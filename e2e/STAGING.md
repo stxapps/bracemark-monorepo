@@ -15,6 +15,8 @@ npm run e2e:web:staging -- --case DATA-IMPORT-WEB-001
 npm run e2e:web:staging -- --list
 # Watch a case in a visible, paced browser window:
 npm run e2e:web:headed:staging -- --case DATA-IMPORT-WEB-001
+# The Firefox-admitted subset, in Playwright's Firefox:
+npm run e2e:web:firefox:staging
 ```
 
 These are aliases for `npx nx e2e-web:staging @stxapps/e2e`. The app is
@@ -24,7 +26,10 @@ API and extractor are `https://api.dryrunbase.com` and
 existing staging deploy scripts first. The client URLs are embedded during its
 build; changing the runner's URLs cannot change them.
 
-Playwright drives system Chrome with TLS validation and CSP enforcement enabled.
+Playwright drives system Chrome with TLS validation and CSP enforcement enabled
+(`e2e:web:firefox:staging`: Playwright's Firefox, on the cases whose registry
+entry lists it — the CSP refusals among them, since Firefox enforces `blob:`
+workers and `'wasm-unsafe-eval'` by its own rules; `docs/e2e.md`, _firefox_).
 The ordinary flows create fresh disposable Free accounts through the real UI.
 `DATA-IMPORT-WEB-001` imports a real image, uploads encrypted content to R2, and
 reads it through a separate signed-in browser profile. It exercises R2's actual

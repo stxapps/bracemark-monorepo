@@ -1,7 +1,8 @@
 import { rm } from 'node:fs/promises';
 
-import { type BrowserContext, chromium, type Page } from '@playwright/test';
+import { type BrowserContext, type Page } from '@playwright/test';
 
+import { BROWSER_LAUNCH, BROWSER_TYPE } from '../../runner/browser';
 import {
   createAccount,
   createAccountWithRecovery,
@@ -10,7 +11,7 @@ import {
   signIn,
 } from './account';
 import { watchCspViolations } from './csp';
-import { CHROME_PATH, WEB_URL } from './env';
+import { WEB_URL } from './env';
 
 // Launching a signed-in bracemark-web, as a plain function rather than a fixture —
 // because three callers need it and only one of them is a spec: the worker fixture
@@ -92,8 +93,11 @@ export async function launchApp(
   // abandoned — signed in, but to nothing the current run has the password for.
   await rm(userDataDir, { recursive: true, force: true });
 
-  const context = await chromium.launchPersistentContext(userDataDir, {
-    executablePath: CHROME_PATH,
+  // System Chrome, or Playwright's Firefox on a Firefox run (runner/browser.ts).
+  // A Firefox profile keeps IndexedDB, and the non-extractable key in it, the
+  // same way, so nothing else here changes.
+  const context = await BROWSER_TYPE.launchPersistentContext(userDataDir, {
+    ...BROWSER_LAUNCH,
     baseURL: options.baseURL ?? WEB_URL,
     bypassCSP: false,
     ignoreHTTPSErrors: false,

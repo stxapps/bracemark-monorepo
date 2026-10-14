@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { E2E_ROOT } from '../paths';
+import { E2E_BROWSERS, type E2EBrowser } from './browser';
 import { type E2EEnvironment } from './environment';
 import { validateVisualCatalog } from './visual-catalog';
 
@@ -21,6 +22,12 @@ export interface E2ECase {
   artifacts: string[];
   // Omitted entries are local-only. Staging admission is reviewed per case.
   environments?: E2EEnvironment[];
+  // The engines a WEB case runs on; omitted means Chrome only. Independent of
+  // `environments`: a case listing both browsers and both tiers runs in all four
+  // combinations. Firefox admission is reviewed per case, like staging, and is
+  // kept to the cases whose outcome rests on something Gecko does its own way
+  // (docs/e2e.md, _firefox_).
+  browsers?: E2EBrowser[];
   // Server state the runner writes for this case on STAGING, outside the app.
   // `plan` is the only one there is: the `manual` purchase row (seed/plan.ts),
   // written to staging's remote D1 with a Cloudflare credential. Declared here
@@ -51,6 +58,7 @@ export interface CaseFilters {
   // pixel claim — SKELETON-*, VIEWPORT-* — and selects nothing special.)
   baseline?: boolean;
   environment?: E2EEnvironment;
+  browser?: E2EBrowser;
   // Start at this case: applied LAST, to what every other filter left, so the
   // id is one of the cases the run would have reached (runner/cli.ts, `from`).
   from?: string;
@@ -108,6 +116,19 @@ export function validateCaseRegistry(cases = readCaseRegistry()): void {
       throw new Error(`${testCase.id}: invalid automated environments`);
     }
     if (
+      testCase.browsers &&
+      (testCase.browsers.length === 0 ||
+        new Set(testCase.browsers).size !== testCase.browsers.length ||
+        testCase.browsers.some((value) => !E2E_BROWSERS.includes(value)) ||
+        // Only the web runner switches engines. The browser extension is a
+        // Chromium build, the PWA target installs through Chromium's CDP, and
+        // native has no browser of its own to choose.
+        testCase.surface !== 'web' ||
+        testCase.tier === 'release')
+    ) {
+      throw new Error(`${testCase.id}: invalid browsers (an automated web case only)`);
+    }
+    if (
       testCase.stagingGrants &&
       (testCase.stagingGrants.length !== 1 ||
         testCase.stagingGrants[0] !== 'plan' ||
@@ -154,6 +175,7 @@ export function selectCases(surface: E2ESurface, filters: CaseFilters = {}): E2E
   const requestedCases = new Set(filters.cases ?? []);
   const all = readCaseRegistry();
   const environment = filters.environment ?? 'local';
+  const browser = filters.browser ?? 'chrome';
 
   for (const id of requestedCases) {
     const requested = all.find((testCase) => testCase.id === id && testCase.surface === surface);
@@ -168,6 +190,9 @@ export function selectCases(surface: E2ESurface, filters: CaseFilters = {}): E2E
         `${id} does not support ${environment}; its required fixtures are local-only`,
       );
     }
+    if (!(requested.browsers ?? ['chrome']).includes(browser)) {
+      throw new Error(`${id} does not run on ${browser}; its registry entry does not list it`);
+    }
     if (requested.traits.includes('baseline') !== Boolean(filters.baseline)) {
       throw new Error(
         filters.baseline
@@ -180,6 +205,7 @@ export function selectCases(surface: E2ESurface, filters: CaseFilters = {}): E2E
   const selected = all.filter((testCase) => {
     if (testCase.surface !== surface) return false;
     if (!(testCase.environments ?? ['local']).includes(environment)) return false;
+    if (!(testCase.browsers ?? ['chrome']).includes(browser)) return false;
     if (testCase.tier === 'release') return false;
     if (testCase.traits.includes('baseline') !== Boolean(filters.baseline)) return false;
     if (requestedCases.size > 0 && !requestedCases.has(testCase.id)) return false;

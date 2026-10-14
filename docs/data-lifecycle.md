@@ -48,6 +48,11 @@ presents. Four formats, one deliberate asymmetry:
   importing deleted-pending links into a browser as live bookmarks is never
   wanted.
 
+Each format's promise is proved end to end by exporting it and importing the
+file into a fresh account — `DATA-ROUNDTRIP-WEB-001`/`-002` ([e2e.md](./e2e.md),
+_what e2e may not assert_), the backup on Firefox, whose download Chrome's save
+dialog replaces.
+
 The marketing site's separate `/tools/bookmark-converter` reads portable
 bookmark files in a browser worker: Netscape HTML, URL-column CSV, strict
 URL-per-line text, LinkWarden JSON, Brace.to exports, ZIPs containing those

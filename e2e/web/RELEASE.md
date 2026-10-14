@@ -10,24 +10,24 @@ These checks own browser surfaces Playwright cannot drive honestly. Run them in
 the supported production Chrome build against a disposable account. Do not stub
 `showSaveFilePicker`: the native dialog and the file it creates are the boundary.
 
-## DATA-EXPORT-WEB-RELEASE-001 — every offered format
+## DATA-EXPORT-WEB-RELEASE-001 — the backup through Chrome's save dialog
 
 `@DATA-EXPORT-WEB-RELEASE-001` `@release` `@online`
 
+The one export path no driver can take: Chrome saves a Bracemark backup through
+`showSaveFilePicker`'s native dialog. Everything else about exporting is
+automated — the three interop formats on Chrome and Firefox
+(`DATA-ROUNDTRIP-WEB-001`) and the backup through Firefox's download
+(`DATA-ROUNDTRIP-WEB-002`), each with its file name, its receipt, and an import
+of the file into a fresh account.
+
 - [ ] Import the Phase 5 small Bracemark archive so the account has one link,
       one list, one tag, and one image.
-- [ ] In Settings → Data → Export all data, choose **Bracemark backup**, export,
-      and save the file through Chrome's native dialog. Verify the suggested and
-      saved filename matches `Bracemark backup YYYY-MM-DD.zip`, then verify the
-      receipt says `Exported 1 link and 1 file.`
-- [ ] Repeat for **HTML bookmarks** and verify
-      `Bracemark bookmarks YYYY-MM-DD.html` plus `Exported 1 link.`
-- [ ] Repeat for **CSV** and verify `Bracemark bookmarks YYYY-MM-DD.csv` plus
-      `Exported 1 link.`
-- [ ] Repeat for **Plain text** and verify `Bracemark links YYYY-MM-DD.txt` plus
-      `Exported 1 link.`
-- [ ] Confirm all four files exist and are non-empty. Archive contents stay the
-      unit/native-contract layer's responsibility.
+- [ ] In Chrome, Settings → Data → Export all data, choose **Bracemark backup**,
+      export, and save the file through the native dialog. Verify the suggested
+      and saved filename matches `Bracemark backup YYYY-MM-DD.zip`, the receipt
+      says `Exported 1 link and 1 file.`, and the saved file is non-empty.
+- [ ] Cancel the dialog on a second export and confirm no error is shown.
 
 ## DATA-EMPTY-001 — a file still exists for an empty run
 

@@ -37,8 +37,8 @@ export const SITE_URL = E2E_ORIGINS.site;
 // installed one is. (A downloaded Chromium may nonetheless be present, and one
 // two entrypoints here use it: `shot/extension.ts` and the `e2e-extension`
 // target, since Chrome won't load an unpacked extension at all. They launch their
-// own contexts and do not come through this constant — every WEB spec stays on
-// system Chrome.) Chrome
+// own contexts and do not come through this constant. A web spec runs on system
+// Chrome unless the run is a Firefox one — runner/browser.ts picks.) Chrome
 // auto-updates, so expect the occasional protocol-assumption break on a new major
 // — that is the standing cost of this choice, not a regression.
 // See docs/e2e.md, "the browser this repo drives".

@@ -2,10 +2,11 @@ import { join } from 'node:path';
 
 import { defineConfig } from '@playwright/test';
 
-import { IS_STAGING } from './runner/environment';
+import { BROWSER_LAUNCH, E2E_BROWSER, IS_FIREFOX } from './runner/browser';
+import { E2E_ENVIRONMENT, IS_STAGING } from './runner/environment';
 import { createRunId } from './runner/lib';
 import { selectCases } from './runner/registry';
-import { CHROME_PATH, WEB_URL } from './web/fixtures/env';
+import { WEB_URL } from './web/fixtures/env';
 import { runArtifactDir } from './paths';
 
 const runId = process.env.E2E_RUN_ID ?? createRunId('web-direct');
@@ -19,17 +20,18 @@ const runDir = process.env.E2E_RUN_DIR ?? runArtifactDir(runId);
 // dependency on it — `--exclude-trait internet` ran the internet cases, and
 // `--case SYNC-BLOCKED-001` ran the whole suite first — while the run's manifest
 // went on listing only what had been asked for. A project's own `grep` holds
-// however the project comes to run. Unset, local runs are unfiltered; staging
-// still intersects with the registry admission list.
+// however the project comes to run. Unset, local Chrome runs are unfiltered; a
+// staging or Firefox run still intersects with the registry's admission list.
 const requestedSelection = process.env.E2E_GREP ? new RegExp(process.env.E2E_GREP) : undefined;
-const selection = IS_STAGING
-  ? new RegExp(
-      selectCases('web', { environment: 'staging' })
-        .filter((entry) => !requestedSelection || requestedSelection.test(`@${entry.id}`))
-        .map((entry) => `@${entry.id}(?=\\s|$)`)
-        .join('|') || '(?!)',
-    )
-  : requestedSelection;
+const selection =
+  IS_STAGING || IS_FIREFOX
+    ? new RegExp(
+        selectCases('web', { environment: E2E_ENVIRONMENT, browser: E2E_BROWSER })
+          .filter((entry) => !requestedSelection || requestedSelection.test(`@${entry.id}`))
+          .map((entry) => `@${entry.id}(?=\\s|$)`)
+          .join('|') || '(?!)',
+      )
+    : requestedSelection;
 
 // Whole-flow e2e for bracemark-web. The design record — what belongs at this
 // layer, why the standard auth fixture cannot work here, and the four repo
@@ -93,7 +95,10 @@ export default defineConfig({
     baseURL: WEB_URL,
     bypassCSP: false,
     ignoreHTTPSErrors: false,
-    launchOptions: { executablePath: CHROME_PATH },
+    // The default `page` the anonymous staging checks use; signed-in contexts
+    // pick their binary the same way, in launchApp.
+    browserName: IS_FIREFOX ? 'firefox' : 'chromium',
+    launchOptions: BROWSER_LAUNCH,
     // Without this a click on a control that never appears waits out the whole
     // 90s TEST budget and then reports "Target page, context or browser has been
     // closed" — naming no step. Actions resolve against an already-rendered page;

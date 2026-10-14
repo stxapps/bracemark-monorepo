@@ -1,9 +1,11 @@
+import { existsSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { E2E_ROOT, runArtifactDir } from '../paths';
 import { proveStagingPlanAccess } from '../seed/d1';
-import { API_URL, CHROME_PATH, EXTRACTOR_URL, WEB_URL } from '../web/fixtures/env';
+import { API_URL, EXTRACTOR_URL, WEB_URL } from '../web/fixtures/env';
+import { browserExecutable, E2E_BROWSER, IS_FIREFOX } from './browser';
 import { parseWebCli } from './cli';
 import { E2E_ENVIRONMENT, E2E_ORIGINS, IS_STAGING } from './environment';
 import { createRunId, writeJson } from './lib';
@@ -24,7 +26,20 @@ async function main(): Promise<void> {
       'use --case/--suite/--include-trait/--exclude-trait; do not combine them with --grep',
     );
   }
-  const selected = selectCases('web', { ...options, environment: E2E_ENVIRONMENT });
+  const selected = selectCases('web', {
+    ...options,
+    environment: E2E_ENVIRONMENT,
+    browser: E2E_BROWSER,
+  });
+  // Playwright's own Firefox, not the one in /Applications (runner/browser.ts).
+  // Checked before anything waits on the stack, as the browser extension's
+  // Chromium is in runner/extension.ts.
+  const executable = browserExecutable();
+  if (IS_FIREFOX && !existsSync(executable)) {
+    throw new Error(
+      'Playwright Firefox is not installed. Run `npx playwright install firefox` and retry.',
+    );
+  }
 
   // The stack is `npm run dev`'s, and must be up and this checkout's before a
   // run directory exists (global-setup.ts then waits for it to answer). Listing
@@ -46,7 +61,7 @@ async function main(): Promise<void> {
       ? await proveStagingPlanAccess()
       : undefined;
 
-  const runId = createRunId(IS_STAGING ? 'staging-web' : 'web');
+  const runId = createRunId(`${IS_STAGING ? 'staging-' : ''}web${IS_FIREFOX ? '-firefox' : ''}`);
   const runDir = runArtifactDir(runId);
   await mkdir(runDir, { recursive: true });
   // The selection travels in the environment, not as `--grep`: the config applies
@@ -72,9 +87,9 @@ async function main(): Promise<void> {
     );
     env[STAGING_PLAN_GRANTS] = '1';
   }
-  const [playwrightVersion, chromeVersion, commit, status] = await Promise.all([
+  const [playwrightVersion, browserVersion, commit, status] = await Promise.all([
     capture('playwright', ['--version'], { cwd: E2E_ROOT, env }),
-    capture(CHROME_PATH, ['--version'], { allowFailure: true }),
+    capture(executable, ['--version'], { allowFailure: true }),
     capture('git', ['rev-parse', 'HEAD'], { cwd: join(E2E_ROOT, '..') }),
     capture('git', ['status', '--porcelain'], { cwd: join(E2E_ROOT, '..') }),
   ]);
@@ -84,6 +99,7 @@ async function main(): Promise<void> {
     runId,
     kind: 'web',
     environment: E2E_ENVIRONMENT,
+    browserName: E2E_BROWSER,
     status: 'running',
     startedAt: new Date().toISOString(),
     suite: options.suite,
@@ -95,15 +111,20 @@ async function main(): Promise<void> {
     selectedCases: selected.map((testCase) => testCase.id),
     stagingGrants: IS_STAGING ? stagingGrants.map((testCase) => testCase.id) : [],
     origins: E2E_ORIGINS,
-    excludedCases: IS_STAGING
-      ? readCaseRegistry()
-          .filter(
-            (entry) =>
-              entry.surface === 'web' && !(entry.environments ?? ['local']).includes('staging'),
-          )
-          .map((entry) => entry.id)
-      : [],
-    browser: { executable: CHROME_PATH, version: chromeVersion.stdout.trim() || 'unknown' },
+    // What this tier and engine leave out — staging's local-only cases, and on
+    // Firefox every case its registry entry does not list.
+    excludedCases:
+      IS_STAGING || IS_FIREFOX
+        ? readCaseRegistry()
+            .filter(
+              (entry) =>
+                entry.surface === 'web' &&
+                (!(entry.environments ?? ['local']).includes(E2E_ENVIRONMENT) ||
+                  !(entry.browsers ?? ['chrome']).includes(E2E_BROWSER)),
+            )
+            .map((entry) => entry.id)
+        : [],
+    browser: { executable, version: browserVersion.stdout.trim() || 'unknown' },
     playwrightVersion: playwrightVersion.stdout.trim(),
     checkout: {
       root: join(E2E_ROOT, '..'),

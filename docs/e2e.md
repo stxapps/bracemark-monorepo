@@ -140,7 +140,7 @@ into `~/Library/Caches/ms-playwright/`, which no install here populates. That is
 what made the original root devDependency `playwright-core` rather than
 `playwright`.
 
-**The one sanctioned reason to fetch it deliberately is `bracemark-extension`.**
+**The first sanctioned reason to fetch it deliberately is `bracemark-extension`.**
 Google Chrome will not load an unpacked extension from the command line and says
 nothing when it declines, so driving the popup needs Playwright's own Chromium
 (`npx playwright install chromium`) — see `docs/app-drivers.md`, _driving
@@ -148,7 +148,8 @@ bracemark-web_, and the extension section of `.claude/skills/verify/SKILL.md`.
 
 Exactly two entrypoints use it: the `e2e-extension` functional target and
 `shot/extension.ts`, the store-screenshot leg (_the published screenshots_,
-below). Every web-app spec still goes through `CHROME_PATH`. The browser
+below). Every web-app spec still goes through `CHROME_PATH` on a Chrome run (the
+second download, Playwright's Firefox, is _firefox_ below). The browser
 extension is the exception because its subject is the unpacked build, which
 system Chrome cannot load from command-line flags at all.
 
@@ -180,6 +181,62 @@ Because it borrows the system browser it is pinned against whatever Chrome is
 installed, and Chrome auto-updates. Expect an occasional bump when a new Chrome
 breaks a protocol assumption; `E2E_CHROME_PATH` overrides the location, and
 `/Applications/Chromium.app` works the same way.
+
+#### firefox
+
+**The second sanctioned download is Playwright's Firefox**
+(`npx playwright install firefox`), for `e2e-web:firefox` and
+`e2e-web:firefox:staging`. It cannot be the system Firefox: Playwright drives
+Firefox through its own patched build (the Juggler protocol), and a stock
+Firefox from `/Applications` does not speak it. So the version under test is the
+one this Playwright release pins (`firefox-1538`, Firefox 153 at 1.62.1), and it
+moves when Playwright does — not when the user's Firefox updates.
+
+`E2E_BROWSER` picks the engine once per process (`runner/browser.ts`), the way
+`E2E_ENVIRONMENT` picks the tier, and the two compose: `e2e-web:firefox:staging`
+is Firefox against dryrunbase.com. Two places read it — `launchApp` for every
+signed-in context, and `playwright.config.ts` for the default `page` the
+anonymous staging checks use — so a spec never names a browser.
+
+**Firefox runs a subset, by registry admission.** A web case's `browsers` field
+(_cases, suites and fixtures_, below) lists the engines it runs on; omitted means
+Chrome only, and every Firefox case also runs on Chrome but one:
+`DATA-ROUNDTRIP-WEB-002`, the backup round trip, whose subject Chrome's native
+save dialog puts out of a driver's reach. Running all of `web/`
+twice would roughly double the longest run to re-prove React and Dexie logic that
+does not depend on the engine. What is admitted is what Gecko does its own way:
+
+- **Crypto and the session** — Argon2id's wasm in a `blob:`-started worker, and
+  a non-extractable `CryptoKey` kept in IndexedDB across a reload
+  (`WEB-ACCOUNT-001`, `LOCK-APP-001`).
+- **IndexedDB lifecycle** — the sign-out and delete-account wipes, a second
+  account's database on one profile, and the `versionchange`/`blocked`
+  handshake between an old tab and a newer build (`WEB-ACCOUNT-002`,
+  `ACCOUNT-DELETE-001`, `WEB-ACCOUNT-004`, `VERSION-SKEW-WEB-001`/`-002`).
+- **Cross-tab coordination** — two tabs' syncs serialized (`SYNC-TABS-001`).
+- **The read edge** — Dexie writes under `liveQuery`, and virtual scrolling,
+  paging and range selection on Gecko's scroll metrics (`WEB-LINK-001`,
+  `SCALE-WEB-001`, `BULK-001`).
+- **Pointer drag** — the list tree's reorder and reparent (`TAXONOMY-DND-001`).
+- **Files** — import through the file input, zip reading and image blobs
+  (`DATA-IMPORT-WEB-001`), export through the download fallback Firefox always
+  takes, since it has no `showSaveFilePicker` (`OFFLINE-EXPORT-WEB-001`), and the
+  export round trip in every format (`DATA-ROUNDTRIP-WEB-001`/`-002`, _what e2e
+  may not assert_, below).
+- **Offline** — `navigator.onLine` and a failed cycle (`OFFLINE-WEB-001`).
+- **The deployed CSP, on staging** — Firefox enforces `worker-src`, `blob:` and
+  `'wasm-unsafe-eval'` by its own rules, so a policy that passes Chrome can still
+  refuse Argon2 or the converter's worker in Firefox. The refusal cases
+  (`STAGING-CSP-001`/`-002`/`-003`/`-005`) and every staging-admitted journey
+  above run under it, with the violation guard on.
+
+Left on Chrome by necessity: `BULK-COPY-001` (Playwright cannot grant Firefox
+`clipboard-read`), `STAGING-CSP-004` (it asks Chrome's DevTools protocol for the
+manifest) and every other CDP-driven path, the PWA target (Playwright supports
+service workers in Chromium only), and the browser extension, whose Firefox build
+remains `EXT-RELEASE-002`'s manual check. Admit another case by adding `firefox`
+to its `browsers` and running it on both engines; the rule is the one above —
+something Gecko does differently has to be on the path.
 
 #### the browser extension functional target
 
@@ -450,27 +507,49 @@ yields a run with no third-party dependency. A red `internet` case whose
 `fetch` to example.com itself failed is an availability fact, not a product one —
 `curl -sI https://example.com/` settles which before anything else is read.
 
-**The backup round trip.** Export ⇄ import looks like a whole-flow question and
-is not one, for a reason specific to this app: `exportAllData` claims its
-destination through `window.showSaveFilePicker`, which the system Chrome this
-repo drives really does implement — so the export opens a **native save dialog
-Playwright has no API for**. Stubbing it with `addInitScript` would leave the
-browser proving nothing about the save path, which is the only part of this the
-browser could prove. Beyond that, `e2e` may depend on `type:shared` alone and
-drives the apps over the wire, so it cannot call the orchestrators, and comparing
-two libraries entity-by-entity through the DOM is the worst available oracle.
-And a file-to-file comparison is wrong for three of the four formats anyway — the
-interop ones are lossy BY DESIGN ([data-lifecycle.md](./data-lifecycle.md)), so a
-golden file would encode today's lossiness as the contract.
+**The export round trip — what may not be asserted about it.** Three things
+kept export ⇄ import out of this layer, and two of them still hold.
 
-It lives at the unit layer instead, with a real zip container in both packages'
-`data/export-import.spec.ts` and golden cross-platform archives in `shared`
-([testing.md](./testing.md), _the ported pair_). What is left for this layer, if
-it is ever wanted, is thin: that the button produces a download with the right
-name and that the receipt announces the right counts. The plain-text export is
-driven for a narrower claim — that the local library leaves the device with the
-server gone (_scale, loading and offline_, below) — and asserts only the URLs it
-must contain and the receipt's this-device's-copy warning.
+- **A whole-library comparison.** `e2e` may depend on `type:shared` alone and
+  drives the apps over the wire, so it cannot call the orchestrators, and
+  comparing two libraries entity-by-entity through the DOM is the worst
+  available oracle.
+- **A golden file, or any assertion of what a format drops.** The interop
+  formats are lossy BY DESIGN ([data-lifecycle.md](./data-lifecycle.md)), so a
+  file-to-file comparison — or a check that the app's HTML has no note, or that
+  no pin crosses — would encode today's lossiness as the contract.
+- **A stubbed save dialog.** `exportAllData` claims the backup's destination
+  through `window.showSaveFilePicker`, which system Chrome implements — a
+  **native dialog Playwright has no API for**. Stubbing it with `addInitScript`
+  would leave the browser proving nothing about the save path, the only part the
+  browser could prove. This one no longer blocks the case: **Firefox has no
+  `showSaveFilePicker`**, so its backup takes the real `downloadBlob` path every
+  Firefox user takes — a product path, not a stub (_firefox_, above).
+
+So the round trip runs (`web/export-round-trip.e2e.ts`), narrowly. One seeded
+row carries every field some format promises — nested list, two tags, custom
+title, note, image, pin — beside a plain row and a trashed one. Each format is
+exported through the real download, its file name and receipt checked, and the
+file imported into a **fresh account**: a restore onto a new device, and the
+only shape that tests what the file carries, since importing back into the
+source dedupes everything. Then that format's promises are read off the one
+row, and nothing it drops is asserted. Trash is the exception, because leaving
+it out of the interop formats IS the promise, printed beside the options.
+`DATA-ROUNDTRIP-WEB-001` takes HTML, CSV and plain text on both engines, since
+they download everywhere; `DATA-ROUNDTRIP-WEB-002` takes the backup on Firefox
+only — every field back, the trashed link in Trash — and re-imports it into its
+source, where skip-existing-by-path must write nothing. Both were checked
+against a deliberately broken app: a backup that dropped Trash failed `-002` on
+its restore receipt, and a CSV with the note column blanked failed `-001` on the
+note. Chrome's native dialog is the one export path left to a person
+(`DATA-EXPORT-WEB-RELEASE-001`, `e2e/web/RELEASE.md`).
+
+The archive's internals stay at the unit layer, with a real zip container in
+both packages' `data/export-import.spec.ts` and golden cross-platform archives
+in `shared` ([testing.md](./testing.md), _the ported pair_). The plain-text
+export is also driven for a narrower claim — that the local library leaves the
+device with the server gone (_scale, loading and offline_, below) — and asserts
+only the URLs it must contain and the receipt's this-device's-copy warning.
 
 **A real Paddle purchase.** Every paid state is reachable without one — the seed
 writes a `manual` purchase row straight into D1 (_seeding a dev account_ below),
@@ -2084,8 +2163,10 @@ The six targets also have root scripts. `npm run e2e:web`, `e2e:extension` and
 scripts carry it and there is no bare one — `e2e:ios` and `e2e:android` for
 `e2e-mobile`, then `e2e:contract:android`, `e2e:visual:web` and so on — each the
 target plus `--platform`, not a target of its own, the way `e2e:web:headed` is.
-The staging scripts put the mode last: `e2e:extension:staging`, `e2e:ios:staging`,
-`e2e:contract:android:staging`, `e2e:build:ios:staging`. There
+`e2e:web:firefox` and `e2e:web:firefox:staging` are the Firefox subset, local
+and deployed (_firefox_, above). The staging scripts put the mode last:
+`e2e:extension:staging`, `e2e:ios:staging`, `e2e:contract:android:staging`,
+`e2e:build:ios:staging`. There
 is deliberately no bare `npm run e2e`: no honest fan-out
 can boot, build, select, and prepare both native platforms. `expo:ios` and
 `expo:android` are prerequisites, not tests; see [expo-build.md](./expo-build.md).
@@ -2115,7 +2196,11 @@ qualification, not the optimized build variant. Automated staging cases retain
 smoke/full tiers. `stagingGrants` names the server state a staging-admitted web
 or browser-extension case writes outside the app — only `["plan"]` exists — and
 is what lets the runner ask for the credential before it creates anything
-(_deployed staging and mobile Release builds_, above).
+(_deployed staging and mobile Release builds_, above). The optional `browsers`
+field, on automated web cases only, is the same kind of admission for the engine:
+missing means Chrome only, and `["chrome", "firefox"]` adds the case to
+`e2e-web:firefox` (_firefox_, above). The two axes are independent, and a case
+runs in every combination its entry lists.
 
 [`e2e/cases.json`](../e2e/cases.json) is the machine-readable registry. Every
 case has an id, surface, primary `smoke`, `full`, or `release` tier, traits,

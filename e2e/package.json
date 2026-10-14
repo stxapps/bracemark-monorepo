@@ -42,6 +42,12 @@
       "e2e-web:staging": {
         "cache": false
       },
+      "e2e-web:firefox": {
+        "cache": false
+      },
+      "e2e-web:firefox:staging": {
+        "cache": false
+      },
       "e2e-extension:staging": {
         "cache": false
       },
@@ -98,6 +104,8 @@
     "e2e-visual": "tsx runner/visual.ts",
     "build-release:staging": "tsx runner/release-build.ts",
     "e2e-web:staging": "E2E_ENVIRONMENT=staging tsx runner/web.ts",
+    "e2e-web:firefox": "E2E_BROWSER=firefox tsx runner/web.ts",
+    "e2e-web:firefox:staging": "E2E_ENVIRONMENT=staging E2E_BROWSER=firefox tsx runner/web.ts",
     "e2e-extension:staging": "E2E_ENVIRONMENT=staging tsx runner/extension.ts",
     "e2e-mobile:staging": "E2E_ENVIRONMENT=staging tsx runner/mobile.ts",
     "e2e-contract:staging": "E2E_ENVIRONMENT=staging tsx runner/contract.ts",

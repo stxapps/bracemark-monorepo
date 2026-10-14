@@ -62,6 +62,11 @@ and stages the unpacked development extension itself. The staged popup path does
 not prove Chrome's real toolbar-created `activeTab` grant; release checks live in
 [`extension/RELEASE.md`](./extension/RELEASE.md).
 
+`npm run e2e:web:firefox` (and `e2e:web:firefox:staging`) runs the web cases
+admitted to Firefox in Playwright's own Firefox build; install it once with
+`npx playwright install firefox`. Which cases, and why only those:
+`docs/e2e.md`, _firefox_.
+
 `--suite smoke` selects only smoke cases; `full` includes smoke and full (never
 release qualification). Narrow any
 runner with repeatable/comma-separated `--case`, `--include-trait`, and
