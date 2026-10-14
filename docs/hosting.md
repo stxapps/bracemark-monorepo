@@ -160,10 +160,14 @@ staging host should be worth.
 ### checking the deployed candidate
 
 `npm run e2e:web:staging` tests the deployed app at `app.dryrunbase.com` and
-marketing site at `dryrunbase.com`, with the real Workers and R2. It checks HTML,
-security headers, app build identity, Worker CORS and deliberate browser CSP
-refusals on both origins. `--include-trait security` runs the deployment checks
-alone. Three things hold the policy, and each catches what the other two cannot:
+marketing site at `dryrunbase.com`, with the real Workers and R2.
+(`npm run e2e:extension:staging` drives this checkout's staging browser-extension build
+against the same tier; it is the only run that reaches R2 from a
+`chrome-extension://` origin — `e2e/STAGING.md`, _browser extension_.) It checks
+HTML, security headers, app build identity, Worker CORS and deliberate browser
+CSP refusals on both origins. `--include-trait security` runs the deployment
+checks alone. Three things hold the policy, and each catches what the other two
+cannot:
 
 - **the refusals** — the browser must raise an `enforce` violation for an
   unapproved script and an unapproved connection. A report-only header fails

@@ -20,11 +20,12 @@ import { promisify } from 'node:util';
 // accounts. So a missing token is an error here, before wrangler is spawned.
 export const STAGING_D1_KEYCHAIN_SERVICE = 'bracemark-cf-token-staging-e2e';
 
-// Set by the web runner for its Playwright child once the credential is proved,
-// and required by the remote executor in seed/d1.ts. It is what keeps the
-// opening as narrow as the registry says it is: a grant from a run that declared
-// none — an undeclared case, the native runner, the account seed pointed at
-// staging — is refused rather than quietly resolving a credential mid-test.
+// Set by the web and browser-extension runners for their Playwright child once
+// the credential is proved, and required by the remote executor in seed/d1.ts. It
+// is what keeps the opening as narrow as the registry says it is: a grant from a
+// run that declared none — an undeclared case, the native runner, the account
+// seed pointed at staging — is refused rather than quietly resolving a credential
+// mid-test.
 export const STAGING_PLAN_GRANTS = 'E2E_STAGING_PLAN_GRANTS';
 
 type KeychainReader = (service: string) => Promise<string>;

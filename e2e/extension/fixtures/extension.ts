@@ -9,27 +9,42 @@ import { type Credentials } from '../../web/fixtures/account';
 
 const REPO_ROOT = join(E2E_ROOT, '..');
 const EXTENSION_PROJECT = '@stxapps/bracemark-extension';
-const DEVELOPMENT_BUILD = join(
-  REPO_ROOT,
-  'apps',
-  'bracemark-extension',
-  '.output',
-  'chrome-mv3-dev',
-);
+
+// The two Chrome MV3 builds a run can drive, by WXT mode: `development` talks to
+// the local api, `staging` is the bundle built for the deployed dryrunbase.com
+// tier (`.env.staging`). Each output directory is its Nx target's declared output,
+// so a cache hit restores it in place.
+const BUILDS = {
+  development: { target: 'build:development', output: 'chrome-mv3-dev' },
+  staging: { target: 'build:staging', output: 'chrome-mv3-staging' },
+} as const;
+
+export type ExtensionBuildMode = keyof typeof BUILDS;
 
 export const EXTENSION_POPUP_WIDTH = 360;
 
 export interface StageExtensionOptions {
+  // The build to copy; the development build unless named.
+  source?: string;
   permissions?: string[];
   hostPermissions?: string[];
 }
 
-/** Build the real development extension once before staging run-specific copies. */
-export function buildDevelopmentExtension(): void {
-  execFileSync('npx', ['nx', 'build:development', EXTENSION_PROJECT], {
+export function extensionBuildDir(mode: ExtensionBuildMode): string {
+  return join(REPO_ROOT, 'apps', 'bracemark-extension', '.output', BUILDS[mode].output);
+}
+
+/** Build the real browser extension once, before staging run-specific copies. */
+export function buildExtension(mode: ExtensionBuildMode): string {
+  execFileSync('npx', ['nx', BUILDS[mode].target, EXTENSION_PROJECT], {
     cwd: REPO_ROOT,
     stdio: 'inherit',
   });
+  return extensionBuildDir(mode);
+}
+
+export function buildDevelopmentExtension(): void {
+  buildExtension('development');
 }
 
 /**
@@ -42,7 +57,7 @@ export async function stageExtensionCopy(
 ): Promise<string> {
   await rm(target, { recursive: true, force: true });
   await mkdir(dirname(target), { recursive: true });
-  await cp(DEVELOPMENT_BUILD, target, { recursive: true });
+  await cp(options.source ?? extensionBuildDir('development'), target, { recursive: true });
 
   const manifestPath = join(target, 'manifest.json');
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {

@@ -2,17 +2,31 @@ import { join } from 'node:path';
 
 import { defineConfig } from '@playwright/test';
 
+import { IS_STAGING } from './runner/environment';
 import { createRunId } from './runner/lib';
+import { selectCases } from './runner/registry';
 import { runArtifactDir } from './paths';
 
 const runId = process.env.E2E_RUN_ID ?? createRunId('extension-direct');
 process.env.E2E_RUN_ID = runId;
 const runDir = process.env.E2E_RUN_DIR ?? runArtifactDir(runId);
 
+// The runner selects with `--grep`; a staging run is also held to the registry's
+// admission list here, so a direct `playwright test` cannot carry a local-only
+// case to the deployed tier (playwright.config.ts does the same for web).
+const stagingAdmitted = IS_STAGING
+  ? new RegExp(
+      selectCases('extension', { environment: 'staging' })
+        .map((entry) => `@${entry.id}(?=\\s|$)`)
+        .join('|') || '(?!)',
+    )
+  : undefined;
+
 export default defineConfig({
   testDir: './extension',
   testMatch: '**/*.e2e.ts',
   globalSetup: './extension/global-setup.ts',
+  grep: stagingAdmitted,
   fullyParallel: true,
   // Every case already runs system Chrome for account setup plus headed bundled
   // Chromium for the unpacked extension. Two workers means four concurrent

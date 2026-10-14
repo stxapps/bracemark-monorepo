@@ -183,7 +183,10 @@ breaks a protocol assumption; `E2E_CHROME_PATH` overrides the location, and
 
 #### the browser extension functional target
 
-`e2e-extension` builds the development Chrome MV3 bundle, copies it under the
+`e2e-extension` builds the development Chrome MV3 bundle (`e2e-extension:staging`
+builds the staging one — _deployed staging and mobile Release builds_, below),
+refuses it unless its manifest grant and scripts name the run's own api and web
+origins and no other tier's (`runner/extension-bundle.ts`), copies it under the
 run's artifact directory, adds `tabs` to that copy, and launches it in a fresh
 persistent headed bundled-Chromium profile per case. Headed is required because
 this runtime does not register the unpacked MV3 worker in its default headless
@@ -1872,10 +1875,10 @@ empty screen rather than for body copy or the loading bones.
 
 Environment and compilation are independent: staging chooses deployed services;
 Release chooses optimized native code and bundled JS. `e2e-web:staging`,
-`e2e-mobile:staging`, and `e2e-contract:staging` use the exact dryrunbase.com
-origins, start no servers, and select only cases whose registry entry admits
-`staging`. Default runs stay local. Origin overrides cannot silently send a local
-run to staging or a staging run to production.
+`e2e-extension:staging`, `e2e-mobile:staging`, and `e2e-contract:staging` use
+the exact dryrunbase.com origins, start no servers, and select only cases whose
+registry entry admits `staging`. Default runs stay local. Origin overrides
+cannot silently send a local run to staging or a staging run to production.
 
 The operational commands and coverage exclusions are in
 [e2e/STAGING.md](../e2e/STAGING.md). `runner/environment.ts` resolves the four
@@ -1887,29 +1890,34 @@ and Android `run-as` sandbox reads remain local, and the D1 helper refuses
 staging so an accidental call cannot mutate unrelated local state.
 
 **The plan grant is the one direct write that follows a case to staging.** A web
-case that declares `"stagingGrants": ["plan"]` puts its own disposable account on
-Plus by writing the `manual` purchase row to staging's **remote** D1 — the same
-row, for the same reason, as the local seed (_the split down the encryption
-boundary_, below): a plan is plaintext server state no client can author, and a
-grant with no provider behind it is a product state the deployed api already
-folds. The alternatives were each worse. A Paddle sandbox checkout is not
-automated and leaves a live subscription (_what e2e may not assert_). An endpoint
-that grants a plan is a test hook on a public host. A standing paid account is
-shared state between runs and between machines, and seeded the way local ones
-are its password would be a hash of a public constant — so `seed:accounts`
-refuses staging outright.
+or browser-extension case that declares `"stagingGrants": ["plan"]` puts its own
+disposable account on Plus by writing the `manual` purchase row to staging's
+**remote** D1 — the same row, for the same reason, as the local seed (_the split
+down the encryption boundary_, below): a plan is plaintext server state no
+client can author, and a grant with no provider behind it is a product state the
+deployed api already folds. The alternatives were each worse. A Paddle sandbox
+checkout is not automated and leaves a live subscription (_what e2e may not
+assert_). An endpoint that grants a plan is a test hook on a public host. A
+standing paid account is shared state between runs and between machines, and
+seeded the way local ones are its password would be a hash of a public constant
+— so `seed:accounts` refuses staging outright.
 
 ⚠ **The write is deliberately narrow, and nothing but its own guards keeps it
 so.** `planD1` (`e2e/seed/d1.ts`) is the only path, and it carries directory
 statements for `seed/plan.ts` alone; `d1`, which takes any binding, still refuses
 staging. The credential is its own keychain item with D1 Edit on the staging
 account — not the deploy token, and with no fallback to it or to
-`wrangler login`. The web runner proves it before Playwright creates an account,
-and the write refuses any run that did not declare a grant, so importing
-`plan.ts` from another entrypoint reaches nothing. `--env staging` pins the
-`database_id`, so no token and no exported account id can turn it into a
-production write. Widening any of these — a second binding, a second runner, the
-deploy token "just for now" — passes every check there is. Setup and the
+`wrangler login`. The web and browser-extension runners prove it before
+Playwright creates an account, the registry admits the declaration on those two
+surfaces only (`PLAN_GRANT_SURFACES`, `runner/registry.ts`), and the write
+refuses any run that did not declare a grant, so importing `plan.ts` from
+another entrypoint reaches nothing. `--env staging` pins the `database_id`, so
+no token and no exported account id can turn it into a production write.
+Widening any of these — a second binding, a third runner, the deploy token
+"just for now" — passes every check there is. The second runner was admitted
+deliberately: the browser extension's link-cap case (`IAP-ENTITLEMENT-001`)
+needs a paid account and has no other way to get one, and `runner/extension.ts`
+carries the web runner's preflight and mark line for line. Setup and the
 operational detail: [e2e/STAGING.md](../e2e/STAGING.md).
 
 The shared persistent browser profiles remain required for non-extractable
@@ -2076,7 +2084,7 @@ The six targets also have root scripts. `npm run e2e:web`, `e2e:extension` and
 scripts carry it and there is no bare one — `e2e:ios` and `e2e:android` for
 `e2e-mobile`, then `e2e:contract:android`, `e2e:visual:web` and so on — each the
 target plus `--platform`, not a target of its own, the way `e2e:web:headed` is.
-The staging scripts put the mode last: `e2e:ios:staging`,
+The staging scripts put the mode last: `e2e:extension:staging`, `e2e:ios:staging`,
 `e2e:contract:android:staging`, `e2e:build:ios:staging`. There
 is deliberately no bare `npm run e2e`: no honest fan-out
 can boot, build, select, and prepare both native platforms. `expo:ios` and
@@ -2102,12 +2110,12 @@ it carries no `--workers 1` because staging already runs one worker.
 #### cases, suites and fixtures
 
 The optional `environments` field selects local/staging admission independently
-of tier. Missing means local-only; the `release` tier remains manual qualification,
-not the optimized build variant. Automated staging cases retain smoke/full tiers.
-`stagingGrants` names the server state a staging-admitted web case writes outside
-the app — only `["plan"]` exists — and is what lets the runner ask for the
-credential before it creates anything (_deployed staging and mobile Release
-builds_, above).
+of tier. Missing means local-only; the `release` tier remains manual
+qualification, not the optimized build variant. Automated staging cases retain
+smoke/full tiers. `stagingGrants` names the server state a staging-admitted web
+or browser-extension case writes outside the app — only `["plan"]` exists — and
+is what lets the runner ask for the credential before it creates anything
+(_deployed staging and mobile Release builds_, above).
 
 [`e2e/cases.json`](../e2e/cases.json) is the machine-readable registry. Every
 case has an id, surface, primary `smoke`, `full`, or `release` tier, traits,

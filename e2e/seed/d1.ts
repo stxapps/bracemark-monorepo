@@ -67,17 +67,17 @@ export async function d1(binding: string, sql: string): Promise<Record<string, u
 // real product state rather than a test hook. Everything that is not a plan
 // statement — the session purge above all — stays behind `d1`.
 //
-// On staging it runs only inside a run that declared it. The web runner proves
-// the credential first (`proveStagingPlanAccess`) and marks its Playwright child;
-// without that mark this throws, so a grant can never be the first moment a
-// missing token is discovered, and no other entrypoint reaches staging by
-// importing plan.ts.
+// On staging it runs only inside a run that declared it. The web or
+// browser-extension runner proves the credential first (`proveStagingPlanAccess`)
+// and marks its Playwright child; without that mark this throws, so a grant can
+// never be the first moment a missing token is discovered, and no other
+// entrypoint reaches staging by importing plan.ts.
 export async function planD1(sql: string): Promise<Record<string, unknown>[]> {
   if (!IS_STAGING) return d1('DIRECTORY_DB', sql);
   if (process.env[STAGING_PLAN_GRANTS] !== '1') {
     throw new Error(
-      'a plan grant on staging runs only for a web case that declares it: add ' +
-        '"stagingGrants": ["plan"] to its cases.json entry, so the runner proves the ' +
+      'a plan grant on staging runs only for a web or browser-extension case that declares ' +
+        'it: add "stagingGrants": ["plan"] to its cases.json entry, so the runner proves the ' +
         'Cloudflare credential before any account is created (e2e/STAGING.md)',
     );
   }

@@ -31,15 +31,16 @@ reads it through a separate signed-in browser profile. It exercises R2's actual
 presigned URLs, browser CORS, decryption, and blob images alongside entity sync.
 Sign-out/account-switch flows visit the real marketing site in this mode.
 
-### The two cases that grant a plan
+### The cases that grant a plan
 
-`EXTRACT-WEB-001` and `EXTRACT-WEB-ALL-001` need Plus: server extraction is a paid
-lever, gated in the client on the entitlement the api folds. They create a
-disposable account like every other journey, and then the runner writes that
-account a `manual` purchase row in staging's remote D1 — the row a comp is in
-production, and the one the local suite writes with `--local`
-(`seed/plan.ts`). The deployed api folds it; nothing test-only is deployed to make
-it work. These are the journeys that send a server extraction through the
+`EXTRACT-WEB-001` and `EXTRACT-WEB-ALL-001` need Plus: server extraction is a
+paid lever, gated in the client on the entitlement the api folds. (The third is
+the browser extension's `IAP-ENTITLEMENT-001`, below, under the same rules.)
+They create a disposable account like every other journey, and then the runner
+writes that account a `manual` purchase row in staging's remote D1 — the row a
+comp is in production, and the one the local suite writes with `--local`
+(`seed/plan.ts`). The deployed api folds it; nothing test-only is deployed to
+make it work. These are the journeys that send a server extraction through the
 deployed CSP and the deployed extractor Worker, using the extractor origin baked
 into the shipped bundle.
 
@@ -59,15 +60,18 @@ does for the deploy scripts; with neither, the run stops — it does not fall
 through to a `wrangler login` session.
 
 - **It is proved before anything is created.** When a selected case declares
-  `"stagingGrants": ["plan"]`, the web runner resolves the token and sends
-  staging's directory an `UPDATE … WHERE 0` — no row changes, but the token, the
-  account, the database and the `purchases` table all have to answer. A missing
-  or refused token fails there, before Playwright provisions an account. A run
-  that selects neither case never reads the keychain, and `--list` never does.
+  `"stagingGrants": ["plan"]`, the web or browser-extension runner resolves the
+  token and sends staging's directory an `UPDATE … WHERE 0` — no row changes,
+  but the token, the account, the database and the `purchases` table all have to
+  answer. A missing or refused token fails there, before Playwright provisions
+  an account. A run that selects no such case never reads the keychain, and
+  `--list` never does.
 - **Only a declared case may grant.** The registry's `stagingGrants` is the list
   of cases that write to staging D1, and the write itself refuses a run that
-  declared none (`seed/d1.ts`). So the native runner, the account seed and an
-  undeclared web case are all still refused, as before.
+  declared none (`seed/d1.ts`), and the registry allows the declaration on web
+  and browser-extension cases only — the two runners that carry the preflight.
+  So the native runner, the account seed and an undeclared case are all still
+  refused.
 - **It cannot spell production.** The statement is addressed to the
   `database_id` committed under `env.staging` in the api's `wrangler.jsonc`, in
   the account `apps/bracemark-api/.env.staging.local` names. The other tier's
@@ -112,6 +116,57 @@ each violation's document, blocked URI and directive. `IAP-WEB-001` is admitted
 for this reason — it opens the real Paddle sandbox overlay under the deployed
 policy and closes it without paying, leaving one unpaid `ready` transaction per
 run. When the CDN's policy changes on purpose, change `staging/policy.ts` with it.
+
+## Browser extension
+
+```sh
+npm run e2e:extension:staging
+npm run e2e:extension:staging -- --suite smoke
+npm run e2e:extension:staging -- --case EXT-SYNC-002
+```
+
+These are aliases for `npx nx e2e-extension:staging @stxapps/e2e`. The runner
+builds `npx nx build:staging @stxapps/bracemark-extension` — the Chrome MV3
+bundle built for this tier from `.env.staging` — and refuses it before any
+account exists unless the manifest grants exactly `https://api.dryrunbase.com/*`
+and the scripts name the staging api and app and neither the local nor the
+production ones (`runner/extension-bundle.ts`). A gitignored `.env.staging.local`
+beside it would otherwise point the bundle at another tier silently. The local
+target applies the same check to the development build. Then it stages the copy
+the local target does (`tabs` added; the extraction case also gets the run's web
+origin) in Playwright's bundled Chromium, headed and serial, against the deployed
+app, api and R2. The bundle is built from this checkout, so it is the browser
+extension a store build would be at this commit, talking to whatever is deployed.
+
+What this run adds over the local one is what the deployed tier can break and
+the development build cannot show:
+
+- the staging bundle's baked origins — the api the popup signs in and syncs
+  against, and the web-app origin its "Upgrade to Plus" hand-off opens
+  (`IAP-ENTITLEMENT-001` asserts the URL);
+- sign-in, sign-out and the session against the deployed api
+  (`EXT-AUTH-001`, `EXT-SIGN-OUT-001`);
+- encrypted sync in both directions through the deployed Workers and R2,
+  including an update to an existing link (`EXT-SAVE-001`, `EXT-SYNC-001`,
+  `EXT-SYNC-002`, `EXT-RESTORE-001`);
+- **R2 from a `chrome-extension://` origin.** The browser extension's presigned
+  blob PUT/GET is an ordinary CORS request that works only because each tier's
+  bucket CORS policy allows origin `*` (`wxt.config.ts`, `host_permissions`).
+  Narrowed to `app.*`, bracemark-web keeps working and every web journey stays
+  green; `EXT-EXTRACT-001` uploads a captured image from the popup and reads it
+  back in a separate web profile, so it goes red;
+- the link-cap wall and its lifting by a Plus grant (`IAP-ENTITLEMENT-001`),
+  which writes the plan row exactly as the web cases above do — same token, same
+  preflight, declared in `cases.json`.
+
+The web client every case pairs with runs under the deployed CSP, and a
+violation in any of its profiles fails the case, as on the web target. Three
+automated cases stay local: `EXT-SAVED-001` (its deployed leg is
+`EXT-SYNC-001`'s pull; the rest is popup logic), `EXT-BOUNDARY-001` (a
+`chrome://` page; nothing deployed is involved) and `EXT-SERVICE-WORKER-001`
+(stopping the MV3 worker through CDP is process fault injection). The real
+toolbar `activeTab` grant and Firefox remain
+[extension/RELEASE.md](./extension/RELEASE.md).
 
 ## Mobile Release builds
 
@@ -210,10 +265,11 @@ case explicitly in staging fails before provisioning, rather than silently
 skipping it. The staging manifests also list excluded cases. Production is not a
 runner mode, and staging refuses origin overrides to production or localhost.
 
-Staging journeys use Free accounts, with one exception: the two server-extraction
-cases grant their own disposable account Plus through staging's remote D1
-(_the two cases that grant a plan_, above). They are what sends an extraction
-through the CSP; the pinned header and the CORS case's fetch from the page hold
+Staging journeys use Free accounts, with two exceptions: the two server-extraction
+cases, and the browser extension's `IAP-ENTITLEMENT-001`, grant their own
+disposable account Plus through staging's remote D1 (_the cases that grant a
+plan_, above). The extraction cases are what sends an extraction through
+the CSP; the pinned header and the CORS case's fetch from the page hold
 the extractor's place in `connect-src` as well, and are all that holds it in a
 run that selects neither. The other Plus journeys — locks, nested lists, the
 search editor, the downgrade — are not admitted: the same grant would carry
@@ -227,8 +283,8 @@ cuts, fake error servers, direct session-row removal, and the browser intercepti
 schedules. Android sandbox-inspection cases also need a debuggable app (`run-as`)
 and cannot inspect a normal release APK. The local PWA target still owns its
 controlled two-build update/offline tests; CDN updates and real installation remain
-[web/RELEASE.md](./web/RELEASE.md). Browser extension and visual-baseline targets
-remain local.
+[web/RELEASE.md](./web/RELEASE.md). Visual baselines remain local; the browser
+extension's local-only cases are listed under _Browser extension_, above.
 
 After preflight passes, each test run writes `.artifacts/runs/<run-id>/run.json`,
 reports and failure artifacts. Security tests attach deployment headers/build identity. Release

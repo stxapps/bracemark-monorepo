@@ -56,3 +56,21 @@ test('staging selection includes deployment checks and rejects unavailable fixtu
     );
   }
 });
+
+test('browser-extension staging admits the deployed journeys and keeps browser-only ones local', () => {
+  assert.deepEqual(
+    selectCases('extension', { environment: 'staging', suite: 'smoke' }).map((entry) => entry.id),
+    ['EXT-AUTH-001', 'EXT-SAVE-001'],
+  );
+  const full = selectCases('extension', { environment: 'staging' });
+  assert.ok(
+    full.every((entry) => (entry.id === 'IAP-ENTITLEMENT-001') === Boolean(entry.stagingGrants)),
+    'the link-cap case is the only browser-extension grant',
+  );
+  for (const id of ['EXT-SAVED-001', 'EXT-BOUNDARY-001', 'EXT-SERVICE-WORKER-001']) {
+    assert.throws(
+      () => selectCases('extension', { environment: 'staging', cases: [id] }),
+      /does not support staging/,
+    );
+  }
+});

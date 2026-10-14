@@ -3,6 +3,7 @@ import { rm } from 'node:fs/promises';
 import { type BrowserContext, expect, type Page, test as base } from '@playwright/test';
 
 import { profileDir } from '../../paths';
+import { takeCspViolations } from '../../web/fixtures/csp';
 import { launchApp, type LaunchedApp } from '../../web/fixtures/launch';
 import {
   extensionId,
@@ -24,6 +25,7 @@ export interface ExtensionApp {
 interface ExtensionFixtures {
   webApp: LaunchedApp;
   extensionApp: ExtensionApp;
+  cspGuard: void;
 }
 
 function safeTestId(testId: string): string {
@@ -31,6 +33,21 @@ function safeTestId(testId: string): string {
 }
 
 export const test = base.extend<ExtensionFixtures>({
+  // The web half of every case is a signed-in bracemark-web client, and on
+  // staging it runs under the deployed CSP: fail a case whose web profiles —
+  // the fixture's and any reader a case opens — reported a violation, as the web
+  // fixture does (web/fixtures/app.ts, `cspGuard`). Local runs send no CSP and
+  // never trip it. The browser-extension pages are not watched: their policy is
+  // the manifest's, not the CDN's.
+  cspGuard: [
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, use) => {
+      await use();
+      expect(takeCspViolations(), 'the journey violated the deployed CSP').toEqual([]);
+    },
+    { auto: true },
+  ],
+
   // Every extension case owns a disposable account. Several cases are ordering,
   // destructive, or multi-profile by construction, so worker sharing would make
   // their local stores and server ops part of one another's setup.
@@ -48,7 +65,10 @@ export const test = base.extend<ExtensionFixtures>({
       ? process.env.E2E_EXTENSION_EXTRACTION_PATH
       : process.env.E2E_EXTENSION_PATH;
     if (!extension) {
-      throw new Error('run extension specs through `npx nx e2e-extension @stxapps/e2e`');
+      throw new Error(
+        'run browser-extension specs through `npx nx e2e-extension @stxapps/e2e` ' +
+          '(or `e2e-extension:staging`)',
+      );
     }
     const extensionPath = extension;
 

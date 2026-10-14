@@ -261,19 +261,23 @@ extension_.
 ### the functional E2E target and the toolbar boundary
 
 `npx nx e2e-extension @stxapps/e2e` drives the development MV3 build in
-Playwright's bundled Chromium. It uses a persistent profile because the
-extension's non-extractable key is stored in IndexedDB and must survive popup and
-browser restart. Every case owns a disposable account, and cross-client checks
-read through a separate bracemark-web profile.
+Playwright's bundled Chromium against `npm run dev`;
+`npx nx e2e-extension:staging @stxapps/e2e` drives the staging build against
+the deployed dryrunbase.com tier (`e2e/STAGING.md`, _browser extension_). It uses a
+persistent profile because the extension's non-extractable key is stored in
+IndexedDB and must survive popup and browser restart. Every case owns a
+disposable account, and cross-client checks read through a separate
+bracemark-web profile.
 
 The attachable popup is `popup.html` in a tab. That tab cannot receive the
-toolbar gesture that creates the shipped `activeTab` grant, so the harness stages
-a run-artifact copy with `tabs`; the extraction case adds only the local web
-origin so its controlled title/image page can be injected. Neither permission
-change touches the build output or manifest source. This proves the popup, local
-store, background messages, sync, and MV3 worker restart, but it deliberately
-does not prove the real toolbar click. `e2e/extension/RELEASE.md` owns that Chrome
-check and the supported Firefox production smoke.
+toolbar gesture that creates the shipped `activeTab` grant, so the harness
+stages a run-artifact copy with `tabs`; the extraction case adds only the
+run's web origin (local or staging) so its controlled title/image page can be
+injected. Neither permission change touches the build output or manifest
+source. This proves the popup, local store, background messages, sync, and MV3
+worker restart, but it deliberately does not prove the real toolbar click.
+`e2e/extension/RELEASE.md` owns that Chrome check and the supported Firefox
+production smoke.
 
 ### auth code lives in the packages, not the web app
 

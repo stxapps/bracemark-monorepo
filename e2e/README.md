@@ -9,9 +9,10 @@ that one before changing anything.
 
 ## staging Release runs
 
-`npm run e2e:web:staging`, `e2e:<ios|android>:staging`, and
-`e2e:contract:<ios|android>:staging`
-test deployed dryrunbase.com services. Mobile needs an installed Release artifact
+`npm run e2e:web:staging`, `e2e:extension:staging`, `e2e:<ios|android>:staging`,
+and `e2e:contract:<ios|android>:staging`
+test deployed dryrunbase.com services. The browser-extension run builds the
+staging bundle itself. Mobile needs an installed Release artifact
 and its build receipt, produced by `npm run e2e:build:android:staging` or
 `e2e:build:ios:staging`. No local stack or Metro is used. Commands, admitted cases, CSP
 requirements, and coverage limits: [STAGING.md](./STAGING.md).

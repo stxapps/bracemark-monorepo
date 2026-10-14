@@ -24,12 +24,20 @@ export interface E2ECase {
   // Server state the runner writes for this case on STAGING, outside the app.
   // `plan` is the only one there is: the `manual` purchase row (seed/plan.ts),
   // written to staging's remote D1 with a Cloudflare credential. Declared here
-  // so the web runner can prove that credential before any account is created,
-  // and so the cases that need one are a list rather than a discovery — an
+  // so the runner can prove that credential before any account is created, and
+  // so the cases that need one are a list rather than a discovery — an
   // undeclared grant is refused at the write (seed/d1.ts). A local grant needs
-  // no credential and is not declared.
+  // no credential and is not declared. Only the surfaces in PLAN_GRANT_SURFACES
+  // may declare it.
   stagingGrants?: 'plan'[];
 }
+
+// The runners that carry the plan credential's preflight (`proveStagingPlanAccess`)
+// and mark their Playwright child: runner/web.ts and runner/extension.ts. ⚠ Adding
+// a surface here admits a third runner to staging's D1, and passes every check
+// there is unless that runner carries the same preflight (docs/e2e.md, _deployed
+// staging and mobile Release builds_).
+const PLAN_GRANT_SURFACES: E2ESurface[] = ['web', 'extension'];
 
 export interface CaseFilters {
   suite?: E2ETier;
@@ -103,11 +111,13 @@ export function validateCaseRegistry(cases = readCaseRegistry()): void {
       testCase.stagingGrants &&
       (testCase.stagingGrants.length !== 1 ||
         testCase.stagingGrants[0] !== 'plan' ||
-        // Only the web runner carries the credential preflight.
-        testCase.surface !== 'web' ||
+        !PLAN_GRANT_SURFACES.includes(testCase.surface) ||
         !testCase.environments?.includes('staging'))
     ) {
-      throw new Error(`${testCase.id}: stagingGrants is ["plan"], on a staging-admitted web case`);
+      throw new Error(
+        `${testCase.id}: stagingGrants is ["plan"], on a staging-admitted ` +
+          `${PLAN_GRANT_SURFACES.join(' or ')} case`,
+      );
     }
     if (!CASE_ID.test(testCase.id)) throw new Error(`invalid E2E case id: ${testCase.id}`);
     const key = `${testCase.surface}:${testCase.id}`;
