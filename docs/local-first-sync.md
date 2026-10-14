@@ -649,7 +649,11 @@ duplicate path.
 >   exact breach the content-before-metadata order exists to prevent. Held
 >   _wholesale_ because the engine is schema-blind: it cannot tell which metadata
 >   is safe. The held ops just stay queued and the next drain retries both halves
->   in order.
+>   in order. **Content the quota gate refused holds it the same way**, without
+>   asking the gate again. That ask would usually be refused too, since the gate
+>   reads usage and usage only grew, but a delete committed by another device or
+>   a purchase that raised the ceiling can land between the two sign calls and
+>   let the metadata through alone. The held ops count toward `blockedCount`.
 > - **The cycle still REJECTS**, after the phases rather than before them — so it
 >   keeps the progress it made, while the caller's error branch (`bgSyncStatus
 'error'`, a scheduled retry) still fires. Reporting a clean `idle` over an

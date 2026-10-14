@@ -905,6 +905,41 @@ describe('an over-quota account clearing space', () => {
     expect(committedPaths()).toEqual([OTHER_LINK_PATH]);
     expect(await pendingPaths()).toEqual([LINK_PATH]);
   });
+
+  it('holds the metadata behind refused content, even when the gate would let it through', async () => {
+    // The gate reads usage at each call, so a delete committed by another device or
+    // a purchase that raised the ceiling can land between the content sign and the
+    // metadata one. Asking again there would push a link naming an image the server
+    // never got — the breach content-before-metadata exists to prevent.
+    // A new link and the custom image it names, both still queued.
+    await seedQueued(FILE_PATH, 'preview bytes');
+    await seedQueued(LINK_PATH, JSON.stringify(linkBlob));
+
+    let putSigns = 0;
+    const refused = await runIncrementalSync(
+      deps({
+        opsList: quietLog,
+        filesSign: (_paths, op) => {
+          if (op !== 'put') return;
+          putSigns += 1;
+          if (putSigns === 1) throw QUOTA_EXCEEDED;
+        },
+      }),
+    );
+
+    expect(putSigns).toBe(1);
+    expect(committedPaths()).toEqual([]);
+    expect(refused.blockedCount).toBe(2);
+    expect(await pendingPaths()).toEqual([FILE_PATH, LINK_PATH].sort());
+
+    // The control: once the content fits, both halves go up, content first.
+    commits = [];
+    const fits = await runIncrementalSync(deps({ opsList: quietLog }));
+
+    expect(fits.blocked).toBe(false);
+    expect(commits.map((batch) => batch.map((o) => o.path))).toEqual([[FILE_PATH], [LINK_PATH]]);
+    expect(await pendingPaths()).toEqual([]);
+  });
 });
 
 // --- the put chunk, per blob kind --------------------------------------------
@@ -947,11 +982,12 @@ describe('the put chunk', () => {
     expect(await pendingPaths()).toEqual([]);
   });
 
-  it('asks the quota gate once per put phase, and counts every op it refused', async () => {
+  it('asks the quota gate once, and counts every op it refused or held', async () => {
     // The gate refuses on the account's usage, never on which paths a chunk holds,
     // so asking again for each remaining content chunk only spends the rate limit
-    // on an answer already known. The count must still cover all of them, or the
-    // "N changes aren't syncing" line understates what is stuck.
+    // on an answer already known — and the metadata phase is held behind refused
+    // content, unasked. The count must still cover all of them, or the "N changes
+    // aren't syncing" line understates what is stuck.
     const putSigns: number[] = [];
     const outcome = await runIncrementalSync(
       deps({
@@ -964,11 +1000,58 @@ describe('the put chunk', () => {
       }),
     );
 
-    // One content chunk refused, then one index chunk — not one per chunk.
-    expect(putSigns).toHaveLength(2);
+    // One content chunk refused — not one per chunk, and no index chunk after it.
+    expect(putSigns).toHaveLength(1);
     expect(outcome.blockedCount).toBe(2 * COUNT);
     expect(committedPaths()).toEqual([]);
     expect(await pendingPaths()).toHaveLength(2 * COUNT);
+  });
+
+  it('clears each chunk from the queue before it signs the next', async () => {
+    // The whole point of a smaller content chunk: the pending count steps down per
+    // chunk, not once per phase. A pass that signed ahead, or held its commits to
+    // the end of the phase, would show the count frozen across every sign.
+    const signs: { size: number; pendingBefore: number }[] = [];
+    await runIncrementalSync(
+      deps({
+        opsList: quietLog,
+        filesSign: async (paths, op) => {
+          if (op !== 'put') return;
+          signs.push({ size: paths.length, pendingBefore: (await pendingPaths()).length });
+        },
+      }),
+    );
+
+    expect(signs.length).toBeGreaterThan(2);
+    expect(signs[0].pendingBefore).toBe(2 * COUNT);
+    for (let i = 1; i < signs.length; i++) {
+      expect(signs[i].pendingBefore).toBe(signs[i - 1].pendingBefore - signs[i - 1].size);
+    }
+  });
+
+  it('keeps what it pushed before a mid-phase refusal, and counts only the rest', async () => {
+    // A refusal past the first chunk: the chunks before it are committed and off the
+    // queue, so counting them as blocked would overstate what is stuck.
+    const putSigns: number[] = [];
+    const outcome = await runIncrementalSync(
+      deps({
+        opsList: quietLog,
+        filesSign: (paths, op) => {
+          if (op !== 'put') return;
+          putSigns.push(paths.length);
+          if (putSigns.length > 1) throw QUOTA_EXCEEDED;
+        },
+      }),
+    );
+
+    const [pushed] = putSigns;
+    // Granted, then refused — neither the rest of the content phase nor the held
+    // metadata phase is asked.
+    expect(putSigns).toHaveLength(2);
+    expect(committedPaths()).toHaveLength(pushed);
+    expect(committedPaths().every((p) => p.startsWith('files/'))).toBe(true);
+    expect(outcome.blockedCount).toBe(2 * COUNT - pushed);
+    expect(await pendingPaths()).toHaveLength(2 * COUNT - pushed);
   });
 });
 

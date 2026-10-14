@@ -788,7 +788,8 @@ async function pushPending(
   // Phase 3 then 4: drain ALL content puts (every chunk) before ANY metadata
   // put, so the content-before-metadata invariant holds across chunk boundaries
   // too. Each phase uploads at its own blob kind's chunk size and fan-out.
-  await pushPuts(
+  const metadataPuts = puts.filter((o) => !isContentPath(o.path));
+  const contentRefused = await pushPuts(
     deps,
     puts.filter((o) => isContentPath(o.path)),
     CONTENT_PUT_BATCH,
@@ -803,10 +804,20 @@ async function pushPending(
   // prevent. Held wholesale because the engine is schema-blind — it can't tell
   // which metadata is safe. The held ops just stay queued; the next drain
   // retries both halves in order.
-  if (failures.count === 0) {
+  //
+  // Content the quota gate refused is held behind for the same reason. Asking
+  // the gate again would usually be refused too — it reads usage, and usage only
+  // grew — but not always: a delete committed by another device, or a purchase
+  // that raised the ceiling, can land between the two sign calls, and the
+  // metadata phase would then go up without the content it names. The held ops
+  // count as blocked: they are stuck behind the refusal, and the next cycle that
+  // fits pushes both halves.
+  if (contentRefused) {
+    recordBlocked(outcome, metadataPuts.length);
+  } else if (failures.count === 0) {
     await pushPuts(
       deps,
-      puts.filter((o) => !isContentPath(o.path)),
+      metadataPuts,
       INDEX_PUT_BATCH,
       INDEX_CONCURRENCY,
       outcome,
@@ -824,7 +835,8 @@ async function pushPending(
 // so each chunk's PUT URLs are minted immediately before that chunk's upload and
 // the chunk commits before the next is signed. `batchSize` (≤ both caps) keeps
 // the sign and the commit a single round trip each; it and `concurrency` are the
-// set's kind's.
+// set's kind's. Resolves true when the quota gate refused the set — the caller
+// holds the metadata phase on it, as it does on a failed upload.
 async function pushPuts(
   deps: SyncDeps,
   puts: PendingOpRecord[],
@@ -833,7 +845,7 @@ async function pushPuts(
   outcome: SyncOutcome,
   orphanedPaths: string[],
   failures: UploadFailures,
-): Promise<void> {
+): Promise<boolean> {
   let unsigned = puts.length;
   for (const batch of chunk(puts, batchSize)) {
     const signed = await signPushable(deps, batch, outcome);
@@ -844,7 +856,7 @@ async function pushPuts(
     // which CONTENT_PUT_BATCH would otherwise multiply against the rate limit.
     if (signed === null) {
       recordBlocked(outcome, unsigned);
-      return;
+      return true;
     }
     const { orphaned, failed, superseded } = await uploadBlobs(
       deps,
@@ -867,9 +879,9 @@ async function pushPuts(
     }
     // A transiently-failed PUT stays queued but is excluded from the commit: unlike
     // an unsigned path there is nothing gained by asking the server to HEAD an
-    // object we know we didn't send — on a big failed chunk that's up to 500
-    // doomed entries per cycle — and the failure is already surfaced through
-    // `failures`.
+    // object we know we didn't send — on a big failed chunk that's up to a chunk's
+    // worth (100 or 500) of doomed entries per cycle — and the failure is already
+    // surfaced through `failures`.
     if (failed.length > 0) {
       const skipped = new Set(failed.map((o) => o.path));
       uploaded = uploaded.filter((o) => !skipped.has(o.path));
@@ -885,6 +897,7 @@ async function pushPuts(
     }
     await commitBatched(deps, uploaded);
   }
+  return false;
 }
 
 // Sign one put chunk, surviving the server's quota gate instead of failing the
@@ -912,9 +925,10 @@ async function pushPuts(
 //
 // Blocked ops stay QUEUED, deliberately — they are the user's data, and they
 // must upload the moment the account is back under its limits. The cost is one
-// refused sign call per put phase per cycle (pushPuts stops a phase at its
-// first refusal), and it is what makes recovery automatic rather than
-// something the user has to know to trigger.
+// refused sign call per cycle (pushPuts stops a phase at its first refusal, and
+// a refused content phase holds the metadata phase unasked), and it is what
+// makes recovery automatic rather than something the user has to know to
+// trigger.
 //
 // Any OTHER error still throws: an auth 403, a 5xx that outlived its retries,
 // a network failure. Those are real cycle failures.

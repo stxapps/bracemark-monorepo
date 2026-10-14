@@ -123,7 +123,8 @@ export interface SyncOutcome {
   // inferred from it so the two stay independently truthful — a surface reading
   // a restored mirror can know it is blocked without a trustworthy count.
   blocked: boolean;
-  // How many pending ops the gate refused this cycle — the "12 links aren't
+  // How many pending ops the gate refused this cycle, or held behind a refusal
+  // (the metadata phase waits on refused content) — the "12 links aren't
   // syncing" detail. NOT the pending-queue length: that also counts ops which
   // simply haven't been reached yet, so it would overstate the problem.
   blockedCount: number;
