@@ -22,6 +22,15 @@ tags: [BULK-002, full, online, destructive, scale, ios, android]
 - extendedWaitUntil:
     visible: '.*${HOST}/row-000.*'
     timeout: 60000
+# Put the "links without a preview" prompt away first. It holds the top half of
+# the screen above the list, and `centerElement` aims a row at the middle of the
+# screen — inside the prompt — so the scroll parks row-045 at the list's top edge
+# with row-044 gone from the tree, and its assertion fails.
+- tapOn:
+    text: 'Dismiss'
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
 
 - tapOn:
     id: 'links-more-options'

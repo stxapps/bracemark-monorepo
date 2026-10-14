@@ -762,7 +762,10 @@ The repo-specific gotchas:
 - **The "links without a preview" prompt covers the middle of the links screen.**
   Every `.invalid` link lacks a preview, so the prompt is up in these flows, and it
   holds the upper half of the screen over the list — where `centerElement` parks a
-  row. `flows/bulk-actions.yaml` dismisses it before selecting rows.
+  row. A press there lands on the prompt, and a row scrolled toward it is parked
+  at the list's top edge with its neighbour above gone from the tree. Every flow
+  that selects or scrolls rows dismisses it first (`flows/bulk-actions.yaml`,
+  `flows/bulk-select.yaml`, …).
 - **Android 13+ floats its clipboard preview over the bottom-left corner.** After
   a copy, a tap on the bulk bar's ✕ opened the system clipboard editor ("From
   Bracemark") instead of leaving the mode. `flows/bulk-copy.yaml` leaves the mode
