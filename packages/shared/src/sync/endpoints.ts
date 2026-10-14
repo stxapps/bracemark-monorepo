@@ -55,10 +55,21 @@ export const syncPathSchema = z
 
 // Contract caps, defined once so the server's validation and the client's
 // batching/paging stay pinned to the same numbers (the sync engine batches its
-// writes and pages its reads against these). The 1000s all trace to R2: one
-// `list()` call returns at most 1000 keys, and the write caps match so one
-// request never implies more than ~1000 R2 subrequests.
-export const MAX_COMMIT_OPS = 1000;
+// writes and pages its reads against these). The list caps and MAX_SIGN_PATHS
+// trace to R2's 1000-key `list()` page; signing is local crypto, one subrequest
+// for the whole batch whatever its size.
+//
+// MAX_COMMIT_OPS is the one cap that is a SUBREQUEST budget, and it is half of
+// the others on purpose. A commit HEADs every put, one R2 binding call each, on
+// top of the auth middleware's D1 read (and its renewal write), the bulk delete
+// and the DO RPC — and Workers Free, which staging runs on, allows 1000 calls to
+// Cloudflare services per invocation, all of those counted together. At 1000 ops
+// the commit came to 1001+ and the last HEAD threw: a 500, every time, on every
+// retry of the same chunk, with the client re-uploading the whole chunk first.
+// Nothing local catches it — miniflare enforces no such limit, and production's
+// plan allows 10,000. 500 keeps half the budget free for whatever the next
+// middleware reads, and halves what a failed chunk costs to re-upload.
+export const MAX_COMMIT_OPS = 500;
 export const MAX_SIGN_PATHS = 1000;
 export const MAX_LIST_LIMIT = 1000;
 
@@ -119,9 +130,10 @@ export const opsListEndpoint = defineEndpoint({
 // One mutation to record, sent AFTER its R2 PUT (for `put`) succeeds. Batched —
 // the client drains its pending-ops queue in one round trip (a first-sync push is
 // thousands of files), and the server fans the per-put HEADs out in parallel
-// rather than paying a request each. Capped at 1000 (same bound as files/sign);
-// over the cap the whole request 400s at the contract before any work runs — the
-// abuse gate.
+// rather than paying a request each. Capped at MAX_COMMIT_OPS — 500, half of
+// files/sign's, because the HEADs spend the invocation's subrequest budget (the
+// caps above); over the cap the whole request 400s at the contract before any
+// work runs — the abuse gate.
 export const commitOpSchema = z.object({
   op: opKindSchema,
   path: syncPathSchema,

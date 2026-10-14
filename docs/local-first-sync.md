@@ -150,10 +150,25 @@ POST /v1/files/sign    mint presigned R2 URL(s); op: 'put' | 'get' (→ authoriz
 shapes bound differently: the **reads** (`ops/list`, `files/list`) return many and
 **paginate** under a `limit`/page size, so a client pages forward with a cursor
 rather than pulling an open-ended response; the **writes** (`ops/commit`,
-`files/sign`) accept many and **batch** under a `.min(1).max(1000)` array, so a
+`files/sign`) accept many and **batch** under a `.min(1).max(N)` array, so a
 first-sync push of thousands of files is a handful of round trips, and a request
-over the cap `400`s at the contract before any work runs (the abuse gate). The
-batch caps for the two writes are the same number (`1000`).
+over the cap `400`s at the contract before any work runs (the abuse gate).
+
+> **The two write caps differ, and `ops/commit`'s is a subrequest budget.**
+> `files/sign` takes 1000 paths (`MAX_SIGN_PATHS`) — signing is local crypto, one
+> subrequest whatever the batch. `ops/commit` takes **500** (`MAX_COMMIT_OPS`),
+> because it `HEAD`s every put: one R2 binding call per op, on top of the auth
+> middleware's D1 read (and renewal write), the bulk delete and the DO RPC, all
+> in one invocation. Workers Free — staging's plan — allows **1000 calls to
+> Cloudflare services per invocation**, bindings included. At a cap of 1000 a full
+> chunk came to 1001+, the last `HEAD` threw, and the commit answered `500` —
+> deterministically, so every retry re-uploaded the same chunk and failed the same
+> way. **Nothing local catches it**: miniflare enforces no such limit, no spec
+> sends a full batch against a real Worker, and production's plan allows 10,000.
+> 500 leaves half the budget for whatever the next middleware reads, and halves
+> what a failed chunk re-uploads. Anything that adds a per-op binding call to the
+> commit (a second `HEAD`, a conditional write) spends this same budget — lower
+> the cap with it. The client's put chunk is the smaller of the two caps.
 
 All four live in `apps/bracemark-api/src/routes/sync.ts` (each behind `requireAuth`).
 (One data-plane endpoint sits deliberately OUTSIDE this control plane:
@@ -555,7 +570,7 @@ delete a bookmark:         delete metadata first, then content files
 ```
 
 The commit protocol (3 round-trips), **batched** across files — `files/sign` and
-`ops/commit` each take an array (up to 1000), so a multi-file create or a
+`ops/commit` each take an array (up to 1000 and 500), so a multi-file create or a
 first-sync push is a handful of round trips, not one per file:
 
 1. `POST /v1/files/sign` with `{ op: 'put', paths: [...] }` to mint signed upload
@@ -617,8 +632,8 @@ duplicate path.
 >
 > - **A failed op is left queued but kept OUT of the commit.** Unlike an unsigned
 >   path there is nothing to gain from asking the server to `HEAD` an object we
->   know we never sent — on a large failed chunk that is up to a thousand
->   guaranteed `no_object` entries per cycle.
+>   know we never sent — on a large failed chunk that is up to a chunk's worth
+>   (500) of guaranteed `no_object` entries per cycle.
 > - **The metadata phase is HELD for the rest of the cycle if any content upload
 >   failed** — otherwise a puller could land metadata whose content `404`s, the
 >   exact breach the content-before-metadata order exists to prevent. Held

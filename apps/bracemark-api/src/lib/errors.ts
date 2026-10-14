@@ -42,6 +42,12 @@ export function errorHandler(err: unknown, c: Context<AppEnv>): Response {
 
   // Anything else is an unexpected bug. Log it for observability (wrangler tail
   // / the observability binding) but never leak internals to the client.
-  console.error('Unhandled error:', err);
+  //
+  // `name: message` goes in as its own string, ahead of the object. Handed only
+  // the object, the stored log kept the stack frames and dropped the line that
+  // says what went wrong: the commit 500s on staging (a full batch over the
+  // per-invocation subrequest limit) read back as nothing but `at Object.head …`.
+  const summary = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+  console.error('Unhandled error:', summary, err);
   return c.json({ error: 'internal_error' }, 500);
 }

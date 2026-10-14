@@ -91,7 +91,8 @@ export const syncRoutes = new Hono<AppEnv>()
       // stamps the commit clock, and frees the size. A put with no R2 object is dropped from
       // the batch — never log an op the log can't back (op-without-object 404s
       // every puller), so `results` omits it and the client retries. The contract
-      // caps `ops` at 1000; over the cap zValidator 400s before any work runs.
+      // caps `ops` at MAX_COMMIT_OPS, sized so the HEADs fit the invocation's
+      // subrequest budget; over the cap zValidator 400s before any work runs.
       const body: OpsCommitResponse = await commitOps(c.env, userId, ops);
       return c.json(body);
     },

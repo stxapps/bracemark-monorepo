@@ -73,8 +73,8 @@ export function userFilesRepo(env: Bindings) {
     // Delete a user's objects — the server side of a committed `delete` op (the
     // client can't do it itself: files/sign mints only PUT/GET URLs). One bulk
     // binding call; deleting an absent key is a no-op, so a retried commit stays
-    // idempotent. Callers stay within the contract's 1000-op batch cap, which
-    // matches the binding's 1000-key bulk-delete ceiling.
+    // idempotent. Callers stay within the contract's MAX_COMMIT_OPS batch cap,
+    // which sits under the binding's 1000-key bulk-delete ceiling.
     async deleteMany(userId: string, paths: string[]): Promise<void> {
       if (paths.length === 0) return;
       await bucket.delete(paths.map((path) => userFileKey(userId, path)));

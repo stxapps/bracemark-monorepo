@@ -103,8 +103,8 @@ const INDEX_CONCURRENCY = 24;
 const FILE_CONCURRENCY = 8;
 
 // One put-pipeline pass (pushPuts) signs, uploads, and commits a single chunk, so
-// the chunk must fit BOTH the sign cap and the commit cap in one call each. Both are
-// 1000 today; min() stays correct if they ever diverge. Bounding the chunk this way
+// the chunk must fit BOTH the sign cap and the commit cap in one call each — the
+// commit cap (500) is the smaller today, so it sets the chunk. Bounding the chunk this way
 // keeps each presigned PUT URL's mint-to-PUT latency inside its own chunk's upload
 // window — for KB-sized index blobs that is well under the 5-min TTL on any push. A
 // `files/` content chunk CAN outlive the TTL on a slow uplink; that is absorbed per
@@ -774,7 +774,7 @@ async function pushPuts(
     }
     // A transiently-failed PUT stays queued but is excluded from the commit: unlike an
     // unsigned path there is nothing gained by asking the server to HEAD an object we
-    // know we didn't send — on a big failed chunk that's up to a thousand doomed
+    // know we didn't send — on a big failed chunk that's up to 500 doomed
     // entries per cycle — and the failure is already surfaced through `failures`.
     if (failed.length > 0) {
       const skipped = new Set(failed.map((o) => o.path));

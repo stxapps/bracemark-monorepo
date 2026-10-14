@@ -65,7 +65,13 @@ describe('errorHandler', () => {
     expect(res.status).toBe(500);
     // No internals in the body — not the message, not a stack, not a field name.
     await expect(res.json()).resolves.toEqual({ error: 'internal_error' });
-    // …but it IS observable in the log (wrangler tail / the observability binding).
-    expect(logged).toHaveBeenCalledWith('Unhandled error:', expect.any(TypeError));
+    // …but it IS observable in the log (wrangler tail / the observability binding),
+    // its message as a string of its own — the stored log dropped it from the
+    // object alone, leaving only the stack frames.
+    expect(logged).toHaveBeenCalledWith(
+      'Unhandled error:',
+      'TypeError: cannot read properties of undefined (reading `secretToken`)',
+      expect.any(TypeError),
+    );
   });
 });
