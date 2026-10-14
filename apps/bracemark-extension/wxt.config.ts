@@ -155,6 +155,12 @@ export default defineConfig({
       // `bracemark-extractor` or Expo's `all` mode instead. See
       // docs/link-extraction.md "the extension is active-context only". The api host
       // stays listed so the bearer-auth calls to bracemark-api keep their CORS exemption.
+      // R2 is deliberately NOT listed: sync's presigned blob PUT/GET to
+      // `<account-id>.r2.cloudflarestorage.com` is an ordinary CORS request that works
+      // only because each tier's bucket CORS policy allows origin `*`. Narrow that
+      // policy to `app.*` and this extension's sync fails at preflight while
+      // bracemark-web keeps working. See docs/hosting.md, _cors & frontend↔backend
+      // wiring_.
       host_permissions: [apiHost],
       permissions: [
         'storage',

@@ -1151,14 +1151,14 @@ has no policy at all. Forget it and every PUT dies at preflight with _"No
 edits all keep working. Local dev cannot surface it: under `wrangler dev`, blobs go
 through the api's own proxy route (`r2/local.ts`), which `CORS_ORIGINS` already
 covers. Like secrets, the policy is set out of band, once per tier's bucket, with
-that tier's token:
+that tier's token — and it is **the same policy on both tiers**:
 
 ```json
 {
   "rules": [
     {
-      "allowed": { "origins": ["https://app.dryrunbase.com"], "methods": ["GET", "PUT"] },
-      "maxAgeSeconds": 3600
+      "allowed": { "origins": ["*"], "methods": ["GET", "PUT"] },
+      "maxAgeSeconds": 7200
     }
   ]
 }
@@ -1169,17 +1169,44 @@ npx wrangler r2 bucket cors set bracemark-user-files-<tier> --file <that json> -
 npx wrangler r2 bucket cors list bracemark-user-files-<tier> --env <tier>
 ```
 
-- **`app.*` only.** The marketing site never touches R2. The Expo app's native
-  `fetch` is not subject to CORS, and the browser extension's `host_permissions`
-  name only the api.
+- **`*`, because the browser extension is a caller too, and its origin cannot
+  be listed.** Its `host_permissions` name only the api
+  (`apps/bracemark-extension/wxt.config.ts`), so its R2 transfers are ordinary
+  cross-origin requests and need this policy exactly as bracemark-web's do. An
+  allow-list cannot hold its origin: Chrome's `chrome-extension://<id>` is
+  fixed per store listing, but Firefox's `moz-extension://<uuid>` and Safari's
+  `safari-web-extension://<uuid>` are **random per install**. The policy used to
+  name `app.*` only, on the reasoning that the extension's permissions kept it
+  out of R2. They don't, and the staging extension's first sync died at
+  preflight. Neither local dev nor the staging web suite can catch that: the
+  first goes through the api's proxy, and the second runs only as `app.*`.
+- **`*` grants nothing a presigned URL doesn't already grant.** CORS protects
+  credentials the browser attaches on its own (cookies, a network position),
+  and this endpoint honours none: the signature in the URL is the whole
+  credential, and anyone holding the URL can already replay it outside a browser.
+  A `*` response also can't be read with credentials, by spec. What bounds the
+  exposure is the presign: one object, one method, a short expiry (five minutes
+  for a PUT, an hour for a GET — `services/sync.ts`), over AES-GCM ciphertext. This is **not** a precedent for
+  `CORS_ORIGINS`, which guards an authenticated api and stays an allow-list.
+  bracemark-web's own control over where it may send bytes is its CSP
+  `connect-src` ([above](#security-headers--where-the-csp-has-to-live)), and that
+  still names the exact account host.
+- **Don't fix the extension with `host_permissions` instead.** A host
+  permission would skip CORS for the extension, but the exact host puts the
+  Cloudflare account id into a committed env file and the published manifest. The
+  wildcard `*.r2.cloudflarestorage.com` reaches every account's R2, which is the
+  shape the CSP rejects. Either way, users see an install warning naming an opaque
+  storage host. With `*` on the bucket, the permission would add nothing.
 - **No `headers`.** `putBlob` sends a raw byte body and no custom header, so the
   preflight asks for none. If the client starts sending one, add it here in the
   same change.
 - **No `exposeHeaders`.** The client reads only the status and the body.
-- **`maxAgeSeconds` buys almost nothing here.** A preflight is remembered per URL,
-  and every presigned URL is its own — so each PUT is preflighted whatever the
-  value, and only a retry of the same URL reuses one. The GET sends no header and
-  is never preflighted.
+- **`maxAgeSeconds` matches the Workers' two hours, and buys nothing here.** A
+  preflight is remembered per URL, and every presigned PUT URL is its own and dies
+  after five minutes — so each PUT is preflighted whatever the value, and any value
+  of 300 or more behaves identically. The number matches the Workers' only so that
+  nobody goes looking for a reason it differs. The GET sends no header and is never
+  preflighted.
 
 Deploy artifacts are **built once per tier**, never promoted: `NEXT_PUBLIC_API_URL`
 and `NEXT_PUBLIC_APP_URL` are baked at build time, so staging and production are
