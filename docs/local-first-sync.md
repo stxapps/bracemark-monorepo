@@ -168,7 +168,8 @@ over the cap `400`s at the contract before any work runs (the abuse gate).
 > 500 leaves half the budget for whatever the next middleware reads, and halves
 > what a failed chunk re-uploads. Anything that adds a per-op binding call to the
 > commit (a second `HEAD`, a conditional write) spends this same budget — lower
-> the cap with it. The client's put chunk is the smaller of the two caps.
+> the cap with it. The client's index put chunk is the smaller of the two caps;
+> its content put chunk is smaller still (_a push is chunked_, below).
 
 All four live in `apps/bracemark-api/src/routes/sync.ts` (each behind `requireAuth`).
 (One data-plane endpoint sits deliberately OUTSIDE this control plane:
@@ -615,13 +616,22 @@ coalescing (see _deferred_) trims the extra rows later. Never fail a commit on a
 duplicate path.
 
 > **A push is chunked, and a failed upload costs its own op — never its chunk.**
-> One pipeline pass signs, uploads, and commits a **single chunk** (bounded by the
-> smaller of the `files/sign` and `ops/commit` caps), rather than signing
-> everything up front: that keeps each presigned PUT's mint-to-PUT latency inside
-> its **own** chunk's upload window. For KB-sized index blobs that is far under
-> the 5-minute TTL on a push of any size. A `files/` **content** chunk genuinely
-> can outlive it on a slow uplink — so the expiry is absorbed **per blob**: an
-> expired-URL PUT (R2 answers 403) fails only its own op, the chunk still commits
+> One pipeline pass signs, uploads, and commits a **single chunk** rather than
+> signing everything up front: that keeps each presigned PUT's mint-to-PUT
+> latency inside its **own** chunk's upload window. The chunk size is per blob
+> kind. An **index** chunk is the smaller of the `files/sign` and `ops/commit`
+> caps (500): KB-sized blobs drain it in seconds, far under the 5-minute TTL, and
+> a smaller chunk would only spend more of the `tight` rate limit (10 calls per
+> 10 s per user; every chunk costs a sign and a commit). A `files/` **content**
+> chunk is **100**, because the chunk is also the step the pending count moves in
+> — its ops leave the queue only when it commits — and 500 MB-sized blobs took
+> minutes on an ordinary uplink, with "N changes waiting to sync" frozen
+> throughout. 100 is about a minute at 1 MB a blob over 10 Mbps, and still ≥ 12
+> fan-out rounds for tiny blobs, which keeps it under the rate limit.
+>
+> Even at 100 a content chunk can outlive the TTL on a slow enough uplink, so the
+> expiry is absorbed **per blob**: an expired-URL PUT (R2 answers 403) fails only
+> its own op, the chunk still commits
 > the blobs that **did** land, and the rest re-sign next drain under fresh URLs.
 > Letting the failure escape and abort the whole chunk instead made a chunk too
 > big for one TTL window a **deterministic livelock** — every retry restarted the
@@ -633,7 +643,7 @@ duplicate path.
 > - **A failed op is left queued but kept OUT of the commit.** Unlike an unsigned
 >   path there is nothing to gain from asking the server to `HEAD` an object we
 >   know we never sent — on a large failed chunk that is up to a chunk's worth
->   (500) of guaranteed `no_object` entries per cycle.
+>   (100 or 500) of guaranteed `no_object` entries per cycle.
 > - **The metadata phase is HELD for the rest of the cycle if any content upload
 >   failed** — otherwise a puller could land metadata whose content `404`s, the
 >   exact breach the content-before-metadata order exists to prevent. Held

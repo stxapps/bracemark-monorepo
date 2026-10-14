@@ -485,6 +485,47 @@ describe('a content push', () => {
     expect(committedPaths()).toEqual([]);
     expect(await pendingPaths()).toEqual([EXTRACTION_PATH, FILE_PATH]);
   });
+
+  // Drift guards for web's 'the put chunk' cases, which carry the reasoning: this
+  // copy's chunk sizes and its gate short-circuit are its own source.
+  describe('the put chunk', () => {
+    const COUNT = 150; // more than a content chunk holds, less than an index one
+    const isContent = (batch: { path: string }[]) => batch[0].path.startsWith(FILES_PREFIX);
+
+    beforeEach(async () => {
+      for (let i = 0; i < COUNT; i++) {
+        await seedQueuedContent(`f_${i}`, 'image bytes');
+        seedQueued(pathFromId(`l_${i}`, LINKS_PREFIX), 'a link');
+      }
+    });
+
+    it('commits content in smaller chunks than the index', async () => {
+      await runIncrementalSync(deps());
+
+      expect(commits.filter((b) => !isContent(b))).toHaveLength(1);
+      expect(commits.filter(isContent).length).toBeGreaterThan(1);
+      expect(commits.at(-1)?.every((o) => !o.path.startsWith(FILES_PREFIX))).toBe(true);
+      expect(await pendingPaths()).toEqual([]);
+    });
+
+    it('asks the quota gate once per put phase, and counts every op it refused', async () => {
+      let putSigns = 0;
+      const outcome = await runIncrementalSync(
+        deps({
+          opsList: () => ({ ops: [], oldestUpdatedAt: 500, newestUpdatedAt: 1500, hasMore: false }),
+          filesSign: (_paths, op) => {
+            if (op !== 'put') return;
+            putSigns += 1;
+            throw new ApiError(403, JSON.stringify({ error: 'quota_exceeded' }));
+          },
+        }),
+      );
+
+      expect(putSigns).toBe(2);
+      expect(outcome.blockedCount).toBe(2 * COUNT);
+      expect(await pendingPaths()).toHaveLength(2 * COUNT);
+    });
+  });
 });
 
 // --- the pull: the row and the file must move together -----------------------

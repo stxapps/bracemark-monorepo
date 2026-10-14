@@ -907,6 +907,71 @@ describe('an over-quota account clearing space', () => {
   });
 });
 
+// --- the put chunk, per blob kind --------------------------------------------
+
+// A chunk is the step the pending count moves in — its ops leave the queue only
+// when it commits — so a `files/` chunk at the full commit cap froze "N changes
+// waiting to sync" for minutes on an ordinary uplink, and ran long enough for its
+// tail to outlive the presigned-URL TTL. Content chunks are smaller than index
+// chunks for that; index chunks stay at the cap, where every extra chunk is two
+// more calls against the `tight` rate limit (docs/local-first-sync.md, _a push is
+// chunked_).
+describe('the put chunk', () => {
+  const quietLog = () => ({
+    ops: [],
+    oldestUpdatedAt: 500,
+    newestUpdatedAt: 1500,
+    hasMore: false,
+  });
+  const QUOTA_EXCEEDED = new ApiError(403, JSON.stringify({ error: 'quota_exceeded' }));
+  // Enough of each kind that a content chunk can't hold them all and an index one can.
+  const COUNT = 150;
+  const contentPaths = Array.from({ length: COUNT }, (_, i) => `files/f_${i}.enc`);
+  const indexPaths = Array.from({ length: COUNT }, (_, i) => `links/l_${i}.enc`);
+
+  beforeEach(async () => {
+    for (const path of [...contentPaths, ...indexPaths]) await seedQueued(path, 'bytes');
+  });
+
+  it('commits content in smaller chunks than the index', async () => {
+    await runIncrementalSync(deps({ opsList: quietLog }));
+
+    const isContent = (batch: { path: string }[]) => batch[0].path.startsWith('files/');
+    const contentCommits = commits.filter(isContent);
+    const indexCommits = commits.filter((b) => !isContent(b));
+    expect(indexCommits).toHaveLength(1);
+    expect(contentCommits.length).toBeGreaterThan(1);
+    // Every op still went up, content first — the phase order holds across chunks.
+    expect(commits.at(-1)).toBe(indexCommits[0]);
+    expect(committedPaths().sort()).toEqual([...contentPaths, ...indexPaths].sort());
+    expect(await pendingPaths()).toEqual([]);
+  });
+
+  it('asks the quota gate once per put phase, and counts every op it refused', async () => {
+    // The gate refuses on the account's usage, never on which paths a chunk holds,
+    // so asking again for each remaining content chunk only spends the rate limit
+    // on an answer already known. The count must still cover all of them, or the
+    // "N changes aren't syncing" line understates what is stuck.
+    const putSigns: number[] = [];
+    const outcome = await runIncrementalSync(
+      deps({
+        opsList: quietLog,
+        filesSign: (paths, op) => {
+          if (op !== 'put') return;
+          putSigns.push(paths.length);
+          throw QUOTA_EXCEEDED;
+        },
+      }),
+    );
+
+    // One content chunk refused, then one index chunk — not one per chunk.
+    expect(putSigns).toHaveLength(2);
+    expect(outcome.blockedCount).toBe(2 * COUNT);
+    expect(committedPaths()).toEqual([]);
+    expect(await pendingPaths()).toHaveLength(2 * COUNT);
+  });
+});
+
 // --- the lazy content cache --------------------------------------------------
 
 // loadEntityContent caches the blob it decrypted into the record, so re-views are

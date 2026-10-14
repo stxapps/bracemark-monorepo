@@ -106,8 +106,8 @@ export interface SyncDeps {
 }
 
 // Batch/page sizes — this client's policy is to use the contract caps in full
-// (anything ≤ the cap is valid; fewer round trips wins). A client-only knob, not
-// contract.
+// (anything ≤ the cap is valid; fewer round trips wins) — all but the content
+// put chunk, CONTENT_PUT_BATCH below. A client-only knob, not contract.
 const SIGN_BATCH = MAX_SIGN_PATHS;
 const COMMIT_BATCH = MAX_COMMIT_OPS;
 const OPS_PAGE = MAX_LIST_LIMIT;
@@ -127,16 +127,27 @@ const INDEX_CONCURRENCY = 24;
 const FILE_CONCURRENCY = 8;
 
 // One put-pipeline pass (pushPuts) signs, uploads, and commits a single chunk, so
-// the chunk must fit BOTH the sign cap and the commit cap in one call each — the
-// commit cap (500) is the smaller today, so it sets the chunk. Bounding the chunk
-// this way keeps each presigned PUT URL's mint-to-PUT latency inside its own
-// chunk's upload window — for KB-sized index blobs that is well under the 5-min
-// TTL on any push. A `files/` content chunk CAN outlive the TTL on a phone
-// uplink; that is absorbed per blob, not per chunk: an expired-URL PUT fails only
-// its own op (uploadBlobs), the chunk still commits the blobs that landed, and
-// the rest retry next cycle under fresh URLs — monotonic progress either way,
-// never a livelock.
-const PUT_BATCH = Math.min(SIGN_BATCH, COMMIT_BATCH);
+// a chunk must fit BOTH the sign cap and the commit cap in one call each, and it
+// keeps each presigned PUT URL's mint-to-PUT latency inside its own chunk's
+// upload window. The chunk is also the step the pending count moves in: its ops
+// leave the queue only when it commits (commitBatched). So the size is per blob
+// kind, the same split as the fan-out above.
+//
+// Index: the full cap — the commit cap (500) is the smaller today. KB-sized
+// blobs at INDEX_CONCURRENCY drain it in seconds, well under the 5-min TTL, and a
+// smaller chunk would only spend more of bracemark-api's `tight` rate limit (10
+// calls per 10 s per user, shared by files/sign and ops/commit — two per chunk).
+//
+// Content: ~12× FILE_CONCURRENCY. At the full cap a `files/` chunk of MB-sized
+// blobs ran for minutes on a phone uplink: minutes with the pending count
+// frozen, and long enough for its tail to outlive the TTL. That expiry is
+// absorbed per blob (uploadBlobs fails only its own op, the chunk commits what
+// landed), but any failed content PUT holds the whole metadata phase until the
+// next cycle. 100 is ~a minute at 1 MB a blob over 10 Mbps, and still ≥ 12
+// fan-out rounds for tiny blobs, which keeps a chunk's two calls under the rate
+// limit.
+const INDEX_PUT_BATCH = Math.min(SIGN_BATCH, COMMIT_BATCH);
+const CONTENT_PUT_BATCH = 100;
 
 // A path under `files/` is heavy content (a saved page copy, screenshot). Per the
 // doc, content is fetched LAZILY (on open/scroll), never eagerly on sync — so
@@ -776,10 +787,11 @@ async function pushPending(
 
   // Phase 3 then 4: drain ALL content puts (every chunk) before ANY metadata
   // put, so the content-before-metadata invariant holds across chunk boundaries
-  // too. Each phase uploads at its own blob kind's fan-out.
+  // too. Each phase uploads at its own blob kind's chunk size and fan-out.
   await pushPuts(
     deps,
     puts.filter((o) => isContentPath(o.path)),
+    CONTENT_PUT_BATCH,
     FILE_CONCURRENCY,
     outcome,
     orphanedPaths,
@@ -795,6 +807,7 @@ async function pushPending(
     await pushPuts(
       deps,
       puts.filter((o) => !isContentPath(o.path)),
+      INDEX_PUT_BATCH,
       INDEX_CONCURRENCY,
       outcome,
       orphanedPaths,
@@ -809,20 +822,30 @@ async function pushPending(
 // Drive a homogeneous put set (all content OR all metadata — the caller splits
 // and orders them) through the sign → PUT → commit pipeline one chunk at a time,
 // so each chunk's PUT URLs are minted immediately before that chunk's upload and
-// the chunk commits before the next is signed. PUT_BATCH fits one sign and one
-// commit call, so each stays a single round trip. `concurrency` is the set's
-// kind's fan-out.
+// the chunk commits before the next is signed. `batchSize` (≤ both caps) keeps
+// the sign and the commit a single round trip each; it and `concurrency` are the
+// set's kind's.
 async function pushPuts(
   deps: SyncDeps,
   puts: PendingOpRecord[],
+  batchSize: number,
   concurrency: number,
   outcome: SyncOutcome,
   orphanedPaths: string[],
   failures: UploadFailures,
 ): Promise<void> {
-  for (const batch of chunk(puts, PUT_BATCH)) {
+  let unsigned = puts.length;
+  for (const batch of chunk(puts, batchSize)) {
     const signed = await signPushable(deps, batch, outcome);
-    if (signed === null) continue;
+    unsigned -= batch.length;
+    // The quota gate refuses on the account's usage, never on which paths a
+    // chunk holds, so every later chunk of this set would be refused too: record
+    // them without asking. One refused sign call per put phase, not per chunk —
+    // which CONTENT_PUT_BATCH would otherwise multiply against the rate limit.
+    if (signed === null) {
+      recordBlocked(outcome, unsigned);
+      return;
+    }
     const { orphaned, failed, superseded } = await uploadBlobs(
       deps,
       signed.ops,
@@ -889,8 +912,8 @@ async function pushPuts(
 //
 // Blocked ops stay QUEUED, deliberately — they are the user's data, and they
 // must upload the moment the account is back under its limits. The cost is one
-// refused sign call per blocked chunk per cycle, bounded by the pending queue
-// and the rate limiter, and it is what makes recovery automatic rather than
+// refused sign call per put phase per cycle (pushPuts stops a phase at its
+// first refusal), and it is what makes recovery automatic rather than
 // something the user has to know to trigger.
 //
 // Any OTHER error still throws: an auth 403, a 5xx that outlived its retries,
