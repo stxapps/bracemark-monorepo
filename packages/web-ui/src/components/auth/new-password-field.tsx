@@ -68,9 +68,13 @@ export type NewPasswordControl = {
 // scores low. It's a named scalar rather than a `string[]` of penalty terms because
 // it is the only one either surface has, and naming it is what stops the next caller
 // from quietly omitting it the way Settings did.
+//
+// `currentPassword` is change password's proof field, when the proof is a password:
+// a new password equal to it is refused by the ladder (field-messages.ts).
 export function useNewPassword({
   username,
-}: { username?: string | null } = {}): NewPasswordControl {
+  currentPassword,
+}: { username?: string | null; currentPassword?: string } = {}): NewPasswordControl {
   const [mode, setMode] = React.useState<'generated' | 'own'>('generated');
   // Generated in an effect on MOUNT rather than a lazy initializer (which is what the
   // native twin uses) so SSR and the first client render agree — a random value
@@ -101,7 +105,7 @@ export function useNewPassword({
   // the gate — no estimate is no estimate — only what the line under the field says,
   // which is the whole point of passing it: without it a permanent failure wears the
   // in-flight rung and reads as a wait that is about to end.
-  const message = newPasswordMessage(ownPassword, guessesLog10, failed);
+  const message = newPasswordMessage(ownPassword, guessesLog10, failed, currentPassword);
 
   const regenerate = React.useCallback(() => {
     setPassphrase(generatePassphrase());
@@ -137,12 +141,28 @@ export function NewPasswordField({
   // is about the PROOF the form submitted, so it's stale the moment any part of the
   // form moves. Nothing on create-account needs it.
   onEdit,
+  // Put the GENERATED passphrase in the form as a `new-password` input, for a
+  // password manager to save from. The panel shows it in an <output>, which no
+  // manager reads — so without this, change password's form held one password
+  // field, the CURRENT one, and Chrome offered to save that: the old password, on
+  // the default path. Change password only. Create-account's confirm step is
+  // already the field a manager saves from, and with this on its setup step Chrome
+  // prompted at Continue (the username check's fetch counts as the submission),
+  // before the account existed.
+  //
+  // Hidden the way HiddenUsername is — the `hidden` attribute, which takes it out of
+  // the layout, the tab order and the accessibility tree at once. Chrome still parses
+  // it as the form's new password beside a visible current one (measured on
+  // chrome://password-manager-internals, Chrome 155); the panel above is what a
+  // person reads.
+  exposeGenerated = false,
 }: {
   control: NewPasswordControl;
   copy: 'create' | 'change';
   idPrefix: string;
   disabled?: boolean;
   onEdit?: () => void;
+  exposeGenerated?: boolean;
 }) {
   const copy = NEW_PASSWORD_COPY[which];
   const {
@@ -209,6 +229,16 @@ export function NewPasswordField({
             </div>
           }
         />
+        {exposeGenerated ? (
+          <input
+            id={`${idPrefix}-generated-password`}
+            type="password"
+            autoComplete="new-password"
+            value={passphrase}
+            readOnly
+            hidden
+          />
+        ) : null}
       </Field>
     );
   }

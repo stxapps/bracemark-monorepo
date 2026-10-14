@@ -1,6 +1,7 @@
 import { act, render, waitFor } from '@testing-library/react';
 
-import { useNewPassword } from './new-password-field';
+import { installJsdomStubs } from '../../testing/jsdom-stubs';
+import { NewPasswordField, useNewPassword } from './new-password-field';
 
 // `useNewPassword` is THE GATE for choosing a new password, and both surfaces
 // that choose one — create-account's setup step and Settings → change password —
@@ -18,10 +19,10 @@ import { useNewPassword } from './new-password-field';
 // typed-path cases carry the same generous timeouts as the dictionary spec beside
 // them.
 
-function probe(username?: string) {
+function probe(username?: string, currentPassword?: string) {
   const result = { current: null as ReturnType<typeof useNewPassword> | null };
   function Probe() {
-    result.current = useNewPassword({ username });
+    result.current = useNewPassword({ username, currentPassword });
     return null;
   }
   render(<Probe />);
@@ -194,4 +195,63 @@ describe('useNewPassword — the typed-your-own path', () => {
     expect(view.current.password).toBe(view.current.passphrase);
     expect(view.current.ownPassword).toBe('Qx7-vT2m_pR9wLd4Zk1B-nH6');
   }, 30_000);
+});
+
+describe('useNewPassword — the current password', () => {
+  // Change password passes its proof field. A rotation to the same password would
+  // clear every other rung — it cleared them when it was set — so this is the one
+  // thing that keeps the gate shut on it.
+  it('stays shut for the current password, compared canonical', async () => {
+    const view = probe(undefined, 'Qx7-vT2m_pR9wLd4Zk1B-nH6');
+    await type(view, ' Qx7-vT2m_pR9wLd4Zk1B-nH6 ');
+
+    expect(view.current.message.text).toBe('That’s your current password.');
+    expect(view.current.ok).toBe(false);
+  }, 30_000);
+});
+
+// THE FIELD A PASSWORD MANAGER SAVES FROM, on change password's generated path. The
+// passphrase is shown in an <output>, which no manager reads, so without this input
+// the form's only password field is the CURRENT one and Chrome offered to save the
+// old password. Nothing else reports its absence — it is invisible, and every flow
+// passes without it.
+describe('NewPasswordField — exposeGenerated', () => {
+  // ShowOnceSecret's Radix checkbox measures itself at mount.
+  beforeAll(installJsdomStubs);
+
+  function Field({ exposeGenerated }: { exposeGenerated?: boolean }) {
+    const control = useNewPassword();
+    return (
+      <form>
+        <NewPasswordField
+          control={control}
+          copy="change"
+          idPrefix="cp"
+          exposeGenerated={exposeGenerated}
+        />
+        <output data-testid="password">{control.password}</output>
+      </form>
+    );
+  }
+
+  it('puts the generated passphrase in a new-password input', async () => {
+    const { container, getByTestId } = render(<Field exposeGenerated />);
+    await waitFor(() => expect(getByTestId('password').textContent).not.toBe(''));
+
+    const input = container.querySelector<HTMLInputElement>('input[autocomplete="new-password"]');
+    expect(input?.type).toBe('password');
+    expect(input?.value).toBe(getByTestId('password').textContent);
+    // Out of the layout, the tab order and the a11y tree — the panel is what a
+    // person reads.
+    expect(input?.hidden).toBe(true);
+  });
+
+  // Off by default: on create-account's setup step it made Chrome prompt to save
+  // at Continue, before the account existed.
+  it('renders none unless asked', async () => {
+    const { container, getByTestId } = render(<Field />);
+    await waitFor(() => expect(getByTestId('password').textContent).not.toBe(''));
+
+    expect(container.querySelector('input[type="password"]')).toBeNull();
+  });
 });

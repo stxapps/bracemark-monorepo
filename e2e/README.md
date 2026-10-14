@@ -267,6 +267,19 @@ npm run measure:native -- --platform ios --device <udid>
 npm run measure:native -- --platform android --device <serial> --links 1000,10000
 ```
 
+## measuring the password manager
+
+Also not a test: which field Chrome's password manager reads as the current and
+the new password on each form that takes the account's password, and whether it
+offers to save — read off `chrome://password-manager-internals`. Needs
+`npm run dev`. Design and limits: `docs/e2e.md`, _measuring the password
+manager_.
+
+```sh
+npm run measure:password-manager
+npm run measure:password-manager -- --flow change-generated,create-account
+```
+
 ## what a spec may depend on
 
 **No spec depends on a seeded account, and none should.** Every web spec creates

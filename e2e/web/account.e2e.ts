@@ -678,6 +678,51 @@ test.describe('account', () => {
       expect(await countSyncedItems(page)).toBeGreaterThan(0);
     },
   );
+
+  // Change password on its DEFAULT path, the generated passphrase — every other
+  // spec that rotates a password takes "Choose my own" (changePasswordElsewhere).
+  // On the way it holds the two things this form owes a password manager and the
+  // user, neither of which any other layer sees in a real browser:
+  //   - the current password is refused as the new one (field-messages.ts);
+  //   - the generated passphrase is IN THE FORM as a `new-password` input. It is
+  //     shown in an <output>, which no manager reads, and without the input
+  //     Chrome's save prompt carried the CURRENT password — the old one
+  //     (new-password-field.tsx, `exposeGenerated`). The prompt itself is browser
+  //     chrome, out of Playwright's reach; this asserts the field it saves from.
+  // Then the passphrase has to actually sign in, or "the new password" is a string
+  // on a screen.
+  test(
+    'change password on the generated path refuses the current one and signs in with the new',
+    { tag: ['@WEB-ACCOUNT-006', '@full', '@online', '@destructive'] },
+    async ({ isolatedApp: app }) => {
+      const { page, credentials } = app;
+      const site = await stubMarketingSite(page);
+
+      await page.goto('/settings/account');
+      await page.getByRole('button', { name: /^Change password/ }).click();
+      await page.locator('#cp-current').fill(credentials.password);
+      const submit = page.getByRole('button', { name: 'Change password', exact: true });
+
+      await page.getByRole('button', { name: 'Choose my own' }).click();
+      await page.locator('#cp-new-password').fill(credentials.password);
+      await expect(page.getByText('That’s your current password.')).toBeVisible();
+      await expect(submit).toBeDisabled();
+
+      await page.getByRole('button', { name: 'Generate one instead' }).click();
+      const passphrase = (await page.getByLabel('Your new password').innerText()).trim();
+      expect(passphrase).not.toBe('');
+      await expect(page.locator('form input[autocomplete="new-password"]')).toHaveValue(passphrase);
+
+      await page.getByLabel('I’ve saved my new password somewhere safe.').check();
+      await submit.click();
+      await expect(page.getByText(/^Your password has been changed\./)).toBeVisible({
+        timeout: 60_000,
+      });
+
+      await signOutToSite(page, site);
+      await signIn(page, { username: credentials.username, password: passphrase });
+    },
+  );
 });
 
 // How many rows bracemark-web's local store holds — synced entities (`items`) and

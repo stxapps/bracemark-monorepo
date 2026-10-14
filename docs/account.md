@@ -591,7 +591,12 @@ their own only behind a strength gate. As built:
   Settings → **change password** — and they carried near-verbatim copies of it
   until those drifted: Settings scored the typed password with **no penalty terms**
   while create-account fed it the username, so a username-derived password could be
-  rejected at signup and accepted at rotation. Both pass `username` now. The words
+  rejected at signup and accepted at rotation. Both pass `username` now. Change
+  password also passes its **current password** when that is the proof, and the
+  ladder refuses a new password whose canonical form equals it ("That’s your
+  current password.") — it cleared the floor when it was set, so nothing else
+  would stop a rotation to the same door. The recovery-code path passes none: that
+  user has said they don't know it. The words
   all four surfaces print sit one layer further down again, beside the message
   ladders (`NEW_PASSWORD_COPY`, `react/lib/new-password-copy.ts`) — two components
   × two platforms is more copies than prose survives, and the typed-path paragraph

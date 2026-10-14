@@ -51,9 +51,12 @@ export type NewPasswordControl = {
   ok: boolean;
 };
 
+// `currentPassword` is change password's proof field, when the proof is a password:
+// a new password equal to it is refused by the ladder (field-messages.ts).
 export function useNewPassword({
   username,
-}: { username?: string | null } = {}): NewPasswordControl {
+  currentPassword,
+}: { username?: string | null; currentPassword?: string } = {}): NewPasswordControl {
   const [mode, setMode] = React.useState<'generated' | 'own'>('generated');
   const [passphrase, setPassphrase] = React.useState(() => generatePassphrase());
   const [passphraseSaved, setPassphraseSaved] = React.useState(false);
@@ -66,7 +69,7 @@ export function useNewPassword({
     username ? [username] : [],
     NEW_PASSWORD_MIN_LENGTH,
   );
-  const message = newPasswordMessage(ownPassword, guessesLog10);
+  const message = newPasswordMessage(ownPassword, guessesLog10, false, currentPassword);
 
   const regenerate = React.useCallback(() => {
     setPassphrase(generatePassphrase());

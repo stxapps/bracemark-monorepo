@@ -74,6 +74,9 @@
       },
       "measure:native": {
         "cache": false
+      },
+      "measure:password-manager": {
+        "cache": false
       }
     }
   },
@@ -102,7 +105,8 @@
     "shot:ext": "tsx shot/extension.ts",
     "shot:mobile": "tsx shot/mobile.ts",
     "measure:data": "tsx measure/data.ts",
-    "measure:native": "tsx measure/native.ts"
+    "measure:native": "tsx measure/native.ts",
+    "measure:password-manager": "tsx measure/password-manager.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

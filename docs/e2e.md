@@ -3016,6 +3016,58 @@ bundle.js`. Bundle the code under test with esbuild, then lower it with
   quadruples when the input doubles is the finding. This is how the Netscape
   parser's quadratic regex was found (data-lifecycle.md, _readings — expo_).
 
+### measuring the password manager
+
+`e2e/measure/password-manager.ts` (`npm run measure:password-manager`) reports
+what Chrome's password manager makes of each form that takes the account's
+password: which field it reads as the current password, which as the new one,
+and whether it offers to save. It reads `chrome://password-manager-internals`,
+open in a second tab of the same profile, which logs exactly that while it is
+open.
+
+It exists because the save prompt is browser chrome, outside the page and out of
+Playwright's reach, and because every way of getting it wrong is **silent**: the
+field a manager saves from is invisible or missing, and every flow passes either
+way. The specimen is change password's generated path, where Chrome offered to
+save the **old** password ([accessibility.md](./accessibility.md), _what a field
+tells the browser_). `WEB-ACCOUNT-006` pins the input that fixed it; this is the
+measurement that showed Chrome actually reads that input, and the thing to re-run
+when any form that takes a password changes shape.
+
+```sh
+npm run dev                                         # the api and the web app
+npm run measure:password-manager                    # all five flows, ~30s
+npm run measure:password-manager -- --flow change-generated,create-account
+npm run measure:password-manager -- --headed
+```
+
+Five flows, each on a fresh account in a fresh profile — change password
+(current password + generated, current password + typed, recovery code +
+generated), Settings → Recovery code, and create-account on its generated path —
+each against the submissions it should produce: the fields, Chrome's decision,
+and how many. The recovery-code view's expected field is the **current
+password**, never the code: the code is a second door, and saved as this site's
+password it would fill sign-in. Create-account's is **one** submission, at the
+end: an exposed passphrase on its setup step made Chrome treat Continue as a
+submission (the username check's fetch counts as one) and offer to save before
+the account existed. It prints a ✓/✗ line per flow and exits non-zero on a
+difference, and writes each flow's raw log to `.artifacts/measure/<run>/`.
+
+**It is not a test, and it is in no suite.** The internals page is a debugging
+surface, not a contract, and the system Chrome auto-updates, so a suite gated on
+its wording would go red on a Chrome release with nothing wrong in the app. A
+log the parser no longer understands prints `?` — read the raw log before
+reading anything into it.
+
+Its limits, which it cannot see past:
+
+- **The log names fields, never values.** "The prompt carries the new password"
+  is inferred from which field Chrome took as the new one.
+- **Every profile is fresh, with no saved login**, so Chrome's offer is always
+  to _save_. What it does against a login it already holds — update, or nothing
+  for an unchanged one — and the prompt it stops opening on its own after being
+  dismissed for a site a few times are a real profile's to show.
+
 ### state today
 
 Web, native, and contract were measured 2026-09-16 from commit

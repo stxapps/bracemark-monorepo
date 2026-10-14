@@ -241,7 +241,13 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
   // describing it as "the same floor". `username` is the penalty term: it was
   // MISSING here while create-account passed it, so a username-derived password
   // could fail at signup and pass at rotation.
-  const newPassword = useNewPassword({ username });
+  // Compared against the current password only when that is the proof: on the
+  // recovery-code path the user has said they don’t know it, and whatever is left
+  // over from the password field is not what they are rotating away from.
+  const newPassword = useNewPassword({
+    username,
+    currentPassword: useRecovery ? undefined : currentPassword,
+  });
   // Return on the proof field goes on to the new password when that is a FIELD —
   // typed mode; a generated passphrase is shown, not entered
   // (lib/input-keyboard.ts).

@@ -66,6 +66,44 @@ describe('newPasswordMessage — the three ways there is no estimate', () => {
   });
 });
 
+// Change password's proof is the current password, so the ladder can see it — and
+// without this rung a rotation to the same password passes every other rung (it
+// cleared the floor when it was set) and opens the gate on a no-op.
+describe('newPasswordMessage — the current password', () => {
+  const current = 'a'.repeat(NEW_PASSWORD_MIN_LENGTH) + '-correct-length';
+  const strong = PASSWORD_MIN_GUESSES_LOG10 + 1;
+
+  it('refuses the current password as the new one', () => {
+    expect(newPasswordMessage(current, strong, false, current)).toEqual({
+      text: 'That’s your current password.',
+      tone: 'error',
+    });
+  });
+
+  // The KEK derives from the canonical form, so these ARE the same password.
+  it('compares the canonical forms', () => {
+    expect(newPasswordMessage(` ${current} `, strong, false, current).tone).toBe('error');
+    expect(
+      newPasswordMessage('caf\u00e9-' + current, strong, false, 'cafe\u0301-' + current).tone,
+    ).toBe('error');
+  });
+
+  it('passes a different password', () => {
+    expect(newPasswordMessage(`${current}x`, strong, false, current).tone).toBe('ok');
+  });
+
+  // Unset on create-account and the recovery-code path; an empty proof field is a
+  // user who hasn't typed it yet, not a password to compare with.
+  it('compares nothing without a current password', () => {
+    expect(newPasswordMessage(current, strong).tone).toBe('ok');
+    expect(newPasswordMessage(current, strong, false, '').tone).toBe('ok');
+  });
+
+  it('keeps the resting rung for an empty field', () => {
+    expect(newPasswordMessage('', null, false, '').tone).toBe('muted');
+  });
+});
+
 // The username ladder's states are reachable by hand, but three of its rungs sit in
 // windows a person can't hold still: the ~400ms after a keystroke where the query
 // still describes the PREVIOUS name, the frame between mount and fetch start, and a
@@ -234,6 +272,7 @@ describe('the slot is one line wide', () => {
     newPasswordMessage(strong, null, true),
     newPasswordMessage(strong, PASSWORD_MIN_GUESSES_LOG10 - 1),
     newPasswordMessage(strong, PASSWORD_MIN_GUESSES_LOG10 + 1),
+    newPasswordMessage(strong, PASSWORD_MIN_GUESSES_LOG10 + 1, false, strong),
   ];
 
   it.each(rungs.map((rung) => [rung.text]))('“%s” fits the slot', (text) => {

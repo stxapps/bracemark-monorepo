@@ -757,7 +757,19 @@ right answers:
       name the account is created under.
     - **Settings → change password** holds a `current-password` and a
       `new-password`, so a manager asked to update a saved login cannot tell
-      which one.
+      which one. ⚠ On its default path there was **no** `new-password`: the
+      generated passphrase is shown in an `<output>`, which no manager reads,
+      so the form's only password field was the current one and Chrome's save
+      prompt carried the **old** password. `NewPasswordField`'s
+      `exposeGenerated` puts the passphrase in a `hidden` `new-password` input
+      (Chrome 155 parses it as the form's new password beside a visible current
+      one, `hidden` and all). Change password only: on create-account's setup
+      step it made Chrome prompt at Continue, before the account existed — the
+      confirm step is the field that ceremony saves from. The prompt is browser
+      chrome, so no spec sees it: `npm run measure:password-manager` reads
+      which field Chrome took as which for every such form
+      ([e2e.md](./e2e.md), _measuring the password manager_), and
+      `WEB-ACCOUNT-006` pins the input it reads.
     - **Settings → recovery code** and **delete account** each hold one
       `current-password`. The recovery form also disappears on success, which
       is the shape a manager reads as a login worth offering to save.

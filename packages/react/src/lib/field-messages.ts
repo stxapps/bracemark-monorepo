@@ -1,4 +1,5 @@
 import {
+  canonicalizePassword,
   type CheckUsernameResponse,
   NEW_PASSWORD_MIN_LENGTH,
   newPasswordSchema,
@@ -156,6 +157,10 @@ export function newPasswordMessage(
   // rung the ladder does not owe both platforms; every other rung stays shared, which
   // is the point of the file.
   strengthFailed = false,
+  // The password the form is proving with — change password's current-password
+  // field. Unset on create-account and on change password's recovery-code path,
+  // where there is no current password on the screen to compare with.
+  currentPassword?: string,
 ): FieldMessage {
   const parse = newPasswordSchema.safeParse(password);
   // Length first — the schema owns its own message, and that message is now the SAME
@@ -168,63 +173,70 @@ export function newPasswordMessage(
   // (the load failed), which is why they are not one rung.
   return password === ''
     ? { text: `At least ${NEW_PASSWORD_MIN_LENGTH} characters.`, tone: 'muted' }
-    : !parse.success
-      ? { text: parse.error?.issues[0]?.message ?? 'Invalid password', tone: 'error' }
-      : strengthFailed && guessesLog10 === null
-        ? // The load failed, so there is no estimate and — per the note at the top of
-          // this file — no way to open the gate without one. `warn`, not `error`: the
-          // CHECK failed, not the password, so this must not claim `aria-invalid` about
-          // a string that may well be strong. Deliberately the same sentence as the
-          // username ladder's transient-failure rung above, because it is the same
-          // event and the same repair, and that one is already measured to fit the
-          // slot (173px).
-          //
-          // "Try again." is literal: `usePasswordStrength` retries the import on the
-          // next keystroke, so typing is what acts on this line. That is also why this
-          // rung sits BELOW the schema rung — a too-short password is a real fault the
-          // user can fix either way, and saying so first costs nothing here.
-          //
-          // AND WHY IT IS GUARDED on there being no estimate, rather than reading
-          // `strengthFailed` alone. A retry that succeeds hands over an estimate and a
-          // flag that has not been cleared yet, in that order, on the same render for
-          // some callers — and this rung above a real verdict would refuse a password
-          // zxcvbn had just scored as strong, telling the user to retry the thing that
-          // already worked. The estimate is the more specific signal; a flag about how
-          // the estimate was obtained can never outrank having one.
-          { text: 'Couldn’t check. Try again.', tone: 'warn' }
-        : guessesLog10 === null
-          ? { text: 'Checking strength…', tone: 'muted' }
-          : guessesLog10 < PASSWORD_MIN_GUESSES_LOG10
-            ? // The FIX, not the diagnosis. "Too predictable — add a few more words." ran
-              // 276px and wrapped on every phone, and the half worth keeping is the half
-              // the user can act on: the meter directly above is already showing red at
-              // "Very weak"/"Weak", which is the verdict this dropped.
-              { text: 'Add a few more words.', tone: 'error' }
-            : // The passing rung says what the METER CAN'T. Every one of the four callers
-              // renders PasswordStrengthMeter directly above this line, and the meter's
-              // own label is the verdict — so "Looks strong" here was the same word in the
-              // same green 13px apart, and the meter row is the `aria-live` one, so a
-              // screen reader heard the verdict from it either way. Worse, doubling it
-              // overclaims: zxcvbn is a weakness detector, not a strength certificate
-              // (docs/account.md), and the banded meter is the hedged form of that reading
-              // — a sentence agreeing with it reads as a second, more confident source.
-              // What's left for this line is the one thing nothing else on the field says:
-              // save it.
-              //
-              // NOT "in your password manager", which was the old wording. It names a tool
-              // instead of the outcome, and "your" presumes one — a user without a manager
-              // is told to use a thing they don't have at the moment they most need to act,
-              // and the app's own answer is broader anyway (the marketing site's FAQ,
-              // _where should I keep my password_: a manager is best, a notes app that
-              // locks or paper both work). It was also least apt HERE, since this rung only
-              // shows on the typed-your-own path; the generated path's helper text is where
-              // that advice belongs. "Somewhere safe" is the phrase the rest of the app
-              // already uses — both ShowOnceSecret confirm labels, all the recovery-code
-              // copy — so this stops being the one surface that says it differently.
-              //
-              // The why is deliberately not repeated: this step's header ("no password
-              // reset — your password is the key to your links") and the helper paragraph
-              // under this very field both carry it. Adding a clause here would be a third
-              // telling AND would wrap on a phone (see the width budget above).
-              { text: 'Save it somewhere safe.', tone: 'ok' };
+    : currentPassword && canonicalizePassword(password) === canonicalizePassword(currentPassword)
+      ? // Ahead of every other rung: it is the most specific thing wrong, and the
+        // current password presumably cleared the floor once, so the rungs below would
+        // pass it and open the gate on a rotation to the same door. Compared
+        // CANONICAL, because that is the string the KEK derives from — a trailing
+        // space or another Unicode form of the same password is the same password.
+        { text: 'That’s your current password.', tone: 'error' }
+      : !parse.success
+        ? { text: parse.error?.issues[0]?.message ?? 'Invalid password', tone: 'error' }
+        : strengthFailed && guessesLog10 === null
+          ? // The load failed, so there is no estimate and — per the note at the top of
+            // this file — no way to open the gate without one. `warn`, not `error`: the
+            // CHECK failed, not the password, so this must not claim `aria-invalid` about
+            // a string that may well be strong. Deliberately the same sentence as the
+            // username ladder's transient-failure rung above, because it is the same
+            // event and the same repair, and that one is already measured to fit the
+            // slot (173px).
+            //
+            // "Try again." is literal: `usePasswordStrength` retries the import on the
+            // next keystroke, so typing is what acts on this line. That is also why this
+            // rung sits BELOW the schema rung — a too-short password is a real fault the
+            // user can fix either way, and saying so first costs nothing here.
+            //
+            // AND WHY IT IS GUARDED on there being no estimate, rather than reading
+            // `strengthFailed` alone. A retry that succeeds hands over an estimate and a
+            // flag that has not been cleared yet, in that order, on the same render for
+            // some callers — and this rung above a real verdict would refuse a password
+            // zxcvbn had just scored as strong, telling the user to retry the thing that
+            // already worked. The estimate is the more specific signal; a flag about how
+            // the estimate was obtained can never outrank having one.
+            { text: 'Couldn’t check. Try again.', tone: 'warn' }
+          : guessesLog10 === null
+            ? { text: 'Checking strength…', tone: 'muted' }
+            : guessesLog10 < PASSWORD_MIN_GUESSES_LOG10
+              ? // The FIX, not the diagnosis. "Too predictable — add a few more words." ran
+                // 276px and wrapped on every phone, and the half worth keeping is the half
+                // the user can act on: the meter directly above is already showing red at
+                // "Very weak"/"Weak", which is the verdict this dropped.
+                { text: 'Add a few more words.', tone: 'error' }
+              : // The passing rung says what the METER CAN'T. Every one of the four callers
+                // renders PasswordStrengthMeter directly above this line, and the meter's
+                // own label is the verdict — so "Looks strong" here was the same word in the
+                // same green 13px apart, and the meter row is the `aria-live` one, so a
+                // screen reader heard the verdict from it either way. Worse, doubling it
+                // overclaims: zxcvbn is a weakness detector, not a strength certificate
+                // (docs/account.md), and the banded meter is the hedged form of that reading
+                // — a sentence agreeing with it reads as a second, more confident source.
+                // What's left for this line is the one thing nothing else on the field says:
+                // save it.
+                //
+                // NOT "in your password manager", which was the old wording. It names a tool
+                // instead of the outcome, and "your" presumes one — a user without a manager
+                // is told to use a thing they don't have at the moment they most need to act,
+                // and the app's own answer is broader anyway (the marketing site's FAQ,
+                // _where should I keep my password_: a manager is best, a notes app that
+                // locks or paper both work). It was also least apt HERE, since this rung only
+                // shows on the typed-your-own path; the generated path's helper text is where
+                // that advice belongs. "Somewhere safe" is the phrase the rest of the app
+                // already uses — both ShowOnceSecret confirm labels, all the recovery-code
+                // copy — so this stops being the one surface that says it differently.
+                //
+                // The why is deliberately not repeated: this step's header ("no password
+                // reset — your password is the key to your links") and the helper paragraph
+                // under this very field both carry it. Adding a clause here would be a third
+                // telling AND would wrap on a phone (see the width budget above).
+                { text: 'Save it somewhere safe.', tone: 'ok' };
 }
