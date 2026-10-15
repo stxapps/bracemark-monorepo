@@ -610,8 +610,8 @@ function DeleteStatus({ state }: { state: DeleteAllState }) {
         <CircleAlert className="mt-0.5 size-4 shrink-0" />
         <span className="wrap-break-words">
           {state.serverWiped
-            ? 'All data was deleted for the account this page was opened for. This device is no longer signed in to that account, so nothing stored on it was changed.'
-            : 'Nothing was deleted — the account signed in on this device changed while this page was open. To delete this account’s data, go back and open this page again.'}
+            ? 'All data was deleted for the account that was signed in when you opened this page. This device is now signed in to a different account, or to none, so nothing stored on it was changed.'
+            : 'Nothing was deleted — the account signed in on this device changed while this page was open. To delete the data of the account signed in now, go back and open this page again.'}
         </span>
       </p>
     );

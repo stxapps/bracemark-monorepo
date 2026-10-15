@@ -3,7 +3,7 @@
 // Direct blob transfer to/from Cloudflare R2 over a presigned URL — the ONE data
 // path that bypasses the API (docs/local-first-sync.md: "the blob bytes never
 // touch the API"). The URL is a short-lived SigV4 presign minted by
-// `files/sign`; the bytes are already AES-GCM encrypted (see crypto.ts), so R2
+// `files/sign`; the bytes are already AES-GCM encrypted (@stxapps/web-crypto blob.ts), so R2
 // only ever sees ciphertext. No auth header here — the signature in the URL is
 // the credential.
 

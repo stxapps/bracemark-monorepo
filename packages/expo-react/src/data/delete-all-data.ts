@@ -33,7 +33,7 @@ import {
 import { clearFaviconFiles } from './favicon-store';
 import { clearDataFiles } from './file-store';
 import { invalidateLiveReads } from './live-read-invalidation';
-import { clearPendingOps } from './pending-store';
+import { returnPendingOps, takePendingOps } from './pending-store';
 import { AccountFencedError, resetToSeededStateTx } from './sync-store';
 
 export type DeleteAllOutcome = {
@@ -71,20 +71,21 @@ export async function deleteAllData(args: {
 
   // Quiesce before destroying: a cycle that already read the pending queue
   // could re-push (resurrect) ops after the server wipe — wait it out, THEN
-  // abandon the queue so any later cycle finds nothing to push. (This device's
-  // unsynced changes are deliberately discarded: the user is deleting
-  // everything, so pushing them first would be work the wipe undoes.)
+  // take the queue out so any later cycle finds nothing to push. (On success
+  // this device's unsynced changes are discarded on purpose: the user is
+  // deleting everything, so pushing them first would be work the wipe undoes.)
+  // Taken, not cleared: a wipe that is refused or fails puts them back.
   await withTimeout(
     awaitInflightSync(username, () => onStep?.('waiting-for-sync')),
     syncWaitTimeoutMs,
     SYNC_WAIT_TIMEOUT_MESSAGE,
   );
   onStep?.('deleting');
-  await clearPendingOps(username);
+  const taken = await takePendingOps(username);
 
-  // The server wipe — idempotent, so a failure here leaves everything retryable
-  // and nothing local has been touched yet (the local wipe below only runs after
-  // the server confirms).
+  // The server wipe — idempotent, so a failure here leaves everything retryable:
+  // the taken queue goes back, and the local wipe below only runs after the
+  // server confirms.
   //
   // It NAMES the account, and that is what binds it: `username` was captured at
   // the tap, the bearer token is attached as the request leaves, and the server
@@ -95,6 +96,7 @@ export async function deleteAllData(args: {
   try {
     ({ deletedCount } = await api.call(dataDeleteAllEndpoint, { username }));
   } catch (e) {
+    await returnPendingOps(username, taken);
     if (apiErrorCode(e) === DATA_DELETE_ALL_ERROR.accountMismatch) {
       throw new DeleteAllAccountChangedError(false);
     }

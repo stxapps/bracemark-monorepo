@@ -2,14 +2,15 @@
 // invisible when they break, and all four are about ORDER or about the exact line
 // between "your data" and "your account on this device":
 //
-//   1. The QUIESCE. `awaitInflightSync` then `clearPendingOps`, both BEFORE the server
+//   1. The QUIESCE. `awaitInflightSync` then `takePendingOps`, both BEFORE the server
 //      call. A cycle already in flight read the queue before we got here, so pushing on
 //      after the wipe would resurrect the very objects the user just deleted — and it
 //      would look like a successful delete followed by a successful sync.
-//   2. NOTHING LOCAL IS TOUCHED UNTIL THE SERVER CONFIRMS. The wipe is idempotent, so a
-//      failed call has to leave a fully retryable device. Wiping first and then failing
-//      leaves the user signed in, looking at an empty library, with their data still on
-//      the server and their device now unable to say so.
+//   2. NOTHING LOCAL IS LOST UNTIL THE SERVER CONFIRMS. The wipe is idempotent, so a
+//      failed call has to leave a fully retryable device — the taken queue included,
+//      or "nothing was removed" is false of the edits that had not synced yet. Wiping
+//      first and then failing leaves the user signed in, looking at an empty library,
+//      with their data still on the server and their device now unable to say so.
 //   3. The SURVIVOR SET — the identity/device stores (the session, the cached
 //      subscription, the device-local settings) live through this, which is exactly what
 //      separates it from clearData (clear-data.spec.ts, the same partition inverted).
@@ -49,7 +50,7 @@ import {
 } from './sync-store';
 
 // Every call the module makes, in the order it made them — the only way to see that the
-// quiesce and the queue abandonment happened BEFORE the server was asked.
+// quiesce and the queue take happened BEFORE the server was asked.
 const calls: string[] = [];
 
 const mockAwaitInflightSync = jest.fn(
@@ -150,7 +151,7 @@ describe('deleteAllData', () => {
 
   // THE QUIESCE ORDER. Both must precede the server call, or an in-flight cycle re-pushes
   // ops the wipe just removed — a successful-looking delete that silently resurrects data.
-  it('waits out the in-flight cycle and abandons the queue BEFORE calling the server', async () => {
+  it('waits out the in-flight cycle and takes the queue out BEFORE calling the server', async () => {
     await seedSignedInAccountWithData();
     mockAwaitInflightSync.mockImplementation(async () => {
       calls.push('awaitInflightSync');
@@ -212,6 +213,81 @@ describe('deleteAllData', () => {
     expect(await db.items.count()).toBe(1);
     expect(await db.locks.count()).toBe(1);
     expect(await db.favicons.count()).toBe(1);
+  });
+
+  // THE QUEUE IS OUT WHILE THE WIPE IS, AND BACK IF IT FAILS. Out, so a cycle that starts
+  // during the call has nothing to push past the wipe; back, so the failure line's
+  // "nothing was removed" is true of the edits that had not synced yet.
+  describe('the unsynced queue', () => {
+    it('is empty while the server call is out', async () => {
+      await seedSignedInAccountWithData();
+      let duringCall: unknown[] | undefined;
+      const api = apiThat(async () => {
+        duringCall = await listPendingOps(USER);
+        return { deletedCount: 1 };
+      });
+
+      await deleteAllData({ username: USER, api });
+
+      expect(duringCall).toEqual([]);
+    });
+
+    it('comes back, write for write, when the server call fails', async () => {
+      await seedSignedInAccountWithData();
+      const before = await listPendingOps(USER);
+
+      await deleteAllData({
+        username: USER,
+        api: apiThat(() => Promise.reject(new Error('offline'))),
+      }).catch(() => undefined);
+
+      expect(await listPendingOps(USER)).toEqual(before);
+    });
+
+    it('comes back when the server refuses the name', async () => {
+      await seedSignedInAccountWithData();
+      const before = await listPendingOps(USER);
+      const api = apiThat(() =>
+        Promise.reject(
+          new ApiError(409, JSON.stringify({ error: DATA_DELETE_ALL_ERROR.accountMismatch })),
+        ),
+      );
+
+      await deleteAllData({ username: USER, api }).catch(() => undefined);
+
+      expect(await listPendingOps(USER)).toEqual(before);
+    });
+
+    // An edit made while the call was out is newer than the taken row for the same path;
+    // putting the old one back over it would push the bytes of the edit before it.
+    it('keeps an edit made during the call over the row it took', async () => {
+      await seedSignedInAccountWithData();
+      const [taken] = await listPendingOps(USER);
+      const api = apiThat(async () => {
+        await enqueuePut(USER, LINK_PATH, 1);
+        throw new Error('offline');
+      });
+
+      await deleteAllData({ username: USER, api }).catch(() => undefined);
+
+      const [kept] = await listPendingOps(USER);
+      expect(kept.writeId).not.toBe(taken.writeId);
+      expect(kept.baseUpdatedAt).toBe(1);
+    });
+
+    // The teardown cleared the queue with the rest of the account; rows put back now would
+    // be orphans keyed on an account that is no longer on this device.
+    it('stays gone when the account was torn down under the call', async () => {
+      await seedSignedInAccountWithData();
+      const api = apiThat(async () => {
+        await clearData();
+        throw new ApiError(409, JSON.stringify({ error: DATA_DELETE_ALL_ERROR.accountMismatch }));
+      });
+
+      await deleteAllData({ username: USER, api }).catch(() => undefined);
+
+      expect(await db.pendingOps.count()).toBe(0);
+    });
   });
 
   it('wipes the synced local state once the server confirms', async () => {

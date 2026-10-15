@@ -3,8 +3,9 @@
 // web-crypto asserts — so "web and native derive identical keys" is a test rather
 // than a review claim. quick-crypto is shimmed onto Node primitives (see
 // ../testing), so what's under test is OUR mapping/wire-format code, not the
-// native library; nothing runs these vectors on a device, and nothing runs them
-// in CI either. The vector file's header states both limits.
+// native library. The real quick-crypto meets the same vectors only on a device,
+// through the dev-only /contract-vectors screen, and nothing runs either in CI.
+// The vector file's header states both.
 import { createCipheriv } from 'node:crypto';
 
 import * as ed25519 from '@noble/ed25519';

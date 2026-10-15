@@ -12,12 +12,16 @@
 // for another's, a list for a list — and the tag would pass. The path is the
 // identity every reader goes by (sync/paths.ts, idFromPath), so it is the whole
 // of what needs binding; the account is already bound by the key. The version
-// byte rides along so the header is authenticated too, and no later format can
-// share these bytes.
+// byte leads the AAD so that a later format which keeps the same rule (its own
+// version byte first in its AAD) can never share these bytes. The frame's own
+// version byte is not fed to GCM: what holds it is each reader's equality check
+// against the one version it opens, together with this constant leading the AAD.
 //
-// Not bound: WHICH VERSION of a path's blob is served. An older blob written to
-// the same path still opens there — rollback is a separate property, and this
-// does not claim it.
+// Not bound: WHICH VERSION of a path's blob is served, or which paths are. An
+// older blob written to the same path still opens there, so the server can roll
+// a path back, serve a deleted path's last blob again, leave paths out, invent
+// deletes, mix versions across paths, or withhold updates — none of which passes
+// one path's content off as another's (docs/local-first-sync.md).
 //
 // The path must stay ASCII — it does today (sync/paths.ts, the path grammar).
 // The four framers agree on the bytes of any well-formed string, but a lone

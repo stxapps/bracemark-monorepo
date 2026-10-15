@@ -1433,8 +1433,14 @@ may sync back afterward").
 
 1. `awaitInflightSync` — wait out any in-flight cycle **without starting one**
    (a cycle that already read the pending queue could re-push ops after the
-   wipe), then `clearPendingOps` — this device's unsynced changes are abandoned
-   on purpose (pushing them first is work the wipe immediately undoes).
+   wipe), then `takePendingOps` — the queue comes out in one transaction, so a
+   cycle that starts while the server call is out finds nothing to push past the
+   wipe. On success this device's unsynced changes are abandoned on purpose
+   (pushing them first is work the wipe immediately undoes). On a refusal or a
+   failed call `returnPendingOps` puts them back — a path edited meanwhile keeps
+   its newer row, and an account torn down meanwhile gets nothing back (its
+   teardown already cleared the queue) — so the failure lines' "nothing was
+   removed" and "nothing was deleted" are true of unsynced edits too.
    The delete view names this as a separate **waiting for sync** step rather than
    claiming the wipe has started. A two-minute watchdog fails closed: if the
    cycle does not settle, the attempt reports an error before the queue, server,

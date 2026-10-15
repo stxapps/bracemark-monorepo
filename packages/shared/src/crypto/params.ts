@@ -73,7 +73,8 @@ export const AES_GCM_IV_BYTES = 12;
 // only under the sync path it was written to: the key proves a blob is the
 // account's, and the path binds where it belongs, so whoever answers a GET (the
 // server, in the E2E threat model) cannot serve one of the account's own blobs
-// in place of another.
+// under another path. Which version of a path it serves is not bound
+// (blob-aad.ts says what that leaves open).
 export const BLOB_FORMAT_V1 = 0x01;
 
 // Canonical form of a username, used BOTH as the per-user Argon2 salt input

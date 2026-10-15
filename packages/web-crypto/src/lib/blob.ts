@@ -58,8 +58,10 @@ export async function encryptEntity(
 }
 
 // A packed R2 blob fetched from `path` → decrypted entity bytes. Throws if the
-// GCM tag fails — tamper, wrong key, or a blob written to another path — which
-// the caller treats as a failed download.
+// GCM tag fails — tamper, wrong key, a blob written to another path, or one
+// written before the path binding. The sync engines let it propagate: the pull
+// rejects and the whole cycle fails, every cycle, until the path is rewritten
+// (docs/local-first-sync.md).
 export async function decryptEntity(
   key: CryptoKey,
   blob: Uint8Array,

@@ -340,7 +340,7 @@ export function assertBackupTreeDepth(entries: readonly BundleEntry[]): void {
 // The editors put no bound on depth, so a library can hold a chain past the rule
 // and its own backup is then refused — rare, and the reason the message names
 // the act in that library rather than in the file.
-export const BACKUP_TOO_DEEP_MESSAGE = `This backup has lists or tags nested more than ${IMPORT_MAX_FOLDER_DEPTH} levels deep. Move the deepest ones higher up in the library it came from, then back it up again.`;
+export const BACKUP_TOO_DEEP_MESSAGE = `This backup has lists or tags nested more than ${IMPORT_MAX_FOLDER_DEPTH} levels deep. In the account it came from, move the deepest ones higher up, then export a new Bracemark backup.`;
 
 // A backup this app writes holds each path once. A file that repeats one is
 // restored from its FIRST line, and only that line goes on: the restore's later

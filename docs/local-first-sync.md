@@ -1606,11 +1606,17 @@ pass the path at every seal and open (`encryptEntity`/`decryptEntity`, and
 itself).
 
 The binding is part of v1 itself, not a later version. It went in before the
-first release, so no account holds an unbound blob, and no reader has an
-unbound branch a server could steer it to. Builds from before the binding wrote
-the same version byte with no AAD; their blobs fail the tag (a failed download,
-not a version error), so a dev account synced by one is recreated, not
-migrated.
+first release, so no released account holds an unbound blob, and no reader has
+an unbound branch a server could steer it to. Builds from before the binding
+wrote the same version byte with no AAD, and their blobs fail the tag. That is
+neither a version error nor a skipped download: the engines let it propagate,
+so the pull rejects and the whole cycle fails, and every later cycle fails the
+same way with the cursor where it was (local edits still push, because the push
+runs first). A device that already holds the plaintext meets it only on a lazy
+file load, a fallback re-download or an export; a fresh device's first sync
+never completes. So a dev or staging account synced by such a build is
+recreated, not migrated — for the seeded dev accounts that means resetting the
+local api's state ([e2e.md](./e2e.md), _seeding a dev account_).
 
 The golden vector holds the four framers to one byte string — `blob` opened
 under its path, refused under another, and resealed byte for byte
@@ -1618,9 +1624,13 @@ under its path, refused under another, and resealed byte for byte
 Kotlin ones on the host (`swift test`, the JVM), and the dev-only
 `/contract-vectors` screen runs the JS framer on each device through
 quick-crypto; the native file framer has no on-device vector run.
-**What the binding does not cover is which version of a path is served**: an
-older blob written to the same path still opens there, so rolling a path back
-to an earlier state is not prevented by this.
+**What the binding does not cover is which version of each path is served, or
+which paths are.** An older blob written to the same path still opens there, so
+the server can roll a path back to an earlier state. It can also serve a deleted
+path's last blob again, leave paths out of a listing, invent delete ops the
+client applies locally, mix versions across paths (an old link record beside
+its current extraction), or withhold updates. None of these passes one path's
+content off as another's, which is the part the AAD closes.
 
 Even with E2E, the server still learns the **number of files, each file's size,
 its timestamps, and access patterns** (which blobs are fetched when). It does

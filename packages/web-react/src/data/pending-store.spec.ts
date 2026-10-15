@@ -22,13 +22,15 @@ import { LINKS_PREFIX, pathFromId } from '@stxapps/shared';
 import { db, type PendingOpRecord } from './db';
 import {
   clearDrainedOps,
-  clearPendingOps,
   enqueueDelete,
   enqueuePut,
   listPendingOps,
   pendingDeleteRecord,
   pendingPutRecord,
+  returnPendingOps,
+  takePendingOps,
 } from './pending-store';
+import { beginInitialSync } from './sync-store';
 
 const USER = 'alice';
 const OTHER = 'bob';
@@ -36,7 +38,7 @@ const PATH = pathFromId('l_1', LINKS_PREFIX);
 const OTHER_PATH = pathFromId('l_2', LINKS_PREFIX);
 
 beforeEach(async () => {
-  await db.pendingOps.clear();
+  await Promise.all([db.pendingOps.clear(), db.syncMeta.clear()]);
 });
 
 const rowFor = async (username: string, path: string): Promise<PendingOpRecord | undefined> =>
@@ -171,17 +173,58 @@ describe('clearDrainedOps', () => {
   });
 });
 
-describe('clearPendingOps', () => {
-  // The delete-all-data flow abandons this account's unsynced work on purpose — but it
-  // is one account being deleted, not the device.
-  it('abandons one account’s whole queue and leaves the other account’s alone', async () => {
+describe('takePendingOps', () => {
+  // The delete-all-data flow takes this account's unsynced work out while its wipe is
+  // out — but it is one account being deleted, not the device.
+  it('takes one account’s whole queue and leaves the other account’s alone', async () => {
     await enqueuePut(USER, PATH, 0);
     await enqueueDelete(USER, OTHER_PATH, 1);
     await enqueuePut(OTHER, PATH, 0);
+    const before = await listPendingOps(USER);
 
-    await clearPendingOps(USER);
+    const taken = await takePendingOps(USER);
 
+    expect(taken).toEqual(before);
     expect(await listPendingOps(USER)).toEqual([]);
     expect(await listPendingOps(OTHER)).toHaveLength(1);
+  });
+});
+
+describe('returnPendingOps', () => {
+  it('puts the taken rows back while the account still owns the store', async () => {
+    await beginInitialSync(USER);
+    await enqueuePut(USER, PATH, 0);
+    await enqueueDelete(USER, OTHER_PATH, 1);
+    const taken = await takePendingOps(USER);
+
+    await returnPendingOps(USER, taken);
+
+    expect(await listPendingOps(USER)).toEqual(taken);
+  });
+
+  // A newer edit to the same path supersedes the taken row; only the untouched path
+  // gets its taken row back.
+  it('keeps a row written since over the one it took', async () => {
+    await beginInitialSync(USER);
+    await enqueuePut(USER, PATH, 0);
+    await enqueuePut(USER, OTHER_PATH, 0);
+    const taken = await takePendingOps(USER);
+    await enqueueDelete(USER, PATH, 3);
+    const newer = (await listPendingOps(USER))[0];
+
+    await returnPendingOps(USER, taken);
+
+    const byPath = new Map((await listPendingOps(USER)).map((o) => [o.path, o]));
+    expect(byPath.get(PATH)).toEqual(newer);
+    expect(byPath.get(OTHER_PATH)).toEqual(taken.find((o) => o.path === OTHER_PATH));
+  });
+
+  it('drops them when the account no longer owns the store', async () => {
+    await enqueuePut(USER, PATH, 0);
+    const taken = await takePendingOps(USER);
+
+    await returnPendingOps(USER, taken);
+
+    expect(await listPendingOps(USER)).toEqual([]);
   });
 });

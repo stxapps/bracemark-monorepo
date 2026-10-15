@@ -768,21 +768,25 @@ describe('the path each blob is sealed for and opened under', () => {
     expect(pathArg(encryptFile, 3)).toEqual([FILE_PATH]);
   });
 
-  it('opens a pulled entity under the path it was listed at', async () => {
+  it('opens a pulled entity under the path it was listed at, each entry of a page under its own', async () => {
     mockGetBlob.mockResolvedValue(new Uint8Array([0xee, ...utf8('the server copy')]));
 
     await runIncrementalSync(
       deps({
         opsList: () => ({
-          ops: [{ op: 'put', path: LINK_PATH, updatedAt: 2000 }],
+          // Two entries, so opening every one under a sibling's path would show.
+          ops: [
+            { op: 'put', path: LINK_PATH, updatedAt: 2000 },
+            { op: 'put', path: OTHER_LINK_PATH, updatedAt: 2001 },
+          ],
           oldestUpdatedAt: 500,
-          newestUpdatedAt: 2000,
+          newestUpdatedAt: 2001,
           hasMore: false,
         }),
       }),
     );
 
-    expect(pathArg(decryptEntity, 2)).toEqual([LINK_PATH]);
+    expect(pathArg(decryptEntity, 2).sort()).toEqual([LINK_PATH, OTHER_LINK_PATH]);
   });
 
   it('opens fetched content under its own path, one at a time and in a batch', async () => {
