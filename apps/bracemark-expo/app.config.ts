@@ -233,10 +233,11 @@ const config: ExpoConfig = {
     // is debug-only code, but on Android its libraries were linked into release
     // too: ~5 MB of native lib per ABI, a ContentProvider that runs at every
     // launch, and a Play Services module download. This strips them from
-    // release only. Its release manifest also removes SYSTEM_ALERT_WINDOW;
-    // debug retains that permission for the dev performance monitor.
-    // See the plugin, and docs/expo-build.md.
-    './plugins/with-android-release-no-mlkit',
+    // release only. Its release manifest also removes SYSTEM_ALERT_WINDOW
+    // (debug retains it for the dev performance monitor) and two exported
+    // activities nothing in release starts. See the plugin, and
+    // docs/expo-build.md.
+    './plugins/with-android-release-trim',
     // DEVELOPMENT_TEAM and IPHONEOS_DEPLOYMENT_TARGET for the iOS SHARE
     // EXTENSION target, neither of which reaches it: withDevelopmentTeam runs
     // before expo-share-extension creates the target, and expo-build-properties

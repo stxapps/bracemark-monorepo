@@ -2,8 +2,8 @@
 
 How bracemark-expo gets **built** — the local prebuild/Xcode/gradle workflow, the
 app config that feeds it, the devices and OS versions it ships to, and the three
-release-only Android concerns (R8 minification, the dev launcher's ML Kit, Play
-upload signing), plus the Claude Code plugin for the iOS
+release-only Android concerns (R8 minification, what debug-only dependencies
+leak into release, Play upload signing), plus the Claude Code plugin for the iOS
 App Store Connect side and the vendored `gplay` skills for the Play Console
 side. For what each dependency _is_ and how it's wired, see
 [expo-dependencies.md](./expo-dependencies.md); for the one-time scaffold
@@ -368,7 +368,7 @@ manifest-merger removal markers. The Android floor is 13: photo/document pickers
 app-private files, and sharing exports need no legacy storage permission, and
 the app deliberately has no vibration feedback. `SYSTEM_ALERT_WINDOW` is
 removed only in the release manifest emitted by
-`plugins/with-android-release-no-mlkit.js`; debug keeps it for Expo's performance
+`plugins/with-android-release-trim.js`; debug keeps it for Expo's performance
 monitor. That plugin owns the release overlay so another writer cannot silently
 erase either the permission removal or the ML Kit metadata removal.
 
@@ -686,7 +686,7 @@ R8 configuration, mapping and installed artifact identity. Passing Release flows
 provide runtime coverage, not proof of every shrinker rule; verify the store
 submission.
 
-#### android release — the dev launcher's ML Kit
+#### android release — what debug-only dependencies leak
 
 **`expo-dev-client` is linked into release builds on Android.** On iOS,
 expo-dev-launcher and expo-dev-menu mark themselves `debugOnly` in their
@@ -706,7 +706,7 @@ code" button). A release AAB therefore carried:
   the dev launcher's _main_ manifest. It asks Play Services to download the
   barcode module onto every device that installs the app.
 
-`plugins/with-android-release-no-mlkit.js` removes all three from release only.
+`plugins/with-android-release-trim.js` removes all three from release only.
 It excludes the ML Kit artifacts from the app's `release*` Gradle configurations,
 and writes `android/app/src/release/AndroidManifest.xml` with a
 `tools:node="remove"` for the meta-data. Debug builds keep all of it, so the QR
@@ -723,6 +723,29 @@ build fails in R8 with _Missing class com.google.mlkit…_. That means revisitin
 the exclusion, not adding a `-dontwarn`. Check with
 `unzip -l app-release.aab | grep -i 'barhopper\|mlkit'`, which should print
 nothing.
+
+The same release manifest overlay also removes two **exported activities** that
+have no permission and that nothing in release starts. Any installed app could
+launch them:
+
+- `androidx.compose.ui.tooling.PreviewActivity`, from `ui-tooling`. The dev
+  launcher and dev menu declare it as a plain `implementation`, the same leak
+  as ML Kit. Only Android Studio's Compose previews use it.
+- `com.canhub.cropper.CropImageActivity`, from the image cropper library
+  that `expo-image-picker` pulls in. The picker crops through its own
+  `ExpoCropImageActivity` subclass, which has its own non-exported entry. The
+  library's entry also accepts a caller-chosen source and output URI.
+
+`gplay preflight --file app-release.aab` should then report 0 errors and
+these 2 warnings, both expected:
+
+- **`expo.modules.clipboard.ClipboardFileProvider` is exported.** Leave it.
+  Its `attachInfo` throws if the provider isn't exported, so a
+  `tools:replace` would crash the app at startup. It serves only
+  `cache/.clipboard/`, which only `setImageAsync` writes to, and the app calls
+  only `setStringAsync`.
+- **`BUNDLE-METADATA/…/app-metadata.properties`.** The Android Gradle Plugin
+  writes it into every AAB and Play reads it. It never reaches a device APK.
 
 #### android release signing — the Play upload key
 
