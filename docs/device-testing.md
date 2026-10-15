@@ -168,7 +168,8 @@ by Next, `EXPO_PUBLIC_*` by Metro. There is one value per dev-server session, so
 Working on the iPad is a mode you switch into and back out of.
 
 The switch is a gitignored `.env.development.local` in each Next app; in
-`bracemark-expo` it is `npm run start:lan`, which needs no undoing, or the
+`bracemark-expo` it is `npm run start:lan` (or `ios:lan`, which also builds and
+installs — [expo-build.md](./expo-build.md)), which needs no undoing, or the
 `.env.local` pair — expo's file is not dev-only, because the same file also
 picks staging for a release build, one started from the CLI with the
 `BRACEMARK_NONPROD_RELEASE=1` opt-in the production guard requires

@@ -66,6 +66,7 @@ scripts** in
 | `android:open`            | `am start` on the dev-client link                       | open the installed dev build, every time             |
 | `ios`                     | `expo run:ios`                                          | quick simulator run without opening Xcode            |
 | `ios:open`                | `simctl openurl` on the same link                       | ” — the simulator twin                               |
+| `ios:lan`                 | `expo run:ios --device`, origins on the `.local` name   | dev build → a device you pick — a physical iPhone    |
 | `ios:release`             | `expo run:ios --configuration Release --device`         | release build → a device you pick — production       |
 | `ios:release:staging`     | ” with staging origins + `BRACEMARK_NONPROD_RELEASE=1`  | ” — against dryrunbase.com                           |
 | `ios:bundle`              | prebuild → build-number check → archive → bundle check  | **the App Store archive**, in `build/` (gitignored)  |
@@ -82,6 +83,23 @@ so after a staging build it calls the JS task up to date and packages the
 STAGING bundle into the next `bundleRelease` (seen: `--rerun` is the fix, as in
 `e2e/runner/release-build.ts`). The two `expo run:android` release scripts delete
 that task's output first for the same reason.
+
+**`ios:lan` is the dev build for a physical iPhone**: `start:lan`'s origins plus
+`expo run:ios --device`, which prompts for a target (connected devices first,
+then simulators) and so needs a real TTY — `npm run ios:lan` from
+`apps/bracemark-expo`, not through nx. `ios` stays on the default simulator and
+`.env.development`; `npm run expo:ios -- --device` adds the picker for one run
+(npm appends the args, so `-- --device "<name>"` skips the prompt as well).
+
+⚠ **`expo run:ios` reuses a Metro already serving this app, and then its own
+origins do nothing.** It starts a Metro only when :8081 is free; if one started
+from `apps/bracemark-expo` is listening, it builds, installs and leaves the app
+to that one, and a dev build takes its origins from Metro
+([env-files.md](./env-files.md), _bracemark-expo_). So `start:lan` in one
+terminal plus `npm run expo:ios -- --device` in another is a valid iPhone setup,
+and `ios:lan` next to a plain `npm run start` is a silent `localhost` on the
+phone. A Metro on :8081 from any other directory gets a "use port 8082
+instead?" prompt instead, and yes starts a second Metro on the env files.
 
 **The store builds are `android:bundle` and `ios:bundle` → `ios:upload`.** The
 `.aab` goes to Play Console by hand (drag and drop); an iOS build cannot — App
