@@ -325,7 +325,8 @@ salts only the `password-KEK`, not the DEK. So a rename re-derives that one KEK
 and re-wraps the DEK — it does **not** re-key data — which makes an editable
 username feasible later if we want it (re-wrap + update the `UNIQUE` handle),
 rather than "create a new account and migrate." Until that's built, treat it as
-effectively permanent.
+effectively permanent — and what building it takes is
+[below](#if-usernames-become-editable).
 
 On **account deletion** the username is **tombstoned, never released**: the
 directory row stays (with `deleted_at` set), so the handle can't be
@@ -333,6 +334,71 @@ re-registered and mistaken for the previous owner, and sign-in answers for it
 exactly as for a name that never existed. Release-after-cooldown is a policy we
 can loosen into later — never the reverse. See
 [data-lifecycle.md](./data-lifecycle.md).
+
+#### if usernames become editable
+
+**The clients bind to the account by username, and they do so on purpose.** No
+client holds a `userId`. Every client-side "is this still the same account?"
+check compares usernames:
+
+- the pending-op queue and the sync bookkeeping row, keyed on it in Dexie and
+  expo-sqlite
+- the per-account sync lock name
+- the favicon writes
+- the share draft's `owner` stamp and the taxonomy snapshot
+  ([share-sheet.md](./share-sheet.md))
+- resume's "same account" test ([sessions.md](./sessions.md))
+- the `{ username }` body that delete-all-data sends and the server checks
+  ([data-lifecycle.md](./data-lifecycle.md))
+
+None of these is frozen. All of it is local state or one request field, and a
+later build can migrate it like any other local schema. Nothing frozen holds the
+username as a binding either. The server keys every account row and object by
+`user_id` and holds the name only in the `usernames` directory. The blob AAD is
+the version byte plus the path, and the doors' AAD leaves the username out
+(`crypto/doors.ts`) so a rename re-wraps only the password door. That is why the
+binding shipped as the username: moving it later costs no more than moving it
+now, and only a feature that may never ship would need it moved.
+
+**A rename fails closed, and a release fails open.** The old handle stays
+tombstoned after a rename, so it never names another account. A client still
+holding it then treats the account's own state as foreign: Save answers
+`'account-changed'`, the drain deletes the account's own queued drafts, resume
+refuses, and delete-all gets a 409. Each of those loses work, but none crosses
+an account. A **released** handle is the opposite case: a new account inherits
+every binding above. That is why releasing handles is blocked until these
+bindings move to an id that a re-registration cannot change (the ⚠ in
+[sessions.md](./sessions.md), _the expired state on the client_). The cooldown above is not a policy
+change alone.
+
+A rename has to do the following:
+
+1. **Tombstone the old handle, permanently.** If the old name can be
+   re-registered, the rename has become a release.
+2. **Tell every device, and choose how each one catches up.** The cheap route
+   ends every session at the rename. Every other device then drops to
+   _expired_, and its resume, pre-filled with the old name, is the
+   different-account path, so that device's unsynced ops and queued share
+   drafts are lost. The rename screen has to say so. The route that keeps that
+   work has the server return the current handle on an authed response. A
+   client that sees a different name then rewrites old to new in one
+   transaction, across the pending ops, the sync row and the share snapshot.
+   Every local row belongs to the signed-in account, because sign-out wipes, so
+   no ownership question comes up. The iOS share extension can still stamp a
+   draft from the stale snapshot after that rewrite, so the drain must also
+   accept the one previous name the rewrite recorded.
+3. **Cover the builds that predate rename.** They neither rewrite nor
+   understand the change. Gate the feature on a minimum app version, or end
+   their sessions. The failures are safe, as above, but they are confusing.
+4. **Leave the frozen contract alone.** The password door is re-derived from the
+   new name and re-wrapped, the directory row moves, and no data is re-keyed.
+
+If a stable client-side id is ever needed (for release, say), a DEK-derived tag
+such as an HKDF label over the DEK is enough. It is stable across a rename and a
+password change, a re-registered handle gets a different DEK and so a different
+tag, and nothing new crosses the wire. The tag changes only on a DEK rotation,
+which re-keys everything anyway. Sending the server's `userId` to clients would
+also work, but nothing needs it.
 
 ### password — rules and entropy
 

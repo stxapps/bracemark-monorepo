@@ -454,7 +454,7 @@ account. That sign-in is a resume and keeps the library
 ([sessions.md](./sessions.md)), and that offline share is the work the outbox
 exists to keep. So the binding is the username alone, with no session
 generation. A username is a stable identity here because the server never
-releases one: deleting an account tombstones it ([account.md](./account.md)). If handles are ever released ([data-lifecycle.md](./data-lifecycle.md), _deferred_) or made editable ([account.md](./account.md)), this binding has to move to an id that neither a re-registration nor a rename can change. A rename alone would make the drain delete that account's own pending drafts.
+releases one: deleting an account tombstones it ([account.md](./account.md)). If handles are ever released ([data-lifecycle.md](./data-lifecycle.md), _deferred_) or made editable, this binding has to move or be migrated. A rename alone would make the drain delete that account's own pending drafts. The requirements are in [account.md](./account.md), _if usernames become editable_.
 
 **A refresh that started under one account never writes its snapshot after the
 switch.** `refreshShareTaxonomy` takes the username before its reads and checks

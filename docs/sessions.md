@@ -325,7 +325,9 @@ other devices, including a fallback listing if the cursor is too old.
   good. ⚠ **If username release ever ships, resume must compare the server's
   `userId` instead**. Otherwise a device holding one account's library could
   resume into a different account that reclaimed the handle. That change is a
-  `userId` in the sign-in response and in the session record.
+  `userId` in the sign-in response and in the session record. Every other
+  username binding has the same dependency ([account.md](./account.md), _if
+  usernames become editable_).
 - **"Use a different account" is sign-out.** It runs the full teardown and
   warns first if pending ops exist. Their only copy is this device. The
   ordinary sign-out warns the same way on every client, but only about what a
