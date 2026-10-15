@@ -139,7 +139,8 @@ export const SYSTEM_LIST_DEFAULTS: readonly List[] = [
 // reader already tolerates (sync/items.ts, pathIdentified). A lock that list
 // held goes with it: coverage is worked out from the tree, so its links and its
 // child lists are no longer covered, and the lock provider's orphan sweep
-// deletes the row. Only a writer other than this app can have stored one.
+// deletes the row. No editor mints either id; before RESERVED_LIST_IDS, a
+// restore or a sync pull could store one.
 export function mergeSystemLists(stored: ListItem[]): ListItem[] {
   const storedById = new Map(stored.map((list) => [list.id, list]));
   const resolved: ListItem[] = SYSTEM_LIST_DEFAULTS.map(

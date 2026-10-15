@@ -128,6 +128,12 @@ salt)`, where `salt = SHA-256(APP_SALT ‖ canonicalizeUsername(username))` (the
   unrecoverable "invisible trailing space at signup" lockout (there is no reset);
   NFC makes a password typed as precomposed `é` vs decomposed `e`+U+0301 derive one
   KEK across keyboards/platforms. On the ASCII generated passphrase it is a no-op.
+  "Identically" is held by a vector, not assumed: `normalize` is the engine's,
+  and Hermes reaches a different Unicode library on iOS than on Android, so
+  `passwordCanonical` (`crypto/contract-vectors.ts`) pins `trim` and NFC on
+  composition, Hangul, exclusions and astral input, asserted under jest (Node's
+  ICU) and on each device by the `/contract-vectors` screen
+  ([e2e.md](./e2e.md), the vectors leg).
   (The generated passphrase joins its words with **`-`**, not spaces — a hyphen is
   a single token to keyboards/autocorrect, avoiding the space-re-entry footgun;
   see `generatePassphrase`.)

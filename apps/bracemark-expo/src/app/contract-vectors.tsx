@@ -11,9 +11,12 @@ import {
 import {
   BLOB_FORMAT_V1,
   bytesToHex,
+  canonicalizePassword,
+  codePointsToString,
   CRYPTO_CONTRACT_VECTOR as V,
   deriveUserSalt,
   hexToBytes,
+  utf8,
 } from '@stxapps/shared';
 
 // `/contract-vectors` — a DEV-ONLY screen that runs the frozen crypto contract
@@ -112,15 +115,35 @@ function ContractVectorsRunner() {
           },
         },
         {
+          // Hermes's String.prototype.normalize, which goes through a different
+          // library on iOS than on Android — and through neither under jest.
+          // A row that differs here is a password that derives another key on
+          // this platform than the same keystrokes do everywhere else.
+          name: 'password-canonical',
+          run: async () => {
+            for (const { input, utf8Hex } of V.passwordCanonical) {
+              const actual = bytesToHex(utf8(canonicalizePassword(codePointsToString(input))));
+              if (actual !== utf8Hex)
+                throw new Error(`${input}: expected ${utf8Hex}, got ${actual}`);
+            }
+          },
+        },
+        {
           // The v1 frame through the real framer — the same bytes the Swift and
-          // Kotlin BlobFrame suites open, here through quick-crypto's AES-GCM.
+          // Kotlin BlobFrame suites open, here through quick-crypto's AES-GCM
+          // with the path as AAD: it opens under its path, and under no other.
           name: 'blob-frame',
           run: async () => {
+            const key = hexToBytes(V.encryptionKeyHex);
             const packed = hexToBytes(V.blob.packedHex);
             if (packed[0] !== BLOB_FORMAT_V1) throw new Error(`format byte ${packed[0]}`);
-            const plaintext = await decryptEntity(hexToBytes(V.encryptionKeyHex), packed);
-            const text = new TextDecoder().decode(plaintext);
+            const text = new TextDecoder().decode(await decryptEntity(key, packed, V.blob.path));
             if (text !== V.blob.plaintext) throw new Error(`plaintext ${text}`);
+            const opened = await decryptEntity(key, packed, 'links/other.enc').then(
+              () => true,
+              () => false,
+            );
+            if (opened) throw new Error('opened under another path');
           },
         },
       ];

@@ -68,6 +68,12 @@ export const AES_GCM_IV_BYTES = 12;
 
 // First byte of every packed blob. Readers reject unknown versions loudly
 // (a wrong slice would otherwise feed garbage to GCM and fail as "tampered").
+//
+// v1 is sealed with AAD = blobAad(path) (crypto/blob-aad.ts), so a blob opens
+// only under the sync path it was written to: the key proves a blob is the
+// account's, and the path binds where it belongs, so whoever answers a GET (the
+// server, in the E2E threat model) cannot serve one of the account's own blobs
+// in place of another.
 export const BLOB_FORMAT_V1 = 0x01;
 
 // Canonical form of a username, used BOTH as the per-user Argon2 salt input

@@ -1,22 +1,23 @@
 /**
  * @jest-environment node
  *
- * The v1 blob frame — `[version(1) || iv(12) || ciphertext+tag]`. This is the
- * ONE wire format every platform reads and writes forever, so the framing is
- * pinned twice over: contract-vectors.spec.ts decrypts a golden packed blob
- * (proving these bytes match what expo and the native framer produce), and this
- * spec pins the properties a single fixed vector can't see — the offsets, the
- * loud version rejection, and the defensive copy on unpack.
+ * The blob frame — `[version(1) || iv(12) || ciphertext+tag]`. This is the ONE
+ * wire format every platform reads and writes forever, so the framing is pinned
+ * twice over: contract-vectors.spec.ts decrypts the golden packed blob (proving
+ * these bytes match what expo and the native framer produce), and this spec pins
+ * the properties a single fixed vector can't see — the offsets, the loud version
+ * rejection, the defensive copy on unpack, and what the path binding refuses.
  *
  * Node env: the real Web Crypto lives at globalThis.crypto there.
  */
-import { AES_GCM_IV_BYTES, BLOB_FORMAT_V1, utf8 } from '@stxapps/shared';
+import { AES_GCM_IV_BYTES, BLOB_FORMAT_V1, blobAad, utf8 } from '@stxapps/shared';
 
 import { decrypt, encrypt } from './aes';
 import { decryptEntity, encryptEntity, packBlob, unpackBlob } from './blob';
 
 const HEADER_BYTES = 1 + AES_GCM_IV_BYTES;
 const TAG_BYTES = 16;
+const PATH = 'links/a1.enc';
 
 const randomKey = () =>
   crypto.subtle.importKey(
@@ -35,7 +36,7 @@ const fakeBlob = () => ({
 });
 
 describe('packBlob', () => {
-  it('lays the frame out as version || iv || ciphertext, with no padding', () => {
+  it('lays a v1 frame out as version || iv || ciphertext, with no padding', () => {
     const { iv, ciphertext } = fakeBlob();
     const packed = packBlob({ iv, ciphertext });
 
@@ -53,7 +54,7 @@ describe('unpackBlob', () => {
   });
 
   it('rejects an unknown version byte LOUDLY, naming the byte', () => {
-    // A newer client's format must not be sliced as if it were v1: that feeds
+    // A newer client's format must not be sliced as if it were known: that feeds
     // garbage to GCM and surfaces as a misleading "tampered" error, sending
     // whoever debugs it after a corruption bug that isn't there. The two
     // failures have to stay distinguishable, so the message is part of the
@@ -65,16 +66,13 @@ describe('unpackBlob', () => {
     }
   });
 
-  it('rejects an empty buffer rather than reading it as a v1 frame', () => {
-    // `bytes[0]` is undefined here, not 1 — a zero-length body from a truncated
+  it('rejects an empty buffer rather than reading it as a frame', () => {
+    // `bytes[0]` is undefined here — a zero-length body from a truncated
     // download must not slice into an empty iv and an empty ciphertext.
     expect(() => unpackBlob(new Uint8Array(0))).toThrow(/Unknown blob format version/);
   });
 
   it('COPIES both slices, so the result never aliases the source buffer', () => {
-    // The source is whatever a caller handed in — a fetch body, or on the expo
-    // sibling a view quick-crypto passes straight to native. Aliasing would make
-    // a later mutation of that buffer silently change the IV under a decrypt.
     const packed = packBlob(fakeBlob());
     const { iv, ciphertext } = unpackBlob(packed);
 
@@ -90,19 +88,49 @@ describe('encryptEntity / decryptEntity', () => {
     const key = await randomKey();
     const data = utf8('{"id":"a1","title":"café — ☕"}');
 
-    const packed = await encryptEntity(key, data);
+    const packed = await encryptEntity(key, data, PATH);
 
     expect(packed[0]).toBe(BLOB_FORMAT_V1);
     expect(packed).toHaveLength(HEADER_BYTES + data.length + TAG_BYTES);
-    await expect(decryptEntity(key, packed)).resolves.toEqual(data);
+    await expect(decryptEntity(key, packed, PATH)).resolves.toEqual(data);
+  });
+
+  // The property the AAD exists for: whoever answers a GET can hand back another of
+  // the account's own blobs, and the key alone would not notice.
+  it('refuses a blob served under any other path', async () => {
+    const key = await randomKey();
+    const packed = await encryptEntity(key, utf8('link a1'), PATH);
+
+    for (const other of ['links/a2.enc', 'lists/a1.enc', 'links/a1.enc ', 'Links/a1.enc']) {
+      await expect(decryptEntity(key, packed, other)).rejects.toThrow();
+    }
+  });
+
+  it('seals with blobAad(path) — the bytes the native framers build', async () => {
+    const key = await randomKey();
+    const data = utf8('bound');
+    const packed = await encryptEntity(key, data, PATH);
+    const sealed = unpackBlob(packed);
+
+    await expect(decrypt(key, sealed, blobAad(PATH))).resolves.toEqual(data);
+    await expect(decrypt(key, sealed)).rejects.toThrow();
+  });
+
+  // A frame sealed without the path — what a pre-binding build wrote — fails
+  // the tag under every path.
+  it('opens no frame sealed without the path', async () => {
+    const key = await randomKey();
+    const unbound = packBlob(await encrypt(key, utf8('written without a path')));
+
+    await expect(decryptEntity(key, unbound, PATH)).rejects.toThrow();
   });
 
   it('round-trips an EMPTY entity (a 29-byte frame, not a special case)', async () => {
     const key = await randomKey();
-    const packed = await encryptEntity(key, new Uint8Array(0));
+    const packed = await encryptEntity(key, new Uint8Array(0), PATH);
 
     expect(packed).toHaveLength(HEADER_BYTES + TAG_BYTES);
-    await expect(decryptEntity(key, packed)).resolves.toEqual(new Uint8Array(0));
+    await expect(decryptEntity(key, packed, PATH)).resolves.toEqual(new Uint8Array(0));
   });
 
   it('copies the caller’s data, so a VIEW into a larger buffer encrypts correctly', async () => {
@@ -113,7 +141,7 @@ describe('encryptEntity / decryptEntity', () => {
     const backing = utf8('PREFIXthe entity bytesSUFFIX');
     const view = backing.subarray(6, 6 + 'the entity bytes'.length);
 
-    const plaintext = await decryptEntity(key, await encryptEntity(key, view));
+    const plaintext = await decryptEntity(key, await encryptEntity(key, view, PATH), PATH);
     expect(new TextDecoder().decode(plaintext)).toBe('the entity bytes');
   });
 
@@ -124,7 +152,7 @@ describe('encryptEntity / decryptEntity', () => {
     const key = await randomKey();
     const data = utf8('same entity, two uploads');
 
-    expect(await encryptEntity(key, data)).not.toEqual(await encryptEntity(key, data));
+    expect(await encryptEntity(key, data, PATH)).not.toEqual(await encryptEntity(key, data, PATH));
   });
 
   it('throws when any byte of the frame is tampered with', async () => {
@@ -134,26 +162,25 @@ describe('encryptEntity / decryptEntity', () => {
     // One flip in the IV region and one in the ciphertext region: both must fail
     // the tag rather than yield plausible-looking plaintext.
     for (const index of [1, HEADER_BYTES, HEADER_BYTES + 5]) {
-      const packed = await encryptEntity(key, data);
+      const packed = await encryptEntity(key, data, PATH);
       packed[index] ^= 0x01;
-      await expect(decryptEntity(key, packed)).rejects.toThrow();
+      await expect(decryptEntity(key, packed, PATH)).rejects.toThrow();
     }
   });
 
   it('throws under a wrong key — the caller treats it as a failed download', async () => {
-    const packed = await encryptEntity(await randomKey(), utf8('someone else’s entity'));
-    await expect(decryptEntity(await randomKey(), packed)).rejects.toThrow();
+    const packed = await encryptEntity(await randomKey(), utf8('someone else’s entity'), PATH);
+    await expect(decryptEntity(await randomKey(), packed, PATH)).rejects.toThrow();
   });
 
   it('packs what packBlob packs — the two entry points share one framer', async () => {
-    // encryptEntity is packBlob(encrypt(...)); decryptEntity must therefore read
-    // a hand-packed frame identically, which is what lets the sync engine and
-    // the native/expo side meet in the middle.
+    // encryptEntity is packBlob(encrypt(..., blobAad(path))); decryptEntity
+    // must therefore read a hand-packed frame identically, which is what lets
+    // the sync engine and the native/expo side meet in the middle.
     const key = await randomKey();
     const data = utf8('framed by hand');
 
-    const packed = packBlob(await encrypt(key, data));
-    await expect(decryptEntity(key, packed)).resolves.toEqual(data);
-    await expect(decrypt(key, unpackBlob(await encryptEntity(key, data)))).resolves.toEqual(data);
+    const packed = packBlob(await encrypt(key, data, blobAad(PATH)));
+    await expect(decryptEntity(key, packed, PATH)).resolves.toEqual(data);
   });
 });

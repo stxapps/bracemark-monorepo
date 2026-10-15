@@ -9,8 +9,8 @@
 //
 // Deliberately DB-free: the extension process must never open the app's sqlite
 // (share-store's header), so the entities are built from the draft alone and
-// pushed straight through the sync contract — encryptEntity (the v1 blob
-// frame) → files/sign → PUT → ops/commit, the same three round trips as one
+// pushed straight through the sync contract — encryptEntity (the blob
+// frame, bound to each entity's path) → files/sign → PUT → ops/commit, the same three round trips as one
 // engine put-chunk, minus the store bookkeeping.
 //
 // The draft's NEW LISTS and NEW TAGS upload too — the sheet mints their ranks
@@ -145,7 +145,7 @@ export async function uploadShareDraft(deps: ShareUploadDeps, draft: ShareDraft)
   const blobs = await Promise.all(
     entities.map(async ({ path, entity }) => ({
       path,
-      blob: await encryptEntity(deps.encryptionKey, utf8(JSON.stringify(entity))),
+      blob: await encryptEntity(deps.encryptionKey, utf8(JSON.stringify(entity)), path),
     })),
   );
 

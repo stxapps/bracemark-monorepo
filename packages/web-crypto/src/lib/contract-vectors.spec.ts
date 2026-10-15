@@ -15,7 +15,10 @@ import * as ed25519 from '@noble/ed25519';
 
 import {
   BLOB_FORMAT_V1,
+  blobAad,
   bytesToHex,
+  canonicalizePassword,
+  codePointsToString,
   CRYPTO_CONTRACT_VECTOR as V,
   dekWrapAad,
   deriveUserSalt,
@@ -27,7 +30,7 @@ import {
 
 import { decrypt } from './aes';
 import { deriveArgon2Hash, setArgon2Runner } from './argon2';
-import { decryptEntity } from './blob';
+import { decryptEntity, packBlob } from './blob';
 import {
   createAccount,
   regenerateRecoveryDoor,
@@ -63,6 +66,21 @@ const aesKey = (hex: string) =>
     'decrypt',
   ]);
 
+// aes.ts mints its IV, so re-sealing a vector byte for byte goes to Web Crypto
+// directly with the vector's fixed one.
+const encryptWithIv = async (
+  key: Awaited<ReturnType<typeof aesKey>>,
+  plaintext: Uint8Array<ArrayBuffer>,
+  ivHex: string,
+  aad: Uint8Array<ArrayBuffer>,
+) => {
+  const iv = hexToBytes(ivHex);
+  const ciphertext = new Uint8Array(
+    await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: aad }, key, plaintext),
+  );
+  return { iv, ciphertext };
+};
+
 describe('frozen-contract vectors', () => {
   it('derives the contract password-KEK (salt + Argon2id)', async () => {
     const salt = deriveUserSalt(V.username);
@@ -83,10 +101,36 @@ describe('frozen-contract vectors', () => {
     // encryptionKeyHex). Decrypt through the real framer (unpackBlob, inside
     // decryptEntity) so the golden vector pins the actual wire-format code, not
     // a hand-inlined slice.
+    const plaintext = await decryptEntity(
+      account.encryptionKey,
+      hexToBytes(V.blob.packedHex),
+      V.blob.path,
+    );
+    expect(new TextDecoder().decode(plaintext)).toBe(V.blob.plaintext);
+  });
+
+  it('opens the contract blob under its path, and under no other', async () => {
+    const key = await aesKey(V.encryptionKeyHex);
+    expect(bytesToHex(blobAad(V.blob.path))).toBe(V.blob.aadHex);
+
     const packed = hexToBytes(V.blob.packedHex);
     expect(packed[0]).toBe(BLOB_FORMAT_V1);
-    const plaintext = await decryptEntity(account.encryptionKey, packed);
+    const plaintext = await decryptEntity(key, packed, V.blob.path);
     expect(new TextDecoder().decode(plaintext)).toBe(V.blob.plaintext);
+    await expect(decryptEntity(key, packed, 'links/other.enc')).rejects.toThrow();
+
+    // And this framer seals the same bytes: the vector's IV, through aes.ts and
+    // packBlob, is the vector.
+    const resealed = packBlob(
+      await encryptWithIv(key, utf8(V.blob.plaintext), V.blob.ivHex, blobAad(V.blob.path)),
+    );
+    expect(bytesToHex(resealed)).toBe(V.blob.packedHex);
+  });
+
+  it('canonicalizes every password row to the vector’s bytes', () => {
+    for (const { input, utf8Hex } of V.passwordCanonical) {
+      expect(bytesToHex(utf8(canonicalizePassword(codePointsToString(input))))).toBe(utf8Hex);
+    }
   });
 
   it('pins the documented intermediates (DEK, auth seed, recovery KEK)', async () => {

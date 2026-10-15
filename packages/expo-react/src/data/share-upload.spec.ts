@@ -4,6 +4,7 @@
 // asserted elsewhere; here the contract under test is WHAT is uploaded and in
 // what order.
 
+import { encryptEntity } from '@stxapps/expo-crypto';
 import {
   type ApiClient,
   EXTRACTIONS_PREFIX,
@@ -50,6 +51,7 @@ const EXTRACTION_PATH = pathFromId('link-1', EXTRACTIONS_PREFIX);
 
 beforeEach(() => {
   mockPutBlob.mockClear();
+  (encryptEntity as jest.Mock).mockClear();
 });
 
 describe('buildDraftEntities', () => {
@@ -128,6 +130,11 @@ describe('uploadShareDraft', () => {
       `https://r2.test/${LINK_PATH}`,
       `https://r2.test/${EXTRACTION_PATH}`,
     ]);
+    // Each blob is sealed for the path it is PUT to — the AAD a blob opens
+    // under (shared crypto/blob-aad.ts). The stand-in ignores it, so this is the
+    // only place a mismatched path would show.
+    const sealedFor = (encryptEntity as jest.Mock).mock.calls.map((call) => call[2]);
+    expect(sealedFor.map((path) => `https://r2.test/${path}`)).toEqual(putUrls);
     // encryptEntity is identity here — the uploaded bytes decode to the link.
     const linkBytes = (mockPutBlob.mock.calls[2] as unknown[])[1] as Uint8Array;
     expect(JSON.parse(new TextDecoder().decode(linkBytes))).toMatchObject({

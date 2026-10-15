@@ -12,8 +12,8 @@ primitives, implemented on React Native.
 - **File-level encryption never enters JS.** The bundled `BracemarkFileCrypto`
   Expo native module (`ios/`, `android/`) encrypts/decrypts whole files
   path-to-path in the native layer, producing the frozen v1 blob frame
-  `[0x01 || iv(12) || ciphertext+tag]` — byte-compatible with the blobs the
-  web client packs/unpacks in JS.
+  `[0x01 || iv(12) || ciphertext+tag]`, sealed with the blob's sync path as
+  AAD — byte-compatible with the blobs the web client packs/unpacks in JS.
 - **Shared-Keychain access the way expo-secure-store can't.** The iOS-only
   `BracemarkSharedKeychain` module reads/writes generic-password items under an
   explicit access group (an App Group id), which is what lets the share

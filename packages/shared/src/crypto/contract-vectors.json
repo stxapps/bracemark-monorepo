@@ -24,8 +24,104 @@
     "sha256Hex": "187db04a869dd9bc7be80d21a86497d692c0db6abd3aa8cb6be5d618ff757fae"
   },
   "blob": {
+    "path": "links/contract-vector.enc",
     "ivHex": "b0b1b2b3b4b5b6b7b8b9babb",
     "plaintext": "Hello, bracemark! contract vector v1",
-    "packedHex": "01b0b1b2b3b4b5b6b7b8b9babbc39e5fb1cd31df39f560ba2ccb91c0b9f19a22ddbb4f3055fa4466d0a5e74eb1544ded59f6af512a36073c199c6c1a0208588be1"
-  }
+    "aadHex": "016c696e6b732f636f6e74726163742d766563746f722e656e63",
+    "packedHex": "01b0b1b2b3b4b5b6b7b8b9babbc39e5fb1cd31df39f560ba2ccb91c0b9f19a22ddbb4f3055fa4466d0a5e74eb1544ded59902334afcf82c4ee221797e551790684"
+  },
+  "passwordCanonical": [
+    {
+      "input": "0063 0061 0066 00e9",
+      "utf8Hex": "636166c3a9"
+    },
+    {
+      "input": "0063 0061 0066 0065 0301",
+      "utf8Hex": "636166c3a9"
+    },
+    {
+      "input": "ac00",
+      "utf8Hex": "eab080"
+    },
+    {
+      "input": "1100 1161",
+      "utf8Hex": "eab080"
+    },
+    {
+      "input": "00c5",
+      "utf8Hex": "c385"
+    },
+    {
+      "input": "0041 030a",
+      "utf8Hex": "c385"
+    },
+    {
+      "input": "212b",
+      "utf8Hex": "c385"
+    },
+    {
+      "input": "fb01 006c 0069 0067",
+      "utf8Hex": "efac816c6967"
+    },
+    {
+      "input": "ff21 0066 0077",
+      "utf8Hex": "efbca16677"
+    },
+    {
+      "input": "0065 0323 0301",
+      "utf8Hex": "e1bab9cc81"
+    },
+    {
+      "input": "017f 0323 0307",
+      "utf8Hex": "e1ba9bcca3"
+    },
+    {
+      "input": "005a 0323 0307",
+      "utf8Hex": "e1ba92cc87"
+    },
+    {
+      "input": "0928 093c",
+      "utf8Hex": "e0a4a9"
+    },
+    {
+      "input": "0958",
+      "utf8Hex": "e0a495e0a4bc"
+    },
+    {
+      "input": "1f600 0065",
+      "utf8Hex": "f09f988065"
+    },
+    {
+      "input": "00a0 006e 0062 00a0",
+      "utf8Hex": "6e62"
+    },
+    {
+      "input": "3000 0069 3000",
+      "utf8Hex": "69"
+    },
+    {
+      "input": "200b 007a",
+      "utf8Hex": "e2808b7a"
+    },
+    {
+      "input": "feff 0062",
+      "utf8Hex": "62"
+    },
+    {
+      "input": "0070 0020 0077",
+      "utf8Hex": "702077"
+    },
+    {
+      "input": "0009 0054 000a",
+      "utf8Hex": "54"
+    },
+    {
+      "input": "2028 006c",
+      "utf8Hex": "6c"
+    },
+    {
+      "input": "180e 006d",
+      "utf8Hex": "e1a08e6d"
+    }
+  ]
 }

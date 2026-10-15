@@ -409,7 +409,7 @@ export async function loadEntityContent(
   });
   if (!blob) return undefined;
 
-  const data = await decryptEntity(deps.encryptionKey, blob);
+  const data = await decryptEntity(deps.encryptionKey, blob, path);
   // Cache under a compare-and-set on the stamp read at the top: a sync pull can
   // restamp this path mid-fetch (newer `updatedAt`, cached `data` dropped), and
   // landing the older blob under the new stamp would serve stale content FOREVER —
@@ -483,7 +483,7 @@ export async function loadEntityContents(
           })
         : undefined;
       if (blob) {
-        const data = await decryptEntity(deps.encryptionKey, blob);
+        const data = await decryptEntity(deps.encryptionKey, blob, path);
         await db.transaction('rw', db.items, db.syncMeta, async () => {
           await assertAccountStillOwnsStore(deps.username);
           const current = await db.items.get(path);
@@ -993,7 +993,7 @@ async function uploadBlobs(
     if (!url) return;
 
     try {
-      await putBlob(url, await encryptEntity(deps.encryptionKey, rec.data));
+      await putBlob(url, await encryptEntity(deps.encryptionKey, rec.data, op.path));
     } catch (err) {
       failed.push(op);
       failures.count += 1;
@@ -1106,7 +1106,7 @@ async function storeDownloads(
         });
         if (!blob) return;
 
-        const data = await decryptEntity(deps.encryptionKey, blob);
+        const data = await decryptEntity(deps.encryptionKey, blob, e.path);
         await putPulled(deps.username, [toItemRecord(e.path, e.updatedAt, data)]);
       } finally {
         tick();

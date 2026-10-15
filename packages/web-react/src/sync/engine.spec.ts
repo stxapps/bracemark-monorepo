@@ -22,6 +22,7 @@ import {
   TRASH_ID,
   utf8,
 } from '@stxapps/shared';
+import { decryptEntity, encryptEntity } from '@stxapps/web-crypto';
 
 import { db } from '../data/db';
 import {
@@ -40,6 +41,7 @@ import { AccountFencedError } from '../data/sync-store';
 import {
   awaitInflightSync,
   loadEntityContent,
+  loadEntityContents,
   runIncrementalSync,
   runInitialSync,
   type SyncDeps,
@@ -1052,6 +1054,60 @@ describe('the put chunk', () => {
     expect(committedPaths().every((p) => p.startsWith('files/'))).toBe(true);
     expect(outcome.blockedCount).toBe(2 * COUNT - pushed);
     expect(await pendingPaths()).toHaveLength(2 * COUNT - pushed);
+  });
+});
+
+// --- the path each blob is bound to ----------------------------------------------
+
+// A blob opens only under the sync path it was sealed for (shared
+// crypto/blob-aad.ts). The crypto is a stand-in in this file, so what is pinned
+// here is the engine's half: every seal names the path the blob is PUT to, and
+// every open the path it was fetched from. A wrong path is not caught by any
+// round trip here — the stand-in ignores it — and on a device it fails every
+// download of that blob, on every other client.
+describe('the path each blob is sealed for and opened under', () => {
+  const pathArg = (mock: jest.Mock) => mock.mock.calls.map((call) => call[2]);
+
+  it('seals a pushed blob for the path it is PUT to', async () => {
+    await seedQueued(LINK_PATH, 'the link');
+
+    await runIncrementalSync(deps());
+
+    expect(pathArg(encryptEntity as jest.Mock)).toEqual([LINK_PATH]);
+  });
+
+  it('opens a pulled blob under the path it was listed at', async () => {
+    mockGetBlob.mockResolvedValue(new Uint8Array([0xee, ...utf8('new')]));
+
+    await runIncrementalSync(
+      deps({
+        opsList: () => ({
+          ops: [{ op: 'put', path: LINK_PATH, updatedAt: 2000 }],
+          oldestUpdatedAt: 500,
+          newestUpdatedAt: 2000,
+          hasMore: false,
+        }),
+      }),
+    );
+
+    expect(pathArg(decryptEntity as jest.Mock)).toEqual([LINK_PATH]);
+  });
+
+  it('opens fetched content under its own path, one at a time and in a batch', async () => {
+    await db.items.put(toItemRecord(FILE_PATH, 1000));
+    mockGetBlob.mockResolvedValue(new Uint8Array([0xee, ...utf8('page copy')]));
+
+    await loadEntityContent(deps(), FILE_PATH);
+    expect(pathArg(decryptEntity as jest.Mock)).toEqual([FILE_PATH]);
+
+    // Two distinct paths in one batch, so opening every item under the first
+    // one's path would show.
+    (decryptEntity as jest.Mock).mockClear();
+    await db.items.put(toItemRecord(FILE_PATH, 1000));
+    await db.items.put(toItemRecord(OTHER_FILE_PATH, 1000));
+    await loadEntityContents(deps(), [FILE_PATH, OTHER_FILE_PATH]);
+
+    expect(pathArg(decryptEntity as jest.Mock).sort()).toEqual([FILE_PATH, OTHER_FILE_PATH]);
   });
 });
 

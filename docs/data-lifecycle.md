@@ -515,8 +515,8 @@ The policy, decided once:
   and both lock providers refuse a list lock at the app lock's id as a last
   line. A lock such a list held goes with it: coverage is worked out from the
   tree, which no longer holds the list, so its links and its child lists are
-  uncovered and the orphan sweep deletes the row. Only a writer other than this
-  app can have stored one.
+  uncovered and the orphan sweep deletes the row. No editor here mints either
+  id; before this rule, a restore or a sync pull could store one.
 - **A backup's list or tag chain is held to the interop depth rule.** A restore
   writes `parentId` verbatim, so without a bound the file decided how deep this
   library's tree was — the one import door the folder-depth rule (below) did not
@@ -528,14 +528,17 @@ The policy, decided once:
   restore that looks complete with links filed under lists it never made. The
   chain is counted inside the file: a parent the file does not carry (a system
   list's default, a list only the library holds) ends it, so the verdict is a
-  fact about the file — and the bound is per file, not per library: a file can
-  hang its chain under a deep list the library already holds, and two restores
-  can each add one. It measures what the restore writes: a path the file
-  repeats is restored from its **first** line and the rest are dropped, counted
-  as skipped, before the rule runs (`firstLinePerPath`). Measured on every line,
-  the rule kept the last line for a path while the writer, which skips a path an
-  earlier chunk wrote, kept the first — so a deep chain repeated further down as
-  roots passed it and was stored. The editors put no bound on depth, so a
+  fact about the file — and **the bound is per file, not per library**. The
+  library's own lists are not measured: a file can hang its chain under a deep
+  list the library already holds, two restores can each add one, and a list the
+  library already holds keeps its stored parent even where the file's line for
+  it says otherwise, so it can join two of the file's chains into one the rule
+  never measured. A path the file repeats is restored from its **first** line
+  and the rest are dropped, counted as skipped, before the rule runs
+  (`firstLinePerPath`). Measured on every line, the rule kept the last line for
+  a path while the writer kept the first wherever the repeat fell in a later
+  write chunk — so a deep chain repeated further down as roots passed it and
+  was stored. The editors put no bound on depth, so a
   library can hold a chain past 100 and its own backup is then refused; the
   message says so in a backup's terms and names the act in that library. A
   `parentId` loop counts as deep as it is long, since
@@ -726,9 +729,10 @@ user asked for, not a screen that opens on its own; the web Lists settings
 table, which is a screen, and works out `forbiddenParentIds` for every row it
 shows on every render, each call walking the forest to the row and then the
 row's whole subtree; and the marketing site's converter, which copies a path per
-folder of a backup's list tree. The depth rule bounds the chain each import
-brings in — interop or backup, one file at a time — and nothing bounds one built
-in the editors, arrived by sync, or grown across several imports.
+folder of a backup's list tree. The depth rule bounds the chains each import
+file carries — interop or backup — and nothing bounds a chain built in the
+editors, arrived by sync, or formed where a restored chain meets lists the
+library already holds.
 
 **A list's identity is its path, and a forest holds one node per id.** Depth was
 one number the data chose; the node count was the other. `buildTree` resolves

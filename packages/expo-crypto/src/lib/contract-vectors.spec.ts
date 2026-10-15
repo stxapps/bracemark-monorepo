@@ -5,11 +5,16 @@
 // ../testing), so what's under test is OUR mapping/wire-format code, not the
 // native library; nothing runs these vectors on a device, and nothing runs them
 // in CI either. The vector file's header states both limits.
+import { createCipheriv } from 'node:crypto';
+
 import * as ed25519 from '@noble/ed25519';
 
 import {
   BLOB_FORMAT_V1,
+  blobAad,
   bytesToHex,
+  canonicalizePassword,
+  codePointsToString,
   CRYPTO_CONTRACT_VECTOR as V,
   dekWrapAad,
   deriveUserSalt,
@@ -21,7 +26,7 @@ import {
 
 import { decrypt, encrypt } from './aes';
 import { deriveArgon2Hash } from './argon2';
-import { decryptEntity } from './blob';
+import { decryptEntity, packBlob } from './blob';
 import {
   createAccount,
   unlockAccount,
@@ -123,14 +128,37 @@ describe('frozen-contract vectors', () => {
     expect(bytesToHex(ed25519.sign(utf8(V.signPayload), authSeed))).toBe(V.signatureHex);
   });
 
-  it('decrypts the packed v1 contract blob', async () => {
-    const packed = hexToBytes(V.blob.packedHex);
-    expect(packed[0]).toBe(BLOB_FORMAT_V1);
+  it('decrypts the packed v1 contract blob under its path, and under no other', async () => {
+    const key = hexToBytes(V.encryptionKeyHex);
+    expect(bytesToHex(blobAad(V.blob.path))).toBe(V.blob.aadHex);
 
     // Decrypt through the real framer (unpackBlob, inside decryptEntity) so the
     // golden vector pins the actual wire-format code, not a hand-inlined slice.
-    const plaintext = await decryptEntity(hexToBytes(V.encryptionKeyHex), packed);
+    const packed = hexToBytes(V.blob.packedHex);
+    expect(packed[0]).toBe(BLOB_FORMAT_V1);
+    const plaintext = await decryptEntity(key, packed, V.blob.path);
     expect(new TextDecoder().decode(plaintext)).toBe(V.blob.plaintext);
+    await expect(decryptEntity(key, packed, 'links/other.enc')).rejects.toThrow();
+
+    // And this framer packs the same bytes: the vector's IV and AAD through
+    // AES-GCM, then packBlob, is the vector. (aes.ts mints its IV, so the seal
+    // goes to node's cipher directly with the vector's fixed one.)
+    const cipher = createCipheriv('aes-256-gcm', key, hexToBytes(V.blob.ivHex));
+    cipher.setAAD(blobAad(V.blob.path));
+    const body = Buffer.concat([cipher.update(utf8(V.blob.plaintext)), cipher.final()]);
+    const resealed = packBlob({
+      iv: hexToBytes(V.blob.ivHex),
+      ciphertext: new Uint8Array(Buffer.concat([body, cipher.getAuthTag()])),
+    });
+    expect(bytesToHex(resealed)).toBe(V.blob.packedHex);
+  });
+
+  it('canonicalizes every password row to the vector’s bytes', () => {
+    // Under jest this is Node's ICU; the on-device screen holds Hermes to the
+    // same rows (apps/bracemark-expo/src/app/contract-vectors.tsx).
+    for (const { input, utf8Hex } of V.passwordCanonical) {
+      expect(bytesToHex(utf8(canonicalizePassword(codePointsToString(input))))).toBe(utf8Hex);
+    }
   });
 });
 

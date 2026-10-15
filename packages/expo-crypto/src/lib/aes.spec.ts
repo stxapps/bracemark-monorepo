@@ -120,13 +120,14 @@ describe('decrypt', () => {
 
   it('throws on a ciphertext too short to hold a tag', async () => {
     // A truncated download reaches the manual split with fewer than 16 bytes,
-    // where the subarray arithmetic goes negative. It has to fail, not decode
-    // whatever the clamped slices happen to be.
+    // where the subarray arithmetic goes negative. It has to fail as a short
+    // input, before GCM: Node-style GCM accepts tags down to 4 bytes, so a
+    // 4-15 byte slice would be checked as a truncated tag instead.
     const key = randomKey();
-    for (const length of [0, 1, 15]) {
+    for (const length of [0, 1, 4, 15]) {
       await expect(
         decrypt(key, { iv: new Uint8Array(AES_GCM_IV_BYTES), ciphertext: new Uint8Array(length) }),
-      ).rejects.toThrow();
+      ).rejects.toThrow('ciphertext shorter than its GCM tag');
     }
   });
 });

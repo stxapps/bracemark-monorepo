@@ -37,6 +37,7 @@
 
 import { sql } from 'drizzle-orm';
 
+import { decryptEntity, decryptFile, encryptEntity, encryptFile } from '@stxapps/expo-crypto';
 import {
   ApiError,
   EXTRACTIONS_PREFIX,
@@ -741,6 +742,60 @@ describe('loadEntityContents', () => {
     expect(missingPaths).toEqual([]);
     expect(plaintextAt(FILE_PATH)).toBeUndefined();
     expect(tempFiles()).toEqual([]);
+  });
+});
+
+// --- the path each blob is bound to ----------------------------------------------
+
+// A blob opens only under the sync path it was sealed for (shared
+// crypto/blob-aad.ts), and that holds for the native file framer too. The crypto
+// is a stand-in in this file, so what is pinned here is the engine's half: every
+// seal names the path the blob is PUT to, and every open the path it was fetched
+// from — never a local file path. A wrong path is not caught by any round trip
+// here (the stand-in ignores it), and on a device it fails every download of that
+// blob, on every other client.
+describe('the path each blob is sealed for and opened under', () => {
+  const pathArg = (mock: unknown, index: number) =>
+    (mock as jest.Mock).mock.calls.map((call) => call[index]);
+
+  it('seals a pushed entity and a pushed file for the paths they are PUT to', async () => {
+    seedQueued(LINK_PATH, 'the link');
+    await seedQueuedContent(FILE_ID, 'image bytes');
+
+    await runIncrementalSync(deps());
+
+    expect(pathArg(encryptEntity, 2)).toEqual([LINK_PATH]);
+    expect(pathArg(encryptFile, 3)).toEqual([FILE_PATH]);
+  });
+
+  it('opens a pulled entity under the path it was listed at', async () => {
+    mockGetBlob.mockResolvedValue(new Uint8Array([0xee, ...utf8('the server copy')]));
+
+    await runIncrementalSync(
+      deps({
+        opsList: () => ({
+          ops: [{ op: 'put', path: LINK_PATH, updatedAt: 2000 }],
+          oldestUpdatedAt: 500,
+          newestUpdatedAt: 2000,
+          hasMore: false,
+        }),
+      }),
+    );
+
+    expect(pathArg(decryptEntity, 2)).toEqual([LINK_PATH]);
+  });
+
+  it('opens fetched content under its own path, one at a time and in a batch', async () => {
+    getDb().transaction((tx) =>
+      putItemsTx(tx, [toItemRecord(FILE_PATH, 1000), toItemRecord(OTHER_FILE_PATH, 1000)]),
+    );
+    r2Content.set(FILE_PATH, 'one');
+    r2Content.set(OTHER_FILE_PATH, 'other');
+
+    await loadEntityContent(deps(), FILE_PATH);
+    await loadEntityContents(deps(), [OTHER_FILE_PATH]);
+
+    expect(pathArg(decryptFile, 3)).toEqual([FILE_PATH, OTHER_FILE_PATH]);
   });
 });
 

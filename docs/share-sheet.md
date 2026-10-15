@@ -968,12 +968,12 @@ still-correct outbox + next-open story.
 
 **The upload runs in RN, because the runtime is already warm.** The sheet is
 RN, so at Add time the JS instance is up and the upload is just more work in a
-runtime already paid for — reusing the v1 frame (`blob.ts`), the typed sync
+runtime already paid for — reusing the blob frame (`blob.ts`), the typed sync
 endpoint contract (`@stxapps/shared`), and the api client, instead of forking
 AES framing + HTTP + endpoint types into Swift for zero latency benefit. (The
 upload's language follows the sheet's language: if the sheet were ever forked
 to native SwiftUI for cold-start reasons — see below — the upload would go
-native with it, on CryptoKit + the v1 frame BracemarkFileCrypto already produces.)
+native with it, on CryptoKit + the frame BracemarkFileCrypto already produces.)
 
 **How the session crosses the process boundary.** expo-secure-store doesn't
 expose Keychain access groups, so the **BracemarkSharedKeychain** native module

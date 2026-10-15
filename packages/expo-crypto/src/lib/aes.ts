@@ -52,6 +52,10 @@ export async function decrypt(
   { iv, ciphertext }: EncryptedBlob,
   aad?: Uint8Array,
 ): Promise<Uint8Array> {
+  // Shorter than one tag is not a ciphertext. Node-style GCM accepts a tag as
+  // short as 4 bytes, so slicing one would verify a truncated tag instead of
+  // failing — Web Crypto refuses the same input outright.
+  if (ciphertext.length < TAG_BYTES) throw new Error('ciphertext shorter than its GCM tag');
   const body = ciphertext.subarray(0, ciphertext.length - TAG_BYTES);
   const tag = ciphertext.subarray(ciphertext.length - TAG_BYTES);
 

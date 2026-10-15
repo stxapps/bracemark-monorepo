@@ -1576,7 +1576,8 @@ data**, so the sync layer is entirely oblivious to them.
 **Blob wire format.** Every R2 object is the binary frame
 `[version(1) || iv(12) || ciphertext+tag]` — packed/unpacked by `blob.ts` in the
 crypto packages (`@stxapps/web-crypto` / `@stxapps/expo-crypto`, next to the
-AES-256-GCM primitive it wraps; the sync engine is the caller). The constants
+AES-256-GCM primitive it wraps; the sync engine is the caller), and for `files/`
+content on expo by the native `BlobFrame` (Swift, Kotlin). The constants
 (`BLOB_FORMAT_V1`, `AES_GCM_IV_BYTES`) live in `@stxapps/shared`
 (`crypto/params.ts`) because they are a **cross-platform contract** like the
 key-derivation parameters: a blob packed on web must unpack on the browser
@@ -1592,6 +1593,34 @@ old blobs keep decoding side by side instead of forcing a download-and-re-encryp
 migration; readers reject an unknown version loudly. The IV is 12 bytes because
 96 bits is the recommended GCM size (other lengths take a weaker GHASH path) —
 it would only ever change as part of a new versioned format.
+
+**A blob is bound to its path.** Every writer seals with AAD =
+`blobAad(path)` — the version byte, then the UTF-8 of the sync path the blob is
+PUT to (`crypto/blob-aad.ts`) — and every reader supplies the path it fetched
+from, so a blob opens only where it was written. The key already proves a blob
+is the account's; without the path, whoever answers a GET (the server, in this
+threat model) could hand back another of the account's own blobs — one link's
+record for another's, a list for a list — and the tag would pass. The engines
+pass the path at every seal and open (`encryptEntity`/`decryptEntity`, and
+`encryptFile`/`decryptFile` across the native bridge, which builds the same AAD
+itself).
+
+The binding is part of v1 itself, not a later version. It went in before the
+first release, so no account holds an unbound blob, and no reader has an
+unbound branch a server could steer it to. Builds from before the binding wrote
+the same version byte with no AAD; their blobs fail the tag (a failed download,
+not a version error), so a dev account synced by one is recreated, not
+migrated.
+
+The golden vector holds the four framers to one byte string — `blob` opened
+under its path, refused under another, and resealed byte for byte
+(`crypto/contract-vectors.ts`). The two JS framers run under jest, the Swift and
+Kotlin ones on the host (`swift test`, the JVM), and the dev-only
+`/contract-vectors` screen runs the JS framer on each device through
+quick-crypto; the native file framer has no on-device vector run.
+**What the binding does not cover is which version of a path is served**: an
+older blob written to the same path still opens there, so rolling a path back
+to an earlier state is not prevented by this.
 
 Even with E2E, the server still learns the **number of files, each file's size,
 its timestamps, and access patterns** (which blobs are fetched when). It does

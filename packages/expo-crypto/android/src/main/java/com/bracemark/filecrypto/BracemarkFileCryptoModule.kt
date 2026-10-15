@@ -20,7 +20,7 @@ internal class UnknownBlobFormatException(version: Int) :
   CodedException("unknown blob format version: $version (expected 0x01)")
 
 internal class TruncatedBlobException :
-  CodedException("encrypted file is too short to be a v1 blob")
+  CodedException("encrypted file is too short to be a blob")
 
 internal class DecryptionFailedException(cause: Throwable?) :
   CodedException("decryption failed — tampered file or wrong key", cause)
@@ -48,22 +48,24 @@ class BracemarkFileCryptoModule : Module() {
 
     // AsyncFunctions run on the module's background dispatcher — the JS thread
     // never blocks on file IO or crypto.
-    AsyncFunction("encryptFile") { inputPath: String, outputPath: String, keyHex: String ->
+    AsyncFunction("encryptFile") { inputPath: String, outputPath: String, keyHex: String, blobPath: String ->
       mapErrors {
         BlobFrame.encryptFile(
           BlobFrame.resolve(inputPath),
           BlobFrame.resolve(outputPath),
           BlobFrame.secretKey(keyHex),
+          blobPath,
         )
       }
     }
 
-    AsyncFunction("decryptFile") { inputPath: String, outputPath: String, keyHex: String ->
+    AsyncFunction("decryptFile") { inputPath: String, outputPath: String, keyHex: String, blobPath: String ->
       mapErrors {
         BlobFrame.decryptFile(
           BlobFrame.resolve(inputPath),
           BlobFrame.resolve(outputPath),
           BlobFrame.secretKey(keyHex),
+          blobPath,
         )
       }
     }

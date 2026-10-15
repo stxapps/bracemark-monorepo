@@ -12,9 +12,11 @@ import javax.crypto.spec.SecretKeySpec
 
 // The FROZEN v1 blob frame `[0x01 || iv(12) || ciphertext || tag(16)]`
 // (@stxapps/shared crypto/params.ts: BLOB_FORMAT_V1 / AES_GCM_IV_BYTES), split
-// out of BracemarkFileCryptoModule so it can be TESTED.
+// out of BracemarkFileCryptoModule so it can be TESTED. Sealed with AAD = [0x01]
+// + UTF-8 of the blob's sync path (shared crypto/blob-aad.ts, blobAad), so a
+// blob opens only under the path it was written to.
 //
-// The split is the whole point. These four constants are a hand-copy of the TS
+// The split is the whole point. These constants and the AAD are a hand-copy of the TS
 // ones — nothing links them, so a re-value on either side diverges in silence,
 // and until BlobFrameTest existed the only thing standing behind this framer was
 // the comment claiming it matched. Inside the Module class it was untestable:
@@ -38,7 +40,7 @@ internal sealed class BlobFrameError(message: String, cause: Throwable? = null) 
   internal class InvalidKey : BlobFrameError("key must be $KEY_BYTES bytes of hex")
   internal class UnknownFormat(val version: Int) :
     BlobFrameError("unknown blob format version: $version (expected 0x01)")
-  internal class Truncated : BlobFrameError("encrypted file is too short to be a v1 blob")
+  internal class Truncated : BlobFrameError("encrypted file is too short to be a blob")
   internal class DecryptionFailed(cause: Throwable?) :
     BlobFrameError("decryption failed — tampered file or wrong key", cause)
   internal class TempRenameFailed : BlobFrameError("could not move temp file into place")
@@ -59,6 +61,9 @@ internal object BlobFrame {
     return SecretKeySpec(bytes, "AES")
   }
 
+  // blobAad(path) in @stxapps/shared: the version byte, then the path's UTF-8.
+  fun aad(path: String): ByteArray = byteArrayOf(BLOB_FORMAT_V1.toByte()) + path.toByteArray(Charsets.UTF_8)
+
   // Written as a 64 KiB stream copy through Cipher{Input,Output}Stream, and the
   // file bytes never enter the JS heap — but it is NOT constant-memory on a
   // device, in either direction. Android's AES/GCM provider (Conscrypt) is an
@@ -67,10 +72,12 @@ internal object BlobFrame {
   // it sits in native memory on iOS. The JVM this file's tests run on streams
   // the encrypt side for real, so BlobFrameTest cannot show the difference.
   // What bounds the cost is the size of what gets here, not this loop.
-  fun encryptFile(inFile: File, outFile: File, key: SecretKeySpec) {
+  // `blobPath` is the sync path (`files/{id}.enc`), not either file.
+  fun encryptFile(inFile: File, outFile: File, key: SecretKeySpec, blobPath: String) {
     val iv = ByteArray(IV_BYTES).also { SecureRandom().nextBytes(it) }
     val cipher = Cipher.getInstance("AES/GCM/NoPadding")
     cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(TAG_BITS, iv))
+    cipher.updateAAD(aad(blobPath))
 
     writeViaTemp(outFile) { tmp ->
       tmp.outputStream().use { out ->
@@ -84,7 +91,7 @@ internal object BlobFrame {
     }
   }
 
-  fun decryptFile(inFile: File, outFile: File, key: SecretKeySpec) {
+  fun decryptFile(inFile: File, outFile: File, key: SecretKeySpec, blobPath: String) {
     inFile.inputStream().use { framed ->
       val version = framed.read()
       if (version == -1) throw BlobFrameError.Truncated()
@@ -102,6 +109,8 @@ internal object BlobFrame {
 
       val cipher = Cipher.getInstance("AES/GCM/NoPadding")
       cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_BITS, iv))
+      // A blob served under another path fails the tag on the final read.
+      cipher.updateAAD(aad(blobPath))
 
       writeViaTemp(outFile) { tmp ->
         tmp.outputStream().use { out ->

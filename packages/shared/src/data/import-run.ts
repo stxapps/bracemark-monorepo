@@ -36,7 +36,8 @@ export interface ImportOutcome {
   // `files/` blobs restored from the zip (bracemark only; 0 otherwise).
   fileCount: number;
   // Interop: URLs skipped as already saved (or repeated in the file).
-  // Bracemark: entities skipped because their path already exists locally.
+  // Bracemark: entities skipped because their path already exists locally (or
+  // repeated in the file — the first line for a path is the one restored).
   skippedCount: number;
   // Rows/lines that didn't parse or validate — reported, never fatal.
   invalidCount: number;

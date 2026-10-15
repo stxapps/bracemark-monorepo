@@ -331,9 +331,10 @@ they are read by the same components, not because it is one of them.
 - web-only crypto-global primitives: KDF, AES-256-GCM, and id minting
   (`newId`, a `crypto.randomUUID()` wrapper; bracemark-api keeps its own copy since
   it's `platform:worker` and can't import this `platform:web` package)
-- also owns the **v1 blob frame** (`blob.ts` — `packBlob`/`unpackBlob` +
+- also owns the **blob frame** (`blob.ts` — `packBlob`/`unpackBlob` +
   `encryptEntity`/`decryptEntity`): the `[version(1) || iv(12) || ciphertext+tag]`
-  wire/at-rest layout wrapped around the AES-256-GCM primitive. Lives here (not in
+  wire/at-rest layout wrapped around the AES-256-GCM primitive, sealed with the
+  blob's sync path as AAD ([local-first-sync.md](./local-first-sync.md), _crypto boundary_). Lives here (not in
   `web-react`, whose sync engine is the caller) so the framing sits next to the
   primitive it frames and the golden-vector spec (below) can assert the real
   `unpackBlob`. On expo the same frame is produced two ways (see `expo-crypto`);
@@ -351,8 +352,9 @@ they are read by the same components, not because it is one of them.
   ships the **`BracemarkCrypto` pod** (`ios/` Swift, `android/` Kotlin, autolinked
   by `expo prebuild`), which hosts two Expo modules. **`BracemarkFileCrypto`**
   (Swift CryptoKit / Kotlin `javax.crypto`): whole-file
-  encrypt/decrypt path-to-path in the native layer, reading/writing the frozen
-  v1 blob frame — file bytes never enter the JS heap; the app stores content
+  encrypt/decrypt path-to-path in the native layer, writing and reading the
+  frozen v1 blob frame (bound to the blob's sync path) — file bytes never enter
+  the JS heap; the app stores content
   DECRYPTED on device (the Dexie-`data` analogue) and e.g. `expo-image` renders
   straight from the plaintext `file://` path. **`BracemarkSharedKeychain`** is the
   pod's second module — iOS-only (registered under `apple.modules`, no Kotlin

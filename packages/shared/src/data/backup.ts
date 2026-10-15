@@ -305,9 +305,12 @@ export function classifyBundleLine(line: string): BundleEntry | undefined {
 // writes (firstLinePerPath, below); the converter hands it every line, and like
 // this rule its tree keeps the last line for a repeated path. A chain is counted inside the file: a parent the
 // file does not carry (a root, a system list's default, a list only the library
-// holds) ends it. So the bound is per file, not per library: a file can hang its
-// chain under a deep list the library already holds, and two restores can each
-// add one. Tags are held to it too — a tag tree is built by the same buildTree.
+// holds) ends it. So the bound is per file, not per library: the library's own
+// lists are not measured, so a file can hang its chain under a deep one, two
+// restores can each add one, and a list the library already holds — which keeps
+// its stored parent whatever the file's line says — can join two of the file's
+// chains into one this never measured. Tags are held to it too — a tag tree is
+// built by the same buildTree.
 //
 // A `parentId` loop has no depth to measure; buildTree cuts one edge of it and
 // the rest becomes a chain as long as the loop, with the cut placed by sort
@@ -337,13 +340,14 @@ export function assertBackupTreeDepth(entries: readonly BundleEntry[]): void {
 // The editors put no bound on depth, so a library can hold a chain past the rule
 // and its own backup is then refused — rare, and the reason the message names
 // the act in that library rather than in the file.
-export const BACKUP_TOO_DEEP_MESSAGE = `This backup has lists or tags nested more than ${IMPORT_MAX_FOLDER_DEPTH} levels deep. Move the deepest ones up a level in the library it came from, then back it up again.`;
+export const BACKUP_TOO_DEEP_MESSAGE = `This backup has lists or tags nested more than ${IMPORT_MAX_FOLDER_DEPTH} levels deep. Move the deepest ones higher up in the library it came from, then back it up again.`;
 
 // A backup this app writes holds each path once. A file that repeats one is
 // restored from its FIRST line, and only that line goes on: the restore's later
 // steps each see one line per path. Without this the depth rule measured the
-// last line (a Map keeps the last set) while the writer kept the first — it
-// skips a path an earlier chunk wrote — so a file whose deep chain was repeated
+// last line (a Map keeps the last set) while the writer kept the first wherever
+// the repeat fell in a later chunk (it skips a path an earlier chunk wrote;
+// within one chunk the last won) — so a file whose deep chain was repeated
 // further down as roots passed the rule and stored the chain. Run before
 // assertBackupTreeDepth, by both restore orchestrators; a dropped repeat counts
 // as skipped.

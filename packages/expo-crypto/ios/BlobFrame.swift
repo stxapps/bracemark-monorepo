@@ -3,9 +3,11 @@ import Foundation
 
 // The FROZEN v1 blob frame `[0x01 || iv(12) || ciphertext || tag(16)]`
 // (@stxapps/shared crypto/params.ts: BLOB_FORMAT_V1 / AES_GCM_IV_BYTES), split
-// out of BracemarkFileCryptoModule so it can be TESTED.
+// out of BracemarkFileCryptoModule so it can be TESTED. Sealed with AAD = [0x01]
+// + UTF-8 of the blob's sync path (shared crypto/blob-aad.ts, blobAad), so a
+// blob opens only under the path it was written to.
 //
-// The split is the whole point. These four constants are a hand-copy of the TS
+// The split is the whole point. These constants and the AAD are a hand-copy of the TS
 // ones — nothing links them, so a re-value on either side diverges in silence,
 // and until BlobFrameTests existed the only thing standing behind this framer
 // was the comment claiming it matched. Inside the Module class it was
@@ -34,10 +36,18 @@ enum BlobFrame {
   static let tagBytes = 16
   static let keyBytes = 32
 
+  // blobAad(path) in @stxapps/shared: the version byte, then the path's UTF-8.
+  static func aad(path: String) -> Data {
+    var aad = Data([formatV1])
+    aad.append(contentsOf: Array(path.utf8))
+    return aad
+  }
+
   // `combined` is exactly `nonce || ciphertext || tag`, so the frame is the
   // version byte + `combined`, nothing more.
-  static func seal(_ plaintext: Data, using key: SymmetricKey) throws -> Data {
-    let sealed = try AES.GCM.seal(plaintext, using: key) // fresh random 12-byte nonce
+  static func seal(_ plaintext: Data, using key: SymmetricKey, path: String) throws -> Data {
+    // fresh random 12-byte nonce
+    let sealed = try AES.GCM.seal(plaintext, using: key, authenticating: aad(path: path))
     guard let combined = sealed.combined else { throw BlobFrameError.decryptionFailed }
     var framed = Data(capacity: 1 + combined.count)
     framed.append(formatV1)
@@ -45,7 +55,7 @@ enum BlobFrame {
     return framed
   }
 
-  static func open(_ framed: Data, using key: SymmetricKey) throws -> Data {
+  static func open(_ framed: Data, using key: SymmetricKey, path: String) throws -> Data {
     guard framed.count >= 1 + ivBytes + tagBytes else { throw BlobFrameError.truncated }
     // Reject unknown versions loudly — a wrong slice would otherwise feed
     // garbage to GCM and surface as a misleading "tampered" error.
@@ -53,7 +63,8 @@ enum BlobFrame {
     guard version == formatV1 else { throw BlobFrameError.unknownFormat(version) }
     do {
       let box = try AES.GCM.SealedBox(combined: framed.dropFirst(1))
-      return try AES.GCM.open(box, using: key)
+      // A blob served under another path fails here, as a wrong tag.
+      return try AES.GCM.open(box, using: key, authenticating: aad(path: path))
     } catch {
       throw BlobFrameError.decryptionFailed
     }
@@ -88,13 +99,19 @@ enum BlobFrame {
   // Writes are atomic (`.atomic` is a temp file + rename), so a consumer can
   // never observe partially-written output; GCM only authenticates at the end of
   // `open`, and a failed tag throws before anything is written.
-  static func encryptFile(inputPath: String, outputPath: String, key: SymmetricKey) throws {
+  // `blobPath` is the sync path (`files/{id}.enc`), not either file path.
+  static func encryptFile(
+    inputPath: String, outputPath: String, key: SymmetricKey, blobPath: String
+  ) throws {
     let plaintext = try Data(contentsOf: fileURL(inputPath))
-    try seal(plaintext, using: key).write(to: fileURL(outputPath), options: .atomic)
+    try seal(plaintext, using: key, path: blobPath)
+      .write(to: fileURL(outputPath), options: .atomic)
   }
 
-  static func decryptFile(inputPath: String, outputPath: String, key: SymmetricKey) throws {
+  static func decryptFile(
+    inputPath: String, outputPath: String, key: SymmetricKey, blobPath: String
+  ) throws {
     let framed = try Data(contentsOf: fileURL(inputPath))
-    try open(framed, using: key).write(to: fileURL(outputPath), options: .atomic)
+    try open(framed, using: key, path: blobPath).write(to: fileURL(outputPath), options: .atomic)
   }
 }

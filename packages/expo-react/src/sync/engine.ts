@@ -466,7 +466,7 @@ export async function loadEntityContent(deps: SyncDeps, path: string): Promise<F
     // behind, and markItemDataFile (below) only runs on success, so the row and
     // disk stay consistent as "not downloaded" and the next call redoes the work.
     deleteDataFile(path);
-    await decryptFile(enc.uri, plain.uri, deps.encryptionKey);
+    await decryptFile(enc.uri, plain.uri, deps.encryptionKey, path);
   } finally {
     if (enc.exists) enc.delete();
   }
@@ -551,7 +551,7 @@ export async function loadEntityContents(
             // Same deterministic-overwrite + flag-last ordering as
             // loadEntityContent (see there).
             deleteDataFile(path);
-            await decryptFile(enc.uri, dataFileFor(path).uri, deps.encryptionKey);
+            await decryptFile(enc.uri, dataFileFor(path).uri, deps.encryptionKey, path);
           }
         } finally {
           if (enc.exists) enc.delete();
@@ -1066,7 +1066,7 @@ async function uploadBlobs(
 
       const enc = newTempEncFile();
       try {
-        await encryptFile(plain.uri, enc.uri, deps.encryptionKey);
+        await encryptFile(plain.uri, enc.uri, deps.encryptionKey, op.path);
         await putBlobFromFile(url, enc);
       } catch (err) {
         recordFailure(op, err);
@@ -1085,7 +1085,7 @@ async function uploadBlobs(
     if (!url) return;
 
     try {
-      await putBlob(url, await encryptEntity(deps.encryptionKey, rec.data));
+      await putBlob(url, await encryptEntity(deps.encryptionKey, rec.data, op.path));
     } catch (err) {
       recordFailure(op, err);
     }
@@ -1190,7 +1190,7 @@ async function storeDownloads(
         });
         if (!blob) return;
 
-        const data = await decryptEntity(deps.encryptionKey, blob);
+        const data = await decryptEntity(deps.encryptionKey, blob, e.path);
         // Per record, not per batch: each arrives after its own GET, so this is the
         // largest group that can share one transaction with its queue check without
         // holding decrypted blobs in memory or losing the resume-where-interrupted

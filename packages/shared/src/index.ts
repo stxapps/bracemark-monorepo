@@ -10,6 +10,7 @@ export * from './auth/credentials';
 export * from './auth/endpoints';
 export * from './auth/sessions';
 export * from './brand/brand';
+export * from './crypto/blob-aad';
 export * from './crypto/contract-vectors';
 export * from './crypto/doors';
 export * from './crypto/encoding';

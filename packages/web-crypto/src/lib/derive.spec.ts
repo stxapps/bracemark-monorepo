@@ -64,7 +64,8 @@ const sharesEncryptionKey = async (a: Account, b: Account): Promise<boolean> => 
   try {
     const plaintext = await decryptEntity(
       b.encryptionKey,
-      await encryptEntity(a.encryptionKey, data),
+      await encryptEntity(a.encryptionKey, data, 'links/a1.enc'),
+      'links/a1.enc',
     );
     return new TextDecoder().decode(plaintext) === '{"id":"a1","title":"a link"}';
   } catch {
@@ -230,7 +231,11 @@ describe('changePasswordDoor', () => {
     // proof without re-opening the DEK; it has to be the SAME credential, and
     // its encryptionKey has to still decrypt what the old one wrote.
     const created = await createAccount(V.username, PASSWORD);
-    const alreadySynced = await encryptEntity(created.encryptionKey, utf8('an existing link'));
+    const alreadySynced = await encryptEntity(
+      created.encryptionKey,
+      utf8('an existing link'),
+      'links/a1.enc',
+    );
 
     const { account } = await changePasswordDoor(V.username, NEW_PASSWORD, {
       kind: 'password',
@@ -240,7 +245,7 @@ describe('changePasswordDoor', () => {
     });
 
     expect(account.publicKey).toBe(created.publicKey);
-    const plaintext = await decryptEntity(account.encryptionKey, alreadySynced);
+    const plaintext = await decryptEntity(account.encryptionKey, alreadySynced, 'links/a1.enc');
     expect(new TextDecoder().decode(plaintext)).toBe('an existing link');
   });
 
