@@ -39,6 +39,7 @@ import {
   isAtLinkCap,
   parseShareDraft,
   parseShareTaxonomy,
+  refreshShareTaxonomy,
   saveSharedDraft,
   type ShareDraft,
   type ShareTaxonomy,
@@ -211,6 +212,16 @@ function makeTag(id: string, name: string, rank: string): Tag {
   return { id, name, parentId: null, rank, createdAt: 1, updatedAt: 1 };
 }
 
+// The iOS snapshot as refreshShareTaxonomy leaves it for `owner` — what an iOS
+// Save re-reads to check the draft is still the signed-in account's.
+function seedSnapshot(owner: string, fields: Partial<ShareTaxonomy> = {}): void {
+  mockDirs.add('group/share');
+  mockFiles.set(
+    'group/share/taxonomy.json',
+    JSON.stringify({ owner, lists: [], tags: [], linkCount: 0, maxLinks: null, ...fields }),
+  );
+}
+
 describe('buildShareLists', () => {
   it('orders the tree and annotates depth + rank', () => {
     const rankA = rankBetween(trashRank, null);
@@ -260,6 +271,7 @@ describe('buildShareTags', () => {
 describe('parseShareDraft', () => {
   const draft: ShareDraft = {
     id: 'link-1',
+    owner: 'alice',
     url: 'https://example.com/a',
     title: 'Example',
     listId: MY_LIST_ID,
@@ -271,6 +283,14 @@ describe('parseShareDraft', () => {
 
   it('round-trips a valid draft', () => {
     expect(parseShareDraft(JSON.stringify(draft))).toEqual(draft);
+  });
+
+  it('rejects a draft that names no account', () => {
+    // No owner, no account to land it under — and landing it under whoever is
+    // signed in is the bug the field exists to close.
+    const { owner: _owner, ...ownerless } = draft;
+    expect(parseShareDraft(JSON.stringify(ownerless))).toBeNull();
+    expect(parseShareDraft(JSON.stringify({ ...draft, owner: '' }))).toBeNull();
   });
 
   it('rejects malformed payloads', () => {
@@ -298,7 +318,7 @@ describe('parseShareDraft', () => {
 
 describe('parseShareTaxonomy', () => {
   const taxonomy: ShareTaxonomy = {
-    sessionPresent: true,
+    owner: 'alice',
     lists: [{ id: MY_LIST_ID, name: 'My List', depth: 0, rank: 'a0' }],
     tags: [{ id: 'tag-1', name: 'alpha', rank: 'a1' }],
     linkCount: 3,
@@ -314,11 +334,18 @@ describe('parseShareTaxonomy', () => {
     // corrupt file. Reading it as signed-out is the right answer: it points the
     // user at the app, which rewrites the snapshot.
     const old = {
-      sessionPresent: true,
+      owner: 'alice',
       lists: [{ id: MY_LIST_ID, name: 'My List', depth: 0 }],
       tags: [{ id: 'tag-1', name: 'alpha' }],
     };
     expect(parseShareTaxonomy(JSON.stringify(old))).toBeNull();
+  });
+
+  it('rejects a snapshot that says a session is present but not whose', () => {
+    // The shape before `owner`: a sheet rendered from it could not stamp its
+    // drafts, so it reads as signed-out and the app rewrites it.
+    const { owner: _owner, ...ownerless } = taxonomy;
+    expect(parseShareTaxonomy(JSON.stringify({ ...ownerless, sessionPresent: true }))).toBeNull();
   });
 
   it('rejects a snapshot predating the cap fields', () => {
@@ -332,7 +359,7 @@ describe('parseShareTaxonomy', () => {
 
   it('rejects malformed payloads', () => {
     expect(parseShareTaxonomy('42')).toBeNull();
-    expect(parseShareTaxonomy(JSON.stringify({ sessionPresent: true }))).toBeNull();
+    expect(parseShareTaxonomy(JSON.stringify({ owner: 'alice' }))).toBeNull();
   });
 });
 
@@ -342,6 +369,7 @@ describe('drainShareOutbox', () => {
 
   const draft: ShareDraft = {
     id: 'link-1',
+    owner: 'alice',
     url: 'https://example.com/a',
     title: 'Example',
     listId: MY_LIST_ID,
@@ -411,6 +439,41 @@ describe('drainShareOutbox', () => {
     expect(mockFiles.has(`${OUTBOX}/good.json`)).toBe(false);
   });
 
+  // The file the sign-out wipe missed: written under the account that signed out,
+  // after the wipe ran (an iOS share extension still saving), and found by the
+  // next account's drain. Applying it would put one account's link in another's
+  // library; quarantining it would keep it on a device now signed in to someone
+  // else (docs/share-sheet.md, _a draft belongs to the account that opened the
+  // sheet_).
+  it('deletes a draft another account owns, and lands nothing from it', async () => {
+    const {
+      writeLink: write,
+      writeList,
+      writeTag,
+    } = jest.requireMock<typeof import('./mutations')>('./mutations');
+    jest.mocked(write).mockClear();
+    jest.mocked(writeList).mockClear();
+    jest.mocked(writeTag).mockClear();
+    mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify({ ...draft, owner: 'bob' }));
+
+    await expect(drainShareOutbox()).resolves.toEqual([]);
+    expect([...mockFiles.keys()]).toEqual([]);
+    expect(write).not.toHaveBeenCalled();
+    expect(writeList).not.toHaveBeenCalled();
+    expect(writeTag).not.toHaveBeenCalled();
+  });
+
+  it('still lands this account’s drafts beside another account’s', async () => {
+    mockFiles.set(
+      `${OUTBOX}/theirs.json`,
+      JSON.stringify({ ...draft, id: 'link-2', owner: 'bob' }),
+    );
+    mockFiles.set(`${OUTBOX}/mine.json`, JSON.stringify(draft));
+
+    await expect(drainShareOutbox()).resolves.toEqual(['links/link-1.enc']);
+    expect([...mockFiles.keys()]).toEqual([]);
+  });
+
   it('clears the quarantine on sign-out along with everything else', () => {
     // The parked files hold plaintext URLs — they must not outlive the session
     // or leak to the next account.
@@ -460,7 +523,7 @@ describe('isAtLinkCap', () => {
       mockFiles.set(
         TAXONOMY,
         JSON.stringify({
-          sessionPresent: true,
+          owner: 'alice',
           lists: [],
           tags: [],
           linkCount: 0,
@@ -493,7 +556,7 @@ describe('isAtLinkCap', () => {
 
     it('fails OPEN on a snapshot too old to carry the cap fields', async () => {
       mockDirs.add('group/share');
-      mockFiles.set(TAXONOMY, JSON.stringify({ sessionPresent: true, lists: [], tags: [] }));
+      mockFiles.set(TAXONOMY, JSON.stringify({ owner: 'alice', lists: [], tags: [] }));
       expect(await isAtLinkCap()).toBe(false);
     });
 
@@ -579,6 +642,7 @@ describe('saveSharedDraft — an expired session sends nothing', () => {
 
   const draft: ShareDraft = {
     id: 'link-1',
+    owner: 'alice',
     url: 'https://example.com/a',
     title: 'Example',
     listId: MY_LIST_ID,
@@ -608,6 +672,9 @@ describe('saveSharedDraft — an expired session sends nothing', () => {
   // jest-expo runs this suite as iOS: the share extension, a separate process
   // reading the session from the shared-Keychain mirror.
   describe('iOS — the share extension', () => {
+    beforeEach(() => {
+      seedSnapshot('alice');
+    });
     afterEach(() => {
       sharedSession.mockResolvedValue(null);
     });
@@ -667,6 +734,179 @@ describe('saveSharedDraft — an expired session sends nothing', () => {
   });
 });
 
+// A draft is landed only under the account that owns it — the one whose lists
+// and tags the sheet rendered (share-store's header, _a draft belongs to an
+// account_). Save is the first place that is checked: the account can change
+// while the sheet is open, and both platforms then write nothing. The iOS
+// upload is the second, because it reads the mirrored session AFTER the outbox
+// write and that mirror can already be the next account's. Each refusal has a
+// positive control above (an Add under the same account saves and uploads).
+describe('saveSharedDraft — the draft’s account', () => {
+  const upload = uploadShareDraft as jest.Mock;
+  const sync = runIncrementalSync as jest.Mock;
+  const sharedSession = loadSharedSession as jest.Mock;
+  const currentSession = getSession as jest.Mock;
+  const write = writeLink as jest.Mock;
+  const count = countLinks as jest.Mock;
+  const cached = readCachedStatus as jest.Mock;
+  const api = {} as ApiClient;
+
+  const draft: ShareDraft = {
+    id: 'link-1',
+    owner: 'alice',
+    url: 'https://example.com/a',
+    listId: MY_LIST_ID,
+    tagIds: [],
+    newTags: [],
+    newLists: [],
+    sharedAt: 1_700_000_000_000,
+  };
+
+  function session(username: string) {
+    return { username, encryptionKey: new Uint8Array(32), state: 'active', generation: 'g1' };
+  }
+
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  beforeEach(() => {
+    mockFiles.clear();
+    mockDirs.clear();
+    upload.mockClear();
+    sync.mockClear();
+    write.mockReset().mockResolvedValue(undefined);
+    count.mockReset().mockResolvedValue(0);
+    cached.mockReset().mockReturnValue(null);
+    sharedSession.mockReset().mockResolvedValue(null);
+  });
+
+  describe('iOS — the share extension', () => {
+    it('writes nothing when the snapshot now names another account', async () => {
+      // Sign-out deleted the snapshot the sheet opened on, and the next
+      // account's first refresh wrote its own.
+      seedSnapshot('bob');
+      sharedSession.mockResolvedValue(session('bob'));
+
+      expect(await saveSharedDraft(draft, api)).toBe('account-changed');
+      await settle();
+      expect(mockFiles.has('group/share/outbox/link-1.json')).toBe(false);
+      expect(upload).not.toHaveBeenCalled();
+    });
+
+    it('writes nothing when there is no snapshot — signed out since the sheet opened', async () => {
+      expect(await saveSharedDraft(draft, api)).toBe('account-changed');
+      expect([...mockFiles.keys()]).toEqual([]);
+    });
+
+    it('answers for the account before the cap', async () => {
+      // Another account's full library is no reason to refuse this draft as
+      // 'quota' — the user would be told to free up room in the wrong place.
+      seedSnapshot('bob', { linkCount: 200, maxLinks: 200 });
+      expect(await saveSharedDraft(draft, api)).toBe('account-changed');
+    });
+
+    it('keeps the outbox file but uploads nothing when the mirror is already another account', async () => {
+      // The snapshot check passed; the switch landed between it and the upload's
+      // mirror read. The file stays — the drain applies the same rule to it.
+      seedSnapshot('alice');
+      sharedSession.mockResolvedValue(session('bob'));
+
+      expect(await saveSharedDraft(draft, api)).toBe('queued');
+      await settle();
+      expect(sharedSession).toHaveBeenCalled();
+      expect(mockFiles.has('group/share/outbox/link-1.json')).toBe(true);
+      expect(upload).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Android — the share activity', () => {
+    const platform = Platform as { OS: string };
+    let original: string;
+
+    beforeEach(() => {
+      original = platform.OS;
+      platform.OS = 'android';
+    });
+    afterEach(() => {
+      platform.OS = original;
+      currentSession.mockReset();
+      currentSession.mockImplementation(() => ({
+        username: 'alice',
+        encryptionKey: new Uint8Array(32),
+      }));
+    });
+
+    it('writes nothing when another account is signed in', async () => {
+      currentSession.mockReturnValue(session('bob'));
+
+      expect(await saveSharedDraft(draft, api)).toBe('account-changed');
+      await settle();
+      expect(write).not.toHaveBeenCalled();
+      expect(sync).not.toHaveBeenCalled();
+      expect(takeShareHandoffs()).toEqual([]);
+    });
+
+    it('writes nothing when signed out since the sheet opened', async () => {
+      currentSession.mockReturnValue(null);
+
+      expect(await saveSharedDraft(draft, api)).toBe('account-changed');
+      expect(write).not.toHaveBeenCalled();
+    });
+  });
+});
+
+// The snapshot names the account it was built for, and a pass that began
+// before a sign-out must not write the old account's snapshot back after the
+// wipe deleted it — the sheet would offer that account's lists again, and every
+// draft saved from it would be refused.
+describe('refreshShareTaxonomy', () => {
+  const currentSession = getSession as jest.Mock;
+  const { readLists } = jest.requireMock<typeof import('./queries')>('./queries');
+  const lists = jest.mocked(readLists);
+  const TAXONOMY = 'group/share/taxonomy.json';
+
+  beforeEach(() => {
+    mockFiles.clear();
+    mockDirs.clear();
+  });
+  afterEach(() => {
+    lists.mockReset().mockResolvedValue([]);
+    currentSession.mockReset();
+    currentSession.mockImplementation(() => ({
+      username: 'alice',
+      encryptionKey: new Uint8Array(32),
+    }));
+  });
+
+  it('writes the signed-in account as the snapshot’s owner', async () => {
+    await refreshShareTaxonomy();
+
+    const written = parseShareTaxonomy(mockFiles.get(TAXONOMY) ?? '');
+    expect(written?.owner).toBe('alice');
+  });
+
+  it('writes nothing when the account was signed out during its reads', async () => {
+    lists.mockImplementationOnce(async () => {
+      currentSession.mockReturnValue(null);
+      return [];
+    });
+
+    await refreshShareTaxonomy();
+
+    expect(mockFiles.has(TAXONOMY)).toBe(false);
+  });
+
+  it('writes nothing when another account was signed in during its reads', async () => {
+    lists.mockImplementationOnce(async () => {
+      currentSession.mockReturnValue({ username: 'bob', encryptionKey: new Uint8Array(32) });
+      return [];
+    });
+
+    await refreshShareTaxonomy();
+
+    expect(mockFiles.has(TAXONOMY)).toBe(false);
+  });
+});
+
 // WHERE a share is counted toward the app-store review prompt, which is a
 // process rule before it is a bookkeeping one (docs/share-sheet.md): the count
 // is a row in sqlite, and the iOS share extension must never open that database
@@ -686,6 +926,7 @@ describe('saveSharedDraft — the review-prompt count', () => {
 
   const draft: ShareDraft = {
     id: 'link-1',
+    owner: 'alice',
     url: 'https://example.com/a',
     listId: MY_LIST_ID,
     tagIds: [],
@@ -704,6 +945,7 @@ describe('saveSharedDraft — the review-prompt count', () => {
 
   // jest-expo runs this suite as iOS: the share extension's process.
   it('counts nothing in the iOS share extension, which only queues', async () => {
+    seedSnapshot('alice');
     expect(await saveSharedDraft(draft, api)).toBe('queued');
 
     expect(counted).not.toHaveBeenCalled();
@@ -762,6 +1004,7 @@ describe('the Android handoff', () => {
 
   const draft: ShareDraft = {
     id: 'link-1',
+    owner: 'alice',
     url: 'https://example.com/a',
     listId: MY_LIST_ID,
     tagIds: [],
@@ -906,9 +1149,12 @@ describe('the Android handoff', () => {
   // drain returns what it landed.
   it('is no part of the iOS path', async () => {
     platform.OS = 'ios';
+    seedSnapshot('alice');
     expect(await saveSharedDraft(draft, api)).toBe('queued');
 
-    expect([...mockFiles.keys()]).toEqual(['group/share/outbox/link-1.json']);
+    expect([...mockFiles.keys()].filter((uri) => !uri.endsWith('taxonomy.json'))).toEqual([
+      'group/share/outbox/link-1.json',
+    ]);
     mockDirs.add(HANDOFF);
     mockFiles.set(`${HANDOFF}/link-9`, 'link-9');
     expect(takeShareHandoffs()).toEqual([]);

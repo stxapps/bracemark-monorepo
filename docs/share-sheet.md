@@ -42,13 +42,13 @@ until a local config plugin overwrites it with the app's own.
 The process split is the load-bearing difference, and everything below follows
 from it:
 
-|                          | Android (same process)                               | iOS (separate process)                                                                                           |
-| ------------------------ | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| taxonomy for the pickers | read live from sqlite                                | **snapshot** JSON in the App Group container                                                                     |
-| saving the link          | the real write edge (mutations → items + pending op) | **outbox** JSON file in the App Group container                                                                  |
-| sync after Save          | inline `runIncrementalSync` (process is alive)       | best-effort upload from the extension + main app drains outbox on next launch/foreground                         |
-| page fetch after Save    | a **handoff** marker the main app collects           | the outbox drain returns the link it landed                                                                      |
-| session check            | `getSession()`                                       | `sessionPresent` flag in the snapshot to gate the form; the shared-Keychain session mirror arms the upload's api |
+|                          | Android (same process)                               | iOS (separate process)                                                                                                      |
+| ------------------------ | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| taxonomy for the pickers | read live from sqlite                                | **snapshot** JSON in the App Group container                                                                                |
+| saving the link          | the real write edge (mutations → items + pending op) | **outbox** JSON file in the App Group container                                                                             |
+| sync after Save          | inline `runIncrementalSync` (process is alive)       | best-effort upload from the extension + main app drains outbox on next launch/foreground                                    |
+| page fetch after Save    | a **handoff** marker the main app collects           | the outbox drain returns the link it landed                                                                                 |
+| session check            | `getSession()`                                       | the snapshot's `owner` gates the form and is stamped on the draft; the shared-Keychain session mirror arms the upload's api |
 
 **The two shells meet at one `AppRegistry` string.** Each native host mounts
 its RN root by a registered name — `bracemarkShare` (Android, `index.js`) and
@@ -328,7 +328,7 @@ lock in a shared container) plus cross-process WAL edge cases. The extension
 instead exchanges **atomic per-item JSON files** — no locks, no contention:
 
 - `<app-group>/share/taxonomy.json` — written by the MAIN APP whenever
-  lists/tags change (and on sign-in/out): `{ sessionPresent, lists, tags }`,
+  lists/tags change (and on sign-in/out): `{ owner, lists, tags, linkCount, maxLinks }`,
   plaintext by design (bracemark-expo already stores content decrypted on device —
   see architecture.md). Lists are the merged system+user set in tree order,
   Trash excluded (saving into the deletion staging area is incoherent); tags in
@@ -336,7 +336,7 @@ instead exchanges **atomic per-item JSON files** — no locks, no contention:
   ranks for what it creates (below).
 - `<app-group>/share/outbox/<linkId>.json` — one `ShareDraft` per Save, written
   by the EXTENSION:
-  `{ id, url, title?, listId, tagIds, newTags, newLists, sharedAt }`.
+  `{ id, owner, url, title?, listId, tagIds, newTags, newLists, sharedAt }`.
   The main app drains each through the normal write edge on launch/foreground
   and deletes the file only after the local write commits.
 - `<app-group>/share/failed/<linkId>.json` — the **quarantine**: an outbox file
@@ -412,6 +412,93 @@ second parser, and the quarantine keeps the option open **without** committing t
 that. Sign-out clears it with everything else (`clearShareData` deletes the whole
 `share/` subtree rather than naming artifacts, so a future addition can't be
 missed).
+
+### a draft belongs to the account that opened the sheet
+
+The snapshot names the account it was built for (`owner`, the signed-in
+username), and the sheet stamps that name on every draft it mints. Three places
+land a draft, and each one lands it **only under that same account**:
+
+| where                                | when the owner is not the signed-in account                           |
+| ------------------------------------ | --------------------------------------------------------------------- |
+| Save (`saveSharedDraft`)             | writes nothing and answers `'account-changed'` — before the cap check |
+| the iOS upload (`uploadQueuedDraft`) | sends nothing; the outbox file stays for the drain to decide          |
+| the drain (`drainShareOutbox`)       | deletes the file and lands nothing from it                            |
+
+Before the stamp, a draft named no account, and whoever was signed in when it
+landed became its owner. Two schedules made that a crossing. A sheet opened
+under one account and saved after the user switched the app to another wrote
+the first account's choice into the second's library. And because the iOS
+share extension is its own process, nothing orders its outbox write after the
+sign-out wipe: a write that lands after the wipe survives it, and the next
+account's drain used to apply it. Sign-out still deletes the whole `share/`
+subtree. The owner check covers what the wipe cannot see.
+
+**Save checks against the current state, not the one the sheet opened on.**
+iOS has no session of its own in that process, so it reads the snapshot again:
+sign-out deletes it, and the next account's first refresh rewrites it under its
+own name. Android reads `getSession()`. Either way, a mismatch or no session at
+all is `'account-changed'`. Account before cap: another account's full library
+is no reason to tell this user to free up room.
+
+**A mismatched draft is deleted, and that is not a breach of _the drain never
+destroys what it couldn't read_.** That rule is about files the drain cannot
+read, because such a file may be the only copy of the user's share. A
+mismatched draft is readable, and it is the other account's. The wipe existed to
+remove exactly this file. Quarantining it in `failed/` would keep one account's
+URL on a device now signed in to someone else.
+
+**Same account, any sign-in: it lands.** A draft saved offline, or while the
+session was expired, still lands after the user signs back in to the same
+account. That sign-in is a resume and keeps the library
+([sessions.md](./sessions.md)), and that offline share is the work the outbox
+exists to keep. So the binding is the username alone, with no session
+generation. A username is a stable identity here because the server never
+releases one: deleting an account tombstones it ([account.md](./account.md)). If handles are ever released ([data-lifecycle.md](./data-lifecycle.md), _deferred_) or made editable ([account.md](./account.md)), this binding has to move to an id that neither a re-registration nor a rename can change. A rename alone would make the drain delete that account's own pending drafts.
+
+**A refresh that started under one account never writes its snapshot after the
+switch.** `refreshShareTaxonomy` takes the username before its reads and checks
+the session again after them, with nothing awaited between that check and the
+write. `clearSession` and `saveSession` update the in-memory session before the
+wipe and before the next account's first refresh. Without the check, a pass
+caught in a sign-out would write the old account's snapshot back after the wipe
+deleted it, and every share made from it would be refused.
+
+**What the binding does not close.** It decides where a draft lands, not when
+one is written, so each of these is still possible and none of them crosses an
+account:
+
+- **A share written after the wipe still shows ✓.** The sheet saved its file,
+  and the next drain deletes it (another account) or the next sign-in's wipe
+  removes it (the same account, with nothing persisted). The user was told it
+  saved, and it never lands.
+- **A Save that reads the snapshot mid-rewrite answers `'account-changed'`.**
+  expo-file-system writes a string in place (`atomically: false`), so the
+  re-read can see a part-written file, which parses as nothing. Nothing is
+  written, and sharing again works. The message is wrong, and nothing is lost.
+  Before the owner check this re-read was only the cap check, which fails open.
+- **An old account's draft caught mid-write is quarantined, not deleted.** The
+  same in-place write: an unreadable file goes to `failed/` under the drain's
+  rule, because the drain cannot read whose it is. It is never applied, and it
+  stays on the device until the new account signs out.
+- **The share extension's requests read the bearer token per request.** The
+  upload checks the mirrored account once, then `auth-api-client.ts` reads
+  `getSession()` for every request it sends. A second share saved in the same
+  extension process under another account, while the first is still uploading,
+  replaces that session, and the first upload's remaining requests carry the
+  second account's token for blobs encrypted under the first's key. It needs a
+  full sign-out and sign-in between two shares within one upload's life, in a
+  process iOS normally suspends. It predates the binding.
+
+The snapshot's `owner` replaced a `sessionPresent` boolean, which told the
+sheet that some account was signed in but not which. Like `rank`, the field is
+required with no back-compat slack. A snapshot without it reads as signed out
+(the app rewrites it), and a draft without it is quarantined. The jest pins are
+in `share-store.spec.ts` (_the draft's account_, the drain cases,
+`refreshShareTaxonomy`) and `share-screen.spec.tsx`. No device case drives an
+account switch with the sheet open. The checks are plain comparisons on both
+sides of the process boundary, and the existing `SHARE-*` cases exercise the
+stamp on every iOS save.
 
 ### the sheet's shape — four screens, one specimen
 
@@ -680,13 +767,19 @@ carrying one. Three rules hold them together:
 - **No session** (cold share before first sign-in): the sheet shows "Sign in to
   save links", and says why — each link is encrypted with a key the password
   unlocks, so there is nothing the sheet could do without it — instead of
-  hanging or crashing. Snapshot absent / `sessionPresent: false` on iOS,
+  hanging or crashing. Snapshot absent / `owner: null` on iOS,
   `getSession() === null` on Android. It and the no-link state are shaped like
   the links pane's `EmptyState` (a mark, a title, a sentence that says what to do
   next), because they are the same kind of moment.
 - **Sign-out hygiene**: clearing account data also deletes the snapshot and
   outbox (clear-data.ts), same reasoning as the session-store install
-  sentinel's Keychain-ghost note.
+  sentinel's Keychain-ghost note. The wipe is not the only guard: a draft is
+  landed only under the account that owns it, so one the wipe missed lands
+  nowhere (_a draft belongs to the account that opened the sheet_).
+- **The account changed while the sheet was open**: Save answers
+  `'account-changed'`, writes nothing, and the sheet puts "You signed out of Bracemark, or into another account, after this opened. Close this and share the link again." in its error line.
+  A retry would refuse again, because the lists and tags on screen are the old
+  account's; reopening the sheet reads the new one.
 
 ### the write edge it lands on
 
@@ -897,6 +990,9 @@ missing mirror just means no fast-path upload (the drain still delivers). The
 mirror carries the session's STATE, and the share extension reads it instead of
 a clock: while it is `expired` (`uploadQueuedDraft`, `data/share-store.ts`) no
 upload is attempted — the outbox file waits for the app's drain and the resume.
+Nor is one attempted when the mirror names a different account than the
+draft's `owner`. The mirror is read after the outbox write, so it can already
+be the next account's (_a draft belongs to the account that opened the sheet_).
 The share extension never acts on a 401 itself: [sessions.md](./sessions.md),
 _who acts on a 401_. On Android, where the share activity runs in the app
 process, an expired session skips the inline sync kick the same way.

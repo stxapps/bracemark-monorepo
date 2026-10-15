@@ -144,8 +144,8 @@ export function ShareScreen({ url, title }: SharePayload) {
         if (!alive) return;
         // `maxLinks: null` is the fail-open default the cap gate uses whenever
         // the answer is unknowable (share-store isAtLinkCap) — though the sheet
-        // never offers the form on a `sessionPresent: false` taxonomy anyway.
-        setTaxonomy({ sessionPresent: false, lists: [], tags: [], linkCount: 0, maxLinks: null });
+        // never offers the form on an ownerless taxonomy anyway.
+        setTaxonomy({ owner: null, lists: [], tags: [], linkCount: 0, maxLinks: null });
         setPhase('ready');
       },
     );
@@ -258,11 +258,15 @@ export function ShareScreen({ url, title }: SharePayload) {
   }, [taxonomy, selectedTagIds, newTags]);
 
   const onSave = useCallback(async () => {
-    if (!url) return;
+    // The owner guard is for the type: the form is never offered without one.
+    if (!url || !taxonomy?.owner) return;
     setPhase('saving');
     setError(null);
     const draft: ShareDraft = {
       id: linkId,
+      // The account whose lists and tags this sheet rendered — share-store's
+      // header, _a draft belongs to an account_.
+      owner: taxonomy.owner,
       url,
       ...(title !== undefined ? { title } : {}),
       listId,
@@ -289,12 +293,22 @@ export function ShareScreen({ url, title }: SharePayload) {
         setError('Your plan’s link limit is full. Open Bracemark to upgrade or free up room.');
         return;
       }
+      // The app signed out, or into another account, while the sheet was open.
+      // Nothing was written, and a retry would refuse again: the lists and tags
+      // on screen are the old account's. Reopening the sheet reads the new one.
+      if (result === 'account-changed') {
+        setPhase('ready');
+        setError(
+          'You signed out of Bracemark, or into another account, after this opened. Close this and share the link again.',
+        );
+        return;
+      }
       setPhase('saved');
     } catch {
       setPhase('ready');
       setError('Couldn’t save. Try again.');
     }
-  }, [linkId, url, title, listId, newList, selectedTagIds, newTags]);
+  }, [linkId, taxonomy, url, title, listId, newList, selectedTagIds, newTags]);
 
   // ── the screens ───────────────────────────────────────────────────────────
 
@@ -315,7 +329,7 @@ export function ShareScreen({ url, title }: SharePayload) {
     );
   }
 
-  if (!taxonomy.sessionPresent) {
+  if (taxonomy.owner === null) {
     return (
       <ShareNotice testID="share-signed-out" icon={LogIn} title="Sign in to save links">
         Open Bracemark on this device and sign in. Each link is encrypted with a key your password

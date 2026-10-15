@@ -33,6 +33,7 @@ const NOW = 1_700_000_000_000;
 
 const draft: ShareDraft = {
   id: 'link-1',
+  owner: 'alice',
   url: 'https://example.com/a',
   title: 'Example',
   listId: 'list-new',

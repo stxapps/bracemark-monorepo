@@ -35,6 +35,17 @@
 // revisiting the day a build ships: an outbox draft or snapshot CAN outlive an
 // app update, which is the skew these once guarded.
 //
+// A DRAFT BELONGS TO AN ACCOUNT. The snapshot names the account it was built
+// for (`owner`), the sheet stamps that name on every draft it mints, and each
+// place that later lands a draft — Save, the iOS upload, the drain — lands it
+// only under that same account. Without the stamp, a draft carried no account
+// at all, and whoever was signed in when it landed became its owner: a sheet
+// opened under one account and saved after a switch to another, or an iOS
+// write racing the sign-out wipe, could put one account's link into the
+// next one's library (docs/share-sheet.md, _a draft belongs to the account that
+// opened the sheet_). A username is a stable identity for this because the
+// server never releases one (docs/account.md — deletion tombstones it).
+//
 // Everything that lands in the App Group container is PLAINTEXT BY DESIGN —
 // the same trust boundary as the rest of the device store (bracemark-expo keeps
 // content decrypted on device; see architecture.md). clearShareData() is part
@@ -115,8 +126,13 @@ export type ShareNewEntity = z.infer<typeof shareNewEntitySchema>;
 // is the share payload's page title — it seeds the provisional
 // `extraction.title` at apply time, never `customTitle` (the same
 // not-a-deliberate-user-title rule as bulk import — shared entities.ts).
+// `owner` is the username of the snapshot the sheet rendered from (the header's
+// _a draft belongs to an account_), so it names the account whose lists and
+// tags the user was choosing among — never whoever is signed in when the draft
+// is finally landed.
 const shareDraftSchema = z.object({
   id: z.string().min(1),
+  owner: z.string().min(1),
   url: z.string().min(1),
   title: z.string().optional(),
   listId: z.string().min(1),
@@ -143,8 +159,15 @@ export type ShareDraft = z.infer<typeof shareDraftSchema>;
 // snapshot is what lets iOS refuse at the cap like every other create surface —
 // the free tier's 200-link wall is client-enforced now,
 // so the server no longer backstops a share that slips through. See isAtLinkCap.
+//
+// `owner` is the signed-in username the snapshot was built under, and null is
+// "no session" — what the sheet shows its sign-in notice for. It replaced a
+// bare `sessionPresent` flag, which told the sheet that SOME account was signed
+// in but not which, so a draft could not say whose it was (the header's _a
+// draft belongs to an account_). A written snapshot always carries one: only
+// the in-memory signed-out shape below is null.
 const shareTaxonomySchema = z.object({
-  sessionPresent: z.boolean(),
+  owner: z.string().min(1).nullable(),
   lists: z.array(
     z.object({
       id: z.string(),
@@ -166,9 +189,9 @@ export type ShareTaxonomyTag = ShareTaxonomy['tags'][number];
 // A signed-out / snapshot-missing taxonomy — what the sheet shows its "open
 // Bracemark and sign in first" state for. `maxLinks: null` keeps the cap gate
 // failing open on this path too, though nothing reaches it: the sheet checks
-// `sessionPresent` before it offers the form at all.
+// `owner` before it offers the form at all.
 const EMPTY_TAXONOMY: ShareTaxonomy = {
-  sessionPresent: false,
+  owner: null,
   lists: [],
   tags: [],
   linkCount: 0,
@@ -242,10 +265,11 @@ export function parseShareTaxonomy(raw: string): ShareTaxonomy | null {
 // cap comes from the device's cached plan. No cached status — a fresh install
 // that hasn't fetched `iap/status` — writes `maxLinks: null`, i.e. fails OPEN,
 // because guessing `free` would tell a paying customer their library is full.
-async function readTaxonomyFromDb(): Promise<ShareTaxonomy> {
+// `owner` is the caller's session username, taken before these reads.
+async function readTaxonomyFromDb(owner: string): Promise<ShareTaxonomy> {
   const status = subscriptions().readCachedStatus();
   return {
-    sessionPresent: true,
+    owner,
     lists: buildShareLists(await queries().readLists()),
     tags: buildShareTags(await queries().readTags()),
     linkCount: await queries().countLinks(),
@@ -276,6 +300,16 @@ function failedDir(group: Directory): Directory {
   return new Directory(group, 'share/failed');
 }
 
+// The iOS snapshot as it stands on disk, or null when there is none or it does
+// not parse. Read at sheet open, and again at Save for the owner and cap checks.
+function readSnapshot(): ShareTaxonomy | null {
+  const group = appGroupDir();
+  if (!group) return null;
+  const file = taxonomyFile(group);
+  if (!file.exists) return null;
+  return parseShareTaxonomy(file.textSync());
+}
+
 // --- the sheet's surface ---------------------------------------------------------
 
 // What the share sheet renders its pickers from. iOS: the snapshot (missing/
@@ -283,16 +317,11 @@ function failedDir(group: Directory): Directory {
 // Android: hydrate the session mirror (this may be the process's first code to
 // run) and read live.
 export async function loadShareTaxonomy(): Promise<ShareTaxonomy> {
-  if (Platform.OS === 'ios') {
-    const group = appGroupDir();
-    if (!group) return EMPTY_TAXONOMY;
-    const file = taxonomyFile(group);
-    if (!file.exists) return EMPTY_TAXONOMY;
-    return parseShareTaxonomy(file.textSync()) ?? EMPTY_TAXONOMY;
-  }
+  if (Platform.OS === 'ios') return readSnapshot() ?? EMPTY_TAXONOMY;
   await loadSession();
-  if (!getSession()) return EMPTY_TAXONOMY;
-  return await readTaxonomyFromDb();
+  const session = getSession();
+  if (!session) return EMPTY_TAXONOMY;
+  return await readTaxonomyFromDb(session.username);
 }
 
 export type ShareSaveResult =
@@ -306,7 +335,12 @@ export type ShareSaveResult =
   // refusal every other create surface makes (the quick-add popover, the expo
   // add screen, the extension popup all render LinkQuotaBanner instead of the
   // form). Both platforms now, off different sources — see isAtLinkCap.
-  | 'quota';
+  | 'quota'
+  // The draft's owner is no longer the signed-in account: the app signed out,
+  // or signed in to another account, while the sheet was open. Nothing was
+  // written. The sheet's lists and tags were the old account's, so there is no
+  // destination in the new one to save to.
+  | 'account-changed';
 
 // Whether a new link would exceed the plan's cap — the share sheet's copy of
 // the useLinkQuota gate the other create surfaces run.
@@ -345,11 +379,7 @@ export type ShareSaveResult =
 // made every Add wait on a whole-library read.
 export async function isAtLinkCap(): Promise<boolean> {
   if (Platform.OS === 'ios') {
-    const group = appGroupDir();
-    if (!group) return false;
-    const file = taxonomyFile(group);
-    if (!file.exists) return false;
-    const snapshot = parseShareTaxonomy(file.textSync());
+    const snapshot = readSnapshot();
     if (!snapshot || snapshot.maxLinks === null) return false;
     return snapshot.linkCount >= snapshot.maxLinks;
   }
@@ -360,8 +390,14 @@ export async function isAtLinkCap(): Promise<boolean> {
   return (await queries().countLinks()) >= maxLinks;
 }
 
-// One Add. The sheet checks `sessionPresent` before offering the form, so a
-// missing session here is a programming error, not a user state. `api` is the
+// One Add. The sheet checks `owner` before offering the form, but the account
+// can still change while the sheet is open — the user switches to the app,
+// signs out or into another account, and comes back to tap Save. So the first
+// check on both platforms is that the draft's owner is still the signed-in
+// account, and a mismatch (or no session at all) writes nothing and answers
+// 'account-changed'. On iOS that reads the snapshot again, since this process
+// has no session of its own: sign-out deletes the snapshot, and the next
+// account's first refresh rewrites it under its own name. `api` is the
 // app's configured client (the sheet passes it in — the baseUrl binding lives
 // in the app, per the layering rules); it powers the post-write kick on both
 // platforms. THE KICK IS NEVER AWAITED (docs/share-sheet.md): the durable
@@ -370,9 +406,11 @@ export async function isAtLinkCap(): Promise<boolean> {
 // next-open drain, not by the in-flight network work surviving the dismissal.
 export async function saveSharedDraft(draft: ShareDraft, api: ApiClient): Promise<ShareSaveResult> {
   if (Platform.OS === 'ios') {
-    // Before the outbox write, not after: a draft refused at the cap must not
-    // become a file, because everything downstream of that file is designed to
-    // never drop it (the drain applies it locally, the upload retries it).
+    // Both before the outbox write, not after: a refused draft must not become a
+    // file, because everything downstream of that file is designed to never drop
+    // it (the drain applies it locally, the upload retries it). The owner check
+    // first — another account's cap is no answer for this draft.
+    if (readSnapshot()?.owner !== draft.owner) return 'account-changed';
     if (await isAtLinkCap()) return 'quota';
     const group = appGroupDir();
     if (!group) throw new Error('saveSharedDraft: no App Group container');
@@ -387,7 +425,7 @@ export async function saveSharedDraft(draft: ShareDraft, api: ApiClient): Promis
     return 'queued';
   }
   const session = getSession();
-  if (!session) throw new Error('saveSharedDraft: no session');
+  if (!session || session.username !== draft.owner) return 'account-changed';
   if (await isAtLinkCap()) return 'quota';
   await applyShareDraft(session.username, draft);
   // Before the expired return below: a paused session stops the sync, not the
@@ -420,11 +458,15 @@ export async function saveSharedDraft(draft: ShareDraft, api: ApiClient): Promis
 // PUT would only earn it again), and swallows every failure: the outbox file
 // already written is the record of truth. It reads a STATE, never a clock, and
 // it never acts on a 401 itself — a verdict it provokes reaches no listener in
-// this process (docs/sessions.md, _who acts on a 401_).
+// this process (docs/sessions.md, _who acts on a 401_). And it uploads only under
+// the draft's own account: the mirror is read AFTER the outbox write, so it can
+// already be the next account's, whose key and token must not carry this draft
+// (the header's _a draft belongs to an account_). The drain makes the same
+// check on the file it leaves behind.
 async function uploadQueuedDraft(api: ApiClient, draft: ShareDraft): Promise<void> {
   try {
     const session = await loadSharedSession();
-    if (!session || session.state === 'expired') return;
+    if (!session || session.state === 'expired' || session.username !== draft.owner) return;
     await shareUpload().uploadShareDraft({ encryptionKey: session.encryptionKey, api }, draft);
   } catch {
     // Best-effort by design — the main app drains the outbox on next open.
@@ -566,6 +608,23 @@ function quarantine(group: Directory, entry: File): void {
 // Nothing reads `failed/` today; sign-out clears it with everything else
 // (clearShareData).
 //
+// A draft another account owns is DELETED, and that is not a breach of the rule
+// above. It is readable, and it is not this account's: the sign-out wipe exists
+// to remove exactly such a file, and one written after the wipe had run — an
+// iOS share extension still saving under the old account — is the file the wipe
+// missed. Applying it would put that account's link in this one's library, and
+// parking it in `failed/` would keep it on a device now signed in to someone
+// else (the header's _a draft belongs to an account_). A same-account draft from
+// an earlier sign-in still applies: signing back in to the same account resumes
+// it (docs/sessions.md), and an offline share made before an expiry is exactly
+// the work the outbox exists to keep.
+//
+// The owner check needs a draft it can read. The outbox write is not atomic
+// (expo-file-system writes a string in place), so a drain that catches an old
+// account's draft mid-write sees no parse and quarantines it like any unreadable
+// file. It is never applied, but the fragment stays in `failed/` until this
+// account signs out: the drain cannot tell whose it is.
+//
 // No-op when signed out (the drafts wait) or on Android (no outbox exists).
 export async function drainShareOutbox(): Promise<string[]> {
   if (Platform.OS !== 'ios') return [];
@@ -581,6 +640,10 @@ export async function drainShareOutbox(): Promise<string[]> {
     const draft = readDraft(entry);
     if (!draft) {
       quarantine(group, entry);
+      continue;
+    }
+    if (draft.owner !== session.username) {
+      entry.delete();
       continue;
     }
     await applyShareDraft(session.username, draft);
@@ -668,12 +731,22 @@ export function takeShareHandoffs(): string[] {
 // app whenever lists/tags change and after sign-in/first sync. No-op on
 // Android (the share activity reads live) and when signed out (clearShareData
 // owns removal).
+//
+// The session is checked again AFTER the reads, and the write skipped unless it
+// is still the same account. A pass that began before a sign-out would
+// otherwise write the old account's snapshot back after the wipe deleted it:
+// the sheet would offer the old account's lists again, and every draft saved
+// from it would be refused or deleted as the old account's. clearSession and
+// saveSession update the in-memory session before the wipe and before the next
+// account's first pass, and nothing awaits between this check and the write.
 export async function refreshShareTaxonomy(): Promise<void> {
   if (Platform.OS !== 'ios') return;
-  if (!getSession()) return;
+  const owner = getSession()?.username;
+  if (!owner) return;
   const group = appGroupDir();
   if (!group) return;
-  const taxonomy = await readTaxonomyFromDb();
+  const taxonomy = await readTaxonomyFromDb(owner);
+  if (getSession()?.username !== owner) return;
   const file = taxonomyFile(group);
   if (!file.exists) file.create({ intermediates: true, overwrite: true });
   file.write(JSON.stringify(taxonomy));

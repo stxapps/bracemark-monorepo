@@ -45,7 +45,7 @@ const loadShareTaxonomyMock = loadShareTaxonomy as jest.Mock;
 const saveSharedDraftMock = saveSharedDraft as jest.Mock;
 
 const TAXONOMY = {
-  sessionPresent: true,
+  owner: 'alice',
   lists: [
     { id: MY_LIST_ID, name: 'My List', depth: 0, rank: 'a0' },
     { id: 'list-a', name: 'Reading', depth: 0, rank: 'a1' },
@@ -63,7 +63,7 @@ beforeEach(() => {
 
 test('shows the signed-out notice when no session is present', async () => {
   loadShareTaxonomyMock.mockResolvedValue({
-    sessionPresent: false,
+    owner: null,
     lists: [],
     tags: [],
     linkCount: 0,
@@ -119,6 +119,9 @@ test('saves a draft into the picked list and shows the saved state', async () =>
   expect(saveSharedDraftMock).toHaveBeenCalledWith(expect.anything(), apiClient);
   const draft = saveSharedDraftMock.mock.calls[0][0] as ShareDraft;
   expect(draft).toMatchObject({
+    // The account whose lists the sheet rendered — share-store's header, _a
+    // draft belongs to an account_.
+    owner: 'alice',
     url: 'https://example.com/a',
     title: 'Example',
     listId: 'list-a',
@@ -287,6 +290,21 @@ test('reuses the same link id when a failed save is retried', async () => {
   const first = saveSharedDraftMock.mock.calls[0][0] as ShareDraft;
   const retried = saveSharedDraftMock.mock.calls[1][0] as ShareDraft;
   expect(retried.id).toBe(first.id);
+});
+
+// The account can change while the sheet is open — the user switches to the
+// app, signs out or into another account, and comes back to tap Save. The
+// store refuses (share-store saveSharedDraft); the sheet must say so in an
+// announcing error rather than show the saved state, because nothing was saved.
+test('refuses with an error when the account changed while the sheet was open', async () => {
+  saveSharedDraftMock.mockResolvedValueOnce('account-changed');
+  const { findByTestId, queryByTestId } = render(<ShareScreen url="https://example.com/g" />);
+
+  fireEvent.press(await findByTestId('share-add'));
+
+  const error = await findByTestId('share-error');
+  expect(error.props.role).toBe('alert');
+  expect(queryByTestId('share-saved')).toBeNull();
 });
 
 // The compose tags row is a SUMMARY, and it is also the only thing on that
