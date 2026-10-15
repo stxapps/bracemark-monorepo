@@ -6,12 +6,22 @@
   "scripts": {
     "prebuild": "expo prebuild --clean",
     "start": "expo start",
+    "start:lan": "EXPO_PUBLIC_API_URL=http://$(scutil --get LocalHostName).local:8787 EXPO_PUBLIC_SITE_URL=http://$(scutil --get LocalHostName).local:3001 expo start",
+    "start:staging": "EXPO_PUBLIC_API_URL=https://api.dryrunbase.com EXPO_PUBLIC_SITE_URL=https://dryrunbase.com expo start",
+    "start:production": "EXPO_PUBLIC_API_URL=https://api.bracemark.com EXPO_PUBLIC_SITE_URL=https://bracemark.com expo start",
     "android": "expo run:android",
     "android:reverse": "adb reverse tcp:8081 tcp:8081 && adb reverse tcp:8787 tcp:8787 && adb reverse tcp:8788 tcp:8788",
     "android:open": "adb shell am start -a android.intent.action.VIEW -d bracemark://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081%2F%3FdisableOnboarding%3D1",
-    "android:release": "expo run:android --variant release",
+    "android:release": "rm -rf android/app/build/generated/assets/createBundleReleaseJsAndAssets && expo run:android --variant release",
+    "android:release:staging": "rm -rf android/app/build/generated/assets/createBundleReleaseJsAndAssets && BRACEMARK_NONPROD_RELEASE=1 EXPO_PUBLIC_API_URL=https://api.dryrunbase.com EXPO_PUBLIC_SITE_URL=https://dryrunbase.com expo run:android --variant release",
+    "android:bundle": "cd android && ./gradlew :app:createBundleReleaseJsAndAssets --rerun :app:bundleRelease && node ../../../tools/scripts/check-native-bundle.mjs app/build/outputs/bundle/release/app-release.aab",
     "ios": "expo run:ios",
-    "ios:open": "xcrun simctl openurl booted bracemark://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081%2F%3FdisableOnboarding%3D1"
+    "ios:open": "xcrun simctl openurl booted bracemark://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081%2F%3FdisableOnboarding%3D1",
+    "ios:release": "expo run:ios --configuration Release --device",
+    "ios:release:staging": "BRACEMARK_NONPROD_RELEASE=1 EXPO_PUBLIC_API_URL=https://api.dryrunbase.com EXPO_PUBLIC_SITE_URL=https://dryrunbase.com expo run:ios --configuration Release --device",
+    "ios:bundle": "bash ../../tools/scripts/ios-bundle.sh",
+    "ios:upload": "bash ../../tools/scripts/ios-upload.sh",
+    "ios:check-archive": "node ../../tools/scripts/check-native-bundle.mjs --latest-archive"
   },
   "nx": {
     "tags": [

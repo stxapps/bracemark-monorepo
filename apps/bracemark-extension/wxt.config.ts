@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import tailwindcss from '@tailwindcss/vite';
@@ -69,6 +69,39 @@ function stubArgon2WorkerPlugin(): Plugin {
   };
 }
 
+// THE PRODUCTION GUARD — `wxt build` / `wxt zip` (mode=production) is the store
+// build, and it fails here unless it talks to bracemark.com. `.env.production` says
+// so, but a gitignored `.env.local` / `.env.production.local` / `.env.<browser>*`
+// or an exported WXT_PUBLIC_API_URL outranks it, and nothing between `nx zip` and
+// a store upload reads the bundle. Checked against the same loadEnv value the
+// manifest's host grant uses: by the time `manifest` runs, WXT has loaded those
+// files into process.env, which Vite's loadEnv lets win, so it is the value the
+// bundle bakes too. The one way past it is BRACEMARK_NONPROD_RELEASE=1 in the
+// SHELL — never a file, enforced — the same opt-in as bracemark-expo's
+// metro.config.js. → docs/env-files.md, "bracemark-extension".
+const PRODUCTION_API_URL = 'https://api.bracemark.com';
+function assertProductionApi(apiUrl: string) {
+  const OVERRIDE = 'BRACEMARK_NONPROD_RELEASE';
+  const inFile = readdirSync(process.cwd())
+    .filter((f) => f.startsWith('.env'))
+    .find((f) =>
+      new RegExp(`^\\s*(export\\s+)?${OVERRIDE}\\s*=`, 'm').test(readFileSync(f, 'utf8')),
+    );
+  if (inFile) {
+    throw new Error(
+      `${OVERRIDE} is set in apps/bracemark-extension/${inFile} — it is shell-only, so ` +
+        'it cannot be left on. Remove it there (docs/env-files.md, "bracemark-extension").',
+    );
+  }
+  if (apiUrl !== PRODUCTION_API_URL && process.env[OVERRIDE] !== '1') {
+    throw new Error(
+      `Refusing a production build that talks to ${apiUrl}, not ${PRODUCTION_API_URL}. ` +
+        'Remove the override (a `.env*.local` here, or WXT_PUBLIC_API_URL in your shell); ' +
+        'a staging build is `--mode staging` (docs/env-files.md, "bracemark-extension").',
+    );
+  }
+}
+
 // See https://wxt.dev/api/config.html
 //
 // One config drives both targets: `wxt build` (Chrome) and `wxt build -b
@@ -131,6 +164,7 @@ export default defineConfig({
     // directly.
     const apiUrl = loadEnv(mode, process.cwd(), 'WXT_PUBLIC_').WXT_PUBLIC_API_URL;
     if (!apiUrl) throw new Error('WXT_PUBLIC_API_URL is not set');
+    if (mode === 'production') assertProductionApi(apiUrl);
     // host_permissions needs a match pattern (origin + `/*`), not a bare origin.
     const apiHost = `${new URL(apiUrl).origin}/*`;
     return {

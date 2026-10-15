@@ -29,9 +29,12 @@ await mkdir(output, { recursive: true });
 
 // Shell values outrank Expo/Nx dotenv loading. Keep NODE_ENV production: staging
 // chooses the services, Release chooses compilation. No new env file is needed.
+// BRACEMARK_NONPROD_RELEASE lets this past metro.config.js's production guard,
+// which refuses any other release bundle that does not talk to bracemark.com.
 const env = {
   ...process.env,
   NODE_ENV: 'production',
+  BRACEMARK_NONPROD_RELEASE: '1',
   EXPO_PUBLIC_API_URL: STAGING_ORIGINS.api,
   EXPO_PUBLIC_SITE_URL: STAGING_ORIGINS.site,
   EXPO_PUBLIC_MEASURE_STALLS: '0',

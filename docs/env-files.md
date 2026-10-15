@@ -306,6 +306,20 @@ Both throw if the var is unset, mirroring bracemark-web's missing-`NEXT_PUBLIC_A
 guard. The `staging` build is a plain `--mode staging` npm script + Nx target
 (`build:staging`, `build:staging:firefox`) — no Nx `envFile` needed.
 
+**⚠ A production build refuses any api but `https://api.bracemark.com`.**
+`wxt.config.ts` checks the value in `manifest` whenever `mode` is `production` —
+`nx build`, `build:firefox`, `zip`, `zip:firefox`, i.e. the store builds. Nothing
+else would: bracemark-web has `deploy-static.sh`'s tier check between the build
+and the bucket, but between `nx zip` and a store upload nothing reads the bundle.
+And the committed `.env.production` is not the last word: WXT loads `.env.local`,
+`.env.production.local`, `.env.<browser>` and their `.local` variants too (all
+gitignored by `.env*.local` or absent today), and an exported `WXT_PUBLIC_API_URL`
+outranks every file. By the time `manifest` runs WXT has put those files into
+`process.env`, which Vite's `loadEnv` lets win, so the guard sees the value the
+bundle bakes — the same one the host grant is derived from. The escape hatch is
+the same as bracemark-expo's: `BRACEMARK_NONPROD_RELEASE=1` in the shell, never
+in a file (enforced). A staging build is `--mode staging` and never trips it.
+
 ### bracemark-expo — Expo / Metro
 
 Expo builds through Metro, which loads `.env` / `.env.<mode>` via `@expo/env`.
@@ -332,28 +346,62 @@ lean on, because the Expo build isn't an `nx build`. **We don't use EAS** — th
 is no `eas.json` and none is needed; builds are local (`npx expo prebuild` +
 Xcode / Gradle).
 
-**So the domain is chosen in ONE gitignored file, `.env.local`, and the committed
-files are only the per-variant defaults.** `.env.local` is the one file
-`@expo/env` loads in every mode and ranks above both `.env.<mode>` files, so a
-pair of URLs uncommented there wins in the dev and the release variant alike.
-It holds three commented pairs — physical iPhone (the Mac's LAN name), staging,
-production — and all-commented means the default.
+**So the domain is chosen per command, by an npm script — or, as the sticky
+alternative, in ONE gitignored file, `.env.local`. The committed files are only
+the per-variant defaults.** The scripts are in `apps/bracemark-expo/package.json`
+([expo-build.md](./expo-build.md), _the npm scripts_):
 
-**Not the shell, and not the committed files.** Both were the obvious spelling
-and each fails silently on one path:
+| domain \ variant     | development (Metro)   | release, on a device                             | store                                         |
+| -------------------- | --------------------- | ------------------------------------------------ | --------------------------------------------- |
+| localhost            | `start` (the default) | not supported (Android refuses cleartext)        | —                                             |
+| this Mac, on the LAN | `start:lan`           | not supported (same)                             | —                                             |
+| dryrunbase.com       | `start:staging`       | `android:release:staging`, `ios:release:staging` | —                                             |
+| bracemark.com        | `start:production`    | `android:release`, `ios:release` (the default)   | `android:bundle`; `ios:bundle` → `ios:upload` |
 
-- **An inline var (`EXPO_PUBLIC_API_URL=… <build>`) never reaches an Xcode
-  build started from its UI.** A GUI app does not inherit your shell's
-  environment, so the _Bundle React Native code and images_ phase bakes
-  `.env.production` into an Archive meant for staging. A file works on every
-  path because every path ends in the same loader: the dev server, and
-  `expo export:embed`, which both Xcode (`react-native-xcode.sh`) and the Gradle
-  plugin run for a release build, with `setNodeEnv('production')` then
-  `@expo/env.load(projectRoot)`. Both also pass `--reset-cache`, so a release
-  build always re-reads the file; there is no stale-cache trap on that side.
-- **Switching by editing `.env.development` / `.env.production` puts the switch
-  in git.** Every staging session becomes a diff to keep out of a commit, and it
-  travels between clones.
+Each one sets `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_SITE_URL` in that one
+command's environment, which outranks every env file — so the choice lasts
+exactly as long as the command, and there is nothing to comment back out.
+`start:lan` is the physical-iPhone one: it computes the Mac's Bonjour name at
+run time (`scutil --get LocalHostName`), so it follows a rename
+(`Macs-MacBook-Pro-2.local`) on its own — see the physical-iPhone paragraph
+below.
+
+**Why the shell is safe now, when it used to be the wrong spelling.** An inline
+var never reaches an Xcode build started from its UI — a GUI app does not inherit
+your shell's environment — so the _Bundle React Native code and images_ phase
+once baked `.env.production` into an Archive meant for staging, silently. Two
+things make that a non-issue:
+
+- **A dev build takes its origins from Metro**, and Metro from the shell that
+  started it. The Debug binary carries no origin; a Debug run from Xcode's UI
+  loads whatever the running `start:*` serves. Switching is a Metro restart — no
+  native rebuild and no `--clear`: a dev bundle's env preamble is written from
+  Metro's own environment rather than its transform cache (verified — a plain
+  restart after a staging session served `localhost` again). Only a _reload_ of
+  a still-running Metro replays its old value.
+- **A release bundle refuses anything but production** (the guard, below), so
+  the Archive that never sees a shell is exactly the production build it should
+  be, and a staging release build is CLI-only by construction.
+
+Every path still ends in the same loader — the dev server, and
+`expo export:embed`, which both Xcode (`react-native-xcode.sh`) and the Gradle
+plugin run for a release build, with `setNodeEnv('production')` then
+`@expo/env.load(projectRoot)`. Both pass `--reset-cache`, so Metro re-reads the
+env; but **Gradle may not run that step at all** — see the stale-bundle note
+under the bundle check below.
+
+**`.env.local` keeps its three commented pairs** — physical iPhone (the Mac's
+LAN name), staging, production — for when a sticky choice is what you want: a
+long session on one stack, or `npm run ios`/`android`, which start their own
+Metro from the files. All-commented means the default. `.env.local` is the one
+file `@expo/env` loads in every mode and ranks above both `.env.<mode>` files, so
+an uncommented pair wins in the dev and the release variant alike — which is
+also its hazard, and why a release bundle then fails the production guard unless
+the shell asks otherwise. Restart Metro after editing it.
+
+**Not the committed files.** Switching by editing `.env.development` /
+`.env.production` puts the switch in git: every staging session becomes a diff
+to keep out of a commit, and it travels between clones.
 
 This replaced a committed `.env.staging` (a paste source for the inline spelling
 above) and a gitignored `.env.development.local` (the physical-iPhone override).
@@ -372,21 +420,61 @@ Files in `apps/bracemark-expo/` (the two committed ones never change to switch):
 `.env.local`, `.env.<mode>`, `.env` — and the **first** file to define a key
 wins; only a var already exported in the shell beats them all.
 
-| domain \ variant | development                     | release                                   |
-| ---------------- | ------------------------------- | ----------------------------------------- |
-| localhost        | default                         | not supported (Android refuses cleartext) |
-| dryrunbase.com   | staging pair in `.env.local`    | staging pair in `.env.local`              |
-| bracemark.com    | production pair in `.env.local` | default                                   |
+⚠ **A release bundle is production or a failed build.** `.env.local` applies to
+release too — and it meant a pair left uncommented went into the App Store /
+Play upload with nothing to flag it: no lint, no type error, no test, and the
+app works. So **`metro.config.js` refuses any production-mode bundle whose
+`EXPO_PUBLIC_API_URL` / `EXPO_PUBLIC_SITE_URL` are not exactly
+`https://api.bracemark.com` / `https://bracemark.com`.** That is every release
+path — `android:release`, `android:bundle`, `ios:release`, a bare `./gradlew
+bundleRelease` / `assembleRelease`, Xcode Run in Release, Xcode Archive — and
+`expo start --no-dev`. The check sits in the Metro config because every one of
+those paths reaches it with the env already final: `expo export:embed` (what
+Xcode and Gradle run) and `expo run`'s eager bundle both call
+`setNodeEnv('production')` and `@expo/env.load()` before loading it. It also
+covers the iOS **share extension**'s bundle, and as plain JS rather than a
+config plugin it survives `prebuild --clean` with nothing to regenerate. The
+failure lands in the build log naming both values and the fix.
 
-A dev build takes the switch from Metro, so it needs no native rebuild — only
-`npm run expo:start -- --clear`, because a reload replays the old value. A
-release build bakes it, so it needs rebuilding (and nothing more).
+The one way past it is **`BRACEMARK_NONPROD_RELEASE=1` in the shell**, for a
+release build that is meant to talk to staging. The two `:release:staging`
+scripts set it, as do `npm run e2e:build:<platform>:staging`
+([e2e.md](./e2e.md)) and `npm run measure:native`, whose `expo start --no-dev` is
+production mode aimed at localhost. **Shell-only, and enforced** — the guard
+also fails if the name appears in any `.env*` file in the app. A shell var lasts
+one command, so it cannot be left on the way a file line can; and since a build
+started from Xcode's UI does not inherit the shell, **an Archive is production
+or a failed build**, with no exception to remember. The cost is that a staging
+_Release_ build does not come from Xcode's UI — use `ios:release:staging`.
 
-⚠ **Check the bundle before uploading a store build.** `.env.local` applies to
-release too, which is the point — and it means a staging pair left uncommented
-goes into the App Store / Play upload with nothing to flag it: no lint, no type
-error, no test, and the app works. The bundle is Hermes bytecode, but its
-string table holds the URLs verbatim:
+⚠ **Still check the bundle before uploading a store build** — the guard reads
+the env, this reads the file that ships. The store scripts do it themselves:
+`npm run android:bundle` on the `.aab` it just built, `ios:bundle` on its
+archive, and `ios:upload` once more on that archive before it sends it. For an
+archive made in Xcode instead, run `npm run ios:check-archive` before
+Distribute — it checks the newest archive holding `Bracemark.app`. All of them run
+`tools/scripts/check-native-bundle.mjs`, which reads every JS bundle in the
+artifact — on iOS that includes the share extension's own `main.jsbundle` under
+`PlugIns/` — and fails unless each names `https://api.bracemark.com` and no
+staging origin or origin on the local ports (:8787, :3001), on any host. The two
+can disagree, and both ways have been seen:
+
+- **A stale bundle.** A release bundle inlines `EXPO_PUBLIC_*` at transform
+  time, into Metro's cache, whose key does not include the env: a staging
+  `export:embed` run without `--reset-cache` after a production one came out
+  byte-identical to it, while the guard approved the staging env. Xcode and
+  Gradle pass `--reset-cache` — but `export:embed` drops it whenever `CI` is set.
+  And **Gradle calls the JS task up to date after a staging build** — the env
+  is no input of it — so a plain `./gradlew bundleRelease` right after
+  `android:release:staging` packages the STAGING bundle, with no bundle step
+  run for the guard to stop. `android:bundle` reruns that task (`--rerun`, as
+  `e2e/runner/release-build.ts` does) and the `expo run:android` release
+  scripts delete its output first; a bare `./gradlew` does neither.
+- **The guard bypassed** by `BRACEMARK_NONPROD_RELEASE=1` in the shell that
+  built it, or broken by an Expo upgrade that loads the env later.
+
+By hand, the bundle is Hermes bytecode but its string table holds the URLs
+verbatim:
 
 ```sh
 # Android
@@ -398,9 +486,9 @@ grep -aoE 'https://api\.[a-z]+\.com' <archive>.xcarchive/Products/Applications/B
 Either should print `https://api.bracemark.com` and nothing else. **Keep the
 `-a`:** without it grep treats the bytecode as binary and `-o` prints NOTHING —
 which reads as "no staging URL in here" when the file was never searched. Empty
-output is a failed check, not a pass. The build log
-says the same thing earlier: `export:embed` prints the env files it loaded and
-the vars it exported.
+output is a failed check, not a pass (the script fails on a bundle-less artifact
+for the same reason). The build log says the same thing earlier: `export:embed`
+prints the env files it loaded and the vars it exported.
 
 Current public vars:
 
@@ -421,8 +509,8 @@ Current public vars:
   Metro it starts, so a shipped build compiles the check to nothing
   ([e2e.md](./e2e.md), _the native leg_).
 
-**A physical iPhone is the one target `localhost` cannot serve, and the
-`.env.local` switch is where that is fixed.** Both default URLs are `localhost`
+**A physical iPhone is the one target `localhost` cannot serve, and
+`npm run start:lan` (or the first `.env.local` pair) is where that is fixed.** Both default URLs are `localhost`
 because one bundle has to serve the iOS simulator, which shares the host's
 loopback, and the Android emulator (or an Android phone over USB / wireless
 debugging), which is taught the same by `adb reverse`
@@ -430,25 +518,27 @@ debugging), which is taught the same by `adb reverse`
 separate host: there is no `adb reverse` for iOS, so it has to address the Mac by
 LAN IP (`ipconfig getifaddr en0`) or by its Bonjour `<name>.local`, and the Worker
 has to be listening on more than loopback — see
-[_the local port map_](#the-local-port-map). That pair is the first of the three
-in `.env.local` rather than a line in the committed file: the address is
-per-machine and per-network, and baking it in breaks the simulator, the emulator
-and the e2e runs. The device also needs a dev build signed for its UDID
+[_the local port map_](#the-local-port-map). `start:lan` builds that address
+from `scutil --get LocalHostName` at run time, and the matching `.env.local` pair
+writes it out by hand — neither is a line in a committed file, because the
+address is per-machine and per-network, and baking it in breaks the simulator,
+the emulator and the e2e runs. Fall back to the LAN IP if mDNS fails. The device also needs a dev build signed for its UDID
 (`npm run expo:ios -- --device`); Expo Go cannot load this app. The full
 device/app/environment matrix — including the secure-context rule that decides
 what `bracemark-web` can do from a phone — is
 [device-testing.md](./device-testing.md).
 
-**Comment it back out when you are done — any pair, not just the iPhone one.** The
+**If you use the file, comment it back out when you are done — any pair, not
+just the iPhone one.** (The scripts need no undoing; that is their point.) The
 switch has no per-target scope, so one left in place takes the simulator, the
-emulator and `npm run e2e:ios` / `e2e:android` off loopback too, and the
-`--clear` above is
-what decides when the fix takes effect. The failure that produces, and why it is
+emulator and `npm run e2e:ios` / `e2e:android` off loopback too, and a Metro
+restart is what decides when the fix takes effect. The failure that produces, and why it is
 intermittent rather than reliable, is [device-testing.md](./device-testing.md),
 _one bundle, one set of origins_.
 
-Adding a new var = add the line to both committed files, and a commented line to
-each pair in `.env.local` — same deliberate symmetry as the other frontends.
+Adding a new origin var = add the line to both committed files, a commented line
+to each pair in `.env.local`, and the var to every `start:*` and
+`*:release:staging` script — same deliberate symmetry as the other frontends.
 
 **The `expo:*` root scripts call `npm run -w`, not `nx` — which also keeps this
 the only loader.** The visible reason is the terminal UI

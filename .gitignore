@@ -103,6 +103,9 @@ node_modules/
 # stay tracked.
 /apps/bracemark-expo/ios/
 /apps/bracemark-expo/android/
+# `npm run ios:bundle` output — the .xcarchive that `ios:upload` signs and
+# sends. Outside ios/ so a prebuild --clean doesn't take it.
+/apps/bracemark-expo/build/
 # Gradle output for the COMMITTED native module sources. Unlike
 # apps/bracemark-expo/android above, these parent directories ARE tracked (they hold
 # hand-written Kotlin), so their build/ and .cxx/ dirs have to be named

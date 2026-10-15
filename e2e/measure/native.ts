@@ -329,6 +329,9 @@ async function startMetro(
         ...process.env,
         CI: '1',
         // See ⚠ above: these outrank .env.production, which --no-dev loads.
+        // --no-dev is production mode, so metro.config.js's production guard
+        // refuses a local URL without this.
+        BRACEMARK_NONPROD_RELEASE: '1',
         EXPO_PUBLIC_API_URL: API_URL,
         EXPO_PUBLIC_SITE_URL: SITE_URL,
         EXPO_PUBLIC_MEASURE_STALLS: '1',

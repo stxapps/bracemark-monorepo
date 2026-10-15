@@ -178,6 +178,15 @@ const config: ExpoConfig = {
           // one), and the sheet never asks from here anyway
           // (src/lib/review-prompt.ts).
           'expo-store-review',
+          // Never called from the sheet (its bundle names no ImageManipulator
+          // module), and linking it broke every Archive: it pulls
+          // SDWebImageWebPCoder → SDWebImage/Core into this target while the
+          // app gets the full SDWebImage via expo-image, so CocoaPods builds
+          // two variants whose SDWebImage.bundle collide in the archive's
+          // UninstalledProducts ("Multiple commands produce"). A Release BUILD
+          // is unaffected — only an install-action build flattens them — which
+          // is why the e2e Release builds never saw it. docs/share-sheet.md.
+          'expo-image-manipulator',
         ],
         preprocessingFile: './share-extension/preprocessing.js',
       },

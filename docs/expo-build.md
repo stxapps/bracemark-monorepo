@@ -51,19 +51,79 @@ regenerates the native projects, then **Xcode** builds/runs iOS and
 scripts** in
 `apps/bracemark-expo/package.json`:
 
-| script            | command                              | when                                                 |
-| ----------------- | ------------------------------------ | ---------------------------------------------------- |
-| `prebuild`        | `expo prebuild --clean`              | after any `app.config.ts`/plugin/native-dep change   |
-| `start`           | `expo start`                         | Metro, for a Debug run from Xcode                    |
-| `android`         | `expo run:android`                   | dev build → device                                   |
-| `android:release` | `expo run:android --variant release` | release build → device (R8, no Metro)                |
-| `android:reverse` | `adb reverse` ×3 (8081, 8787, 8788)  | once per emulator boot, before anything hits the api |
-| `android:open`    | `am start` on the dev-client link    | open the installed dev build, every time             |
-| `ios`             | `expo run:ios`                       | quick simulator run without opening Xcode            |
-| `ios:open`        | `simctl openurl` on the same link    | ” — the simulator twin                               |
+| script                    | command                                                 | when                                                 |
+| ------------------------- | ------------------------------------------------------- | ---------------------------------------------------- |
+| `prebuild`                | `expo prebuild --clean`                                 | after any `app.config.ts`/plugin/native-dep change   |
+| `start`                   | `expo start`                                            | Metro, for a Debug run from Xcode — local api        |
+| `start:lan`               | `expo start`, origins on this Mac's `.local` name       | ” — a physical iPhone against the local api          |
+| `start:staging`           | `expo start`, staging origins                           | ” — against dryrunbase.com                           |
+| `start:production`        | `expo start`, production origins                        | ” — against the live stack                           |
+| `android`                 | `expo run:android`                                      | dev build → device                                   |
+| `android:release`         | `expo run:android --variant release`                    | release build → device (R8, no Metro) — production   |
+| `android:release:staging` | ” with staging origins + `BRACEMARK_NONPROD_RELEASE=1`  | ” — against dryrunbase.com                           |
+| `android:bundle`          | `gradlew bundleRelease`, then the bundle check          | **the Play Store `.aab`**                            |
+| `android:reverse`         | `adb reverse` ×3 (8081, 8787, 8788)                     | once per emulator boot, before anything hits the api |
+| `android:open`            | `am start` on the dev-client link                       | open the installed dev build, every time             |
+| `ios`                     | `expo run:ios`                                          | quick simulator run without opening Xcode            |
+| `ios:open`                | `simctl openurl` on the same link                       | ” — the simulator twin                               |
+| `ios:release`             | `expo run:ios --configuration Release --device`         | release build → a device you pick — production       |
+| `ios:release:staging`     | ” with staging origins + `BRACEMARK_NONPROD_RELEASE=1`  | ” — against dryrunbase.com                           |
+| `ios:bundle`              | prebuild → build-number check → archive → bundle check  | **the App Store archive**, in `build/` (gitignored)  |
+| `ios:upload`              | the bundle check, then `asc xcode export --wait`        | **sign it for the App Store and upload it**          |
+| `ios:check-archive`       | the bundle check, on the newest `Bracemark.app` archive | only for an archive made in Xcode (Archive)          |
 
-Run them either way — `npm run <script>` from `apps/bracemark-expo`, or the
-root alias, one per script, under an `expo:` prefix rather than the `dev:` one
+The `start:*` and `*:release:staging` scripts pick the domain for that one
+command, in its shell environment, which outranks every env file — the
+alternative to the `.env.local` switch, and one that cannot be left on. The
+`:release` and `:bundle` ones are what the production guard and the bundle check
+are about ([env-files.md](./env-files.md), _bracemark-expo_). `android:bundle`
+reruns the JS bundle task on purpose: Gradle does not count the env as an input,
+so after a staging build it calls the JS task up to date and packages the
+STAGING bundle into the next `bundleRelease` (seen: `--rerun` is the fix, as in
+`e2e/runner/release-build.ts`). The two `expo run:android` release scripts delete
+that task's output first for the same reason.
+
+**The store builds are `android:bundle` and `ios:bundle` → `ios:upload`.** The
+`.aab` goes to Play Console by hand (drag and drop); an iOS build cannot — App
+Store Connect's website takes no binaries — so `ios:upload` sends it through
+Xcode, driven by `asc` (_ios release_ below). Together they are Xcode's Archive
+→ Organizer → Distribute, from the shell (`tools/scripts/ios-bundle.sh`,
+`ios-upload.sh`):
+
+1. `ios:bundle` — `expo prebuild --clean --platform ios`, so `ios/` can't be
+   stale against `app.config.ts`;
+2. **the build number, against App Store Connect**
+   (`asc builds next-build-number`, per version, as Apple keys it) — a read
+   that stops before the multi-minute archive if `ios.buildNumber` is already
+   taken, and says what to set it to. Every upload after a version's first
+   needs that bump;
+3. `asc xcode archive` — Release, generic iOS device, automatic signing;
+4. `check-native-bundle.mjs` on the archive. `ios:bundle` ends here.
+5. `ios:upload` — the bundle check again, then `asc xcode export --wait`:
+   App Store export options with `destination=upload`, so `-exportArchive`
+   re-signs and uploads in one pass, then waits for App Store Connect's
+   processing. Submitting for review stays in App Store Connect.
+
+⚠ **There is no local App Store `.ipa` step, on purpose.** An `-exportArchive`
+with method `app-store-connect` is not offline even with `destination=export`:
+Xcode lists the version's build uploads on App Store Connect and **reserves the
+build number** (`POST /v1/buildUploads`, state `AWAITING_UPLOAD`) before writing
+the file — seen 2026-10-15 on Xcode 26.6, in the export's
+`ContentDelivery.log`. A local export followed by a separate upload would
+reserve the number twice, and `asc builds next-build-number` counts the
+orphaned reservation as taken. So the export happens once, as the upload.
+`check-native-bundle.mjs` still reads an `.ipa` if you ever have one.
+
+Signing needs nothing beyond what Xcode already has: `-allowProvisioningUpdates`
+lets Xcode's signed-in account fetch the cloud-managed _Apple Distribution_
+certificate and the App Store profiles, exactly as Organizer does, so no
+distribution certificate lives on this Mac (verified: both the app and the iOS
+share extension signed by Apple Distribution under the team, App Store
+profiles, `codesign --verify --deep --strict` clean). Xcode's Archive still
+works — run `ios:check-archive` before Distribute if you take that path.
+
+Run them either way — `npm run <script>` from `apps/bracemark-expo`, or, for
+the everyday ones, the root alias under an `expo:` prefix rather than the `dev:` one
 `dev:ext`/`dev:site` use: those start a server in seconds, where `expo:ios` is a
 multi-minute native build and install, and one prefix for both would hide that.
 The root spelling names the platform even where the app-level script could not be
@@ -243,10 +303,12 @@ on demand instead of carrying it forever:
     npm run prebuild
     diff -ru /tmp/ios-before apps/bracemark-expo/ios
 
-For a store `.aab`, gradle directly: `cd apps/bracemark-expo/android && ./gradlew
-bundleRelease` (needs a real release keystore — the prebuild template signs
+For a store `.aab`: `npm run android:bundle` from `apps/bracemark-expo`, which
+runs gradle's `bundleRelease` and then checks the bundle inside it (needs a real release keystore — the prebuild template signs
 `release` with the debug config, which is fine for `run-android:release` on a
-device but not for the Play Store).
+device but not for the Play Store). Its bundle step fails if `.env.local` or the
+shell points the build anywhere but production — `metro.config.js`'s production
+guard ([env-files.md](./env-files.md), _bracemark-expo_).
 
 #### app config — `app.config.ts`, not `app.json`
 
@@ -753,14 +815,14 @@ if the app is already enrolled.
 
 **Don't escape `$` in the passwords any more.** That rule was a dotenv rule:
 Expo runs `dotenv-expand` over the env files, so an unescaped `$` started a
-variable reference and `Bracemark$1MTo` loaded as `Bracemark`. `gradle.properties`
-is a **Java properties** file with no interpolation, so the same password is now
-written literally as `Bracemark$1MTo` — and a backslash there is an _escape
-character_, so carrying the old `Bracemark\$1MTo` spelling across is itself the
-bug. Both failure modes surface identically, as a keystore-password error that
+variable reference and a made-up `example$1pass` loaded as `example`.
+`gradle.properties` is a **Java properties** file with no interpolation, so the
+same password is now written literally as `example$1pass` — and a backslash there
+is an _escape character_, so carrying the old `example\$1pass` spelling across is
+itself the bug. Both failure modes surface identically, as a keystore-password error that
 says nothing about where the value came from.
 
-Store build: `cd apps/bracemark-expo/android && ./gradlew bundleRelease`. Verify what
+Store build: `npm run android:bundle` from `apps/bracemark-expo`. Verify what
 actually signed it — `keytool -printcert -jarfile
 app/build/outputs/bundle/release/app-release.aab`, or ask gradle before building
 with `./gradlew :app:signingReport` (its `Variant: release` block prints the
@@ -810,6 +872,9 @@ claude plugin disable asc@rorkai --scope local  # when done
 Start a new session after either. The skills drive the `asc` CLI, which needs
 installing and its own App Store Connect API key — that key is a credential and
 goes outside the worktree like every other (see [env-files.md](./env-files.md)).
+It lives in the system keychain (`asc auth login`; `asc auth status` shows
+the profile), which is all `ios:bundle` and `ios:upload` need — **the scripts call
+the CLI directly and need the plugin neither on nor installed.**
 The same off-by-default pattern holds for `paddle@claude-community`.
 
 #### android release — the `gplay` skills

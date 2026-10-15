@@ -51,11 +51,17 @@ Staging and production answer on `dryrunbase.com` and `bracemark.com`
 Every device reaches them the same way it reaches any other website, and
 `bracemark-expo` reaches them the same way it will in the store. So:
 
-| environment   | what a device needs                                              |
-| ------------- | ---------------------------------------------------------------- |
-| `development` | everything in this doc                                           |
-| `staging`     | the URL; for expo, a build with the staging pair in `.env.local` |
-| `production`  | the URL; for expo, a release build                               |
+| environment   | what a device needs                                                                       |
+| ------------- | ----------------------------------------------------------------------------------------- |
+| `development` | everything in this doc                                                                    |
+| `staging`     | the URL; for expo, `npm run start:staging` (dev) or `ios:release:staging` / `android:…` ¹ |
+| `production`  | the URL; for expo, a release build                                                        |
+
+¹ Scripts in `apps/bracemark-expo`. The staging pair in `.env.local` does the same
+for a dev build; a **release** build also needs `BRACEMARK_NONPROD_RELEASE=1` in
+the shell, which the `:release:staging` scripts set — `metro.config.js` refuses
+any other non-production release bundle ([env-files.md](./env-files.md),
+_bracemark-expo_).
 
 That is worth stating plainly because it makes staging the cheap way to answer
 "does this work on my iPad" — no certificates, no LAN addresses, no overrides.
@@ -138,9 +144,11 @@ used. There is one such URL, the local blob proxy that stands in for R2 in dev
 (`apps/bracemark-api/src/r2/local.ts` — miniflare's emulated bucket has no
 presignable S3 endpoint, so `files/sign` hands out URLs back to the Worker itself).
 It builds its origin from the incoming request, which is what keeps the Mac's
-address out of the api entirely: **the only file that carries it is
-`apps/bracemark-expo/.env.local`**, the gitignored domain switch
-([env-files.md](./env-files.md), _bracemark-expo_).
+address out of the api entirely: **no committed file carries it.**
+`npm run start:lan` (in `apps/bracemark-expo`) computes it at run time from
+`scutil --get LocalHostName`, and the gitignored `apps/bracemark-expo/.env.local`
+holds the same pair written out by hand ([env-files.md](./env-files.md),
+_bracemark-expo_).
 
 ⚠ Hardcoding that origin instead is the silent failure this arrangement exists to
 prevent. It is right for every caller except the phone, and on the phone
@@ -159,11 +167,13 @@ by Next, `EXPO_PUBLIC_*` by Metro. There is one value per dev-server session, so
 **you cannot serve the localhost devices and the LAN devices simultaneously**.
 Working on the iPad is a mode you switch into and back out of.
 
-The switch is a gitignored `.env.development.local` in each Next app, and
-`.env.local` in `bracemark-expo` — expo's is not dev-only, because the same file
-also picks staging for a release build ([env-files.md](./env-files.md),
-_bracemark-expo_). Both loaders resolve these ahead of the committed files and
-let them win — verified in `@next/env` and `@expo/env`,
+The switch is a gitignored `.env.development.local` in each Next app; in
+`bracemark-expo` it is `npm run start:lan`, which needs no undoing, or the
+`.env.local` pair — expo's file is not dev-only, because the same file also
+picks staging for a release build, one started from the CLI with the
+`BRACEMARK_NONPROD_RELEASE=1` opt-in the production guard requires
+([env-files.md](./env-files.md), _bracemark-expo_). Both loaders resolve these
+files ahead of the committed ones and let them win — verified in `@next/env` and `@expo/env`,
 which implement the identical order (`.env.<mode>.local`, `.env.local`,
 `.env.<mode>`, `.env`) and both keep the first definition of a key. `.env*.local`
 is gitignored at the root, so the committed files stay on `localhost` and the
@@ -182,8 +192,13 @@ being down rather than a misconfigured var.
 
 Two consequences of the bake:
 
-- **Metro needs `--clear`.** `npm run expo:start -- --clear` after editing the
-  file; a reload re-runs the old inlined value.
+- **Metro needs a restart.** Stop and re-run `npm run expo:start` after editing
+  the file; a reload of the running Metro re-runs the old value. `--clear` is
+  not needed — measured on SDK 54: a dev bundle's env preamble is written from
+  Metro's environment at startup, not from its transform cache, so a plain
+  restart served the new value both after a file edit and after a shell
+  override. (A _release_ bundle is different: it inlines at transform time —
+  [env-files.md](./env-files.md), _bracemark-expo_.)
 - **The api's CORS list has to learn the new browser origin**, and the dev
   `CORS_ORIGINS` lives in the committed, public `wrangler.jsonc`. Export the
   override for the session instead — `CORS_ORIGINS=http://<mac>.local:3000,… npm
@@ -225,10 +240,10 @@ request from the device at all. The `e2e-mobile` and `e2e-contract` runs no
 longer fail the same way one layer further from the cause: their preflight
 reads the api origin out of the bundle Metro serves and refuses to start on any
 but the local one ([e2e.md](./e2e.md), _driving the native apps_). Driving the
-app by hand has no such guard. And per _Metro needs `--clear`_ above, the repair
+app by hand has no such guard. And per _Metro needs a restart_ above, the repair
 is not instant: commenting the two lines back out does nothing until Metro
-restarts with a cleared cache, so a reload leaves you testing the old inlined
-value and looking for a second bug.
+restarts, so a reload leaves you testing the old value and looking for a second
+bug.
 
 **There is a way back out that leaves the file alone**, for the session that
 needs loopback while the device setup stays in place. A variable already in
@@ -237,11 +252,15 @@ is set — so pin the pair on the command line:
 
 ```sh
 EXPO_PUBLIC_API_URL=http://localhost:8787 EXPO_PUBLIC_SITE_URL=http://localhost:3001 \
-  npm run expo:start -- --clear
+  npm run expo:start
 ```
 
 It lasts exactly as long as that Metro does, which is the point: nothing to
-remember to undo, and the next plain `expo:start` is back on the file.
+remember to undo, and the next plain `expo:start` is back on the file. The
+`start:lan` / `start:staging` / `start:production` scripts in
+`apps/bracemark-expo` are the same move the other way round — the device setup
+for one Metro, with the file left all-commented
+([env-files.md](./env-files.md), _bracemark-expo_).
 
 ### open decision: `bracemark-web` in `development`, on the iPhone and iPad
 

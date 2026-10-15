@@ -2052,7 +2052,9 @@ reads headers and makes two requests the browser must refuse, so it creates
 nothing — the reason journeys are barred from production does not apply to it.
 
 `build-release:staging` regenerates native output, pins staging API/site values
-above dotenv precedence, and builds an Android release APK or iOS Release
+above dotenv precedence (with `BRACEMARK_NONPROD_RELEASE=1`, the opt-in past
+`metro.config.js`'s production guard — [env-files.md](./env-files.md),
+_bracemark-expo_), and builds an Android release APK or iOS Release
 simulator app with ad hoc signing enabled for Keychain access. It records source
 revision, SHA-256 and Android's R8 mapping.
 Before testing, native preflight verifies the installed binary against that
@@ -3046,7 +3048,10 @@ npm run measure:native -- --platform android --device <serial> --links 1000,1000
   _bracemark-expo_), so the runner starts its own Metro with
   `--no-dev --minify`, and **that makes Metro load `.env.production`, which
   names the production api**. The origins are exported in Metro's environment
-  (a shell variable outranks every env file), and the runner fetches the
+  (a shell variable outranks every env file) along with
+  `BRACEMARK_NONPROD_RELEASE=1`, without which `metro.config.js`'s production
+  guard refuses a production-mode bundle aimed at localhost
+  ([env-files.md](./env-files.md), _bracemark-expo_), and the runner fetches the
   served bundle and refuses to continue unless it names the local api and no
   deployed one. Metro must not already be on :8081. `--no-dev` also turns
   `__DEV__` off, so everything gated on it is live in this run and in staging Release runs,
@@ -3089,8 +3094,8 @@ Protocol, the same channel React Native DevTools uses, and it needs no DevTools
 window:
 
 - **Serve a production bundle unminified**: `npx expo start --no-dev` without
-  `--minify`, with the same exported origins and `EXPO_PUBLIC_MEASURE_STALLS=1`
-  as the runner (see ⚠ above: `--no-dev` still loads `.env.production`). That
+  `--minify`, with the same exported origins, `BRACEMARK_NONPROD_RELEASE=1` and
+  `EXPO_PUBLIC_MEASURE_STALLS=1` as the runner (see ⚠ above: `--no-dev` still loads `.env.production`). That
   keeps function names and costs nothing measurable. Its comments do still name
   the deployed api, so check the live `baseUrl`, not a substring.
 - **Metro's inspector lists the runtimes** at `http://localhost:8081/json/list`.

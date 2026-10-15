@@ -23,12 +23,13 @@ license: MIT
   does not ignore.
 - **Never `gplay snitch --confirm`** — it files a public GitHub issue. `--local` or
   nothing.
-- **The `.aab` and its `versionCode` are not this skill's business.** Build it per
-  `docs/expo-build.md`, _android release signing_ — `./gradlew bundleRelease` in
-  `apps/bracemark-expo/android`, upload key read from `~/.gradle/gradle.properties` —
-  and bump `android.versionCode` in `app.config.ts`, never in `build.gradle`: `android/`
-  is prebuild output and the edit is deleted on the next `npm run prebuild`. Ignore the
-  keystore and Gradle snippets below.
+- **The `.aab` and its `versionCode` are not this skill's business.** Build it with
+  `npm run android:bundle` in `apps/bracemark-expo` — never a bare
+  `./gradlew bundleRelease`, which can package a stale staging JS bundle and skips
+  the bundle check (`docs/expo-build.md`, _the npm scripts_) — upload key read from
+  `~/.gradle/gradle.properties` — and bump `android.versionCode` in `app.config.ts`,
+  never in `build.gradle`: `android/` is prebuild output and the edit is deleted on the
+  next `npm run prebuild`. Ignore the keystore and Gradle snippets below.
 
 `gplay preflight` inspects a local `.aab` or `.apk` and reports findings. It
 makes **no API calls and needs no credentials**, so it works on any machine, in

@@ -1024,6 +1024,22 @@ call **BracemarkFileCrypto** (your own autolinked module — the `BracemarkCrypt
 links anyway for BracemarkSharedKeychain) for the AES, staying in the RN path. The entity blobs are
 KB-sized (no Argon2, key pre-derived, far under the ~120MB cap).
 
+⚠ **A pod the two targets share has to resolve to the same subspecs in both, or
+every Archive fails — and nothing short of an Archive says so.** When the
+extension's set differs from the app's, CocoaPods builds the pod twice (a
+`<Pod>-Core` target beside `<Pod>`), and only an install-action build — Xcode
+Archive, `xcodebuild archive` — copies both copies' resource bundles into one
+`UninstalledProducts` directory: `error: Multiple commands produce
+'…/SDWebImage.bundle'`. A Release _build_ keeps them apart, so the simulator, a
+device run and the e2e Release builds all pass. That is how
+`expo-image-manipulator` sat in the extension unnoticed: it pulls
+`SDWebImageWebPCoder` → `SDWebImage/Core`, while the app takes the full
+`SDWebImage` through `expo-image` (already excluded here). It is now in
+`excludedPackages` too — the sheet never calls it; its bundle names no
+`ImageManipulator` module — which leaves `SDWebImage` to the app alone. After
+changing `excludedPackages` or adding a native module, prebuild and check
+`ls "ios/Pods/Target Support Files"` for a `-Core`-style twin, or archive.
+
 **Invariant that keeps the memory story true: no bytes-heavy work in the
 extension.** The extension handles URLs and KB-sized entity JSON only —
 image/screenshot fetch, decrypt, and encrypt stay in the main app / extractor.

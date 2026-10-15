@@ -191,7 +191,10 @@ npm run e2e:build:ios:staging
 The build target regenerates that platform's generated native directory through
 Nx prebuild, then runs `assembleRelease` or Xcode's Release simulator build. It
 pins `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_SITE_URL` in the child environment,
-which outranks every dotenv file; it leaves `.env.local` alone. Android reruns
+which outranks every dotenv file; it leaves `.env.local` alone. It also sets
+`BRACEMARK_NONPROD_RELEASE=1`, the shell-only opt-in past `metro.config.js`'s
+production guard, which refuses any other release bundle not aimed at
+bracemark.com ([env-files.md](../docs/env-files.md), _bracemark-expo_). Android reruns
 the JS embedding task so an earlier bundle cannot survive a changed environment,
 while native dependency compilation can retain its normal cache. Existing
 signing prerequisites still apply ([expo-build.md](../docs/expo-build.md)); no
