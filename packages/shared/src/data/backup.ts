@@ -25,6 +25,7 @@
 //   files/{id}      the raw decrypted blob bytes for each referenced media id
 //                   (note: NO `.enc` suffix — the zip holds plaintext)
 
+import { IMPORT_MAX_FOLDER_DEPTH, ImportFolderDepthError } from '../import/resolve';
 import { isCalendarTime } from '../sync/calendar-time';
 import {
   type Extraction,
@@ -39,6 +40,7 @@ import {
 import {
   ENC_SUFFIX,
   EXTRACTIONS_PREFIX,
+  idFromPath,
   isPathId,
   LINKS_PREFIX,
   LISTS_PREFIX,
@@ -46,6 +48,7 @@ import {
   SETTINGS_GENERAL_PATH,
   TAGS_PREFIX,
 } from '../sync/paths';
+import { RESERVED_LIST_IDS } from '../sync/system-lists';
 
 // The manifest's format/version contract — the import side's dispatch key. Bump
 // `version` (and keep reading old ones) on any breaking change to the zip
@@ -240,9 +243,20 @@ export function classifyBundleLine(line: string): BundleEntry | undefined {
     // everything else here. No writer in this app builds a list's or tag's path
     // from anything but its id, so a backup this app wrote carries one only if
     // the library it was exported from already held it — the export is verbatim.
-    if ((kind === 'list' || kind === 'tag') && (data as { id: string }).id !== id) {
+    // A pin restates its link's id the same way (`pins/{linkId}.enc`), and is
+    // refused on the same terms.
+    if (
+      (kind === 'list' || kind === 'tag' || kind === 'pin') &&
+      (data as { id: string }).id !== id
+    ) {
       return undefined;
     }
+    // A list at an id that already means something else — Show All, or the app
+    // lock's row in the lock table list locks share (RESERVED_LIST_IDS,
+    // sync/system-lists.ts). No writer in this app stores one, so a backup it
+    // wrote carries one only if the library already held it — the export is
+    // verbatim — and the read edge drops it there too.
+    if (kind === 'list' && RESERVED_LIST_IDS.has(id)) return undefined;
     // A date outside the calendar is refused here for the reason an id outside
     // the path grammar is refused below: this is the one edge where the value
     // comes from a file rather than from this app, and once stored it is
@@ -272,6 +286,109 @@ export function classifyBundleLine(line: string): BundleEntry | undefined {
     return entry;
   }
   return undefined;
+}
+
+// --- the depth rule ------------------------------------------------------------
+
+// A backup restores `parentId` verbatim, so without a bound the file decides how
+// deep this library's list tree is — the one door the interop rule
+// (IMPORT_MAX_FOLDER_DEPTH, import/resolve.ts) did not cover. Nothing that reads
+// the tree recurses any more, but four readers still pay per level, each up to
+// the square of one long chain (docs/data-lifecycle.md lists them). Same number,
+// same error class, same verdict as the interop rule: the WHOLE file is refused,
+// before anything is written, because dropping the deep lines would leave a
+// restore that looks complete with links filed under lists it never made.
+//
+// Asked of every list and tag line the classifier admitted, existing or not, so
+// the verdict is a fact about the file and not about which of its lines this
+// library already holds. A restore hands it one line per path, the one it
+// writes (firstLinePerPath, below); the converter hands it every line, and like
+// this rule its tree keeps the last line for a repeated path. A chain is counted inside the file: a parent the
+// file does not carry (a root, a system list's default, a list only the library
+// holds) ends it. So the bound is per file, not per library: a file can hang its
+// chain under a deep list the library already holds, and two restores can each
+// add one. Tags are held to it too — a tag tree is built by the same buildTree.
+//
+// A `parentId` loop has no depth to measure; buildTree cuts one edge of it and
+// the rest becomes a chain as long as the loop, with the cut placed by sort
+// order. So every member of a loop counts as deep as the loop is long — the
+// deepest any of them can come out — and what hangs off it counts from there.
+// That can refuse a looped file a cut would have left under the bound; no
+// backup this app wrote holds a loop.
+export function assertBackupTreeDepth(entries: readonly BundleEntry[]): void {
+  for (const { kind, prefix } of [
+    { kind: 'list', prefix: LISTS_PREFIX },
+    { kind: 'tag', prefix: TAGS_PREFIX },
+  ] as const) {
+    const parentOf = new Map<string, string | null>();
+    for (const entry of entries) {
+      if (entry.kind !== kind) continue;
+      parentOf.set(
+        idFromPath(entry.path, prefix),
+        (entry.data as { parentId: string | null }).parentId,
+      );
+    }
+    if (chainExceeds(parentOf, IMPORT_MAX_FOLDER_DEPTH)) {
+      throw new ImportFolderDepthError(BACKUP_TOO_DEEP_MESSAGE);
+    }
+  }
+}
+
+// The editors put no bound on depth, so a library can hold a chain past the rule
+// and its own backup is then refused — rare, and the reason the message names
+// the act in that library rather than in the file.
+export const BACKUP_TOO_DEEP_MESSAGE = `This backup has lists or tags nested more than ${IMPORT_MAX_FOLDER_DEPTH} levels deep. Move the deepest ones up a level in the library it came from, then back it up again.`;
+
+// A backup this app writes holds each path once. A file that repeats one is
+// restored from its FIRST line, and only that line goes on: the restore's later
+// steps each see one line per path. Without this the depth rule measured the
+// last line (a Map keeps the last set) while the writer kept the first — it
+// skips a path an earlier chunk wrote — so a file whose deep chain was repeated
+// further down as roots passed the rule and stored the chain. Run before
+// assertBackupTreeDepth, by both restore orchestrators; a dropped repeat counts
+// as skipped.
+export function firstLinePerPath(entries: readonly BundleEntry[]): BundleEntry[] {
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    if (seen.has(entry.path)) return false;
+    seen.add(entry.path);
+    return true;
+  });
+}
+
+// Whether any chain in `parentOf` (id → parent id) is longer than `limit`. Each
+// id is settled once, on an explicit stack — a chain is as long as the file
+// says, so neither a call frame nor a re-climb per level.
+function chainExceeds(parentOf: ReadonlyMap<string, string | null>, limit: number): boolean {
+  const depthOf = new Map<string, number>();
+  for (const start of parentOf.keys()) {
+    if (depthOf.has(start)) continue;
+    // Climb until an id already settled, a parent the file doesn't hold, or an
+    // id already on this climb (a loop).
+    const climb: string[] = [];
+    const onClimb = new Map<string, number>();
+    let id: string | null | undefined = start;
+    while (id != null && parentOf.has(id) && !depthOf.has(id) && !onClimb.has(id)) {
+      onClimb.set(id, climb.length);
+      climb.push(id);
+      id = parentOf.get(id);
+    }
+    let end = climb.length;
+    let depth = id != null ? (depthOf.get(id) ?? 0) : 0;
+    const loopStart = id != null ? onClimb.get(id) : undefined;
+    if (loopStart !== undefined) {
+      depth = climb.length - loopStart;
+      if (depth > limit) return true;
+      for (let i = loopStart; i < climb.length; i++) depthOf.set(climb[i], depth);
+      end = loopStart;
+    }
+    for (let i = end - 1; i >= 0; i--) {
+      depth += 1;
+      if (depth > limit) return true;
+      depthOf.set(climb[i], depth);
+    }
+  }
+  return false;
 }
 
 // Every `files/{id}` blob the given links/extractions reference —

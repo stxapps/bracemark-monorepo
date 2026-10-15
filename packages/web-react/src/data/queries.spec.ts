@@ -30,6 +30,8 @@
 // Below them, the one rule of the NAMESPACE reads that is silent in the same way:
 // whose id a list or tag is read back under (_the id a list or tag is read under_).
 import {
+  ALL_ID,
+  APP_LOCK_ID,
   buildTree,
   emptyQuery,
   flattenTree,
@@ -39,6 +41,7 @@ import {
   MY_LIST_ID,
   newFacet,
   pathFromId,
+  PINS_PREFIX,
   ranksBetween,
   SYSTEM_LIST_IDS,
   SYSTEM_LIST_NAMES,
@@ -47,11 +50,12 @@ import {
 } from '@stxapps/shared';
 
 import { db } from './db';
-import { bulkWriteEntities, writeExtraction, writeLink } from './mutations';
+import { bulkWriteEntities, writeExtraction, writeLink, writePin } from './mutations';
 import {
   readExtractionFacetCounts,
   readLinks,
   readLists,
+  readPins,
   readRawPendingTitleImageCount,
   readTags,
 } from './queries';
@@ -331,5 +335,74 @@ describe('the id a list or tag is read under', () => {
 
     expect(lists.find((list) => list.id === TRASH_ID)?.name).toBe('Bin');
     expect(lists.some((list) => list.id === 'claimed')).toBe(false);
+  });
+});
+
+// Two more ids the read edge decides rather than the record. A list stored at an
+// id that already means something else — Show All, or the app lock's row in the
+// lock table list locks share — is not handed to any reader (RESERVED_LIST_IDS,
+// shared sync/system-lists.ts): one the user could lock would replace the app
+// lock. And a pin, which restates its link's id the way a list restates its own,
+// is read under its path's: the pinned overlay, pin reordering and both
+// bulk-edit bars go by the id readPins hands back.
+describe('the ids the read edge decides', () => {
+  const [RANK_A, RANK_B] = ranksBetween(null, null, 2);
+  const list = (id: string, name: string) => ({
+    id,
+    name,
+    parentId: null,
+    rank: RANK_A,
+    createdAt: 1,
+    updatedAt: 1,
+  });
+
+  it.each([ALL_ID, APP_LOCK_ID])('hands no reader a list stored at %s', async (id) => {
+    await bulkWriteEntities(USER, [
+      { path: pathFromId(id, LISTS_PREFIX), data: list(id, 'Reserved') },
+      { path: pathFromId('a', LISTS_PREFIX), data: list('a', 'Kept') },
+    ]);
+
+    const lists = await readLists();
+
+    expect(lists.some((entry) => entry.id === id)).toBe(false);
+    expect(lists.find((entry) => entry.id === 'a')?.name).toBe('Kept');
+  });
+
+  it('reads a pin under its path id, whatever the plaintext says', async () => {
+    await bulkWriteEntities(USER, [
+      {
+        path: pathFromId('lnk-a', PINS_PREFIX),
+        data: { id: 'lnk-b', rank: RANK_A, createdAt: 1, updatedAt: 1 },
+      },
+      {
+        path: pathFromId('lnk-c', PINS_PREFIX),
+        data: { id: 'lnk-c', rank: RANK_B, createdAt: 1, updatedAt: 1 },
+      },
+    ]);
+
+    const pins = await readPins();
+
+    expect(pins.map(({ id, path }) => ({ id, path }))).toEqual([
+      { id: 'lnk-a', path: pathFromId('lnk-a', PINS_PREFIX) },
+      { id: 'lnk-c', path: pathFromId('lnk-c', PINS_PREFIX) },
+    ]);
+  });
+
+  // Pin reordering writes back the pin readPins handed it (usePinMutations,
+  // moveBeside), so the next write sets the stored copy right.
+  it('stores the path id when a pin read here is written back', async () => {
+    const path = pathFromId('lnk-a', PINS_PREFIX);
+    await bulkWriteEntities(USER, [
+      { path, data: { id: 'lnk-b', rank: RANK_A, createdAt: 1, updatedAt: 1 } },
+    ]);
+
+    const [pin] = await readPins();
+    await writePin(USER, pin, { rank: RANK_B });
+
+    const record = await db.items.get(path);
+    expect(JSON.parse(new TextDecoder().decode(record?.data))).toMatchObject({
+      id: 'lnk-a',
+      rank: RANK_B,
+    });
   });
 });

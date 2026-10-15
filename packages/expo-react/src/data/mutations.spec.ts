@@ -11,7 +11,16 @@
 import { sql } from 'drizzle-orm';
 import { File } from 'expo-file-system';
 
-import { FILES_PREFIX, LINKS_PREFIX, linkSchema, pathFromId, utf8 } from '@stxapps/shared';
+import {
+  FILES_PREFIX,
+  LINKS_PREFIX,
+  linkSchema,
+  pathFromId,
+  PINS_PREFIX,
+  pinSchema,
+  ranksBetween,
+  utf8,
+} from '@stxapps/shared';
 
 import {
   listFileUris,
@@ -22,9 +31,10 @@ import {
 import { getDb, items, itemTagIds, rowsPerStatement, syncMeta } from './db';
 import { dataFileFor } from './file-store';
 import { getItem, putItemsTx } from './item-store';
-import { bulkWriteEntities, writeFile } from './mutations';
+import { bulkWriteEntities, writeFile, writePin } from './mutations';
 import { listPendingOps } from './pending-store';
 import { parseBlob, toItemRecord } from './projection';
+import { readPins } from './queries';
 import { seedNewAccount } from './sync-store';
 
 jest.mock('expo-sqlite', () => require('../testing/node-sqlite'));
@@ -163,4 +173,21 @@ describe('writeFile', () => {
     expect(listFileUris()).toEqual([picked]);
     expect(getDb().select().from(items).all()).toHaveLength(0);
   });
+});
+
+// Pin reordering writes back the pin readPins handed it (usePinMutations,
+// moveBeside), and readPins hands it back under its path's id — so a pin whose
+// stored copy names another link has that copy set right by its next write.
+it('stores the path id when a pin read through readPins is written back', async () => {
+  const [rankA, rankB] = ranksBetween(null, null, 2);
+  const path = pathFromId('lnk-a', PINS_PREFIX);
+  await bulkWriteEntities(USER, [
+    { path, data: { id: 'lnk-b', rank: rankA, createdAt: 1, updatedAt: 1 } },
+  ]);
+
+  const [pin] = await readPins();
+  await writePin(USER, pin, { rank: rankB });
+
+  const stored = parseBlob((await getItem(path))?.data ?? undefined, pinSchema);
+  expect(stored).toMatchObject({ id: 'lnk-a', rank: rankB });
 });

@@ -27,6 +27,7 @@ import {
   TRASH_ID,
 } from '@stxapps/shared';
 
+import type { AuthApiClient } from '../lib/auth-api-client';
 import { runIncrementalSync } from '../sync/engine';
 import { writeLink } from './mutations';
 import { countLinks } from './queries';
@@ -55,6 +56,14 @@ import { readCachedStatus } from './subscription-store';
 // keeps the hoisted factory clear of the TDZ.
 const mockFiles = new Map<string, string>();
 const mockDirs = new Set<string>();
+
+// A stand-in for the app's api client. Nothing here reaches the network (the
+// upload and the sync are mocked); `bindSession` hands back a client of its own,
+// so a spec can tell the session-bound one from the plain one.
+function mockApi(): AuthApiClient & { bound: ApiClient } {
+  const bound = { call: jest.fn() } as ApiClient;
+  return { call: jest.fn(), bindSession: jest.fn(() => bound), bound };
+}
 
 jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn() }));
 // share-store's post-Add kicks reach the sync engine and the upload,
@@ -637,7 +646,7 @@ describe('saveSharedDraft — an expired session sends nothing', () => {
   const sharedSession = loadSharedSession as jest.Mock;
   const currentSession = getSession as jest.Mock;
   const write = writeLink as jest.Mock;
-  const api = {} as ApiClient;
+  const api = mockApi();
   const OUTBOX_FILE = 'group/share/outbox/link-1.json';
 
   const draft: ShareDraft = {
@@ -689,11 +698,19 @@ describe('saveSharedDraft — an expired session sends nothing', () => {
     });
 
     it('uploads the draft when the mirrored session is active', async () => {
-      sharedSession.mockResolvedValue(session('active'));
+      const mirrored = session('active');
+      sharedSession.mockResolvedValue(mirrored);
       expect(await saveSharedDraft(draft, api)).toBe('queued');
       await settle();
       expect(mockFiles.has(OUTBOX_FILE)).toBe(true);
-      expect(upload).toHaveBeenCalledWith(expect.objectContaining({ api }), draft);
+      // Key and token from the one record the owner check passed: the upload
+      // gets the client bound to it, never the plain one that reads whatever
+      // session this process holds by the time each request leaves.
+      expect(api.bindSession).toHaveBeenCalledWith(mirrored);
+      expect(upload).toHaveBeenCalledWith(
+        { encryptionKey: mirrored.encryptionKey, api: api.bound },
+        draft,
+      );
     });
   });
 
@@ -749,7 +766,7 @@ describe('saveSharedDraft — the draft’s account', () => {
   const write = writeLink as jest.Mock;
   const count = countLinks as jest.Mock;
   const cached = readCachedStatus as jest.Mock;
-  const api = {} as ApiClient;
+  const api = mockApi();
 
   const draft: ShareDraft = {
     id: 'link-1',
@@ -922,7 +939,7 @@ describe('saveSharedDraft — the review-prompt count', () => {
   const counted = jest.mocked(countReviewPromptSave);
   const count = countLinks as jest.Mock;
   const cached = readCachedStatus as jest.Mock;
-  const api = {} as ApiClient;
+  const api = mockApi();
 
   const draft: ShareDraft = {
     id: 'link-1',
@@ -999,7 +1016,7 @@ describe('the Android handoff', () => {
   const count = countLinks as jest.Mock;
   const cached = readCachedStatus as jest.Mock;
   const platform = Platform as { OS: string };
-  const api = {} as ApiClient;
+  const api = mockApi();
   const HANDOFF = 'file:/documents/share/handoff';
 
   const draft: ShareDraft = {

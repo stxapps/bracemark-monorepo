@@ -10,6 +10,17 @@ import type { TreeItem, TreeNode } from './tree';
 // prompt for the list verifies against, and unlocking which releases everything
 // it covers.
 
+// The constant primary key of the single app-lock row in each client's
+// device-local `locks` table. List locks share that table, keyed by their list
+// id, so no list may ever be stored at this id: a list lock on it would be a
+// `put` over the app lock's row — the app lock gone, with nothing saying so —
+// and removing that list's lock would delete it. The ids this app mints for
+// lists never collide (a system-list constant or a random UUID); what keeps a
+// list arriving from elsewhere off it is RESERVED_LIST_IDS (system-lists.ts),
+// refused by the backup classifier and dropped by the read edge. Here, in
+// `shared`, rather than in either lock store, so that rule can name it.
+export const APP_LOCK_ID = 'app';
+
 // The structural slice of a lock row coverage reads — each client's own
 // LockRecord (web-react db.ts, expo-react db.ts) satisfies it.
 export interface CoverageLock {

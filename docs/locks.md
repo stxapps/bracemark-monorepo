@@ -81,9 +81,20 @@ interface LockRecord {
 }
 ```
 
-- **Keying.** The app lock is the single constant row `APP_LOCK_ID = 'app'`. List
-  locks are keyed by their **list id** (stable across renames; a system-list
-  constant or a random token — neither collides with `'app'`). That id is the
+- **Keying.** The app lock is the single constant row `APP_LOCK_ID = 'app'`
+  (`sync/lock-coverage.ts` in `@stxapps/shared`, re-exported by each
+  `lock-store.ts`). List locks are keyed by their **list id** (stable across
+  renames; a system-list constant or a random token — neither collides with
+  `'app'`). **No list may be stored at `'app'`**: a list lock there would be a
+  `put` over the app lock's row, the app lock gone with nothing saying so, and
+  removing it would delete the app lock. The ids this app mints never collide,
+  but the path grammar admits `app`, so a list arriving from elsewhere is held
+  off it at three places: the backup reader refuses the line,
+  `mergeSystemLists` drops one that arrived by sync (so no reader is handed it
+  but the backup export, which is verbatim), and `addListLock` on both
+  platforms refuses the id outright
+  (`RESERVED_LIST_IDS`, [data-lifecycle.md](./data-lifecycle.md), _a backup's
+  list may not sit at a reserved id_). That id is the
   `{id}` of the list's **path**, which is what the read edge hands every reader
   ([data-lifecycle.md](./data-lifecycle.md), _a list's identity is its path_) —
   never the copy inside the list's plaintext. The two agree for every list this

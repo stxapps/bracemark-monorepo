@@ -55,7 +55,6 @@ import { Platform } from 'react-native';
 import { Directory, File, Paths } from 'expo-file-system';
 
 import {
-  type ApiClient,
   buildTree,
   cleanTitle,
   compareRank,
@@ -73,6 +72,7 @@ import {
   z,
 } from '@stxapps/shared';
 
+import type { AuthApiClient } from '../lib/auth-api-client';
 import { appGroupDir } from './app-group';
 import { getSession, loadSession, loadSharedSession } from './session-store';
 
@@ -404,7 +404,10 @@ export async function isAtLinkCap(): Promise<boolean> {
 // commit is the local write / outbox file, so Add resolves as soon as that
 // lands and the sheet shows ✓ — delivery is guaranteed by the pending op /
 // next-open drain, not by the in-flight network work surviving the dismissal.
-export async function saveSharedDraft(draft: ShareDraft, api: ApiClient): Promise<ShareSaveResult> {
+export async function saveSharedDraft(
+  draft: ShareDraft,
+  api: AuthApiClient,
+): Promise<ShareSaveResult> {
   if (Platform.OS === 'ios') {
     // Both before the outbox write, not after: a refused draft must not become a
     // file, because everything downstream of that file is designed to never drop
@@ -452,8 +455,8 @@ export async function saveSharedDraft(draft: ShareDraft, api: ApiClient): Promis
 }
 
 // The iOS extension's fire-and-forget half of saveSharedDraft. Hydrates the
-// session from the shared-Keychain mirror (the extension runs no AuthProvider —
-// this is also what arms the api client's bearer token), skips when the mirror
+// session from the shared-Keychain mirror (the extension runs no AuthProvider;
+// the record it returns supplies both the key and the token), skips when the mirror
 // says the session is EXPIRED (the main app recorded the server's verdict; the
 // PUT would only earn it again), and swallows every failure: the outbox file
 // already written is the record of truth. It reads a STATE, never a clock, and
@@ -463,11 +466,21 @@ export async function saveSharedDraft(draft: ShareDraft, api: ApiClient): Promis
 // already be the next account's, whose key and token must not carry this draft
 // (the header's _a draft belongs to an account_). The drain makes the same
 // check on the file it leaves behind.
-async function uploadQueuedDraft(api: ApiClient, draft: ShareDraft): Promise<void> {
+//
+// The token is bound to the record that check passed, like the key: the
+// requests go through `api.bindSession(session)`, not the module session the
+// plain client reads per request. In this process loadSharedSession is what
+// sets that module session, so a second share saved while this upload runs —
+// after a sign-out and a sign-in in the app — would otherwise send the rest of
+// this upload with the next account's token, blobs sealed under this one's key.
+async function uploadQueuedDraft(api: AuthApiClient, draft: ShareDraft): Promise<void> {
   try {
     const session = await loadSharedSession();
     if (!session || session.state === 'expired' || session.username !== draft.owner) return;
-    await shareUpload().uploadShareDraft({ encryptionKey: session.encryptionKey, api }, draft);
+    await shareUpload().uploadShareDraft(
+      { encryptionKey: session.encryptionKey, api: api.bindSession(session) },
+      draft,
+    );
   } catch {
     // Best-effort by design — the main app drains the outbox on next open.
   }

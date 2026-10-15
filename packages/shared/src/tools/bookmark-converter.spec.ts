@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
+  BACKUP_TOO_DEEP_MESSAGE,
   BRACEMARK_BACKUP_FORMAT,
   BRACEMARK_BACKUP_VERSION,
   jsonlLine,
@@ -10,9 +11,12 @@ import {
 import { scanCsv } from '../import/csv';
 import { parseNetscapeHtml } from '../import/netscape';
 import { parseImportText } from '../import/parse';
+import { IMPORT_MAX_FOLDER_DEPTH } from '../import/resolve';
+import { ranksBetween } from '../sync/rank';
 import { readBackupFixtureContents } from '../testing/backup-fixtures';
 import {
   BOOKMARK_CONVERTER_BACKUP_TOO_LARGE,
+  BOOKMARK_CONVERTER_BACKUP_TOO_MANY_LISTS,
   BOOKMARK_CONVERTER_MAX_ROWS,
   BOOKMARK_OUTPUTS,
   bookmarkReceiptText,
@@ -284,6 +288,44 @@ it('sends a backup past the record limit to the app’s own export, not to split
   expect(() => convertBookmarkFiles([backupSource(lines)], 'text')).toThrow(
     BOOKMARK_CONVERTER_BACKUP_TOO_LARGE,
   );
+});
+
+// A backup's lists are not records, so the row limit above never counted them,
+// and the tree walk copies a path per list. Both bounds are asked before that
+// walk: the app's depth rule, and the row limit applied to list lines.
+describe('a backup’s list tree', () => {
+  const [RANK] = ranksBetween(null, null, 1);
+  const listLine = (id: string, parentId: string | null) =>
+    jsonlLine(`lists/${id}.enc`, {
+      id,
+      name: id,
+      parentId,
+      rank: RANK,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+  const chain = (length: number) =>
+    Array.from({ length }, (_, i) => listLine(`deep${i}`, i === 0 ? null : `deep${i - 1}`));
+
+  it('converts a chain of exactly the depth limit', () => {
+    const result = convertBookmarkFiles([backupSource(chain(IMPORT_MAX_FOLDER_DEPTH))]);
+    expect(result.receipt.linkCount).toBe(1);
+  });
+
+  it('refuses a chain one past it with the app’s own restore message', () => {
+    expect(() => convertBookmarkFiles([backupSource(chain(IMPORT_MAX_FOLDER_DEPTH + 1))])).toThrow(
+      BACKUP_TOO_DEEP_MESSAGE,
+    );
+  });
+
+  it('sends a backup with more lists than the row limit to the app’s own export', () => {
+    const lines = Array.from({ length: BOOKMARK_CONVERTER_MAX_ROWS + 1 }, (_, i) =>
+      listLine(`flat${i}`, null),
+    );
+    expect(() => convertBookmarkFiles([backupSource(lines)], 'text')).toThrow(
+      BOOKMARK_CONVERTER_BACKUP_TOO_MANY_LISTS,
+    );
+  });
 });
 
 it('leaves Trash out of every source, not only backups', () => {

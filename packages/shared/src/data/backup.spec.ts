@@ -1,14 +1,20 @@
+import { IMPORT_MAX_FOLDER_DEPTH, ImportFolderDepthError } from '../import/resolve';
 import { syncPathSchema } from '../sync/endpoints';
-import { FILES_PREFIX, pathFromId } from '../sync/paths';
+import { APP_LOCK_ID } from '../sync/lock-coverage';
+import { FILES_PREFIX, LISTS_PREFIX, pathFromId, TAGS_PREFIX } from '../sync/paths';
 import { ranksBetween } from '../sync/rank';
+import { ALL_ID, RESERVED_LIST_IDS } from '../sync/system-lists';
 import {
+  assertBackupTreeDepth,
   BACKUP_ITEMS_ENTRY,
   BACKUP_MANIFEST_ENTRY,
+  BACKUP_TOO_DEEP_MESSAGE,
   backupFileEntry,
   BRACEMARK_BACKUP_FORMAT,
   BRACEMARK_BACKUP_VERSION,
   type BundleEntry,
   classifyBundleLine,
+  firstLinePerPath,
   jsonlLine,
   parseBackupManifest,
   referencedFileIds,
@@ -208,11 +214,28 @@ describe('classifyBundleLine', () => {
   // A list's or tag's identity is its path; the `id` inside is a copy. A line
   // whose copy disagrees claims an id it is not stored under — and a restore that
   // took its word kept two lists under one id, or a user list under Trash's.
-  it.each(['list', 'tag'] as const)('refuses a %s line whose own id is not its path id', (kind) => {
-    const { path, data } = ENTITIES[kind];
+  it.each(['list', 'tag', 'pin'] as const)(
+    'refuses a %s line whose own id is not its path id',
+    (kind) => {
+      const { path, data } = ENTITIES[kind];
 
-    expect(classifyBundleLine(jsonlLine(path, { ...data, id: 'other' }))).toBeUndefined();
-    expect(classifyBundleLine(jsonlLine(path, data))?.kind).toBe(kind);
+      expect(classifyBundleLine(jsonlLine(path, { ...data, id: 'other' }))).toBeUndefined();
+      expect(classifyBundleLine(jsonlLine(path, data))?.kind).toBe(kind);
+    },
+  );
+
+  // Show All's id, and the app lock's row in the lock table list locks share: a
+  // list at either already means something else, and one the user locked would
+  // replace the app lock. Lists only — a tag shares neither.
+  it('refuses a list stored at a reserved id, and only a list', () => {
+    expect([...RESERVED_LIST_IDS].sort()).toEqual([ALL_ID, APP_LOCK_ID].sort());
+    for (const id of RESERVED_LIST_IDS) {
+      const list = { ...ENTITIES.list.data, id };
+      const tag = { ...ENTITIES.tag.data, id };
+
+      expect(classifyBundleLine(jsonlLine(pathFromId(id, LISTS_PREFIX), list))).toBeUndefined();
+      expect(classifyBundleLine(jsonlLine(pathFromId(id, TAGS_PREFIX), tag))?.kind).toBe('tag');
+    }
   });
 
   it('refuses a user list claiming a system list id, and keeps the override stored at it', () => {
@@ -398,5 +421,138 @@ describe('referencedFileIds', () => {
 
   it('yields nothing for no entries', () => {
     expect(referencedFileIds([])).toEqual(new Set());
+  });
+});
+
+// A restore keeps a repeated path's first line, which is the one its writer
+// keeps, so the depth rule after it measures what is written
+// (docs/data-lifecycle.md, _a backup's list or tag chain_).
+describe('firstLinePerPath', () => {
+  const [RANK] = ranksBetween(null, null, 1);
+  const list = (id: string, name: string): BundleEntry => ({
+    kind: 'list',
+    path: pathFromId(id, LISTS_PREFIX),
+    data: { id, name, parentId: null, rank: RANK, createdAt: 1, updatedAt: 1 },
+  });
+
+  it('keeps the first line for each path, in file order', () => {
+    const [a1, b, a2, c, b2] = [
+      list('a', '1'),
+      list('b', '1'),
+      list('a', '2'),
+      list('c', '1'),
+      list('b', '2'),
+    ];
+    expect(firstLinePerPath([a1, b, a2, c, b2])).toEqual([a1, b, c]);
+  });
+
+  it('hands back a file with no repeats unchanged', () => {
+    const lines = [list('a', '1'), list('b', '1')];
+    expect(firstLinePerPath(lines)).toEqual(lines);
+  });
+});
+
+// The depth rule a backup is held to: no list or tag chain past the interop
+// rule's number, measured in the file, the whole file refused before anything
+// is written (docs/data-lifecycle.md). Each side of the bound is pinned, so a
+// rule that counted one level off — or not at all — fails here.
+describe('assertBackupTreeDepth', () => {
+  const [RANK] = ranksBetween(null, null, 1);
+  const LIMIT = IMPORT_MAX_FOLDER_DEPTH;
+
+  function node(kind: 'list' | 'tag', id: string, parentId: string | null): BundleEntry {
+    return {
+      kind,
+      path: pathFromId(id, kind === 'list' ? LISTS_PREFIX : TAGS_PREFIX),
+      data: { id, name: id, parentId, rank: RANK, createdAt: 1, updatedAt: 1 },
+    };
+  }
+
+  // `length` ids chained root-first: c0 is the root, c{length-1} the deepest.
+  function chain(kind: 'list' | 'tag', length: number, prefix = 'c', top: string | null = null) {
+    return Array.from({ length }, (_, i) =>
+      node(kind, `${prefix}${i}`, i === 0 ? top : `${prefix}${i - 1}`),
+    );
+  }
+
+  it.each(['list', 'tag'] as const)('admits a %s chain of exactly the limit', (kind) => {
+    expect(() => assertBackupTreeDepth(chain(kind, LIMIT))).not.toThrow();
+  });
+
+  it.each(['list', 'tag'] as const)('refuses a %s chain one past it', (kind) => {
+    expect(() => assertBackupTreeDepth(chain(kind, LIMIT + 1))).toThrow(ImportFolderDepthError);
+  });
+
+  // In a backup's terms, not the interop file's: its tree is lists and tags,
+  // and the act is in the library it came from.
+  it('says so in a backup’s terms', () => {
+    expect(() => assertBackupTreeDepth(chain('list', LIMIT + 1))).toThrow(BACKUP_TOO_DEEP_MESSAGE);
+  });
+
+  // A verdict about the file, not about the order its lines come in.
+  it('gives the same verdict in any line order', () => {
+    const deep = chain('list', LIMIT + 1);
+    expect(() => assertBackupTreeDepth([...deep].reverse())).toThrow(ImportFolderDepthError);
+    const exact = chain('list', LIMIT);
+    const shuffled = exact.filter((_, i) => i % 2 === 0).concat(exact.filter((_, i) => i % 2));
+    expect(() => assertBackupTreeDepth(shuffled)).not.toThrow();
+  });
+
+  // A parent the file doesn't carry — a list only the library holds, or a system
+  // list's default — ends the chain where the file does.
+  it('counts only the levels the file carries', () => {
+    expect(() => assertBackupTreeDepth(chain('list', LIMIT, 'c', 'not-in-file'))).not.toThrow();
+  });
+
+  // Lists and tags are two trees: a tag naming a list as parent joins nothing.
+  it('measures lists and tags apart', () => {
+    const lists = chain('list', LIMIT, 'x');
+    const tags = chain('tag', LIMIT, 'y', `x${LIMIT - 1}`);
+    expect(() => assertBackupTreeDepth([...lists, ...tags])).not.toThrow();
+  });
+
+  // A loop comes out of buildTree as a chain as long as the loop, so it counts
+  // that long; what hangs below it counts from there.
+  it('counts a loop as deep as it is long', () => {
+    const loop = (length: number) =>
+      Array.from({ length }, (_, i) => node('list', `l${i}`, `l${(i + 1) % length}`));
+
+    expect(() => assertBackupTreeDepth(loop(LIMIT))).not.toThrow();
+    expect(() => assertBackupTreeDepth(loop(LIMIT + 1))).toThrow(ImportFolderDepthError);
+
+    // Two in a loop, then a tail hanging below it: 2 + 98 = the limit, admitted;
+    // one more below is refused — whichever line the walk starts from.
+    const tail = (length: number) =>
+      Array.from({ length }, (_, i) => node('list', `t${i}`, i === 0 ? 'l0' : `t${i - 1}`));
+    const atLimit = [...loop(2), ...tail(LIMIT - 2)];
+    const past = [...loop(2), ...tail(LIMIT - 1)];
+    expect(() => assertBackupTreeDepth(atLimit)).not.toThrow();
+    expect(() => assertBackupTreeDepth([...atLimit].reverse())).not.toThrow();
+    expect(() => assertBackupTreeDepth(past)).toThrow(ImportFolderDepthError);
+    expect(() => assertBackupTreeDepth([...past].reverse())).toThrow(ImportFolderDepthError);
+  });
+
+  it('admits the self-parented list as one level', () => {
+    expect(() => assertBackupTreeDepth([node('list', 'self', 'self')])).not.toThrow();
+  });
+
+  // The file chooses the depth, so the walk must not take a call frame — or a
+  // re-climb — per level: a hundred thousand chained lines, refused at once.
+  it('settles a very deep chain without recursing, in linear time', () => {
+    const deep = chain('list', 100_000);
+    const started = Date.now();
+    expect(() => assertBackupTreeDepth([...deep].reverse())).toThrow(ImportFolderDepthError);
+    expect(() => assertBackupTreeDepth(deep)).toThrow(ImportFolderDepthError);
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
+  it('ignores every other kind', () => {
+    expect(() => assertBackupTreeDepth([])).not.toThrow();
+    const links: BundleEntry[] = Array.from({ length: LIMIT + 1 }, (_, i) => ({
+      kind: 'link',
+      path: `links/k${i}.enc`,
+      data: { ...link, parentId: i === 0 ? null : `k${i - 1}` },
+    }));
+    expect(() => assertBackupTreeDepth(links)).not.toThrow();
   });
 });

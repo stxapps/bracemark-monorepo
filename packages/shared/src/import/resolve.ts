@@ -58,10 +58,14 @@ export const IMPORT_MAX_FOLDER_DEPTH = 100;
 // import views and the converter render it verbatim. The WHOLE file is refused,
 // not the deep rows: dropping them would leave an import that looks complete,
 // and cutting their paths short would file links in folders the file never put
-// them in.
+// them in. A backup refused by the same rule says so in its own terms
+// (assertBackupTreeDepth, data/backup.ts): its tree is lists and tags, and the
+// act is in the library it came from, not in the file.
 export class ImportFolderDepthError extends Error {
-  constructor() {
-    super('This file has too many nested folders. Flatten the folder tree and try again.');
+  constructor(
+    message = 'This file has too many nested folders. Flatten the folder tree and try again.',
+  ) {
+    super(message);
     this.name = 'ImportFolderDepthError';
   }
 }

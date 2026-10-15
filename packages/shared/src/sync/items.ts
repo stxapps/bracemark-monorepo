@@ -8,7 +8,7 @@
 // bundle lives here in `shared`, not in any one app's read layer.
 
 import type { Extraction, Link, List, Pin, Tag } from './entities';
-import { idFromPath, LINKS_PREFIX, LISTS_PREFIX, TAGS_PREFIX } from './paths';
+import { idFromPath, LINKS_PREFIX, LISTS_PREFIX, PINS_PREFIX, TAGS_PREFIX } from './paths';
 
 // A parsed entity always carries its source `items` path — the stable id every
 // other layer (op log, pending queue, R2) keys by, and what the UI needs to
@@ -60,4 +60,16 @@ export function pathIdentifiedList(list: ListItem): ListItem {
 
 export function pathIdentifiedTag(tag: TagItem): TagItem {
   return pathIdentified(tag, TAGS_PREFIX);
+}
+
+// A pin carries its link's id the same way (`pins/{linkId}.enc`), and the
+// readers went by the copy: the pinned overlay looks up the link it names, pin
+// reordering finds the moved pin and its neighbour, and both bulk-edit bars
+// split a selection into "to pin" and "to unpin". A pin whose copy disagrees
+// with its path then named one link while its file shadowed another — and
+// writePin writes the copy back unchanged, so a reorder never corrected it.
+// Applied by both platforms' readPins, which every one of those readers goes
+// through; the next write stores the path's id.
+export function pathIdentifiedPin(pin: PinItem): PinItem {
+  return pathIdentified(pin, PINS_PREFIX);
 }

@@ -349,6 +349,11 @@ export function LockProvider({ children }: { children: ReactNode }) {
 
   const addListLock = useCallback(
     async (listId: string, password: string, opts: { hideList: boolean }) => {
+      // The lock table keys list locks by list id beside the app lock's row, so
+      // a list at APP_LOCK_ID would be a put over the app lock. The read edge
+      // hands no list that id (RESERVED_LIST_IDS, @stxapps/shared), so this
+      // only stops a caller that got one some other way.
+      if (listId === APP_LOCK_ID) throw new Error('addListLock: reserved list id');
       const verifier = await createLockVerifier(password);
       await putLock({ id: listId, kind: 'list', ...verifier, hideList: opts.hideList });
       // Drop any stale unlock from an earlier lock on the same list this

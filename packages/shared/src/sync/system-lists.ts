@@ -23,6 +23,7 @@
 
 import type { List } from './entities';
 import type { ListItem } from './items';
+import { APP_LOCK_ID } from './lock-coverage';
 import { LISTS_PREFIX, pathFromId } from './paths';
 import { ranksBetween } from './rank';
 
@@ -50,6 +51,19 @@ export const SYSTEM_LIST_IDS: ReadonlySet<string> = new Set([MY_LIST_ID, ARCHIVE
 export function isSystemListId(id: string): boolean {
   return SYSTEM_LIST_IDS.has(id);
 }
+
+// Ids no list may be stored at, not even as an override: each already means
+// something else to a reader that takes a list id. ALL_ID is Show All, a list
+// param and never a list, so a list there would answer `?list=all` with every
+// link. APP_LOCK_ID is the app lock's row in the lock table list locks share
+// (lock-coverage.ts), so locking a list there would replace the app lock.
+//
+// This app never mints either for a list, and the path grammar (paths.ts,
+// isPathId) admits both, so the rule is held at the two places a list can come
+// from somewhere else: the backup classifier refuses the line (data/backup.ts),
+// and mergeSystemLists below drops one that arrived by sync or was stored before
+// the rule. Dropped, not renamed: a reserved id is no id this app wrote.
+export const RESERVED_LIST_IDS: ReadonlySet<string> = new Set([ALL_ID, APP_LOCK_ID]);
 
 // Trash takes no children: it's the deletion staging area (links held until the
 // user deletes them permanently — nothing purges on a timer), so nesting a list
@@ -117,13 +131,22 @@ export const SYSTEM_LIST_DEFAULTS: readonly List[] = [
 // to buildTree (it sorts every sibling group by rank), so this just unions the
 // two sources. Both platforms' read layers call it, and so does anything reading
 // a backup's `lists/` lines, which hold overrides only, exactly like sync.
+//
+// A stored list at a RESERVED_LIST_IDS id is left out, so no reader is handed
+// one: not the sidebar, a picker, the lock provider or the HTML and CSV exports
+// (the backup export reads the store raw — it is verbatim). Links filed under
+// it, and lists naming it as parent, are then dangling references, which every
+// reader already tolerates (sync/items.ts, pathIdentified). A lock that list
+// held goes with it: coverage is worked out from the tree, so its links and its
+// child lists are no longer covered, and the lock provider's orphan sweep
+// deletes the row. Only a writer other than this app can have stored one.
 export function mergeSystemLists(stored: ListItem[]): ListItem[] {
   const storedById = new Map(stored.map((list) => [list.id, list]));
   const resolved: ListItem[] = SYSTEM_LIST_DEFAULTS.map(
     (def) => storedById.get(def.id) ?? { ...def, path: pathFromId(def.id, LISTS_PREFIX) },
   );
   for (const list of stored) {
-    if (!SYSTEM_LIST_IDS.has(list.id)) resolved.push(list);
+    if (!SYSTEM_LIST_IDS.has(list.id) && !RESERVED_LIST_IDS.has(list.id)) resolved.push(list);
   }
   return resolved;
 }

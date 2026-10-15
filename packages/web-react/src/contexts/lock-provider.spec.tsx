@@ -257,6 +257,25 @@ describe('the app lock', () => {
   });
 });
 
+// List locks share the table, keyed by list id, so a list lock at the app lock's
+// id would be a put over the app lock's row. The read edge hands no list that id
+// (RESERVED_LIST_IDS); this pins the writer refusing it anyway.
+describe('a list lock at the app lock’s id', () => {
+  it('is refused, and the app lock stays', async () => {
+    renderProvider();
+    await waitFor(() => expect(statusText()).toBe('ready'));
+    await act(async () => void (await mutations.setAppLock('hunter2')));
+
+    await expect(mutations.addListLock(APP_LOCK_ID, 'other', { hideList: false })).rejects.toThrow(
+      /reserved/,
+    );
+    await refresh();
+
+    expect(await readLocks()).toEqual([expect.objectContaining({ id: APP_LOCK_ID, kind: 'app' })]);
+    expect(screen.getByTestId('app').textContent).toBe('true/true');
+  });
+});
+
 describe('list locks', () => {
   // "Lock" means lock NOW, unlike the app lock — matching the affordance's own label.
   it('engages a new list lock immediately', async () => {

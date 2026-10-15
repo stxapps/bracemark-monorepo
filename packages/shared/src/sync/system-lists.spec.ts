@@ -1,4 +1,6 @@
 import { listSchema } from './entities';
+import { APP_LOCK_ID } from './lock-coverage';
+import { LISTS_PREFIX, pathFromId } from './paths';
 import { compareRank } from './rank';
 import {
   ALL_ID,
@@ -6,7 +8,9 @@ import {
   DEFAULT_LIST_ID,
   isSystemListId,
   LIST_NO_CHILDREN_IDS,
+  mergeSystemLists,
   MY_LIST_ID,
+  RESERVED_LIST_IDS,
   SYSTEM_LIST_DEFAULTS,
   SYSTEM_LIST_IDS,
   SYSTEM_LIST_NAMES,
@@ -132,5 +136,35 @@ describe('the defaults a client depends on', () => {
   it('names every system list and nothing else', () => {
     expect(new Set(Object.keys(SYSTEM_LIST_NAMES))).toEqual(SYSTEM_LIST_IDS);
     for (const name of Object.values(SYSTEM_LIST_NAMES)) expect(name).not.toBe('');
+  });
+});
+
+// Ids no list may be stored at: Show All's, and the app lock's row in the lock
+// table list locks share. The merge every list reader goes through drops one,
+// and must drop nothing else — a merge that dropped a user list or an override
+// with it would pass the first half alone.
+describe('the reserved list ids', () => {
+  const stored = (id: string, name: string) => ({
+    ...SYSTEM_LIST_DEFAULTS[0],
+    id,
+    name,
+    path: pathFromId(id, LISTS_PREFIX),
+  });
+
+  it('are Show All and the app lock, neither of them a system list', () => {
+    expect([...RESERVED_LIST_IDS].sort()).toEqual([ALL_ID, APP_LOCK_ID].sort());
+    for (const id of RESERVED_LIST_IDS) expect(isSystemListId(id)).toBe(false);
+  });
+
+  it('never reach a reader through the merge, which keeps everything else', () => {
+    const merged = mergeSystemLists([
+      stored(ALL_ID, 'Every link'),
+      stored(APP_LOCK_ID, 'App'),
+      stored('user-list', 'Reading'),
+      stored(MY_LIST_ID, 'Inbox'),
+    ]);
+
+    expect(merged.map((list) => list.id)).toEqual([MY_LIST_ID, ARCHIVE_ID, TRASH_ID, 'user-list']);
+    expect(merged[0].name).toBe('Inbox');
   });
 });

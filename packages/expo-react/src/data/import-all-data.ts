@@ -33,6 +33,7 @@ import { File } from 'expo-file-system';
 import { newId } from '@stxapps/expo-crypto';
 import type { BundleEntry, ImportOutcome, ImportProgress } from '@stxapps/shared';
 import {
+  assertBackupTreeDepth,
   assertImportFolderDepth,
   assertUnderImportQuota,
   BACKUP_ITEMS_ENTRY,
@@ -42,6 +43,7 @@ import {
   classifyBundleLine,
   EXTRACTIONS_PREFIX,
   FILES_PREFIX,
+  firstLinePerPath,
   idFromPath,
   type ImportedBundle,
   type ImportedLink,
@@ -246,17 +248,23 @@ async function importBracemarkBackup(
     if (entry === undefined) invalidCount += 1;
     else classified.push(entry);
   }
+  // A path the file repeats is restored from its first line; every step below
+  // sees only that one (shared data/backup.ts, firstLinePerPath).
+  const unique = firstLinePerPath(classified);
+  // A list or tag chain past the import limit refuses the whole file, before
+  // anything is looked up or written (shared data/backup.ts).
+  assertBackupTreeDepth(unique);
 
   // SKIP-EXISTING: a path already in the local store is never touched. Looked
   // up a slice at a time, with a yield between slices, as on web.
   const existingRecords: unknown[] = [];
-  for (let i = 0; i < classified.length; i += YIELD_CHUNK) {
+  for (let i = 0; i < unique.length; i += YIELD_CHUNK) {
     if (i > 0) await yieldToMain();
-    const slice = classified.slice(i, i + YIELD_CHUNK).map((entry) => entry.path);
+    const slice = unique.slice(i, i + YIELD_CHUNK).map((entry) => entry.path);
     existingRecords.push(...(await bulkGetItems(slice)));
   }
-  let skippedCount = 0;
-  const fresh = classified.filter((_, i) => {
+  let skippedCount = classified.length - unique.length;
+  const fresh = unique.filter((_, i) => {
     if (existingRecords[i] === undefined) return true;
     skippedCount += 1;
     return false;

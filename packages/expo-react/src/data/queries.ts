@@ -73,6 +73,7 @@ import {
   mergeSystemLists,
   pathFromId,
   pathIdentifiedList,
+  pathIdentifiedPin,
   pathIdentifiedTag,
   PINS_PREFIX,
   pinSchema,
@@ -283,9 +284,11 @@ export async function readTags(): Promise<TagItem[]> {
   return stored.map(pathIdentifiedTag);
 }
 
-// Every pin (one per pinned link). Small by design, like lists/tags.
-export function readPins(): Promise<PinItem[]> {
-  return readNamespace(PINS_PREFIX, pinSchema);
+// Every pin (one per pinned link). Small by design, like lists/tags. Each under
+// its PATH's id — web queries.ts readPins has the reasoning.
+export async function readPins(): Promise<PinItem[]> {
+  const stored = await readNamespace(PINS_PREFIX, pinSchema);
+  return stored.map(pathIdentifiedPin);
 }
 
 // The synced general-settings blob, or undefined if this device hasn't

@@ -481,14 +481,19 @@ account:
   same in-place write: an unreadable file goes to `failed/` under the drain's
   rule, because the drain cannot read whose it is. It is never applied, and it
   stays on the device until the new account signs out.
-- **The share extension's requests read the bearer token per request.** The
-  upload checks the mirrored account once, then `auth-api-client.ts` reads
-  `getSession()` for every request it sends. A second share saved in the same
-  extension process under another account, while the first is still uploading,
-  replaces that session, and the first upload's remaining requests carry the
-  second account's token for blobs encrypted under the first's key. It needs a
-  full sign-out and sign-in between two shares within one upload's life, in a
-  process iOS normally suspends. It predates the binding.
+
+**The upload's token is bound to the record its check passed**, like its key.
+The plain api client reads `getSession()` for every request it sends, and in
+the extension process `loadSharedSession()` is what sets that session — so a
+second share saved in the same process under another account, while the first
+was still uploading, used to replace it, and the first upload's remaining
+requests went out with the second account's token for blobs encrypted under
+the first's key. `uploadQueuedDraft` now sends its requests through
+`api.bindSession(session)` (`AuthApiClient`, `lib/auth-api-client.ts`), a
+client that carries that one record's token whatever the module session
+becomes; `auth-api-client.spec.ts` pins the token request by request, and
+`share-store.spec.ts` that the upload is handed the bound client and never the
+plain one.
 
 The snapshot's `owner` replaced a `sessionPresent` boolean, which told the
 sheet that some account was signed in but not which. Like `rank`, the field is
@@ -993,6 +998,8 @@ upload is attempted — the outbox file waits for the app's drain and the resume
 Nor is one attempted when the mirror names a different account than the
 draft's `owner`. The mirror is read after the outbox write, so it can already
 be the next account's (_a draft belongs to the account that opened the sheet_).
+The upload that does run sends that record's token, not the module session's
+(`bindSession`, same section).
 The share extension never acts on a 401 itself: [sessions.md](./sessions.md),
 _who acts on a 401_. On Android, where the share activity runs in the app
 process, an expired session skips the inline sync kick the same way.

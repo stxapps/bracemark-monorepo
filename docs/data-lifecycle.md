@@ -156,7 +156,12 @@ archive's root, as the restore does, and never opens `files/`, so the archive
 itself has **no size limit** and its entry count is bounded by the largest
 plan's `maxFiles`. Its `items.jsonl` is held to the same 60 MB and 100,000. Past
 either limit a backup is sent to the app's own export rather than told to split
-the file, which a backup can't be.
+the file, which a backup can't be. A backup's **list lines** are held to the
+same 100,000, counted apart from the records (a list is not a bookmark), and
+to the app's depth rule (`assertBackupTreeDepth`, _a backup's list or tag
+chain_), both before the folder tree is built: the walk that names every folder
+copies a path per list, and until then the number of lists reaching it was
+bounded by the byte limit alone.
 
 The two limits are set so that the record count is what an ordinary library
 meets: 100,000 bookmarks without long notes are 15–17 MB of HTML or CSV and
@@ -492,6 +497,54 @@ The policy, decided once:
   calendar rule above. It is one of three rules that hold the same line — the
   read edge and the tree builder are the other two (_a list's identity is its
   path_, below) — and the only one that keeps such a record out of the store.
+  A **pin** line is held to the same rule: a pin restates its link's id the
+  same way (`pins/{linkId}.enc`), and the readers that went by that copy now go
+  by the path (below).
+- **A backup's list may not sit at a reserved id.** `RESERVED_LIST_IDS`
+  (`sync/system-lists.ts`) holds the two ids that already mean something else to
+  a reader that takes a list id: `all`, Show All, which is a list param and
+  never a list; and `app`, the app lock's row in the device-local lock table
+  that list locks share, keyed by list id ([locks.md](./locks.md), _Keying_).
+  The path grammar admits both, so a file could store a list there — and locking
+  that list would have been a `put` over the app lock's row, the app lock gone
+  with nothing saying so. `classifyBundleLine` refuses the line and counts it
+  invalid. No writer in this app stores a list at either id, so a backup it
+  wrote carries one only if the library already held it (the export is
+  verbatim); `mergeSystemLists`, which every list reader goes through but the
+  backup export, drops one that arrived by sync or was stored before the rule,
+  and both lock providers refuse a list lock at the app lock's id as a last
+  line. A lock such a list held goes with it: coverage is worked out from the
+  tree, which no longer holds the list, so its links and its child lists are
+  uncovered and the orphan sweep deletes the row. Only a writer other than this
+  app can have stored one.
+- **A backup's list or tag chain is held to the interop depth rule.** A restore
+  writes `parentId` verbatim, so without a bound the file decided how deep this
+  library's tree was — the one import door the folder-depth rule (below) did not
+  cover. `assertBackupTreeDepth` (`data/backup.ts`) asks it of every admitted
+  list and tag line, existing or not, right after the classify pass and before
+  anything is looked up or written: a chain past `IMPORT_MAX_FOLDER_DEPTH` (100)
+  refuses the **whole file** with the same `ImportFolderDepthError` class, for the
+  same reason the interop rule does — dropping the deep lines would leave a
+  restore that looks complete with links filed under lists it never made. The
+  chain is counted inside the file: a parent the file does not carry (a system
+  list's default, a list only the library holds) ends it, so the verdict is a
+  fact about the file — and the bound is per file, not per library: a file can
+  hang its chain under a deep list the library already holds, and two restores
+  can each add one. It measures what the restore writes: a path the file
+  repeats is restored from its **first** line and the rest are dropped, counted
+  as skipped, before the rule runs (`firstLinePerPath`). Measured on every line,
+  the rule kept the last line for a path while the writer, which skips a path an
+  earlier chunk wrote, kept the first — so a deep chain repeated further down as
+  roots passed it and was stored. The editors put no bound on depth, so a
+  library can hold a chain past 100 and its own backup is then refused; the
+  message says so in a backup's terms and names the act in that library. A
+  `parentId` loop counts as deep as it is long, since
+  `buildTree` turns it into a chain that long, and what hangs below a loop
+  counts from there — which can refuse a looped file a particular cut would
+  have left under 100; no backup this app writes holds a loop. Tags are held to
+  it too: their tree is built by the same `buildTree`. It is measured in one
+  linear pass on its own stack, so the file's depth costs it nothing per
+  level.
 - **An interop date the calendar cannot name is dropped; the row is kept.** The
   same value reaches the projection legitimately — the epoch parser's unit
   inference is by magnitude, and a source can simply carry a wrong number. A date
@@ -526,9 +579,10 @@ The policy, decided once:
   resolved. 100 was already the bookmark converter's rule, which now reads the
   same constant and throws the same error; the converter also counts a folder
   with no links in it, which the app never sees as a row. It bounds what an
-  import **mints**, not what is stored: a backup restores `parentId` verbatim and
-  another device can sync any chain, which is why nothing that reads the tree
-  recurses (below). The rule reads the ROWS a parse returns, so a parser has to
+  import **mints**, not what is stored: another device can sync any chain, which
+  is why nothing that reads the tree recurses (below). A backup, which restores
+  `parentId` verbatim rather than minting, is held to the same number by a rule
+  of its own (_a backup's list or tag chain_, above). The rule reads the ROWS a parse returns, so a parser has to
   get that far cheaply whatever the file nests: `import/linkwarden.ts` used to
   climb the whole `parentId` chain again from every collection, and 10,000
   nested empty collections — half a megabyte — took 25 seconds to parse before
@@ -672,7 +726,9 @@ user asked for, not a screen that opens on its own; the web Lists settings
 table, which is a screen, and works out `forbiddenParentIds` for every row it
 shows on every render, each call walking the forest to the row and then the
 row's whole subtree; and the marketing site's converter, which copies a path per
-folder of a backup's list tree before its depth rule can refuse it.
+folder of a backup's list tree. The depth rule bounds the chain each import
+brings in — interop or backup, one file at a time — and nothing bounds one built
+in the editors, arrived by sync, or grown across several imports.
 
 **A list's identity is its path, and a forest holds one node per id.** Depth was
 one number the data chose; the node count was the other. `buildTree` resolves
@@ -718,15 +774,17 @@ lists that were nested under it, and the links still naming the old id, which
 locking the list again does not re-cover ([locks.md](./locks.md), _Keying_, has
 the whole of it). Nothing is rewritten on read; the next edit of the record
 writes the path's id into its plaintext, and until then a client on an older
-build still goes by the copy. A pin and an extraction carry the same kind of
-copy, and neither is part of this rule — the backup reader compares the two ids
-of a list or a tag and of nothing else. An extraction is fetched by path. A pin
-is still read by its copy, in three places on each platform: the pinned overlay
-resolves the pin's link through it (`readPinnedOverlay`), pin reordering finds
-the moved pin and its neighbour by it (`usePinMutations`), and the bulk-edit bar
-splits a selection into pinned and unpinned by it. Nor does a pin's next write
-set the copy right, as a list's or a tag's does: reordering writes the pin back
-with the copy it was read with (`writePin`).
+build still goes by the copy. A **pin** carries the same kind of copy (its
+link's id) and is under the same rule: both platforms' `readPins` hand each pin
+back under its path's id (`pathIdentifiedPin`, `sync/items.ts`), and the backup
+reader compares a pin's two ids as it does a list's or a tag's. Every reader of
+a pin's id goes through `readPins` — the pinned overlay, which resolves the
+pin's link through it (`readPinnedOverlay`); pin reordering, which finds the
+moved pin and its neighbour by it (`usePinMutations`); and both bulk-edit bars,
+which split a selection into pinned and unpinned by it — and since `writePin`
+writes back what it was handed, a reorder now stores the path's id as well. An
+**extraction** carries one too and is under neither: it is fetched by path, and
+nothing reads its copy.
 
 Only the platform-bound half of that lives in each orchestrator (the store
 reads, the zip library, the file API). The rest is shared, so the two can't

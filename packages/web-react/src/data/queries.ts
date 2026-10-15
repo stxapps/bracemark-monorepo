@@ -45,6 +45,7 @@ import {
   mergeSystemLists,
   pathFromId,
   pathIdentifiedList,
+  pathIdentifiedPin,
   pathIdentifiedTag,
   PINS_PREFIX,
   pinSchema,
@@ -266,15 +267,20 @@ async function joinExtractions(links: LinkItem[]): Promise<LinkView[]> {
 // All records under one namespace prefix, decoded and parse-filtered. The
 // `startsWith` runs against the `items` primary key, so it's an index range scan,
 // not a full-table walk. Lists/tags are small by design, so reading the whole
-// namespace and decoding it is cheap — no index needed.
+// namespace and decoding it is cheap — no index needed. `identify`, when given,
+// maps each decoded entity on the way out — inside this one direct Dexie await,
+// so a caller that hands it on with `return readNamespace(…)` adds no await hop
+// (_the zone-echo constraint_, docs/client-queries.md).
 async function readNamespace<T extends z.ZodTypeAny>(
   prefix: string,
   schema: T,
+  identify: (entity: WithPath<z.infer<T>>) => WithPath<z.infer<T>> = (entity) => entity,
 ): Promise<WithPath<z.infer<T>>[]> {
   const records = await db.items.where('path').startsWith(prefix).toArray();
   return records
     .map((record) => decode(record, schema))
-    .filter((entity): entity is WithPath<z.infer<T>> => entity !== undefined);
+    .filter((entity): entity is WithPath<z.infer<T>> => entity !== undefined)
+    .map(identify);
 }
 
 // The full logical list set: the user's synced lists merged with the system-list
@@ -299,9 +305,15 @@ export async function readTags(): Promise<TagItem[]> {
 }
 
 // Every pin (one per pinned link). Small by design — a user pins a handful — so
-// the whole namespace is read and decoded, no index, like lists/tags.
+// the whole namespace is read and decoded, no index, like lists/tags. Each under
+// its PATH's id, like lists and tags (pathIdentifiedPin, shared sync/items.ts):
+// every reader of a pin's id goes through here. A pass-through, NOT an async
+// wrapper that awaits readNamespace: readLinks reaches this from a liveQuery
+// querier (via readPinnedOverlay) and queries the store after it, and a second
+// stacked await would silently stop Dexie tracking that query in a real
+// browser (_the zone-echo constraint_, docs/client-queries.md).
 export function readPins(): Promise<PinItem[]> {
-  return readNamespace(PINS_PREFIX, pinSchema);
+  return readNamespace(PINS_PREFIX, pinSchema, pathIdentifiedPin);
 }
 
 // The synced general-settings blob (`settings/general.enc`), or undefined if this

@@ -17,6 +17,8 @@
 // sqlite, everything above it — decode, parseBlob, the merge — runs for real.
 
 import {
+  ALL_ID,
+  APP_LOCK_ID,
   ARCHIVE_ID,
   buildTree,
   flattenTree,
@@ -24,6 +26,7 @@ import {
   LISTS_PREFIX,
   MY_LIST_ID,
   pathFromId,
+  PINS_PREFIX,
   SYSTEM_LIST_DEFAULTS,
   SYSTEM_LIST_IDS,
   SYSTEM_LIST_NAMES,
@@ -33,7 +36,7 @@ import {
   utf8,
 } from '@stxapps/shared';
 
-import { readLists, readTags } from './queries';
+import { readLists, readPins, readTags } from './queries';
 
 // The rows `namespaceRows` hands back, keyed by the prefix asked for.
 const mockRowsByPrefix = new Map<string, { path: string; data: Uint8Array }[]>();
@@ -231,5 +234,36 @@ describe('the id a list or tag is read under', () => {
 
     expect(lists.find((list) => list.id === TRASH_ID)?.name).toBe('Bin');
     expect(lists.some((list) => list.id === 'claimed')).toBe(false);
+  });
+});
+
+// Two more ids the read edge decides rather than the record — web
+// queries.spec.ts has the reasoning: no reader is handed a list at a reserved id,
+// and a pin is read under its path's id.
+describe('the ids the read edge decides', () => {
+  it.each([ALL_ID, APP_LOCK_ID])('hands no reader a list stored at %s', async (id) => {
+    mockRowsByPrefix.set(LISTS_PREFIX, [
+      row(pathFromId(id, LISTS_PREFIX), makeList(id, 'Reserved', null, 'a')),
+      row(pathFromId('a', LISTS_PREFIX), makeList('a', 'Kept', null, 'b')),
+    ]);
+
+    const lists = await readLists();
+
+    expect(lists.some((entry) => entry.id === id)).toBe(false);
+    expect(lists.find((entry) => entry.id === 'a')?.name).toBe('Kept');
+  });
+
+  it('reads a pin under its path id, whatever the plaintext says', async () => {
+    mockRowsByPrefix.set(PINS_PREFIX, [
+      row(pathFromId('lnk-a', PINS_PREFIX), { id: 'lnk-b', rank: 'a', createdAt: 1, updatedAt: 1 }),
+      row(pathFromId('lnk-c', PINS_PREFIX), { id: 'lnk-c', rank: 'b', createdAt: 1, updatedAt: 1 }),
+    ]);
+
+    const pins = await readPins();
+
+    expect(pins.map(({ id, path }) => ({ id, path }))).toEqual([
+      { id: 'lnk-a', path: pathFromId('lnk-a', PINS_PREFIX) },
+      { id: 'lnk-c', path: pathFromId('lnk-c', PINS_PREFIX) },
+    ]);
   });
 });

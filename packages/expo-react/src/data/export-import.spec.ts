@@ -40,12 +40,15 @@ import {
   EXTRACTIONS_PREFIX,
   filesListEndpoint,
   filesSignEndpoint,
+  IMPORT_MAX_FOLDER_DEPTH,
+  ImportFolderDepthError,
   LINKS_PREFIX,
   LISTS_PREFIX,
   opsCommitEndpoint,
   opsListEndpoint,
   PINS_PREFIX,
   ranksBetween,
+  serializeBackupManifest,
   SETTINGS_GENERAL_PATH,
   syncPathSchema,
   TAGS_PREFIX,
@@ -264,6 +267,31 @@ function repick(bytes: Uint8Array, name: string): { uri: string; name: string } 
   const uri = `file:///cache/${name}`;
   writeFileBytes(uri, bytes);
   return { uri, name };
+}
+
+// A backup written line by line, for what no export of this app produces (a
+// repeated path). Its manifest counts are not read by the restore.
+function backupZip(lines: string[]): { uri: string; name: string } {
+  const counts = { links: 0, lists: 0, tags: 0, pins: 0, extractions: 0, files: 0 };
+  return repick(
+    zipSync({
+      [BACKUP_MANIFEST_ENTRY]: utf8(serializeBackupManifest(counts)),
+      [BACKUP_ITEMS_ENTRY]: utf8(lines.join('\n')),
+    }),
+    'Bracemark backup.zip',
+  );
+}
+
+function listLine(id: string, parentId: string | null, name = id): string {
+  const [rank] = ranksBetween(null, null, 1);
+  const data = { id, name, parentId, rank, createdAt: T, updatedAt: T };
+  return JSON.stringify({ path: `${LISTS_PREFIX}${id}.enc`, data });
+}
+
+function tagLine(id: string): string {
+  const [rank] = ranksBetween(null, null, 1);
+  const data = { id, name: id, parentId: null, rank, createdAt: T, updatedAt: T };
+  return JSON.stringify({ path: `${TAGS_PREFIX}${id}.enc`, data });
 }
 
 beforeEach(async () => {
@@ -507,6 +535,85 @@ describe('the bracemark backup round trip, through fflate', () => {
     for (const path of queued) expect(syncPathSchema.safeParse(path).success).toBe(true);
     // …and the queue is not simply empty.
     expect(queued).toContain(IMAGE_PATH);
+  });
+
+  // A backup restores `parentId` verbatim, so it is held to the interop depth
+  // rule like any other import — web export-import.spec.ts has the reasoning. A
+  // chain one past the limit refuses the whole file: no row, no file, no op.
+  it('refuses a backup whose list chain is past the import limit, writing nothing', async () => {
+    const [rank] = ranksBetween(null, null, 1);
+    seedEntities();
+    await seedContent();
+    getDb().transaction((tx) =>
+      putItemsTx(
+        tx,
+        Array.from({ length: IMPORT_MAX_FOLDER_DEPTH + 1 }, (_, i) =>
+          toItemRecord(
+            `${LISTS_PREFIX}deep${i}.enc`,
+            5000,
+            utf8(
+              JSON.stringify({
+                id: `deep${i}`,
+                name: `Level ${i}`,
+                parentId: i === 0 ? null : `deep${i - 1}`,
+                rank,
+                createdAt: T,
+                updatedAt: T,
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+    const outcome = await exportBackup();
+    expect(new TextDecoder().decode(unzipSaved(outcome.file.uri)[BACKUP_ITEMS_ENTRY])).toContain(
+      `deep${IMPORT_MAX_FOLDER_DEPTH}`,
+    );
+    const archive = stash(outcome.file.uri);
+    await truncate();
+    resetFileSystem();
+
+    await expect(
+      importAllData({ file: repick(archive, outcome.file.name), deps: deps(), maxLinks: null }),
+    ).rejects.toThrow(ImportFolderDepthError);
+
+    expect(storedEntities()).toEqual({});
+    expect(dataFileFor(IMAGE_PATH).exists).toBe(false);
+    expect(await listPendingOps(USER)).toEqual([]);
+  });
+
+  // A file that repeats a path. The depth rule used to measure the LAST line
+  // for a path while the writer — skipping a path an earlier 200-line chunk
+  // wrote — kept the FIRST, so a deep chain repeated further down as roots
+  // passed the rule and the chain was stored. Now the restore keeps each path's
+  // first line before the rule runs, so the rule measures what would be written.
+  it('refuses a deep chain that the file repeats further down as roots', async () => {
+    const depth = IMPORT_MAX_FOLDER_DEPTH + 50;
+    const lines = [
+      ...Array.from({ length: depth }, (_, i) => listLine(`d${i}`, i === 0 ? null : `d${i - 1}`)),
+      // Enough lines between that the repeats land in a later write chunk.
+      ...Array.from({ length: 200 }, (_, i) => tagLine(`f${i}`)),
+      ...Array.from({ length: depth }, (_, i) => listLine(`d${i}`, null)),
+    ];
+
+    await expect(
+      importAllData({ file: backupZip(lines), deps: deps(), maxLinks: null }),
+    ).rejects.toThrow(ImportFolderDepthError);
+
+    expect(storedEntities()).toEqual({});
+    expect(await listPendingOps(USER)).toEqual([]);
+  });
+
+  it('restores a repeated path from its first line and counts the repeat as skipped', async () => {
+    const outcome = await importAllData({
+      file: backupZip([listLine('a', null, 'First'), listLine('a', null, 'Second')]),
+      deps: deps(),
+      maxLinks: null,
+    });
+
+    expect(storedEntities()[`${LISTS_PREFIX}a.enc`]).toMatchObject({ name: 'First' });
+    expect(outcome.listCount).toBe(1);
+    expect(outcome.skippedCount).toBe(1);
   });
 
   // The other side of the same asymmetry: the row claims materialization and the

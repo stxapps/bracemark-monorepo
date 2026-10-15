@@ -260,3 +260,21 @@ describe('a lock engaged any other way', () => {
     expect(locks.isListLockedByHand(PARENT)).toBe(false);
   });
 });
+
+// List locks share the table, keyed by list id, so a list lock at the app lock's
+// id would be a put over the app lock's row. The read edge hands no list that id
+// (RESERVED_LIST_IDS, @stxapps/shared); this pins the writer refusing it anyway.
+describe('a list lock at the app lock’s id', () => {
+  it('is refused, and the app lock stays', async () => {
+    await mount();
+    await act(async () => void (await mutations.setAppLock(PASSWORD)));
+
+    await expect(mutations.addListLock('app', 'other', { hideList: false })).rejects.toThrow(
+      /reserved/,
+    );
+    await refresh();
+
+    expect([...mockRows.values()]).toEqual([expect.objectContaining({ id: 'app', kind: 'app' })]);
+    expect(locks.appLock).toMatchObject({ exists: true, unlocked: true });
+  });
+});

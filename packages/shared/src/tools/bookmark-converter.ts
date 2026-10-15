@@ -1,4 +1,5 @@
 import {
+  assertBackupTreeDepth,
   BackupVersionError,
   type BundleEntry,
   classifyBundleLine,
@@ -51,6 +52,8 @@ export const BOOKMARK_CONVERTER_MAX_ENTRIES = 100;
 // the app's own export.
 export const BOOKMARK_CONVERTER_BACKUP_TOO_LARGE =
   'This backup has more links than this converter reads at once. Export HTML or CSV in the app from Settings → Data instead.';
+export const BOOKMARK_CONVERTER_BACKUP_TOO_MANY_LISTS =
+  'This backup has more lists than this converter reads at once. Export HTML or CSV in the app from Settings → Data instead.';
 export const BOOKMARK_CONVERTER_BACKUP_MAX_ENTRIES =
   Math.max(...PLANS.map((plan) => entitlementsOf(plan).maxFiles)) + 2;
 
@@ -151,6 +154,14 @@ function readBackup(
     else byKind.set(entry.kind, [entry]);
   }
   const of = (kind: BundleEntry['kind']) => byKind.get(kind) ?? [];
+  // Lists aren't records, so the row limit above never saw them, and every one
+  // costs a path copy below — bounded by the byte limit alone until this. Held
+  // to the same number as the rows, then to the app's depth rule, both before
+  // the tree is built: the walk that copies a path per folder is what they bound.
+  if (of('list').length > BOOKMARK_CONVERTER_MAX_ROWS) {
+    throw new Error(BOOKMARK_CONVERTER_BACKUP_TOO_MANY_LISTS);
+  }
+  assertBackupTreeDepth([...of('list'), ...of('tag')]);
   const extractions = new Map(of('extraction').map((entry) => [entry.path, entry.data]));
   const links: LibraryLink[] = of('link').map((entry) => ({
     link: entry.data as Link,
@@ -170,8 +181,9 @@ function readBackup(
 }
 
 // Every folder in the tree with its root-first path, parents before children and
-// siblings in order. Walked with its own stack: a backup's list tree is as deep
-// as the backup says, and this runs before the depth rule below can refuse it.
+// siblings in order. Walked with its own stack, like every tree walk here. It
+// copies a path per folder, so it only ever sees a tree already held to the
+// depth rule: a backup's in readBackup, the output bundle's in addFolder below.
 function foldersWithPaths(folders: ExportFolder[]): { folder: ExportFolder; path: string[] }[] {
   const out: { folder: ExportFolder; path: string[] }[] = [];
   const pending: { folder: ExportFolder; parent: string[] }[] = [];

@@ -33,9 +33,9 @@ export interface LockRecord {
 }
 
 // The constant primary key of the single app-lock row. List locks are keyed by
-// their list id (a system-list constant or a random token — neither can collide
-// with this).
-export const APP_LOCK_ID = 'app' as const;
+// their list id, which is never this one: the id lives in @stxapps/shared
+// (sync/lock-coverage.ts) so the reserved-list-id rule can name it.
+export { APP_LOCK_ID } from '@stxapps/shared';
 
 export async function readLocks(): Promise<LockRecord[]> {
   const rows = await getDb().select().from(locks);
