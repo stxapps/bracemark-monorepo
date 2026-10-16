@@ -441,6 +441,44 @@ boundary. The exact
 cross-context locking and notification mechanism is implementation work, but
 these races are acceptance requirements, not optional follow-up hardening.
 
+### one record per run
+
+**⚠ A run of requests made with one record's key sends that record's token.**
+The plain api client reads the module session (`getSession()`) on every request.
+That is right for one-off calls, and wrong for a run that took its key from a
+record at the start. The fence above guards the local database. It does not
+guard a request going out. A sync cycle can outlive a sign-out and the next
+account's sign-in: in another tab or the browser extension's popup on web, and
+in the same process on expo, where no document dies with the old account. The
+engine sends its commit (`opsCommitEndpoint`) before its next fence check. Read
+per request, that commit went out under the new account's token, naming paths
+whose blobs had gone up under the old account's key. Nothing failed loudly. The
+only damage was ciphertext in the wrong account, but the key and the token came
+from two different accounts.
+
+As built: `createAuthApiClient` in both stacks returns an `AuthApiClient`
+(`packages/shared/src/api/client.ts`), and `withSession(record)` gives a client
+that sends that record's token and tags its verdicts with that record's
+generation, whatever the module session becomes. `ApiClientProvider` carries the
+`AuthApiClient`. The callers:
+
+- **the sync providers** (`contexts/sync-provider.tsx`, both stacks) read the
+  record when **each cycle starts**, not once per provider effect, and take its
+  key and a bound client from it. Per cycle because a web tab asleep through
+  another tab's resume wakes still `active`, so the effect doesn't re-run, and
+  its next cycle must send the new token. A record that is no longer the
+  provider's account runs no cycle. The effect re-runs for whatever replaced it.
+- **the browser extension's background worker** (`utils/sync-runner.ts`,
+  `buildDeps`), per run, which it already was.
+- **the iOS share extension's upload** (`uploadQueuedDraft`,
+  [share-sheet.md](./share-sheet.md)), where a second share can load another
+  account's session in the same process.
+
+A bound cycle that outlives its own sign-out sends a revoked token. The server
+answers `session_revoked` for the old generation, and the provider ignores it.
+Import, export and file content also read the session once, but they are not
+bound yet. They are shorter, and no specimen has shown them crossing accounts.
+
 ### who acts on a 401 — the lifecycle owner, only
 
 Only the process running the `AuthProvider` writes session state or wipes: the
@@ -556,7 +594,14 @@ The layers ([testing.md](./testing.md)), and where each part of the rule is pinn
   neither `error` nor `idle`.
 - **clients (jest):** per stack, `lib/auth-api-client.spec.ts` (web) — the same
   table through a real `api.call`, a network error, the generation captured at
-  send and not at arrival, no clock; `contexts/auth-provider.spec.tsx` (both
+  send and not at arrival, no clock; `lib/auth-api-client.spec.ts` (both
+  stacks) — a bound client keeps its record's token across a sign-out and
+  another account's sign-in, and tags a verdict with its record's generation;
+  `contexts/sync-provider.spec.tsx` (both stacks) — each cycle gets the key and
+  a bound client from the record current at its start, a resumed token is picked
+  up without a re-render, and another account's record runs no cycle;
+  `utils/sync-runner.spec.ts` (the browser extension) — the worker's run is bound
+  to the record it read; `contexts/auth-provider.spec.tsx` (both
   stacks) — `session_revoked` for the current generation wipes and says why,
   expiry keeps everything and persists `expired`, a replaced generation's
   verdicts do nothing, a record two years old on the device clock hydrates

@@ -65,7 +65,7 @@ it('the plain client sends the module session’s token at the time of each requ
 
 it('a bound client keeps sending its own record’s token after the module session changes', async () => {
   currentSession.mockReturnValue(record('alice'));
-  const bound = api.bindSession(record('alice'));
+  const bound = api.withSession(record('alice'));
   await bound.call(pingEndpoint, {});
   // A second share in the same extension process loaded bob's mirrored session.
   currentSession.mockReturnValue(record('bob'));
@@ -83,7 +83,7 @@ it('a bound client reports a session verdict under its own record’s generation
     new Response(JSON.stringify({ error: SESSION_ERROR.expired }), { status: 401 }),
   );
 
-  await expect(api.bindSession(record('alice')).call(pingEndpoint, {})).rejects.toThrow();
+  await expect(api.withSession(record('alice')).call(pingEndpoint, {})).rejects.toThrow();
 
   expect(verdicts).toHaveBeenCalledWith(
     expect.objectContaining({ generation: 'generation-alice' }),

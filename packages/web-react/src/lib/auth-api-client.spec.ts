@@ -240,3 +240,58 @@ describe('the auth-aware fetch', () => {
     expect(sentAuthHeader()).toBe('Bearer tok_live');
   });
 });
+
+// A bound client sends the token of the one record it was bound to, whatever the
+// module session becomes (docs/sessions.md, _one record per run_): a sync cycle
+// binds the record it took its key from, because a sign-out and another account's
+// sign-in can land between its requests.
+describe('a bound client', () => {
+  const record = (username: string): SessionRecord => ({
+    username,
+    token: `tok_${username}`,
+    encryptionKey: {} as CryptoKey,
+    state: 'active',
+    generation: `gen-${username}`,
+  });
+
+  const sentAuthHeaders = (): (string | null)[] =>
+    fetchMock.mock.calls.map(([, init]) =>
+      new Headers((init as RequestInit | undefined)?.headers).get('authorization'),
+    );
+
+  it('keeps sending its own record’s token after the module session changes', async () => {
+    await signIn({ username: 'alice', token: 'tok_alice', generation: 'gen-alice' });
+    const bound = createAuthApiClient({ baseUrl: BASE_URL }).withSession(record('alice'));
+
+    await bound.call(iapStatusEndpoint, {});
+    // Signed out in another context…
+    await clearSession();
+    await bound.call(iapStatusEndpoint, {});
+    // …and into another account.
+    await signIn({ username: 'bob', token: 'tok_bob', generation: 'gen-bob' });
+    await bound.call(iapStatusEndpoint, {});
+
+    expect(sentAuthHeaders()).toEqual(['Bearer tok_alice', 'Bearer tok_alice', 'Bearer tok_alice']);
+  });
+
+  // The plain client beside it still reads the module session per request.
+  it('leaves the plain client reading the module session', async () => {
+    await signIn({ username: 'bob', token: 'tok_bob', generation: 'gen-bob' });
+    const api = createAuthApiClient({ baseUrl: BASE_URL });
+    api.withSession(record('alice'));
+
+    await api.call(iapStatusEndpoint, {});
+
+    expect(sentAuthHeaders()).toEqual(['Bearer tok_bob']);
+  });
+
+  it('reports a verdict under its own record’s generation', async () => {
+    await signIn({ username: 'bob', token: 'tok_bob', generation: 'gen-bob' });
+    fetchMock.mockResolvedValue(envelope(SESSION_ERROR.revoked));
+
+    const bound = createAuthApiClient({ baseUrl: BASE_URL }).withSession(record('alice'));
+    await expect(bound.call(iapStatusEndpoint, {})).rejects.toBeInstanceOf(ApiError);
+
+    expect(verdicts).toHaveBeenCalledWith({ verdict: 'revoked', generation: 'gen-alice' });
+  });
+});

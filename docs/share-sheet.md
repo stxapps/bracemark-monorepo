@@ -492,11 +492,12 @@ second share saved in the same process under another account, while the first
 was still uploading, used to replace it, and the first upload's remaining
 requests went out with the second account's token for blobs encrypted under
 the first's key. `uploadQueuedDraft` now sends its requests through
-`api.bindSession(session)` (`AuthApiClient`, `lib/auth-api-client.ts`), a
+`api.withSession(session)` (`AuthApiClient`, `lib/auth-api-client.ts`), a
 client that carries that one record's token whatever the module session
 becomes; `auth-api-client.spec.ts` pins the token request by request, and
 `share-store.spec.ts` that the upload is handed the bound client and never the
-plain one.
+plain one. The sync cycles bind the same way ([sessions.md](./sessions.md),
+_one record per run_).
 
 The snapshot's `owner` replaced a `sessionPresent` boolean, which told the
 sheet that some account was signed in but not which. Like `rank`, the field is
@@ -1002,7 +1003,7 @@ Nor is one attempted when the mirror names a different account than the
 draft's `owner`. The mirror is read after the outbox write, so it can already
 be the next account's (_a draft belongs to the account that opened the sheet_).
 The upload that does run sends that record's token, not the module session's
-(`bindSession`, same section).
+(`withSession`, same section).
 The share extension never acts on a 401 itself: [sessions.md](./sessions.md),
 _who acts on a 401_. On Android, where the share activity runs in the app
 process, an expired session skips the inline sync kick the same way.

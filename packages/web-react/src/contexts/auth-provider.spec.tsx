@@ -31,7 +31,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, waitFor } from '@testing-library/react';
 
 import { ApiClientProvider } from '@stxapps/react';
-import { type ApiClient, sessionProbeEndpoint } from '@stxapps/shared';
+import { type AuthApiClient, sessionProbeEndpoint } from '@stxapps/shared';
 
 import type { SessionRecord } from '../data/session-store';
 import * as store from '../data/session-store';
@@ -164,7 +164,7 @@ let apiCall: jest.Mock;
 function renderProvider() {
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   apiCall = jest.fn(() => new Promise(() => undefined)); // the probe never answers here
-  const api = { call: apiCall } as unknown as ApiClient;
+  const api = { call: apiCall } as unknown as AuthApiClient;
   return render(
     <QueryClientProvider client={queryClient}>
       <ApiClientProvider client={api}>

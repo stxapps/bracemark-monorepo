@@ -19,6 +19,7 @@ import { Platform } from 'react-native';
 import {
   type ApiClient,
   ARCHIVE_ID,
+  type AuthApiClient,
   type List,
   MY_LIST_ID,
   rankBetween,
@@ -27,7 +28,6 @@ import {
   TRASH_ID,
 } from '@stxapps/shared';
 
-import type { AuthApiClient } from '../lib/auth-api-client';
 import { runIncrementalSync } from '../sync/engine';
 import { writeLink } from './mutations';
 import { countLinks } from './queries';
@@ -58,11 +58,11 @@ const mockFiles = new Map<string, string>();
 const mockDirs = new Set<string>();
 
 // A stand-in for the app's api client. Nothing here reaches the network (the
-// upload and the sync are mocked); `bindSession` hands back a client of its own,
+// upload and the sync are mocked); `withSession` hands back a client of its own,
 // so a spec can tell the session-bound one from the plain one.
 function mockApi(): AuthApiClient & { bound: ApiClient } {
   const bound = { call: jest.fn() } as ApiClient;
-  return { call: jest.fn(), bindSession: jest.fn(() => bound), bound };
+  return { call: jest.fn(), withSession: jest.fn(() => bound), bound };
 }
 
 jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn() }));
@@ -706,7 +706,7 @@ describe('saveSharedDraft — an expired session sends nothing', () => {
       // Key and token from the one record the owner check passed: the upload
       // gets the client bound to it, never the plain one that reads whatever
       // session this process holds by the time each request leaves.
-      expect(api.bindSession).toHaveBeenCalledWith(mirrored);
+      expect(api.withSession).toHaveBeenCalledWith(mirrored);
       expect(upload).toHaveBeenCalledWith(
         { encryptionKey: mirrored.encryptionKey, api: api.bound },
         draft,

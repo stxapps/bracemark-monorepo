@@ -55,6 +55,7 @@ import { Platform } from 'react-native';
 import { Directory, File, Paths } from 'expo-file-system';
 
 import {
+  type AuthApiClient,
   buildTree,
   cleanTitle,
   compareRank,
@@ -72,7 +73,6 @@ import {
   z,
 } from '@stxapps/shared';
 
-import type { AuthApiClient } from '../lib/auth-api-client';
 import { appGroupDir } from './app-group';
 import { getSession, loadSession, loadSharedSession } from './session-store';
 
@@ -476,7 +476,7 @@ export async function saveSharedDraft(
 // check on the file it leaves behind.
 //
 // The token is bound to the record that check passed, like the key: the
-// requests go through `api.bindSession(session)`, not the module session the
+// requests go through `api.withSession(session)`, not the module session the
 // plain client reads per request. In this process loadSharedSession is what
 // sets that module session, so a second share saved while this upload runs —
 // after a sign-out and a sign-in in the app — would otherwise send the rest of
@@ -486,7 +486,7 @@ async function uploadQueuedDraft(api: AuthApiClient, draft: ShareDraft): Promise
     const session = await loadSharedSession();
     if (!session || session.state === 'expired' || session.username !== draft.owner) return;
     await shareUpload().uploadShareDraft(
-      { encryptionKey: session.encryptionKey, api: api.bindSession(session) },
+      { encryptionKey: session.encryptionKey, api: api.withSession(session) },
       draft,
     );
   } catch {

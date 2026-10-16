@@ -38,8 +38,11 @@ jest.mock('@stxapps/web-react', () => ({
   runIncrementalSync: mockRunIncrementalSync,
 }));
 
-// Only its identity matters — it is threaded into SyncDeps and never called here.
-jest.mock('./api-client', () => ({ apiClient: { baseUrl: 'https://api.test' } }));
+// Never called here: a bound client only records which session it was bound to,
+// so the spec can see the cycle's token came from the record its key did.
+jest.mock('./api-client', () => ({
+  apiClient: { withSession: (session: unknown) => ({ boundTo: session }) },
+}));
 
 const SESSION = { username: 'alice', encryptionKey: { type: 'fake-key' } };
 const CLEAN: SyncOutcome = { blocked: false, blockedCount: 0 };
@@ -214,13 +217,16 @@ describe('runSync — the selective sync', () => {
     expect(deps.pathFilter?.(path)).toBe(wanted);
   });
 
-  it('hands the engine the session it just read', async () => {
+  // Key and token from the one record (docs/sessions.md, _one record per run_): a
+  // client reading the mirror per request would send whichever account the popup
+  // signs into mid-cycle.
+  it('hands the engine the session it just read, its api bound to that record', async () => {
     await freshRunner().runSync();
 
     expect(mockRunIncrementalSync.mock.calls[0][0]).toMatchObject({
       username: 'alice',
       encryptionKey: SESSION.encryptionKey,
-      api: { baseUrl: 'https://api.test' },
+      api: { boundTo: SESSION },
     });
   });
 });

@@ -198,7 +198,17 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       };
     }
 
-    const deps: SyncDeps = { username, encryptionKey: session.encryptionKey, api };
+    // Each cycle's key and token come from ONE record, read when the cycle starts
+    // (docs/sessions.md, _one record per run_). Bound, because a cycle can outlive
+    // a sign-out and the next account's sign-in — no document dies with the old
+    // account here: read per request, its commit would go out under that
+    // account's token. A record that is no longer this account's runs nothing;
+    // the effect re-runs for whatever replaced it. Same as web-react's.
+    const cycleDeps = (): SyncDeps | null => {
+      const current = getSession();
+      if (current?.username !== username) return null;
+      return { username, encryptionKey: current.encryptionKey, api: api.withSession(current) };
+    };
     // Fresh slate for the indicator — a stale 'error' / stale timestamp from a
     // previous account (or a pre-retry run) must not bleed into this one.
     setBgSyncStatus('idle');
@@ -240,6 +250,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     // outcome lands on the INDICATOR (bgSyncStatus), never the gate: a failed
     // background cycle coexists with a usable store, so storeStatus stays put.
     const backgroundSync = () => {
+      const deps = cycleDeps();
+      if (!deps) return Promise.resolve();
       setBgSyncStatus('syncing');
       // Returned for syncAndWait. Both branches below are handled, so it settles
       // with the cycle and never rejects.
@@ -284,6 +296,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         // build may not have one yet.
         setStoreStatus('syncing-initial');
         await claimIfStillSignedIn(username);
+        const deps = cycleDeps();
+        if (!deps) return;
         await runInitialSync(deps, reportProgress);
         if (!active) return;
 

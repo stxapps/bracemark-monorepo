@@ -14,30 +14,35 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 
 import { SyncProvider, useSync } from './sync-provider';
 
-const mockRunIncrementalSync = jest.fn(() => Promise.resolve({ blocked: false, blockedCount: 0 }));
+const mockRunIncrementalSync = jest.fn((_deps: unknown) =>
+  Promise.resolve({ blocked: false, blockedCount: 0 }),
+);
 
 let mockSessionState: 'active' | 'expired' = 'active';
 jest.mock('./auth-provider', () => ({
   useAuth: () => ({ username: 'alice', status: 'authenticated', sessionState: mockSessionState }),
 }));
 // One client for the provider's lifetime: it is an effect dependency, and a new
-// object per render would re-run the effect forever.
-const mockApi = {};
+// object per render would re-run the effect forever. A bound client only records
+// the record it was bound to.
+const mockApi = { withSession: (session: unknown) => ({ boundTo: session }) };
 jest.mock('@stxapps/react', () => ({
   ...jest.requireActual('@stxapps/react'),
   useApiClient: () => mockApi,
 }));
-jest.mock('../data/session-store', () => ({ getSession: () => ({ encryptionKey: {} }) }));
+const ALICE = { username: 'alice', token: 'tok-1', generation: 'gen-1', encryptionKey: {} };
+let mockSession: { username: string } | null = ALICE;
+jest.mock('../data/session-store', () => ({ getSession: () => mockSession }));
 let mockFirstSyncDone = true;
 const mockClaim = jest.fn((_username: string) => Promise.resolve());
-const mockRunInitialSync = jest.fn(() => Promise.resolve());
+const mockRunInitialSync = jest.fn((_deps: unknown) => Promise.resolve());
 jest.mock('../data/sync-store', () => ({
   claimIfStillSignedIn: (username: string) => mockClaim(username),
   isFirstSyncDone: () => Promise.resolve(mockFirstSyncDone),
 }));
 jest.mock('../sync/engine', () => ({
-  runIncrementalSync: () => mockRunIncrementalSync(),
-  runInitialSync: () => mockRunInitialSync(),
+  runIncrementalSync: (deps: unknown) => mockRunIncrementalSync(deps),
+  runInitialSync: (deps: unknown) => mockRunInitialSync(deps),
 }));
 
 const wrapper = ({ children }: { children: ReactNode }) => <SyncProvider>{children}</SyncProvider>;
@@ -57,6 +62,7 @@ beforeEach(() => {
   mockRunIncrementalSync.mockClear();
   mockSessionState = 'active';
   mockFirstSyncDone = true;
+  mockSession = ALICE;
 });
 
 it('marks a local write for requestSync', async () => {
@@ -222,3 +228,44 @@ it.each(['resolve', 'reject'] as const)(
     expect(result.current.lastError).toBeNull();
   },
 );
+
+// A cycle's key and token come from ONE record, read when the cycle starts
+// (docs/sessions.md, _one record per run_): its requests are bound to that record,
+// so a sign-out and the next account's sign-in mid-cycle can't put that account's
+// token on the old account's commit.
+describe('one record per cycle', () => {
+  it('hands the initial pull the record’s key and a client bound to it', async () => {
+    mockFirstSyncDone = false;
+    const { result } = renderHook(() => useSync(), { wrapper });
+    await waitFor(() => expect(result.current.storeStatus).toBe('ready'));
+
+    expect(mockRunInitialSync).toHaveBeenCalledWith(
+      expect.objectContaining({ encryptionKey: ALICE.encryptionKey, api: { boundTo: ALICE } }),
+    );
+  });
+
+  // Per cycle, not per provider run: a resume the provider never saw as a state
+  // change (another context's, while this one slept) leaves it `active` with a new
+  // token, and the next cycle must send that one.
+  it('binds each cycle to the record current when it starts', async () => {
+    const { result } = await readySync();
+    const resumed = { ...ALICE, token: 'tok-2', generation: 'gen-2', encryptionKey: {} };
+    mockSession = resumed;
+
+    act(() => result.current.syncNow());
+
+    expect(mockRunIncrementalSync).toHaveBeenCalledWith(
+      expect.objectContaining({ encryptionKey: resumed.encryptionKey, api: { boundTo: resumed } }),
+    );
+    await waitFor(() => expect(result.current.bgSyncStatus).toBe('idle'));
+  });
+
+  it('runs no cycle once the record is another account’s', async () => {
+    const { result } = await readySync();
+    mockSession = { ...ALICE, username: 'bob' };
+
+    await act(() => result.current.syncAndWait());
+
+    expect(mockRunIncrementalSync).not.toHaveBeenCalled();
+  });
+});

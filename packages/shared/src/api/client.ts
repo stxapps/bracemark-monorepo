@@ -168,6 +168,23 @@ export interface ApiClient {
   ): Promise<z.infer<TResponse>>;
 }
 
+// What a bound client needs of a session record (both stacks' `SessionRecord`
+// carry it): the token it sends, and the generation a verdict on it is tagged with.
+export interface BoundSession {
+  token: string;
+  generation: string;
+}
+
+// The client each platform's `createAuthApiClient` returns: the ordinary client,
+// which reads the module session per request, plus a way to pin one record's
+// token for a run of requests made with that record's key (docs/sessions.md,
+// _one record per run_).
+export interface AuthApiClient extends ApiClient {
+  // A client that sends THIS record's token on every request, whatever the
+  // module session becomes in the meantime.
+  withSession(session: BoundSession): ApiClient;
+}
+
 // Binds a baseUrl once so call sites stay terminal: `client.call(endpoint, input)`.
 export function createApiClient(options: ApiClientOptions): ApiClient {
   return {

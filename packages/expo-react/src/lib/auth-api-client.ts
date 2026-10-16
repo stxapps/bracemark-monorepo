@@ -1,20 +1,11 @@
-import { type ApiClient, createApiClient, sessionVerdictFromResponse } from '@stxapps/shared';
+import {
+  type AuthApiClient,
+  type BoundSession,
+  createApiClient,
+  sessionVerdictFromResponse,
+} from '@stxapps/shared';
 
-import { getSession, notifySessionVerdict, type SessionRecord } from '../data/session-store';
-
-// The api client this package's createAuthApiClient returns: the ordinary
-// client, plus a way to pin one session's token for a run of requests.
-export interface AuthApiClient extends ApiClient {
-  // A client that sends THIS record's token on every request, whatever the
-  // module session (getSession) becomes in the meantime. For a caller that has
-  // checked a session and then does several requests with that session's key:
-  // the iOS share extension's upload (share-store.ts, uploadQueuedDraft), where a
-  // second share saved in the same process can load another account's session
-  // between the first upload's requests. Read per request, the rest of the first
-  // upload would go out under the second account's token with blobs sealed under
-  // the first's key.
-  bindSession(session: SessionRecord): ApiClient;
-}
+import { getSession, notifySessionVerdict } from '../data/session-store';
 
 // The expo binding of the typed API client to bracemark-api — the `platform:expo`
 // sibling of web-react's `createAuthApiClient`. Same shape and same auth-fetch
@@ -26,11 +17,22 @@ export interface AuthApiClient extends ApiClient {
 // `NEXT_PUBLIC_API_URL` / wxt's `WXT_PUBLIC_API_URL`), which the layering rules
 // keep out of packages. So the app passes the resolved `baseUrl` in; everything
 // else — the auth-aware fetch and the client wiring — lives here once.
+//
+// Two modes. The client itself sends whoever is signed in at the moment each
+// request leaves — right for one-off calls. `withSession(record)` is the same
+// client pinned to one record's token, for a run of requests made with that
+// record's key (docs/sessions.md, _one record per run_). Two callers: the iOS
+// share extension's upload (share-store.ts, uploadQueuedDraft), where a second
+// share saved in the same process can load another account's session between
+// the first upload's requests; and a sync cycle (contexts/sync-provider.tsx),
+// which can outlive a sign-out and the next account's sign-in. Read per request,
+// the rest of either run would go out under the second account's token for blobs
+// sealed under the first's key.
 export function createAuthApiClient({ baseUrl }: { baseUrl: string }): AuthApiClient {
   const client = createApiClient({ baseUrl, fetch: authFetch(getSession) });
   return {
     call: client.call,
-    bindSession: (session) => createApiClient({ baseUrl, fetch: authFetch(() => session) }),
+    withSession: (session) => createApiClient({ baseUrl, fetch: authFetch(() => session) }),
   };
 }
 
@@ -50,7 +52,7 @@ export function createAuthApiClient({ baseUrl }: { baseUrl: string }): AuthApiCl
 //
 // The iOS share extension builds this same client, and a verdict fired there
 // reaches no listener — it runs no AuthProvider, and never acts on a 401.
-function authFetch(readSession: () => SessionRecord | null): typeof fetch {
+function authFetch(readSession: () => BoundSession | null): typeof fetch {
   return async (input, init) => {
     const session = readSession();
     if (!session) return fetch(input, init);

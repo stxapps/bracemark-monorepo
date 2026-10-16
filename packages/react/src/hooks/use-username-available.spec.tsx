@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 
-import { type ApiClient, canonicalizeUsername } from '@stxapps/shared';
+import { type AuthApiClient, canonicalizeUsername } from '@stxapps/shared';
 
 import { ApiClientProvider } from '../contexts/api-client-provider';
 import { usernameAvailableQueryOptions, useUsernameAvailable } from './use-username-available';
@@ -23,7 +23,7 @@ import { usernameAvailableQueryOptions, useUsernameAvailable } from './use-usern
 // short to hold still in a browser.
 
 const availabilityClient = (available = true) =>
-  ({ call: jest.fn(() => Promise.resolve({ available })) }) as unknown as ApiClient;
+  ({ call: jest.fn(() => Promise.resolve({ available })) }) as unknown as AuthApiClient;
 
 describe('usernameAvailableQueryOptions', () => {
   it('keys on the canonical handle, so case and padding are one question', () => {
@@ -77,7 +77,7 @@ describe('usernameAvailableQueryOptions', () => {
 });
 
 describe('useUsernameAvailable', () => {
-  const wrap = (client: ApiClient) => {
+  const wrap = (client: AuthApiClient) => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     return ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={queryClient}>

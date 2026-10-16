@@ -59,10 +59,14 @@ function buildDeps(): SyncDeps | null {
   const session = getSession();
   if (!session) return null;
 
+  // Key and token from this one record (docs/sessions.md, _one record per run_):
+  // the popup or options page can sign out and into another account while this
+  // cycle is still running, and a client that read the mirror per request would
+  // send that account's token for the rest of it.
   return {
     username: session.username,
     encryptionKey: session.encryptionKey,
-    api: apiClient,
+    api: apiClient.withSession(session),
     pathFilter,
   };
 }
