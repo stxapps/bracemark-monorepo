@@ -2,6 +2,7 @@ import { base64ToBytes } from '../crypto/encoding';
 import { normalizeUrl } from '../url/url';
 import type { ImportedBundle, ImportedLink, ImportObserver } from './bundle';
 import { isRecord } from './is-record';
+import { capFolderPath } from './resolve';
 import { PARSE_CHUNK, runSteps } from './steps';
 
 // Brace.to export parser — the one importer whose input is a foreign app's whole
@@ -109,24 +110,37 @@ function splitFPath(path: string, count: number): { parts: string[]; id: string 
 // Brace's listNameMap is a tree of `{ listName, displayName, children? }`. Flatten it
 // to one root-first chain of DISPLAY names per listName — what a folder path is here.
 // The built-in three are excluded: they're handled by identity, not by name.
-function walkListNameMap(
-  objs: unknown,
-  prefix: string[],
-  out: Map<string, string[]>,
-  depth = 0,
-): void {
-  // A cyclic/absurdly deep map would otherwise recurse forever; Brace's own UI
-  // nests a handful deep at most.
-  if (!Array.isArray(objs) || depth > 20) return;
-  for (const obj of objs) {
-    if (!isRecord(obj)) continue;
-    const { listName, displayName, children } = obj;
+//
+// Every list is kept, however deep it sits. This used to stop at depth 20, which
+// was no cap: a list below it fell out of the map, so its links fell back to the
+// raw list id as a TOP-LEVEL folder. Instead each chain is held to
+// capFolderPath's shape as it is built (resolve.ts) — a list past TREE_MAX_DEPTH
+// is placed at the limit under its own name, like every other importer's, and no
+// chain copies more than TREE_MAX_DEPTH + 1 names.
+//
+// Walked with an explicit stack rather than by recursion. The map comes out of
+// JSON.parse, so it is a tree and cannot cycle, but its depth is the file's
+// choice and recursion would hand that choice to the call stack. Children are
+// pushed in reverse, so lists are visited in the same depth-first order the
+// recursion visited them in — the order `observer.folder` reports.
+function walkListNameMap(objs: unknown): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  const stack: { obj: unknown; prefix: string[] }[] = [];
+  const push = (children: unknown, prefix: string[]) => {
+    if (!Array.isArray(children)) return;
+    for (let i = children.length - 1; i >= 0; i--) stack.push({ obj: children[i], prefix });
+  };
+  push(objs, []);
+  for (let item = stack.pop(); item !== undefined; item = stack.pop()) {
+    if (!isRecord(item.obj)) continue;
+    const { listName, displayName, children } = item.obj;
     if (typeof listName !== 'string' || listName === '') continue;
     const name = typeof displayName === 'string' && displayName !== '' ? displayName : listName;
-    const chain = [...prefix, name];
+    const chain = capFolderPath([...item.prefix, name]);
     out.set(listName, chain);
-    walkListNameMap(children, chain, out, depth + 1);
+    push(children, chain);
   }
+  return out;
 }
 
 function readTagNameMap(objs: unknown): Map<string, string> {
@@ -300,8 +314,7 @@ export function* parseBraceExportSteps(
   }
 
   const settings = latestSettings(settingsEntries);
-  const listPaths = new Map<string, string[]>();
-  walkListNameMap(settings?.listNameMap, [], listPaths);
+  const listPaths = walkListNameMap(settings?.listNameMap);
   for (const path of listPaths.values()) observer?.folder(path);
   const tagNames = readTagNameMap(settings?.tagNameMap);
 

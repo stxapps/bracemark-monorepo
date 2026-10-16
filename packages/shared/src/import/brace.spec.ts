@@ -1,3 +1,4 @@
+import { TREE_MAX_DEPTH } from '../sync/tree';
 import { parseBraceExport } from './brace';
 
 // A Brace.to export entry. `data` is whatever that file held — `{}` for the
@@ -248,6 +249,45 @@ describe('parseBraceExport', () => {
     );
 
     expect(links[0].folderPath).toEqual(['1600000000009-dead-beef']);
+  });
+
+  it('keeps a deep list under its own name, placed at the depth limit', () => {
+    // One chain of nested lists, `list-<i>` named `f<i>` at level i + 1. The walk
+    // used to stop at depth 20, dropping everything below from the name map, so
+    // a link there was filed under its raw list id at the top level.
+    const depth = TREE_MAX_DEPTH + 5;
+    let node: Record<string, unknown> | undefined;
+    for (let i = depth - 1; i >= 0; i--) {
+      node = { listName: `list-${i}`, displayName: `f${i}`, children: node ? [node] : [] };
+    }
+    const names = Array.from({ length: depth }, (_, i) => `f${i}`);
+    const settings = entry('settings1700000000000abcd.json', { listNameMap: [node] });
+    const folders: string[][] = [];
+    const observer = {
+      row: () => undefined,
+      folder: (path: string[]) => folders.push(path),
+      damage: () => undefined,
+    };
+
+    const { links } = parseBraceExport(
+      exportText([
+        entry(
+          'links/list-29/1700000000000-abcd-efgh.json',
+          link('1700000000000-abcd-efgh', 'https://example.com/level-30'),
+        ),
+        entry(
+          `links/list-${depth - 1}/1700000000001-abcd-efgh.json`,
+          link('1700000000001-abcd-efgh', 'https://example.com/deepest'),
+        ),
+        settings,
+      ]),
+      observer,
+    );
+
+    expect(links[0].folderPath).toEqual(names.slice(0, 30));
+    expect(links[1].folderPath).toEqual([...names.slice(0, TREE_MAX_DEPTH), `f${depth - 1}`]);
+    expect(Math.max(...folders.map((path) => path.length))).toBe(TREE_MAX_DEPTH + 1);
+    expect(folders).toHaveLength(depth);
   });
 
   it('names a re-tagged tag once, not once per tags/ file', () => {

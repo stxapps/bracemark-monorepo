@@ -119,9 +119,11 @@ as two folders with one path in a CSV.
   that deepens a tree.
 - **Interop import — placed at the limit.** It used to refuse the whole file.
   `capFolderPath` (`import/resolve.ts`) holds a path to the first 100 names
-  plus the row's own folder; Netscape, CSV and LinkWarden paths are capped as
-  they are parsed, so a long chain no longer costs a path copy per level per
-  row. `ListResolver` files the row's own folder under the level-99 list and
+  plus the row's own folder; Netscape, CSV, LinkWarden and Brace.to paths are
+  capped as they are parsed, so a long chain no longer costs a path copy per
+  level per row. (Brace.to's `listNameMap` walk used to stop at depth 20
+  instead, which was no cap: a list below it lost its name and imported as a
+  top-level folder named for its raw id.) `ListResolver` files the row's own folder under the level-99 list and
   counts the lists it placed (`flattenedListCount` on `ProjectedImport` and
   `ImportOutcome`). A folder between level 100 and the row's own that holds no
   link of its own is not minted — the interop import only ever mints what a
