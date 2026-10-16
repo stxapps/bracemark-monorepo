@@ -473,7 +473,7 @@ The policy, decided once:
   are _not_ where this lives, for the same reason: they decode what is already
   stored. So the readers that turn a date into a calendar string tolerate one
   regardless — the list row renders "date unknown" with no `dateTime`
-  (`sorted-date.tsx`), and the CSV export leaves the `created` cell empty rather
+  (`relative-time.tsx`, in both apps), and the CSV export leaves the `created` cell empty rather
   than aborting the file. A backup this app wrote carries such a value only when
   the library it was exported from already held one, since the export is
   verbatim as well: that link is then refused on restore and counted, where it

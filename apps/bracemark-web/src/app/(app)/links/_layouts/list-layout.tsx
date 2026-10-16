@@ -11,6 +11,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { displayUrl, hostFromText } from '@stxapps/shared';
 
 import { useLinksViewState } from '../_contexts/view-state-provider';
+import { RelativeTime } from './relative-time';
 import {
   EmptyState,
   Favicon,
@@ -28,7 +29,6 @@ import {
   useScrollTopOnQuery,
   useTagMap,
 } from './shared';
-import { SortedDate } from './sorted-date';
 
 // Row heights are MEASURED, not budgeted. The title is `line-clamp-2`, so a row's
 // height turns on whether that title wraps — and whether it wraps is a fact about
@@ -390,11 +390,15 @@ export function ListLayout({
                 </div>
                 {/* Sorted-field date column — only when the PANE is wide enough (@xl
                     container width), so it never crowds the title on a narrow pane
-                    or in the extension popup. Shows the createdAt/updatedAt value the
+                    or in the browser extension's popup. Shows the createdAt/updatedAt value the
                     rows are ordered by (see dateVerb above). dateTime carries the exact
                     instant; title/aria-label prefix the verb so the field is legible
                     to hover and AT (the bare visible text can't say which it is). */}
-                <SortedDate epochMs={link[sortOn]} verb={dateVerb} />
+                <RelativeTime
+                  epochMs={link[sortOn]}
+                  verb={dateVerb}
+                  className="hidden shrink-0 @xl:block"
+                />
                 {!bulkEditing && (
                   <LinkRowMenu
                     link={link}

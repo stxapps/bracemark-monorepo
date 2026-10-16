@@ -1,7 +1,10 @@
-// The list layout's sorted-field date cell, on its own so it can be rendered
-// without the virtualized list around it (sorted-date.spec.tsx).
+// A relative date ("3 days ago") with its verb, on its own so it can be rendered
+// without the virtualized list around it (relative-time.spec.tsx). Today its one
+// caller is the list layout's sorted-field date column, which supplies the verb
+// and its own placement classes. Expo's twin is features/links/relative-time.tsx.
 
 import { isCalendarTime } from '@stxapps/shared';
+import { cn } from '@stxapps/web-ui/lib/utils';
 
 // Compact, localized "N ago" for the wide-pane date column (the sorted field —
 // created or updated; the row supplies the verb). Intl.RelativeTimeFormat
@@ -29,15 +32,25 @@ function formatRelativeTime(epochMs: number): string {
   return relativeTimeFormat.format(Math.round(diff / 1000), 'second');
 }
 
-// The sorted-field date cell. A stored date can be an integer the calendar
-// cannot name — `toISOString` THROWS on one, and it did so in render, hidden
-// column or not, for every list containing the row (@stxapps/shared
-// sync/calendar-time.ts). The import edges refuse such a value now, but one
-// already stored or synced from another device still arrives here, so the row
-// renders without a machine-readable instant and says the date is unknown
-// rather than taking the page down with it.
-export function SortedDate({ epochMs, verb }: { epochMs: number; verb: string }) {
-  const className = 'hidden shrink-0 text-xs whitespace-nowrap text-muted-foreground @xl:block';
+// A stored date can be an integer the calendar cannot name — `toISOString`
+// THROWS on one, and it did so in render, hidden column or not, for every list
+// containing the row (@stxapps/shared sync/calendar-time.ts). The import edges
+// refuse such a value now, but one already stored or synced from another device
+// still arrives here, so the cell renders without a machine-readable instant and
+// says the date is unknown rather than taking the page down with it.
+//
+// `className` is the caller's placement (the list layout's `@xl` reveal); the
+// look — small, muted, unwrapped — is the component's.
+export function RelativeTime({
+  epochMs,
+  verb,
+  className: placement,
+}: {
+  epochMs: number;
+  verb: string;
+  className?: string;
+}) {
+  const className = cn('text-xs whitespace-nowrap text-muted-foreground', placement);
   if (!isCalendarTime(epochMs)) {
     const unknown = `${verb} date unknown`;
     return (

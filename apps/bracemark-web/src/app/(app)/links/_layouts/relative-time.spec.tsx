@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 
-import { SortedDate } from './sorted-date';
+import { RelativeTime } from './relative-time';
 
 // The date a list row shows is whichever field the list is sorted by, read
 // straight off the stored link. Its schema asks for an integer, and an integer
@@ -13,11 +13,11 @@ import { SortedDate } from './sorted-date';
 
 const LAST_INSTANT = 8.64e15;
 
-describe('SortedDate', () => {
+describe('RelativeTime', () => {
   it.each([LAST_INSTANT + 1, -LAST_INSTANT - 1, Number.MAX_SAFE_INTEGER])(
     'renders %d as an unknown date instead of throwing',
     (epochMs) => {
-      render(<SortedDate epochMs={epochMs} verb="Updated" />);
+      render(<RelativeTime epochMs={epochMs} verb="Updated" />);
 
       // Named for assistive tech and on hover, with no machine-readable instant —
       // a `dateTime` that is not a date is worse than none.
@@ -30,7 +30,7 @@ describe('SortedDate', () => {
   // The control: a cell that called every date unknown would pass the case above.
   it('carries the exact instant for a date the calendar can name', () => {
     const epochMs = Date.UTC(2026, 0, 2, 3, 4, 5);
-    render(<SortedDate epochMs={epochMs} verb="Added" />);
+    render(<RelativeTime epochMs={epochMs} verb="Added" />);
 
     const cell = screen.getByLabelText(/^Added /);
     expect(cell.getAttribute('datetime')).toBe('2026-01-02T03:04:05.000Z');
@@ -40,8 +40,8 @@ describe('SortedDate', () => {
   it('still names the last instant on either side', () => {
     const { container } = render(
       <>
-        <SortedDate epochMs={LAST_INSTANT} verb="Added" />
-        <SortedDate epochMs={-LAST_INSTANT} verb="Added" />
+        <RelativeTime epochMs={LAST_INSTANT} verb="Added" />
+        <RelativeTime epochMs={-LAST_INSTANT} verb="Added" />
       </>,
     );
 

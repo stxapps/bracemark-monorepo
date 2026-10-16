@@ -5,9 +5,8 @@
 // link-media.tsx, web's slots).
 //
 // The date column shows the field the rows are SORTED by (web's rationale:
-// relative values must read top-to-bottom in order). Formatted by hand rather
-// than Intl.RelativeTimeFormat — Hermes' Intl coverage is uneven across
-// platforms, and the compact "3d" style suits the narrow column anyway.
+// relative values must read top-to-bottom in order), and its verb says which —
+// relative-time.tsx carries the format and the accessible name.
 
 import { memo } from 'react';
 import { Linking, Pressable, View } from 'react-native';
@@ -20,27 +19,9 @@ import { Text } from '../../components/ui/text';
 import { Favicon, LinkPreviewImage } from './link-media';
 import { LinkRowMenu } from './link-row-menu';
 import { LinkTagChips } from './link-tag-chips';
+import { RelativeTime } from './relative-time';
 import { type LinkItemProps, NoteBadge, PinnedBadge } from './shared';
 import { useLinksViewActions } from './view-state-provider';
-
-const MINUTE = 60 * 1000;
-const RELATIVE_UNITS: [string, number][] = [
-  ['y', 365 * 24 * 60 * MINUTE],
-  ['mo', 30 * 24 * 60 * MINUTE],
-  ['w', 7 * 24 * 60 * MINUTE],
-  ['d', 24 * 60 * MINUTE],
-  ['h', 60 * MINUTE],
-  ['m', MINUTE],
-];
-
-// Compact "3d" / "2mo" for the date column: the largest unit that fits.
-function formatRelativeTime(epochMs: number): string {
-  const diff = Date.now() - epochMs;
-  for (const [unit, ms] of RELATIVE_UNITS) {
-    if (diff >= ms) return `${Math.round(diff / ms)}${unit}`;
-  }
-  return 'now';
-}
 
 // Web reveals its sorted-field date at the pane's `@xl` container query: 36rem,
 // or 576px at Tailwind's 16px root. Use the row width main.tsx hands down rather
@@ -204,9 +185,11 @@ export const LinkRow = memo(function LinkRow({
         </View>
       </View>
       {showRelativeTime && (
-        <Text className="shrink-0 text-xs text-muted-foreground">
-          {formatRelativeTime(link[sortOn])}
-        </Text>
+        <RelativeTime
+          epochMs={link[sortOn]}
+          verb={sortOn === 'createdAt' ? 'Added' : 'Updated'}
+          className="shrink-0"
+        />
       )}
       {/* Hidden while selecting — the checkbox column stands in (web's list
           layout, verbatim). */}
