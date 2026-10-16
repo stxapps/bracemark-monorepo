@@ -1056,12 +1056,19 @@ describe('the put chunk', () => {
   const COUNT = 150;
   const contentPaths = Array.from({ length: COUNT }, (_, i) => `files/f_${i}.enc`);
   const indexPaths = Array.from({ length: COUNT }, (_, i) => `links/l_${i}.enc`);
+  // That many ops is slow here for the fake, not the engine: fake-indexeddb drops a
+  // record's old index entries by scanning the whole index, so every write is O(n)
+  // and a case is O(n²) — 1–3s alone, past jest's 5s default under a parallel
+  // `npm run test`. A timed-out case is not stopped either: its sync runs on into
+  // the next one and commits there, failing that case too.
+  const SLOW_MS = 30_000;
+  const slowIt = (name: string, fn: () => Promise<void>) => it(name, fn, SLOW_MS);
 
   beforeEach(async () => {
     for (const path of [...contentPaths, ...indexPaths]) await seedQueued(path, 'bytes');
-  });
+  }, SLOW_MS);
 
-  it('commits content in smaller chunks than the index', async () => {
+  slowIt('commits content in smaller chunks than the index', async () => {
     await runIncrementalSync(deps({ opsList: quietLog }));
 
     const isContent = (batch: { path: string }[]) => batch[0].path.startsWith('files/');
@@ -1075,7 +1082,7 @@ describe('the put chunk', () => {
     expect(await pendingPaths()).toEqual([]);
   });
 
-  it('asks the quota gate once, and counts every op it refused or held', async () => {
+  slowIt('asks the quota gate once, and counts every op it refused or held', async () => {
     // The gate refuses on the account's usage, never on which paths a chunk holds,
     // so asking again for each remaining content chunk only spends the rate limit
     // on an answer already known — and the metadata phase is held behind refused
@@ -1100,7 +1107,7 @@ describe('the put chunk', () => {
     expect(await pendingPaths()).toHaveLength(2 * COUNT);
   });
 
-  it('clears each chunk from the queue before it signs the next', async () => {
+  slowIt('clears each chunk from the queue before it signs the next', async () => {
     // The whole point of a smaller content chunk: the pending count steps down per
     // chunk, not once per phase. A pass that signed ahead, or held its commits to
     // the end of the phase, would show the count frozen across every sign.
@@ -1122,7 +1129,7 @@ describe('the put chunk', () => {
     }
   });
 
-  it('keeps what it pushed before a mid-phase refusal, and counts only the rest', async () => {
+  slowIt('keeps what it pushed before a mid-phase refusal, and counts only the rest', async () => {
     // A refusal past the first chunk: the chunks before it are committed and off the
     // queue, so counting them as blocked would overstate what is stuck.
     const putSigns: number[] = [];
