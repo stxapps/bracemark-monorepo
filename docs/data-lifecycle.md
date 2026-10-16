@@ -749,7 +749,7 @@ a different edge:
 
 - **The read edge takes the id from the path.** Both platforms' `readLists` and
   `readTags` hand each entity back under `idFromPath` of its path
-  (`pathIdentifiedList`/`pathIdentifiedTag`, `sync/items.ts`) — for lists
+  (`listWithPathId`/`tagWithPathId`, `sync/items.ts`) — for lists
   _before_ `mergeSystemLists`, because that merge is by id. Paths are unique, so
   ids are; a record stored anywhere else is no longer taken for a system list's
   override, and the one stored at a system id is that override whatever it calls
@@ -780,7 +780,7 @@ the whole of it). Nothing is rewritten on read; the next edit of the record
 writes the path's id into its plaintext, and until then a client on an older
 build still goes by the copy. A **pin** carries the same kind of copy (its
 link's id) and is under the same rule: both platforms' `readPins` hand each pin
-back under its path's id (`pathIdentifiedPin`, `sync/items.ts`), and the backup
+back under its path's id (`pinWithPathId`, `sync/items.ts`), and the backup
 reader compares a pin's two ids as it does a list's or a tag's. Every reader of
 a pin's id goes through `readPins` — the pinned overlay, which resolves the
 pin's link through it (`readPinnedOverlay`); pin reordering, which finds the

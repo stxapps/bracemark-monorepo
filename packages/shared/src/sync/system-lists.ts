@@ -136,7 +136,7 @@ export const SYSTEM_LIST_DEFAULTS: readonly List[] = [
 // one: not the sidebar, a picker, the lock provider or the HTML and CSV exports
 // (the backup export reads the store raw — it is verbatim). Links filed under
 // it, and lists naming it as parent, are then dangling references, which every
-// reader already tolerates (sync/items.ts, pathIdentified). A lock that list
+// reader already tolerates (sync/items.ts, withPathId). A lock that list
 // held goes with it: coverage is worked out from the tree, so its links and its
 // child lists are no longer covered, and the lock provider's orphan sweep
 // deletes the row. No editor mints either id; before RESERVED_LIST_IDS, a

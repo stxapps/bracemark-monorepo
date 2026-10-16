@@ -46,20 +46,17 @@ export function linkIdOf(link: LinkItem): string {
 // not harmless: a device-local list lock is keyed by list id, so a lock set
 // under the old id covers nothing afterwards (docs/locks.md, Keying). The next
 // edit rewrites the plaintext with the path's id.
-function pathIdentified<T extends { id: string }>(
-  entity: WithPath<T>,
-  prefix: string,
-): WithPath<T> {
+function withPathId<T extends { id: string }>(entity: WithPath<T>, prefix: string): WithPath<T> {
   const id = idFromPath(entity.path, prefix);
   return entity.id === id ? entity : { ...entity, id };
 }
 
-export function pathIdentifiedList(list: ListItem): ListItem {
-  return pathIdentified(list, LISTS_PREFIX);
+export function listWithPathId(list: ListItem): ListItem {
+  return withPathId(list, LISTS_PREFIX);
 }
 
-export function pathIdentifiedTag(tag: TagItem): TagItem {
-  return pathIdentified(tag, TAGS_PREFIX);
+export function tagWithPathId(tag: TagItem): TagItem {
+  return withPathId(tag, TAGS_PREFIX);
 }
 
 // A pin carries its link's id the same way (`pins/{linkId}.enc`), and the
@@ -70,6 +67,6 @@ export function pathIdentifiedTag(tag: TagItem): TagItem {
 // writePin writes the copy back unchanged, so a reorder never corrected it.
 // Applied by both platforms' readPins, which every one of those readers goes
 // through; the next write stores the path's id.
-export function pathIdentifiedPin(pin: PinItem): PinItem {
-  return pathIdentified(pin, PINS_PREFIX);
+export function pinWithPathId(pin: PinItem): PinItem {
+  return withPathId(pin, PINS_PREFIX);
 }

@@ -70,13 +70,12 @@ import {
   linkSchema,
   LISTS_PREFIX,
   listSchema,
+  listWithPathId,
   mergeSystemLists,
   pathFromId,
-  pathIdentifiedList,
-  pathIdentifiedPin,
-  pathIdentifiedTag,
   PINS_PREFIX,
   pinSchema,
+  pinWithPathId,
   rekey,
   setCachedExtraction,
   setCachedLink,
@@ -84,6 +83,7 @@ import {
   settingsGeneralSchema,
   TAGS_PREFIX,
   tagSchema,
+  tagWithPathId,
   TRASH_ID,
 } from '@stxapps/shared';
 import { chunk } from '@stxapps/shared';
@@ -276,19 +276,19 @@ async function readNamespace<T extends z.ZodTypeAny>(
 // queries.ts readLists has the reasoning.
 export async function readLists(): Promise<ListItem[]> {
   const stored = await readNamespace(LISTS_PREFIX, listSchema);
-  return mergeSystemLists(stored.map(pathIdentifiedList));
+  return mergeSystemLists(stored.map(listWithPathId));
 }
 
 export async function readTags(): Promise<TagItem[]> {
   const stored = await readNamespace(TAGS_PREFIX, tagSchema);
-  return stored.map(pathIdentifiedTag);
+  return stored.map(tagWithPathId);
 }
 
 // Every pin (one per pinned link). Small by design, like lists/tags. Each under
 // its PATH's id — web queries.ts readPins has the reasoning.
 export async function readPins(): Promise<PinItem[]> {
   const stored = await readNamespace(PINS_PREFIX, pinSchema);
-  return stored.map(pathIdentifiedPin);
+  return stored.map(pinWithPathId);
 }
 
 // The synced general-settings blob, or undefined if this device hasn't

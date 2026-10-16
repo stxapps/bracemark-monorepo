@@ -30,7 +30,7 @@
 // multiplied at every step: twenty records, two to an id and ten deep, built two
 // thousand nodes, and each further level doubled that. So an id is placed once,
 // and a forest is never larger than the set it was built from. The read edges
-// take a list's and a tag's id from its PATH (`pathIdentified`, items.ts), which
+// take a list's and a tag's id from its PATH (`withPathId`, items.ts), which
 // is unique, so nothing stored is hidden by this; it is the backstop for a caller
 // holding a set that never went through one — the marketing site's converter
 // reading a backup that repeats a line. The LAST item with an id is the one

@@ -42,13 +42,12 @@ import {
   linkSchema,
   LISTS_PREFIX,
   listSchema,
+  listWithPathId,
   mergeSystemLists,
   pathFromId,
-  pathIdentifiedList,
-  pathIdentifiedPin,
-  pathIdentifiedTag,
   PINS_PREFIX,
   pinSchema,
+  pinWithPathId,
   rekey,
   setCachedExtraction,
   setCachedLink,
@@ -56,6 +55,7 @@ import {
   settingsGeneralSchema,
   TAGS_PREFIX,
   tagSchema,
+  tagWithPathId,
   TRASH_ID,
 } from '@stxapps/shared';
 
@@ -289,31 +289,31 @@ async function readNamespace<T extends z.ZodTypeAny>(
 // take the flat set. Tags have no system entries, so `readTags` is a plain read.
 //
 // Both hand back each entity under its PATH's id, not the copy in its plaintext
-// (pathIdentified, shared sync/items.ts) — and for lists BEFORE the merge, since
+// (withPathId, shared sync/items.ts) — and for lists BEFORE the merge, since
 // the merge is by id: it is what stops a record stored anywhere else from being
 // taken for a system list's override, and makes the one stored at a system id
 // that override whatever it calls itself. Ids are then unique because paths are,
 // which is the property buildTree needs of the set it is given.
 export async function readLists(): Promise<ListItem[]> {
   const stored = await readNamespace(LISTS_PREFIX, listSchema);
-  return mergeSystemLists(stored.map(pathIdentifiedList));
+  return mergeSystemLists(stored.map(listWithPathId));
 }
 
 export async function readTags(): Promise<TagItem[]> {
   const stored = await readNamespace(TAGS_PREFIX, tagSchema);
-  return stored.map(pathIdentifiedTag);
+  return stored.map(tagWithPathId);
 }
 
 // Every pin (one per pinned link). Small by design — a user pins a handful — so
 // the whole namespace is read and decoded, no index, like lists/tags. Each under
-// its PATH's id, like lists and tags (pathIdentifiedPin, shared sync/items.ts):
+// its PATH's id, like lists and tags (pinWithPathId, shared sync/items.ts):
 // every reader of a pin's id goes through here. A pass-through, NOT an async
 // wrapper that awaits readNamespace: readLinks reaches this from a liveQuery
 // querier (via readPinnedOverlay) and queries the store after it, and a second
 // stacked await would silently stop Dexie tracking that query in a real
 // browser (_the zone-echo constraint_, docs/client-queries.md).
 export function readPins(): Promise<PinItem[]> {
-  return readNamespace(PINS_PREFIX, pinSchema, pathIdentifiedPin);
+  return readNamespace(PINS_PREFIX, pinSchema, pinWithPathId);
 }
 
 // The synced general-settings blob (`settings/general.enc`), or undefined if this
