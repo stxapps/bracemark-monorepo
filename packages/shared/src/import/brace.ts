@@ -1,6 +1,7 @@
 import { base64ToBytes } from '../crypto/encoding';
 import { normalizeUrl } from '../url/url';
 import type { ImportedBundle, ImportedLink, ImportObserver } from './bundle';
+import { isRecord } from './is-record';
 import { PARSE_CHUNK, runSteps } from './steps';
 
 // Brace.to export parser — the one importer whose input is a foreign app's whole
@@ -71,10 +72,6 @@ interface BraceEntry {
   data: unknown;
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 // The revision-collapsing key: the first two id segments. `<addedDT>-<r4>` is
 // stable across every edit of one link, where the full id is not.
 function mainIdOf(id: string): string {
@@ -122,7 +119,7 @@ function walkListNameMap(
   // nests a handful deep at most.
   if (!Array.isArray(objs) || depth > 20) return;
   for (const obj of objs) {
-    if (!isObject(obj)) continue;
+    if (!isRecord(obj)) continue;
     const { listName, displayName, children } = obj;
     if (typeof listName !== 'string' || listName === '') continue;
     const name = typeof displayName === 'string' && displayName !== '' ? displayName : listName;
@@ -136,7 +133,7 @@ function readTagNameMap(objs: unknown): Map<string, string> {
   const out = new Map<string, string>();
   if (!Array.isArray(objs)) return out;
   for (const obj of objs) {
-    if (!isObject(obj)) continue;
+    if (!isRecord(obj)) continue;
     const { tagName, displayName } = obj;
     if (typeof tagName !== 'string' || tagName === '') continue;
     out.set(tagName, typeof displayName === 'string' && displayName !== '' ? displayName : tagName);
@@ -152,7 +149,7 @@ function latestSettings(entries: BraceEntry[]): Record<string, unknown> | undefi
   let bestDt = -1;
   let best: Record<string, unknown> | undefined;
   for (const entry of entries) {
-    if (!isObject(entry.data)) continue;
+    if (!isRecord(entry.data)) continue;
     const digits = /^\d+/.exec(entry.path.slice(SETTINGS.length));
     const dt = digits ? parseInt(digits[0], 10) : 0;
     if (dt < bestDt) continue;
@@ -187,7 +184,7 @@ export function* parseBraceExportSteps(
   const entries: BraceEntry[] = [];
   for (const [index, value] of json.entries()) {
     if (index > 0 && index % PARSE_CHUNK === 0) yield;
-    if (!isObject(value) || typeof value.path !== 'string') continue;
+    if (!isRecord(value) || typeof value.path !== 'string') continue;
     entries.push({ path: value.path, data: value.data, position: index + 1 });
   }
 
@@ -214,7 +211,7 @@ export function* parseBraceExportSteps(
 
     if (path.startsWith(LINKS)) {
       const split = splitFPath(path, 3);
-      if (!split || !isObject(data)) {
+      if (!split || !isRecord(data)) {
         observer?.row(position, 'Invalid link record');
         continue;
       }
@@ -311,7 +308,7 @@ export function* parseBraceExportSteps(
   const links: ImportedLink[] = [];
   for (const [index, row] of linkRows.entries()) {
     if (index > 0 && index % PARSE_CHUNK === 0) yield;
-    if (!isObject(row.data)) continue;
+    if (!isRecord(row.data)) continue;
     if (typeof row.data.url !== 'string') {
       observer?.row(row.position, 'No address');
       continue;
@@ -349,10 +346,10 @@ export function* parseBraceExportSteps(
 
     // The page title Brace's extractor found: provisional, like every other
     // imported title. `custom.title` beside it is the user's own — deliberate.
-    if (isObject(row.data.extractedResult) && typeof row.data.extractedResult.title === 'string') {
+    if (isRecord(row.data.extractedResult) && typeof row.data.extractedResult.title === 'string') {
       link.title = row.data.extractedResult.title;
     }
-    if (isObject(row.data.custom)) {
+    if (isRecord(row.data.custom)) {
       const { title, image } = row.data.custom;
       if (typeof title === 'string' && title !== '') link.customTitle = title;
       if (typeof image === 'string' && image.includes(CD_ROOT)) {

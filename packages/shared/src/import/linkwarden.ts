@@ -2,6 +2,7 @@ import { decodeHtmlEntities } from '../html/entities';
 import { normalizeUrl } from '../url/url';
 import type { ImportedLink, ImportObserver } from './bundle';
 import { parseEpoch } from './epoch';
+import { isRecord } from './is-record';
 import { IMPORT_MAX_FOLDER_DEPTH } from './resolve';
 import { PARSE_CHUNK, runSteps } from './steps';
 
@@ -96,10 +97,6 @@ interface LwCollection extends Named {
   id?: unknown;
   parentId?: unknown;
   links?: unknown;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function nonEmpty(value: unknown): string | undefined {

@@ -57,6 +57,29 @@ export interface ExportBundle {
   exportedAt?: number;
 }
 
+// Every folder in the tree with its root-first path, parents before children and
+// siblings in order — the order the serializers write. Walked with an explicit
+// stack, not recursion: the tree is as deep as the library's `parentId` chain,
+// which a backup or another device can make deeper than the call stack. It copies
+// a path per folder, so memory grows with depth × folders; a caller holding an
+// untrusted tree bounds its depth first.
+export function foldersWithPaths(
+  folders: ExportFolder[],
+): { folder: ExportFolder; path: string[] }[] {
+  const out: { folder: ExportFolder; path: string[] }[] = [];
+  const pending: { folder: ExportFolder; parent: string[] }[] = [];
+  for (let i = folders.length - 1; i >= 0; i--) pending.push({ folder: folders[i], parent: [] });
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    const path = [...next.parent, next.folder.name];
+    out.push({ folder: next.folder, path });
+    const { children } = next.folder;
+    for (let i = children.length - 1; i >= 0; i--) {
+      pending.push({ folder: children[i], parent: path });
+    }
+  }
+  return out;
+}
+
 function exportRow(link: ImportedLink): ExportLinkRow {
   return {
     url: link.url,

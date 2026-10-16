@@ -9,8 +9,8 @@ import {
   bundleFromImported,
   bundleFromLibrary,
   type ExportBundle,
-  type ExportFolder,
   type ExportLinkRow,
+  foldersWithPaths,
   type LibraryLink,
 } from '../export/bundle';
 import { toRaindropCsv } from '../export/csv';
@@ -21,6 +21,7 @@ import { parseBraceExport } from '../import/brace';
 import type { ImportedLink, ImportObserver } from '../import/bundle';
 import { parseRaindropCsv, scanCsv } from '../import/csv';
 import { detectTextImportFormat } from '../import/detect';
+import { isRecord } from '../import/is-record';
 import { parseLinkwardenExport } from '../import/linkwarden';
 import { parseNetscapeHtml } from '../import/netscape';
 import { isRaindropCsvHeader } from '../import/raindrop';
@@ -116,10 +117,6 @@ export interface BookmarkSource {
   backupManifest?: string;
 }
 
-function record(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 function flatten(bundle: ExportBundle): ImportedLink[] {
   const out: ImportedLink[] = [];
   function rows(links: ExportLinkRow[], path: string[]) {
@@ -178,31 +175,6 @@ function readBackup(
     trashCount: links.filter(({ link }) => link.listId === TRASH_ID).length,
     archiveCount: links.filter(({ link }) => link.listId === ARCHIVE_ID).length,
   };
-}
-
-// Every folder in the tree with its root-first path, parents before children and
-// siblings in order. Walked with its own stack, like every tree walk here. It
-// copies a path per folder, so it only ever sees a tree already held to the
-// depth rule: a backup's in readBackup, the output bundle's in addFolder below.
-function foldersWithPaths(folders: ExportFolder[]): { folder: ExportFolder; path: string[] }[] {
-  const out: { folder: ExportFolder; path: string[] }[] = [];
-  const pending: { folder: ExportFolder; parent: string[] }[] = [];
-  for (let i = folders.length - 1; i >= 0; i--) pending.push({ folder: folders[i], parent: [] });
-  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
-    const path = [...next.parent, next.folder.name];
-    out.push({ folder: next.folder, path });
-    const { children } = next.folder;
-    for (let i = children.length - 1; i >= 0; i--) {
-      pending.push({ folder: children[i], parent: path });
-    }
-  }
-  return out;
-}
-
-// Every folder path in the tree, parents before children — how a backup's lists,
-// empty ones included, reach the observer.
-function folderPaths(folders: ExportFolder[]): string[][] {
-  return foldersWithPaths(folders).map(({ path }) => path);
 }
 
 /** Strict file inspection around the tolerant app parsers. No URL mining fallback. */
@@ -285,7 +257,10 @@ export function convertBookmarkFiles(
       }
       sourceLabels.add('Bracemark backup');
       const read = readBackup(text, observer);
-      for (const path of folderPaths(read.bundle.folders)) observer.folder(path);
+      // Every list reaches the observer, empty ones included. foldersWithPaths
+      // copies a path per folder; readBackup has already held the tree to the
+      // depth rule, and the output bundle is held to it by addFolder.
+      for (const { path } of foldersWithPaths(read.bundle.folders)) observer.folder(path);
       parsed = flatten(read.bundle);
       trashCount += read.trashCount;
       losses.add('Bracemark settings, pins, and images aren’t included.');
@@ -378,10 +353,10 @@ export function convertBookmarkFiles(
       } catch {
         throw new Error('This JSON export is incomplete or malformed. Export it again.');
       }
-      if (record(json) && Array.isArray(json.collections)) {
+      if (isRecord(json) && Array.isArray(json.collections)) {
         if (
           json.collections.some(
-            (collection) => !record(collection) || !Array.isArray(collection.links),
+            (collection) => !isRecord(collection) || !Array.isArray(collection.links),
           )
         )
           throw new Error('This LinkWarden export has an invalid collection. Export it again.');
@@ -398,7 +373,7 @@ export function convertBookmarkFiles(
         json.length > 0 &&
         json.every(
           (entry) =>
-            record(entry) &&
+            isRecord(entry) &&
             typeof entry.path === 'string' &&
             /^(links\/|sslts\/|pins\/|tags\/|images\/|settings)|\/images\//.test(entry.path),
         )

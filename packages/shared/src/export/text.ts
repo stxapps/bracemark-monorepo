@@ -7,7 +7,7 @@ import type { ExportBundle, ExportFolder } from './bundle';
 export function toUrlText(bundle: ExportBundle): string {
   const out: string[] = (bundle.rootLinks ?? []).map((link) => link.url);
   // An explicit stack, not recursion: the tree is as deep as the library's
-  // `parentId` chain (see csv.ts).
+  // `parentId` chain (see `foldersWithPaths` in bundle.ts).
   const pending: ExportFolder[] = bundle.folders.slice().reverse();
   for (let folder = pending.pop(); folder !== undefined; folder = pending.pop()) {
     for (const link of folder.links) out.push(link.url);

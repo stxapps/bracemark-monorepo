@@ -35,9 +35,9 @@ function linkLines(link: ExportLinkRow, indent: string, includeNotes: boolean): 
 
 // Folders open, hold their links and children, and close — walked with an
 // explicit stack rather than recursion, since the tree is as deep as the
-// library's `parentId` chain (see csv.ts). A frame is either a folder still to
-// open or the closing line of one already opened, pushed UNDER its children so it
-// comes off after the last of them.
+// library's `parentId` chain (see `foldersWithPaths` in bundle.ts). A frame is
+// either a folder still to open or the closing line of one already opened,
+// pushed UNDER its children so it comes off after the last of them.
 function pushFolders(
   folders: ExportFolder[],
   indent: string,

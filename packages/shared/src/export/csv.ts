@@ -1,5 +1,5 @@
 import { isCalendarTime } from '../sync/calendar-time';
-import type { ExportBundle, ExportFolder, ExportLinkRow } from './bundle';
+import { type ExportBundle, type ExportLinkRow, foldersWithPaths } from './bundle';
 
 // CSV serializer targeting Raindrop.io's import (its documented columns:
 // url/folder/title/note/tags/created) — and any spreadsheet. Preferred over
@@ -45,23 +45,6 @@ function pushLinks(links: ExportLinkRow[], path: string, out: string[], safe: bo
   }
 }
 
-// Folders are walked with an explicit stack, parents before children and
-// siblings in order: a list tree is as deep as its `parentId` chain, which a
-// backup or another device can make deeper than the call stack.
-function pushFolders(folders: ExportFolder[], out: string[], safe: boolean): void {
-  const pending: { folder: ExportFolder; parentPath: string }[] = [];
-  for (let i = folders.length - 1; i >= 0; i--)
-    pending.push({ folder: folders[i], parentPath: '' });
-  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
-    const { folder, parentPath } = next;
-    const path = parentPath === '' ? folder.name : `${parentPath}/${folder.name}`;
-    pushLinks(folder.links, path, out, safe);
-    for (let i = folder.children.length - 1; i >= 0; i--) {
-      pending.push({ folder: folder.children[i], parentPath: path });
-    }
-  }
-}
-
 export function toRaindropCsv(
   bundle: ExportBundle,
   options: { spreadsheetSafe?: boolean } = {},
@@ -69,6 +52,7 @@ export function toRaindropCsv(
   const out = [HEADER.join(',')];
   const safe = options.spreadsheetSafe === true;
   pushLinks(bundle.rootLinks ?? [], '', out, safe);
-  pushFolders(bundle.folders, out, safe);
+  for (const { folder, path } of foldersWithPaths(bundle.folders))
+    pushLinks(folder.links, path.join('/'), out, safe);
   return out.join('\r\n') + '\r\n';
 }
