@@ -1390,6 +1390,12 @@ things about using it:
   fixture.** That fixture's ids all sort after any random id, so a link saved
   during a listing could never land BEHIND it and the case would pass on the
   engine that lost links.
+- **The behind link is looked for by scrolling, not by its absence.** The case
+  saves until one link lands ahead of the listing, which can take a couple of
+  dozen saves; the behind link is the oldest of them, and past ~18 rows the
+  virtualizer has not mounted it. Read as `toHaveCount(0)`, that was a flake
+  that looked exactly like the bug the case guards — the reader had downloaded
+  the link, and it was in the store, one screen down.
 
 `SYNC-TABS-001` reads the server the only honest way — through a device that
 has nothing but what the server gives it — because the failure it guards left

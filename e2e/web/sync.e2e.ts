@@ -14,7 +14,7 @@ import {
   linkRow,
   openSidebarItem,
 } from './fixtures/links';
-import { expectRowAtTop, scrollerOf, scrollTop } from './fixtures/scroll';
+import { expectRowAtTop, scrollerOf, scrollTop, scrollUntilRow } from './fixtures/scroll';
 import { syncAndWait } from './fixtures/sync';
 
 // Cross-profile sync as the mounted links page receives it. The promotion rules
@@ -383,6 +383,14 @@ test.describe('sync between clients in use at once', () => {
 
         // The control first: the listing did reach the link saved ahead of it.
         await expect(linkRow(reader.page, ahead)).toHaveCount(1);
+        // `behind` is the OLDEST of the live saves, and finding `ahead` can take a
+        // couple of dozen of them — enough to push it below the virtualizer's
+        // window, where a row that is in the store is simply not in the DOM. So
+        // walk down to it rather than read its absence as a lost link.
+        if ((await linkRow(reader.page, behind).count()) === 0) {
+          const scroller = await scrollerOf(linkRow(reader.page, ahead));
+          await scrollUntilRow(reader.page, scroller, behind);
+        }
         await expect(linkRow(reader.page, behind)).toHaveCount(1);
       } finally {
         listing.resume();
