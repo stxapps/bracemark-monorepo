@@ -20,12 +20,15 @@
 //  - No `pathFilter` in SyncDeps: selective sync exists for the bracemark-extension;
 //    bracemark-expo is a full-sync client and this package has no other consumer.
 //    Reintroduce it from web verbatim if a selective expo surface ever appears.
-//  - No cycle lock. Web takes a Web Lock around each cycle because every tab of an
-//    origin runs its own copy of the engine over one store; here there is one
-//    runtime per store (the Android share activity lives in the app's process, and
-//    the iOS share extension writes an outbox file and never opens the database),
-//    so the single-flight below already IS one cycle at a time for the account on
-//    this device.
+//  - The cycle lock is this runtime's own (withCycleLock), not a Web Lock. Web
+//    needs one to keep cycles apart because every tab of an origin runs its own
+//    copy of the engine over one store; here there is one runtime per store (the
+//    Android share activity lives in the app's process, and the iOS share
+//    extension writes an outbox file and never opens the database), so the
+//    single-flight below already IS one cycle at a time for the account on this
+//    device. The lock is there only so something that is not a cycle can hold
+//    them off (holdSyncCycles). The first sync does not take it; the first-sync
+//    flag keeps it and the cycles apart (runCycle).
 //
 // What does NOT diverge, and is restated here only because the source is
 // duplicated: the cursor is a claim — "every op at or below this point has been
@@ -543,10 +546,12 @@ export async function loadEntityContent(deps: SyncDeps, path: string): Promise<F
 // the row, so re-runs are resumable — but signed in SIGN_BATCH pages (one
 // `files/sign` call per ~1000 paths instead of one per file) and fetched at
 // FILE_CONCURRENCY, as web's is: these are MB-sized media, not index blobs.
-// Already-materialized files are skipped (and don't count toward progress); a path that's unknown
-// locally or 404s on GET (deleted on another device, the delete op not yet
-// pulled) lands in `missingPaths` for the caller to report — never a thrown
-// error. Any other failure rejects.
+// Already-materialized files are skipped (and don't count toward progress); a
+// path that's unknown locally, 404s on GET (deleted on another device, the
+// delete op not yet pulled) or does not open under its path (openFetchedFile)
+// lands in `missingPaths` for the caller to report — never a thrown error. Any
+// other failure rejects. The unreadable case is web's, for web's reason: one
+// such blob used to fail the whole batch on every attempt.
 export async function loadEntityContents(
   deps: SyncDeps,
   paths: string[],
@@ -596,7 +601,7 @@ export async function loadEntityContents(
             // Same deterministic-overwrite + flag-last ordering as
             // loadEntityContent (see there).
             deleteDataFile(path);
-            await decryptFile(enc.uri, dataFileFor(path).uri, deps.encryptionKey, path);
+            fetched = await openFetchedFile(deps, enc, path);
           }
         } finally {
           if (enc.exists) enc.delete();
@@ -1265,6 +1270,22 @@ async function openPulled(
     if (!(err instanceof BlobUnreadableError)) throw err;
     console.warn(`sync: skipped ${path}, which does not open under its path`);
     return undefined;
+  }
+}
+
+// openPulled for a fetched `files/` ciphertext, which decrypts path-to-path into
+// the path's plaintext location: true once it is there, false when the blob does
+// not open under its path (BlobUnreadableError — expo-crypto's decryptFile maps
+// the native tag and truncation failures onto it). A failed decrypt leaves no
+// output behind, so false needs no cleanup. Anything else still throws.
+async function openFetchedFile(deps: SyncDeps, enc: File, path: string): Promise<boolean> {
+  try {
+    await decryptFile(enc.uri, dataFileFor(path).uri, deps.encryptionKey, path);
+    return true;
+  } catch (err) {
+    if (!(err instanceof BlobUnreadableError)) throw err;
+    console.warn(`sync: skipped ${path}, which does not open under its path`);
+    return false;
   }
 }
 

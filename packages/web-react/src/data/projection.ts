@@ -101,7 +101,11 @@ export function toItemRecord(path: string, updatedAt: number, data?: Uint8Array)
       // non-link rows. (The all-type `[itemType+item*At]` indexes don't have this
       // problem — itemType already scopes them.)
       record.itemListId = link.listId;
-      record.itemTagIds = link.tagIds;
+      // A SET, though the schema allows a repeated id: the multiEntry index would
+      // fold it away here, but expo's copy writes each id as a junction row keyed
+      // (path, tagId), where a repeat fails the whole write — so both copies dedupe
+      // and the column means the same thing on either.
+      record.itemTagIds = [...new Set(link.tagIds)];
       record.itemUrl = link.url;
       // The client-only dedup identity (db.ts `itemUrlKey`): DERIVED here, never
       // read from the blob, so the key rules can evolve without touching synced

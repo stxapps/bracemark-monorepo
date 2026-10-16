@@ -366,7 +366,7 @@ always**, plus a thin drift guard:
   The load-bearing case is the asymmetry — a pull tears down the plaintext only
   for the rows it actually re-stored, because a path the local-wins guard spared
   still has a queued op whose upload reads that file.
-  It also carries the cases where expo has no lock to lean on: web keeps a
+  It also carries the cases where expo's first sync has no lock to lean on: web keeps a
   cycle and the first sync apart with `withCycleLock`, expo by declining the
   cycle and by giving the pull a slot of its own, and only expo's own spec can
   see either go ([local-first-sync.md](./local-first-sync.md), _two tabs, one

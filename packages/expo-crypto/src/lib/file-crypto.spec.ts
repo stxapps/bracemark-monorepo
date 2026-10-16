@@ -134,4 +134,35 @@ describe('decryptFile', () => {
       'authentication failed',
     );
   });
+
+  // The sync engine skips a blob that does not open under its path and fails on
+  // anything else, by `instanceof BlobUnreadableError` — the contract decryptEntity
+  // keeps. Native names the two such failures only by the code expo-modules-core
+  // infers from the exception class, so a renamed class turns this case red rather
+  // than turning one corrupt file back into a failed export. (Matched by name: the
+  // fresh module registry has its own copy of the class.)
+  it.each([
+    ['a failed tag', 'ERR_DECRYPTION_FAILED'],
+    ['a frame too short to hold one', 'ERR_TRUNCATED_BLOB'],
+  ])('rejects %s as BlobUnreadableError for the blob path', async (_what, code) => {
+    const { decryptFile } = await freshFileCrypto();
+    const native = Object.assign(new Error('native'), { code });
+    mockNative.decryptFile.mockRejectedValueOnce(native);
+
+    await expect(decryptFile('/tmp/in.enc', '/tmp/out.jpg', KEY, BLOB)).rejects.toMatchObject({
+      name: 'BlobUnreadableError',
+      path: BLOB,
+      cause: native,
+    });
+  });
+
+  it('leaves an unknown version as native threw it', async () => {
+    const { decryptFile } = await freshFileCrypto();
+    const native = Object.assign(new Error('unknown blob format version: 2'), {
+      code: 'ERR_UNKNOWN_BLOB_FORMAT',
+    });
+    mockNative.decryptFile.mockRejectedValueOnce(native);
+
+    await expect(decryptFile('/tmp/in.enc', '/tmp/out.jpg', KEY, BLOB)).rejects.toBe(native);
+  });
 });

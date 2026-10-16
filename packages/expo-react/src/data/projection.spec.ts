@@ -142,6 +142,18 @@ describe('toItemRecord', () => {
     });
   });
 
+  // The column is a set on both platforms (projection.ts): expo stores each id as a
+  // junction row whose primary key a repeat would hit, failing the pull's write.
+  it('projects a tag the link names twice once, in first-seen order', () => {
+    const record = toItemRecord(
+      pathFromId('l_1', LINKS_PREFIX),
+      1,
+      bytes(link({ tagIds: ['t_2', 't_1', 't_2'] })),
+    );
+
+    expect(record.itemTagIds).toEqual(['t_2', 't_1']);
+  });
+
   it('derives itemUrlKey with canonicalUrlKey rather than storing the raw url', () => {
     const url = 'HTTPS://WWW.Example.com:443/a/?b=2&a=1#frag';
     const record = toItemRecord(pathFromId('l_1', LINKS_PREFIX), 1, bytes(link({ url })));

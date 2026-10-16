@@ -584,6 +584,10 @@ changes is mechanical, and only the substrate forces it:
   finishes in JS rather than pushing an indexed join into SQL — the multi-tag
   `all`/`none` predicates need each row's full tag set anyway, and keeping it in
   JS holds the two engines' logic aligned. Fine at few-thousand-links scale.
+  The junction is keyed `(path, tagId)`, so the projector writes a link's tag
+  ids as a set: a multiEntry index folds a repeated id away, a primary key
+  refuses the whole write, and that write is a pull's. Web's projector dedupes
+  too, so the column means the same on both (`projection.ts`).
 - **Lazy Dexie cursor → keyset chunk loop.** Dexie's lazy filtered
   `.filter().limit(n+1)` cursor walk becomes a keyset-paginated chunk loop
   (`SCAN_CHUNK` rows per step, resuming strictly after `(sortValue, path)`), so a

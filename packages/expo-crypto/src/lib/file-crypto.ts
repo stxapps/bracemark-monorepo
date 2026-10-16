@@ -1,6 +1,6 @@
 import { requireNativeModule } from 'expo-modules-core';
 
-import { bytesToHex } from '@stxapps/shared';
+import { BlobUnreadableError, bytesToHex } from '@stxapps/shared';
 
 // File-level AES-256-GCM: whole files encrypted/decrypted path-to-path in the
 // native layer (Swift CryptoKit / Kotlin javax.crypto — see ../../ios and
@@ -61,11 +61,27 @@ export async function encryptFile(
   await getNative().encryptFile(inputPath, outputPath, bytesToHex(key), blobPath);
 }
 
+// A blob that does not open under `blobPath` rejects as BlobUnreadableError, the
+// contract blob.ts's decryptEntity already keeps, so a caller handles both framers
+// with one `instanceof`. Native raises it as a coded exception whose code
+// expo-modules-core infers from the class name (BracemarkFileCryptoModule.{swift,kt}):
+// a failed tag and a frame too short to hold one are both "does not open". An
+// unknown version is not, and stays as native threw it, as decryptEntity's does.
+const UNREADABLE_CODES = new Set(['ERR_DECRYPTION_FAILED', 'ERR_TRUNCATED_BLOB']);
+
 export async function decryptFile(
   inputPath: string,
   outputPath: string,
   key: Uint8Array,
   blobPath: string,
 ): Promise<void> {
-  await getNative().decryptFile(inputPath, outputPath, bytesToHex(key), blobPath);
+  try {
+    await getNative().decryptFile(inputPath, outputPath, bytesToHex(key), blobPath);
+  } catch (cause) {
+    const code = (cause as { code?: unknown } | null)?.code;
+    if (typeof code === 'string' && UNREADABLE_CODES.has(code)) {
+      throw new BlobUnreadableError(blobPath, { cause });
+    }
+    throw cause;
+  }
 }

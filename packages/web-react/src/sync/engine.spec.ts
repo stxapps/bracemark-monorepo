@@ -1336,6 +1336,57 @@ describe('loadEntityContent', () => {
   });
 });
 
+// The batch fetch's own poison pill. One `files/` blob that does not open under its
+// path rejected the whole batch, and every caller reads a rejection as a dead network:
+// the export failed on every attempt, for every file in the library, and the content
+// provider forgot the batch and asked for all of it again on the next mount. It is
+// reported missing now, like a 404 — the export counts it as a file it could not
+// include, and the rest of the batch lands.
+describe('a fetched content blob that does not open under its path', () => {
+  afterEach(() => {
+    mockGetBlob.mockReset();
+    (decryptEntity as jest.Mock).mockImplementation(async (_key: unknown, bytes: Uint8Array) =>
+      bytes.slice(1),
+    );
+  });
+
+  it('is reported missing, and the rest of the batch lands', async () => {
+    await db.items.put(toItemRecord(FILE_PATH, 1000));
+    await db.items.put(toItemRecord(OTHER_FILE_PATH, 1000));
+    mockGetBlob.mockImplementation(async (url: string) =>
+      Promise.resolve(new Uint8Array([0xee, ...utf8(`server ${pathFor(url)}`)])),
+    );
+    (decryptEntity as jest.Mock).mockImplementation(
+      async (_key: unknown, bytes: Uint8Array, at: string) => {
+        if (at === FILE_PATH) throw new BlobUnreadableError(FILE_PATH);
+        return bytes.slice(1);
+      },
+    );
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    let result: { missingPaths: string[] };
+    try {
+      result = await loadEntityContents(deps(), [FILE_PATH, OTHER_FILE_PATH]);
+    } finally {
+      warn.mockRestore();
+    }
+
+    expect(result.missingPaths).toEqual([FILE_PATH]);
+    expect(await bodyAt(FILE_PATH)).toBeUndefined();
+    expect(await bodyAt(OTHER_FILE_PATH)).toBe(`server ${OTHER_FILE_PATH}`);
+  });
+
+  it('still rejects on anything else, an unknown version above all', async () => {
+    await db.items.put(toItemRecord(FILE_PATH, 1000));
+    mockGetBlob.mockResolvedValue(new Uint8Array([0xee, ...utf8('page copy')]));
+    (decryptEntity as jest.Mock).mockRejectedValue(new Error('Unknown blob format version: 2'));
+
+    await expect(loadEntityContents(deps(), [FILE_PATH])).rejects.toThrow(
+      'Unknown blob format version: 2',
+    );
+  });
+});
+
 // --- the first-sync counter --------------------------------------------------
 
 // What the decrypting screen (bracemark-web components/initial-sync-gate.tsx) puts a

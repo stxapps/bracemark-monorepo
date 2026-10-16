@@ -122,7 +122,11 @@ export function toItemRecord(path: string, updatedAt: number, data?: Uint8Array)
       // add an itemType discriminator to those indexes and the read layer, or
       // link queries start returning non-link rows.
       record.itemListId = link.listId;
-      record.itemTagIds = link.tagIds;
+      // A SET, as on web: each id becomes a junction row keyed (path, tagId), and
+      // a link naming one tag twice — the schema allows it — would meet its own
+      // primary key and fail the whole write. That write is a pull's, so one such
+      // link failed every sync on this device for good.
+      record.itemTagIds = [...new Set(link.tagIds)];
       record.itemUrl = link.url;
       // The client-only dedup identity (db.ts `itemUrlKey`): DERIVED here, never
       // read from the blob, so the key rules can evolve without touching synced

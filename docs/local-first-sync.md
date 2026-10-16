@@ -1375,7 +1375,10 @@ flag is re-read inside the lock, and the pull the first tab just finished was
 the device's: the store is complete up to its cursor, and listing the namespace
 again would only hold the lock against the cycle that comes next.
 
-**bracemark-expo has no lock, and needed the same separation anyway** — a cycle
+**bracemark-expo's first sync takes no lock, and needed the same separation
+anyway** — its engine's cycle lock is runtime-local and exists only for
+`holdSyncCycles` (see [data-lifecycle.md](./data-lifecycle.md), _delete all
+data_), and a cycle
 and the first sync must not overlap, in one runtime as much as in two tabs. A
 write can land before the first sync is done there, where on web the gate keeps
 every editor out: a share, saved by the Android activity or drained from the iOS
@@ -1622,8 +1625,14 @@ the path is read again only when it is rewritten or a fallback lists it, which
 is what the server could already achieve by withholding it (below). An
 **unknown version** is deliberately not skipped: that is a newer client's
 format, an update reads it, and skipping would move the cursor past it for
-good. Only the pull skips; a lazy file load or an export that meets such a
-blob still fails. So a dev or staging account synced by a pre-binding build
+good. The batch content fetch (`loadEntityContents` — an export's file phase,
+the content provider) skips it the same way and reports the path in
+`missingPaths`, as it reports a 404: it used to reject, and one such file then
+failed every export of the library and re-fetched the provider's whole batch on
+every mount. expo's `decryptFile` maps the native tag and truncation failures
+onto `BlobUnreadableError` for this, by the codes expo-modules-core infers from
+the native exception classes. A single lazy load (`loadEntityContent`) still
+rejects. So a dev or staging account synced by a pre-binding build
 syncs again, without its old records — recreating it, or resetting the local
 api's state for the seeded dev accounts ([e2e.md](./e2e.md), _seeding a dev
 account_), is still how to get them back.

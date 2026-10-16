@@ -150,6 +150,18 @@ describe('toItemRecord', () => {
     });
   });
 
+  // The column is a set on both platforms (projection.ts): expo stores each id as a
+  // junction row whose primary key a repeat would hit, failing the pull's write.
+  it('projects a tag the link names twice once, in first-seen order', () => {
+    const record = toItemRecord(
+      pathFromId('l_1', LINKS_PREFIX),
+      1,
+      bytes(link({ tagIds: ['t_2', 't_1', 't_2'] })),
+    );
+
+    expect(record.itemTagIds).toEqual(['t_2', 't_1']);
+  });
+
   // `itemUrlKey` is DERIVED here and never read from the blob, so the key rules can
   // evolve without touching synced state (db.ts). Pinned as the relation rather than as
   // a literal, so a refinement to canonicalUrlKey moves this spec with it.

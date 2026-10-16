@@ -35,7 +35,7 @@
 // what puts a mid-cycle write after the pending snapshot deterministically,
 // with no timers.
 
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 import { decryptEntity, decryptFile, encryptEntity, encryptFile } from '@stxapps/expo-crypto';
 import {
@@ -52,14 +52,19 @@ import {
   utf8,
 } from '@stxapps/shared';
 
-import { getDb, syncMeta } from '../data/db';
+import { getDb, itemTagIds, syncMeta } from '../data/db';
 import { dataFileFor, ensureDataFilesDir } from '../data/file-store';
 import { getItem, markItemDataFile, putItemsTx, stampItemUpdatedAts } from '../data/item-store';
 import { liveReadsHeld } from '../data/live-read-invalidation';
 import { writeExtraction, writeFile } from '../data/mutations';
 import { enqueueDeleteTx, enqueuePutTx, listPendingOps } from '../data/pending-store';
 import { toItemRecord } from '../data/projection';
-import { beginInitialSync, getSyncMeta, markFirstSyncDone } from '../data/sync-store';
+import {
+  beginInitialSync,
+  getSyncMeta,
+  isFirstSyncDone,
+  markFirstSyncDone,
+} from '../data/sync-store';
 import {
   File as MemFile,
   listFileUris,
@@ -77,6 +82,10 @@ import {
   type SyncDeps,
 } from './engine';
 import { BlobRequestError, getBlob, getBlobToFile, putBlob, putBlobFromFile } from './r2';
+
+// The expo-crypto stand-in below throws this; jest's hoisting lets a factory
+// reach an outer binding only by a `mock` prefix, and only once it runs.
+const mockBlobUnreadableError = BlobUnreadableError;
 
 // The one seam that would reach native sqlite; everything above it in db.ts —
 // getDb, the PRAGMA, the DDL, the schema objects — runs for real
@@ -112,11 +121,14 @@ jest.mock('@stxapps/expo-crypto', () => {
     encryptFile: jest.fn(async (input: string, output: string) => {
       fs.writeFileText(output, `enc:${fs.readFileText(input)}`);
     }),
-    decryptFile: jest.fn(async (input: string, output: string) => {
+    decryptFile: jest.fn(async (input: string, output: string, _key: unknown, path: string) => {
       const cipher = fs.readFileText(input);
       // GCM authenticates at the end of the stream: a bad tag rejects and leaves
-      // no output behind (expo-crypto lib/file-crypto.ts).
-      if (!cipher.startsWith('enc:')) throw new Error('BracemarkFileCrypto: bad tag');
+      // no output behind, as BlobUnreadableError (expo-crypto lib/file-crypto.ts).
+      // Through the static import's `mock`-prefixed alias, not a require of the
+      // package: one would make the boundary rule read it as lazy-loaded
+      // (docs/testing.md, the tripwire).
+      if (!cipher.startsWith('enc:')) throw new mockBlobUnreadableError(path);
       fs.writeFileText(output, cipher.slice('enc:'.length));
     }),
     // Kept real in spirit — file-store mints temp names with it, and two
@@ -813,6 +825,36 @@ describe('loadEntityContents', () => {
     expect(plaintextAt(FILE_PATH)).toBeUndefined();
     expect(tempFiles()).toEqual([]);
   });
+
+  // Web engine's spec carries the reasoning: rejected, one bad blob failed the whole
+  // batch on every attempt — the export never finished.
+  it('reports a blob that does not open under its path as missing, and lands the rest', async () => {
+    getDb().transaction((tx) =>
+      putItemsTx(tx, [toItemRecord(FILE_PATH, 1000), toItemRecord(OTHER_FILE_PATH, 1000)]),
+    );
+    r2Content.set(OTHER_FILE_PATH, 'fetched');
+    mockGetBlobToFile.mockImplementation(async (url: string, file: { uri: string }) => {
+      const path = pathFor(url);
+      writeFileText(
+        file.uri,
+        path === FILE_PATH ? 'not a sealed frame' : `enc:${r2Content.get(path)}`,
+      );
+    });
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    let missingPaths: string[];
+    try {
+      ({ missingPaths } = await loadEntityContents(deps(), [FILE_PATH, OTHER_FILE_PATH]));
+    } finally {
+      warn.mockRestore();
+    }
+
+    expect(missingPaths).toEqual([FILE_PATH]);
+    expect(plaintextAt(FILE_PATH)).toBeUndefined();
+    expect((await getItem(FILE_PATH))?.hasDataFile).toBeFalsy();
+    expect(plaintextAt(OTHER_FILE_PATH)).toBe('fetched');
+    expect(tempFiles()).toEqual([]);
+  });
 });
 
 // --- the path each blob is bound to ----------------------------------------------
@@ -933,6 +975,57 @@ describe('a pulled blob that does not open under its path', () => {
     );
 
     expect((await getSyncMeta(USER))?.syncCursorUpdatedAt).toBe(1000);
+  });
+});
+
+// A link that names one tag twice. The schema reads `tagIds` as a plain array, and
+// web's multiEntry index folds the repeat away without a word, so web writes and
+// reads such a link fine. Here each tag is a junction row keyed `(path, tagId)`: the
+// repeat met its own primary key and the store refused the whole write. That failed
+// the pull on the one link, on every retry — a first sync whose gate never cleared on
+// this device, or a cycle that never moved its cursor again, while every web client
+// read the same library without a fault.
+describe('a pulled link that names a tag twice', () => {
+  const TWICE = JSON.stringify({
+    url: 'https://example.com/a',
+    listId: 'l_list',
+    tagIds: ['t_a', 't_b', 't_a'],
+    createdAt: 1,
+    updatedAt: 1,
+  });
+
+  afterEach(() => mockGetBlob.mockReset());
+
+  it('lands with the tag once, and the first sync completes', async () => {
+    getDb().delete(syncMeta).run();
+    await beginInitialSync(USER);
+    mockGetBlob.mockImplementation(async (url: string) =>
+      Promise.resolve(
+        new Uint8Array([0xee, ...utf8(pathFor(url) === LINK_PATH ? TWICE : 'the server copy')]),
+      ),
+    );
+
+    await runInitialSync(
+      deps({
+        filesList: () => [
+          { path: LINK_PATH, updatedAt: 5000 },
+          { path: OTHER_LINK_PATH, updatedAt: 5001 },
+        ],
+        opsList: () => ({ ops: [], oldestUpdatedAt: 2000, newestUpdatedAt: 6000, hasMore: false }),
+      }),
+    );
+
+    expect(await isFirstSyncDone(USER)).toBe(true);
+    expect(await bodyAt(LINK_PATH)).toBe(TWICE);
+    expect(await bodyAt(OTHER_LINK_PATH)).toBe('the server copy');
+    const tags = getDb()
+      .select({ tagId: itemTagIds.tagId })
+      .from(itemTagIds)
+      .where(eq(itemTagIds.path, LINK_PATH))
+      .all()
+      .map((row) => row.tagId)
+      .sort();
+    expect(tags).toEqual(['t_a', 't_b']);
   });
 });
 
@@ -1165,7 +1258,8 @@ describe('the cycle, against this copy of it', () => {
     // write does. Run beside the pull, that cycle pushed the link and cleared its
     // op — and the pull, reconciling against a listing taken before the push, then
     // dropped a path that was local-only and no longer queued. Web's engine holds
-    // its cycle lock across the pull; this one has no lock, so the cycle declines.
+    // its cycle lock across the pull; this one's pull takes no lock, so the cycle
+    // declines.
     getDb().delete(syncMeta).run();
     await beginInitialSync(USER);
     mockGetBlob.mockResolvedValue(new Uint8Array([0xee, ...utf8('the server copy')]));

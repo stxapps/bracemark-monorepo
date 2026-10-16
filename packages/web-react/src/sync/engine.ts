@@ -472,10 +472,13 @@ export async function loadEntityContent(
 // per ~1000 paths instead of one per file) and fetched at FILE_CONCURRENCY, not
 // the index fan-out: each in-flight fetch holds an MB-sized ciphertext and then
 // its plaintext in the JS heap. Already-resident bytes are skipped (and don't count
-// toward progress); a path that's unknown locally or 404s on GET (deleted on
-// another device, the delete op not yet pulled) lands in `missingPaths` for the
-// caller to report — never a thrown error, mirroring loadEntityContent. Any other
-// failure rejects.
+// toward progress); a path that's unknown locally, 404s on GET (deleted on another
+// device, the delete op not yet pulled) or does not open under its path
+// (openPulled) lands in `missingPaths` for the caller to report — never a thrown
+// error. Any other failure rejects. The unreadable case is the one that has to be
+// per path: rejected, one bad blob failed the whole batch on every attempt, so an
+// export could never finish and the content provider re-asked for the whole batch
+// on every mount.
 export async function loadEntityContents(
   deps: SyncDeps,
   paths: string[],
@@ -516,8 +519,8 @@ export async function loadEntityContents(
             throw err;
           })
         : undefined;
-      if (blob) {
-        const data = await decryptEntity(deps.encryptionKey, blob, path);
+      const data = blob && (await openPulled(deps, blob, path));
+      if (data) {
         await db.transaction('rw', db.items, db.syncMeta, async () => {
           await assertAccountStillOwnsStore(deps.username);
           const current = await db.items.get(path);
@@ -1159,7 +1162,8 @@ async function storeDownloads(
 // cursor moves on, and a local copy the path already had stays as it was. The
 // path is read again only when it is rewritten or a fallback lists it
 // (docs/local-first-sync.md, _crypto boundary_). Anything else still throws —
-// an unknown format version above all, which an update fixes.
+// an unknown format version above all, which an update fixes. The batch content
+// fetch (loadEntityContents) opens through here too, for the same reason.
 async function openPulled(
   deps: SyncDeps,
   blob: Uint8Array,
