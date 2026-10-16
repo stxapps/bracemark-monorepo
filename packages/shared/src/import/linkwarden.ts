@@ -3,7 +3,7 @@ import { normalizeUrl } from '../url/url';
 import type { ImportedLink, ImportObserver } from './bundle';
 import { parseEpoch } from './epoch';
 import { isRecord } from './is-record';
-import { IMPORT_MAX_FOLDER_DEPTH } from './resolve';
+import { capFolderPath } from './resolve';
 import { PARSE_CHUNK, runSteps } from './steps';
 
 // LinkWarden backup parser — the second importer (with brace.ts) whose input is a
@@ -167,7 +167,7 @@ export function* parseLinkwardenExportSteps(
   // the one that cuts it. The same loop listed in another order can be cut at
   // another edge — it is the first-listed collection reaching the loop, and
   // where it enters, that decide — and the depth rule (resolve.ts) reads the
-  // paths as cut, so a loop is not refused for being one. linkwarden.spec.ts
+  // paths as cut, so a loop is not flattened for being one. linkwarden.spec.ts
   // holds both halves. A parent that isn't in the file — LinkWarden can share a
   // collection whose parent belongs to someone else — simply ends the chain.
   const paths = new Map<LwCollection, string[]>();
@@ -182,14 +182,14 @@ export function* parseLinkwardenExportSteps(
     }
 
     // Back down, nearest the root first, each collection extending the path
-    // above it. A path already PAST the import's depth limit is not extended:
-    // one name over is all it takes to refuse the file, wherever a row or the
-    // converter's observer meets it (resolve.ts), so the names below would never
-    // be read — and copying them is what made a long chain quadratic.
+    // above it. Held to capFolderPath's shape as it grows (resolve.ts): past the
+    // depth limit a path is the first TREE_MAX_DEPTH names and then the
+    // collection's own, which is all the resolver reads of a deeper one — and
+    // copying every name above is what made a long chain quadratic.
     let path = (current !== undefined ? paths.get(current) : undefined) ?? [];
     for (let i = walk.length - 1; i >= 0; i--) {
       const name = nonEmpty(walk[i].name);
-      if (name !== undefined && path.length <= IMPORT_MAX_FOLDER_DEPTH) path = [...path, name];
+      if (name !== undefined) path = capFolderPath([...path, name]);
       paths.set(walk[i], path);
     }
     return path;

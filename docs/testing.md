@@ -216,7 +216,7 @@ seconds. Nothing was red; the suite was just slow, on whichever machine ran it.
 So pin what the fast path **leaves behind**, not the clock:
 
 - **Sharing.** Work done once is usually shared afterwards: that parser's
-  collections past the depth limit all hold the same path array, and
+  chain of unnamed collections all hold one empty path array, and
   `flattenToPathRows`' rows past the cut share one `ancestors`
   (`new Set(rows.map((r) => r.ancestors)).size`). Redo the work per row and each
   gets its own.

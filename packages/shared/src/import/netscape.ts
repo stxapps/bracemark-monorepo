@@ -3,6 +3,7 @@ import { normalizeUrl } from '../url/url';
 import type { ImportedLink, ImportObserver } from './bundle';
 import { parseEpoch } from './epoch';
 import { FAVORITES_TAG, isRaindropHtml, withHighlights, withoutUnsorted } from './raindrop';
+import { capFolderPath } from './resolve';
 import { PARSE_CHUNK, runSteps } from './steps';
 
 // Netscape Bookmark File parser — the read mirror of export/netscape.ts, and the
@@ -207,7 +208,7 @@ export function* parseNetscapeHtmlSteps(
       stack.push(pendingFolder);
       if (pendingFolder !== null) {
         const path = stack.filter((name): name is string => name !== null);
-        observer?.folder(raindrop ? withoutUnsorted(path) : path);
+        observer?.folder(capFolderPath(raindrop ? withoutUnsorted(path) : path));
       }
       pendingFolder = null;
       noteTarget = undefined;
@@ -255,7 +256,9 @@ export function* parseNetscapeHtmlSteps(
     const link: ImportedLink = {
       url,
       tagNames: [],
-      folderPath: raindrop ? withoutUnsorted(folderPath) : folderPath,
+      // Capped (resolve.ts), so a row past the depth limit keeps TREE_MAX_DEPTH + 1
+      // names rather than one per level it sits at.
+      folderPath: capFolderPath(raindrop ? withoutUnsorted(folderPath) : folderPath),
     };
 
     const title = innerText(match[4]);

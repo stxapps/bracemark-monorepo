@@ -14,10 +14,18 @@
 // and rank against grow as entities are created, so a second row naming the
 // same new folder reuses it and ranks stay monotonic. One resolver per run.
 
-import type { List, Tag } from '../sync/entities';
+import {
+  cleanName,
+  LINK_TAGS_MAX,
+  type List,
+  LIST_NAME_MAX,
+  type Tag,
+  TAG_NAME_MAX,
+} from '../sync/entities';
 import { LISTS_PREFIX, pathFromId, TAGS_PREFIX } from '../sync/paths';
 import { compareRank, rankForIndex } from '../sync/rank';
 import { MY_LIST_ID, TRASH_ID } from '../sync/system-lists';
+import { TREE_MAX_DEPTH } from '../sync/tree';
 
 // A minted entity and the items path to write it at — structurally the write
 // edge's RawEntityEntry (data/mutations.ts, both platforms), which is where
@@ -36,43 +44,38 @@ export interface ResolverNode {
   rank: string;
 }
 
-// The deepest folder chain an import builds. A file names its own depth — a
-// Netscape file by how many <DL>s it opens, a CSV by the separators in one cell,
-// a LinkWarden backup by its parentId chain — and every level becomes a list, so
-// without a bound the file decides how deep this library's tree is. The readers
-// no longer depend on that (sync/tree.ts walks with its own stack, not the call
-// stack), but a tree nobody could have built by hand is still not one an import
-// should mint, and the per-level costs that remain grow with it: an exported
-// folder carries its whole path, and a picker row its ancestors' names — those
-// only up to TREE_ROW_MAX_LEVELS of them (sync/tree.ts). docs/data-lifecycle.md
-// lists the readers known to still pay per level.
+// The deepest folder chain an import builds is the tree's own limit,
+// TREE_MAX_DEPTH (sync/tree.ts). A file names its own depth — a Netscape file
+// by how many <DL>s it opens, a CSV by the separators in one cell, a LinkWarden
+// backup by its parentId chain — and every level becomes a list, so without a
+// bound the file would decide how deep this library's tree is.
 //
-// 100 is the bookmark converter's rule (tools/bookmark-converter.ts), which now
-// reads this constant, so the tool on the marketing site and the app's import
-// hold a file to the same number. It is far past any export a bookmark manager writes —
-// browsers and their users stop within a dozen levels — which is the point: the
-// bound should never be met by a real library.
-export const IMPORT_MAX_FOLDER_DEPTH = 100;
-
-// Thrown before anything is resolved or written. The message is user-facing: both
-// import views and the converter render it verbatim. The WHOLE file is refused,
-// not the deep rows: dropping them would leave an import that looks complete,
-// and cutting their paths short would file links in folders the file never put
-// them in. A backup refused by the same rule says so in its own terms
-// (assertBackupTreeDepth, data/backup.ts): its tree is lists and tags, and the
-// act is in the library it came from, not in the file.
-export class ImportFolderDepthError extends Error {
-  constructor(
-    message = 'This file has too many nested folders. Flatten the folder tree and try again.',
-  ) {
-    super(message);
-    this.name = 'ImportFolderDepthError';
-  }
+// A deeper folder is PLACED at the limit, not refused: it becomes a list at
+// level TREE_MAX_DEPTH, beside its level-(TREE_MAX_DEPTH - 1) ancestor's other
+// children, under its own name and holding its own links. So no link lands in a
+// list that isn't named for its own folder, and only the nesting below the limit
+// is lost — the same shape the interop exports write (export/bundle.ts), so a
+// deep library exported and imported again comes back the same lists. It used
+// to refuse the whole file, which left the user nothing to import and nothing
+// they could do short of editing the file by hand (docs/data-limits.md).
+//
+// A folder path is held to at most TREE_MAX_DEPTH + 1 names: the first
+// TREE_MAX_DEPTH, then the row's own folder when it sits deeper. capFolderPath
+// is that shape; a parser may hand the resolver a longer path (the resolver
+// caps it) or cap its own as it builds them, which is what keeps a long chain
+// from costing a path copy per level per row (linkwarden.ts).
+export function capFolderPath(path: string[]): string[] {
+  return path.length <= TREE_MAX_DEPTH + 1
+    ? path
+    : [...path.slice(0, TREE_MAX_DEPTH), path[path.length - 1]];
 }
 
 export class ListResolver {
   private childrenOf = new Map<string | null, { id: string; name: string; rank: string }[]>();
   private resolved = new Map<string, string>();
+  // The lists a too-deep folder was placed in at the limit (capFolderPath), by
+  // id — a list found again by another row counts once.
+  private readonly flattenedIds = new Set<string>();
   readonly created: CreatedEntity<List>[] = [];
   private readonly now: number;
   private readonly newId: () => string;
@@ -88,43 +91,61 @@ export class ListResolver {
     for (const siblings of this.childrenOf.values()) siblings.sort(compareRank);
   }
 
-  // The list id for one root-first folder chain; [] → the default list.
+  // Lists that hold a folder from deeper than TREE_MAX_DEPTH, placed at it.
+  get flattenedCount(): number {
+    return this.flattenedIds.size;
+  }
+
+  // The list id for one root-first folder chain; [] → the default list. A chain
+  // past TREE_MAX_DEPTH files the row's own folder at that level, as a child of
+  // the level-(TREE_MAX_DEPTH - 1) list (capFolderPath, above).
   resolve(folderPath: string[]): string {
     if (folderPath.length === 0) return MY_LIST_ID;
-    const memoKey = folderPath.join('\u0000');
+    const path = capFolderPath(folderPath);
+    const memoKey = path.join('\u0000');
     const memoized = this.resolved.get(memoKey);
     if (memoized !== undefined) return memoized;
 
     let parentId: string | null = null;
     let listId = MY_LIST_ID;
-    for (const segment of folderPath) {
-      const siblings = this.childrenOf.get(parentId) ?? [];
-      this.childrenOf.set(parentId, siblings);
-      const wanted = segment.toLowerCase();
-      // Trash is excluded from matching — a folder named "Trash" becomes a
-      // regular list rather than mapping links into deletion staging.
-      const match = siblings.find(
-        (list) => list.id !== TRASH_ID && list.name.trim().toLowerCase() === wanted,
-      );
-      if (match) {
-        listId = match.id;
-      } else {
-        const list: List = {
-          id: this.newId(),
-          name: segment,
-          parentId,
-          rank: rankForIndex(siblings, siblings.length),
-          createdAt: this.now,
-          updatedAt: this.now,
-        };
-        this.created.push({ path: pathFromId(list.id, LISTS_PREFIX), data: list });
-        siblings.push({ id: list.id, name: list.name, rank: list.rank });
-        listId = list.id;
-      }
+    // The parent of the level-TREE_MAX_DEPTH list — where a deeper folder goes.
+    let parentAtLimit: string | null = null;
+    for (let level = 1; level <= path.length; level++) {
+      if (level === TREE_MAX_DEPTH) parentAtLimit = parentId;
+      if (level > TREE_MAX_DEPTH) parentId = parentAtLimit;
+      listId = this.findOrCreate(parentId, path[level - 1]);
+      if (level > TREE_MAX_DEPTH) this.flattenedIds.add(listId);
       parentId = listId;
     }
     this.resolved.set(memoKey, listId);
     return listId;
+  }
+
+  // A name past LIST_NAME_MAX is cut there, as the editors cut one, and matched
+  // as cut — so two long folder names that share their first LIST_NAME_MAX
+  // characters under one parent become one list.
+  private findOrCreate(parentId: string | null, segment: string): string {
+    const siblings = this.childrenOf.get(parentId) ?? [];
+    this.childrenOf.set(parentId, siblings);
+    const name = cleanName(segment, LIST_NAME_MAX);
+    const wanted = name.toLowerCase();
+    // Trash is excluded from matching — a folder named "Trash" becomes a
+    // regular list rather than mapping links into deletion staging.
+    const match = siblings.find(
+      (list) => list.id !== TRASH_ID && list.name.trim().toLowerCase() === wanted,
+    );
+    if (match) return match.id;
+    const list: List = {
+      id: this.newId(),
+      name,
+      parentId,
+      rank: rankForIndex(siblings, siblings.length),
+      createdAt: this.now,
+      updatedAt: this.now,
+    };
+    this.created.push({ path: pathFromId(list.id, LISTS_PREFIX), data: list });
+    siblings.push({ id: list.id, name: list.name, rank: list.rank });
+    return list.id;
   }
 }
 
@@ -144,17 +165,21 @@ export class TagResolver {
     this.rootSiblings = tags.filter((tag) => tag.parentId === null).sort(compareRank);
   }
 
-  // The tag ids for one row's names, in the file's order.
+  // The tag ids for one row's names, in the file's order: at most LINK_TAGS_MAX
+  // of them (entities.ts), the first ones, and no tag minted for a name past
+  // that. A name past TAG_NAME_MAX is cut there and matched as cut.
   resolve(names: string[]): string[] {
     const ids: string[] = [];
-    for (const name of names) {
-      const wanted = name.trim().toLowerCase();
+    for (const raw of names) {
+      if (ids.length === LINK_TAGS_MAX) break;
+      const name = cleanName(raw, TAG_NAME_MAX);
+      const wanted = name.toLowerCase();
       if (wanted === '') continue;
       let id = this.idByName.get(wanted);
       if (id === undefined) {
         const tag: Tag = {
           id: this.newId(),
-          name: name.trim(),
+          name,
           parentId: null,
           rank: rankForIndex(this.rootSiblings, this.rootSiblings.length),
           createdAt: this.now,

@@ -20,7 +20,9 @@ import { useCallback, useMemo } from 'react';
 
 import {
   buildTree,
+  cleanName,
   isSystemListId,
+  LIST_NAME_MAX,
   LIST_NO_CHILDREN_IDS,
   LISTS_PREFIX,
   pathFromId,
@@ -98,7 +100,7 @@ export function useListMutations(): ListMutations {
       if (!username) throw new Error('useListMutations: no active account');
       if (parentId === TRASH_ID) throw new Error('Trash cannot contain lists');
 
-      const trimmed = name.trim();
+      const trimmed = cleanName(name, LIST_NAME_MAX);
       if (trimmed === '') return null;
 
       const id = newId();
@@ -147,7 +149,10 @@ export function useListMutations(): ListMutations {
     async (list: ListItem, name: string) => {
       if (!username) throw new Error('useListMutations: no active account');
 
-      const trimmed = name.trim();
+      // An unedited name is no rename, however long: one stored before the cap
+      // (LIST_NAME_MAX) is cut only when the user changes it.
+      if (name.trim() === list.name) return;
+      const trimmed = cleanName(name, LIST_NAME_MAX);
       if (trimmed === '' || trimmed === list.name) return;
 
       await writeList(username, list, { name: trimmed });

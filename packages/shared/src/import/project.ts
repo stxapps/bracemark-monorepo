@@ -54,13 +54,7 @@ import { ranksBetween } from '../sync/rank';
 import { ARCHIVE_ID, TRASH_ID } from '../sync/system-lists';
 import { hostFromText } from '../url/url';
 import type { ImportedLink } from './bundle';
-import {
-  IMPORT_MAX_FOLDER_DEPTH,
-  ImportFolderDepthError,
-  ListResolver,
-  type ResolverNode,
-  TagResolver,
-} from './resolve';
+import { ListResolver, type ResolverNode, TagResolver } from './resolve';
 import { runSteps, runStepsWithPauses } from './steps';
 
 // One entity to write, structurally the write edge's RawEntityEntry on both
@@ -87,6 +81,9 @@ export interface ProjectedImport {
   tagCount: number;
   // Rows that didn't validate against their schema — reported, never fatal.
   invalidCount: number;
+  // Lists holding a folder from deeper than TREE_MAX_DEPTH, placed at that
+  // level (ListResolver, resolve.ts) — reported, never fatal.
+  flattenedListCount: number;
 }
 
 export interface ProjectImportOptions {
@@ -130,23 +127,6 @@ function calendarDate(epochMs: number | undefined): number | undefined {
   return isCalendarTime(epochMs) ? epochMs : undefined;
 }
 
-// Refuse a file whose folder chain runs past IMPORT_MAX_FOLDER_DEPTH (resolve.ts)
-// — the WHOLE file, by throwing ImportFolderDepthError. A system-list row's path
-// is never resolved, so it is not counted.
-//
-// The orchestrators call this on every parsed row, before the dedupe and before
-// the over-cap prompt. Asked only inside the projection it ran after both, and
-// the answer then depended on what they had removed: the same file imported or
-// was refused according to which rows the library already held, and a user
-// could be asked "import what fits?", say yes, and have the file refused.
-export function assertImportFolderDepth(rows: readonly ImportedLink[]): void {
-  for (const row of rows) {
-    if (row.systemList === undefined && row.folderPath.length > IMPORT_MAX_FOLDER_DEPTH) {
-      throw new ImportFolderDepthError();
-    }
-  }
-}
-
 // Rows projected between two pauses in `projectImportedLinksInChunks`. The
 // per-row cost is URL parsing (`hostFromText`), an id mint and two schema
 // checks: about 13 ms per thousand rows on web at a 4x CPU slowdown, so a chunk
@@ -174,12 +154,6 @@ export function projectImportedLinksInChunks(
 // whether a yield is a pause.
 function* projectSteps(options: ProjectImportOptions): Generator<void, ProjectedImport> {
   const { rows, images, newId, now } = options;
-
-  // Refused whole and FIRST — before a resolver exists, so no list of a
-  // too-deep chain is ever minted. The orchestrators have already asked this of
-  // the whole file (assertImportFolderDepth, above); asked again here because
-  // this is where the lists are made, and a caller that forgot must not make them.
-  assertImportFolderDepth(rows);
 
   const lists = new ListResolver(options.lists, now, newId);
   const tags = new TagResolver(options.tags, now, newId);
@@ -301,5 +275,6 @@ function* projectSteps(options: ProjectImportOptions): Generator<void, Projected
     listCount: lists.created.length,
     tagCount: tags.created.length,
     invalidCount,
+    flattenedListCount: lists.flattenedCount,
   };
 }

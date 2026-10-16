@@ -1,11 +1,6 @@
 import { parseImportText } from '../import/parse';
-import { assertImportFolderDepth } from '../import/project';
-import {
-  EXPORT_MAX_FOLDER_DEPTH,
-  type ExportBundle,
-  type ExportFolder,
-  type ExportLinkRow,
-} from './bundle';
+import { TREE_MAX_DEPTH } from '../sync/tree';
+import type { ExportBundle, ExportFolder, ExportLinkRow } from './bundle';
 import { toNetscapeHtml } from './netscape';
 
 function link(over: Partial<ExportLinkRow> = {}): ExportLinkRow {
@@ -203,7 +198,7 @@ describe('toNetscapeHtml → parseImportText', () => {
 // Every line is indented by its folder's depth, so an unbounded chain made the
 // file grow with the square of it: 10,000 nested lists ended the export in
 // `RangeError: Invalid string length`, nothing saved.
-describe('toNetscapeHtml past EXPORT_MAX_FOLDER_DEPTH', () => {
+describe('toNetscapeHtml past TREE_MAX_DEPTH', () => {
   // A chain of `depth` folders named f0, f1, … each holding one link.
   function chain(depth: number): ExportFolder[] {
     let below: ExportFolder[] = [];
@@ -215,29 +210,27 @@ describe('toNetscapeHtml past EXPORT_MAX_FOLDER_DEPTH', () => {
   const names = (count: number) => Array.from({ length: count }, (_, i) => `f${i}`);
 
   it('closes the folder at the depth before its children, which follow at its level', () => {
-    const depth = EXPORT_MAX_FOLDER_DEPTH + 2;
+    const depth = TREE_MAX_DEPTH + 2;
     const html = toNetscapeHtml(bundle(chain(depth)));
     const indent = (name: string) => html.match(new RegExp(`^( *)<DT><H3>${name}</H3>`, 'm'))?.[1];
 
-    expect(indent(`f${depth - 1}`)).toBe(indent(`f${EXPORT_MAX_FOLDER_DEPTH - 1}`));
-    expect(indent(`f${depth - 1}`)).toHaveLength(4 * EXPORT_MAX_FOLDER_DEPTH);
+    expect(indent(`f${depth - 1}`)).toBe(indent(`f${TREE_MAX_DEPTH - 1}`));
+    expect(indent(`f${depth - 1}`)).toHaveLength(4 * TREE_MAX_DEPTH);
     // Balanced, or a line-wise importer reparents everything after the cut.
     expect(html.match(/<\/DL><p>/g)).toHaveLength(depth + 1);
     expect(html.match(/<DL><p>/g)).toHaveLength(depth + 1);
   });
 
-  it('writes 10,000 nested lists into a file this app’s import accepts', () => {
+  it('writes 10,000 nested lists into a file this app’s import nests as written', () => {
     const depth = 10_000;
     const rows = parseImportText(toNetscapeHtml(bundle(chain(depth)))).links;
 
     expect(rows).toHaveLength(depth);
-    expect(() => assertImportFolderDepth(rows)).not.toThrow();
+    // No folder past the depth, so an import places none of them elsewhere.
+    expect(rows.every((row) => row.folderPath.length <= TREE_MAX_DEPTH)).toBe(true);
     // The same paths the CSV writes (csv.spec.ts): a list past the depth keeps
     // its own name, under the ancestors the depth allows.
-    expect(rows[EXPORT_MAX_FOLDER_DEPTH - 1]?.folderPath).toEqual(names(EXPORT_MAX_FOLDER_DEPTH));
-    expect(rows.at(-1)?.folderPath).toEqual([
-      ...names(EXPORT_MAX_FOLDER_DEPTH - 1),
-      `f${depth - 1}`,
-    ]);
+    expect(rows[TREE_MAX_DEPTH - 1]?.folderPath).toEqual(names(TREE_MAX_DEPTH));
+    expect(rows.at(-1)?.folderPath).toEqual([...names(TREE_MAX_DEPTH - 1), `f${depth - 1}`]);
   });
 });

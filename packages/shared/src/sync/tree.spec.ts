@@ -3,11 +3,14 @@ import {
   ancestorIds,
   buildTree,
   childrenOf,
+  deepestDepthFor,
   findNode,
   flattenToPathRows,
   flattenToRows,
   flattenTree,
   forbiddenParentIds,
+  parentsPastMaxDepth,
+  TREE_MAX_DEPTH,
   TREE_PATH_CUT,
   TREE_ROW_MAX_LEVELS,
   type TreeItem,
@@ -431,6 +434,63 @@ describe('forbiddenParentIds', () => {
   it('accepts a custom no-children set (e.g. an empty one for tag trees)', () => {
     const forbidden = forbiddenParentIds(fixture(), 'cooking', new Set());
     expect([...forbidden].sort()).toEqual(['cooking', 'recipes']);
+  });
+
+  // The depth rule: a parent whose level leaves no room for the moving list's
+  // subtree within TREE_MAX_DEPTH. c{i} sits on level i + 1.
+  it('forbids every parent too deep for the subtree being moved', () => {
+    const forest = buildTree([...deepChain(TREE_MAX_DEPTH), n('leaf', null, 'z')]);
+    // A leaf fits under the list on level 99, not under the one on level 100.
+    const forLeaf = forbiddenParentIds(forest, 'leaf', new Set());
+    expect(forLeaf.has(`c${TREE_MAX_DEPTH - 2}`)).toBe(false);
+    expect(forLeaf.has(`c${TREE_MAX_DEPTH - 1}`)).toBe(true);
+
+    // Two levels tall, it needs one more level of room.
+    const tall = buildTree([
+      ...deepChain(TREE_MAX_DEPTH),
+      n('top', null, 'z'),
+      n('kid', 'top', 'a'),
+    ]);
+    const forTall = forbiddenParentIds(tall, 'top', new Set());
+    expect(forTall.has(`c${TREE_MAX_DEPTH - 3}`)).toBe(false);
+    expect(forTall.has(`c${TREE_MAX_DEPTH - 2}`)).toBe(true);
+  });
+});
+
+// c0 on level 1 down to c{length-1} on level `length`.
+function deepChain(length: number): Node[] {
+  return Array.from({ length }, (_, i) => n(`c${i}`, i === 0 ? null : `c${i - 1}`, 'a'));
+}
+
+describe('deepestDepthFor', () => {
+  it('leaves room for the whole subtree under the limit', () => {
+    const forest = buildTree([n('a', null, 'a'), n('b', 'a', 'a'), n('c', 'b', 'a')]);
+    expect(deepestDepthFor(forest, 'a')).toBe(TREE_MAX_DEPTH - 3);
+    expect(deepestDepthFor(forest, 'c')).toBe(TREE_MAX_DEPTH - 1);
+  });
+
+  // A subtree already past the limit — stored before it, or met in sync — may
+  // still move anywhere no deeper than it sits: lifting it is never refused.
+  it('never refuses a move that does not deepen a subtree already past the limit', () => {
+    const forest = buildTree(deepChain(TREE_MAX_DEPTH + 10));
+    expect(deepestDepthFor(forest, 'c5')).toBe(5);
+    expect(deepestDepthFor(forest, 'c0')).toBe(0);
+  });
+});
+
+describe('parentsPastMaxDepth', () => {
+  it('maps every node past the limit to its ancestor on the level above it', () => {
+    const forest = buildTree([...deepChain(TREE_MAX_DEPTH + 2), n('side', null, 'z')]);
+    expect(parentsPastMaxDepth(forest)).toEqual(
+      new Map([
+        [`c${TREE_MAX_DEPTH}`, `c${TREE_MAX_DEPTH - 2}`],
+        [`c${TREE_MAX_DEPTH + 1}`, `c${TREE_MAX_DEPTH - 2}`],
+      ]),
+    );
+  });
+
+  it('maps nothing in a tree within the limit', () => {
+    expect(parentsPastMaxDepth(buildTree(deepChain(TREE_MAX_DEPTH))).size).toBe(0);
   });
 });
 

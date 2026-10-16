@@ -42,14 +42,11 @@ import {
   ARCHIVE_ID,
   BACKUP_ITEMS_ENTRY,
   BACKUP_MANIFEST_ENTRY,
-  EXPORT_MAX_FOLDER_DEPTH,
   type ExportFormat,
   type ExportOutcome,
   EXTRACTIONS_PREFIX,
   filesListEndpoint,
   filesSignEndpoint,
-  IMPORT_MAX_FOLDER_DEPTH,
-  ImportFolderDepthError,
   LINKS_PREFIX,
   LISTS_PREFIX,
   MY_LIST_ID,
@@ -63,6 +60,7 @@ import {
   syncPathSchema,
   TAGS_PREFIX,
   TRASH_ID,
+  TREE_MAX_DEPTH,
   utf8,
 } from '@stxapps/shared';
 import {
@@ -653,13 +651,13 @@ describe('the bracemark backup round trip', () => {
     expect(queued).toContain('files/img_work.enc');
   });
 
-  // A backup restores `parentId` verbatim, so it is held to the interop depth
-  // rule like any other import: a chain one past the limit refuses the whole
-  // file before anything is stored or queued. Exported from a library that holds
-  // one, the way such a file would come back — the export is verbatim.
-  it('refuses a backup whose list chain is past the import limit, writing nothing', async () => {
+  // A backup writes a library's list tree as it is, and a restore places a line
+  // past the depth limit AT it (shared data/backup.ts, flattenBackupTree). The
+  // export says so on its receipt, while the user can still move the lists; the
+  // restore moves only those lines' `parentId` and says how many it moved.
+  it('exports a list chain past the limit as it is and restores it at the limit', async () => {
     const [rank] = ranksBetween(null, null, 1);
-    const deep = Array.from({ length: IMPORT_MAX_FOLDER_DEPTH + 1 }, (_, i) => ({
+    const deep = Array.from({ length: TREE_MAX_DEPTH + 1 }, (_, i) => ({
       path: `${LISTS_PREFIX}deep${i}.enc`,
       data: {
         id: `deep${i}`,
@@ -671,19 +669,29 @@ describe('the bracemark backup round trip', () => {
       },
     }));
     await seed([...library(), ...deep]);
-    await exportAllData({ format: 'bracemark', deps: deps(), excludedListIds: new Set() });
+    const exported = await exportAllData({
+      format: 'bracemark',
+      deps: deps(),
+      excludedListIds: new Set(),
+    });
+    expect(exported).toMatchObject({ pastMaxDepthListCount: 1, pastMaxDepthTagCount: 0 });
     expect(await zipEntryText(savedZip(), BACKUP_ITEMS_ENTRY)).toContain(
-      `deep${IMPORT_MAX_FOLDER_DEPTH}`,
+      `"parentId":"deep${TREE_MAX_DEPTH - 1}"`,
     );
     await db.items.clear();
     await db.pendingOps.clear();
 
-    await expect(importAllData({ file: savedZip(), deps: deps(), maxLinks: null })).rejects.toThrow(
-      ImportFolderDepthError,
-    );
+    const outcome = await importAllData({ file: savedZip(), deps: deps(), maxLinks: null });
 
-    expect(await storedEntities()).toEqual({});
-    expect(await db.pendingOps.count()).toBe(0);
+    expect(outcome).toMatchObject({ flattenedListCount: 1, flattenedTagCount: 0 });
+    const stored = await storedEntities();
+    expect(stored[`${LISTS_PREFIX}deep${TREE_MAX_DEPTH}.enc`]).toMatchObject({
+      name: `Level ${TREE_MAX_DEPTH}`,
+      parentId: `deep${TREE_MAX_DEPTH - 2}`,
+    });
+    expect(stored[`${LISTS_PREFIX}deep${TREE_MAX_DEPTH - 1}.enc`]).toMatchObject({
+      parentId: `deep${TREE_MAX_DEPTH - 2}`,
+    });
   });
 
   // A file that repeats a path. The depth rule used to measure the LAST line
@@ -691,8 +699,8 @@ describe('the bracemark backup round trip', () => {
   // wrote — kept the FIRST, so a deep chain repeated further down as roots
   // passed the rule and the chain was stored. Now the restore keeps each path's
   // first line before the rule runs, so the rule measures what would be written.
-  it('refuses a deep chain that the file repeats further down as roots', async () => {
-    const depth = IMPORT_MAX_FOLDER_DEPTH + 50;
+  it('places a deep chain that the file repeats further down as roots', async () => {
+    const depth = TREE_MAX_DEPTH + 50;
     const lines = [
       ...Array.from({ length: depth }, (_, i) => listLine(`d${i}`, i === 0 ? null : `d${i - 1}`)),
       // Enough lines between that the repeats land in a later write chunk.
@@ -700,12 +708,20 @@ describe('the bracemark backup round trip', () => {
       ...Array.from({ length: depth }, (_, i) => listLine(`d${i}`, null)),
     ];
 
-    await expect(
-      importAllData({ file: await backupZip(lines), deps: deps(), maxLinks: null }),
-    ).rejects.toThrow(ImportFolderDepthError);
+    const outcome = await importAllData({
+      file: await backupZip(lines),
+      deps: deps(),
+      maxLinks: null,
+    });
 
-    expect(await storedEntities()).toEqual({});
-    expect(await db.pendingOps.count()).toBe(0);
+    expect(outcome.flattenedListCount).toBe(50);
+    const stored = await storedEntities();
+    expect(stored[`${LISTS_PREFIX}d${depth - 1}.enc`]).toMatchObject({
+      parentId: `d${TREE_MAX_DEPTH - 2}`,
+    });
+    expect(stored[`${LISTS_PREFIX}d${TREE_MAX_DEPTH - 1}.enc`]).toMatchObject({
+      parentId: `d${TREE_MAX_DEPTH - 2}`,
+    });
   });
 
   it('restores a repeated path from its first line and counts the repeat as skipped', async () => {
@@ -1034,7 +1050,7 @@ describe('the interop formats, on a library with damage', () => {
   // The serializers write a list past the depth at it (shared export/bundle.ts);
   // the receipt says how many — for the formats that have folders.
   it('counts the lists written at the depth limit, in the formats with folders', async () => {
-    const depth = EXPORT_MAX_FOLDER_DEPTH + 2;
+    const depth = TREE_MAX_DEPTH + 2;
     const ranks = ranksBetween(null, null, 1);
     await seed(
       Array.from({ length: depth }, (_, i) => ({

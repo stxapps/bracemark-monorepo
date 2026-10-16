@@ -293,6 +293,21 @@ draft; each keystroke commits or reverts in place):
   complete non-drag fallback, and both route a nesting drop through the
   `nestedLists` paywall rather than clamping the projection.
 
+  **The depth limit IS clamped, and refused at the drop.** No move may put a
+  list's subtree past `TREE_MAX_DEPTH` (100) levels: `getMovePlan` works out the
+  deepest the row may land (`deepestDepthFor`, `sync/tree.ts`) from the forest
+  and returns no plan past it, so the row eases home; both sections pass the
+  same number to `getProjection` as `maxDepth`, so the live indent stops there
+  too; and `forbiddenParentIds` leaves every too-deep parent out of "Move to". A
+  subtree already past the limit may still be lifted. Unlike the paywall, it is
+  a rule about the data rather than the plan, so it stops the gesture instead of
+  explaining it — and at 100 levels no one meets it by hand. Why the limit lives
+  at the editors and nowhere that only carries data:
+  [data-limits.md](./data-limits.md). The web table asks `forbiddenParentIds` of
+  a row only while that row's menu is open (`excludeIdsFor`): each answer walks
+  the forest, and asked of every row on every render it was the square of the
+  list count on every drag frame.
+
   **A native drop is held until the new order renders — never for a fixed
   time.** Finishing a drop takes two changes on two threads: the drag transforms
   go back to identity (UI thread), and the rows re-lay-out in their new order (the

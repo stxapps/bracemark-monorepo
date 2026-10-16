@@ -41,6 +41,13 @@ export interface ImportOutcome {
   skippedCount: number;
   // Rows/lines that didn't parse or validate — reported, never fatal.
   invalidCount: number;
+  // Lists and tags nested deeper than TREE_MAX_DEPTH (sync/tree.ts), placed at
+  // that level instead — reported, never fatal. Interop counts the lists its
+  // too-deep folders landed in (import/resolve.ts) and never a tag, which it
+  // mints at the root; bracemark counts the lines it wrote with a moved
+  // `parentId` (data/backup.ts, flattenBackupTree).
+  flattenedListCount: number;
+  flattenedTagCount: number;
   // The pre-import refresh failed (offline / server down); the import carried on
   // against this device's local copy. A warning, not an error — local-first.
   syncFailed: boolean;

@@ -273,6 +273,10 @@ export function DestroyConfirm({
 
 interface CreateRowProps {
   noun: string;
+  // The writer's name cap (LIST_NAME_MAX / TAG_NAME_MAX), so the field stops
+  // where the mutation would cut. RenameField has none: an over-long name stored
+  // before the cap stays whole until it is edited, and the mutation cuts that.
+  maxLength: number;
   onCreate: (name: string) => Promise<unknown>;
 }
 
@@ -284,7 +288,7 @@ interface CreateRowProps {
 //
 // `noun` is the singular ("list", "tag") and drives every label, so the two
 // tables cannot end up describing the same control differently.
-export function CreateRow({ noun, onCreate }: CreateRowProps) {
+export function CreateRow({ noun, maxLength, onCreate }: CreateRowProps) {
   const [value, setValue] = useState('');
   const [focused, setFocused] = useState(false);
   const active = focused || value !== '';
@@ -345,6 +349,7 @@ export function CreateRow({ noun, onCreate }: CreateRowProps) {
         value={value}
         placeholder={`New ${noun}`}
         aria-label={`New ${noun} name`}
+        maxLength={maxLength}
         className="h-8 border-transparent bg-transparent px-2 focus-visible:bg-background"
         onChange={(e) => setValue(e.target.value)}
         onFocus={() => setFocused(true)}

@@ -8,11 +8,13 @@ import { useCallback, useMemo } from 'react';
 
 import { newId } from '@stxapps/expo-crypto';
 import {
+  cleanName,
   compareRank,
   pathFromId,
   placeAtIndex,
   rankForIndex,
   rerankToOrder,
+  TAG_NAME_MAX,
   TAGS_PREFIX,
 } from '@stxapps/shared';
 
@@ -69,7 +71,7 @@ export function useTagMutations(): TagMutations {
     async (name: string, parentId: string | null, siblings: TagItem[], index: number) => {
       if (!username) throw new Error('useTagMutations: no active account');
 
-      const trimmed = name.trim();
+      const trimmed = cleanName(name, TAG_NAME_MAX);
       if (trimmed === '') return null;
 
       const id = newId();
@@ -96,7 +98,7 @@ export function useTagMutations(): TagMutations {
     async (name: string) => {
       if (!username) throw new Error('useTagMutations: no active account');
 
-      const trimmed = name.trim();
+      const trimmed = cleanName(name, TAG_NAME_MAX);
       if (trimmed === '') return null;
 
       // Re-derive from the store rather than a rendered snapshot: a tag with this
@@ -118,7 +120,10 @@ export function useTagMutations(): TagMutations {
     async (tag: TagItem, name: string) => {
       if (!username) throw new Error('useTagMutations: no active account');
 
-      const trimmed = name.trim();
+      // An unedited name is no rename, however long: one stored before the cap
+      // (TAG_NAME_MAX) is cut only when the user changes it.
+      if (name.trim() === tag.name) return;
+      const trimmed = cleanName(name, TAG_NAME_MAX);
       if (trimmed === '' || trimmed === tag.name) return;
 
       await writeTag(username, tag, { name: trimmed });

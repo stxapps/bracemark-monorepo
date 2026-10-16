@@ -42,8 +42,6 @@ import {
   EXTRACTIONS_PREFIX,
   filesListEndpoint,
   filesSignEndpoint,
-  IMPORT_MAX_FOLDER_DEPTH,
-  ImportFolderDepthError,
   LINKS_PREFIX,
   LISTS_PREFIX,
   opsCommitEndpoint,
@@ -56,6 +54,7 @@ import {
   syncPathSchema,
   TAGS_PREFIX,
   TRASH_ID,
+  TREE_MAX_DEPTH,
   utf8,
 } from '@stxapps/shared';
 import {
@@ -564,17 +563,16 @@ describe('the bracemark backup round trip, through fflate', () => {
     expect(queued).toContain(IMAGE_PATH);
   });
 
-  // A backup restores `parentId` verbatim, so it is held to the interop depth
-  // rule like any other import — web export-import.spec.ts has the reasoning. A
-  // chain one past the limit refuses the whole file: no row, no file, no op.
-  it('refuses a backup whose list chain is past the import limit, writing nothing', async () => {
+  // A backup writes a library's list tree as it is, and a restore places a line
+  // past the depth limit AT it — web export-import.spec.ts has the reasoning.
+  it('exports a list chain past the limit as it is and restores it at the limit', async () => {
     const [rank] = ranksBetween(null, null, 1);
     seedEntities();
     await seedContent();
     getDb().transaction((tx) =>
       putItemsTx(
         tx,
-        Array.from({ length: IMPORT_MAX_FOLDER_DEPTH + 1 }, (_, i) =>
+        Array.from({ length: TREE_MAX_DEPTH + 1 }, (_, i) =>
           toItemRecord(
             `${LISTS_PREFIX}deep${i}.enc`,
             5000,
@@ -592,30 +590,34 @@ describe('the bracemark backup round trip, through fflate', () => {
         ),
       ),
     );
-    const outcome = await exportBackup();
-    expect(new TextDecoder().decode(unzipSaved(outcome.file.uri)[BACKUP_ITEMS_ENTRY])).toContain(
-      `deep${IMPORT_MAX_FOLDER_DEPTH}`,
+    const exported = await exportBackup();
+    expect(exported).toMatchObject({ pastMaxDepthListCount: 1, pastMaxDepthTagCount: 0 });
+    expect(new TextDecoder().decode(unzipSaved(exported.file.uri)[BACKUP_ITEMS_ENTRY])).toContain(
+      `"parentId":"deep${TREE_MAX_DEPTH - 1}"`,
     );
-    const archive = stash(outcome.file.uri);
+    const archive = stash(exported.file.uri);
     await truncate();
     resetFileSystem();
 
-    await expect(
-      importAllData({ file: repick(archive, outcome.file.name), deps: deps(), maxLinks: null }),
-    ).rejects.toThrow(ImportFolderDepthError);
+    const outcome = await importAllData({
+      file: repick(archive, exported.file.name),
+      deps: deps(),
+      maxLinks: null,
+    });
 
-    expect(storedEntities()).toEqual({});
-    expect(dataFileFor(IMAGE_PATH).exists).toBe(false);
-    expect(await listPendingOps(USER)).toEqual([]);
+    expect(outcome).toMatchObject({ flattenedListCount: 1, flattenedTagCount: 0 });
+    const stored = storedEntities();
+    expect(stored[`${LISTS_PREFIX}deep${TREE_MAX_DEPTH}.enc`]).toMatchObject({
+      name: `Level ${TREE_MAX_DEPTH}`,
+      parentId: `deep${TREE_MAX_DEPTH - 2}`,
+    });
   });
 
-  // A file that repeats a path. The depth rule used to measure the LAST line
-  // for a path while the writer — skipping a path an earlier 200-line chunk
-  // wrote — kept the FIRST, so a deep chain repeated further down as roots
-  // passed the rule and the chain was stored. Now the restore keeps each path's
-  // first line before the rule runs, so the rule measures what would be written.
-  it('refuses a deep chain that the file repeats further down as roots', async () => {
-    const depth = IMPORT_MAX_FOLDER_DEPTH + 50;
+  // A file that repeats a path: the restore keeps each path's first line before
+  // the depth rule runs, so the rule measures what will be written — web
+  // export-import.spec.ts has the history.
+  it('places a deep chain that the file repeats further down as roots', async () => {
+    const depth = TREE_MAX_DEPTH + 50;
     const lines = [
       ...Array.from({ length: depth }, (_, i) => listLine(`d${i}`, i === 0 ? null : `d${i - 1}`)),
       // Enough lines between that the repeats land in a later write chunk.
@@ -623,12 +625,12 @@ describe('the bracemark backup round trip, through fflate', () => {
       ...Array.from({ length: depth }, (_, i) => listLine(`d${i}`, null)),
     ];
 
-    await expect(
-      importAllData({ file: backupZip(lines), deps: deps(), maxLinks: null }),
-    ).rejects.toThrow(ImportFolderDepthError);
+    const outcome = await importAllData({ file: backupZip(lines), deps: deps(), maxLinks: null });
 
-    expect(storedEntities()).toEqual({});
-    expect(await listPendingOps(USER)).toEqual([]);
+    expect(outcome.flattenedListCount).toBe(50);
+    expect(storedEntities()[`${LISTS_PREFIX}d${depth - 1}.enc`]).toMatchObject({
+      parentId: `d${TREE_MAX_DEPTH - 2}`,
+    });
   });
 
   it('restores a repeated path from its first line and counts the repeat as skipped', async () => {

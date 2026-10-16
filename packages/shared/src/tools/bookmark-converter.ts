@@ -1,5 +1,4 @@
 import {
-  assertBackupTreeDepth,
   BackupVersionError,
   type BundleEntry,
   classifyBundleLine,
@@ -10,6 +9,7 @@ import {
   bundleFromLibrary,
   type ExportBundle,
   type ExportLinkRow,
+  foldersPastMaxDepth,
   foldersWithPaths,
   type LibraryLink,
 } from '../export/bundle';
@@ -25,11 +25,12 @@ import { isRecord } from '../import/is-record';
 import { parseLinkwardenExport } from '../import/linkwarden';
 import { parseNetscapeHtml } from '../import/netscape';
 import { isRaindropCsvHeader } from '../import/raindrop';
-import { IMPORT_MAX_FOLDER_DEPTH, ImportFolderDepthError } from '../import/resolve';
+import { capFolderPath } from '../import/resolve';
 import { parseUrlText } from '../import/text';
 import type { Extraction, Link, List, Tag } from '../sync/entities';
 import { EXTRACTIONS_PREFIX, LINKS_PREFIX, rekey } from '../sync/paths';
 import { ARCHIVE_ID, mergeSystemLists, TRASH_ID } from '../sync/system-lists';
+import { TREE_MAX_DEPTH } from '../sync/tree';
 import { canonicalUrlKey, normalizeUrl } from '../url/url';
 
 // One set of limits for every input. The converter is client-only, so they
@@ -153,12 +154,12 @@ function readBackup(
   const of = (kind: BundleEntry['kind']) => byKind.get(kind) ?? [];
   // Lists aren't records, so the row limit above never saw them, and every one
   // costs a path copy below — bounded by the byte limit alone until this. Held
-  // to the same number as the rows, then to the app's depth rule, both before
-  // the tree is built: the walk that copies a path per folder is what they bound.
+  // to the same number as the rows before the tree is built; the depth of a
+  // path is held by the walk itself (foldersWithPaths writes none past
+  // TREE_MAX_DEPTH), so the copies it makes are bounded by both.
   if (of('list').length > BOOKMARK_CONVERTER_MAX_ROWS) {
     throw new Error(BOOKMARK_CONVERTER_BACKUP_TOO_MANY_LISTS);
   }
-  assertBackupTreeDepth([...of('list'), ...of('tag')]);
   const extractions = new Map(of('extraction').map((entry) => [entry.path, entry.data]));
   const links: LibraryLink[] = of('link').map((entry) => ({
     link: entry.data as Link,
@@ -205,8 +206,15 @@ export function convertBookmarkFiles(
   const excludedRows: BookmarkConversionReceipt['excludedRows'] = [];
   let sourceRowCount = 0;
   let trashCount = 0;
-  const addFolder = (path: string[]) => {
-    if (path.length > IMPORT_MAX_FOLDER_DEPTH) throw new ImportFolderDepthError();
+  // Folders from deeper than TREE_MAX_DEPTH, placed at it — the app's own import
+  // and export rule (sync/tree.ts). A backup's are counted as its tree is read;
+  // every other input's in the output bundle, below.
+  let flattenedFolderCount = 0;
+  const addFolder = (folderPath: string[]) => {
+    // Capped like the app's import (resolve.ts): past the limit, the first
+    // TREE_MAX_DEPTH names and the folder's own — so every prefix below is
+    // copied at most that long.
+    const path = capFolderPath(folderPath);
     for (let length = 1; length <= path.length; length++) {
       const part = path.slice(0, length);
       paths.set(JSON.stringify(part), part);
@@ -258,9 +266,10 @@ export function convertBookmarkFiles(
       sourceLabels.add('Bracemark backup');
       const read = readBackup(text, observer);
       // Every list reaches the observer, empty ones included. foldersWithPaths
-      // copies a path per folder; readBackup has already held the tree to the
-      // depth rule, and the output bundle is held to it by addFolder.
+      // copies a path per folder, none past TREE_MAX_DEPTH: a deeper list is
+      // placed at it, which is the app's own export.
       for (const { path } of foldersWithPaths(read.bundle.folders)) observer.folder(path);
+      flattenedFolderCount += foldersPastMaxDepth(read.bundle.folders);
       parsed = flatten(read.bundle);
       trashCount += read.trashCount;
       losses.add('Bracemark settings, pins, and images aren’t included.');
@@ -480,6 +489,15 @@ export function convertBookmarkFiles(
   }
   if (output !== 'html' && emptyFolderCount)
     losses.add(`${emptyFolderCount} empty folders aren’t included.`);
+  // The output's folder paths are compared above against the bundle, which is
+  // already flattened — so this is the one place the flattening is reported.
+  flattenedFolderCount += foldersPastMaxDepth(bundle.folders);
+  if (output !== 'text' && flattenedFolderCount)
+    losses.add(
+      flattenedFolderCount === 1
+        ? `1 folder nested more than ${TREE_MAX_DEPTH} levels deep is placed at level ${TREE_MAX_DEPTH}.`
+        : `${flattenedFolderCount} folders nested more than ${TREE_MAX_DEPTH} levels deep are placed at level ${TREE_MAX_DEPTH}.`,
+    );
   const pins = links.filter((link) => link.pinRank !== undefined).length;
   if (pins) losses.add(`${pins} pin positions aren’t included.`);
   if (trashCount)

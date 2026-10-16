@@ -65,6 +65,17 @@ export interface BuildTreeOptions {
 
 const EMPTY_SET: ReadonlySet<string> = new Set();
 
+// The deepest a list or tag tree may be made: TREE_MAX_DEPTH levels, a root
+// (`depth` 0) being level 1. A rule for the doors that MAKE a tree — the
+// editors refuse a move past it, an import and a restore place what is deeper
+// at it, an interop export writes it no deeper — and never for the ones that
+// read one: nothing here refuses or trims a deeper stored chain, which sync can
+// always deliver (two devices' moves can each be legal and meet past it).
+// Far past any real library — browsers and their users stop within a dozen
+// levels — which is the point: the bound should never be met by a real one.
+// docs/data-limits.md.
+export const TREE_MAX_DEPTH = 100;
+
 export function buildTree<T extends TreeItem>(
   items: T[],
   options?: BuildTreeOptions,
@@ -391,11 +402,14 @@ export function childrenOf<T extends TreeItem>(nodes: TreeNode<T>[], parentId: s
 }
 
 // Every id that may NOT receive `id` as a child: the item itself, its whole
-// subtree (no cycles), and any no-children container. The "move to" picker
-// subtracts these from the candidate parents. `noChildrenIds` defaults to the
-// list containers (Trash) — the only entity kind that has any; a caller working
-// a tag tree can pass an empty set (or just accept the harmless list default,
-// since no tag id collides with TRASH_ID).
+// subtree (no cycles), any no-children container, and every parent too deep to
+// take `id`'s subtree within TREE_MAX_DEPTH (deepestDepthFor). The "move to"
+// picker subtracts these from the candidate parents. The too-deep set is closed
+// downwards — a parent's children are deeper still — so a picker that drops an
+// excluded row's subtree with it drops nothing it would have offered.
+// `noChildrenIds` defaults to the list containers (Trash) — the only entity kind
+// that has any; a caller working a tag tree can pass an empty set (or just
+// accept the harmless list default, since no tag id collides with TRASH_ID).
 export function forbiddenParentIds<T extends TreeItem>(
   nodes: TreeNode<T>[],
   id: string,
@@ -404,7 +418,50 @@ export function forbiddenParentIds<T extends TreeItem>(
   const forbidden = new Set<string>(noChildrenIds);
   const node = findNode(nodes, id);
   if (node) collectSubtreeIds(node, forbidden);
+  const deepest = deepestDepthFor(nodes, id);
+  visit(nodes, (each) => {
+    if (each.depth + 1 > deepest) forbidden.add(each.item.id);
+  });
   return forbidden;
+}
+
+// The deepest `depth` (0 at the root) `id` may be placed at by a move: deep
+// enough that its whole subtree still ends within TREE_MAX_DEPTH levels — or,
+// for a subtree that is already past the limit (a backup from before the
+// limit, or two devices' moves meeting in sync), no deeper than it sits now, so
+// a move that only lifts it is never refused. The editors' one depth rule: the
+// "move to" picker reads it through forbiddenParentIds, the drag projection
+// through getMovePlan (tree-dnd.ts).
+export function deepestDepthFor<T extends TreeItem>(nodes: TreeNode<T>[], id: string): number {
+  const node = findNode(nodes, id);
+  if (node === undefined) return TREE_MAX_DEPTH - 1;
+  let height = 0;
+  visit([node], (each) => {
+    height = Math.max(height, each.depth - node.depth + 1);
+  });
+  return Math.max(TREE_MAX_DEPTH - height, node.depth);
+}
+
+// Every node deeper than TREE_MAX_DEPTH levels, mapped to the parent that puts
+// it AT that level: its ancestor on level TREE_MAX_DEPTH - 1. So the node keeps
+// its name and its own links and sits beside that ancestor's other children,
+// and its descendants, each mapped the same way, follow it there — only the
+// nesting below the limit is lost. The shape the interop exports write
+// (export/bundle.ts, foldersWithPaths) and the one a restore places a too-deep
+// backup line in (data/backup.ts, flattenBackupTree). docs/data-limits.md.
+export function parentsPastMaxDepth<T extends TreeItem>(nodes: TreeNode<T>[]): Map<string, string> {
+  const out = new Map<string, string>();
+  const pending: { node: TreeNode<T>; anchor: string | null }[] = nodes.map((node) => ({
+    node,
+    anchor: null,
+  }));
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    const { node } = next;
+    if (node.depth >= TREE_MAX_DEPTH && next.anchor !== null) out.set(node.item.id, next.anchor);
+    const anchor = node.depth === TREE_MAX_DEPTH - 2 ? node.item.id : next.anchor;
+    for (const child of node.children) pending.push({ node: child, anchor });
+  }
+  return out;
 }
 
 // Ids on the path from the root down to (not including) `id` — the ancestors that

@@ -58,7 +58,9 @@ import {
 } from '@stxapps/expo-react';
 import {
   ARCHIVE_ID,
+  deepestDepthFor,
   isSystemListId,
+  LIST_NAME_MAX,
   MY_LIST_ID,
   type SortDir,
   sortedByName,
@@ -520,13 +522,11 @@ export function ListsSection() {
       // The first call can arrive before `draggingId`'s render lands; the offset
       // is 0 at that point anyway.
       if (!over || !active) return 0;
-      const { depth } = getProjection(
-        displayRows,
-        active.item.id,
-        over.item.id,
-        offsetX,
-        PROJECTION_OPTIONS,
-      );
+      // The depth rule too, so the row never slides to a depth the drop refuses.
+      const { depth } = getProjection(displayRows, active.item.id, over.item.id, offsetX, {
+        ...PROJECTION_OPTIONS,
+        maxDepth: deepestDepthFor(lists, active.item.id),
+      });
       return (depth - active.depth) * INDENT_WIDTH;
     },
     onDrop: (from, to, offsetX) => {
@@ -581,8 +581,8 @@ export function ListsSection() {
     // trade legible: at 24 a row reads one nesting level deeper than it is. On a
     // 375pt screen a locked row at depth 3 leaves ~83px of text at 16 and ~67px at
     // 24 — about nine characters, on a field whose whole job is editing a name.
-    // Nothing caps depth (there is no MAX_DEPTH anywhere), so the field degrades to
-    // unusable eventually either way; the inset decides how soon.
+    // The only cap on depth is TREE_MAX_DEPTH (100, far past any width), so the
+    // field degrades to unusable eventually either way; the inset decides how soon.
     //
     // This section used to spell `px-4` itself, as web's twin did. Both moved into
     // their kits when web's copy turned out to be pulling the two tables 8px inside
@@ -604,7 +604,11 @@ export function ListsSection() {
       <View className="rounded-lg border border-border">
         {/* runAwait, not run: CreateRow awaits this to clear its field only on
             success, so the error has to surface AND re-throw. */}
-        <CreateRow noun="list" onCreate={(name) => runAwait(() => createTopLevel(name))} />
+        <CreateRow
+          noun="list"
+          maxLength={LIST_NAME_MAX}
+          onCreate={(name) => runAwait(() => createTopLevel(name))}
+        />
 
         {displayRows.map((row, index) => (
           <Row

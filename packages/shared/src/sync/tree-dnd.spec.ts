@@ -1,5 +1,12 @@
 import { LIST_NO_CHILDREN_IDS, TRASH_ID } from './system-lists';
-import { buildTree, flattenToRows, type TreeItem, type TreeNode, type TreeRow } from './tree';
+import {
+  buildTree,
+  flattenToRows,
+  TREE_MAX_DEPTH,
+  type TreeItem,
+  type TreeNode,
+  type TreeRow,
+} from './tree';
 import {
   applyMovePlan,
   arrayMove,
@@ -241,5 +248,52 @@ describe('applyMovePlan', () => {
     const rows = flattenToRows(moved, NONE);
     expect(rows).toHaveLength(DEPTH);
     expect(rows[DEPTH - 1]).toMatchObject({ item: { id: id(DEPTH - 1) }, depth: DEPTH - 2 });
+  });
+});
+
+// The depth rule on a drag: a drop that would put the row's subtree past
+// TREE_MAX_DEPTH plans nothing, and the live projection stops at the deepest
+// depth the row may take.
+describe('the depth limit', () => {
+  // c0 … c{TREE_MAX_DEPTH - 1} chained (c{i} at depth i), then a root leaf.
+  function deep(): { lists: TreeNode<Node>[]; rows: TreeRow<Node>[] } {
+    const items = Array.from({ length: TREE_MAX_DEPTH }, (_, i) =>
+      item(`c${i}`, i === 0 ? null : `c${i - 1}`, 'a'),
+    );
+    items.push(item('leaf', null, 'z'));
+    const lists = buildTree(items, { noChildrenIds: LIST_NO_CHILDREN_IDS });
+    return { lists, rows: flattenToRows(lists, new Set()) };
+  }
+  const last = `c${TREE_MAX_DEPTH - 1}`;
+
+  it('refuses a drop under the deepest list', () => {
+    const { lists, rows } = deep();
+    // Dropped just below the deepest row, pulled one level further right.
+    const plan = getMovePlan(lists, rows, 'leaf', 'leaf', INDENT * TREE_MAX_DEPTH, OPTS);
+    expect(plan?.parentId).not.toBe(last);
+    expect(plan?.depth ?? 0).toBeLessThanOrEqual(TREE_MAX_DEPTH - 1);
+  });
+
+  it('caps the live projection at the deepest depth the row may take', () => {
+    const { rows } = deep();
+    const { depth } = getProjection(rows, 'leaf', 'leaf', INDENT * TREE_MAX_DEPTH, {
+      ...OPTS,
+      maxDepth: TREE_MAX_DEPTH - 1,
+    });
+    expect(depth).toBe(TREE_MAX_DEPTH - 1);
+  });
+
+  // Above a deeper row, the row must take at least its depth or orphan it; past
+  // the limit, that drop is refused outright.
+  it('refuses a drop whose neighbours force it past the limit', () => {
+    const items = Array.from({ length: TREE_MAX_DEPTH }, (_, i) =>
+      item(`c${i}`, i === 0 ? null : `c${i - 1}`, 'a'),
+    );
+    items.push(item('top', null, 'z'), item('kid', 'top', 'a'));
+    const lists = buildTree(items, { noChildrenIds: LIST_NO_CHILDREN_IDS });
+    const rows = excludeActiveDescendants(flattenToRows(lists, new Set()), 'top');
+    // Dropped between c{98} and c{99}: it would have to sit on c99's depth, and
+    // its child one deeper — past the limit.
+    expect(getMovePlan(lists, rows, 'top', last, 0, OPTS)).toBeNull();
   });
 });

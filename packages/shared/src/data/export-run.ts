@@ -39,9 +39,16 @@ export interface ExportOutcome {
   // this app version doesn't accept), left out the way the read layer leaves
   // them out of every view. One per record, whatever namespace it is in.
   unreadableCount: number;
-  // Lists nested deeper than EXPORT_MAX_FOLDER_DEPTH (export/bundle.ts), written
-  // at that level instead (netscape and csv only; 0 otherwise).
+  // Lists nested deeper than TREE_MAX_DEPTH (sync/tree.ts), written at that
+  // level instead (netscape and csv only; 0 otherwise).
   flattenedListCount: number;
+  // Lists and tags nested deeper than TREE_MAX_DEPTH, which a backup writes as
+  // they are — it is a copy of the library — and a restore places at that level
+  // (data/backup.ts, flattenBackupTree). Told now because now is when the user
+  // can still move them, in the library they're exporting (bracemark only; 0
+  // otherwise).
+  pastMaxDepthListCount: number;
+  pastMaxDepthTagCount: number;
   // The pre-export refresh failed (offline / server down); the export carried
   // on with this device's local copy. A warning, not an error — local-first.
   syncFailed: boolean;

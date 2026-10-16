@@ -2,7 +2,6 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
-  BACKUP_TOO_DEEP_MESSAGE,
   BRACEMARK_BACKUP_FORMAT,
   BRACEMARK_BACKUP_VERSION,
   jsonlLine,
@@ -11,8 +10,8 @@ import {
 import { scanCsv } from '../import/csv';
 import { parseNetscapeHtml } from '../import/netscape';
 import { parseImportText } from '../import/parse';
-import { IMPORT_MAX_FOLDER_DEPTH } from '../import/resolve';
 import { ranksBetween } from '../sync/rank';
+import { TREE_MAX_DEPTH } from '../sync/tree';
 import { readBackupFixtureContents } from '../testing/backup-fixtures';
 import {
   BOOKMARK_CONVERTER_BACKUP_TOO_LARGE,
@@ -291,8 +290,9 @@ it('sends a backup past the record limit to the app’s own export, not to split
 });
 
 // A backup's lists are not records, so the row limit above never counted them,
-// and the tree walk copies a path per list. Both bounds are asked before that
-// walk: the app's depth rule, and the row limit applied to list lines.
+// and the tree walk copies a path per list. The row limit is applied to list
+// lines before that walk, and the walk itself copies no path past the depth
+// limit — a deeper list is placed at it, as the app's own export places it.
 describe('a backup’s list tree', () => {
   const [RANK] = ranksBetween(null, null, 1);
   const listLine = (id: string, parentId: string | null) =>
@@ -308,14 +308,45 @@ describe('a backup’s list tree', () => {
     Array.from({ length }, (_, i) => listLine(`deep${i}`, i === 0 ? null : `deep${i - 1}`));
 
   it('converts a chain of exactly the depth limit', () => {
-    const result = convertBookmarkFiles([backupSource(chain(IMPORT_MAX_FOLDER_DEPTH))]);
+    const result = convertBookmarkFiles([backupSource(chain(TREE_MAX_DEPTH))]);
     expect(result.receipt.linkCount).toBe(1);
   });
 
-  it('refuses a chain one past it with the app’s own restore message', () => {
-    expect(() => convertBookmarkFiles([backupSource(chain(IMPORT_MAX_FOLDER_DEPTH + 1))])).toThrow(
-      BACKUP_TOO_DEEP_MESSAGE,
+  it('converts a chain past it, placing the deeper lists at the limit and saying so', () => {
+    const result = convertBookmarkFiles([backupSource(chain(TREE_MAX_DEPTH + 2))]);
+    expect(result.receipt.linkCount).toBe(1);
+    expect(result.receipt.losses).toContain(
+      `2 folders nested more than ${TREE_MAX_DEPTH} levels deep are placed at level ${TREE_MAX_DEPTH}.`,
     );
+    // The download nests no deeper than the app's import places a folder.
+    const html = result.content;
+    expect(html.match(/<DL><p>/g)?.length).toBeGreaterThan(TREE_MAX_DEPTH);
+    expect(html).toContain(`<DT><H3>deep${TREE_MAX_DEPTH + 1}</H3>`);
+  });
+
+  // Any other input is held to the same rule: a bookmarks HTML nested past the
+  // limit converts, its deepest folder placed at it, rather than being refused.
+  it('converts a bookmarks file nested past the limit the same way', () => {
+    const depth = TREE_MAX_DEPTH + 3;
+    let html = '<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<DL><p>\n';
+    for (let i = 0; i < depth; i++) html += `<DT><H3>f${i}</H3>\n<DL><p>\n`;
+    html += '<DT><A HREF="https://example.com/deep">Deep</A>\n';
+    for (let i = 0; i <= depth; i++) html += '</DL><p>\n';
+
+    const result = convertBookmarkFiles([{ name: 'bookmarks.html', text: html }]);
+    // f100, f101 and f102: the two empty ones between are folders too.
+    expect(result.receipt.losses).toContain(
+      `3 folders nested more than ${TREE_MAX_DEPTH} levels deep are placed at level ${TREE_MAX_DEPTH}.`,
+    );
+    expect(parseNetscapeHtml(result.content)).toMatchObject([
+      {
+        url: 'https://example.com/deep',
+        folderPath: [
+          ...Array.from({ length: TREE_MAX_DEPTH - 1 }, (_, i) => `f${i}`),
+          `f${depth - 1}`,
+        ],
+      },
+    ]);
   });
 
   it('sends a backup with more lists than the row limit to the app’s own export', () => {

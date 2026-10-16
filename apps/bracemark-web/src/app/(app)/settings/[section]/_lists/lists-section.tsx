@@ -62,8 +62,10 @@ import {
 
 import {
   ARCHIVE_ID,
+  deepestDepthFor,
   flattenTree,
   isSystemListId,
+  LIST_NAME_MAX,
   MY_LIST_ID,
   type SortDir,
   sortedByName,
@@ -162,7 +164,7 @@ function listIcon(id: string): React.ReactNode {
 function RowActions({
   row,
   wide,
-  excludeIds,
+  excludeIdsFor,
   lock,
   onFocusName,
   onMoveUp,
@@ -178,9 +180,13 @@ function RowActions({
   row: ListRow;
   // At `md` and up. Picks which shape "Move to" takes — see the header.
   wide: boolean;
-  // Parent ids the row may NOT move under (forbiddenParentIds): its subtree +
-  // no-children containers. Passed to ListCommand's excludeIds.
-  excludeIds: readonly string[];
+  // Parent ids the row may NOT move under (forbiddenParentIds): its subtree,
+  // no-children containers, and parents too deep for its subtree (the depth
+  // rule). Passed to ListCommand's excludeIds. A function, asked only while this
+  // menu is open: each answer walks the whole forest, and the table used to ask
+  // it of every row on every render — the square of the list count, paid on
+  // every drag frame.
+  excludeIdsFor: () => readonly string[];
   // The row's OWN lock (lock-provider's listLocks), undefined when unlocked-able
   // — i.e. no lock exists yet.
   lock: ListLockInfo | undefined;
@@ -211,6 +217,7 @@ function RowActions({
     onMoveTo(parentId);
     setOpen(false);
   };
+  const excludeIds = useMemo(() => (open ? excludeIdsFor() : []), [open, excludeIdsFor]);
 
   const { triggerRef, onRenameSelect, onCloseAutoFocus } = useRowMenuFocus(onFocusName);
 
@@ -336,7 +343,7 @@ function SortableRow({
   wide,
   renderDepth,
   collapsedIds,
-  excludeIds,
+  excludeIdsFor,
   lock,
   onToggle,
   onRename,
@@ -354,7 +361,7 @@ function SortableRow({
   wide: boolean;
   renderDepth: number;
   collapsedIds: ReadonlySet<string>;
-  excludeIds: readonly string[];
+  excludeIdsFor: () => readonly string[];
   lock: ListLockInfo | undefined;
   onToggle: () => void;
   onRename: (name: string) => Promise<unknown>;
@@ -444,7 +451,7 @@ function SortableRow({
       <RowActions
         row={row}
         wide={wide}
-        excludeIds={excludeIds}
+        excludeIdsFor={excludeIdsFor}
         lock={lock}
         onFocusName={focusName}
         onMoveUp={onMoveUp}
@@ -535,12 +542,21 @@ export function ListsSection() {
 
   // The depth the dragged row would land at, recomputed as it moves. Drives both
   // the live indent of the dragged row and the final drop.
+  // The deepest the dragged row may land under the depth rule, so its live indent
+  // never shows a depth the drop refuses (getMovePlan works it out again on drop).
+  const activeMaxDepth = useMemo(
+    () => (activeId ? deepestDepthFor(lists, activeId) : undefined),
+    [lists, activeId],
+  );
   const projection: Projection | null = useMemo(
     () =>
       activeId && overId
-        ? getProjection(displayRows, activeId, overId, offsetLeft, PROJECTION_OPTIONS)
+        ? getProjection(displayRows, activeId, overId, offsetLeft, {
+            ...PROJECTION_OPTIONS,
+            maxDepth: activeMaxDepth,
+          })
         : null,
-    [activeId, overId, offsetLeft, displayRows],
+    [activeId, overId, offsetLeft, displayRows, activeMaxDepth],
   );
 
   const resetDnd = () => {
@@ -638,8 +654,9 @@ export function ListsSection() {
     // the narrow inset gives back is half an indent step (INDENT_WIDTH is 20 here,
     // 16 on expo), so it buys most of a nesting level: on a 375px screen a locked
     // row at depth 3 leaves ~83px of text at 16 and ~67px at 24, about nine
-    // characters. Nothing caps depth (there is no MAX_DEPTH anywhere), so the
-    // field degrades eventually either way; the inset decides how soon.
+    // characters. The only cap on depth is TREE_MAX_DEPTH (100, far past any
+    // width), so the field degrades eventually either way; the inset decides how
+    // soon.
     //
     // Above `md` the argument stops applying — the column caps at 672, so `px-6`
     // still leaves 624px of measure — which is the whole reason the two values
@@ -669,7 +686,11 @@ export function ListsSection() {
         <div className="rounded-lg border border-border">
           {/* runAwait, not run: CreateRow awaits this to clear its field only on
               success, so the error has to surface AND re-throw. */}
-          <CreateRow noun="list" onCreate={(name) => runAwait(() => createTopLevel(name))} />
+          <CreateRow
+            noun="list"
+            maxLength={LIST_NAME_MAX}
+            onCreate={(name) => runAwait(() => createTopLevel(name))}
+          />
 
           <DndContext
             sensors={sensors}
@@ -686,9 +707,10 @@ export function ListsSection() {
               <ul>
                 {displayRows.map((row) => {
                   // Parents this row may not move under — its own subtree (no
-                  // cycles) + no-children containers. ListCommand renders every
-                  // other list (it reads useLists itself) minus these.
-                  const excludeIds = [...forbiddenParentIds(lists, row.item.id)];
+                  // cycles), no-children containers, and lists too deep for it.
+                  // ListCommand renders every other list (it reads useLists
+                  // itself) minus these. Worked out when the row's menu opens.
+                  const excludeIdsFor = () => [...forbiddenParentIds(lists, row.item.id)];
                   // The dragged row renders at its projected (would-be) depth so the
                   // indent tracks the pointer; every other row keeps its real depth.
                   const renderDepth =
@@ -700,7 +722,7 @@ export function ListsSection() {
                       wide={wide}
                       renderDepth={renderDepth}
                       collapsedIds={collapsedIds}
-                      excludeIds={excludeIds}
+                      excludeIdsFor={excludeIdsFor}
                       lock={listLocks.get(row.item.id)}
                       onToggle={() => toggle(row.item.id)}
                       onRename={(name) => runAwait(() => rename(row.item, name))}

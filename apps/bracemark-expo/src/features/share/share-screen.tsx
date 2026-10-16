@@ -66,7 +66,13 @@ import {
   type ShareNewEntity,
   type ShareTaxonomy,
 } from '@stxapps/expo-react/data/share-store';
-import { DEFAULT_LIST_ID, rankBetween } from '@stxapps/shared';
+import {
+  cleanName,
+  DEFAULT_LIST_ID,
+  LIST_NAME_MAX,
+  rankBetween,
+  TAG_NAME_MAX,
+} from '@stxapps/shared';
 
 import { ErrorText } from '../../components/error-text';
 import { LinkQuotaBanner } from '../../components/links/link-quota-banner';
@@ -178,8 +184,12 @@ export function ShareScreen({ url, title }: SharePayload) {
   // and select. The rank prepends before the first root list — web ListSelect's
   // create-at-index-0, so the same action lands the same place everywhere.
   const submitListName = useCallback(
-    (name: string) => {
+    (typed: string) => {
       if (!taxonomy) return;
+      // Cut to the writers' cap, as the app's mutation hooks cut it
+      // (docs/data-limits.md) — this sheet mints without them.
+      const name = cleanName(typed, LIST_NAME_MAX);
+      if (name === '') return;
       const lower = name.toLowerCase();
       const existing = taxonomy.lists.find((list) => list.name.toLowerCase() === lower);
       if (existing) {
@@ -204,8 +214,10 @@ export function ShareScreen({ url, title }: SharePayload) {
   // before the first tag — web findOrCreate's create-at-index-0, the same rule
   // submitListName follows, so the same action lands the same place everywhere.
   const submitTagName = useCallback(
-    (name: string) => {
+    (typed: string) => {
       if (!taxonomy) return;
+      const name = cleanName(typed, TAG_NAME_MAX);
+      if (name === '') return;
       const lower = name.toLowerCase();
       const existing = taxonomy.tags.find((tag) => tag.name.toLowerCase() === lower);
       if (existing) {

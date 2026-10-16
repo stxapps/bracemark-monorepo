@@ -1,4 +1,4 @@
-import { type Link, LINK_NOTE_MAX } from '../sync/entities';
+import { type Link, LINK_NOTE_MAX, type List } from '../sync/entities';
 import {
   EXTRACTIONS_PREFIX,
   FILES_PREFIX,
@@ -9,16 +9,15 @@ import {
 } from '../sync/paths';
 import { ranksBetween } from '../sync/rank';
 import { ARCHIVE_ID, MY_LIST_ID, TRASH_ID } from '../sync/system-lists';
+import { TREE_MAX_DEPTH } from '../sync/tree';
 import type { ImportedLink } from './bundle';
 import {
-  assertImportFolderDepth,
   PROJECT_CHUNK,
   type ProjectedImport,
   projectImportedLinks,
   projectImportedLinksInChunks,
   type ProjectImportOptions,
 } from './project';
-import { IMPORT_MAX_FOLDER_DEPTH, ImportFolderDepthError } from './resolve';
 
 // The pure half of an import: rows in, every blob the run will write out. It is
 // where an import's USER-VISIBLE behaviour is decided — which list a row lands in,
@@ -319,70 +318,87 @@ describe('projectImportedLinks', () => {
   });
 
   // Every segment of a folder path becomes a list, so the file decides how deep
-  // the library's tree is unless something says otherwise. The whole file is
-  // refused, before anything is minted: a refusal that came after resolution
-  // would leave the half-built chain behind as empty lists.
-  describe('a folder chain past the import limit', () => {
+  // the library's tree is unless something says otherwise. A folder past the
+  // limit is placed AT it — beside its level-99 ancestor's other children,
+  // under its own name — the shape the interop exports write
+  // (docs/data-limits.md). It used to refuse the whole file.
+  describe('a folder chain past the depth limit', () => {
     const chain = (depth: number) => Array.from({ length: depth }, (_, i) => `f${i}`);
+    const listsOf = (result: ProjectedImport) =>
+      under(result, LISTS_PREFIX).map((entry) => entry.data as List);
+    const listNamed = (result: ProjectedImport, name: string) =>
+      listsOf(result).find((list) => list.name === name);
 
     it('builds a chain exactly at the limit', () => {
       const result = project({
-        rows: [row({ url: 'https://example.com/a', folderPath: chain(IMPORT_MAX_FOLDER_DEPTH) })],
+        rows: [row({ url: 'https://example.com/a', folderPath: chain(TREE_MAX_DEPTH) })],
       });
 
-      expect(result).toMatchObject({ linkCount: 1, listCount: IMPORT_MAX_FOLDER_DEPTH });
-      expect(under(result, LISTS_PREFIX)).toHaveLength(IMPORT_MAX_FOLDER_DEPTH);
+      expect(result).toMatchObject({
+        linkCount: 1,
+        listCount: TREE_MAX_DEPTH,
+        flattenedListCount: 0,
+      });
+      expect(under(result, LISTS_PREFIX)).toHaveLength(TREE_MAX_DEPTH);
     });
 
-    it('refuses the file one level deeper, before minting anything', () => {
-      let minted = 0;
-      const run = () =>
-        project({
-          rows: [
-            row({ url: 'https://example.com/shallow', folderPath: ['Work'] }),
-            row({
-              url: 'https://example.com/deep',
-              folderPath: chain(IMPORT_MAX_FOLDER_DEPTH + 1),
-            }),
-          ],
-          newId: () => `new-${++minted}`,
-        });
-
-      expect(run).toThrow(ImportFolderDepthError);
-      expect(minted).toBe(0);
-    });
-
-    it('rejects the chunked projection the orchestrators call, too', async () => {
-      await expect(
-        projectImportedLinksInChunks(
-          {
-            rows: [
-              row({ url: 'https://example.com/a', folderPath: chain(IMPORT_MAX_FOLDER_DEPTH + 1) }),
-            ],
-            lists: [],
-            tags: [],
-            existingPinRanks: [],
-            images: new Map(),
-            newId: idMinter(),
-            now: NOW,
-          },
-          async () => undefined,
-        ),
-      ).rejects.toThrow(ImportFolderDepthError);
-    });
-
-    // The orchestrators ask BEFORE the dedupe and the over-cap prompt, of every
-    // parsed row, so the verdict cannot depend on which rows those two remove.
-    it('is the same verdict when asked of the whole file up front', () => {
-      const at = row({ url: 'https://example.com/a', folderPath: chain(IMPORT_MAX_FOLDER_DEPTH) });
-      const past = row({
-        url: 'https://example.com/b',
-        folderPath: chain(IMPORT_MAX_FOLDER_DEPTH + 1),
+    it('places a folder one level deeper at the limit, under its own name', () => {
+      const result = project({
+        rows: [row({ url: 'https://example.com/a', folderPath: chain(TREE_MAX_DEPTH + 1) })],
       });
 
-      expect(() => assertImportFolderDepth([at])).not.toThrow();
-      expect(() => assertImportFolderDepth([at, past])).toThrow(ImportFolderDepthError);
-      expect(() => assertImportFolderDepth([{ ...past, systemList: 'trash' }])).not.toThrow();
+      const deep = listNamed(result, `f${TREE_MAX_DEPTH}`);
+      const levelAbove = listNamed(result, `f${TREE_MAX_DEPTH - 2}`);
+      expect(deep?.parentId).toBe(levelAbove?.id);
+      expect(listNamed(result, `f${TREE_MAX_DEPTH - 1}`)?.parentId).toBe(levelAbove?.id);
+      expect(linksOf(result)[0].listId).toBe(deep?.id);
+      expect(result).toMatchObject({
+        linkCount: 1,
+        listCount: TREE_MAX_DEPTH + 1,
+        flattenedListCount: 1,
+      });
+    });
+
+    // Only the row's own folder is placed: a folder between the limit and it
+    // holds no link of this row, and an interop import mints only what a link
+    // is filed under (a folder with links of its own has its own rows).
+    it('places a much deeper folder at the limit, without the folders between', () => {
+      const result = project({
+        rows: [
+          row({ url: 'https://example.com/a', folderPath: chain(TREE_MAX_DEPTH + 5) }),
+          row({ url: 'https://example.com/b', folderPath: chain(TREE_MAX_DEPTH + 2) }),
+          row({ url: 'https://example.com/c', folderPath: chain(TREE_MAX_DEPTH + 5) }),
+        ],
+      });
+
+      const levelAbove = listNamed(result, `f${TREE_MAX_DEPTH - 2}`);
+      for (const name of [`f${TREE_MAX_DEPTH + 4}`, `f${TREE_MAX_DEPTH + 1}`]) {
+        expect(listNamed(result, name)?.parentId).toBe(levelAbove?.id);
+      }
+      expect(listNamed(result, `f${TREE_MAX_DEPTH + 2}`)).toBeUndefined();
+      const [a, b, c] = linksOf(result);
+      expect(a.listId).toBe(listNamed(result, `f${TREE_MAX_DEPTH + 4}`)?.id);
+      expect(b.listId).toBe(listNamed(result, `f${TREE_MAX_DEPTH + 1}`)?.id);
+      expect(c.listId).toBe(a.listId);
+      // Two lists placed, each counted once however many rows it holds.
+      expect(result).toMatchObject({ listCount: TREE_MAX_DEPTH + 2, flattenedListCount: 2 });
+    });
+
+    it('places it the same way in the chunked projection the orchestrators call', async () => {
+      const result = await projectImportedLinksInChunks(
+        {
+          rows: [row({ url: 'https://example.com/a', folderPath: chain(TREE_MAX_DEPTH + 1) })],
+          lists: [],
+          tags: [],
+          existingPinRanks: [],
+          images: new Map(),
+          newId: idMinter(),
+          now: NOW,
+        },
+        async () => undefined,
+      );
+
+      expect(result).toMatchObject({ listCount: TREE_MAX_DEPTH + 1, flattenedListCount: 1 });
     });
 
     it('does not count the path of a system-list row, which is never resolved', () => {
@@ -391,12 +407,12 @@ describe('projectImportedLinks', () => {
           row({
             url: 'https://example.com/a',
             systemList: 'archive',
-            folderPath: chain(IMPORT_MAX_FOLDER_DEPTH + 1),
+            folderPath: chain(TREE_MAX_DEPTH + 1),
           }),
         ],
       });
 
-      expect(result).toMatchObject({ linkCount: 1, listCount: 0 });
+      expect(result).toMatchObject({ linkCount: 1, listCount: 0, flattenedListCount: 0 });
     });
   });
 

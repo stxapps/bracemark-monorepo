@@ -37,7 +37,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { ChevronDown, ChevronUp, MoreHorizontal, Pencil, Tag, Trash2 } from 'lucide-react';
 
-import { arrayMove, sortedByName } from '@stxapps/shared';
+import { arrayMove, sortedByName, TAG_NAME_MAX } from '@stxapps/shared';
 import { type TagItem, useTagMutations, useTags } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
@@ -266,7 +266,11 @@ export function TagsSection() {
         <div className="rounded-lg border border-border">
           {/* runAwait, not run: CreateRow awaits this to clear its field only on
               success, so the error has to surface AND re-throw. */}
-          <CreateRow noun="tag" onCreate={(name) => runAwait(() => create(name, null, tags, 0))} />
+          <CreateRow
+            noun="tag"
+            maxLength={TAG_NAME_MAX}
+            onCreate={(name) => runAwait(() => create(name, null, tags, 0))}
+          />
 
           {tags.length === 0 ? (
             <p className="px-3 py-6 text-center text-sm text-muted-foreground">No tags yet.</p>

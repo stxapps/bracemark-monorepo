@@ -90,10 +90,11 @@ HTML preserves identified empty folders; CSV/text report their removal. CSV
 formula-like cells gain an apostrophe, also disclosed. The tool does not read or
 write an account; original files still import directly through Settings → Data.
 
-Limits cover file and expanded ZIP bytes, archive entries, bookmark records,
-folder count and depth, plus a worker deadline — see _the bookmark converter's
-limits_ below. The depth limit is the app's own import rule
-(`IMPORT_MAX_FOLDER_DEPTH`), read from one constant. ZIP decoding uses native streams in the existing worker, checks
+Limits cover file and expanded ZIP bytes, archive entries, bookmark records and
+folder count, plus a worker deadline — see _the bookmark converter's limits_
+below. A folder past the app's depth limit (`TREE_MAX_DEPTH`) is placed at it
+and listed among the losses, as the app's own import and export place it
+([data-limits.md](./data-limits.md)). ZIP decoding uses native streams in the existing worker, checks
 CRCs, and measures emitted bytes as well as declared sizes. It never fetches
 saved addresses or archive references. Clear/cancel and unmount terminate work;
 changing the output replaces the receipt and download.
@@ -133,7 +134,7 @@ one the read edge does not trust; the interop formats take lists and tags from
 
 **One bad record or one unreachable file costs only itself, and every such
 loss is counted.** Like a sync cycle, an export goes on past what it can't use.
-It reports four counters, and each gets its own receipt line:
+It reports five counters, and each gets its own receipt line:
 
 - **`unreadableCount`**: a stored record that doesn't decode (bad JSON, or a
   shape this version refuses) is left out and counted. The read layer drops
@@ -153,7 +154,12 @@ It reports four counters, and each gets its own receipt line:
   although the sync step before it had already turned the same failure into a
   warning. A `session_revoked` verdict still fails the run, since the device is
   being told to forget.
-- **`flattenedListCount`**: lists nested past the export depth (below).
+- **`flattenedListCount`**: lists nested past the depth limit, which the
+  interop formats write at it (below).
+- **`pastMaxDepthListCount`** / **`pastMaxDepthTagCount`**: lists and tags
+  nested past the depth limit, which the backup writes as they are and a
+  restore places at it. Told at export because that is when the user can still
+  move them ([data-limits.md](./data-limits.md)).
 
 On expo, a blob whose disk file won't read is missing too. The backup's
 `manifest.json` adds `omitted: { files, unreadable }` beside `counts`, because
@@ -203,11 +209,11 @@ itself has **no size limit** and its entry count is bounded by the largest
 plan's `maxFiles`. Its `items.jsonl` is held to the same 60 MB and 100,000. Past
 either limit a backup is sent to the app's own export rather than told to split
 the file, which a backup can't be. A backup's **list lines** are held to the
-same 100,000, counted apart from the records (a list is not a bookmark), and
-to the app's depth rule (`assertBackupTreeDepth`, _a backup's list or tag
-chain_), both before the folder tree is built: the walk that names every folder
-copies a path per list, and until then the number of lists reaching it was
-bounded by the byte limit alone.
+same 100,000, counted apart from the records (a list is not a bookmark),
+before the folder tree is built: the walk that names every folder copies a path
+per list, and until then the number of lists reaching it was bounded by the
+byte limit alone. The walk writes no path past the depth limit, so each copy is
+at most 100 names.
 
 The two limits are set so that the record count is what an ordinary library
 meets: 100,000 bookmarks without long notes are 15–17 MB of HTML or CSV and
@@ -563,37 +569,25 @@ The policy, decided once:
   tree, which no longer holds the list, so its links and its child lists are
   uncovered and the orphan sweep deletes the row. No editor here mints either
   id; before this rule, a restore or a sync pull could store one.
-- **A backup's list or tag chain is held to the interop depth rule.** A restore
-  writes `parentId` verbatim, so without a bound the file decided how deep this
-  library's tree was — the one import door the folder-depth rule (below) did not
-  cover. `assertBackupTreeDepth` (`data/backup.ts`) asks it of every admitted
-  list and tag line, existing or not, right after the classify pass and before
-  anything is looked up or written: a chain past `IMPORT_MAX_FOLDER_DEPTH` (100)
-  refuses the **whole file** with the same `ImportFolderDepthError` class, for the
-  same reason the interop rule does — dropping the deep lines would leave a
-  restore that looks complete with links filed under lists it never made. The
-  chain is counted inside the file: a parent the file does not carry (a system
-  list's default, a list only the library holds) ends it, so the verdict is a
-  fact about the file — and **the bound is per file, not per library**. The
-  library's own lists are not measured: a file can hang its chain under a deep
-  list the library already holds, two restores can each add one, and a list the
-  library already holds keeps its stored parent even where the file's line for
-  it says otherwise, so it can join two of the file's chains into one the rule
-  never measured. A path the file repeats is restored from its **first** line
-  and the rest are dropped, counted as skipped, before the rule runs
-  (`firstLinePerPath`). Measured on every line, the rule kept the last line for
-  a path while the writer kept the first wherever the repeat fell in a later
-  write chunk — so a deep chain repeated further down as roots passed it and
-  was stored. The editors put no bound on depth, so a
-  library can hold a chain past 100 and its own backup is then refused; the
-  message says so in a backup's terms and names the act in that library. A
-  `parentId` loop counts as deep as it is long, since
-  `buildTree` turns it into a chain that long, and what hangs below a loop
-  counts from there — which can refuse a looped file a particular cut would
-  have left under 100; no backup this app writes holds a loop. Tags are held to
-  it too: their tree is built by the same `buildTree`. It is measured in one
-  linear pass on its own stack, so the file's depth costs it nothing per
-  level.
+- **A backup's list or tag line past the depth limit is restored at it.** A
+  restore writes `parentId` verbatim, so without a bound the file would decide
+  how deep this library's tree is. `flattenBackupTree` (`data/backup.ts`) runs
+  right after the classify pass and before anything is looked up or written: a
+  line deeper than `TREE_MAX_DEPTH` (100) gets its level-99 ancestor as
+  `parentId`, so it sits beside that ancestor's other children with its own
+  name and links, and nothing else on it changes. The receipt counts the moved
+  lines that were written. It used to refuse the **whole file** — the user's
+  own library, whose editors had no depth limit then — and the reasoning for
+  the change, the shape, and the bound being **per file, not per library** are
+  in [data-limits.md](./data-limits.md). A path the file repeats is restored
+  from its **first** line and the rest are dropped, counted as skipped, before
+  the rule runs (`firstLinePerPath`). Measured on every line, the old rule kept
+  the last line for a path while the writer kept the first wherever the repeat
+  fell in a later write chunk — so a deep chain repeated further down as roots
+  passed it and was stored. The tree is built by the read edge's `buildTree`,
+  so a `parentId` loop is cut where every device cuts it and measured as cut;
+  no backup this app writes holds a loop. Tags are held to it too: their tree
+  is built by the same `buildTree`.
 - **An interop date the calendar cannot name is dropped; the row is kept.** The
   same value reaches the projection legitimately — the epoch parser's unit
   inference is by magnitude, and a source can simply carry a wrong number. A date
@@ -611,37 +605,34 @@ The policy, decided once:
   cleanup: deleting on refusal would take the image from an accepted row that
   shares it. A reference is claimed by the first _accepted_ row, so a refused row
   ahead of it in the file does not cost the later one its image.
-- **A folder chain past 100 levels refuses the whole file.**
-  `IMPORT_MAX_FOLDER_DEPTH` (`import/resolve.ts`). Every segment of a folder path
-  becomes a list, and each format lets the file choose the depth — nested `<DL>`s,
-  separators in one CSV cell, a `parentId` chain — so without a bound the file
-  decides how deep this library's tree is. `assertImportFolderDepth` asks it of
-  every parsed row, before the dedupe and before the over-cap prompt, so the
-  verdict is a fact about the file's rows and not about which of them the
-  library already holds — and nobody answers "import what fits?" for a file that
-  is then refused. The projection asks again before a resolver exists, so nothing of a
-  refused file is minted. It throws `ImportFolderDepthError`, whose message both
-  import views render verbatim. The
-  **file** is refused rather than the deep rows — dropping them would leave an
-  import that looks complete, and shortening their paths would file links where
-  the file never put them. A system-list row is not counted: its path is never
-  resolved. 100 was already the bookmark converter's rule, which now reads the
-  same constant and throws the same error; the converter also counts a folder
-  with no links in it, which the app never sees as a row. It bounds what an
-  import **mints**, not what is stored: another device can sync any chain, which
-  is why nothing that reads the tree recurses (below). A backup, which restores
-  `parentId` verbatim rather than minting, is held to the same number by a rule
-  of its own (_a backup's list or tag chain_, above). The rule reads the ROWS a parse returns, so a parser has to
-  get that far cheaply whatever the file nests: `import/linkwarden.ts` used to
-  climb the whole `parentId` chain again from every collection, and 10,000
-  nested empty collections — half a megabyte — took 25 seconds to parse before
-  there was a row to refuse. It settles each collection's path once now, from
-  its parent's, and stops extending one that is already past the limit.
+- **A folder past 100 levels is placed at level 100.** `TREE_MAX_DEPTH`
+  (`sync/tree.ts`). Every segment of a folder path becomes a list, and each
+  format lets the file choose the depth — nested `<DL>`s, separators in one CSV
+  cell, a `parentId` chain — so without a bound the file decides how deep this
+  library's tree is. `ListResolver` (`import/resolve.ts`) files a row's own
+  folder past the limit under the level-99 list, beside its other children, with
+  its own name and links, and counts the lists it placed
+  (`flattenedListCount`); a folder between level 100 and the row's own that
+  holds no link of its own is not minted. A system-list row is not counted: its
+  path is never resolved. The import used to refuse the whole file instead; the
+  shape, and why it changed, are in [data-limits.md](./data-limits.md). It
+  bounds what an import **mints**, not what is stored: another device can sync
+  any chain, which is why nothing that reads the tree recurses (below). A
+  backup, which restores `parentId` verbatim rather than minting, is held to the
+  same number by a rule of its own (_a backup's list or tag line_, above).
+
+  A path is held to the first 100 names and the row's own (`capFolderPath`), and
+  the Netscape, CSV and LinkWarden parsers cap it as they build it, so a parse
+  gets through a deep file cheaply whatever it nests: `import/linkwarden.ts` used
+  to climb the whole `parentId` chain again from every collection, and 10,000
+  nested empty collections — half a megabyte — took 25 seconds to parse. It
+  settles each collection's path once now, from its parent's, held to the
+  capped shape.
 
   **A `parentId` loop is cut once, and the file's order picks where.** A loop —
   a hand-edited file, or a restore that reparented two collections into each
-  other — has no depth to measure, so the walk cuts it before the rule reads
-  anything. Settling each collection once takes exactly one edge out of a loop:
+  other — has no depth to measure, so the walk cuts it before the resolver
+  reads anything. Settling each collection once takes exactly one edge out of a loop:
   the collection whose parent is where the first climb entered the loop is filed
   at the top level and the rest nest under it in order, so every collection
   still has one path, and a loop yields at most one folder per collection:
@@ -652,10 +643,10 @@ The policy, decided once:
   hangs off it, holding no link, cuts it where its chain comes in. So the same
   loop listed in another order can be cut at another edge — the cut follows the
   first-listed collection whose parent chain reaches the loop, and where that
-  chain enters. The rule then reads the paths as cut — the app's rows and the
-  converter's folders both come from this one parser — so such a file is refused
-  when one of them is past the limit, and not for looping; the order sets every
-  member's depth, so it can decide that as well. The walk this replaced gave
+  chain enters. The resolver then reads the paths as cut — the app's rows and the
+  converter's folders both come from this one parser — so such a file has a
+  folder placed at the limit when one of them is past it, and not for looping;
+  the order sets every member's depth, so it can decide that as well. The walk this replaced gave
   every member the whole loop, rotated to end in itself — the same answer in any
   order, and a separate copy of the loop minted for each member that held a link
   or had a link-holding collection hanging from it. `import/linkwarden.spec.ts`
@@ -767,36 +758,32 @@ ancestor carry one label. Where a picker draws guide lines its indent stops at
 all the bound reaches: a row is keyed and picked by its id, and the picker's
 filter matches a list's own name, never the label.
 
-**The interop exports write at most `EXPORT_MAX_FOLDER_DEPTH` levels** (100,
-`export/bundle.ts`, which is the import's own `IMPORT_MAX_FOLDER_DEPTH`). They
+**The interop exports write at most `TREE_MAX_DEPTH` levels** (100,
+`sync/tree.ts`, the one depth limit — [data-limits.md](./data-limits.md)). They
 used to grow with the square of a long chain, since the CSV writes a folder's
 whole path on every link row and a Netscape file indents every line by its
 folder's depth. Measured on 2026-10-16: 5,000 nested lists made ~200 M
 characters of HTML, and 10,000 failed both formats with
-`RangeError: Invalid string length`, so nothing was saved. Truncating the path
-was the better trade than the error, and the shape of the truncation is chosen.
-A list deeper than 100 is written AT level 100, beside its level-99 ancestor's
-other children: under its own name, holding its own links, with its descendants
-following it at the same level. So no link moves to a folder that isn't its own
-list, and only the nesting below level 100 is lost. Cutting the path at 100
-names instead would have merged every deeper list into its level-100 ancestor.
-Two deep lists with one name under the same level-99 ancestor end up with one
-path, which a CSV importer merges. Both formats flatten identically
-(`foldersWithPaths` for the CSV, `pushFolders` for the Netscape nesting), and
-the file stays one this app's import accepts, which a 101-level file would not
-be. The receipt counts the lists it flattened (`flattenedListCount`). This is
-the import's opposite choice on purpose: an import refuses a file that is too
-deep rather than file links where the file never put them, because it would be
-changing the user's library. An export is a copy, and refusing it would leave
-the user with no copy at all.
+`RangeError: Invalid string length`, so nothing was saved. A list deeper than
+100 is written AT level 100, beside its level-99 ancestor's other children:
+under its own name, holding its own links, with its descendants following it at
+the same level — the shape every edge that meets the limit uses
+([data-limits.md](./data-limits.md), _one shape everywhere_). Two deep lists with
+one name under the same level-99 ancestor end up with one path, which a CSV
+importer merges. Both formats flatten identically (`foldersWithPaths` for the
+CSV, `pushFolders` for the Netscape nesting), and this app's import nests the
+file exactly as written. The receipt counts the lists it flattened
+(`flattenedListCount`). The backup is the exception: a copy of the library, it
+keeps every `parentId`, and its receipt says what a restore will place at the
+limit (`pastMaxDepthListCount` / `pastMaxDepthTagCount`).
 
-What still grows with depth, each by up to the square of one long chain: the web
-Lists settings table, which is a screen, and works out `forbiddenParentIds` for every row it
-shows on every render, each call walking the forest to the row and then the
-row's whole subtree; and the marketing site's converter, which copies a path per
-folder of a backup's list tree. The depth rule bounds the chains each import
-file carries — interop or backup — and nothing bounds a chain built in the
-editors, arrived by sync, or formed where a restored chain meets lists the
+What still grows with depth: the marketing site's converter copies a path per
+folder of a backup's list tree, now at most 101 names each. The web Lists
+settings table used to work out `forbiddenParentIds` for every row on every
+render — a forest walk per row — and now asks it only of the row whose menu is
+open. The editors refuse a move past the limit, an import and a restore place
+what is deeper at it, and nothing bounds a chain that arrives by sync, was
+stored before the editor rule, or forms where a restored chain meets lists the
 library already holds.
 
 **A list's identity is its path, and a forest holds one node per id.** Depth was

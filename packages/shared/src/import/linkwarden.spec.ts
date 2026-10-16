@@ -1,8 +1,8 @@
+import { TREE_MAX_DEPTH } from '../sync/tree';
 import { detectTextImportFormat } from './detect';
 import { parseLinkwardenExport } from './linkwarden';
 import { parseImportText } from './parse';
-import { assertImportFolderDepth } from './project';
-import { IMPORT_MAX_FOLDER_DEPTH, ImportFolderDepthError, ListResolver } from './resolve';
+import { ListResolver } from './resolve';
 
 // LinkWarden's backup.json, rule by rule.
 //
@@ -294,24 +294,30 @@ describe('parseLinkwardenExport', () => {
   // the rows this parse returns. Half a megabyte of nested EMPTY collections
   // took 25 seconds to parse.
   //
-  // Pinned by what settling each collection ONCE leaves behind, not by a clock:
-  // jest cannot time out a synchronous test, so a slow parse would only make
-  // this file slow. A collection's path is its parent's plus one name, so paths
-  // are shared — every collection past the depth limit holds the very same
-  // array. Climb the chain again per collection and each gets its own.
-  it('settles each collection of a long chain once', () => {
+  // Pinned by what the fast path leaves behind, never by a clock (testing.md,
+  // _jest cannot time out a synchronous test_). A collection's path is its
+  // parent's plus one name, held to capFolderPath's shape (resolve.ts): past the
+  // depth limit, the first TREE_MAX_DEPTH names and its own — so no path copies
+  // the chain above it, and a walk that did would fail here on the shape. That
+  // each collection is settled ONCE is pinned by the unnamed chain below, whose
+  // collections all share one path array only if the memo held.
+  it('holds the paths of a long chain to the capped shape', () => {
     const links = parseLinkwardenExport(chainOf(5_000, (i) => `c${i}`, true));
 
     expect(links).toHaveLength(5_000);
-    // Not the whole chain — only enough of it to be refused (below).
-    expect(links[4_999].folderPath.length).toBe(IMPORT_MAX_FOLDER_DEPTH + 1);
-    expect(links[4_999].folderPath.slice(0, 3)).toEqual(['c0', 'c1', 'c2']);
-    expect(new Set(links.map((link) => link.folderPath)).size).toBe(IMPORT_MAX_FOLDER_DEPTH + 1);
+    // Not the whole chain — only what the resolver reads of it.
+    expect(links[4_999].folderPath).toEqual([
+      ...Array.from({ length: TREE_MAX_DEPTH }, (_, i) => `c${i}`),
+      'c4999',
+    ]);
+    expect(Math.max(...links.map((link) => link.folderPath.length))).toBe(TREE_MAX_DEPTH + 1);
   });
 
   // The same chain with nothing to stop on: a collection with no name adds
   // nothing to a path, so a walk bounded only by NAMES would still climb all of
-  // it from every collection. One shared empty path says it did not.
+  // it from every collection. One shared empty path says it did not — the pin
+  // on settling each collection once, for named chains as well: the memo is the
+  // same code either way.
   it('settles a chain of unnamed collections once as well', () => {
     const links = parseLinkwardenExport(chainOf(5_000, () => null, true));
 
@@ -320,17 +326,17 @@ describe('parseLinkwardenExport', () => {
     expect(new Set(links.map((link) => link.folderPath)).size).toBe(1);
   });
 
-  // The parser stops extending a path once it is past the limit, which is only
-  // sound if "past the limit" is still what the import refuses on — and if a
-  // chain exactly AT the limit still arrives whole, name for name.
-  it('carries a chain at the depth limit whole, and one past it far enough to be refused', () => {
-    const names = Array.from({ length: IMPORT_MAX_FOLDER_DEPTH }, (_, i) => `c${i}`);
-    const atLimit = parseLinkwardenExport(chainOf(IMPORT_MAX_FOLDER_DEPTH, (i) => `c${i}`));
-    const pastLimit = parseLinkwardenExport(chainOf(IMPORT_MAX_FOLDER_DEPTH + 1, (i) => `c${i}`));
+  // The parser caps a path once it is past the limit, which is only sound if a
+  // chain exactly AT the limit still arrives whole, name for name, and a deeper
+  // collection keeps its own name at the end — the one the resolver places at
+  // the limit.
+  it('carries a chain at the depth limit whole, and one past it with its own name', () => {
+    const names = (count: number) => Array.from({ length: count }, (_, i) => `c${i}`);
+    const atLimit = parseLinkwardenExport(chainOf(TREE_MAX_DEPTH, (i) => `c${i}`));
+    const pastLimit = parseLinkwardenExport(chainOf(TREE_MAX_DEPTH + 5, (i) => `c${i}`));
 
-    expect(atLimit[0].folderPath).toEqual(names);
-    expect(() => assertImportFolderDepth(atLimit)).not.toThrow();
-    expect(() => assertImportFolderDepth(pastLimit)).toThrow(ImportFolderDepthError);
+    expect(atLimit[0].folderPath).toEqual(names(TREE_MAX_DEPTH));
+    expect(pastLimit[0].folderPath).toEqual([...names(TREE_MAX_DEPTH), `c${TREE_MAX_DEPTH + 4}`]);
   });
 
   it('ends the chain at a parent the file does not contain', () => {

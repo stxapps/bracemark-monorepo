@@ -17,7 +17,14 @@
 // only the px constants and the gesture plumbing aren't.
 
 import { LIST_NO_CHILDREN_IDS } from './system-lists';
-import { childrenOf, findNode, type TreeItem, type TreeNode, type TreeRow } from './tree';
+import {
+  childrenOf,
+  deepestDepthFor,
+  findNode,
+  type TreeItem,
+  type TreeNode,
+  type TreeRow,
+} from './tree';
 
 export interface Projection {
   depth: number;
@@ -51,6 +58,13 @@ export interface ProjectionOptions {
   // jitters horizontally by several px the whole way, and at 0.5 that jitter
   // reparents rows by accident, so expo asks for 0.75 of an indent.
   stepThreshold?: number;
+  // The deepest depth the dragged row may land at — `deepestDepthFor(nodes,
+  // activeId)` (tree.ts), the TREE_MAX_DEPTH rule. The flat rows can't say it:
+  // the dragged row's subtree is excluded from them and a collapsed one was
+  // never in them. Only the live indent reads it from here; getMovePlan works it
+  // out from the forest itself, so a drop can't pass the limit if a caller
+  // leaves it out.
+  maxDepth?: number;
 }
 
 const DEFAULT_INDENT_WIDTH = 20;
@@ -121,13 +135,17 @@ export function getProjection<T extends TreeItem>(
   const projected = active.depth + dragSteps(offsetX, indentWidth, stepThreshold);
 
   // A no-children container (Trash) can sit beside the row but never adopt it, so
-  // it doesn't grant the usual +1 level.
-  const maxDepth = prev ? (noChildrenIds.has(prev.item.id) ? prev.depth : prev.depth + 1) : 0;
+  // it doesn't grant the usual +1 level. Nor may the row go deeper than the depth
+  // rule lets its subtree reach. Where that is shallower than the next row needs,
+  // minDepth wins — the row can't land above a deeper row without adopting it —
+  // and the drop is past the limit, which getMovePlan refuses.
+  const maxDepth = Math.min(
+    prev ? (noChildrenIds.has(prev.item.id) ? prev.depth : prev.depth + 1) : 0,
+    options?.maxDepth ?? Infinity,
+  );
   const minDepth = next ? next.depth : 0;
 
-  let depth = projected;
-  if (projected >= maxDepth) depth = maxDepth;
-  else if (projected < minDepth) depth = minDepth;
+  const depth = Math.max(Math.min(projected, maxDepth), minDepth);
 
   return { depth, parentId: resolveParentId(newRows, overIndex, depth, prev) };
 }
@@ -155,7 +173,8 @@ function resolveParentId<T extends TreeItem>(
 // destination sibling group), `rows` the active-subtree-excluded flat list. The
 // index is how many of the destination's children already sit above the drop —
 // counted from the post-move flat order, so it lines up with the sibling group
-// `move` will re-rank against.
+// `move` will re-rank against. Null for a drop that would put the row's subtree
+// past TREE_MAX_DEPTH: the row eases home, as for any drop that changes nothing.
 export function getMovePlan<T extends TreeItem>(
   nodes: TreeNode<T>[],
   rows: TreeRow<T>[],
@@ -168,7 +187,12 @@ export function getMovePlan<T extends TreeItem>(
   const overIndex = rows.findIndex((row) => row.item.id === overId);
   if (activeIndex === -1 || overIndex === -1) return null;
 
-  const { depth, parentId } = getProjection(rows, activeId, overId, offsetX, options);
+  const maxDepth = deepestDepthFor(nodes, activeId);
+  const { depth, parentId } = getProjection(rows, activeId, overId, offsetX, {
+    ...options,
+    maxDepth,
+  });
+  if (depth > maxDepth) return null;
   const item = rows[activeIndex].item;
   const newRows = arrayMove(rows, activeIndex, overIndex);
 

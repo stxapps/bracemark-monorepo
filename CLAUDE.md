@@ -83,6 +83,7 @@ that reading comes _before_ the edit; nothing downstream will tell you.
 | link editors, list/tag trees, bulk edit                                        | `editors.md`                    |
 | title/image/screenshot/page-copy capture, `bracemark-extractor`                | `link-extraction.md` ⚠          |
 | import/export, sign-out wipe, delete all data, delete account                  | `data-lifecycle.md` ⚠           |
+| **a limit** — tree depth, a name's length, tags per link; a new `.max()`       | `data-limits.md` ⚠              |
 | subscriptions — Paddle, store IAP, the entitlement fold                        | `iap.md`                        |
 | app lock + list locks                                                          | `locks.md`                      |
 | **error messages, labels, roles, font scaling**                                | `accessibility.md` ⚠            |

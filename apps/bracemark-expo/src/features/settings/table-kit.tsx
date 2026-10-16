@@ -207,9 +207,14 @@ export function DestroyConfirm({
 // tables cannot end up describing the same control differently.
 export function CreateRow({
   noun,
+  maxLength,
   onCreate,
 }: {
   noun: string;
+  // The writer's name cap (LIST_NAME_MAX / TAG_NAME_MAX), so the field stops
+  // where the mutation would cut. RenameField has none: an over-long name stored
+  // before the cap stays whole until it is edited, and the mutation cuts that.
+  maxLength: number;
   onCreate: (name: string) => Promise<unknown>;
 }) {
   const [value, setValue] = useState('');
@@ -263,6 +268,7 @@ export function CreateRow({
         value={value}
         placeholder={`New ${noun}`}
         aria-label={`New ${noun} name`}
+        maxLength={maxLength}
         className="h-9 min-w-0 flex-1 border-transparent bg-transparent px-2 shadow-none"
         onChangeText={setValue}
         onFocus={() => setFocused(true)}

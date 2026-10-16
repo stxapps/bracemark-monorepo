@@ -8,6 +8,7 @@ import {
   withHighlights,
   withoutUnsorted,
 } from './raindrop';
+import { capFolderPath } from './resolve';
 import { PARSE_CHUNK, runSteps } from './steps';
 
 // CSV parser targeting Raindrop.io's export (and export/csv.ts's own output —
@@ -123,7 +124,7 @@ function folderPath(value: string, raindrop: boolean): string[] {
     .split(raindrop ? ' / ' : '/')
     .map((name) => name.trim())
     .filter((name) => name !== '');
-  return raindrop ? withoutUnsorted(path) : path;
+  return capFolderPath(raindrop ? withoutUnsorted(path) : path);
 }
 
 export function parseRaindropCsv(text: string, observer?: ImportObserver): ImportedLink[] {

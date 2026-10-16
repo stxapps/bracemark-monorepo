@@ -36,7 +36,6 @@ import {
 import Link from 'next/link';
 
 import {
-  EXPORT_MAX_FOLDER_DEPTH,
   type ExportFormat,
   formatSyncedAt,
   getSyncPhase,
@@ -44,6 +43,7 @@ import {
   type ImportQuotaPrompt,
   SYNC_PHASE_LABELS,
   syncBlockedDetail,
+  TREE_MAX_DEPTH,
 } from '@stxapps/shared';
 import {
   type DeleteAllState,
@@ -183,6 +183,15 @@ function SyncStatus() {
   );
 }
 
+// "2 lists", "1 tag", "2 lists and 1 tag" — the subject of a depth-limit line,
+// which a backup can say of either tree (docs/data-limits.md).
+function listsAndTags(lists: number, tags: number): string {
+  const parts: string[] = [];
+  if (lists > 0) parts.push(`${lists} ${lists === 1 ? 'list' : 'lists'}`);
+  if (tags > 0) parts.push(`${tags} ${tags === 1 ? 'tag' : 'tags'}`);
+  return parts.join(' and ');
+}
+
 const IMPORT_STEP_LABELS: Record<'sync' | 'parse' | 'items' | 'files', string> = {
   sync: 'Refreshing from the server…',
   parse: 'Reading the file…',
@@ -262,6 +271,12 @@ function ImportStatus({ state }: { state: ImportState }) {
   if (outcome.invalidCount > 0) {
     notes.push(
       `${outcome.invalidCount} ${outcome.invalidCount === 1 ? 'entry' : 'entries'} couldn’t be read and ${outcome.invalidCount === 1 ? 'was' : 'were'} left out.`,
+    );
+  }
+  const flattened = outcome.flattenedListCount + outcome.flattenedTagCount;
+  if (flattened > 0) {
+    notes.push(
+      `${listsAndTags(outcome.flattenedListCount, outcome.flattenedTagCount)} nested more than ${TREE_MAX_DEPTH} levels deep ${flattened === 1 ? 'was' : 'were'} placed at level ${TREE_MAX_DEPTH}.`,
     );
   }
   if (outcome.syncFailed) {
@@ -481,7 +496,16 @@ function ExportStatus({ state, excludedCount }: { state: ExportState; excludedCo
   }
   if (outcome.flattenedListCount > 0) {
     warnings.push(
-      `${outcome.flattenedListCount} ${outcome.flattenedListCount === 1 ? 'list' : 'lists'} nested more than ${EXPORT_MAX_FOLDER_DEPTH} levels deep ${outcome.flattenedListCount === 1 ? 'was' : 'were'} placed at level ${EXPORT_MAX_FOLDER_DEPTH}.`,
+      `${outcome.flattenedListCount} ${outcome.flattenedListCount === 1 ? 'list' : 'lists'} nested more than ${TREE_MAX_DEPTH} levels deep ${outcome.flattenedListCount === 1 ? 'was' : 'were'} placed at level ${TREE_MAX_DEPTH}.`,
+    );
+  }
+  // The backup keeps them as they are; this is the moment the user can still
+  // move them, before a restore places them (docs/data-limits.md).
+  const pastMaxDepth = outcome.pastMaxDepthListCount + outcome.pastMaxDepthTagCount;
+  if (pastMaxDepth > 0) {
+    const one = pastMaxDepth === 1;
+    warnings.push(
+      `${listsAndTags(outcome.pastMaxDepthListCount, outcome.pastMaxDepthTagCount)} ${one ? 'is' : 'are'} nested more than ${TREE_MAX_DEPTH} levels deep. Restoring this backup places ${one ? 'it' : 'them'} at level ${TREE_MAX_DEPTH} — to keep ${one ? 'its' : 'their'} nesting, move ${one ? 'it' : 'them'} higher up and export again.`,
     );
   }
   if (excludedCount > 0) {

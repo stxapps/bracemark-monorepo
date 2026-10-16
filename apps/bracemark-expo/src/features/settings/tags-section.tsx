@@ -21,7 +21,7 @@ import { View } from 'react-native';
 import { ChevronDown, ChevronUp, MoreHorizontal, Pencil, Tag, Trash2 } from 'lucide-react-native';
 
 import { useTagMutations, useTags } from '@stxapps/expo-react';
-import { arrayMove, sortedByName, type TagItem } from '@stxapps/shared';
+import { arrayMove, sortedByName, TAG_NAME_MAX, type TagItem } from '@stxapps/shared';
 
 import { Button } from '../../components/ui/button';
 import {
@@ -227,7 +227,11 @@ export function TagsSection() {
       <View className="rounded-lg border border-border">
         {/* runAwait, not run: CreateRow awaits this to clear its field only on
             success, so the error has to surface AND re-throw. */}
-        <CreateRow noun="tag" onCreate={(name) => runAwait(() => create(name, null, tags, 0))} />
+        <CreateRow
+          noun="tag"
+          maxLength={TAG_NAME_MAX}
+          onCreate={(name) => runAwait(() => create(name, null, tags, 0))}
+        />
 
         {tags.length === 0 ? (
           <Text className="px-3 py-6 text-center text-sm text-muted-foreground">No tags yet.</Text>

@@ -73,8 +73,6 @@ import type { FileEntry } from '@zip.js/zip.js/index-native.js';
 
 import type { BundleEntry, ImportOutcome, ImportProgress } from '@stxapps/shared';
 import {
-  assertBackupTreeDepth,
-  assertImportFolderDepth,
   assertUnderImportQuota,
   BACKUP_ITEMS_ENTRY,
   BACKUP_MANIFEST_ENTRY,
@@ -84,6 +82,7 @@ import {
   EXTRACTIONS_PREFIX,
   FILES_PREFIX,
   firstLinePerPath,
+  flattenBackupTree,
   idFromPath,
   type ImportedBundle,
   type ImportedLink,
@@ -151,11 +150,6 @@ async function importInterop(
   onQuotaPrompt?: ImportQuotaResolver,
 ): Promise<Omit<ImportOutcome, 'syncFailed'>> {
   const existing = await readExistingLinks();
-
-  // Before anything is asked or written: a folder chain past the import limit
-  // refuses the file whole, whichever of its rows the dedupe and the cap below
-  // would have kept (@stxapps/shared import/project.ts).
-  assertImportFolderDepth(bundle.links);
 
   // Dedupe against the library and within the file, by canonical identity.
   const seen = new Set(existing.urlKeys);
@@ -225,6 +219,8 @@ async function importInterop(
     fileCount: projected.files.length,
     skippedCount,
     invalidCount: projected.invalidCount,
+    flattenedListCount: projected.flattenedListCount,
+    flattenedTagCount: 0,
     notImportedCount,
   };
 }
@@ -263,11 +259,10 @@ async function importBracemarkBackup(
     else classified.push(entry);
   }
   // A path the file repeats is restored from its first line; every step below
-  // sees only that one (shared data/backup.ts, firstLinePerPath).
-  const unique = firstLinePerPath(classified);
-  // A list or tag chain past the import limit refuses the whole file, before
-  // anything is looked up or written (shared data/backup.ts).
-  assertBackupTreeDepth(unique);
+  // sees only that one (shared data/backup.ts, firstLinePerPath). A list or tag
+  // line nested past the depth limit is restored at it, its `parentId` moved
+  // up, before anything is looked up or written (flattenBackupTree).
+  const { entries: unique, flattenedPaths } = flattenBackupTree(firstLinePerPath(classified));
 
   // SKIP-EXISTING: a path already in the local store is never touched. Looked
   // up a slice at a time: one bulkGet over every path issued and collected
@@ -352,6 +347,12 @@ async function importBracemarkBackup(
     invalidCount,
     // A backup either fits or is refused whole — it never truncates.
     notImportedCount: 0,
+    flattenedListCount: imported.filter(
+      (entry) => entry.kind === 'list' && flattenedPaths.has(entry.path),
+    ).length,
+    flattenedTagCount: imported.filter(
+      (entry) => entry.kind === 'tag' && flattenedPaths.has(entry.path),
+    ).length,
   };
 }
 

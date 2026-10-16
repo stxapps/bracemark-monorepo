@@ -1,9 +1,8 @@
 import { parseImportText } from '../import/parse';
-import { assertImportFolderDepth } from '../import/project';
 import type { ListItem } from '../sync/items';
+import { TREE_MAX_DEPTH } from '../sync/tree';
 import {
   bundleFromLibrary,
-  EXPORT_MAX_FOLDER_DEPTH,
   type ExportBundle,
   type ExportFolder,
   type ExportLinkRow,
@@ -142,7 +141,7 @@ describe('toRaindropCsv over a library the import edges would now refuse', () =>
 
     expect(rows).toHaveLength(2);
     // The deepest list keeps its own name, under the ancestors the depth allows.
-    const path = [...names(EXPORT_MAX_FOLDER_DEPTH - 1), `f${DEPTH - 1}`].join('/');
+    const path = [...names(TREE_MAX_DEPTH - 1), `f${DEPTH - 1}`].join('/');
     expect(rows[1]).toBe(
       `https://example.com/f${DEPTH - 1},${path},Deep,,,2026-01-02T03:04:05.000Z`,
     );
@@ -182,9 +181,9 @@ const names = (count: number) => Array.from({ length: count }, (_, i) => `f${i}`
 // Every row repeats its folder's path, so an unbounded chain made the file grow
 // with the square of its depth: 10,000 nested lists, a link in each, ended the
 // export in `RangeError: Invalid string length` with nothing saved.
-describe('toRaindropCsv past EXPORT_MAX_FOLDER_DEPTH', () => {
+describe('toRaindropCsv past TREE_MAX_DEPTH', () => {
   it('writes a list past the depth beside its parent’s children, under its own name', () => {
-    const depth = EXPORT_MAX_FOLDER_DEPTH + 2;
+    const depth = TREE_MAX_DEPTH + 2;
     const links = [depth - 3, depth - 2, depth - 1].map(storedLink);
     const rows = toRaindropCsv(bundleFromLibrary(links, chain(depth), []))
       .trimEnd()
@@ -192,7 +191,7 @@ describe('toRaindropCsv past EXPORT_MAX_FOLDER_DEPTH', () => {
       .slice(1)
       .map((row) => row.split(',')[1]);
 
-    const top = names(EXPORT_MAX_FOLDER_DEPTH - 1);
+    const top = names(TREE_MAX_DEPTH - 1);
     expect(rows).toEqual([
       [...top, `f${depth - 3}`].join('/'),
       [...top, `f${depth - 2}`].join('/'),
@@ -200,19 +199,17 @@ describe('toRaindropCsv past EXPORT_MAX_FOLDER_DEPTH', () => {
     ]);
   });
 
-  it('writes 10,000 nested lists into a file this app’s import accepts', () => {
+  it('writes 10,000 nested lists into a file this app’s import nests as written', () => {
     const depth = 10_000;
     const links = Array.from({ length: depth }, (_, i) => storedLink(i));
     const bundle = bundleFromLibrary(links, chain(depth), []);
     const rows = parseImportText(toRaindropCsv(bundle)).links;
 
     expect(rows).toHaveLength(depth);
-    expect(() => assertImportFolderDepth(rows)).not.toThrow();
-    expect(rows.at(-1)?.folderPath).toEqual([
-      ...names(EXPORT_MAX_FOLDER_DEPTH - 1),
-      `f${depth - 1}`,
-    ]);
-    expect(foldersPastMaxDepth(bundle.folders)).toBe(depth - EXPORT_MAX_FOLDER_DEPTH);
+    // No folder past the depth, so an import places none of them elsewhere.
+    expect(rows.every((row) => row.folderPath.length <= TREE_MAX_DEPTH)).toBe(true);
+    expect(rows.at(-1)?.folderPath).toEqual([...names(TREE_MAX_DEPTH - 1), `f${depth - 1}`]);
+    expect(foldersPastMaxDepth(bundle.folders)).toBe(depth - TREE_MAX_DEPTH);
   });
 });
 

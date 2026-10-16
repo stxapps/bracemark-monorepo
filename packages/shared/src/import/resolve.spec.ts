@@ -1,6 +1,8 @@
+import { LINK_TAGS_MAX, LIST_NAME_MAX, TAG_NAME_MAX } from '../sync/entities';
 import { ranksBetween } from '../sync/rank';
 import { MY_LIST_ID, TRASH_ID } from '../sync/system-lists';
-import { ListResolver, type ResolverNode, TagResolver } from './resolve';
+import { TREE_MAX_DEPTH } from '../sync/tree';
+import { capFolderPath, ListResolver, type ResolverNode, TagResolver } from './resolve';
 
 // Deterministic stand-in for the platform's newId (web-crypto / expo-crypto).
 function idMinter(): () => string {
@@ -149,5 +151,42 @@ describe('TagResolver', () => {
     expect(resolver.created[0].data.rank > RANKS[0]).toBe(true);
     // The nested sibling's rank is ignored — only root siblings bound the new tag.
     expect(resolver.created[0].data.rank < RANKS[2]).toBe(true);
+  });
+});
+
+// The writers' limits, which an import is one of (docs/data-limits.md): a name
+// past its cap is cut, never refused, and a row's tags stop at LINK_TAGS_MAX.
+describe('the import’s limits', () => {
+  it('cuts a list name past LIST_NAME_MAX and matches it as cut', () => {
+    const resolver = new ListResolver([], 100, idMinter());
+    const long = 'a'.repeat(LIST_NAME_MAX) + 'tail';
+    const id = resolver.resolve([long]);
+    expect(resolver.created.map((entry) => entry.data.name)).toEqual(['a'.repeat(LIST_NAME_MAX)]);
+    // Another name sharing the first LIST_NAME_MAX characters is the same list.
+    expect(resolver.resolve(['a'.repeat(LIST_NAME_MAX) + 'other'])).toBe(id);
+  });
+
+  it('cuts a tag name past TAG_NAME_MAX', () => {
+    const resolver = new TagResolver([], 100, idMinter());
+    resolver.resolve(['t'.repeat(TAG_NAME_MAX + 10)]);
+    expect(resolver.created.map((entry) => entry.data.name)).toEqual(['t'.repeat(TAG_NAME_MAX)]);
+  });
+
+  it('keeps a row’s first LINK_TAGS_MAX tags and mints none past them', () => {
+    const resolver = new TagResolver([], 100, idMinter());
+    const names = Array.from({ length: LINK_TAGS_MAX + 5 }, (_, i) => `t${i}`);
+    expect(resolver.resolve(names)).toHaveLength(LINK_TAGS_MAX);
+    expect(resolver.created).toHaveLength(LINK_TAGS_MAX);
+    expect(resolver.created.at(-1)?.data.name).toBe(`t${LINK_TAGS_MAX - 1}`);
+  });
+
+  it('caps a folder path at the first TREE_MAX_DEPTH names and the row’s own', () => {
+    const path = Array.from({ length: TREE_MAX_DEPTH + 7 }, (_, i) => `f${i}`);
+    expect(capFolderPath(path)).toEqual([...path.slice(0, TREE_MAX_DEPTH), path.at(-1)]);
+    // Idempotent, and a path within the limit is untouched.
+    expect(capFolderPath(capFolderPath(path))).toEqual(capFolderPath(path));
+    expect(capFolderPath(path.slice(0, TREE_MAX_DEPTH + 1))).toEqual(
+      path.slice(0, TREE_MAX_DEPTH + 1),
+    );
   });
 });

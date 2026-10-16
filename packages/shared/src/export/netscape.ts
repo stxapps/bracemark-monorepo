@@ -1,9 +1,5 @@
-import {
-  EXPORT_MAX_FOLDER_DEPTH,
-  type ExportBundle,
-  type ExportFolder,
-  type ExportLinkRow,
-} from './bundle';
+import { TREE_MAX_DEPTH } from '../sync/tree';
+import type { ExportBundle, ExportFolder, ExportLinkRow } from './bundle';
 
 // Netscape Bookmark File serializer — the one interop format everything reads:
 // web browsers (Chrome/Firefox/Safari "Import bookmarks"), LinkWarden, and
@@ -43,7 +39,7 @@ function linkLines(link: ExportLinkRow, indent: string, includeNotes: boolean): 
 // library's `parentId` chain (see `foldersWithPaths` in bundle.ts). A frame is
 // either a folder still to open or the closing line of one already opened,
 // pushed UNDER its children so it comes off after the last of them — except at
-// EXPORT_MAX_FOLDER_DEPTH, where it goes on top: that folder closes first and
+// TREE_MAX_DEPTH, where it goes on top: that folder closes first and
 // its children follow at its own level, which is where `foldersWithPaths` puts
 // them in the CSV too.
 function pushFolders(
@@ -68,7 +64,7 @@ function pushFolders(
     const inner = frame.indent + '    ';
     for (const link of folder.links) out.push(...linkLines(link, inner, includeNotes));
     const close = { close: `${frame.indent}</DL><p>` };
-    const nests = depth < EXPORT_MAX_FOLDER_DEPTH;
+    const nests = depth < TREE_MAX_DEPTH;
     if (nests) pending.push(close);
     for (let i = folder.children.length - 1; i >= 0; i--) {
       pending.push(

@@ -54,6 +54,27 @@ import { z } from '../zod';
 export const LINK_TITLE_MAX = 300; // shared by `linkSchema.customTitle` + `extractionSchema.title` (a title either way)
 export const LINK_NOTE_MAX = 500; // short inline note; long-form → files/ (`noteId`)
 
+// Caps the WRITERS hold a list's and a tag's name to — the editors (through the
+// mutation hooks) and an import (import/resolve.ts) — and that the schemas below
+// deliberately do NOT carry. A name was never capped, so a longer stored one is
+// legitimate data, and a cap in `listSchema` would drop that list from every view
+// and file its links under My List. Generous for the same reason as the caps
+// above: a name past it is cut, never refused (docs/data-limits.md).
+export const LIST_NAME_MAX = 200;
+export const TAG_NAME_MAX = 200;
+
+// The most tags an import gives one link (import/resolve.ts, TagResolver) —
+// the file's first ones, in its order. `tagIds` is inline in the link's
+// `< ~2 KB` metadata, and a file can name any number per row; no editor comes
+// near it by hand, so they aren't gated. Not in `linkSchema`, for the reason the
+// names aren't.
+export const LINK_TAGS_MAX = 100;
+
+// A list or tag name as a writer stores it: trimmed, then cut to `max`.
+export function cleanName(raw: string, max: number): string {
+  return raw.trim().slice(0, max).trimEnd();
+}
+
 export const linkSchema = z.looseObject({
   // Uncapped on purpose — the link's identity must never be truncated (see the
   // `LINK_TITLE_MAX` note above); the per-user byte quota is the only backstop.
