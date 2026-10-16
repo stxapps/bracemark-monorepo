@@ -1387,6 +1387,85 @@ describe('a fetched content blob that does not open under its path', () => {
   });
 });
 
+// The export's file phase runs best-effort. It took this function's default —
+// every transport failure rejects — and so an export with even one image not yet
+// on this device failed outright offline, after its sync step had already been
+// let off with a warning. The default stays: the content provider remembers
+// `missingPaths` for the session and retries only on a rejection, so a dead
+// network reported as missing would hide those images until the next launch.
+describe('loadEntityContents, best-effort', () => {
+  afterEach(() => mockGetBlob.mockReset());
+
+  async function seedBoth(): Promise<void> {
+    await db.items.put(toItemRecord(FILE_PATH, 1000));
+    await db.items.put(toItemRecord(OTHER_FILE_PATH, 1000));
+  }
+
+  it('fails one path on a transport error, and the rest of the batch lands', async () => {
+    await seedBoth();
+    mockGetBlob.mockImplementation(async (url: string) => {
+      if (pathFor(url) === FILE_PATH) throw new BlobRequestError('GET', 503);
+      return new Uint8Array([0xee, ...utf8(`server ${pathFor(url)}`)]);
+    });
+
+    const result = await loadEntityContents(deps(), [FILE_PATH, OTHER_FILE_PATH], undefined, {
+      bestEffort: true,
+    });
+
+    expect(result).toEqual({ missingPaths: [], failedPaths: [FILE_PATH] });
+    expect(await bodyAt(FILE_PATH)).toBeUndefined();
+    expect(await bodyAt(OTHER_FILE_PATH)).toBe(`server ${OTHER_FILE_PATH}`);
+  });
+
+  it('fails every path when the sign call fails, and fetches nothing', async () => {
+    await seedBoth();
+    const progress = jest.fn();
+
+    const result = await loadEntityContents(
+      deps({
+        filesSign: () => {
+          throw new ApiTimeoutError(60_000);
+        },
+      }),
+      [FILE_PATH, OTHER_FILE_PATH],
+      progress,
+      { bestEffort: true },
+    );
+
+    expect(result).toEqual({ missingPaths: [], failedPaths: [FILE_PATH, OTHER_FILE_PATH] });
+    expect(mockGetBlob).not.toHaveBeenCalled();
+    // The export's progress bar reaches its end rather than stopping at 0 of 2.
+    expect(progress).toHaveBeenLastCalledWith(2, 2);
+  });
+
+  // The device is being told to forget, and the caller is about to write the
+  // library out to a file.
+  it('still rejects on session_revoked', async () => {
+    await seedBoth();
+    const revoked = new ApiError(401, JSON.stringify({ error: 'session_revoked' }));
+
+    await expect(
+      loadEntityContents(
+        deps({
+          filesSign: () => {
+            throw revoked;
+          },
+        }),
+        [FILE_PATH],
+        undefined,
+        { bestEffort: true },
+      ),
+    ).rejects.toBe(revoked);
+  });
+
+  it('rejects on a transport error without it, which is the content provider’s signal', async () => {
+    await seedBoth();
+    mockGetBlob.mockRejectedValue(new BlobRequestError('GET', 503));
+
+    await expect(loadEntityContents(deps(), [FILE_PATH])).rejects.toBeInstanceOf(BlobRequestError);
+  });
+});
+
 // --- the first-sync counter --------------------------------------------------
 
 // What the decrypting screen (bracemark-web components/initial-sync-gate.tsx) puts a

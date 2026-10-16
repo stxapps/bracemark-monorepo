@@ -22,6 +22,7 @@
 
 import {
   type ApiClient,
+  ApiError,
   apiErrorCode,
   BlobUnreadableError,
   chunk,
@@ -40,6 +41,7 @@ import {
   type OpsListResponse,
   type ProgressFn,
   recordBlocked,
+  sessionVerdictFromResponse,
   type SignOp,
   type SyncOutcome,
   untilAborted,
@@ -479,12 +481,27 @@ export async function loadEntityContent(
 // per path: rejected, one bad blob failed the whole batch on every attempt, so an
 // export could never finish and the content provider re-asked for the whole batch
 // on every mount.
+//
+// `bestEffort` turns those other failures — a transport failure: offline, a
+// non-404 status, a deadline, on the sign call or on a GET — into `failedPaths`
+// as well, and the batch carries on. The export wants that, where a backup
+// missing a few images beats no backup, and an offline export used to fail
+// outright on its first unfetched blob. The content provider must not have it:
+// it remembers `missingPaths` for the session and retries only on a rejection,
+// so the two lists stay apart. A failed sign call fails every path left, since
+// it is one endpoint and the call has already been retried. Even best-effort
+// rejects on `session_revoked` — this device is being told to forget, and the
+// caller is about to write the library out — and on a fenced store write.
 export async function loadEntityContents(
   deps: SyncDeps,
   paths: string[],
   onProgress?: ProgressFn,
-): Promise<{ missingPaths: string[] }> {
+  options: { bestEffort?: boolean } = {},
+): Promise<{ missingPaths: string[]; failedPaths: string[] }> {
   deps = withRetryDeps(deps);
+  const tolerates = (err: unknown): boolean =>
+    options.bestEffort === true &&
+    !(err instanceof ApiError && sessionVerdictFromResponse(err.status, err.body) === 'revoked');
 
   const records = await db.items.bulkGet(paths);
   const missingPaths: string[] = [];
@@ -509,17 +526,37 @@ export async function loadEntityContents(
     onProgress?.(done, total);
   };
   onProgress?.(done, total);
-  for (const batch of chunk(wanted, SIGN_BATCH)) {
-    const urls = await signPaths(deps.api, 'get', batch);
+  const failedPaths: string[] = [];
+  const batches = chunk(wanted, SIGN_BATCH);
+  for (const [index, batch] of batches.entries()) {
+    let urls: Map<string, string>;
+    try {
+      urls = await signPaths(deps.api, 'get', batch);
+    } catch (err) {
+      if (!tolerates(err)) throw err;
+      for (const path of batches.slice(index).flat()) {
+        failedPaths.push(path);
+        reportOne();
+      }
+      break;
+    }
     await mapLimit(batch, FILE_CONCURRENCY, async (path) => {
       const url = urls.get(path);
-      const blob = url
-        ? await getBlob(url).catch((err: unknown) => {
-            if (err instanceof BlobRequestError && err.status === 404) return undefined;
-            throw err;
-          })
-        : undefined;
-      const data = blob && (await openPulled(deps, blob, path));
+      let data: Uint8Array | undefined;
+      try {
+        const blob = url
+          ? await getBlob(url).catch((err: unknown) => {
+              if (err instanceof BlobRequestError && err.status === 404) return undefined;
+              throw err;
+            })
+          : undefined;
+        data = blob && (await openPulled(deps, blob, path));
+      } catch (err) {
+        if (!tolerates(err)) throw err;
+        failedPaths.push(path);
+        reportOne();
+        return;
+      }
       if (data) {
         await db.transaction('rw', db.items, db.syncMeta, async () => {
           await assertAccountStillOwnsStore(deps.username);
@@ -532,7 +569,7 @@ export async function loadEntityContents(
       reportOne();
     });
   }
-  return { missingPaths };
+  return { missingPaths, failedPaths };
 }
 
 // --- the cycle: incremental -------------------------------------------------

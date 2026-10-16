@@ -855,6 +855,30 @@ describe('loadEntityContents', () => {
     expect(plaintextAt(OTHER_FILE_PATH)).toBe('fetched');
     expect(tempFiles()).toEqual([]);
   });
+
+  // The drift guard for web's best-effort mode (its spec has the cases and the
+  // reasoning): the export's file phase, offline, used to fail the whole backup.
+  it('best-effort, fails a path on a transport error and lands the rest', async () => {
+    getDb().transaction((tx) =>
+      putItemsTx(tx, [toItemRecord(FILE_PATH, 1000), toItemRecord(OTHER_FILE_PATH, 1000)]),
+    );
+    r2Content.set(OTHER_FILE_PATH, 'fetched');
+    mockGetBlobToFile.mockImplementation(async (url: string, file: { uri: string }) => {
+      const path = pathFor(url);
+      if (path === FILE_PATH) throw new BlobRequestError('GET', 503);
+      writeFileText(file.uri, `enc:${r2Content.get(path)}`);
+    });
+
+    const result = await loadEntityContents(deps(), [FILE_PATH, OTHER_FILE_PATH], undefined, {
+      bestEffort: true,
+    });
+
+    expect(result).toEqual({ missingPaths: [], failedPaths: [FILE_PATH] });
+    expect(plaintextAt(FILE_PATH)).toBeUndefined();
+    expect((await getItem(FILE_PATH))?.hasDataFile).toBeFalsy();
+    expect(plaintextAt(OTHER_FILE_PATH)).toBe('fetched');
+    expect(tempFiles()).toEqual([]);
+  });
 });
 
 // --- the path each blob is bound to ----------------------------------------------

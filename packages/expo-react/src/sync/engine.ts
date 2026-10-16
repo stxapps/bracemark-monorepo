@@ -41,6 +41,7 @@ import type { File } from 'expo-file-system';
 import { decryptEntity, decryptFile, encryptEntity, encryptFile } from '@stxapps/expo-crypto';
 import {
   type ApiClient,
+  ApiError,
   apiErrorCode,
   BlobUnreadableError,
   chunk,
@@ -59,6 +60,7 @@ import {
   type OpsListResponse,
   type ProgressFn,
   recordBlocked,
+  sessionVerdictFromResponse,
   type SignOp,
   type SyncOutcome,
   untilAborted,
@@ -551,13 +553,20 @@ export async function loadEntityContent(deps: SyncDeps, path: string): Promise<F
 // delete op not yet pulled) or does not open under its path (openFetchedFile)
 // lands in `missingPaths` for the caller to report — never a thrown error. Any
 // other failure rejects. The unreadable case is web's, for web's reason: one
-// such blob used to fail the whole batch on every attempt.
+// such blob used to fail the whole batch on every attempt. `bestEffort` is web's
+// too, with web's reasoning (its engine.ts): a transport failure lands in
+// `failedPaths` and the batch goes on, except a `session_revoked` verdict or a
+// fenced write, which still reject.
 export async function loadEntityContents(
   deps: SyncDeps,
   paths: string[],
   onProgress?: ProgressFn,
-): Promise<{ missingPaths: string[] }> {
+  options: { bestEffort?: boolean } = {},
+): Promise<{ missingPaths: string[]; failedPaths: string[] }> {
   deps = withRetryDeps(deps);
+  const tolerates = (err: unknown): boolean =>
+    options.bestEffort === true &&
+    !(err instanceof ApiError && sessionVerdictFromResponse(err.status, err.body) === 'revoked');
 
   const records = await bulkGetItems(paths);
   const missingPaths: string[] = [];
@@ -582,8 +591,20 @@ export async function loadEntityContents(
     onProgress?.(done, total);
   };
   onProgress?.(done, total);
-  for (const batch of chunk(wanted, SIGN_BATCH)) {
-    const urls = await signPaths(deps.api, 'get', batch);
+  const failedPaths: string[] = [];
+  const batches = chunk(wanted, SIGN_BATCH);
+  for (const [index, batch] of batches.entries()) {
+    let urls: Map<string, string>;
+    try {
+      urls = await signPaths(deps.api, 'get', batch);
+    } catch (err) {
+      if (!tolerates(err)) throw err;
+      for (const path of batches.slice(index).flat()) {
+        failedPaths.push(path);
+        reportOne();
+      }
+      break;
+    }
     await mapLimit(batch, FILE_CONCURRENCY, async (path) => {
       const url = urls.get(path);
       let fetched = false;
@@ -603,6 +624,16 @@ export async function loadEntityContents(
             deleteDataFile(path);
             fetched = await openFetchedFile(deps, enc, path);
           }
+        } catch (err) {
+          if (!tolerates(err)) throw err;
+          // A decrypt that threw part-way may have left plaintext behind, under a
+          // row whose flag can predate it (a flagged row whose file had gone is
+          // fetched again) — and the export includes any flagged row whose file
+          // exists. Remove it, so a failed path is no file at all.
+          deleteDataFile(path);
+          failedPaths.push(path);
+          reportOne();
+          return;
         } finally {
           if (enc.exists) enc.delete();
         }
@@ -616,7 +647,7 @@ export async function loadEntityContents(
       reportOne();
     });
   }
-  return { missingPaths };
+  return { missingPaths, failedPaths };
 }
 
 // --- the cycle: incremental -------------------------------------------------
