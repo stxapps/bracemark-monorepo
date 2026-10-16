@@ -35,6 +35,7 @@ import { sql } from 'drizzle-orm';
 import { unzipSync, zipSync } from 'fflate';
 
 import {
+  ApiError,
   ApiTimeoutError,
   BACKUP_ITEMS_ENTRY,
   BACKUP_MANIFEST_ENTRY,
@@ -50,6 +51,7 @@ import {
   PINS_PREFIX,
   ranksBetween,
   serializeBackupManifest,
+  SESSION_ERROR,
   SETTINGS_GENERAL_PATH,
   syncPathSchema,
   TAGS_PREFIX,
@@ -142,6 +144,18 @@ function offlineDeps(): SyncDeps {
     api: {
       call: async () => {
         throw new ApiTimeoutError(60_000);
+      },
+    } as unknown as SyncDeps['api'],
+  };
+}
+
+// The server telling this device to forget: every call answers `session_revoked`.
+function revokedDeps(): SyncDeps {
+  return {
+    ...deps(),
+    api: {
+      call: async () => {
+        throw new ApiError(401, JSON.stringify({ error: SESSION_ERROR.revoked }));
       },
     } as unknown as SyncDeps['api'],
   };
@@ -984,6 +998,21 @@ describe('the output the share sheet is presented over', () => {
     await expect(running).rejects.toBeInstanceOf(AccountFencedError);
     expect(listFileUris().filter((uri) => uri.startsWith('file:///cache/'))).toEqual([]);
   });
+
+  // The fence above catches a wipe that has landed by the write. A revocation's
+  // wipe is still under way when the refresh hears the verdict, and the run used
+  // to swallow it as one more failed refresh and race the write against the
+  // wipe, so it now ends there (web's spec has the matrix).
+  it.each(['netscape', 'bracemark'] as const)(
+    'stops a %s export at a session_revoked verdict and writes nothing',
+    async (format) => {
+      seedEntities();
+      await expect(
+        exportAllData({ format, deps: revokedDeps(), excludedListIds: new Set<string>() }),
+      ).rejects.toBeInstanceOf(ApiError);
+      expect(listFileUris().filter((uri) => uri.startsWith('file:///cache/'))).toEqual([]);
+    },
+  );
 });
 
 // --- the cross-platform half --------------------------------------------------------

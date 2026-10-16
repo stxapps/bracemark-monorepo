@@ -103,7 +103,23 @@ after a pre-export sync refresh; a failed refresh downgrades to a warning —
 "this is this device's copy" — rather than aborting. A server that never answers
 counts as failed: the contract client's default deadline fails the refresh after
 60 s ([local-first-sync.md](./local-first-sync.md), under the single-flight bullet), so
-the export can't hang on its sync step. The policy that spans all
+the export can't hang on its sync step.
+
+**Losing the account is not a failed refresh.** A refresh that fails with a
+`session_revoked` verdict, or with `AccountFencedError`, ends the run instead of
+downgrading to the warning. The verdict has already started the auth provider's
+wipe ([sessions.md](./sessions.md)), and a run that went on would race its
+gather against that wipe and write out whatever it read — the library of a
+device just told to forget. The interop formats have no files phase, so before
+this nothing else in the run stopped them. The save is fenced on the account
+too, for a sign-out the refresh did not see: expo's `writeExportFile` checks and
+writes in one synchronous step, and web checks before the anchor click (in one
+task with it) and before the `close()` that commits a streamed backup under the
+picked name. That close is the one await left unfenced. On web, any failure
+after the save picker aborts the writable, which discards the browser's swap
+file rather than leaving it open until the tab goes.
+
+The policy that spans all
 formats is decided once in the orchestrator: **locked lists are excluded**
 (the lock provider's coverage set, descendants included; excluded links drop
 with their pins/extractions/files, and the list entities drop too — a hidden

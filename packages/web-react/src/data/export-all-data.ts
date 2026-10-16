@@ -36,7 +36,10 @@
 // (`unreadableCount`), a blob that can't be downloaded is left out and counted
 // (`missingFileCount` / `failedFileCount`), and a list nested past the export
 // depth is written at it (`flattenedListCount`) — all reported on the receipt
-// and, for the backup, in the manifest's `omitted`.
+// and, for the backup, in the manifest's `omitted`. What it does NOT go on past
+// is losing the account: a `session_revoked` verdict ends the run, and the save
+// itself is fenced on the account (saveDownload), since a revoked device is
+// being told to forget and the run is about to write the library out.
 
 import type { z } from 'zod';
 
@@ -74,6 +77,7 @@ import {
   rekey,
   serializeBackupItems,
   serializeBackupManifest,
+  sessionVerdictOf,
   SETTINGS_GENERAL_PATH,
   type SettingsGeneral,
   settingsGeneralSchema,
@@ -90,6 +94,7 @@ import { loadEntityContents, runIncrementalSync, type SyncDeps } from '../sync/e
 import { db } from './db';
 import { parseBlob } from './projection';
 import { readLists, readTags } from './queries';
+import { AccountFencedError, assertAccountStillOwnsStore } from './sync-store';
 
 // The user dismissed the save dialog — not a failure; the caller returns to idle.
 export class ExportCancelledError extends Error {
@@ -247,6 +252,7 @@ async function pickBracemarkSaveTarget(filename: string): Promise<BracemarkSaveT
 // `level: 0` entries below would load the WASM codec for nothing
 // (docs/data-lifecycle.md, _which zip.js build_).
 async function assembleBracemarkZip(
+  username: string,
   target: BracemarkSaveTarget,
   filename: string,
   links: GatheredLink[],
@@ -315,12 +321,27 @@ async function assembleBracemarkZip(
     await zipWriter.add(backupFileEntry(id), new Uint8ArrayReader(record.data), { level: 0 });
   }
 
+  // The stream target already holds the archive in the browser's swap file, and
+  // close() is what commits it under the picked name — so it is fenced before
+  // the close, and a fenced run aborts the swap file instead (exportAllData).
+  // The close itself is the one await left unfenced.
+  if (target.kind === 'stream') await assertAccountStillOwnsStore(username);
   const zipped = await zipWriter.close();
-  if (target.kind === 'blob') downloadBlob(zipped, filename);
+  if (target.kind === 'blob') await saveDownload(username, zipped, filename);
   return { fileCount, failedFileCount };
 }
 
 // --- save helpers ---------------------------------------------------------------
+
+// The run's save, fenced on the account like a store write (sync-store.ts,
+// AccountFencedError). A run takes minutes and holds the library in memory once
+// gathered, so a sign-out or a revocation wipe midway would otherwise end with
+// the forgotten account's library in Downloads, where no wipe reaches. The check
+// and the click are in one task, so no wipe lands between them.
+async function saveDownload(username: string, blob: Blob, filename: string): Promise<void> {
+  await assertAccountStillOwnsStore(username);
+  downloadBlob(blob, filename);
+}
 
 function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
@@ -337,30 +358,56 @@ function downloadBlob(blob: Blob, filename: string): void {
 
 // --- the flow -------------------------------------------------------------------
 
-export async function exportAllData(options: {
+interface ExportAllDataOptions {
   format: ExportFormat;
   deps: SyncDeps;
   // The lock provider's coverage set (useLocks().lockedListIds) — descendants
   // included, so membership alone excludes a link/list.
   excludedListIds: ReadonlySet<string>;
   onProgress?: (progress: ExportProgress) => void;
-}): Promise<ExportOutcome> {
-  const { format, deps, excludedListIds } = options;
-  const onProgress = options.onProgress ?? (() => undefined);
-  const filename = exportFileName(format);
+}
+
+export async function exportAllData(options: ExportAllDataOptions): Promise<ExportOutcome> {
+  const filename = exportFileName(options.format);
 
   // Bracemark: claim the save destination first — showSaveFilePicker must run while
   // the click's user activation is still alive, i.e. before sync/gather awaits.
   const target: BracemarkSaveTarget | undefined =
-    format === 'bracemark' ? await pickBracemarkSaveTarget(filename) : undefined;
+    options.format === 'bracemark' ? await pickBracemarkSaveTarget(filename) : undefined;
+
+  try {
+    return await runExport(options, filename, target);
+  } catch (err) {
+    // A failed run discards what it streamed rather than leaving the writable
+    // open on a half-written swap file until the tab goes. Best-effort: a stream
+    // zip.js has already errored, or one a still-running pipe holds locked,
+    // refuses the abort, and the run's own error is the one worth reporting.
+    if (target?.kind === 'stream') await target.writable.abort().catch(() => undefined);
+    throw err;
+  }
+}
+
+async function runExport(
+  options: ExportAllDataOptions,
+  filename: string,
+  target: BracemarkSaveTarget | undefined,
+): Promise<ExportOutcome> {
+  const { format, deps, excludedListIds } = options;
+  const onProgress = options.onProgress ?? (() => undefined);
 
   // Refresh so "all data" means the account, not just this device. Best-effort:
-  // a failed cycle downgrades to a warning and we export the local copy.
+  // a failed cycle downgrades to a warning and we export the local copy — unless
+  // it failed because the account is going. A `session_revoked` verdict has
+  // already started the auth provider's wipe (auth-provider.tsx, onVerdict), and
+  // a fenced write means it has landed; going on would race the gather against
+  // that wipe and write out whatever it read. loadEntityContents draws the same
+  // line for the files phase, which the interop formats never reach.
   onProgress({ step: 'sync' });
   let syncFailed = false;
   try {
     await runIncrementalSync(deps);
-  } catch {
+  } catch (err) {
+    if (sessionVerdictOf(err) === 'revoked' || err instanceof AccountFencedError) throw err;
     syncFailed = true;
   }
 
@@ -394,7 +441,11 @@ export async function exportAllData(options: {
         : format === 'csv'
           ? toRaindropCsv(bundle)
           : toUrlText(bundle);
-    downloadBlob(new Blob([content], { type: `${EXPORT_MIME[format]};charset=utf-8` }), filename);
+    await saveDownload(
+      deps.username,
+      new Blob([content], { type: `${EXPORT_MIME[format]};charset=utf-8` }),
+      filename,
+    );
     return {
       linkCount: interopLinks.length,
       fileCount: 0,
@@ -442,6 +493,7 @@ export async function exportAllData(options: {
   onProgress({ step: 'assemble' });
   if (target === undefined) throw new Error('unreachable: bracemark export without a save target');
   const { fileCount, failedFileCount } = await assembleBracemarkZip(
+    deps.username,
     target,
     filename,
     links,

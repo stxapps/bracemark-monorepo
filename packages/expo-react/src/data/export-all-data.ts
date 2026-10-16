@@ -24,8 +24,9 @@
 //    work, not before, so there's nothing to cancel mid-run.
 //  - Resilience is web's (its header): a record that doesn't decode, a blob that
 //    can't be downloaded, and a list nested past the export depth each cost
-//    themselves and are counted. One more case here: a materialized blob whose
-//    disk file can't be read is left out like a missing one.
+//    themselves and are counted, and a `session_revoked` verdict ends the run.
+//    One more case here: a materialized blob whose disk file can't be read is
+//    left out like a missing one.
 //  - That cache file is plaintext that outlives the run, so it has an owner:
 //    cache-files.ts gives the run its location and removes it at sign-out. And
 //    the write is fenced on the account like any store write — see
@@ -68,6 +69,7 @@ import {
   rekey,
   serializeBackupItems,
   serializeBackupManifest,
+  sessionVerdictOf,
   SETTINGS_GENERAL_PATH,
   type SettingsGeneral,
   settingsGeneralSchema,
@@ -88,7 +90,7 @@ import { dataFileFor } from './file-store';
 import { bulkGetItems, getItem, namespaceRows } from './item-store';
 import { parseBlob } from './projection';
 import { readLists, readTags } from './queries';
-import { assertAccountOwnsStoreTx } from './sync-store';
+import { AccountFencedError, assertAccountOwnsStoreTx } from './sync-store';
 
 // The written output, for the UI's share-sheet handoff. Lives in the CACHE dir
 // (transient by definition — the share sheet copies it out; an OS purge later
@@ -431,12 +433,17 @@ export async function exportAllData(options: {
   const file: ExportedFile = { uri: outFile.uri, name: filename, mimeType: EXPORT_MIME[format] };
 
   // Refresh so "all data" means the account, not just this device. Best-effort:
-  // a failed cycle downgrades to a warning and we export the local copy.
+  // a failed cycle downgrades to a warning and we export the local copy — unless
+  // it failed because the account is going (a `session_revoked` verdict, or a
+  // fenced write); web's copy has the reasoning. The fence on the write would
+  // catch a wipe that has LANDED by then; this catches one still under way,
+  // which the write would otherwise race.
   onProgress({ step: 'sync' });
   let syncFailed = false;
   try {
     await runIncrementalSync(deps);
-  } catch {
+  } catch (err) {
+    if (sessionVerdictOf(err) === 'revoked' || err instanceof AccountFencedError) throw err;
     syncFailed = true;
   }
 

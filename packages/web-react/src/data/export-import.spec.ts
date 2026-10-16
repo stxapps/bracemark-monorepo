@@ -37,6 +37,7 @@
 import type { FileEntry } from '@zip.js/zip.js/index-native.js';
 
 import {
+  ApiError,
   ApiTimeoutError,
   ARCHIVE_ID,
   BACKUP_ITEMS_ENTRY,
@@ -57,6 +58,7 @@ import {
   PINS_PREFIX,
   ranksBetween,
   serializeBackupManifest,
+  SESSION_ERROR,
   SETTINGS_GENERAL_PATH,
   syncPathSchema,
   TAGS_PREFIX,
@@ -74,6 +76,7 @@ import { db } from './db';
 import { exportAllData } from './export-all-data';
 import { importAllData } from './import-all-data';
 import { toItemRecord } from './projection';
+import { AccountFencedError } from './sync-store';
 
 const USER = 'alice';
 // The device's sync cursor, and the top of the op-log window the stub reports.
@@ -130,6 +133,33 @@ function offlineDeps(): SyncDeps {
   };
 }
 
+// The server telling this device to forget: every call answers `session_revoked`.
+function revokedDeps(): SyncDeps {
+  return {
+    ...deps(),
+    api: {
+      call: async () => {
+        throw new ApiError(401, JSON.stringify({ error: SESSION_ERROR.revoked }));
+      },
+    } as unknown as SyncDeps['api'],
+  };
+}
+
+// A sign-out landing during the run's refresh: the account's bookkeeping row goes,
+// as the wipe takes it, and the refresh fails like any offline one. The library
+// itself is left in place, so only the fence on the save can stop the write.
+function signedOutMidRunDeps(): SyncDeps {
+  return {
+    ...deps(),
+    api: {
+      call: async () => {
+        await db.syncMeta.clear();
+        throw new ApiTimeoutError(60_000);
+      },
+    } as unknown as SyncDeps['api'],
+  };
+}
+
 // Records stored under a path that no longer decode — a bad JSON body, or a shape
 // this version refuses — beside a link whose only fault is its extraction.
 function unreadable(): { path: string; bytes: Uint8Array }[] {
@@ -163,6 +193,9 @@ async function seedUnreadable(): Promise<void> {
 
 // The bytes the last bracemark export streamed, assembled in write order.
 let zipChunks: Uint8Array[];
+// How the last bracemark export's stream ended: committed under the picked name,
+// aborted (the swap file discarded), or neither.
+let streamEnd: 'closed' | 'aborted' | undefined;
 // Every blob an interop export handed to the anchor. A list rather than a single
 // slot: the write happens inside the `createObjectURL` stub's closure, which the
 // checker cannot see, so a variable reset to `undefined` before the export stays
@@ -191,6 +224,12 @@ function installSavePicker(): void {
         new WritableStream<Uint8Array>({
           write(chunk) {
             zipChunks.push(chunk);
+          },
+          close() {
+            streamEnd = 'closed';
+          },
+          abort() {
+            streamEnd = 'aborted';
           },
         }),
     }),
@@ -431,6 +470,7 @@ async function zipEntryText(file: File, name: string): Promise<string> {
 
 beforeEach(async () => {
   zipChunks = [];
+  streamEnd = undefined;
   downloads.length = 0;
   installSavePicker();
   installAnchorDownload();
@@ -1013,6 +1053,73 @@ describe('the interop formats, on a library with damage', () => {
     expect((await exportInterop('netscape')).outcome.flattenedListCount).toBe(2);
     expect((await exportInterop('csv')).outcome.flattenedListCount).toBe(2);
     expect((await exportInterop('text')).outcome.flattenedListCount).toBe(0);
+  });
+});
+
+// --- losing the account mid-run -----------------------------------------------------
+
+// A failed refresh is a warning and the export goes on — but not when it failed
+// because the account is going. `session_revoked` has already started the wipe,
+// and the run used to swallow it with every other refresh failure, then race the
+// gather against that wipe and save whatever it read: the library of a device just
+// told to forget, in Downloads, where no wipe reaches. The interop formats have
+// no files phase, so nothing else in the run would have stopped it.
+describe('an export that loses its account', () => {
+  it.each(['netscape', 'csv', 'text'] as const)(
+    'stops a %s export at a session_revoked verdict and saves nothing',
+    async (format) => {
+      await seed();
+      await expect(
+        exportAllData({ format, deps: revokedDeps(), excludedListIds: new Set() }),
+      ).rejects.toBeInstanceOf(ApiError);
+      expect(downloads).toEqual([]);
+    },
+  );
+
+  // The save destination was claimed before the refresh, so the run that stops
+  // there has a writable open on it, which it now discards.
+  it('stops a backup at a session_revoked verdict and discards its stream', async () => {
+    await seed();
+    await expect(
+      exportAllData({ format: 'bracemark', deps: revokedDeps(), excludedListIds: new Set() }),
+    ).rejects.toBeInstanceOf(ApiError);
+    expect(streamEnd).toBe('aborted');
+    expect(zipChunks).toEqual([]);
+  });
+
+  // A sign-out whose wipe the refresh did not see — it failed as offline — is
+  // caught at the save: the fence, the same one a store write carries.
+  it('saves no interop file for an account that signed out while it ran', async () => {
+    await seed();
+    await expect(
+      exportAllData({
+        format: 'netscape',
+        deps: signedOutMidRunDeps(),
+        excludedListIds: new Set(),
+      }),
+    ).rejects.toBeInstanceOf(AccountFencedError);
+    expect(downloads).toEqual([]);
+  });
+
+  // The backup has streamed its archive into the swap file by then; the fence
+  // stands before the close that would commit it, and the stream is discarded.
+  it('commits no backup for an account that signed out while it ran', async () => {
+    await seed();
+    await expect(
+      exportAllData({
+        format: 'bracemark',
+        deps: signedOutMidRunDeps(),
+        excludedListIds: new Set(),
+      }),
+    ).rejects.toBeInstanceOf(AccountFencedError);
+    expect(streamEnd).toBe('aborted');
+  });
+
+  // The ordinary run still commits its stream — the abort is the failure path only.
+  it('closes the stream of a backup that finished', async () => {
+    await seed();
+    await exportAllData({ format: 'bracemark', deps: deps(), excludedListIds: new Set() });
+    expect(streamEnd).toBe('closed');
   });
 });
 
