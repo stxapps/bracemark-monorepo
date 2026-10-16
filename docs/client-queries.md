@@ -556,6 +556,29 @@ fast path at the cost of complexity, scroll-time UX, or a second code path for
 search/tag/pinned queries — so they wait until profiling or a product requirement
 forces the issue.
 
+### the tree surfaces mount every row (not virtualized yet)
+
+Only the link layouts above are virtualized. Every surface that shows the list or
+tag tree mounts one element per row, so what it costs grows with the number of
+lists or tags in the library, not with what fits on screen:
+
+- **The sidebars** (web `_panes/sidebar.tsx`, expo `features/links/sidebar.tsx`)
+  — the tree, and the list and tag matches while filtering. They already render
+  flat rows from `flattenToRows` ([data-lifecycle.md](./data-lifecycle.md),
+  _nothing that reads the list tree recurses_), so a virtualizer can take that
+  array as it is.
+- **The list pickers** (`links/list-command.tsx`, both platforms) and **the tag
+  pickers** (`links/tags-command.tsx`; on expo a plain `ScrollView`).
+- **The settings Lists and Tags tables**, both platforms. These are
+  drag-sortable, so virtualizing one has to keep the drag — and the Lists
+  table's live depth projection ([editors.md](./editors.md)) — working against
+  rows that are not mounted.
+
+None of this is a correctness risk: the limits bound depth, not count
+([data-limits.md](./data-limits.md), _counts: none per kind_), so a library
+with thousands of lists or tags renders, only slowly. It waits, like the
+alternatives above, until a real library makes it worth the complexity.
+
 ### the expo (SQLite/drizzle) port
 
 bracemark-expo runs the **same read model over a different substrate**:

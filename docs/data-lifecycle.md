@@ -2228,3 +2228,10 @@ archive a piece per turn, as the backup export already deflates it. Not made.
   already wiped; sign-in already refused). Harmless but untidy; sweep alongside
   the orphan-claim sweeper in the daily cron that now runs session cleanup
   (`worker.ts` `scheduled`, [sessions.md](./sessions.md)).
+- **A name lookup per parent in `ListResolver`** — `findOrCreate`
+  (`import/resolve.ts`) finds a folder among its parent's children with a linear
+  `find`, once per folder segment, so an import that mints many folders under
+  one parent costs the square of their count. A map per parent from the
+  matched name to the list id fixes it, as `TagResolver` already does for tags;
+  the map has to keep Trash out of matching and key names as cut
+  (`LIST_NAME_MAX`), as the scan does now.

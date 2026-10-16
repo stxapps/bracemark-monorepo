@@ -185,3 +185,8 @@ refusal changes nothing, but leaves them nothing either.
 - **The marketing site's converter's path copies** stay bounded by the limit
   rather than removed: it copies a path per folder, at most 101 names each.
 - **Tags on one link by hand**, as above.
+- **Counts, and so speed.** No count per kind is bounded (_counts: none per
+  kind_, above), so what grows with a library's size is time: the tree
+  surfaces mount every list or tag row ([client-queries.md](./client-queries.md),
+  _the tree surfaces mount every row_), and the import finds each folder by a
+  scan of its siblings ([data-lifecycle.md](./data-lifecycle.md), _deferred_).
