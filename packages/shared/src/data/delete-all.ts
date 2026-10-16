@@ -15,8 +15,9 @@
 //           found the store no longer that account's (each platform's
 //           AccountFencedError) and applied none of the local wipe.
 //
-// "Nothing" is about the wipe. Both flows abandon the account's unsynced queue
-// BEFORE the server call, so on either outcome that queue is already gone.
+// "Nothing" in the first is all of it: a refused call leaves the account's
+// unsynced queue where it was, too. In the second the queue went with the
+// teardown that took the account off the device.
 //
 // Here rather than beside either flow so both throw the SAME class and a hook can
 // tell it by `instanceof` without importing a module that pulls in a database.
@@ -28,5 +29,23 @@ export class DeleteAllAccountChangedError extends Error {
         : 'Not deleted: the signed-in account is not the one the delete was started for',
     );
     this.name = 'DeleteAllAccountChangedError';
+  }
+}
+
+// The delete-all call failed without saying whether the wipe ran: a timeout, a
+// lost response, a 5xx. The route empties the op log before it pages R2 and
+// answers only after the last page, so any of these can come back from a wipe
+// that happened, in whole or in part. (A 4xx is a refusal the route gives before
+// touching anything, and stays an ordinary error.)
+//
+// Its own class because the flows do one more thing on it: they drop the
+// account's unsynced queue, which would otherwise push into a namespace that may
+// already be empty and bring back what the user deleted. So the failure line
+// cannot say "nothing was removed" — the hook's `error` state carries that
+// difference (`unsyncedDiscarded`). The message is the call's own.
+export class DeleteAllUncertainError extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+    this.name = 'DeleteAllUncertainError';
   }
 }

@@ -439,7 +439,10 @@ iOS has no session of its own in that process, so it reads the snapshot again:
 sign-out deletes it, and the next account's first refresh rewrites it under its
 own name. Android reads `getSession()`. Either way, a mismatch or no session at
 all is `'account-changed'`. Account before cap: another account's full library
-is no reason to tell this user to free up room.
+is no reason to tell this user to free up room. On iOS the two checks share one
+read of the snapshot, so the cap judged is the one whose owner just matched —
+two reads could straddle a rewrite and pair this account's owner with another's
+count.
 
 **A mismatched draft is deleted, and that is not a breach of _the drain never
 destroys what it couldn't read_.** That rule is about files the drain cannot

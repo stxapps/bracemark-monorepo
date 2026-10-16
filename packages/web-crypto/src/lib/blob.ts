@@ -6,7 +6,7 @@
 // encryptEntity before a PUT / decryptEntity after a GET, so plaintext never
 // crosses the network.
 
-import { AES_GCM_IV_BYTES, BLOB_FORMAT_V1, blobAad } from '@stxapps/shared';
+import { AES_GCM_IV_BYTES, BLOB_FORMAT_V1, blobAad, BlobUnreadableError } from '@stxapps/shared';
 
 import { decrypt, encrypt, type EncryptedBlob } from './aes';
 
@@ -57,15 +57,20 @@ export async function encryptEntity(
   return packBlob(await encrypt(key, new Uint8Array(data), blobAad(path)));
 }
 
-// A packed R2 blob fetched from `path` → decrypted entity bytes. Throws if the
-// GCM tag fails — tamper, wrong key, a blob written to another path, or one
-// written before the path binding. The sync engines let it propagate: the pull
-// rejects and the whole cycle fails, every cycle, until the path is rewritten
-// (docs/local-first-sync.md).
+// A packed R2 blob fetched from `path` → decrypted entity bytes. Throws
+// BlobUnreadableError if the GCM tag fails — tamper, wrong key, a blob written to
+// another path, or one written before the path binding — which a sync pull skips
+// rather than failing the cycle on (docs/local-first-sync.md). An unknown version
+// throws unpackBlob's own error, which the pull does not skip.
 export async function decryptEntity(
   key: CryptoKey,
   blob: Uint8Array,
   path: string,
 ): Promise<Uint8Array> {
-  return decrypt(key, unpackBlob(blob), blobAad(path));
+  const sealed = unpackBlob(blob);
+  try {
+    return await decrypt(key, sealed, blobAad(path));
+  } catch (cause) {
+    throw new BlobUnreadableError(path, { cause });
+  }
 }

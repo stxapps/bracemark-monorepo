@@ -19,7 +19,6 @@ import {
   getDb,
   pendingOps,
   rowsPerStatement,
-  syncMeta,
   upsertExcludedSet,
   valuesList,
   valuesPerStatement,
@@ -212,37 +211,9 @@ export async function clearDrainedOps(ops: PendingOpRecord[]): Promise<void> {
   });
 }
 
-// Take an account's WHOLE queue out, and hand back what was in it — the
-// delete-all-data flow, which puts it back with returnPendingOps if its server
-// wipe is refused or fails (web-react's pending-store.ts carries the reasoning:
-// empty while the wipe is out, and back when nothing was removed). One
-// synchronous transaction, so no enqueue can land between the read and the delete.
-export async function takePendingOps(username: string): Promise<PendingOpRecord[]> {
-  return getDb().transaction((tx) => {
-    const ops = tx.select().from(pendingOps).where(eq(pendingOps.username, username)).all();
-    tx.delete(pendingOps).where(eq(pendingOps.username, username)).run();
-    return ops;
-  });
-}
-
-// Put back what takePendingOps took, after a delete that did not happen. A path
-// edited since keeps its newer row (DO NOTHING on the key). Fenced on the
-// account: a teardown meanwhile has cleared the queue already, and the rows would
-// be orphans keyed on a departed account, so they are dropped (web's sibling).
-export async function returnPendingOps(username: string, ops: PendingOpRecord[]): Promise<void> {
-  if (ops.length === 0) return;
-  getDb().transaction((tx) => {
-    const owner = tx
-      .select({ username: syncMeta.username })
-      .from(syncMeta)
-      .where(eq(syncMeta.username, username))
-      .get();
-    if (!owner) return;
-    for (const batch of chunk(ops, rowsPerStatement(pendingOps))) {
-      tx.insert(pendingOps)
-        .values(batch)
-        .onConflictDoNothing({ target: [pendingOps.username, pendingOps.path] })
-        .run();
-    }
-  });
+// Drop an account's WHOLE queue — the delete-all-data flow, when its server wipe
+// failed in a way that leaves no telling whether it happened (web-react's
+// pending-store.ts carries the reasoning). One account's, not the device's.
+export async function clearPendingOps(username: string): Promise<void> {
+  getDb().delete(pendingOps).where(eq(pendingOps.username, username)).run();
 }

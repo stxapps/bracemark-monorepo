@@ -23,6 +23,7 @@
 import {
   type ApiClient,
   apiErrorCode,
+  BlobUnreadableError,
   chunk,
   emptySyncOutcome,
   FILES_PREFIX,
@@ -41,6 +42,7 @@ import {
   recordBlocked,
   type SignOp,
   type SyncOutcome,
+  untilAborted,
   withRetry,
 } from '@stxapps/shared';
 import { decryptEntity, encryptEntity } from '@stxapps/web-crypto';
@@ -279,22 +281,54 @@ async function logWatermark(api: ApiClient): Promise<number> {
 const inflightSyncs = new Map<string, Promise<SyncOutcome>>();
 const rerunRequests = new Set<string>();
 
-// Wait for an in-flight cycle (if any) to settle WITHOUT starting one — unlike
-// calling runIncrementalSync, which kicks a fresh cycle when idle. For callers
-// that need the engine quiescent before doing something destructive (the
-// delete-all flow: a cycle that already read the pending queue could otherwise
-// re-push ops after the server wipe). Swallows the cycle's rejection — the
-// waiter only cares that it's over, not how it went (the cycle's own callers
-// handle the error).
-export async function awaitInflightSync(username: string, onWait?: () => void): Promise<void> {
-  const inflight = inflightSyncs.get(username);
-  if (!inflight) return;
-
-  // Let a blocking caller distinguish "waiting for the engine to become safe"
-  // from the work it performs afterward. Called only when there is actually a
-  // cycle to wait for, so a delete-all view does not flash a false waiting step.
+// Run `work` with this account's sync cycles held off: a cycle already running
+// is waited out first, and one asked for meanwhile waits until `work` settles.
+// For the delete-all flow, whose server wipe must have no cycle beside it — one
+// that read the pending queue would push it past the wipe and bring back what
+// the user deleted, and one that pulled meanwhile could land the server's copy
+// over an edit the wipe was then refused for.
+//
+// It IS the cycle lock, so a cycle in another tab is held off as well as this
+// one's: they all drain the same queue. A cycle of this context's asked for
+// meanwhile still joins its single-flight slot as usual; its run just queues
+// behind `work` for the lock. Where Web Locks are missing there is no lock to
+// take, and this narrows to what every cycle gets there: this context's cycle is
+// waited out, and nothing holds the next one off.
+//
+// `onWait` fires only when there is a cycle to wait for, so a delete view does
+// not flash a false waiting step. `signal` aborts the WAIT and never the work:
+// once the lock is held, `work` runs to the end. The deadline and its wording
+// are the caller's (the delete flow's watchdog), not the engine's.
+export async function holdSyncCycles<T>(
+  username: string,
+  work: () => Promise<T>,
+  { onWait, signal }: { onWait?: () => void; signal?: AbortSignal } = {},
+): Promise<T> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  if (!locks) {
+    const inflight = inflightSyncs.get(username);
+    if (inflight) {
+      onWait?.();
+      await untilAborted(
+        inflight.then(
+          () => undefined,
+          () => undefined,
+        ),
+        signal,
+      );
+    }
+    signal?.throwIfAborted();
+    return work();
+  }
+  const name = `${CYCLE_LOCK_PREFIX}${username}`;
+  // Free right now: take it without reporting a wait. `ifAvailable` grants a null
+  // lock instead of queueing, which is the "there is a cycle" answer.
+  const held = await locks.request(name, { ifAvailable: true }, async (lock) =>
+    lock ? { value: await work() } : undefined,
+  );
+  if (held) return held.value;
   onWait?.();
-  await inflight.catch(() => undefined);
+  return locks.request(name, { signal }, work);
 }
 
 // A returning-visit sync (docs flow #2 + "a sync cycle"): reconcile, then push,
@@ -1106,12 +1140,37 @@ async function storeDownloads(
         });
         if (!blob) return;
 
-        const data = await decryptEntity(deps.encryptionKey, blob, e.path);
+        const data = await openPulled(deps, blob, e.path);
+        if (!data) return;
         await putPulled(deps.username, [toItemRecord(e.path, e.updatedAt, data)]);
       } finally {
         tick();
       }
     });
+  }
+}
+
+// Decrypt one pulled blob, or skip it when it does not open under its path
+// (BlobUnreadableError — tampered, sealed for another path, from a build before
+// the path binding, or corrupt). Skipped, not thrown: one such path used to
+// reject the pull, so the cycle failed with the cursor where it was and met the
+// same blob on every cycle after — no path in the account synced again. Skipped,
+// the entry is treated like the 404 above: nothing stored, the counter ticks, the
+// cursor moves on, and a local copy the path already had stays as it was. The
+// path is read again only when it is rewritten or a fallback lists it
+// (docs/local-first-sync.md, _crypto boundary_). Anything else still throws —
+// an unknown format version above all, which an update fixes.
+async function openPulled(
+  deps: SyncDeps,
+  blob: Uint8Array,
+  path: string,
+): Promise<Uint8Array | undefined> {
+  try {
+    return await decryptEntity(deps.encryptionKey, blob, path);
+  } catch (err) {
+    if (!(err instanceof BlobUnreadableError)) throw err;
+    console.warn(`sync: skipped ${path}, which does not open under its path`);
+    return undefined;
   }
 }
 

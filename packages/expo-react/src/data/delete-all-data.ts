@@ -8,8 +8,11 @@
 // sign-out teardown): same wipe of the synced stores, opposite treatment of
 // the identity/device stores.
 
+import { eq } from 'drizzle-orm';
+
 import {
   type ApiClient,
+  ApiError,
   apiErrorCode,
   clearDecodeCache,
   DATA_DELETE_ALL_ERROR,
@@ -17,10 +20,10 @@ import {
   DEFAULT_CALL_TIMEOUT_MS,
   DEFAULT_RETRY_MAX_DELAY_MS,
   DeleteAllAccountChangedError,
-  withTimeout,
+  DeleteAllUncertainError,
 } from '@stxapps/shared';
 
-import { awaitInflightSync } from '../sync/engine';
+import { holdSyncCycles } from '../sync/engine';
 import {
   favicons,
   getDb,
@@ -28,12 +31,13 @@ import {
   items,
   itemTagIds,
   locks,
+  pendingOps,
   scrubFreedPages,
 } from './db';
 import { clearFaviconFiles } from './favicon-store';
 import { clearDataFiles } from './file-store';
 import { invalidateLiveReads } from './live-read-invalidation';
-import { returnPendingOps, takePendingOps } from './pending-store';
+import { clearPendingOps } from './pending-store';
 import { AccountFencedError, resetToSeededStateTx } from './sync-store';
 
 export type DeleteAllOutcome = {
@@ -43,20 +47,22 @@ export type DeleteAllOutcome = {
 
 export type DeleteAllStep = 'waiting-for-sync' | 'deleting';
 
-// A cap on how long this user-initiated action spins, not an estimate of how
-// long a cycle takes. The per-request deadlines (the contract client's default
-// call deadline, `withDeadline` on the JS R2 transfers, the OS idle timeouts on
-// the native ones) don't make it redundant. They guarantee the cycle settles
-// EVENTUALLY, and the web sibling spells out why eventually has no bound a user
-// can sit through. The cap is one stalled call's deadline plus the retry
-// client's longest single wait (two minutes today), derived from both. Timing
-// out FAILS CLOSED below (no queue clear, server wipe, or local wipe follows)
-// and cancels nothing, so the cycle runs on and a retry resumes the wait on it.
+// A cap on how long this user-initiated action waits for a sync to finish, not
+// an estimate of how long a cycle takes. The per-request deadlines (the contract
+// client's default call deadline, `withDeadline` on the JS R2 transfers, the OS
+// idle timeouts on the native ones) don't make it redundant. They guarantee the
+// cycle settles EVENTUALLY, and the web sibling spells out why eventually has no
+// bound a user can sit through. The cap is one stalled call's deadline plus the
+// retry client's longest single wait (two minutes today), derived from both.
+// Timing out FAILS CLOSED (no server wipe or local wipe follows) and cancels
+// nothing, so the cycle runs on and a retry waits again. It bounds the wait
+// only: the clock stops once the hold is taken, before the server call, which
+// has its own longer deadline.
 //
 // The duration and the wording live HERE, not in the engine, for the reason the
 // web sibling spells out: the watchdog is a property of this destructive,
-// user-blocking action, not of waiting itself — `awaitInflightSync` deliberately
-// never rejects. shared's `withTimeout` supplies the mechanism and nothing else.
+// user-blocking action, not of waiting itself — `holdSyncCycles` takes a signal
+// and has no clock of its own.
 const SYNC_WAIT_TIMEOUT_MS = DEFAULT_CALL_TIMEOUT_MS + DEFAULT_RETRY_MAX_DELAY_MS;
 const SYNC_WAIT_TIMEOUT_MESSAGE = 'Sync is taking longer than expected.';
 
@@ -69,43 +75,63 @@ export async function deleteAllData(args: {
 }): Promise<DeleteAllOutcome> {
   const { username, api, onStep, syncWaitTimeoutMs = SYNC_WAIT_TIMEOUT_MS } = args;
 
-  // Quiesce before destroying: a cycle that already read the pending queue
-  // could re-push (resurrect) ops after the server wipe — wait it out, THEN
-  // take the queue out so any later cycle finds nothing to push. (On success
-  // this device's unsynced changes are discarded on purpose: the user is
-  // deleting everything, so pushing them first would be work the wipe undoes.)
-  // Taken, not cleared: a wipe that is refused or fails puts them back.
-  await withTimeout(
-    awaitInflightSync(username, () => onStep?.('waiting-for-sync')),
-    syncWaitTimeoutMs,
-    SYNC_WAIT_TIMEOUT_MESSAGE,
-  );
-  onStep?.('deleting');
-  const taken = await takePendingOps(username);
+  // Quiesce before destroying, and STAY quiet until it is over: the whole run
+  // holds this account's sync cycles off (sync/engine.ts holdSyncCycles). A cycle
+  // beside the server wipe would push the pending queue past it, or pull server
+  // copies over edits the wipe was then refused for (the web sibling spells it
+  // out). Held off, the queue stays where it is until the server answers. On
+  // success this device's unsynced changes are discarded on purpose.
+  const watchdog = new AbortController();
+  const timer = setTimeout(() => watchdog.abort(), syncWaitTimeoutMs);
+  try {
+    return await holdSyncCycles(
+      username,
+      () => {
+        clearTimeout(timer);
+        onStep?.('deleting');
+        return wipe(username, api);
+      },
+      { onWait: () => onStep?.('waiting-for-sync'), signal: watchdog.signal },
+    );
+  } catch (e) {
+    if (watchdog.signal.aborted) throw new Error(SYNC_WAIT_TIMEOUT_MESSAGE);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
-  // The server wipe — idempotent, so a failure here leaves everything retryable:
-  // the taken queue goes back, and the local wipe below only runs after the
-  // server confirms.
+// The server wipe, then the local one — with no sync cycle able to run beside
+// either (deleteAllData holds them off).
+async function wipe(username: string, api: ApiClient): Promise<DeleteAllOutcome> {
+  // The server wipe — idempotent, so a failure here leaves everything retryable,
+  // and the local wipe below only runs after the server confirms.
   //
   // It NAMES the account, and that is what binds it: `username` was captured at
   // the tap, the bearer token is attached as the request leaves, and the server
   // wipes only if the token's account is the one named — so a session that became
-  // someone else's during the waits above is refused instead of losing its
+  // someone else's during the wait above is refused instead of losing its
   // namespace (the web sibling and shared's data/endpoints.ts carry the reasoning).
   let deletedCount: number;
   try {
     ({ deletedCount } = await api.call(dataDeleteAllEndpoint, { username }));
   } catch (e) {
-    await returnPendingOps(username, taken);
     if (apiErrorCode(e) === DATA_DELETE_ALL_ERROR.accountMismatch) {
       throw new DeleteAllAccountChangedError(false);
+    }
+    // A 4xx refused before anything was touched, and the queue stays. Anything
+    // else leaves no telling whether the wipe ran, so the queue goes rather than
+    // push into a namespace that may be empty (the web sibling spells it out).
+    if (!(e instanceof ApiError && e.status >= 400 && e.status < 500)) {
+      await clearPendingOps(username).catch(() => undefined);
+      throw new DeleteAllUncertainError(e);
     }
     throw e;
   }
 
   // Local synced state, wiped to match the (now empty) server: the decrypted
   // items (rows + their junction tables + the on-disk plaintext blobs), their
-  // decoded-plaintext cache, and the locks (they guard lists that no longer
+  // decoded-plaintext cache, the pending queue, and the locks (they guard lists that no longer
   // exist — same reset clearData applies). The favicon cache goes too: it isn't
   // synced state, but it's derived FROM the wiped links, so leaving it would
   // let the deleted library's hosts be read back off the device (web's rule).
@@ -133,6 +159,7 @@ export async function deleteAllData(args: {
       tx.delete(items).run();
       tx.delete(itemTagIds).run();
       tx.delete(itemFacetStatuses).run();
+      tx.delete(pendingOps).where(eq(pendingOps.username, username)).run();
       tx.delete(locks).run();
       tx.delete(favicons).run();
     });

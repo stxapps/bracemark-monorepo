@@ -2,15 +2,17 @@
 // invisible when they break, and all four are about ORDER or about the exact line
 // between "your data" and "your account on this device":
 //
-//   1. The QUIESCE. `awaitInflightSync` then `takePendingOps`, both BEFORE the server
-//      call. A cycle already in flight read the queue before we got here, so pushing on
-//      after the wipe would resurrect the very objects the user just deleted — and it
-//      would look like a successful delete followed by a successful sync.
-//   2. NOTHING LOCAL IS LOST UNTIL THE SERVER CONFIRMS. The wipe is idempotent, so a
-//      failed call has to leave a fully retryable device — the taken queue included,
-//      or "nothing was removed" is false of the edits that had not synced yet. Wiping
-//      first and then failing leaves the user signed in, looking at an empty library,
-//      with their data still on the server and their device now unable to say so.
+//   1. The HOLD. The server call and the local wipe both run INSIDE `holdSyncCycles`, so
+//      no cycle runs beside them: one that read the queue would push it past the wipe and
+//      resurrect the very objects the user just deleted — and it would look like a
+//      successful delete followed by a successful sync. (That the hold really keeps a
+//      cycle waiting is the engine's spec; here it is that the work is inside it.)
+//   2. NOTHING LOCAL IS LOST UNTIL THE SERVER CONFIRMS — or until it cannot say. The wipe
+//      is idempotent, so a refused call has to leave a fully retryable device, the queue
+//      included. Wiping first and then failing leaves the user signed in, looking at an
+//      empty library, with their data still on the server and their device now unable to
+//      say so. The one exception is the queue on a call that failed WITHOUT an answer: the
+//      wipe may have run, and those ops would push into the emptied namespace.
 //   3. The SURVIVOR SET — the identity/device stores (the session, the cached
 //      subscription, the device-local settings) live through this, which is exactly what
 //      separates it from clearData (clear-data.spec.ts, the same partition inverted).
@@ -21,16 +23,19 @@
 //
 // The store reads are real (fake-indexeddb); only the two seams that leave the module —
 // the sync engine and the api client — are stubbed, and the engine stub is what makes
-// the quiesce ordering observable at all.
+// the hold's extent observable at all.
 
 import {
   type ApiClient,
   ApiError,
+  ApiTimeoutError,
   DATA_DELETE_ALL_ERROR,
   dataDeleteAllEndpoint,
   DeleteAllAccountChangedError,
+  DeleteAllUncertainError,
   LINKS_PREFIX,
   pathFromId,
+  untilAborted,
 } from '@stxapps/shared';
 
 import { clearData } from './clear-data';
@@ -50,19 +55,28 @@ import {
 } from './sync-store';
 
 // Every call the module makes, in the order it made them — the only way to see that the
-// quiesce and the queue take happened BEFORE the server was asked.
+// server was asked, and the local store wiped, while the hold was taken.
 const calls: string[] = [];
 
-const mockAwaitInflightSync = jest.fn(
-  async (_username: string, _onWait?: () => void): Promise<void> => {
-    void _username;
-    void _onWait;
-    calls.push('awaitInflightSync');
-  },
-);
+type HoldOptions = { onWait?: () => void; signal?: AbortSignal };
+type Hold = (
+  username: string,
+  work: () => Promise<unknown>,
+  opts?: HoldOptions,
+) => Promise<unknown>;
+
+// The engine's hold, as a pass-through that records where it starts and ends.
+const passThroughHold: Hold = async (_username, work) => {
+  calls.push('hold');
+  try {
+    return await work();
+  } finally {
+    calls.push('release');
+  }
+};
+const mockHoldSyncCycles = jest.fn<Promise<unknown>, Parameters<Hold>>(passThroughHold);
 jest.mock('../sync/engine', () => ({
-  awaitInflightSync: (username: string, onWait?: () => void) =>
-    mockAwaitInflightSync(username, onWait),
+  holdSyncCycles: (...args: Parameters<Hold>) => mockHoldSyncCycles(...args),
 }));
 
 const USER = 'alice';
@@ -110,14 +124,8 @@ async function seedSignedInAccountWithData(): Promise<void> {
 
 beforeEach(async () => {
   calls.length = 0;
-  mockAwaitInflightSync.mockReset();
-  mockAwaitInflightSync.mockImplementation(
-    async (_username: string, _onWait?: () => void): Promise<void> => {
-      void _username;
-      void _onWait;
-      calls.push('awaitInflightSync');
-    },
-  );
+  mockHoldSyncCycles.mockReset();
+  mockHoldSyncCycles.mockImplementation(passThroughHold);
   installStorage();
   await Promise.all([
     db.items.clear(),
@@ -149,28 +157,32 @@ describe('deleteAllData', () => {
     expect(await deleteAllData({ username: USER, api })).toEqual({ deletedCount: 0 });
   });
 
-  // THE QUIESCE ORDER. Both must precede the server call, or an in-flight cycle re-pushes
-  // ops the wipe just removed — a successful-looking delete that silently resurrects data.
-  it('waits out the in-flight cycle and takes the queue out BEFORE calling the server', async () => {
+  // THE HOLD'S EXTENT. The server call and the local wipe both run while this account's
+  // cycles are held off, or a cycle beside them re-pushes ops the wipe just removed — a
+  // successful-looking delete that silently resurrects data.
+  it('asks the server, and wipes the store, while the sync cycles are held off', async () => {
     await seedSignedInAccountWithData();
-    mockAwaitInflightSync.mockImplementation(async () => {
-      calls.push('awaitInflightSync');
-      // The queue is still intact while a cycle could be reading it.
+    const api = apiThat(async () => {
+      // The queue stays where it is: no cycle can see it while the hold is taken.
       expect(await listPendingOps(USER)).toHaveLength(1);
+      return { deletedCount: 1 };
     });
 
-    await deleteAllData({ username: USER, api: apiThat(async () => ({ deletedCount: 1 })) });
+    await deleteAllData({ username: USER, api });
 
-    expect(calls).toEqual(['awaitInflightSync', 'deleteAll']);
-    expect(await listPendingOps(USER)).toEqual([]);
-    expect(mockAwaitInflightSync).toHaveBeenCalledWith(USER, expect.any(Function));
+    expect(calls).toEqual(['hold', 'deleteAll', 'release']);
+    expect(mockHoldSyncCycles).toHaveBeenCalledWith(USER, expect.any(Function), {
+      onWait: expect.any(Function),
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it('reports the safety wait separately from the server and local wipe', async () => {
     const steps: string[] = [];
     await seedNewAccount(USER);
-    mockAwaitInflightSync.mockImplementation(async (_username, onWait) => {
-      onWait?.();
+    mockHoldSyncCycles.mockImplementation(async (_username, work, opts) => {
+      opts?.onWait?.();
+      return work();
     });
 
     await deleteAllData({
@@ -184,12 +196,10 @@ describe('deleteAllData', () => {
 
   it('fails closed when the in-flight cycle does not settle', async () => {
     await seedSignedInAccountWithData();
-    mockAwaitInflightSync.mockImplementation(
-      async (_username, onWait) =>
-        new Promise<void>(() => {
-          onWait?.();
-        }),
-    );
+    mockHoldSyncCycles.mockImplementation((_username, _work, opts) => {
+      opts?.onWait?.();
+      return untilAborted(new Promise<never>(() => undefined), opts?.signal);
+    });
     const api = apiThat(async () => ({ deletedCount: 1 }));
 
     await expect(deleteAllData({ username: USER, api, syncWaitTimeoutMs: 1 })).rejects.toThrow(
@@ -199,6 +209,21 @@ describe('deleteAllData', () => {
     expect(api.call).not.toHaveBeenCalled();
     expect(await listPendingOps(USER)).toHaveLength(1);
     expect(await db.items.count()).toBe(1);
+  });
+
+  // The watchdog bounds the WAIT. The call after it pages the whole namespace and has its
+  // own, longer deadline; a watchdog still running over it would report a wipe that is
+  // still going as a failure.
+  it('stops the watchdog once the hold is taken', async () => {
+    await seedSignedInAccountWithData();
+    const api = apiThat(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return { deletedCount: 1 };
+    });
+
+    await expect(deleteAllData({ username: USER, api, syncWaitTimeoutMs: 1 })).resolves.toEqual({
+      deletedCount: 1,
+    });
   });
 
   // The server wipe is idempotent, so a failure has to leave a device that can simply try
@@ -215,78 +240,78 @@ describe('deleteAllData', () => {
     expect(await db.favicons.count()).toBe(1);
   });
 
-  // THE QUEUE IS OUT WHILE THE WIPE IS, AND BACK IF IT FAILS. Out, so a cycle that starts
-  // during the call has nothing to push past the wipe; back, so the failure line's
-  // "nothing was removed" is true of the edits that had not synced yet.
+  // THE QUEUE: gone with a wipe that ran, kept through one that was refused, and dropped
+  // when the call cannot say which. Kept after a refusal, so the failure line's "nothing
+  // was removed" is true of the edits that had not synced yet; dropped after an unanswered
+  // call, because the wipe may have run and those ops would push into the emptied
+  // namespace — the user deleted everything, and they would come back.
   describe('the unsynced queue', () => {
-    it('is empty while the server call is out', async () => {
+    it('goes with the local wipe once the server confirms', async () => {
       await seedSignedInAccountWithData();
-      let duringCall: unknown[] | undefined;
-      const api = apiThat(async () => {
-        duringCall = await listPendingOps(USER);
-        return { deletedCount: 1 };
-      });
 
-      await deleteAllData({ username: USER, api });
+      await deleteAllData({ username: USER, api: apiThat(async () => ({ deletedCount: 1 })) });
 
-      expect(duringCall).toEqual([]);
+      expect(await listPendingOps(USER)).toEqual([]);
     });
 
-    it('comes back, write for write, when the server call fails', async () => {
+    it('is only this account’s', async () => {
       await seedSignedInAccountWithData();
-      const before = await listPendingOps(USER);
+      await enqueuePut(NEXT_USER, NEXT_LINK_PATH, 0);
 
-      await deleteAllData({
-        username: USER,
-        api: apiThat(() => Promise.reject(new Error('offline'))),
-      }).catch(() => undefined);
+      await deleteAllData({ username: USER, api: apiThat(async () => ({ deletedCount: 1 })) });
 
-      expect(await listPendingOps(USER)).toEqual(before);
+      expect(await listPendingOps(NEXT_USER)).toHaveLength(1);
     });
 
-    it('comes back when the server refuses the name', async () => {
+    it.each([
+      ['refuses the name', DATA_DELETE_ALL_ERROR.accountMismatch],
+      ['refuses for any other reason', 'something_else'],
+    ])('stays, write for write, when the server %s', async (_, error) => {
       await seedSignedInAccountWithData();
       const before = await listPendingOps(USER);
-      const api = apiThat(() =>
-        Promise.reject(
-          new ApiError(409, JSON.stringify({ error: DATA_DELETE_ALL_ERROR.accountMismatch })),
-        ),
-      );
+      const api = apiThat(() => Promise.reject(new ApiError(409, JSON.stringify({ error }))));
 
       await deleteAllData({ username: USER, api }).catch(() => undefined);
 
       expect(await listPendingOps(USER)).toEqual(before);
     });
 
-    // An edit made while the call was out is newer than the taken row for the same path;
-    // putting the old one back over it would push the bytes of the edit before it.
-    it('keeps an edit made during the call over the row it took', async () => {
+    it.each([
+      ['the network fails', () => new Error('offline')],
+      ['the deadline passes', () => new ApiTimeoutError(300_000)],
+      ['the server errors', () => new ApiError(503, '')],
+    ])('is dropped, and the failure says so, when %s', async (_, failure) => {
       await seedSignedInAccountWithData();
-      const [taken] = await listPendingOps(USER);
-      const api = apiThat(async () => {
-        await enqueuePut(USER, LINK_PATH, 1);
-        throw new Error('offline');
-      });
+      const api = apiThat(() => Promise.reject(failure()));
 
-      await deleteAllData({ username: USER, api }).catch(() => undefined);
+      const err = await deleteAllData({ username: USER, api }).catch((e: unknown) => e);
 
-      const [kept] = await listPendingOps(USER);
-      expect(kept.writeId).not.toBe(taken.writeId);
-      expect(kept.baseUpdatedAt).toBe(1);
+      expect(err).toBeInstanceOf(DeleteAllUncertainError);
+      expect((err as Error).message).toBe(failure().message);
+      expect(await listPendingOps(USER)).toEqual([]);
+      // Only the queue: the library is still here, and so is everything else.
+      expect(await db.items.count()).toBe(1);
+      expect(await db.locks.count()).toBe(1);
     });
 
-    // The teardown cleared the queue with the rest of the account; rows put back now would
-    // be orphans keyed on an account that is no longer on this device.
-    it('stays gone when the account was torn down under the call', async () => {
+    // The call's failure is the one to report. A store error while dropping the queue must
+    // not replace it — the user would read a storage fault as the reason the delete failed.
+    it('reports the call’s failure even when dropping the queue fails', async () => {
       await seedSignedInAccountWithData();
-      const api = apiThat(async () => {
-        await clearData();
-        throw new ApiError(409, JSON.stringify({ error: DATA_DELETE_ALL_ERROR.accountMismatch }));
+      const where = jest.spyOn(db.pendingOps, 'where').mockImplementation(() => {
+        throw new Error('quota exceeded');
       });
+      try {
+        const err = await deleteAllData({
+          username: USER,
+          api: apiThat(() => Promise.reject(new Error('offline'))),
+        }).catch((e: unknown) => e);
 
-      await deleteAllData({ username: USER, api }).catch(() => undefined);
-
-      expect(await db.pendingOps.count()).toBe(0);
+        expect(err).toBeInstanceOf(DeleteAllUncertainError);
+        expect((err as Error).message).toBe('offline');
+      } finally {
+        where.mockRestore();
+      }
     });
   });
 

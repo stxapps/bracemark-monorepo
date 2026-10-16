@@ -1608,15 +1608,25 @@ itself).
 The binding is part of v1 itself, not a later version. It went in before the
 first release, so no released account holds an unbound blob, and no reader has
 an unbound branch a server could steer it to. Builds from before the binding
-wrote the same version byte with no AAD, and their blobs fail the tag. That is
-neither a version error nor a skipped download: the engines let it propagate,
-so the pull rejects and the whole cycle fails, and every later cycle fails the
-same way with the cursor where it was (local edits still push, because the push
-runs first). A device that already holds the plaintext meets it only on a lazy
-file load, a fallback re-download or an export; a fresh device's first sync
-never completes. So a dev or staging account synced by such a build is
-recreated, not migrated — for the seeded dev accounts that means resetting the
-local api's state ([e2e.md](./e2e.md), _seeding a dev account_).
+wrote the same version byte with no AAD, and their blobs fail the tag.
+
+**A pulled blob that fails the tag is skipped, not a failed cycle.** Both
+framers throw shared's `BlobUnreadableError` for it — tamper, a blob sealed for
+another path, one from before the binding, or corruption — and the engines'
+pull (`openPulled`, inside `storeDownloads`) treats it like a mid-pull 404:
+nothing is stored, a local copy the path already had stays as it was, and the
+cursor moves on. It used to propagate, and one such path then failed every
+cycle for good: the pull rejected with the cursor where it was, met the same
+blob on the next cycle, and no other path in the account synced again. Skipped,
+the path is read again only when it is rewritten or a fallback lists it, which
+is what the server could already achieve by withholding it (below). An
+**unknown version** is deliberately not skipped: that is a newer client's
+format, an update reads it, and skipping would move the cursor past it for
+good. Only the pull skips; a lazy file load or an export that meets such a
+blob still fails. So a dev or staging account synced by a pre-binding build
+syncs again, without its old records — recreating it, or resetting the local
+api's state for the seeded dev accounts ([e2e.md](./e2e.md), _seeding a dev
+account_), is still how to get them back.
 
 The golden vector holds the four framers to one byte string — `blob` opened
 under its path, refused under another, and resealed byte for byte

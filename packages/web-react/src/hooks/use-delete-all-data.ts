@@ -10,7 +10,7 @@
 import { useCallback, useRef, useState } from 'react';
 
 import { useApiClient } from '@stxapps/react';
-import { DeleteAllAccountChangedError } from '@stxapps/shared';
+import { DeleteAllAccountChangedError, DeleteAllUncertainError } from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
 import { deleteAllData, type DeleteAllOutcome, type DeleteAllStep } from '../data/delete-all-data';
@@ -19,7 +19,11 @@ export type DeleteAllState =
   | { phase: 'idle' }
   | { phase: 'running'; step: DeleteAllStep }
   | { phase: 'done'; outcome: DeleteAllOutcome }
-  | { phase: 'error'; message: string }
+  // `unsyncedDiscarded` — the call failed without saying whether the wipe ran
+  // (shared's DeleteAllUncertainError), so this device's unsynced changes were
+  // dropped rather than left to push into a namespace that may be empty, and the
+  // failure line cannot say nothing was removed.
+  | { phase: 'error'; message: string; unsyncedDiscarded?: boolean }
   // The account changed under the view. TERMINAL like `done`, and unlike `error`
   // not something to try again: a retry would be the new account's wipe on the
   // previous account's confirmation. `serverWiped` — whether the account that
@@ -81,7 +85,11 @@ export function useDeleteAllData(): UseDeleteAllDataResult {
           setState(
             err instanceof DeleteAllAccountChangedError
               ? { phase: 'account-changed', serverWiped: err.serverWiped }
-              : { phase: 'error', message: err instanceof Error ? err.message : String(err) },
+              : {
+                  phase: 'error',
+                  message: err instanceof Error ? err.message : String(err),
+                  unsyncedDiscarded: err instanceof DeleteAllUncertainError,
+                },
           ),
       )
       .finally(() => {

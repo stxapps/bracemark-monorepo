@@ -1,5 +1,6 @@
 // Specs for the expo delete-all-data flow. Same three invisible rules as web's sibling —
-// the QUIESCE before the server call, NOTHING LOCAL TOUCHED until the server confirms, and
+// the HOLD around the server call and the local wipe, NOTHING LOCAL LOST until the server
+// confirms (or cannot say — then the queue goes), and
 // the SURVIVOR SET that separates this from the sign-out teardown — but the two modules are
 // duplicated source over different stores, so web's spec proves nothing about this one.
 //
@@ -24,11 +25,14 @@ import { sql } from 'drizzle-orm';
 import {
   type ApiClient,
   ApiError,
+  ApiTimeoutError,
   DATA_DELETE_ALL_ERROR,
   dataDeleteAllEndpoint,
   DeleteAllAccountChangedError,
+  DeleteAllUncertainError,
   LINKS_PREFIX,
   pathFromId,
+  untilAborted,
   utf8,
 } from '@stxapps/shared';
 
@@ -58,20 +62,28 @@ jest.mock('expo-file-system', () => require('../testing/memory-file-system'));
 jest.mock('@stxapps/expo-crypto/lib/ids', () => ({ newId: () => globalThis.crypto.randomUUID() }));
 jest.mock('@stxapps/expo-crypto', () => ({ newId: () => globalThis.crypto.randomUUID() }));
 
-// Every call the module makes, in order — the only way to see that the quiesce and the
-// queue take happened BEFORE the server was asked.
+// Every call the module makes, in order — the only way to see that the server was asked,
+// and the local store wiped, while the hold was taken.
 const calls: string[] = [];
 const mockInvalidateLiveReads = jest.fn();
-const mockAwaitInflightSync = jest.fn(
-  async (_username: string, _onWait?: () => void): Promise<void> => {
-    void _username;
-    void _onWait;
-    calls.push('awaitInflightSync');
-  },
-);
+type HoldOptions = { onWait?: () => void; signal?: AbortSignal };
+type Hold = (
+  username: string,
+  work: () => Promise<unknown>,
+  opts?: HoldOptions,
+) => Promise<unknown>;
+// The engine's hold, as a pass-through that records where it starts and ends.
+const passThroughHold: Hold = async (_username, work) => {
+  calls.push('hold');
+  try {
+    return await work();
+  } finally {
+    calls.push('release');
+  }
+};
+const mockHoldSyncCycles = jest.fn<Promise<unknown>, Parameters<Hold>>(passThroughHold);
 jest.mock('../sync/engine', () => ({
-  awaitInflightSync: (username: string, onWait?: () => void) =>
-    mockAwaitInflightSync(username, onWait),
+  holdSyncCycles: (...args: Parameters<Hold>) => mockHoldSyncCycles(...args),
 }));
 jest.mock('./live-read-invalidation', () => ({
   invalidateLiveReads: (tables: readonly string[]) => mockInvalidateLiveReads(tables),
@@ -147,14 +159,8 @@ const countOf = (table: string): number =>
 beforeEach(() => {
   calls.length = 0;
   mockInvalidateLiveReads.mockClear();
-  mockAwaitInflightSync.mockReset();
-  mockAwaitInflightSync.mockImplementation(
-    async (_username: string, _onWait?: () => void): Promise<void> => {
-      void _username;
-      void _onWait;
-      calls.push('awaitInflightSync');
-    },
-  );
+  mockHoldSyncCycles.mockReset();
+  mockHoldSyncCycles.mockImplementation(passThroughHold);
   resetFileSystem();
   const tables = getDb().all<{ name: string }>(
     sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`,
@@ -173,29 +179,32 @@ describe('deleteAllData', () => {
     ).toEqual({ deletedCount: 0 });
   });
 
-  // THE QUIESCE ORDER. Both must precede the server call, or a cycle already holding the
-  // queue re-pushes ops the wipe just removed — a successful-looking delete that silently
-  // resurrects the library on the next sync.
-  it('waits out the in-flight cycle and takes the queue out BEFORE calling the server', async () => {
+  // THE HOLD'S EXTENT. The server call and the local wipe both run while this account's
+  // cycles are held off, or a cycle beside them re-pushes ops the wipe just removed — a
+  // successful-looking delete that silently resurrects the library on the next sync.
+  it('asks the server, and wipes the store, while the sync cycles are held off', async () => {
     await seedSignedInAccountWithData();
-    mockAwaitInflightSync.mockImplementation(async () => {
-      calls.push('awaitInflightSync');
-      // The queue is still intact while a cycle could be reading it.
+    const api = apiThat(async () => {
+      // The queue stays where it is: no cycle can see it while the hold is taken.
       expect(await listPendingOps(USER)).toHaveLength(1);
+      return { deletedCount: 1 };
     });
 
-    await deleteAllData({ username: USER, api: apiThat(async () => ({ deletedCount: 1 })) });
+    await deleteAllData({ username: USER, api });
 
-    expect(calls).toEqual(['awaitInflightSync', 'deleteAll']);
-    expect(await listPendingOps(USER)).toEqual([]);
-    expect(mockAwaitInflightSync).toHaveBeenCalledWith(USER, expect.any(Function));
+    expect(calls).toEqual(['hold', 'deleteAll', 'release']);
+    expect(mockHoldSyncCycles).toHaveBeenCalledWith(USER, expect.any(Function), {
+      onWait: expect.any(Function),
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it('reports the safety wait separately from the server and local wipe', async () => {
     const steps: string[] = [];
     await seedNewAccount(USER);
-    mockAwaitInflightSync.mockImplementation(async (_username, onWait) => {
-      onWait?.();
+    mockHoldSyncCycles.mockImplementation(async (_username, work, opts) => {
+      opts?.onWait?.();
+      return work();
     });
 
     await deleteAllData({
@@ -209,12 +218,10 @@ describe('deleteAllData', () => {
 
   it('fails closed when the in-flight cycle does not settle', async () => {
     await seedSignedInAccountWithData();
-    mockAwaitInflightSync.mockImplementation(
-      async (_username, onWait) =>
-        new Promise<void>(() => {
-          onWait?.();
-        }),
-    );
+    mockHoldSyncCycles.mockImplementation((_username, _work, opts) => {
+      opts?.onWait?.();
+      return untilAborted(new Promise<never>(() => undefined), opts?.signal);
+    });
     const api = apiThat(async () => ({ deletedCount: 1 }));
 
     await expect(deleteAllData({ username: USER, api, syncWaitTimeoutMs: 1 })).rejects.toThrow(
@@ -224,6 +231,19 @@ describe('deleteAllData', () => {
     expect(api.call).not.toHaveBeenCalled();
     expect(await listPendingOps(USER)).toHaveLength(1);
     expect(countOf('items')).toBe(1);
+  });
+
+  // The watchdog bounds the WAIT, not the call after it (web's sibling).
+  it('stops the watchdog once the hold is taken', async () => {
+    await seedSignedInAccountWithData();
+    const api = apiThat(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return { deletedCount: 1 };
+    });
+
+    await expect(deleteAllData({ username: USER, api, syncWaitTimeoutMs: 1 })).resolves.toEqual({
+      deletedCount: 1,
+    });
   });
 
   // The server wipe is idempotent, so a failure has to leave a device that can simply try
@@ -240,76 +260,48 @@ describe('deleteAllData', () => {
     expect(listFileUris().length).toBeGreaterThan(0);
   });
 
-  // THE QUEUE IS OUT WHILE THE WIPE IS, AND BACK IF IT FAILS (web's sibling): out, so a
-  // cycle starting during the call has nothing to push past the wipe; back, so "nothing was
-  // removed" is true of the edits that had not synced yet.
+  // THE QUEUE (web's sibling): gone with a wipe that ran, kept through one that was
+  // refused, and dropped when the call cannot say which — the wipe may have run, and those
+  // ops would push into the emptied namespace.
   describe('the unsynced queue', () => {
-    const refusedName = (): ApiClient =>
-      apiThat(() =>
-        Promise.reject(
-          new ApiError(409, JSON.stringify({ error: DATA_DELETE_ALL_ERROR.accountMismatch })),
-        ),
-      );
-
-    it('is empty while the server call is out', async () => {
+    it('goes with the local wipe once the server confirms, and only this account’s', async () => {
       await seedSignedInAccountWithData();
-      let duringCall: unknown[] | undefined;
-      const api = apiThat(async () => {
-        duringCall = await listPendingOps(USER);
-        return { deletedCount: 1 };
-      });
+      getDb().transaction((tx) => enqueuePutTx(tx, NEXT_USER, NEXT_LINK_PATH, 0));
 
-      await deleteAllData({ username: USER, api });
+      await deleteAllData({ username: USER, api: apiThat(async () => ({ deletedCount: 1 })) });
 
-      expect(duringCall).toEqual([]);
+      expect(await listPendingOps(USER)).toEqual([]);
+      expect(await listPendingOps(NEXT_USER)).toHaveLength(1);
     });
 
-    it('comes back, write for write, when the server call fails', async () => {
+    it.each([
+      ['refuses the name', DATA_DELETE_ALL_ERROR.accountMismatch],
+      ['refuses for any other reason', 'something_else'],
+    ])('stays, write for write, when the server %s', async (_, error) => {
       await seedSignedInAccountWithData();
       const before = await listPendingOps(USER);
+      const api = apiThat(() => Promise.reject(new ApiError(409, JSON.stringify({ error }))));
 
-      await deleteAllData({
-        username: USER,
-        api: apiThat(() => Promise.reject(new Error('offline'))),
-      }).catch(() => undefined);
+      await deleteAllData({ username: USER, api }).catch(() => undefined);
 
       expect(await listPendingOps(USER)).toEqual(before);
     });
 
-    it('comes back when the server refuses the name', async () => {
+    it.each([
+      ['the network fails', () => new Error('offline')],
+      ['the deadline passes', () => new ApiTimeoutError(300_000)],
+      ['the server errors', () => new ApiError(503, '')],
+    ])('is dropped, and the failure says so, when %s', async (_, failure) => {
       await seedSignedInAccountWithData();
-      const before = await listPendingOps(USER);
+      const api = apiThat(() => Promise.reject(failure()));
 
-      await deleteAllData({ username: USER, api: refusedName() }).catch(() => undefined);
+      const err = await deleteAllData({ username: USER, api }).catch((e: unknown) => e);
 
-      expect(await listPendingOps(USER)).toEqual(before);
-    });
-
-    it('keeps an edit made during the call over the row it took', async () => {
-      await seedSignedInAccountWithData();
-      const [taken] = await listPendingOps(USER);
-      const api = apiThat(async () => {
-        getDb().transaction((tx) => enqueuePutTx(tx, USER, LINK_PATH, 1));
-        throw new Error('offline');
-      });
-
-      await deleteAllData({ username: USER, api }).catch(() => undefined);
-
-      const [kept] = await listPendingOps(USER);
-      expect(kept.writeId).not.toBe(taken.writeId);
-      expect(kept.baseUpdatedAt).toBe(1);
-    });
-
-    it('stays gone when the account was torn down under the call', async () => {
-      await seedSignedInAccountWithData();
-      const api = apiThat(async () => {
-        await clearData();
-        throw new ApiError(409, JSON.stringify({ error: DATA_DELETE_ALL_ERROR.accountMismatch }));
-      });
-
-      await deleteAllData({ username: USER, api }).catch(() => undefined);
-
-      expect(countOf('pending_ops')).toBe(0);
+      expect(err).toBeInstanceOf(DeleteAllUncertainError);
+      expect((err as Error).message).toBe(failure().message);
+      expect(await listPendingOps(USER)).toEqual([]);
+      expect(countOf('items')).toBe(1);
+      expect(countOf('locks')).toBe(1);
     });
   });
 

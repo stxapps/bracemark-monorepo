@@ -573,7 +573,9 @@ function ExportView({ onBack }: { onBack: () => void }) {
 // The one-line receipt under the delete button: a single spinner while running
 // (the wipe is one server call — no per-item progress to show), the count when
 // done, the failure when errored (the endpoint is idempotent, so the retry is
-// just clicking again).
+// just clicking again). A failure that cannot say whether the wipe ran
+// (`unsyncedDiscarded`) has its own second sentence: the unsynced queue was
+// dropped, so "nothing was removed" would be false of it.
 //
 // `account-changed` is NOT that failure and must not borrow its line: "nothing
 // was removed, try again" is false when the server already wiped the account
@@ -598,7 +600,10 @@ function DeleteStatus({ state }: { state: DeleteAllState }) {
       <p role="alert" className="flex items-start gap-2 text-sm text-destructive">
         <CircleAlert className="mt-0.5 size-4 shrink-0" />
         <span className="wrap-break-words">
-          Delete failed: {state.message} Nothing was removed from this device — please try again.
+          Delete failed: {state.message}{' '}
+          {state.unsyncedDiscarded
+            ? 'It may have gone through anyway, so changes on this device that hadn’t synced yet were discarded — please try again.'
+            : 'Nothing was removed from this device — please try again.'}
         </span>
       </p>
     );

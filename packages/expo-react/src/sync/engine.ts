@@ -39,6 +39,7 @@ import { decryptEntity, decryptFile, encryptEntity, encryptFile } from '@stxapps
 import {
   type ApiClient,
   apiErrorCode,
+  BlobUnreadableError,
   chunk,
   emptySyncOutcome,
   FILES_PREFIX,
@@ -57,6 +58,7 @@ import {
   recordBlocked,
   type SignOp,
   type SyncOutcome,
+  untilAborted,
   withRetry,
 } from '@stxapps/shared';
 
@@ -315,26 +317,62 @@ async function logWatermark(api: ApiClient): Promise<number> {
 // after that run's snapshot. Serializing cycles keeps two drains from
 // double-committing the same pending ops and keeps cursor writes ordered
 // (advanceCursor's forward-only guard covers out-of-order stragglers). One
-// runtime per store, so this is the whole of what web needs a cross-tab lock for.
+// runtime per store, so this is the whole of what web needs a cross-tab lock for
+// between CYCLES; the cycle lock below is for holding them off (holdSyncCycles).
 const inflightSyncs = new Map<string, Promise<SyncOutcome>>();
 const rerunRequests = new Set<string>();
 
-// Wait for an in-flight cycle (if any) to settle WITHOUT starting one — unlike
-// calling runIncrementalSync, which kicks a fresh cycle when idle. For callers
-// that need the engine quiescent before doing something destructive (the
-// delete-all flow: a cycle that already read the pending queue could otherwise
-// re-push ops after the server wipe). Swallows the cycle's rejection — the
-// waiter only cares that it's over, not how it went (the cycle's own callers
-// handle the error).
-export async function awaitInflightSync(username: string, onWait?: () => void): Promise<void> {
-  const inflight = inflightSyncs.get(username);
-  if (!inflight) return;
+// The cycle lock — web's Web Lock of the same name, scoped to this runtime: per
+// account, first come first served, taken by each cycle (incrementalSyncOnce) and
+// by holdSyncCycles. The single-flight slot above already keeps cycles to one at
+// a time; what the lock adds is a way for something that is NOT a cycle to keep
+// the next one waiting. Each holder waits on the tail the one before it left; a
+// waiter that gives up (its signal aborts) passes its turn straight on when it
+// comes, so the queue never stalls on a run that will not happen.
+const cycleLockTails = new Map<string, Promise<void>>();
 
-  // Let a blocking caller distinguish "waiting for the engine to become safe"
-  // from the work it performs afterward. Called only when there is actually a
-  // cycle to wait for, so a delete-all view does not flash a false waiting step.
-  onWait?.();
-  await inflight.catch(() => undefined);
+async function withCycleLock<T>(
+  username: string,
+  run: () => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  const before = cycleLockTails.get(username) ?? Promise.resolve();
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => (release = resolve));
+  const tail = before.then(() => released);
+  cycleLockTails.set(username, tail);
+  void tail.then(() => {
+    if (cycleLockTails.get(username) === tail) cycleLockTails.delete(username);
+  });
+  try {
+    await untilAborted(before, signal);
+  } catch (err) {
+    release();
+    throw err;
+  }
+  try {
+    return await run();
+  } finally {
+    release();
+  }
+}
+
+// Run `work` with this account's sync cycles held off: a cycle already running
+// is waited out first, and one asked for meanwhile waits until `work` settles —
+// web engine's holdSyncCycles, which carries the reasoning (the delete-all flow:
+// no cycle may push the queue past its server wipe, or pull beside it). A cycle
+// asked for meanwhile still joins the single-flight slot as usual; its run just
+// queues behind `work` for the lock.
+//
+// `onWait` fires only when there is something to wait for. `signal` aborts the
+// WAIT and never the work: once the lock is held, `work` runs to the end.
+export function holdSyncCycles<T>(
+  username: string,
+  work: () => Promise<T>,
+  { onWait, signal }: { onWait?: () => void; signal?: AbortSignal } = {},
+): Promise<T> {
+  if (cycleLockTails.has(username)) onWait?.();
+  return withCycleLock(username, work, signal);
 }
 
 // A returning-visit sync (docs flow #2 + "a sync cycle"): reconcile, then push,
@@ -376,7 +414,13 @@ export function runIncrementalSync(deps: SyncDeps): Promise<SyncOutcome> {
   return run;
 }
 
-async function incrementalSyncOnce(deps: SyncDeps): Promise<SyncOutcome> {
+// One cycle, under the cycle lock from its first read to its last write — so a
+// holdSyncCycles caller is never overlapped by one.
+function incrementalSyncOnce(deps: SyncDeps): Promise<SyncOutcome> {
+  return withCycleLock(deps.username, () => runCycle(deps));
+}
+
+async function runCycle(deps: SyncDeps): Promise<SyncOutcome> {
   deps = withRetryDeps(deps);
   // Collected DOWN the call chain (the cycles → pushPending → pushPuts) and
   // returned UP, so the provider can tell a clean cycle from one the quota gate
@@ -396,8 +440,9 @@ async function incrementalSyncOnce(deps: SyncDeps): Promise<SyncOutcome> {
   // stored yet a second time, beside it.
   //
   // This is the step web's engine takes with its cycle lock, which
-  // runInitialSync holds like any other cycle. There is no lock here (one
-  // runtime per store), so the flag does it: a pull only ever runs with the
+  // runInitialSync holds like any other cycle. The pull takes no lock here (one
+  // runtime per store; the cycle lock is the cycles'), so the flag does it: a
+  // pull only ever runs with the
   // flag unset, one at a time (runInitialSync holds both), and no cycle starts
   // until it is set, so the two never overlap.
   // Same predicate as isFirstSyncDone — an absent row is not-done.
@@ -1190,7 +1235,8 @@ async function storeDownloads(
         });
         if (!blob) return;
 
-        const data = await decryptEntity(deps.encryptionKey, blob, e.path);
+        const data = await openPulled(deps, blob, e.path);
+        if (!data) return;
         // Per record, not per batch: each arrives after its own GET, so this is the
         // largest group that can share one transaction with its queue check without
         // holding decrypted blobs in memory or losing the resume-where-interrupted
@@ -1200,6 +1246,25 @@ async function storeDownloads(
         tick();
       }
     });
+  }
+}
+
+// Decrypt one pulled blob, or skip it when it does not open under its path
+// (BlobUnreadableError) — web engine's openPulled, which carries the reasoning:
+// one such path must not fail every cycle for every path. Skipped like a 404:
+// nothing stored, the cursor moves on, a local copy stays. Anything else, an
+// unknown format version above all, still throws.
+async function openPulled(
+  deps: SyncDeps,
+  blob: Uint8Array,
+  path: string,
+): Promise<Uint8Array | undefined> {
+  try {
+    return await decryptEntity(deps.encryptionKey, blob, path);
+  } catch (err) {
+    if (!(err instanceof BlobUnreadableError)) throw err;
+    console.warn(`sync: skipped ${path}, which does not open under its path`);
+    return undefined;
   }
 }
 

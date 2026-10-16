@@ -2,11 +2,10 @@
 // or reject with `new Error(message)` if `timeoutMs` elapses first.
 //
 // The MECHANISM only. How long to wait and what to say when the wait runs out are
-// the caller's policy, and they stay at the call site — the delete-all flow's
-// two-minute watchdog and its "Sync is taking longer than expected." line live in
-// `data/delete-all-data.ts` on both platforms, not here, because that timeout is a
-// property of a user-initiated destructive action rather than of the thing it
-// awaits (the sync engine's `awaitInflightSync` deliberately never rejects).
+// the caller's policy, and they stay at the call site — sign-out's bounded sync
+// (@stxapps/react lib/sync-before-sign-out.ts) keeps its number there, not here.
+// A deadline that must stop partway — on a wait, before the work it guards — is
+// untilAborted's job instead (./until-aborted.ts).
 //
 // `clearTimeout` in the `finally` is the whole reason this isn't an inline
 // `Promise.race`: the winning path leaves the loser's timer armed, and a stray

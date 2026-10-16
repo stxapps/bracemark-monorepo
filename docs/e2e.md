@@ -2432,16 +2432,17 @@ throwaway ones, because these accounts are meant to be signed back into tomorrow
   a genuine no-op, which is what makes a half-finished run safe to repeat. (The
   shot account answers the same trap with a flag — `shot:account --fresh` —
   because its fixture is a hand-edited URL list that changes more often.)
-- **An account synced by a build from before the blob path binding cannot be
-  re-seeded.** Its blobs fail the tag, so signing in wedges on a first sync that
-  never completes, and Delete all data is behind that sync
-  ([local-first-sync.md](./local-first-sync.md), _crypto boundary_). Usernames
-  are never released, so it cannot be recreated under the same name either.
-  Reset the local api's state instead: stop the api,
-  `rm -rf apps/bracemark-api/.wrangler/state`, `npm run d1:migrate`, start it
-  again, sign any device or browser profile out of the old accounts, then re-run
-  `seed:accounts`. This also drops every throwaway e2e account, which is fine —
-  nothing reuses them.
+- **An account synced by a build from before the blob path binding comes back
+  empty.** Its blobs fail the tag, and the pull skips them
+  ([local-first-sync.md](./local-first-sync.md), _crypto boundary_): signing in
+  completes, with none of the old records. Re-seeding does not fill it — a
+  backup merge skips existing paths, and the old blobs are still there — and
+  usernames are never released, so it cannot be recreated under the same name
+  either. Delete all data and then re-seed, or reset the local api's state:
+  stop the api, `rm -rf apps/bracemark-api/.wrangler/state`,
+  `npm run d1:migrate`, start it again, sign any device or browser profile out
+  of the old accounts, then re-run `seed:accounts`. The reset also drops every
+  throwaway e2e account, which is fine — nothing reuses them.
 - **The seed waits for sync, and must.** An import lands in Dexie and pushes in
   the background, and the browser profile is deleted when the run ends. Close
   early and the account exists, the plan is granted, and the library is nowhere —

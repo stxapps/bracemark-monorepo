@@ -97,34 +97,12 @@ export async function clearDrainedOps(ops: PendingOpRecord[]): Promise<void> {
   });
 }
 
-// Take an account's WHOLE queue out, and hand back what was in it — the
-// delete-all-data flow. While its server wipe is out, a cycle that starts (a
-// timer, another edit) must find nothing to push, or it re-pushes ops past the
-// wipe. But the wipe can still be refused or fail, and then the user is told
-// nothing was removed, which is only true once the queue is back: hence take,
-// not clear, and returnPendingOps below. One transaction, so an edit landing
-// mid-take is either taken with the rest or queued after it.
-export async function takePendingOps(username: string): Promise<PendingOpRecord[]> {
-  return db.transaction('rw', db.pendingOps, async () => {
-    const ops = await db.pendingOps.where('username').equals(username).toArray();
-    await db.pendingOps.where('username').equals(username).delete();
-    return ops;
-  });
-}
-
-// Put back what takePendingOps took, after a delete that did not happen. A path
-// edited since has a newer row, which supersedes the taken one and stays. Fenced
-// on the account, like every write that can outlive its session
-// (sync-store.ts): if the account was torn down meanwhile, its teardown has
-// already cleared the queue, and these rows would be orphans keyed on a
-// departed account — so they are dropped instead.
-export async function returnPendingOps(username: string, ops: PendingOpRecord[]): Promise<void> {
-  if (ops.length === 0) return;
-  await db.transaction('rw', db.pendingOps, db.syncMeta, async () => {
-    if (!(await db.syncMeta.get(username))) return;
-    const keys = ops.map((o) => [o.username, o.path] as [string, string]);
-    const current = await db.pendingOps.bulkGet(keys);
-    const missing = ops.filter((_, i) => current[i] === undefined);
-    if (missing.length > 0) await db.pendingOps.bulkAdd(missing);
-  });
+// Drop an account's WHOLE queue — the delete-all-data flow, when its server wipe
+// failed in a way that leaves no telling whether it happened (a timeout, a lost
+// response, a 5xx: data/delete-all-data.ts). Kept, those ops would push into a
+// namespace that may already be empty and bring back what the user asked to
+// delete. One account's, not the device's. (A wipe that succeeds clears the queue
+// inside its own local-wipe transaction instead.)
+export async function clearPendingOps(username: string): Promise<void> {
+  await db.pendingOps.where('username').equals(username).delete();
 }

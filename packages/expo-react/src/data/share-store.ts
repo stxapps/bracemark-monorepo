@@ -301,7 +301,8 @@ function failedDir(group: Directory): Directory {
 }
 
 // The iOS snapshot as it stands on disk, or null when there is none or it does
-// not parse. Read at sheet open, and again at Save for the owner and cap checks.
+// not parse. Read at sheet open, and again — once — at Save for the owner and
+// cap checks.
 function readSnapshot(): ShareTaxonomy | null {
   const group = appGroupDir();
   if (!group) return null;
@@ -378,16 +379,21 @@ export type ShareSaveResult =
 // take `.length`, which on a large library kept over its cap (a lapsed paid plan)
 // made every Add wait on a whole-library read.
 export async function isAtLinkCap(): Promise<boolean> {
-  if (Platform.OS === 'ios') {
-    const snapshot = readSnapshot();
-    if (!snapshot || snapshot.maxLinks === null) return false;
-    return snapshot.linkCount >= snapshot.maxLinks;
-  }
+  if (Platform.OS === 'ios') return snapshotAtLinkCap(readSnapshot());
   const status = subscriptions().readCachedStatus();
   if (!status) return false;
   const { maxLinks } = entitlementsOf(status.plan);
   if (maxLinks === null) return false;
   return (await queries().countLinks()) >= maxLinks;
+}
+
+// The iOS half of isAtLinkCap, over a snapshot the caller already read — Save
+// reads it once for both of its checks, so the cap is judged against the same
+// snapshot whose owner was just compared, not a second read the main app may
+// have rewritten in between.
+function snapshotAtLinkCap(snapshot: ShareTaxonomy | null): boolean {
+  if (!snapshot || snapshot.maxLinks === null) return false;
+  return snapshot.linkCount >= snapshot.maxLinks;
 }
 
 // One Add. The sheet checks `owner` before offering the form, but the account
@@ -412,9 +418,11 @@ export async function saveSharedDraft(
     // Both before the outbox write, not after: a refused draft must not become a
     // file, because everything downstream of that file is designed to never drop
     // it (the drain applies it locally, the upload retries it). The owner check
-    // first — another account's cap is no answer for this draft.
-    if (readSnapshot()?.owner !== draft.owner) return 'account-changed';
-    if (await isAtLinkCap()) return 'quota';
+    // first — another account's cap is no answer for this draft. One read for
+    // both, so the cap checked is the owner's.
+    const snapshot = readSnapshot();
+    if (snapshot?.owner !== draft.owner) return 'account-changed';
+    if (snapshotAtLinkCap(snapshot)) return 'quota';
     const group = appGroupDir();
     if (!group) throw new Error('saveSharedDraft: no App Group container');
     const dir = outboxDir(group);

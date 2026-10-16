@@ -20,6 +20,7 @@
 
 import {
   type ApiClient,
+  ApiError,
   apiErrorCode,
   clearDecodeCache,
   DATA_DELETE_ALL_ERROR,
@@ -27,12 +28,12 @@ import {
   DEFAULT_CALL_TIMEOUT_MS,
   DEFAULT_RETRY_MAX_DELAY_MS,
   DeleteAllAccountChangedError,
-  withTimeout,
+  DeleteAllUncertainError,
 } from '@stxapps/shared';
 
-import { awaitInflightSync } from '../sync/engine';
+import { holdSyncCycles } from '../sync/engine';
 import { db } from './db';
-import { returnPendingOps, takePendingOps } from './pending-store';
+import { clearPendingOps } from './pending-store';
 import { AccountFencedError, resetToSeededState } from './sync-store';
 
 export type DeleteAllOutcome = {
@@ -42,25 +43,27 @@ export type DeleteAllOutcome = {
 
 export type DeleteAllStep = 'waiting-for-sync' | 'deleting';
 
-// A cap on how long this user-initiated action spins, not an estimate of how
-// long a cycle takes. The per-request deadlines (shared's `withDeadline`: the
-// contract client's default call deadline, the R2 blob transfers') don't make it
-// redundant. They guarantee the cycle settles EVENTUALLY, and eventually has no
-// bound a user can sit through: a cycle is many requests in sequence, each with
-// its own deadline; a 429/5xx still retries through its Retry-After wait; a sync
-// triggered meanwhile reruns inside the same in-flight cycle; and the Dexie and
-// crypto work has no deadline at all. The cap is one stalled call's deadline
-// plus the retry client's longest single wait (two minutes today) — room for the
-// worst single hiccup, derived so that moving either one moves this. Longer only
-// lengthens the spinner, because giving up is cheap: timing out FAILS CLOSED
-// below (no queue clear, server wipe, or local wipe follows) and cancels nothing,
-// so the cycle runs on and a retry resumes the wait on it.
+// A cap on how long this user-initiated action waits for a sync to finish, not
+// an estimate of how long a cycle takes. The per-request deadlines (shared's
+// `withDeadline`: the contract client's default call deadline, the R2 blob
+// transfers') don't make it redundant. They guarantee the cycle settles
+// EVENTUALLY, and eventually has no bound a user can sit through: a cycle is many
+// requests in sequence, each with its own deadline; a 429/5xx still retries
+// through its Retry-After wait; and the Dexie and crypto work has no deadline at
+// all. The cap is one stalled call's deadline plus the retry client's longest
+// single wait (two minutes today) — room for the worst single hiccup, derived so
+// that moving either one moves this. Longer only lengthens the spinner, because
+// giving up is cheap: timing out FAILS CLOSED (no server wipe or local wipe
+// follows) and cancels nothing, so the cycle runs on and a retry waits again.
+//
+// It bounds the WAIT and nothing after it: the clock stops the moment the hold
+// is taken, because the server call that follows has its own, longer deadline
+// (DELETE_ALL_TIMEOUT_MS in its contract) and a watchdog running over it would
+// report a failure for a wipe that is still going.
 //
 // The duration and the wording live HERE, not in the engine: the watchdog is a
 // property of this destructive, user-blocking action, not of waiting itself —
-// `awaitInflightSync` deliberately never rejects, and it also serves the
-// bracemark-extension's background worker, which has no UI to show a message to.
-// shared's `withTimeout` supplies the mechanism and nothing else.
+// `holdSyncCycles` takes a signal and has no clock of its own.
 const SYNC_WAIT_TIMEOUT_MS = DEFAULT_CALL_TIMEOUT_MS + DEFAULT_RETRY_MAX_DELAY_MS;
 const SYNC_WAIT_TIMEOUT_MESSAGE = 'Sync is taking longer than expected.';
 
@@ -73,28 +76,44 @@ export async function deleteAllData(args: {
 }): Promise<DeleteAllOutcome> {
   const { username, api, onStep, syncWaitTimeoutMs = SYNC_WAIT_TIMEOUT_MS } = args;
 
-  // Quiesce before destroying: a cycle already in flight read the pending queue
-  // before we got here and could re-push (resurrect) ops after the server wipe —
-  // wait it out, THEN take the queue out so any later cycle finds nothing to push.
-  // (On success this device's unsynced changes are discarded on purpose: the user
-  // is deleting everything, so pushing them first would be work the wipe undoes.)
-  // Taken, not cleared: a wipe that is refused or fails puts them back, so "nothing
-  // was removed" stays true of them too (pending-store.ts).
-  await withTimeout(
-    awaitInflightSync(username, () => onStep?.('waiting-for-sync')),
-    syncWaitTimeoutMs,
-    SYNC_WAIT_TIMEOUT_MESSAGE,
-  );
-  onStep?.('deleting');
-  const taken = await takePendingOps(username);
+  // Quiesce before destroying, and STAY quiet until it is over: the whole run
+  // holds this account's sync cycles off (sync/engine.ts holdSyncCycles — the
+  // cycle lock, so other tabs' cycles too). A cycle beside the server wipe would
+  // read the pending queue and push it past the wipe, bringing back what the user
+  // deleted; one that pulled while the call was out would land server copies over
+  // edits the wipe was then refused for. Held off, the queue simply stays where it
+  // is until the server answers — no cycle can see it. On success this device's
+  // unsynced changes are discarded on purpose (pushing them first would be work
+  // the wipe undoes).
+  const watchdog = new AbortController();
+  const timer = setTimeout(() => watchdog.abort(), syncWaitTimeoutMs);
+  try {
+    return await holdSyncCycles(
+      username,
+      () => {
+        clearTimeout(timer);
+        onStep?.('deleting');
+        return wipe(username, api);
+      },
+      { onWait: () => onStep?.('waiting-for-sync'), signal: watchdog.signal },
+    );
+  } catch (e) {
+    if (watchdog.signal.aborted) throw new Error(SYNC_WAIT_TIMEOUT_MESSAGE);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
-  // The server wipe — idempotent, so a failure here leaves everything retryable:
-  // the taken queue goes back, and the local wipe below only runs after the server
-  // confirms.
+// The server wipe, then the local one — with no sync cycle able to run beside
+// either (deleteAllData holds them off).
+async function wipe(username: string, api: ApiClient): Promise<DeleteAllOutcome> {
+  // The server wipe — idempotent, so a failure here leaves everything retryable,
+  // and the local wipe below only runs after the server confirms.
   //
   // It NAMES the account, and that is what binds it. `username` was captured at
   // the click; the bearer token is attached by the client as the request leaves
-  // (lib/auth-api-client.ts reads the session then), and the waits above are long
+  // (lib/auth-api-client.ts reads the session then), and the wait above is long
   // enough for the session to have become someone else's — another tab signs in
   // as a different account and this one adopts it in place. The server wipes only
   // if the token's account is the one named, so that request is refused instead
@@ -105,19 +124,32 @@ export async function deleteAllData(args: {
   try {
     ({ deletedCount } = await api.call(dataDeleteAllEndpoint, { username }));
   } catch (e) {
-    await returnPendingOps(username, taken);
     if (apiErrorCode(e) === DATA_DELETE_ALL_ERROR.accountMismatch) {
       throw new DeleteAllAccountChangedError(false);
+    }
+    // A 4xx is a refusal the route gave before touching anything (the name
+    // check, validation, auth, a rate limit): nothing was wiped, and the queue
+    // stays — "nothing was removed" is true of it too. Anything else (a timeout,
+    // a lost response, a 5xx) leaves no telling whether the wipe ran: the route
+    // empties the op log before it pages R2, and only answers after the last
+    // page. Kept, the queue would push into a namespace that may already be empty
+    // and bring back what the user asked to delete, so it goes, as it would on
+    // success; the failure line says so. Best-effort: the call's own error is
+    // the one to report.
+    if (!(e instanceof ApiError && e.status >= 400 && e.status < 500)) {
+      await clearPendingOps(username).catch(() => undefined);
+      throw new DeleteAllUncertainError(e);
     }
     throw e;
   }
 
   // Local synced state, wiped to match the (now empty) server: the decrypted
-  // items, their decoded-plaintext cache, and the locks (they guard lists that
-  // no longer exist — same reset clearData applies, and the empty library needs
-  // no shoulder-surfing gate until new locks are set). The favicon cache goes too:
-  // it isn't synced state, but it's derived FROM the wiped links, so leaving it
-  // would let the deleted library's hosts be read back off the device.
+  // items, their decoded-plaintext cache, the pending queue, and the locks (they
+  // guard lists that no longer exist — same reset clearData applies, and the
+  // empty library needs no shoulder-surfing gate until new locks are set). The
+  // favicon cache goes too: it isn't synced state, but it's derived FROM the
+  // wiped links, so leaving it would let the deleted library's hosts be read
+  // back off the device.
   //
   // And the sync bookkeeping, reset to the seeded-new-account state: cursor
   // (0, '') with firstSyncDoneAt now — semantically exact, because an empty local
@@ -143,10 +175,19 @@ export async function deleteAllData(args: {
   // that asked, so the fence's own error — a sync error, about a sync that
   // stopped — would read as a delete that failed and could be tried again.
   try {
-    await db.transaction('rw', [db.syncMeta, db.items, db.locks, db.favicons], async () => {
-      await resetToSeededState(username);
-      await Promise.all([db.items.clear(), db.locks.clear(), db.favicons.clear()]);
-    });
+    await db.transaction(
+      'rw',
+      [db.syncMeta, db.items, db.pendingOps, db.locks, db.favicons],
+      async () => {
+        await resetToSeededState(username);
+        await Promise.all([
+          db.items.clear(),
+          db.pendingOps.where('username').equals(username).delete(),
+          db.locks.clear(),
+          db.favicons.clear(),
+        ]);
+      },
+    );
   } catch (e) {
     if (e instanceof AccountFencedError) throw new DeleteAllAccountChangedError(true);
     throw e;

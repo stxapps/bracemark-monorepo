@@ -1431,38 +1431,55 @@ may sync back afterward").
 **The deleting device** (`web-react` `data/delete-all-data.ts`, over the
 `useDeleteAllData` hook):
 
-1. `awaitInflightSync` — wait out any in-flight cycle **without starting one**
-   (a cycle that already read the pending queue could re-push ops after the
-   wipe), then `takePendingOps` — the queue comes out in one transaction, so a
-   cycle that starts while the server call is out finds nothing to push past the
-   wipe. On success this device's unsynced changes are abandoned on purpose
-   (pushing them first is work the wipe immediately undoes). On a refusal or a
-   failed call `returnPendingOps` puts them back — a path edited meanwhile keeps
-   its newer row, and an account torn down meanwhile gets nothing back (its
-   teardown already cleared the queue) — so the failure lines' "nothing was
-   removed" and "nothing was deleted" are true of unsynced edits too.
-   The delete view names this as a separate **waiting for sync** step rather than
-   claiming the wipe has started. A two-minute watchdog fails closed: if the
-   cycle does not settle, the attempt reports an error before the queue, server,
-   or local store is touched. It must never time out _into_ the next step.
+1. `holdSyncCycles` — the run takes the sync engine's **cycle lock** for this
+   account and keeps it until the local wipe is done: a cycle already running
+   (on web, in any tab) is waited out, and one asked for meanwhile waits until
+   the run is over. Nothing may run beside the server wipe. A cycle that read
+   the pending queue would push it past the wipe and bring back what the user
+   deleted, and one that pulled while the call was out would land server copies
+   over edits that a refused wipe was supposed to keep. With the cycles held
+   off, the queue simply stays where it is until the server answers: no cycle
+   can see it. (On web it is the Web Lock every cycle takes; on expo it is the
+   engine's own per-account lock, since one runtime holds the store. Where Web
+   Locks are missing it narrows to waiting out this tab's cycle, the guarantee
+   every cycle has there.)
+   The delete view names the wait as a separate **waiting for sync** step rather
+   than claiming the wipe has started. A two-minute watchdog fails closed: if the
+   cycle does not settle, the attempt reports an error before the server or
+   local store is touched. It must never time out _into_ the next step, so it
+   aborts only the wait — `holdSyncCycles` takes an `AbortSignal` that is never
+   consulted once the lock is held — and its clock stops when the hold is taken,
+   because the server call has its own, longer deadline (below) and a watchdog
+   still running over it would report a wipe in progress as failed.
    The per-request deadlines ([api-contracts.md](./api-contracts.md),
    _deadlines_) don't make it redundant. They guarantee the cycle settles
    _eventually_, and eventually has no bound a user can sit through: a cycle is
    many requests in sequence, each with its own deadline; a 429/5xx still retries
-   through its Retry-After wait; a sync triggered meanwhile reruns inside the
-   same in-flight cycle; and local store work has no deadline at all. The two
-   minutes is one stalled call's deadline plus the retry client's longest single
-   wait, derived from both (`DEFAULT_CALL_TIMEOUT_MS` +
+   through its Retry-After wait; and local store work has no deadline at all. The
+   two minutes is one stalled call's deadline plus the retry client's longest
+   single wait, derived from both (`DEFAULT_CALL_TIMEOUT_MS` +
    `DEFAULT_RETRY_MAX_DELAY_MS`), so moving either moves the watchdog. Giving up
    is cheap, so a longer cap would only lengthen the spinner: the watchdog
-   cancels nothing, the cycle runs on, and a retry resumes the wait on it. The
-   watchdog is applied HERE, at the flow, with shared's `withTimeout` — the
-   duration and the user-facing line are a property of this destructive,
-   user-blocking action, not of waiting. `awaitInflightSync` itself never
-   rejects, and it also serves the browser extension's background worker, which
-   has no UI to report a timeout to.
+   cancels nothing, the cycle runs on, and a retry waits again. The duration and
+   the user-facing line live at the flow, not in the engine — they are a property
+   of this destructive, user-blocking action, not of waiting.
 2. Call the endpoint, **naming the account** (below). Nothing local is touched
-   until the server confirms.
+   until the server confirms — with one exception, the queue, decided by how the
+   call failed:
+   - **a 4xx** is a refusal the route gives before it touches anything (the name
+     check, validation, auth, a rate limit). Nothing was wiped and nothing
+     local changes, the queue included, so the failure line's "nothing was
+     removed" is true of unsynced edits too.
+   - **anything else** — a timeout, a lost response, a 5xx — leaves no telling
+     whether the wipe ran: the route empties the op log before it pages R2, and
+     answers only after the last page. Kept, the queue would push into a
+     namespace that may already be empty and bring back what the user deleted,
+     so it is dropped (`clearPendingOps`, best-effort — the call's own error is
+     the one reported) and the flow throws shared's `DeleteAllUncertainError`.
+     The hook carries that as `unsyncedDiscarded` on its `error` state, and the
+     line says the delete may have gone through and that the unsynced changes
+     were discarded, instead of "nothing was removed".
+     On success the queue is cleared with the rest, inside the transaction below.
 3. Wipe the local **synced** stores: `items`, the decode cache, and `locks`
    (they guard lists that no longer exist — the same reset sign-out applies).
    On expo, the bare whole-table deletes then explicitly invalidate the affected
@@ -1479,8 +1496,8 @@ may sync back afterward").
 
 **⚠ The table deletes of step 3 and the reset of step 4 are one transaction,
 fenced on the account, and the reset runs first because it is the fence.** The
-transaction holds the reset and the deletes of `items`, `locks` and the
-`favicons` cache (on expo the two junction tables too); the rest of step 3 — the
+transaction holds the reset and the deletes of `items`, the account's pending
+ops, `locks` and the `favicons` cache (on expo the two junction tables too); the rest of step 3 — the
 decode cache, and on expo the invalidation, the scrub and the file sweeps — runs
 after it, and only if it committed. Step 2 pages the whole namespace and can be out for minutes, and
 the session can end under it — on web another tab signs out, or signs in as
@@ -1550,8 +1567,9 @@ account gone, and the hook turns it into the `account-changed` state:
 | `false`       | the server refused the name (the token at dispatch was another account's), or the hook refused the run before sending (the view's guard, below) | nothing was deleted; open the view again              |
 | `true`        | the server wiped the account that asked, then the fence refused the local half                                                                  | that account's data is deleted; this device untouched |
 
-"Nothing" in both rows is about the wipe: step 1 has already abandoned the
-account's unsynced queue by the time either can happen.
+"Nothing" in the first row is all of it: a refused call leaves the unsynced
+queue where it was, too. In the second the queue went with the teardown that
+took the account off the device.
 
 It is terminal, like `done`: the button and the tick are disabled. The ordinary
 `error` line — "nothing was removed from this device, please try again" — is

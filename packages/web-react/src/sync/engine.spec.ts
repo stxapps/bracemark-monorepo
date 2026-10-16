@@ -12,6 +12,7 @@
 import {
   ApiError,
   ApiTimeoutError,
+  BlobUnreadableError,
   createApiClient,
   DEFAULT_LIST_ID,
   filesListEndpoint,
@@ -36,10 +37,10 @@ import {
 } from '../data/mutations';
 import { enqueuePut } from '../data/pending-store';
 import { toItemRecord } from '../data/projection';
-import { beginInitialSync } from '../data/sync-store';
+import { beginInitialSync, getSyncMeta } from '../data/sync-store';
 import { AccountFencedError } from '../data/sync-store';
 import {
-  awaitInflightSync,
+  holdSyncCycles,
   loadEntityContent,
   loadEntityContents,
   runIncrementalSync,
@@ -236,28 +237,118 @@ beforeEach(async () => {
   });
 });
 
-describe('waiting for an in-flight cycle', () => {
+// The delete-all flow's hold: its server wipe and local wipe run with no cycle beside
+// them. A cycle already running is waited out; one asked for meanwhile waits for the
+// work. Asked of the real cycle lock, through the real single-flight slot.
+describe('holding the sync cycles off', () => {
+  const EMPTY_PAGE: OpsListReply = {
+    ops: [],
+    oldestUpdatedAt: 500,
+    newestUpdatedAt: 1000,
+    hasMore: false,
+  };
+
+  // A cycle stopped at its first call, so the test decides when it may finish.
+  function blockedCycle(order: string[]): { cycle: Promise<unknown>; finish: () => void } {
+    let finish!: () => void;
+    const answered = new Promise<OpsListReply>((resolve) => {
+      finish = () => {
+        order.push('cycle done');
+        resolve(EMPTY_PAGE);
+      };
+    });
+    const cycle = runIncrementalSync(deps({ opsList: () => answered }));
+    return { cycle, finish };
+  }
+
   it('reports a wait only when a cycle is actually running', async () => {
     const onIdleWait = jest.fn();
-    await awaitInflightSync(USER, onIdleWait);
+    await holdSyncCycles(USER, async () => undefined, { onWait: onIdleWait });
     expect(onIdleWait).not.toHaveBeenCalled();
 
-    let release!: (reply: OpsListReply) => void;
-    const blockedList = new Promise<OpsListReply>((resolve) => {
-      release = resolve;
-    });
-    const cycle = runIncrementalSync(deps({ opsList: () => blockedList }));
+    const order: string[] = [];
+    const { cycle, finish } = blockedCycle(order);
+    // Let the cycle reach its lock before the hold asks for it.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     const onWait = jest.fn();
-    const waiting = awaitInflightSync(USER, onWait);
+    const held = holdSyncCycles(
+      USER,
+      async () => {
+        order.push('work');
+      },
+      { onWait },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(onWait).toHaveBeenCalledTimes(1);
-    release({
-      ops: [],
-      oldestUpdatedAt: 500,
-      newestUpdatedAt: 1000,
-      hasMore: false,
+    expect(order).toEqual([]);
+    finish();
+    await Promise.all([cycle, held]);
+    // The work ran after the cycle, never beside it.
+    expect(order).toEqual(['cycle done', 'work']);
+  });
+
+  // The whole point: a cycle asked for while the work runs (a timer, an edit, another
+  // tab) does not so much as list until the work is over — it would push the queue past
+  // a server wipe, or pull over edits a refused one was meant to keep.
+  it('keeps a cycle asked for meanwhile waiting until the work settles', async () => {
+    const order: string[] = [];
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => (release = resolve));
+    let started!: () => void;
+    const working = new Promise<void>((resolve) => (started = resolve));
+    const held = holdSyncCycles(USER, async () => {
+      started();
+      await released;
+      order.push('work done');
     });
-    await Promise.all([cycle, waiting]);
+    await working;
+
+    const cycle = runIncrementalSync(
+      deps({
+        opsList: () => {
+          order.push('cycle listed');
+          return EMPTY_PAGE;
+        },
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const listedMeanwhile = [...order];
+    release();
+    await Promise.all([held, cycle]);
+
+    expect(listedMeanwhile).toEqual([]);
+    expect(order).toEqual(['work done', 'cycle listed']);
+  });
+
+  // The signal is the caller's watchdog on the WAIT. Given up on, the work must never
+  // run later — a delete that starts minutes after it reported a failure.
+  it('never runs the work when the wait is aborted', async () => {
+    const order: string[] = [];
+    const { cycle, finish } = blockedCycle(order);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const watchdog = new AbortController();
+    const work = jest.fn(async () => undefined);
+    const held = holdSyncCycles(USER, work, { signal: watchdog.signal });
+
+    watchdog.abort(new Error('too slow'));
+    await expect(held).rejects.toThrow('too slow');
+    finish();
+    await cycle;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(work).not.toHaveBeenCalled();
+  });
+
+  it('settles with the work’s own outcome', async () => {
+    await expect(holdSyncCycles(USER, async () => 42)).resolves.toBe(42);
+    await expect(
+      holdSyncCycles(USER, async () => {
+        throw new Error('refused');
+      }),
+    ).rejects.toThrow('refused');
+    // And the lock is free again after a failure: a cycle runs.
+    await expect(runIncrementalSync(deps({ opsList: () => EMPTY_PAGE }))).resolves.toBeDefined();
   });
 });
 
@@ -1112,6 +1203,86 @@ describe('the path each blob is sealed for and opened under', () => {
     await loadEntityContents(deps(), [FILE_PATH, OTHER_FILE_PATH]);
 
     expect(pathArg(decryptEntity as jest.Mock).sort()).toEqual([FILE_PATH, OTHER_FILE_PATH]);
+  });
+});
+
+// One pulled blob that does not open under its path — tampered, sealed for another path,
+// from a build before the binding — used to reject the pull, so the cycle failed with the
+// cursor where it was and met the same blob on every cycle after: no path in the account
+// synced again. It is skipped like a mid-pull 404 now. An UNKNOWN format version is not
+// skipped: an update reads it, and skipping would move the cursor past it for good.
+describe('a pulled blob that does not open under its path', () => {
+  const TWO_PUTS: OpsListReply = {
+    ops: [
+      { op: 'put', path: LINK_PATH, updatedAt: 2000 },
+      { op: 'put', path: OTHER_LINK_PATH, updatedAt: 2001 },
+    ],
+    oldestUpdatedAt: 500,
+    newestUpdatedAt: 2001,
+    hasMore: false,
+  };
+
+  beforeEach(() => {
+    mockGetBlob.mockImplementation(async (url: string) =>
+      Promise.resolve(new Uint8Array([0xee, ...utf8(`server ${pathFor(url)}`)])),
+    );
+  });
+  // clearAllMocks keeps implementations, and every later case expects the stand-in's.
+  afterEach(() => {
+    mockGetBlob.mockReset();
+    (decryptEntity as jest.Mock).mockImplementation(async (_key: unknown, bytes: Uint8Array) =>
+      bytes.slice(1),
+    );
+  });
+
+  function failToOpen(path: string, error: Error): void {
+    (decryptEntity as jest.Mock).mockImplementation(
+      async (_key: unknown, bytes: Uint8Array, at: string) => {
+        if (at === path) throw error;
+        return bytes.slice(1);
+      },
+    );
+  }
+
+  it('is skipped, and the rest of the pull lands and moves the cursor', async () => {
+    failToOpen(LINK_PATH, new BlobUnreadableError(LINK_PATH));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    try {
+      await runIncrementalSync(deps({ opsList: () => TWO_PUTS }));
+    } finally {
+      warn.mockRestore();
+    }
+
+    expect(await db.items.get(LINK_PATH)).toBeUndefined();
+    expect(await bodyAt(OTHER_LINK_PATH)).toBe(`server ${OTHER_LINK_PATH}`);
+    expect((await getSyncMeta(USER))?.syncCursorUpdatedAt).toBe(2001);
+  });
+
+  // What the device already held for the path is not the server's to take away by
+  // serving something that does not open.
+  it('leaves the local copy of that path as it was', async () => {
+    await seedSynced(LINK_PATH, 'held here', 1000);
+    failToOpen(LINK_PATH, new BlobUnreadableError(LINK_PATH));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    try {
+      await runIncrementalSync(deps({ opsList: () => TWO_PUTS }));
+    } finally {
+      warn.mockRestore();
+    }
+
+    expect(await bodyAt(LINK_PATH)).toBe('held here');
+  });
+
+  it('still fails the cycle on anything else, an unknown version above all', async () => {
+    failToOpen(LINK_PATH, new Error('Unknown blob format version: 2'));
+
+    await expect(runIncrementalSync(deps({ opsList: () => TWO_PUTS }))).rejects.toThrow(
+      'Unknown blob format version: 2',
+    );
+
+    expect((await getSyncMeta(USER))?.syncCursorUpdatedAt).toBe(1000);
   });
 });
 

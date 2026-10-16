@@ -667,7 +667,10 @@ function DeleteStatus({ state }: { state: DeleteAllState }) {
   if (state.phase === 'error') {
     return (
       <ErrorText className="mt-3" icon={CircleAlert}>
-        Delete failed: {state.message} Nothing was removed from this device — please try again.
+        Delete failed: {state.message}{' '}
+        {state.unsyncedDiscarded
+          ? 'It may have gone through anyway, so changes on this device that hadn’t synced yet were discarded — please try again.'
+          : 'Nothing was removed from this device — please try again.'}
       </ErrorText>
     );
   }
