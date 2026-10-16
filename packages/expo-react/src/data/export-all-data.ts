@@ -56,7 +56,6 @@ import {
   EXTRACTIONS_PREFIX,
   extractionSchema,
   FILES_PREFIX,
-  flattenBackupTree,
   foldersPastMaxDepth,
   idFromPath,
   jsonlLine,
@@ -64,6 +63,7 @@ import {
   linkSchema,
   LISTS_PREFIX,
   listSchema,
+  pastMaxDepthCounts,
   pathFromId,
   PINS_PREFIX,
   pinSchema,
@@ -541,25 +541,8 @@ export async function exportAllData(options: {
     failedFileCount,
     unreadableCount: tally.unreadable,
     flattenedListCount: 0,
-    ...pastMaxDepthOf(lists, tags),
+    ...pastMaxDepthCounts(lists, tags),
     syncFailed,
     file,
   };
-}
-
-// The list and tag lines a restore of this backup would place at TREE_MAX_DEPTH
-// — asked of the restore's own rule (@stxapps/shared data/backup.ts,
-// flattenBackupTree) over the lines being written, so the receipt says what
-// the restore will do. The backup itself writes them as they are.
-function pastMaxDepthOf(
-  lists: readonly { path: string; entity: List }[],
-  tags: readonly { path: string; entity: Tag }[],
-): Pick<ExportOutcome, 'pastMaxDepthListCount' | 'pastMaxDepthTagCount'> {
-  const { flattenedPaths } = flattenBackupTree([
-    ...lists.map(({ path, entity }) => ({ path, data: entity, kind: 'list' as const })),
-    ...tags.map(({ path, entity }) => ({ path, data: entity, kind: 'tag' as const })),
-  ]);
-  const among = (entries: readonly { path: string }[]) =>
-    entries.filter(({ path }) => flattenedPaths.has(path)).length;
-  return { pastMaxDepthListCount: among(lists), pastMaxDepthTagCount: among(tags) };
 }

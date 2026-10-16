@@ -7,6 +7,9 @@
 // in two copies that can only agree by luck. The sibling of import-run.ts, beside
 // backup.ts in the data-lifecycle namespace (docs/data-lifecycle.md).
 
+import type { List, Tag } from '../sync/entities';
+import { flattenBackupTree } from './backup';
+
 // `bracemark` is the backup zip (backup.ts); the other three are the interop
 // serializers in export/.
 export type ExportFormat = 'bracemark' | 'netscape' | 'csv' | 'text';
@@ -52,6 +55,23 @@ export interface ExportOutcome {
   // The pre-export refresh failed (offline / server down); the export carried
   // on with this device's local copy. A warning, not an error — local-first.
   syncFailed: boolean;
+}
+
+// The list and tag lines a restore of this backup would place at TREE_MAX_DEPTH
+// — asked of the restore's own rule (backup.ts, flattenBackupTree) over the
+// lines being written, so the receipt says what the restore will do. The backup
+// itself writes them as they are.
+export function pastMaxDepthCounts(
+  lists: readonly { path: string; entity: List }[],
+  tags: readonly { path: string; entity: Tag }[],
+): Pick<ExportOutcome, 'pastMaxDepthListCount' | 'pastMaxDepthTagCount'> {
+  const { flattenedPaths } = flattenBackupTree([
+    ...lists.map(({ path, entity }) => ({ path, data: entity, kind: 'list' as const })),
+    ...tags.map(({ path, entity }) => ({ path, data: entity, kind: 'tag' as const })),
+  ]);
+  const among = (entries: readonly { path: string }[]) =>
+    entries.filter(({ path }) => flattenedPaths.has(path)).length;
+  return { pastMaxDepthListCount: among(lists), pastMaxDepthTagCount: among(tags) };
 }
 
 // Bare media types; a caller writing text adds its own `;charset=utf-8`.
