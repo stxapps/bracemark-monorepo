@@ -82,12 +82,12 @@ export async function deleteAllData(args: {
   // out). Held off, the queue stays where it is until the server answers. On
   // success this device's unsynced changes are discarded on purpose.
   const watchdog = new AbortController();
-  const timer = setTimeout(() => watchdog.abort(), syncWaitTimeoutMs);
+  const syncWaitTimer = setTimeout(() => watchdog.abort(), syncWaitTimeoutMs);
   try {
     return await holdSyncCycles(
       username,
       () => {
-        clearTimeout(timer);
+        clearTimeout(syncWaitTimer);
         onStep?.('deleting');
         return wipe(username, api);
       },
@@ -97,7 +97,7 @@ export async function deleteAllData(args: {
     if (watchdog.signal.aborted) throw new Error(SYNC_WAIT_TIMEOUT_MESSAGE);
     throw e;
   } finally {
-    clearTimeout(timer);
+    clearTimeout(syncWaitTimer);
   }
 }
 

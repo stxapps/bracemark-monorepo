@@ -86,12 +86,12 @@ export async function deleteAllData(args: {
   // unsynced changes are discarded on purpose (pushing them first would be work
   // the wipe undoes).
   const watchdog = new AbortController();
-  const timer = setTimeout(() => watchdog.abort(), syncWaitTimeoutMs);
+  const syncWaitTimer = setTimeout(() => watchdog.abort(), syncWaitTimeoutMs);
   try {
     return await holdSyncCycles(
       username,
       () => {
-        clearTimeout(timer);
+        clearTimeout(syncWaitTimer);
         onStep?.('deleting');
         return wipe(username, api);
       },
@@ -101,7 +101,7 @@ export async function deleteAllData(args: {
     if (watchdog.signal.aborted) throw new Error(SYNC_WAIT_TIMEOUT_MESSAGE);
     throw e;
   } finally {
-    clearTimeout(timer);
+    clearTimeout(syncWaitTimer);
   }
 }
 
