@@ -77,7 +77,10 @@ parent become one list.
 tag minted for a name past them. `tagIds` is inline in the link's `< ~2 KB`
 metadata, and a file can name any number per row; no editor comes near 100 by
 hand, so none is gated, and a bulk "add tag" onto a link already at 100 would
-take it to 101 without complaint.
+take it to 101 without complaint. What that costs is one round trip: an interop
+export writes every tag a link has (`bundle.ts`), and importing that file back
+keeps the first 100 and does not count the rest. A backup restore takes them
+as written, so it loses none.
 
 ### the depth limit, edge by edge
 
