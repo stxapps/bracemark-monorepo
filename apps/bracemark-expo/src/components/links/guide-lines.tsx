@@ -32,7 +32,7 @@
 // `text(n-1)` — every line hangs from the left edge of the name it belongs to.
 // `w-6` is that unit: 24, the step the names already had (`w-4` plus the gap),
 // so depth 1 does not move and only depth 2+ changes. web-ui's
-// links/list-command.tsx carries the same pair and the same derivation.
+// links/guide-lines.tsx carries the same pair and the same derivation.
 //
 // AT MOST `TREE_ROW_MAX_LEVELS` LINES, whatever `depth` says. Both pickers mount
 // every row in a ScrollView, so a view per level per row is the square of a deep

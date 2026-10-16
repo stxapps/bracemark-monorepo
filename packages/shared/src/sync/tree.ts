@@ -235,8 +235,8 @@ export function treeNameMap<T extends TreeItem & { name: string }>(
 }
 
 // The most levels one ROW describes: the ancestor names in a path row below, and
-// the guide lines a picker draws for a row's indent (web-ui's ListCommand, expo's
-// guide-lines.tsx). Both are paid per row and both used to be the row's whole
+// the guide lines a picker draws for a row's indent (guide-lines.tsx, in web-ui
+// and in expo). Both are paid per row and both used to be the row's whole
 // depth, so one long `parentId` chain cost the SQUARE of its length — a 10,000-
 // deep chain held 600 MB of ancestor names before a picker had drawn anything.
 // Nothing here recursed, so the app launched; the bill came when a picker opened.
