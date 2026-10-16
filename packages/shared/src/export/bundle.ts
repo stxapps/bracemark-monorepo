@@ -1,4 +1,5 @@
 import type { ImportedLink } from '../import/bundle';
+import { IMPORT_MAX_FOLDER_DEPTH } from '../import/resolve';
 import type { Extraction, Link, Tag } from '../sync/entities';
 import type { ListItem } from '../sync/items';
 import { LIST_NO_CHILDREN_IDS, MY_LIST_ID, TRASH_ID } from '../sync/system-lists';
@@ -57,12 +58,27 @@ export interface ExportBundle {
   exportedAt?: number;
 }
 
+// The deepest folder a serializer writes — the import's own rule, so every file
+// this app exports is one it can import again. A folder deeper than this is
+// written at this level, beside its parent's other children rather than inside
+// them: under its own name, holding its own links, so only the nesting below
+// level 100 is flattened. Its descendants follow it at the same level.
+//
+// Nesting is not just memory here, it is the file's size. Every CSV row repeats
+// its folder's whole path and every Netscape line is indented by its folder's
+// depth, so an unbounded chain made the output grow with the square of its
+// depth: 10,000 nested lists made a file past V8's longest string, and the
+// export failed with `RangeError: Invalid string length` instead of saving
+// anything. Imports refuse such a chain, but nothing bounds one built in the
+// editors or arriving by sync (docs/data-lifecycle.md, _export_).
+export const EXPORT_MAX_FOLDER_DEPTH = IMPORT_MAX_FOLDER_DEPTH;
+
 // Every folder in the tree with its root-first path, parents before children and
 // siblings in order — the order the serializers write. Walked with an explicit
 // stack, not recursion: the tree is as deep as the library's `parentId` chain,
-// which a backup or another device can make deeper than the call stack. It copies
-// a path per folder, so memory grows with depth × folders; a caller holding an
-// untrusted tree bounds its depth first.
+// which a backup or another device can make deeper than the call stack. No path
+// is longer than EXPORT_MAX_FOLDER_DEPTH: a folder at that depth hands its
+// children its parent's path, not its own, so they come out as its siblings.
 export function foldersWithPaths(
   folders: ExportFolder[],
 ): { folder: ExportFolder; path: string[] }[] {
@@ -72,12 +88,30 @@ export function foldersWithPaths(
   for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
     const path = [...next.parent, next.folder.name];
     out.push({ folder: next.folder, path });
+    const below = path.length < EXPORT_MAX_FOLDER_DEPTH ? path : next.parent;
     const { children } = next.folder;
     for (let i = children.length - 1; i >= 0; i--) {
-      pending.push({ folder: children[i], parent: path });
+      pending.push({ folder: children[i], parent: below });
     }
   }
   return out;
+}
+
+// How many folders sit deeper than EXPORT_MAX_FOLDER_DEPTH and so are written at
+// that level instead. The export's receipt reports it; nothing about the file
+// depends on it.
+export function foldersPastMaxDepth(folders: ExportFolder[]): number {
+  let count = 0;
+  const pending: { folder: ExportFolder; depth: number }[] = folders.map((folder) => ({
+    folder,
+    depth: 1,
+  }));
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    if (next.depth > EXPORT_MAX_FOLDER_DEPTH) count += 1;
+    for (const child of next.folder.children)
+      pending.push({ folder: child, depth: next.depth + 1 });
+  }
+  return count;
 }
 
 function exportRow(link: ImportedLink): ExportLinkRow {

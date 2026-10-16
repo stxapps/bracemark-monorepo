@@ -82,21 +82,34 @@ export interface BackupCounts {
   files: number;
 }
 
+// What the exporter meant to include and couldn't — informational like
+// `counts`, and the archive's own record of being partial, since the receipt
+// that said so is gone once the file is saved. `files`: referenced blobs left
+// out (missing or failed to download); `unreadable`: stored records that
+// didn't decode. Optional in the manifest: an archive from before it carries
+// none, and a reader must not take that for "nothing was left out".
+export interface BackupOmitted {
+  files: number;
+  unreadable: number;
+}
+
 export interface BackupManifest {
   format: string;
   version: number;
   exportedAt: number;
   counts: BackupCounts;
+  omitted?: BackupOmitted;
 }
 
 // The manifest.json text, formatting included — one definition so the two
 // exporters can't drift on the bytes.
-export function serializeBackupManifest(counts: BackupCounts): string {
+export function serializeBackupManifest(counts: BackupCounts, omitted?: BackupOmitted): string {
   const manifest: BackupManifest = {
     format: BRACEMARK_BACKUP_FORMAT,
     version: BRACEMARK_BACKUP_VERSION,
     exportedAt: Date.now(),
     counts,
+    ...(omitted === undefined ? {} : { omitted }),
   };
   return JSON.stringify(manifest, null, 2);
 }

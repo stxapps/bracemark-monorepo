@@ -1,10 +1,13 @@
 import { parseImportText } from '../import/parse';
+import { assertImportFolderDepth } from '../import/project';
 import type { ListItem } from '../sync/items';
 import {
   bundleFromLibrary,
+  EXPORT_MAX_FOLDER_DEPTH,
   type ExportBundle,
   type ExportFolder,
   type ExportLinkRow,
+  foldersPastMaxDepth,
 } from './bundle';
 import { toRaindropCsv } from './csv';
 import { toNetscapeHtml } from './netscape';
@@ -133,36 +136,83 @@ describe('toRaindropCsv over a library the import edges would now refuse', () =>
   it('writes a list chain deeper than the call stack, library to file', () => {
     // bundleFromLibrary and the serializer both walked the tree recursively.
     const DEPTH = 20_000;
-    const id = (i: number) => `l${i}`;
-    const lists: ListItem[] = Array.from({ length: DEPTH }, (_, i) => ({
-      path: `lists/${id(i)}.enc`,
-      id: id(i),
-      name: 'f',
-      parentId: i === 0 ? null : id(i - 1),
-      rank: 'a',
-      createdAt: 0,
-      updatedAt: 0,
-    }));
-    const stored = {
-      link: {
-        url: 'https://example.com/deep',
-        listId: id(DEPTH - 1),
-        tagIds: [],
-        customTitle: 'Deep',
-        createdAt: Date.UTC(2026, 0, 2, 3, 4, 5),
-        updatedAt: Date.UTC(2026, 0, 2, 3, 4, 5),
-      },
-      extraction: undefined,
-    };
-
-    const rows = toRaindropCsv(bundleFromLibrary([stored], lists, []))
+    const rows = toRaindropCsv(bundleFromLibrary([storedLink(DEPTH - 1)], chain(DEPTH), []))
       .trimEnd()
       .split('\r\n');
 
     expect(rows).toHaveLength(2);
+    // The deepest list keeps its own name, under the ancestors the depth allows.
+    const path = [...names(EXPORT_MAX_FOLDER_DEPTH - 1), `f${DEPTH - 1}`].join('/');
     expect(rows[1]).toBe(
-      `https://example.com/deep,${Array(DEPTH).fill('f').join('/')},Deep,,,2026-01-02T03:04:05.000Z`,
+      `https://example.com/f${DEPTH - 1},${path},Deep,,,2026-01-02T03:04:05.000Z`,
     );
+  });
+});
+
+// One `parentId` chain of `depth` lists named f0, f1, … root first, and a link
+// filed in the list at `index`.
+function chain(depth: number): ListItem[] {
+  return Array.from({ length: depth }, (_, i) => ({
+    path: `lists/l${i}.enc`,
+    id: `l${i}`,
+    name: `f${i}`,
+    parentId: i === 0 ? null : `l${i - 1}`,
+    rank: 'a',
+    createdAt: 0,
+    updatedAt: 0,
+  }));
+}
+
+function storedLink(index: number) {
+  return {
+    link: {
+      url: `https://example.com/f${index}`,
+      listId: `l${index}`,
+      tagIds: [],
+      customTitle: 'Deep',
+      createdAt: Date.UTC(2026, 0, 2, 3, 4, 5),
+      updatedAt: Date.UTC(2026, 0, 2, 3, 4, 5),
+    },
+    extraction: undefined,
+  };
+}
+
+const names = (count: number) => Array.from({ length: count }, (_, i) => `f${i}`);
+
+// Every row repeats its folder's path, so an unbounded chain made the file grow
+// with the square of its depth: 10,000 nested lists, a link in each, ended the
+// export in `RangeError: Invalid string length` with nothing saved.
+describe('toRaindropCsv past EXPORT_MAX_FOLDER_DEPTH', () => {
+  it('writes a list past the depth beside its parent’s children, under its own name', () => {
+    const depth = EXPORT_MAX_FOLDER_DEPTH + 2;
+    const links = [depth - 3, depth - 2, depth - 1].map(storedLink);
+    const rows = toRaindropCsv(bundleFromLibrary(links, chain(depth), []))
+      .trimEnd()
+      .split('\r\n')
+      .slice(1)
+      .map((row) => row.split(',')[1]);
+
+    const top = names(EXPORT_MAX_FOLDER_DEPTH - 1);
+    expect(rows).toEqual([
+      [...top, `f${depth - 3}`].join('/'),
+      [...top, `f${depth - 2}`].join('/'),
+      [...top, `f${depth - 1}`].join('/'),
+    ]);
+  });
+
+  it('writes 10,000 nested lists into a file this app’s import accepts', () => {
+    const depth = 10_000;
+    const links = Array.from({ length: depth }, (_, i) => storedLink(i));
+    const bundle = bundleFromLibrary(links, chain(depth), []);
+    const rows = parseImportText(toRaindropCsv(bundle)).links;
+
+    expect(rows).toHaveLength(depth);
+    expect(() => assertImportFolderDepth(rows)).not.toThrow();
+    expect(rows.at(-1)?.folderPath).toEqual([
+      ...names(EXPORT_MAX_FOLDER_DEPTH - 1),
+      `f${depth - 1}`,
+    ]);
+    expect(foldersPastMaxDepth(bundle.folders)).toBe(depth - EXPORT_MAX_FOLDER_DEPTH);
   });
 });
 

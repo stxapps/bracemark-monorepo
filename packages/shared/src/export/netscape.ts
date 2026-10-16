@@ -1,4 +1,9 @@
-import type { ExportBundle, ExportFolder, ExportLinkRow } from './bundle';
+import {
+  EXPORT_MAX_FOLDER_DEPTH,
+  type ExportBundle,
+  type ExportFolder,
+  type ExportLinkRow,
+} from './bundle';
 
 // Netscape Bookmark File serializer — the one interop format everything reads:
 // web browsers (Chrome/Firefox/Safari "Import bookmarks"), LinkWarden, and
@@ -37,30 +42,42 @@ function linkLines(link: ExportLinkRow, indent: string, includeNotes: boolean): 
 // explicit stack rather than recursion, since the tree is as deep as the
 // library's `parentId` chain (see `foldersWithPaths` in bundle.ts). A frame is
 // either a folder still to open or the closing line of one already opened,
-// pushed UNDER its children so it comes off after the last of them.
+// pushed UNDER its children so it comes off after the last of them — except at
+// EXPORT_MAX_FOLDER_DEPTH, where it goes on top: that folder closes first and
+// its children follow at its own level, which is where `foldersWithPaths` puts
+// them in the CSV too.
 function pushFolders(
   folders: ExportFolder[],
   indent: string,
   out: string[],
   includeNotes: boolean,
 ): void {
-  type Frame = { folder: ExportFolder; indent: string } | { close: string };
+  type Frame = { folder: ExportFolder; indent: string; depth: number } | { close: string };
   const pending: Frame[] = [];
-  for (let i = folders.length - 1; i >= 0; i--) pending.push({ folder: folders[i], indent });
+  for (let i = folders.length - 1; i >= 0; i--) {
+    pending.push({ folder: folders[i], indent, depth: 1 });
+  }
   for (let frame = pending.pop(); frame !== undefined; frame = pending.pop()) {
     if ('close' in frame) {
       out.push(frame.close);
       continue;
     }
-    const { folder } = frame;
+    const { folder, depth } = frame;
     out.push(`${frame.indent}<DT><H3>${esc(folder.name)}</H3>`);
     out.push(`${frame.indent}<DL><p>`);
     const inner = frame.indent + '    ';
     for (const link of folder.links) out.push(...linkLines(link, inner, includeNotes));
-    pending.push({ close: `${frame.indent}</DL><p>` });
+    const close = { close: `${frame.indent}</DL><p>` };
+    const nests = depth < EXPORT_MAX_FOLDER_DEPTH;
+    if (nests) pending.push(close);
     for (let i = folder.children.length - 1; i >= 0; i--) {
-      pending.push({ folder: folder.children[i], indent: inner });
+      pending.push(
+        nests
+          ? { folder: folder.children[i], indent: inner, depth: depth + 1 }
+          : { folder: folder.children[i], indent: frame.indent, depth },
+      );
     }
+    if (!nests) pending.push(close);
   }
 }
 

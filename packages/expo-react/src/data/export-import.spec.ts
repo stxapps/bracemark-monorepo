@@ -35,6 +35,7 @@ import { sql } from 'drizzle-orm';
 import { unzipSync, zipSync } from 'fflate';
 
 import {
+  ApiTimeoutError,
   BACKUP_ITEMS_ENTRY,
   BACKUP_MANIFEST_ENTRY,
   EXTRACTIONS_PREFIX,
@@ -132,6 +133,18 @@ function deps(): SyncDeps {
       },
     } as unknown as SyncDeps['api'],
   } as unknown as SyncDeps;
+}
+
+// The server gone, every call failing at once — web's copy says why a deadline.
+function offlineDeps(): SyncDeps {
+  return {
+    ...deps(),
+    api: {
+      call: async () => {
+        throw new ApiTimeoutError(60_000);
+      },
+    } as unknown as SyncDeps['api'],
+  };
 }
 
 // --- the library under test -----------------------------------------------------
@@ -630,6 +643,64 @@ describe('the bracemark backup round trip, through fflate', () => {
     expect(outcome.missingFileCount).toBe(1);
     const entries = unzipSaved(outcome.file.uri);
     expect(Object.keys(entries)).toEqual([BACKUP_MANIFEST_ENTRY, BACKUP_ITEMS_ENTRY]);
+  });
+
+  // Resilience's drift guards — web's spec has the matrix and the reasoning.
+  // Offline, a blob not yet on disk used to fail the whole backup.
+  it('exports with the server gone, leaving out the file it could not fetch', async () => {
+    seedEntities();
+    getDb().transaction((tx) => putItemsTx(tx, [toItemRecord(IMAGE_PATH, 5000)]));
+
+    const outcome = await exportAllData({
+      format: 'bracemark',
+      deps: offlineDeps(),
+      excludedListIds: new Set(),
+    });
+
+    expect(outcome).toMatchObject({
+      linkCount: 2,
+      fileCount: 0,
+      missingFileCount: 0,
+      failedFileCount: 1,
+      syncFailed: true,
+    });
+    const entries = unzipSaved(outcome.file.uri);
+    expect(new TextDecoder().decode(entries[BACKUP_ITEMS_ENTRY])).toContain(
+      'https://work.invalid/spec',
+    );
+    const manifest = JSON.parse(new TextDecoder().decode(entries[BACKUP_MANIFEST_ENTRY]));
+    expect(manifest.omitted).toEqual({ files: 1, unreadable: 0 });
+  });
+
+  // The one expo has alone: a materialized blob the disk won't give back.
+  it('leaves out a blob whose file will not read, and a record that will not decode', async () => {
+    seedEntities();
+    await seedContent();
+    getDb().transaction((tx) =>
+      putItemsTx(tx, [toItemRecord(`${LINKS_PREFIX}l_bad.enc`, 5000, utf8('{not json'))]),
+    );
+    const bytes = jest
+      .spyOn(File.prototype, 'bytes')
+      .mockRejectedValue(new Error('EIO: i/o error, read'));
+
+    let outcome;
+    try {
+      outcome = await exportBackup();
+    } finally {
+      bytes.mockRestore();
+    }
+
+    expect(outcome).toMatchObject({
+      linkCount: 2,
+      fileCount: 0,
+      missingFileCount: 1,
+      failedFileCount: 0,
+      unreadableCount: 1,
+    });
+    const manifest = JSON.parse(
+      new TextDecoder().decode(unzipSaved(outcome.file.uri)[BACKUP_MANIFEST_ENTRY]),
+    );
+    expect(manifest.omitted).toEqual({ files: 1, unreadable: 1 });
   });
 
   // The drift guard, not a port of web's matrix: one case each for the two

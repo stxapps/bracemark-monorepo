@@ -22,6 +22,10 @@
 //    written to a cache file and returned in the outcome (`file`), and the UI
 //    presents the platform share sheet from it — the save happens AFTER the
 //    work, not before, so there's nothing to cancel mid-run.
+//  - Resilience is web's (its header): a record that doesn't decode, a blob that
+//    can't be downloaded, and a list nested past the export depth each cost
+//    themselves and are counted. One more case here: a materialized blob whose
+//    disk file can't be read is left out like a missing one.
 //  - That cache file is plaintext that outlives the run, so it has an owner:
 //    cache-files.ts gives the run its location and removes it at sign-out. And
 //    the write is fenced on the account like any store write — see
@@ -51,6 +55,7 @@ import {
   EXTRACTIONS_PREFIX,
   extractionSchema,
   FILES_PREFIX,
+  foldersPastMaxDepth,
   idFromPath,
   jsonlLine,
   LINKS_PREFIX,
@@ -64,6 +69,8 @@ import {
   serializeBackupItems,
   serializeBackupManifest,
   SETTINGS_GENERAL_PATH,
+  type SettingsGeneral,
+  settingsGeneralSchema,
   TAGS_PREFIX,
   tagSchema,
   toNetscapeHtml,
@@ -80,7 +87,7 @@ import { getDb } from './db';
 import { dataFileFor } from './file-store';
 import { bulkGetItems, getItem, namespaceRows } from './item-store';
 import { parseBlob } from './projection';
-import { readLists, readSettingsGeneral, readTags } from './queries';
+import { readLists, readTags } from './queries';
 import { assertAccountOwnsStoreTx } from './sync-store';
 
 // The written output, for the UI's share-sheet handoff. Lives in the CACHE dir
@@ -167,19 +174,30 @@ interface GatheredLink {
 
 const GATHER_CHUNK = 500;
 
+// The records a run read and couldn't decode (ExportOutcome.unreadableCount).
+interface Tally {
+  unreadable: number;
+}
+
 // Decode every record under an id-keyed namespace prefix into (path, entity)
-// pairs, dropping unparseable blobs like the read layer does. Keeps the entity
-// and its path SEPARATE (no WithPath merge): the bracemark backup writes the
-// plaintext exactly as stored, and `path` is storage infrastructure that must
-// not leak into the round-tripped `data`.
+// pairs, dropping unparseable blobs like the read layer does — and counting
+// them. `include` filters by path before the decode, so a record the policy
+// excludes is neither shipped nor counted (web's, for web's reasons). Keeps the
+// entity and its path SEPARATE (no WithPath merge): the bracemark backup writes
+// the plaintext exactly as stored, and `path` is storage infrastructure that
+// must not leak into the round-tripped `data`.
 function readRawNamespace<T extends z.ZodTypeAny>(
   prefix: string,
   schema: T,
+  tally: Tally,
+  include: (path: string) => boolean = () => true,
 ): { path: string; entity: z.infer<T> }[] {
   const out: { path: string; entity: z.infer<T> }[] = [];
   for (const record of namespaceRows(prefix)) {
+    if (!include(record.path)) continue;
     const entity = parseBlob(record.data ?? undefined, schema);
-    if (entity !== undefined) out.push({ path: record.path, entity });
+    if (entity === undefined) tally.unreadable += 1;
+    else out.push({ path: record.path, entity });
   }
   return out;
 }
@@ -192,6 +210,7 @@ function readRawNamespace<T extends z.ZodTypeAny>(
 // block of the JS thread (docs/data-lifecycle.md, _readings — expo_).
 async function gatherLinks(
   excludedListIds: ReadonlySet<string>,
+  tally: Tally,
   onProgress: ProgressFn,
 ): Promise<GatheredLink[]> {
   const records = namespaceRows(LINKS_PREFIX);
@@ -203,8 +222,9 @@ async function gatherLinks(
     await yieldToMain();
     for (const record of records.slice(i, i + GATHER_CHUNK)) {
       const link = parseBlob(record.data ?? undefined, linkSchema);
-      if (link === undefined || excludedListIds.has(link.listId)) continue;
-      included.push({ path: record.path, link });
+      // Counted whatever list it was in: an unreadable link names none.
+      if (link === undefined) tally.unreadable += 1;
+      else if (!excludedListIds.has(link.listId)) included.push({ path: record.path, link });
     }
     onProgress(Math.min(i + GATHER_CHUNK, total), total);
   }
@@ -220,11 +240,10 @@ async function gatherLinks(
       slice.map(({ path }) => rekey(path, LINKS_PREFIX, EXTRACTIONS_PREFIX)),
     );
     slice.forEach(({ path, link }, j) => {
-      gathered.push({
-        path,
-        link,
-        extraction: parseBlob(exRecords[j]?.data ?? undefined, extractionSchema),
-      });
+      const extraction = parseBlob(exRecords[j]?.data ?? undefined, extractionSchema);
+      // The link still goes, with no extraction — it shows the same way in the app.
+      if (exRecords[j] !== undefined && extraction === undefined) tally.unreadable += 1;
+      gathered.push({ path, link, extraction });
     });
   }
   return gathered;
@@ -279,8 +298,11 @@ async function assembleBracemarkZip(
   lists: { path: string; entity: List }[],
   tags: { path: string; entity: Tag }[],
   pins: { path: string; entity: Pin }[],
+  settings: SettingsGeneral | undefined,
   filePaths: string[],
-): Promise<{ fileCount: number }> {
+  failedPaths: readonly string[],
+  unreadable: number,
+): Promise<{ fileCount: number; failedFileCount: number }> {
   const { Zip, ZipDeflate, ZipPassThrough } = fflate();
 
   const lines: string[] = [];
@@ -293,28 +315,44 @@ async function assembleBracemarkZip(
     }
   }
   for (const { path, entity } of pins) lines.push(jsonlLine(path, entity));
-  const settings = await readSettingsGeneral();
   if (settings !== undefined) lines.push(jsonlLine(SETTINGS_GENERAL_PATH, settings));
 
   // Gather the includable blobs: a row that claims materialization AND whose
-  // disk file is really there.
+  // disk file is really there AND reads. A file the disk won't give back costs
+  // that file, counted as missing like one never fetched — not the backup. A
+  // failed path the content provider happened to fetch meanwhile ships, so it is
+  // not failed.
   const fileEntries: [string, Uint8Array][] = [];
+  const failed = new Set(failedPaths);
+  let failedFileCount = 0;
   for (const path of filePaths) {
     const record = await getItem(path);
     const plain = dataFileFor(path);
-    if (!record?.hasDataFile || !plain.exists) continue;
-    fileEntries.push([backupFileEntry(idFromPath(path, FILES_PREFIX)), await plain.bytes()]);
+    if (!record?.hasDataFile || !plain.exists) {
+      if (failed.has(path)) failedFileCount += 1;
+      continue;
+    }
+    let bytes: Uint8Array;
+    try {
+      bytes = await plain.bytes();
+    } catch {
+      continue;
+    }
+    fileEntries.push([backupFileEntry(idFromPath(path, FILES_PREFIX)), bytes]);
   }
 
   const manifestBytes = utf8(
-    serializeBackupManifest({
-      links: links.length,
-      lists: lists.length,
-      tags: tags.length,
-      pins: pins.length,
-      extractions: links.filter((l) => l.extraction !== undefined).length,
-      files: fileEntries.length,
-    }),
+    serializeBackupManifest(
+      {
+        links: links.length,
+        lists: lists.length,
+        tags: tags.length,
+        pins: pins.length,
+        extractions: links.filter((l) => l.extraction !== undefined).length,
+        files: fileEntries.length,
+      },
+      { files: filePaths.length - fileEntries.length, unreadable },
+    ),
   );
   const itemsBytes = utf8(serializeBackupItems(lines));
 
@@ -358,7 +396,7 @@ async function assembleBracemarkZip(
     offset += chunk.length;
   }
   writeExportFile(username, outFile, zipped);
-  return { fileCount: fileEntries.length };
+  return { fileCount: fileEntries.length, failedFileCount };
 }
 
 // --- save helpers ---------------------------------------------------------------
@@ -403,9 +441,14 @@ export async function exportAllData(options: {
   }
 
   onProgress({ step: 'gather' });
-  const links = await gatherLinks(excludedListIds, (done, total) =>
+  const tally: Tally = { unreadable: 0 };
+  const links = await gatherLinks(excludedListIds, tally, (done, total) =>
     onProgress({ step: 'gather', done, total }),
   );
+  // A list is locked by its path's id — the id the coverage set was computed
+  // over (see the backup's lists below).
+  const unlockedList = (path: string): boolean =>
+    !excludedListIds.has(idFromPath(path, LISTS_PREFIX));
 
   if (format !== 'bracemark') {
     onProgress({ step: 'assemble' });
@@ -415,6 +458,10 @@ export async function exportAllData(options: {
     // readTags, not the raw namespace: a link's `tagIds` name a tag by its path's
     // id, which is the id the read edge hands back (queries.ts readTags).
     const tags = await readTags();
+    // readLists and readTags leave out what they can't decode without a word;
+    // this pass only counts those. Both namespaces are small.
+    readRawNamespace(LISTS_PREFIX, listSchema, tally, unlockedList);
+    readRawNamespace(TAGS_PREFIX, tagSchema, tally);
     const interopLinks = links.filter(({ link }) => link.listId !== TRASH_ID);
     const bundle = bundleFromLibrary(interopLinks, mergedLists, tags);
     const content =
@@ -428,6 +475,9 @@ export async function exportAllData(options: {
       linkCount: interopLinks.length,
       fileCount: 0,
       missingFileCount: 0,
+      failedFileCount: 0,
+      unreadableCount: tally.unreadable,
+      flattenedListCount: format === 'text' ? 0 : foldersPastMaxDepth(bundle.folders),
       syncFailed,
       file,
     };
@@ -438,37 +488,49 @@ export async function exportAllData(options: {
   const includedLinkIds = new Set(links.map(({ path }) => idFromPath(path, LINKS_PREFIX)));
   // Excluded by the PATH's id, like the pins below — the id the lock coverage is
   // computed over; web export-all-data.ts has the reasoning.
-  const lists = readRawNamespace(LISTS_PREFIX, listSchema).filter(
-    ({ path }) => !excludedListIds.has(idFromPath(path, LISTS_PREFIX)),
-  );
-  const tags = readRawNamespace(TAGS_PREFIX, tagSchema);
-  const pins = readRawNamespace(PINS_PREFIX, pinSchema).filter(({ path }) =>
+  const lists = readRawNamespace(LISTS_PREFIX, listSchema, tally, unlockedList);
+  const tags = readRawNamespace(TAGS_PREFIX, tagSchema, tally);
+  const pins = readRawNamespace(PINS_PREFIX, pinSchema, tally, (path) =>
     includedLinkIds.has(idFromPath(path, PINS_PREFIX)),
   );
+  // Read raw rather than through readSettingsGeneral, which can't tell an absent
+  // record from one that doesn't decode — and only the second is left out.
+  const settingsRecord = await getItem(SETTINGS_GENERAL_PATH);
+  const settings = parseBlob(settingsRecord?.data ?? undefined, settingsGeneralSchema);
+  if (settingsRecord !== undefined && settings === undefined) tally.unreadable += 1;
 
   const filePaths = referencedFilePaths(links);
   onProgress({ step: 'files', done: 0, total: filePaths.length });
-  // The unincludable paths (404 / never known locally) are counted below as
-  // `filePaths - fileCount` — that also covers a blob raced away mid-assembly.
-  await loadEntityContents(deps, filePaths, (done, total) =>
-    onProgress({ step: 'files', done, total }),
+  // Best-effort, as on web (see there): the blobs that can't be downloaded now
+  // are left out and counted rather than failing the backup.
+  const { failedPaths } = await loadEntityContents(
+    deps,
+    filePaths,
+    (done, total) => onProgress({ step: 'files', done, total }),
+    { bestEffort: true },
   );
 
   onProgress({ step: 'assemble' });
-  const { fileCount } = await assembleBracemarkZip(
+  const { fileCount, failedFileCount } = await assembleBracemarkZip(
     deps.username,
     outFile,
     links,
     lists,
     tags,
     pins,
+    settings,
     filePaths,
+    failedPaths,
+    tally.unreadable,
   );
 
   return {
     linkCount: links.length,
     fileCount,
-    missingFileCount: filePaths.length - fileCount,
+    missingFileCount: filePaths.length - fileCount - failedFileCount,
+    failedFileCount,
+    unreadableCount: tally.unreadable,
+    flattenedListCount: 0,
     syncFailed,
     file,
   };

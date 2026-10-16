@@ -37,10 +37,13 @@
 import type { FileEntry } from '@zip.js/zip.js/index-native.js';
 
 import {
+  ApiTimeoutError,
   ARCHIVE_ID,
   BACKUP_ITEMS_ENTRY,
   BACKUP_MANIFEST_ENTRY,
+  EXPORT_MAX_FOLDER_DEPTH,
   type ExportFormat,
+  type ExportOutcome,
   EXTRACTIONS_PREFIX,
   filesListEndpoint,
   filesSignEndpoint,
@@ -113,6 +116,49 @@ function deps(): SyncDeps {
   };
 }
 
+// The server gone: every call fails at once. A deadline rather than a network
+// error, because the api client retries a network error with backoff, and what
+// is under test is what the export does once the calls have given up.
+function offlineDeps(): SyncDeps {
+  return {
+    ...deps(),
+    api: {
+      call: async () => {
+        throw new ApiTimeoutError(60_000);
+      },
+    } as unknown as SyncDeps['api'],
+  };
+}
+
+// Records stored under a path that no longer decode — a bad JSON body, or a shape
+// this version refuses — beside a link whose only fault is its extraction.
+function unreadable(): { path: string; bytes: Uint8Array }[] {
+  return [
+    { path: `${LINKS_PREFIX}l_bad.enc`, bytes: utf8('{not json') },
+    { path: `${LISTS_PREFIX}bad.enc`, bytes: utf8(JSON.stringify({ id: 'bad', name: 7 })) },
+    { path: `${TAGS_PREFIX}bad.enc`, bytes: utf8(JSON.stringify({ id: 'bad' })) },
+    {
+      path: `${LINKS_PREFIX}l_plain.enc`,
+      bytes: utf8(
+        JSON.stringify({
+          url: 'https://plain.invalid/page',
+          listId: MY_LIST_ID,
+          tagIds: [],
+          createdAt: T + 4,
+          updatedAt: T + 4,
+        }),
+      ),
+    },
+    { path: `${EXTRACTIONS_PREFIX}l_plain.enc`, bytes: utf8(JSON.stringify({ id: 'l_plain' })) },
+  ];
+}
+
+async function seedUnreadable(): Promise<void> {
+  for (const { path, bytes } of unreadable()) {
+    await db.items.put(toItemRecord(path, 5000, bytes));
+  }
+}
+
 // --- the save seams -----------------------------------------------------------
 
 // The bytes the last bracemark export streamed, assembled in write order.
@@ -173,20 +219,27 @@ function installAnchorDownload(): void {
 }
 
 async function exportedText(format: Exclude<ExportFormat, 'bracemark'>): Promise<string> {
+  return (await exportInterop(format)).text;
+}
+
+async function exportInterop(
+  format: Exclude<ExportFormat, 'bracemark'>,
+): Promise<{ text: string; outcome: ExportOutcome }> {
   downloads.length = 0;
   // `downloadBlob` defers its revoke by a minute, which outlives the test and keeps
   // the jest worker from exiting ("failed to exit gracefully"). Cancel every timer
   // the export left pending — the revoke is stubbed anyway, and clearing a timer that
   // already fired is a no-op.
   const timeout = jest.spyOn(globalThis, 'setTimeout');
+  let outcome: ExportOutcome;
   try {
-    await exportAllData({ format, deps: deps(), excludedListIds: new Set() });
+    outcome = await exportAllData({ format, deps: deps(), excludedListIds: new Set() });
   } finally {
     for (const { value } of timeout.mock.results) clearTimeout(value);
     timeout.mockRestore();
   }
   if (downloads.length !== 1) throw new Error(`expected one download, got ${downloads.length}`);
-  return await downloads[0].text();
+  return { text: await downloads[0].text(), outcome };
 }
 
 // --- the library under test -----------------------------------------------------
@@ -771,6 +824,60 @@ describe('the bracemark backup round trip', () => {
       extractions: 1,
       files: 1,
     });
+    expect(manifest.omitted).toEqual({ files: 0, unreadable: 0 });
+  });
+
+  // Offline, the export's file phase used to reject on its first blob not yet on
+  // this device, and the whole backup failed — though its sync step had already
+  // failed into a warning. Now the blob costs itself: counted as failed (export
+  // again later), apart from a missing one (gone for good), and recorded in the
+  // manifest, which outlives the receipt.
+  it('exports with the server gone, leaving out the files it could not fetch', async () => {
+    await seed();
+    await db.items.put(toItemRecord('files/img_work.enc', 5000));
+
+    const outcome = await exportAllData({
+      format: 'bracemark',
+      deps: offlineDeps(),
+      excludedListIds: new Set(),
+    });
+
+    expect(outcome).toMatchObject({
+      linkCount: 3,
+      fileCount: 1,
+      missingFileCount: 0,
+      failedFileCount: 1,
+      syncFailed: true,
+    });
+    const file = savedZip();
+    expect(await zipEntryText(file, BACKUP_ITEMS_ENTRY)).toContain('https://work.invalid/spec');
+    expect(await zipEntryNames(file)).toContain('files/img_secret');
+    expect(await zipEntryNames(file)).not.toContain('files/img_work');
+    const manifest = JSON.parse(await zipEntryText(file, BACKUP_MANIFEST_ENTRY));
+    expect(manifest.omitted).toEqual({ files: 1, unreadable: 0 });
+  });
+
+  it('leaves out and counts each record that does not decode, and ships the rest', async () => {
+    await seed();
+    await seedUnreadable();
+    await db.items.put(toItemRecord(SETTINGS_GENERAL_PATH, 5000, utf8('{"linksLayout":')));
+
+    const outcome = await exportAllData({
+      format: 'bracemark',
+      deps: deps(),
+      excludedListIds: new Set(),
+    });
+
+    // The bad link, list, tag and settings, and l_plain's extraction.
+    expect(outcome.unreadableCount).toBe(5);
+    expect(outcome.linkCount).toBe(4);
+    const file = savedZip();
+    const items = await zipEntryText(file, BACKUP_ITEMS_ENTRY);
+    expect(items).toContain('https://plain.invalid/page');
+    expect(items).not.toContain(`${EXTRACTIONS_PREFIX}l_plain.enc`);
+    expect(items).not.toContain(SETTINGS_GENERAL_PATH);
+    const manifest = JSON.parse(await zipEntryText(file, BACKUP_MANIFEST_ENTRY));
+    expect(manifest.omitted).toEqual({ files: 0, unreadable: 5 });
   });
 });
 
@@ -868,6 +975,44 @@ describe('the interop formats', () => {
       );
     }
     expect(Object.keys(stored).filter((path) => path.startsWith(EXTRACTIONS_PREFIX))).toEqual([]);
+  });
+});
+
+describe('the interop formats, on a library with damage', () => {
+  // Settings are not read for these, so four of the backup's five.
+  it('leaves out and counts each record that does not decode, and writes the rest', async () => {
+    await seed();
+    await seedUnreadable();
+
+    const { text, outcome } = await exportInterop('csv');
+
+    expect(outcome.unreadableCount).toBe(4);
+    expect(text).toContain('https://plain.invalid/page');
+    expect(text).toContain('https://work.invalid/spec');
+  });
+
+  // The serializers write a list past the depth at it (shared export/bundle.ts);
+  // the receipt says how many — for the formats that have folders.
+  it('counts the lists written at the depth limit, in the formats with folders', async () => {
+    const depth = EXPORT_MAX_FOLDER_DEPTH + 2;
+    const ranks = ranksBetween(null, null, 1);
+    await seed(
+      Array.from({ length: depth }, (_, i) => ({
+        path: `${LISTS_PREFIX}d${i}.enc`,
+        data: {
+          id: `d${i}`,
+          name: `d${i}`,
+          parentId: i === 0 ? null : `d${i - 1}`,
+          rank: ranks[0],
+          createdAt: T,
+          updatedAt: T,
+        },
+      })),
+    );
+
+    expect((await exportInterop('netscape')).outcome.flattenedListCount).toBe(2);
+    expect((await exportInterop('csv')).outcome.flattenedListCount).toBe(2);
+    expect((await exportInterop('text')).outcome.flattenedListCount).toBe(0);
   });
 });
 

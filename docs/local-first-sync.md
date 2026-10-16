@@ -1629,7 +1629,13 @@ good. The batch content fetch (`loadEntityContents` — an export's file phase,
 the content provider) skips it the same way and reports the path in
 `missingPaths`, as it reports a 404: it used to reject, and one such file then
 failed every export of the library and re-fetched the provider's whole batch on
-every mount. expo's `decryptFile` maps the native tag and truncation failures
+every mount. Any other failure — offline, a server error, a deadline — still
+rejects by default, because the content provider remembers `missingPaths` for
+the session and retries only after a rejection. The export instead passes
+`bestEffort`, which puts such a path in a separate `failedPaths` and goes on
+(a failed sign call fails every path left). A `session_revoked` verdict still
+rejects, since the export is about to write the library out
+([data-lifecycle.md](./data-lifecycle.md), _export_). expo's `decryptFile` maps the native tag and truncation failures
 onto `BlobUnreadableError` for this, by the codes expo-modules-core infers from
 the native exception classes. A single lazy load (`loadEntityContent`) still
 rejects. So a dev or staging account synced by a pre-binding build

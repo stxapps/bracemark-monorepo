@@ -26,9 +26,22 @@ export interface ExportOutcome {
   linkCount: number;
   // `files/` blobs included in the zip (bracemark only; 0 otherwise).
   fileCount: number;
-  // Referenced blobs that couldn't be included — deleted server-side or never
-  // known locally (dangling refs). Reported, never fatal.
+  // Referenced blobs that couldn't be included and won't be by trying again —
+  // deleted server-side, never known locally (dangling refs), or not readable
+  // once fetched. Reported, never fatal.
   missingFileCount: number;
+  // Referenced blobs whose download failed — offline, a server error, a deadline
+  // — so they were left out of THIS file; another export may include them.
+  // Disjoint from `missingFileCount`. Reported, never fatal: a backup without
+  // some images beats no backup (bracemark only; 0 otherwise).
+  failedFileCount: number;
+  // Stored records the export read and couldn't decode (bad JSON, or a shape
+  // this app version doesn't accept), left out the way the read layer leaves
+  // them out of every view. One per record, whatever namespace it is in.
+  unreadableCount: number;
+  // Lists nested deeper than EXPORT_MAX_FOLDER_DEPTH (export/bundle.ts), written
+  // at that level instead (netscape and csv only; 0 otherwise).
+  flattenedListCount: number;
   // The pre-export refresh failed (offline / server down); the export carried
   // on with this device's local copy. A warning, not an error — local-first.
   syncFailed: boolean;

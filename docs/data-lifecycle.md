@@ -115,6 +115,36 @@ list's identity is its path) — and never by the `id` copy inside, which is the
 one the read edge does not trust; the interop formats take lists and tags from
 `readLists`/`readTags`, which have already made that substitution.
 
+**One bad record or one unreachable file costs only itself, and every such
+loss is counted.** Like a sync cycle, an export goes on past what it can't use.
+It reports four counters, and each gets its own receipt line:
+
+- **`unreadableCount`**: a stored record that doesn't decode (bad JSON, or a
+  shape this version refuses) is left out and counted. The read layer drops
+  such a record from every view without counting it. Covered: links, the
+  extractions of included links, lists, tags, and, for the backup, pins and
+  general settings. A link whose extraction is bad still ships, without its
+  extraction. A record that the lock policy excludes by its path (a locked
+  list, a locked link's pin) is filtered out before decoding, so it is not
+  counted either.
+- **`missingFileCount`**: a blob that is gone for good (404, never known
+  locally, or doesn't open under its path).
+- **`failedFileCount`**: a blob whose download failed this time (offline, a
+  server error, a deadline). The receipt says "export again later". The file
+  phase runs `loadEntityContents` best-effort for this
+  ([local-first-sync.md](./local-first-sync.md)). It used to reject on the
+  first blob not yet on the device, so an offline backup failed outright,
+  although the sync step before it had already turned the same failure into a
+  warning. A `session_revoked` verdict still fails the run, since the device is
+  being told to forget.
+- **`flattenedListCount`**: lists nested past the export depth (below).
+
+On expo, a blob whose disk file won't read is missing too. The backup's
+`manifest.json` adds `omitted: { files, unreadable }` beside `counts`, because
+the receipt is gone once the file is saved and the archive should still say it
+is partial. The field is informational like `counts`, and an older archive
+carries none, which is not the same as nothing omitted.
+
 ### the export's empty run
 
 An export that matches **nothing** — an empty library, every link in Trash under
@@ -721,12 +751,31 @@ ancestor carry one label. Where a picker draws guide lines its indent stops at
 all the bound reaches: a row is keyed and picked by its id, and the picker's
 filter matches a list's own name, never the label.
 
-What still grows with depth, each by up to the square of one long chain: the two
-exports — the CSV forms every folder's whole path and writes it on every link
-row in that folder, and a Netscape file indents every line by its folder's depth
-— which are an export the
-user asked for, not a screen that opens on its own; the web Lists settings
-table, which is a screen, and works out `forbiddenParentIds` for every row it
+**The interop exports write at most `EXPORT_MAX_FOLDER_DEPTH` levels** (100,
+`export/bundle.ts`, which is the import's own `IMPORT_MAX_FOLDER_DEPTH`). They
+used to grow with the square of a long chain, since the CSV writes a folder's
+whole path on every link row and a Netscape file indents every line by its
+folder's depth. Measured on 2026-10-16: 5,000 nested lists made ~200 M
+characters of HTML, and 10,000 failed both formats with
+`RangeError: Invalid string length`, so nothing was saved. Truncating the path
+was the better trade than the error, and the shape of the truncation is chosen.
+A list deeper than 100 is written AT level 100, beside its level-99 ancestor's
+other children: under its own name, holding its own links, with its descendants
+following it at the same level. So no link moves to a folder that isn't its own
+list, and only the nesting below level 100 is lost. Cutting the path at 100
+names instead would have merged every deeper list into its level-100 ancestor.
+Two deep lists with one name under the same level-99 ancestor end up with one
+path, which a CSV importer merges. Both formats flatten identically
+(`foldersWithPaths` for the CSV, `pushFolders` for the Netscape nesting), and
+the file stays one this app's import accepts, which a 101-level file would not
+be. The receipt counts the lists it flattened (`flattenedListCount`). This is
+the import's opposite choice on purpose: an import refuses a file that is too
+deep rather than file links where the file never put them, because it would be
+changing the user's library. An export is a copy, and refusing it would leave
+the user with no copy at all.
+
+What still grows with depth, each by up to the square of one long chain: the web
+Lists settings table, which is a screen, and works out `forbiddenParentIds` for every row it
 shows on every render, each call walking the forest to the row and then the
 row's whole subtree; and the marketing site's converter, which copies a path per
 folder of a backup's list tree. The depth rule bounds the chains each import

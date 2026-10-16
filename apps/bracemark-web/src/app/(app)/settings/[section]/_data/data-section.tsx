@@ -36,6 +36,7 @@ import {
 import Link from 'next/link';
 
 import {
+  EXPORT_MAX_FOLDER_DEPTH,
   type ExportFormat,
   formatSyncedAt,
   getSyncPhase,
@@ -461,9 +462,26 @@ function ExportStatus({ state, excludedCount }: { state: ExportState; excludedCo
       'Couldn’t refresh from the server first — this is this device’s copy of your data.',
     );
   }
+  // Missing is for good (deleted, or never readable); failed is this run's
+  // network or server, so only that line asks for another try.
   if (outcome.missingFileCount > 0) {
     warnings.push(
-      `${outcome.missingFileCount} ${outcome.missingFileCount === 1 ? 'file' : 'files'} couldn’t be downloaded and ${outcome.missingFileCount === 1 ? 'was' : 'were'} left out.`,
+      `${outcome.missingFileCount} ${outcome.missingFileCount === 1 ? 'file is' : 'files are'} no longer available and ${outcome.missingFileCount === 1 ? 'was' : 'were'} left out.`,
+    );
+  }
+  if (outcome.failedFileCount > 0) {
+    warnings.push(
+      `${outcome.failedFileCount} ${outcome.failedFileCount === 1 ? 'file' : 'files'} couldn’t be downloaded and ${outcome.failedFileCount === 1 ? 'was' : 'were'} left out — export again later to include ${outcome.failedFileCount === 1 ? 'it' : 'them'}.`,
+    );
+  }
+  if (outcome.unreadableCount > 0) {
+    warnings.push(
+      `${outcome.unreadableCount} ${outcome.unreadableCount === 1 ? 'item' : 'items'} in your library couldn’t be read and ${outcome.unreadableCount === 1 ? 'was' : 'were'} left out.`,
+    );
+  }
+  if (outcome.flattenedListCount > 0) {
+    warnings.push(
+      `${outcome.flattenedListCount} ${outcome.flattenedListCount === 1 ? 'list' : 'lists'} nested more than ${EXPORT_MAX_FOLDER_DEPTH} levels deep ${outcome.flattenedListCount === 1 ? 'was' : 'were'} placed at level ${EXPORT_MAX_FOLDER_DEPTH}.`,
     );
   }
   if (excludedCount > 0) {
