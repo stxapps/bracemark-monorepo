@@ -420,8 +420,8 @@ and then replaced on the browser's own check. Five things about writing one:
 
 These are not two `next build`s: the chunk graph is the staged export's
 throughout. The pair that matters most — the previously **released** build
-against the candidate — cannot exist before a first release (`PWA-UPGRADE-001`,
-`e2e/NEXT.md`).
+against the candidate — is not exercised yet. It could not exist before the
+first release, and it can now (`PWA-UPGRADE-001`, `e2e/NEXT.md`).
 
 #### the fixture constraint — read this before touching `web/fixtures/`
 

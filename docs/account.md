@@ -269,13 +269,14 @@ rule, or a door fails to unwrap the DEK and the user is locked out. **They can
 never change once real users exist.** (The DEK is random, so it is _not_ part of
 the frozen contract — only the machinery that derives KEKs and unwraps it is.)
 
-**Until launch, "never" has an exception — and it expires.** The rule protects
-_existing users' keys_, and there are none yet, so these constants were in fact
-rewritten during the rename (`bracemark.app-salt.v1.…`, `bracemark-auth-seed`,
-`bracemark-encryption-key`, `bracemark-recovery-kek`) at the cost of
-regenerating every golden vector below. That is a greenfield licence, not a
-standing one: **once real accounts exist, rotating a constant means minting a
-`.v2.` label beside it, never editing this one.**
+**Until launch, "never" had an exception, and it has now expired.** The rule
+protects _existing users' keys_, and before the first release there were none,
+so these constants were in fact rewritten during the rename
+(`bracemark.app-salt.v1.…`, `bracemark-auth-seed`, `bracemark-encryption-key`,
+`bracemark-recovery-kek`) at the cost of regenerating every golden vector below.
+That was a greenfield licence, not a standing one, and real accounts exist now:
+**rotating a constant means minting a `.v2.` label beside it, never editing this
+one.**
 The contract is pinned by **golden vectors** (`crypto/contract-vectors.ts` in
 `@stxapps/shared` — salt, KEK, wrapped password door, **recovery-KEK + wrapped
 recovery door**, derived keys, signature, packed blob, and a **passphrase

@@ -296,26 +296,21 @@ R2. (What the shared clock does NOT buy is a cursor read off a listing: the
 newest `LastModified` a client happens to list is not one, though this section
 used to say it was — _the cursor is a claim_.)
 
-### schema changes — the client is greenfield, the server is not
+### schema changes — shipped, so append-only on every side
 
-Three shapes above can move, and they do **not** obey the same rule.
+Three client shapes above can move. Until the first release they were
+greenfield: Dexie's `version(1)` (`packages/web-react/src/data/db.ts`), the
+expo-sqlite DDL (`packages/expo-react/src/data/db.ts`) and the R2 payload shapes
+(`packages/shared/src/sync/`) changed by **rewriting them**. You changed the
+shape, recreated the dev database (deleted the app or cleared its data) and
+added no migration step, because compatibility with a past no user had was cost
+with no beneficiary.
 
-**On a device nothing has shipped, so the client stores are edited in place.**
-Dexie's `version(1)` (`packages/web-react/src/data/db.ts`), the expo-sqlite DDL
-(`packages/expo-react/src/data/db.ts` — idempotent, per the greenfield
-no-migrations policy in [architecture.md](./architecture.md)) and the R2 payload
-shapes above (`packages/shared/src/sync/`) all change by **rewriting them**:
-change the shape, recreate the dev database (delete the app, clear its data), add
-no migration step. Compatibility with a past no user has is cost with no
-beneficiary — [share-sheet.md](./share-sheet.md) reaches the same answer about the
-outbox file, for the same reason.
-
-**⚠ The client leaves this regime the day the first build reaches a user, and
-it has to be ready before that day, not on it.** From then on, "delete the app,
-clear its data" stops being a dev chore. It deletes a library that, with the
-server unreachable or gone, exists nowhere else
-([offline-mode.md](./offline-mode.md), _the promise_). The three client shapes
-leave on different terms:
+**⚠ That regime ended with the first release.** The shapes as they shipped are
+now version 1 on users' devices, and "delete the app, clear its data" is no
+longer a dev chore. It deletes a library that, with the server unreachable or
+gone, exists nowhere else ([offline-mode.md](./offline-mode.md), _the promise_).
+The three client shapes now change on different terms:
 
 - **Dexie (`bracemark-data`) and the raw session database
   (`bracemark-session`).** Append `version(N)` (with an `upgrade()` for any
@@ -325,21 +320,22 @@ leave on different terms:
   databases (`data/update-required.ts`): the event fires in the _old_ tab, so it
   had to ship before the first `version(2)`, and it has. The mechanics and the
   failure modes are in [offline-mode.md](./offline-mode.md), _version skew_.
-- **expo-sqlite.** Replace the idempotent DDL with numbered migrations keyed
-  on `PRAGMA user_version`, run on open before first use, append-only like the
-  server's. One process opens the database at a time (the iOS share extension
-  writes its outbox file, not the database; [share-sheet.md](./share-sheet.md)),
-  so there's no multi-tab counterpart to `versionchange`. The migration
-  runner can land with the first migration; it's the _policy_ that has to
-  change at launch. The comments at the top of
-  `packages/expo-react/src/data/db.ts` and the "greenfield no-migrations
-  policy" in [architecture.md](./architecture.md) go in the same change.
+- **expo-sqlite.** The idempotent DDL in `db.ts` is the shipped version 1.
+  Every change after it is a numbered migration keyed on `PRAGMA user_version`,
+  run on open before first use, append-only like the server's. Never edit a
+  shipped statement. One process opens the database at a time (the iOS share
+  extension writes its outbox file, not the database;
+  [share-sheet.md](./share-sheet.md)), so there's no multi-tab counterpart to
+  `versionchange`. No migration exists yet, so there's no runner yet either.
+  It lands with the first migration. Nothing sets `user_version` today, so
+  every database the first release created reads `0`, and the runner has to
+  treat `0` as the shipped schema, not as an empty database.
 - **R2 payloads** are already built to cross versions. Every entity is a
   `z.looseObject` (`packages/shared/src/sync/entities.ts`), so an older client
   passes fields it doesn't know through unchanged, and the blob frame's version
   byte makes an unknown layout fail loudly rather than misread
-  ([crypto boundary](#crypto-boundary--what-the-server-still-learns)). After
-  launch, what changes is only the licence to _rewrite_ a shape: fields are
+  ([crypto boundary](#crypto-boundary--what-the-server-still-learns)). Since
+  the first release, what has changed is only the licence to _rewrite_ a shape: fields are
   added, never renamed or repurposed, because a device that last synced a year
   ago will still write the old name back.
 
@@ -1516,8 +1512,8 @@ is why it is closed rather than written down as accepted.
   and push when the lock comes free.
 - **Where Web Locks are missing** the lock is skipped and the in-context
   single-flight is all there is, as before.
-- **A tab running a build from before the lock** takes none. Nothing has shipped
-  without it.
+- **A tab running a build from before the lock** takes none. No released build
+  lacks it: the lock went in before the first release.
 - **Delete-all still quiesces one tab, not the device.** `deleteAllData` waits
   out THIS context's in-flight cycle before it clears the queue and wipes the
   server ([data-lifecycle.md](./data-lifecycle.md), _delete all data_); a

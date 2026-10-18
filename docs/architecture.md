@@ -416,7 +416,8 @@ they are read by the same components, not because it is one of them.
     sandbox sentinel file so an iOS reinstall doesn't resurrect the Keychain's
     old session), the first slice of the expo-sqlite + drizzle store
     (`data/db.ts` — lazy-opened, change-listener on for drizzle's `useLiveQuery`,
-    idempotent DDL per the greenfield no-migrations policy — holding the `locks`
+    idempotent DDL, the shipped version 1 that changes only by migration from
+    here (docs/local-first-sync.md, _schema changes_) — holding the `locks`
     table behind `data/lock-store.ts`, web lock-store's sibling; lock verifiers
     are deliberately NOT in secure-store — they're one-way PBKDF2 pairs gating
     already-decrypted data, and the pure covering logic both platforms share is

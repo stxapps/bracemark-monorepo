@@ -355,7 +355,7 @@ export function coerceLinkSortOrder(value: string | undefined): LinkSortOrder {
 //           _the stance_), a link that arrived by sync or import is not.
 //   all   — the old boolean's `true`: also back-fill the residual, un-gestured.
 //
-// It replaces the `deviceExtraction` boolean outright (greenfield — no migration, and
+// It replaced the `deviceExtraction` boolean outright (before the first release — no migration, and
 // `looseObject` round-trips the dead field harmlessly on any device that still holds
 // one). The two positions the boolean could express keep their exact meanings, so the
 // only NEW behavior is `off`.

@@ -358,7 +358,7 @@ describe('parseShareTaxonomy', () => {
   });
 
   it('rejects a snapshot predating the cap fields', () => {
-    // Same greenfield rule as `rank` above: the cap fields are REQUIRED rather
+    // Same pre-release tightening as `rank` above: the cap fields are REQUIRED rather
     // than defaulted, so a snapshot without them reads as signed-out and the app
     // rewrites it — which is strictly safer than defaulting `maxLinks` to null
     // and letting a stale file silently disable the gate.

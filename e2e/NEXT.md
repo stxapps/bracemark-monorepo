@@ -564,9 +564,10 @@ case already carries `online`) and are `full`, so they never block a smoke run;
       gets the origin's 404.
 - [ ] `PWA-UPGRADE-001` Install from the **previously released** export, then
       serve the candidate and prove the takeover, the new page with the origin
-      gone, and an intact library. Blocked until there is a first release to
-      keep: every case above replaces a build with one derived from it in the
-      same run (docs/offline-mode.md, _testing_).
+      gone, and an intact library. Every case above replaces a build with one
+      derived from it in the same run (docs/offline-mode.md, _testing_). No
+      longer blocked: the first release exists, so its deploy tag is the
+      previous build to install from.
 - [x] `OFFLINE-EXPORT-IOS-001` / `OFFLINE-EXPORT-ANDROID-001` Save a link with
       the api cut (frozen on iOS, route removed on Android), reach Export in-app,
       and read both links out of the exported file.

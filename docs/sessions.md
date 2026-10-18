@@ -178,8 +178,8 @@ pending ops included. With a marker, each costs a sign-in. The marker costs one
 nullable column, one append-only migration, a two-case cleanup predicate, and
 a year of retained rows that the public pages disclose. If remote wipe were
 dropped entirely, deleting rows would be enough and no column would be needed;
-this design keeps remote wipe, so it keeps the evidence. Being prelaunch
-removes client compatibility work, not this distinction.
+this design keeps remote wipe, so it keeps the evidence. Being prelaunch when
+this was decided removed client compatibility work, never this distinction.
 
 **Revocation needs a retained marker.** Nullable `revoked_at` on the sessions
 table, returned by the repository; the guard checks revocation before expiry.

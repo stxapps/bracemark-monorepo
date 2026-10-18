@@ -28,12 +28,12 @@
 // The schemas below carry NO back-compat slack — rank is required wherever it
 // appears (no drain-side fallback, no upload-side skip) and `newLists` has no
 // `.default([])`. Each of those covered files written by a build predating the
-// field, and nothing has shipped, so no such file can exist; the greenfield
-// rule is to tighten the schema in place rather than carry compatibility with a
-// past that never happened. A payload missing either is therefore corrupt, and
-// the parse boundary rejects it like any other malformed input. Both are worth
-// revisiting the day a build ships: an outbox draft or snapshot CAN outlive an
-// app update, which is the skew these once guarded.
+// field. The schema was tightened in place before the first release, and every
+// released build writes both, so no such file can exist. A payload missing
+// either is therefore corrupt, and the parse boundary rejects it like any other
+// malformed input. That licence ended with the release: an outbox draft or
+// snapshot CAN outlive an app update, so a field added from here on must read a
+// file written without it (docs/share-sheet.md).
 //
 // A DRAFT BELONGS TO AN ACCOUNT. The snapshot names the account it was built
 // for (`owner`), the sheet stamps that name on every draft it mints, and each

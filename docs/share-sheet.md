@@ -371,10 +371,11 @@ rank can do no worse.
 
 **Rank is required on the draft and the snapshot** — there is no drain-side
 fallback that computes one and no upload-side skip for entities missing one.
-Those existed for files written by a build that predates sheet-minted ranks;
-nothing has shipped, so no such file can exist, and the greenfield rule is to
-tighten the schema in place rather than carry compatibility with a past that
-never happened. A rank-free payload is corrupt and is rejected at the parse
+Those existed for files written by a build that predates sheet-minted ranks.
+The schema was tightened in place before the first release, and every released
+build writes ranks, so no such file can exist. **That licence ended with the
+release.** A draft or snapshot can outlive an app update, so a field added from
+here on has to read a file written without it. A rank-free payload is corrupt and is rejected at the parse
 boundary like any other malformed input — for the snapshot that means reading as
 signed-out, which points the user at the app, and the app rewrites it
 (`refreshShareTaxonomy`). Both pickers mint at **index 0** (the create-position

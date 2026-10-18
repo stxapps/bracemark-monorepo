@@ -10,10 +10,15 @@
 // the same auth≠sync split as web's 'bracemark-session' vs 'bracemark-data' databases:
 // auth/key material lives in credential storage, synced user data here.
 //
-// Greenfield schema policy: no migrations. The DDL below runs idempotently on
-// open; when a table changes shape, edit it in place and recreate dev
-// databases (delete the app / clear its data) rather than adding a migration
-// step.
+// ⚠ This schema has shipped. The DDL below is version 1 exactly as the first
+// release created it on users' devices, and it runs idempotently on open. A
+// table that changes shape gets a numbered migration keyed on
+// `PRAGMA user_version`, run on open before first use and append-only like the
+// server's. Never edit a shipped statement in place: "delete the app" now
+// deletes a library that may exist nowhere else. The runner lands with the
+// first migration. Nothing sets user_version yet, so a shipped database reads 0,
+// and the runner must take 0 to mean this schema (docs/local-first-sync.md,
+// _schema changes_).
 //
 // How the web store's IndexedDB idioms map onto SQLite:
 //
@@ -205,8 +210,8 @@ export interface LocalSettingsValue {
 // Dexie's `localSettings: 'id'` indexes only the primary key, so on web every
 // other field is a schemaless object property and a NEW device setting needs no
 // schema bump — a JSON column is the sqlite construct with the same property
-// (per-field columns would make expo stricter than web: DDL now, an ALTER TABLE
-// migration once the schema freezes at launch). Nothing ever queries settings
+// (per-field columns would make expo stricter than web: an ALTER TABLE
+// migration per new setting, now that the schema has shipped). Nothing ever queries settings
 // by field — the singleton row is read whole. The other tables keep real
 // columns because their fields are keys/indexes (items' projection, the
 // junctions, pendingOps' composite key) or protocol-pinned shapes (syncMeta's
@@ -414,8 +419,8 @@ export function valuesList(rows: readonly (readonly unknown[])[]): SQL {
 // database, so subscribers filter events to this one by name.
 export const DB_NAME = 'bracemark-data.db';
 
-// Idempotent DDL, run on every open (the greenfield no-migrations policy —
-// header). Index set mirrors web-react db.ts's Dexie stores line: the four
+// Idempotent DDL, run on every open — the shipped version-1 schema (header).
+// Index set mirrors web-react db.ts's Dexie stores line: the four
 // compound indexes are the two orderings (date modified / date added) over the
 // two groupings (per type / per list); url and url-key are the exact-lookup
 // indexes. All the sparse ones are partial so non-carrying rows (e.g. `files/`
@@ -437,10 +442,11 @@ export const DB_NAME = 'bracemark-data.db';
 // One ASC index serves both sort directions because the ORDER BY is uniform (the
 // sort column and `path` always move together).
 //
-// Mind the `IF NOT EXISTS` when EDITING an index here: on a database that has
-// already been opened, a changed column list is a SILENT NO-OP (same name, old
-// columns, no error). Recreate the dev database — delete the app / clear its
-// data — as the greenfield policy in the header says, or the change won't take.
+// Mind the `IF NOT EXISTS` if you are tempted to EDIT an index here: on a
+// database that has already been opened, a changed column list is a SILENT
+// NO-OP (same name, old columns, no error). That is one more reason a shipped
+// index changes only by migration (header): a DROP INDEX and a CREATE INDEX,
+// never an edit to the line below.
 //
 // There is deliberately NO index on `updated_at`. It reads like it should have
 // one (it is the sync clock), but nothing drives on it: the engine's reconcile

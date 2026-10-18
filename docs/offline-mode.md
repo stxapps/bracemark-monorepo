@@ -113,12 +113,12 @@ depend on what the list contains. No rule caches a non-GET request. `PWA-005`
 inspects every cache the origin owns after a full online session and finds no
 cross-origin key.
 
-**Prelaunch: reset development profiles, without a legacy-cache migration.**
-There are no real users or production installs to migrate. Before verifying a
-worker change, unregister the old worker and clear its Cache Storage in
-development/test profiles, or use a fresh profile. Once real users exist, any
-later change that leaves account data in old caches must include a cleanup
-path.
+**A change that strands account data in an old cache ships its own cleanup.**
+Before the first release there were no production installs, so a worker change
+only needed a reset development profile. Real installs exist now, and a later
+change that leaves account data in old caches must include a cleanup path. A
+fresh or reset profile is still the right way to _verify_ the change itself:
+unregister the old worker and clear its Cache Storage first.
 
 ### when the worker registers — after sign-in, in any display mode
 
@@ -554,12 +554,12 @@ Reachability is worthless if the browser throws the data away.
   list), so there's no over-the-air policy to design and no update server
   whose disappearance matters. The iOS share extension ships in the same
   bundle as the app, so the two processes are always the same version.
-- **⚠ The schema can't keep the "delete the app" policy past launch.**
-  `packages/expo-react/src/data/db.ts` runs idempotent DDL under a greenfield
-  no-migrations policy, and its fix for a changed table is to delete the app.
-  After launch, deleting the app deletes a library that may exist nowhere
-  else. [local-first-sync.md](./local-first-sync.md), _schema changes_, owns
-  the switch to `PRAGMA user_version` migrations. There's no multi-tab
+- **⚠ The schema changes by migration, never by "delete the app".**
+  `packages/expo-react/src/data/db.ts` holds the shipped version-1 DDL. Before
+  the first release, the fix for a changed table was to delete the app. Now
+  that deletes a library that may exist nowhere else.
+  [local-first-sync.md](./local-first-sync.md), _schema changes_, owns the
+  `PRAGMA user_version` migrations that replace it. There's no multi-tab
   equivalent of `versionchange` here: one app process opens the database at a
   time, and it runs any migration before first use.
 - **An old app meeting a newer blob format** fails loudly, by design
@@ -661,9 +661,10 @@ offline case.
 
 - **The previous release → this one.** Every update case replaces a build with
   one derived from it in the same run. The pair real users meet is the worker
-  that shipped last time against the one about to ship, and it cannot exist
-  before there is a first release. After it: keep the released `out/` (or
-  rebuild its tag against the local stack) and install from that.
+  that shipped last time against the one about to ship. That pair could not
+  exist before the first release, and it can now: keep the released `out/` (or
+  rebuild its deploy tag against the local stack) and install from that
+  (`PWA-UPGRADE-001`, `e2e/NEXT.md`).
 - **A stalled response body.** The navigation timeout is on the response
   starting; headers followed by a stall are not exercised.
 - **Two real builds.** The derived builds share build A's chunk graph, so an old
