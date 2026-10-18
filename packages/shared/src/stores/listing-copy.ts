@@ -216,6 +216,14 @@ export const PLAY = {
 // bracemark-expo ships an iOS share extension, which is a different thing. The
 // distinction matters more here than anywhere, because a store listing is read by
 // people who have no idea either exists.
+//
+// THE CLOSING TWO LINES ARE NOT DECORATION. App Review 3.1.2 wants a Terms of Use
+// link in the listing's metadata for any app selling an auto-renewable
+// subscription, and with no custom EULA set in App Store Connect the description
+// is the only field that carries it. Nothing here catches their removal — no
+// spec, no console check — and the failure is a rejection on submission day. They
+// stay in the shared text because Play sells the same subscription and they are
+// as true there.
 export const FULL_DESCRIPTION = `Bracemark is a bookmark manager that cannot read your bookmarks.
 
 Save anything worth coming back to — articles, docs, threads, products, videos — and read it later on any device.
@@ -246,7 +254,10 @@ YOURS TO LEAVE WITH
 WHAT IT COSTS TO BUILD IT THIS WAY
 We hold no key, so there is no password reset. A recovery code is your second door, and saving it is genuinely on you. Search runs on your device rather than ours. There are no shared or public lists.
 
-Bracemark is paid for by subscriptions. There is no advertising, no data to sell, and no investor waiting for us to change that.`;
+Bracemark is paid for by subscriptions. There is no advertising, no data to sell, and no investor waiting for us to change that.
+
+Terms of Service: https://bracemark.com/terms
+Privacy Policy: https://bracemark.com/privacy`;
 
 // --- the browser extension ---------------------------------------------------
 //
