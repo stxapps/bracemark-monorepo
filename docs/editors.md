@@ -1348,9 +1348,13 @@ in `view-state-provider`, items grow a `LinkRowSelect` checkbox
   to, Remove) drop their labels for square icon buttons, keeping their names in
   `aria-label`/`title`. That second tier is what fits the fixed set on a phone
   without pushing the one irreversible-looking action into a menu.
-- **Non-Trash-view actions skip trashed links.** The All view and tag views can
-  hold trashed links, whose own row menu allows only Restore/destroy; the
-  toolbar is keyed off the active view, so each action instead filters
+- **Non-Trash-view actions skip trashed links.** Show All, tag views and search
+  never hold trashed links — `use-links` suppresses Trash unless the query names
+  it (→ `search.md`) — but a query that does name it alongside something else
+  (`?list-any=trash&tag=x`, Trash + Archive) still does, and its selection
+  resolves to `none`, not the Trash view. A trashed link's own row menu allows
+  only Restore/destroy; the toolbar is keyed off the active view (Trash
+  toolbar only when the selection _is_ Trash), so each action instead filters
   `listId === TRASH_ID` out of its targets — per-link parity without per-link
   buttons. Every action also drops links already in its target state, so it
   never writes a no-op patch (no `updatedAt` bump reordering the date-modified

@@ -86,6 +86,15 @@ order = asc | desc                      (ordering dir    — READ-ONLY override)
   lists clause (Show All is the absence of a list filter, not a filter), and a URL
   with **no filter params at all** injects the default inbox (`lists.any =
 [My List]`). This injection is load-bearing for the projection below.
+- **Trash is out of every view that doesn't name it.** Show All, tag views and text
+  search never return trashed links: `use-links` (both apps) adds `TRASH_ID` to the
+  suppressed set unless `lists.any` includes it, the same `excludeLists` edge locks
+  use (→ `locks.md`). Removing a link means "stop showing me this"; rows render no
+  list, so a trashed link would otherwise pass for a live one. Unlike a lock it is
+  opt-in: `?list=trash`, `?list-any=trash` or Trash picked in the editor brings it
+  back. The gate checks the query, not `selection`, because selection resolves to
+  `none` for a compound query and "Trash + some text" would come back empty. Archive
+  is deliberately not suppressed, since archived links are kept, just not in the inbox.
 - **`sort`/`order` are not filters.** Ordering is a **global synced setting**
   (`settings/general.enc` — Settings → Misc), and the URL params are only an
   **optional, hand-typed, read-only override** of it: present and known → they win;
