@@ -9,13 +9,19 @@ import { createRunId, waitForApi } from '../runner/lib';
 import { capture } from '../runner/process';
 import { assertOriginOwnedByRepo } from '../runner/stack';
 import { newCredentials } from '../web/fixtures/account';
+import { unique } from '../web/fixtures/data';
 import { API_URL, CHROME_PATH, WEB_URL } from '../web/fixtures/env';
 import { launchApp, type LaunchedApp } from '../web/fixtures/launch';
+import { openSidebarItem } from '../web/fixtures/links';
+import { grantPlusAndLoad } from '../web/fixtures/plan';
+import { createInSettings, lockListInSettings } from '../web/fixtures/taxonomy';
 
 // What Chrome's password manager makes of each form that takes the account's
 // password — which field it reads as the current password, which as the new one,
-// and whether it offers to save — read off chrome://password-manager-internals,
-// which logs exactly that while a tab has it open.
+// and whether it offers to save — and that it offers nothing for a LOCK password,
+// which is a secret but not this site's login. Read off
+// chrome://password-manager-internals, which logs exactly that while a tab has
+// it open.
 //
 //   npm run dev                                   # the api and the web app
 //   npm run measure:password-manager
@@ -30,6 +36,10 @@ import { launchApp, type LaunchedApp } from '../web/fixtures/launch';
 // the old password (docs/accessibility.md, _what a field tells the browser_).
 // WEB-ACCOUNT-006 pins the input that fixed it; this is what showed Chrome reads
 // that input, and what to re-run when a form that takes a password changes shape.
+// The second specimen is the other direction: the lock surfaces were `off`, which
+// Chrome ignores on a password field, so setting a lock or unlocking one had it
+// offer to replace the saved sign-in password with the lock's. They now say
+// `one-time-code`, and the lock flows expect no submission at all.
 //
 // NOT A TEST, and in no suite. The internals page is a debugging surface whose
 // text is not a contract, read from the system Chrome, which auto-updates — a
@@ -65,7 +75,8 @@ interface Flow {
   launch: { withRecovery?: boolean; signedOut?: boolean };
   run: (app: LaunchedApp) => Promise<void>;
   // One per submission Chrome should detect, in order — a flow that prompts
-  // twice is as wrong as one that prompts with the wrong field.
+  // twice is as wrong as one that prompts with the wrong field. Empty for a lock
+  // flow: Chrome should see nothing to save.
   expected: Omit<Submission, 'username' | 'indicator'>[];
 }
 
@@ -146,7 +157,61 @@ const FLOWS: Flow[] = [
     },
     expected: [{ current: '', next: 'confirm', decision: ASK }],
   },
+  {
+    // NO submission, from either surface. The specimen came from a real profile
+    // with the account's login saved: setting the lock and leaving Settings
+    // opened Chrome's offer to update that login with the lock password, and the
+    // unlock field was offered the sign-in password. Here, under `off`, the set
+    // and the unlock each logged an ASK. Covers both surfaces (the dialog and
+    // the pane) for both kinds of lock.
+    name: 'lock-app',
+    what: 'Set app lock, close settings, unlock the app',
+    launch: {},
+    run: async ({ page, credentials }) => {
+      const password = unique('app-lock');
+      await grantPlusAndLoad(page, credentials.username);
+      await page.goto('/settings/misc');
+      await page.getByRole('button', { name: 'Set app lock…' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Set app lock' });
+      await dialog.getByLabel('Password', { exact: true }).fill(password);
+      await dialog.getByRole('button', { name: 'Set lock', exact: true }).click();
+      await expect(dialog).toHaveCount(0);
+      await leaveSettings(page);
+      await page.reload();
+      await page.getByLabel('Password', { exact: true }).fill(password);
+      await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Bracemark is locked' })).toHaveCount(0);
+    },
+    expected: [],
+  },
+  {
+    name: 'lock-list',
+    what: 'Lock a list, close settings, unlock it in place',
+    launch: {},
+    run: async ({ page, credentials }) => {
+      const password = unique('list-lock');
+      const list = unique('Locked list');
+      await grantPlusAndLoad(page, credentials.username);
+      await createInSettings(page, 'list', list);
+      await lockListInSettings(page, list, password);
+      await leaveSettings(page);
+      await openSidebarItem(page, `${list} Locked`);
+      await page.getByLabel('Password', { exact: true }).fill(password);
+      await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+      await expect(page.getByLabel('Password', { exact: true })).toHaveCount(0);
+    },
+    expected: [],
+  },
 ];
+
+// Leaving Settings through its close link — a same-document navigation, which
+// is where the prompt opened — then giving Chrome's decision a beat to land
+// before the next load discards the page it would land on.
+async function leaveSettings(page: Page): Promise<void> {
+  await page.getByRole('link', { name: 'Close settings' }).click();
+  await expect(page).toHaveURL(/\/links/);
+  await page.waitForTimeout(2_500);
+}
 
 async function openChangePassword(page: Page): Promise<void> {
   await page.goto('/settings/account');
@@ -178,9 +243,9 @@ function parseSubmissions(log: string): Submission[] {
     const parse = parses.length > 1 ? (parses.at(-1) ?? '') : '';
     const after = log.slice(match.index);
     submissions.push({
-      current: field(parse, /^\s*Password element :\s*(.*?)\s*,\s*$/m),
-      next: field(parse, /^\s*New password element :\s*(.*?)\s*,\s*$/m),
-      username: field(parse, /^\s*Username element :\s*(.*?)\s*,?\s*$/m),
+      current: field(parse, 'Password element'),
+      next: field(parse, 'New password element'),
+      username: field(parse, 'Username element'),
       indicator: match[1] ?? '?',
       decision: /Decision:\s*(.+?)\s*$/m.exec(after)?.[1] ?? '?',
     });
@@ -189,9 +254,15 @@ function parseSubmissions(log: string): Submission[] {
   return submissions;
 }
 
-function field(parse: string, pattern: RegExp): string {
+// A field by its id, or `#<renderer id>` for one Chrome chose that has no id or
+// name — a lock field has neither, and printed as `—` it read as "no field".
+function field(parse: string, role: string): string {
   if (!parse) return '?';
-  return pattern.exec(parse)?.[1] ?? '?';
+  const name = new RegExp(`^\\s*${role} :\\s*(.*?)\\s*,?\\s*$`, 'm').exec(parse)?.[1];
+  if (name === undefined) return '?';
+  if (name !== '') return name;
+  const id = new RegExp(`^\\s*${role} renderer id :\\s*(\\d+)`, 'm').exec(parse)?.[1];
+  return id && id !== '0' ? `#${id}` : '';
 }
 
 interface FlowResult {

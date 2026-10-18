@@ -112,3 +112,15 @@ test('a failed verification still shows when the field was edited and put back m
 
   expect(screen.getByRole('alert')).toBeTruthy();
 });
+
+// lock-pane.spec.tsx has the reasoning. Here the cost was the save prompt:
+// setting a lock had Chrome offer to replace the saved sign-in password.
+test.each(['create', 'verify'] as const)(
+  'the %s field tells a password manager it is not the login',
+  (mode) => {
+    render(tree(jest.fn(), { mode }));
+
+    expect(field().getAttribute('autocomplete')).toBe('one-time-code');
+    expect(field().type).toBe('password');
+  },
+);

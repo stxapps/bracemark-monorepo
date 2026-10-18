@@ -276,14 +276,16 @@ npm run measure:native -- --platform android --device <serial> --links 1000,1000
 ## measuring the password manager
 
 Also not a test: which field Chrome's password manager reads as the current and
-the new password on each form that takes the account's password, and whether it
-offers to save — read off `chrome://password-manager-internals`. Needs
+the new password on each form that takes the account's password, whether it
+offers to save, and that it offers nothing for a lock password — read off
+`chrome://password-manager-internals`. Needs
 `npm run dev`. Design and limits: `docs/e2e.md`, _measuring the password
 manager_.
 
 ```sh
 npm run measure:password-manager
 npm run measure:password-manager -- --flow change-generated,create-account
+npm run measure:password-manager -- --flow lock-app,lock-list
 ```
 
 ## what a spec may depend on

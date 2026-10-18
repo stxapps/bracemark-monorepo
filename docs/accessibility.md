@@ -728,7 +728,7 @@ item.
 
 ### what a field tells the browser
 
-`autocomplete` is the other half of a field's identity, and it has exactly two
+`autocomplete` is the other half of a field's identity, and it has exactly three
 right answers:
 
 - **A credential field names itself** — `username`, `current-password`,
@@ -776,13 +776,41 @@ right answers:
 
     Not the lock surfaces: a lock password is not this site's login, and naming
     the account beside it would file it as one.
+- **A secret that is not this site's login says `one-time-code` (web).** The
+  lock password is the one there is, on both of its surfaces —
+  `LockPasswordDialog` (set/remove the app lock, lock/unlock/remove a list
+  lock) and `LockPane` (the in-place unlock). ⚠ `off` does not cover it: Chrome
+  ignores `autocomplete="off"` on a password field. Both surfaces were `off`.
+  In a profile with the account's login saved, setting the app lock and leaving
+  Settings made Chrome offer to **update** that login with the lock password,
+  and the unlock field was offered the sign-in password. One wrong click there
+  overwrites the saved copy of a password that has no reset
+  ([account.md](./account.md)).
+  Chrome 155's parser counts a password field marked `one-time-code` as
+  not-a-password. It still falls back to the field when the form has no other,
+  but marks that parse fallback-only. A fallback-only form gets no automatic
+  save prompt; Chrome shows only the omnibox key icon, which the user has to
+  click. It is also not a login to fill, so nothing is filled or suggested when
+  the field takes focus. That part was read from Chromium's source, not
+  measured, because the measurement's fresh profile holds no saved login.
+  **What it cannot stop:** a click on the field still
+  lists the saved logins, because Chrome offers its saved logins on every
+  `type="password"` field. The only way out of that is a field that was never
+  a password field, and every way of building one is worse: a `type="text"`
+  field with `-webkit-text-security` masking lands in Chrome's form history
+  (the residue below, of a secret this time) and in the keyboard's learned
+  words, and a screen reader echoes it as it is typed. The field stays
+  `type="password"`.
+  Why not `new-password` on the set dialog: that token asks Chrome to
+  **generate** a password and offer to save it, which is the bug.
+  `npm run measure:password-manager` has a flow for each lock kind, expecting
+  no submission ([e2e.md](./e2e.md), _measuring the password manager_). The
+  lock specs pin the token.
 - **Everything else is `off`, and it is `off` by default.** The input
   primitives apply it themselves — web-ui's `ui/input.tsx` and `ui/textarea.tsx`,
   expo's `ui/input.tsx` (which `Textarea` and `PasswordInput` both go through) —
   so a field that holds the user's content needs nothing, and a field that holds
-  a credential has to say which. A lock password is the case that shows why the
-  default is not "leave it to the browser": it is a secret, and it is not this
-  site's login.
+  a credential has to say which.
 
 The reason is not tidiness. What a browser offers to complete is what it has
 **kept**, outside this app's storage and past a sign-out

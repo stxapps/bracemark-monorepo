@@ -108,6 +108,10 @@ export function LockPasswordDialog({
                 autoFocus
                 placeholder="Password"
                 aria-label="Password"
+                // Not this site's login — see lock-pane.tsx. Here it was the save
+                // prompt: setting a lock and leaving Settings had Chrome offer to
+                // replace the saved sign-in password with the lock's.
+                autoComplete="one-time-code"
                 value={password}
                 // `readOnly`, not `disabled`, and ONLY while frozen: focus stays
                 // in the field either way, where the expo twin's `editable` drops

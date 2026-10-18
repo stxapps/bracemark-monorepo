@@ -35,17 +35,19 @@ describe('what a field tells the browser to keep', () => {
   );
 
   // PasswordInput is the one wrapper every secret goes through, so the default
-  // has to reach its field — a list-lock password is not this site's login, and
-  // a wrapper that swallowed the attribute would offer to save it as one.
+  // has to reach its field, and so does a caller's token. `off` is not enough on
+  // its own for a secret that is not this site's login: Chrome ignores it on a
+  // password field, which is why the lock surfaces say `one-time-code` instead
+  // (docs/accessibility.md, _what a field tells the browser_).
   it('reaches a secret field through PasswordInput, and yields to its token', () => {
     render(
       <>
-        <PasswordInput aria-label="Lock password" />
+        <PasswordInput aria-label="Secret" />
         <PasswordInput aria-label="Account password" autoComplete="current-password" />
       </>,
     );
 
-    expect(screen.getByLabelText('Lock password').getAttribute('autocomplete')).toBe('off');
+    expect(screen.getByLabelText('Secret').getAttribute('autocomplete')).toBe('off');
     expect(screen.getByLabelText('Account password').getAttribute('autocomplete')).toBe(
       'current-password',
     );

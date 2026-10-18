@@ -109,6 +109,15 @@ export function LockPane({ title, description, onUnlock, className }: LockPanePr
             ref={fieldRef}
             placeholder={LOCK_COPY.passwordLabel}
             aria-label={LOCK_COPY.passwordLabel}
+            // NOT this site's login, and `off` cannot say so: Chrome ignores it on
+            // a password field. It suggested the saved sign-in password here, and
+            // after an unlock it offered to UPDATE the saved login with the lock
+            // password. `one-time-code` is the token Chrome's parser drops from
+            // login detection: no save prompt, and the form is no longer a login
+            // to fill. A click on the field can still list the saved logins,
+            // because Chrome offers them on every password field.
+            // docs/accessibility.md, _what a field tells the browser_.
+            autoComplete="one-time-code"
             value={password}
             onChange={(e) => {
               latestPassword.current = e.target.value;

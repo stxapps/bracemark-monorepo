@@ -123,3 +123,15 @@ test('the field stays enabled, and focused, while a password is verified and aft
   expect(field().disabled).toBe(false);
   expect(document.activeElement).toBe(field());
 });
+
+// A lock password is not this site's login, and `autocomplete="off"` did not
+// tell Chrome so: it suggested the saved sign-in password here and offered to
+// overwrite that login with the lock password. Whether Chrome reads the token
+// is `npm run measure:password-manager`'s to say (docs/e2e.md); that the field
+// still carries it is pinned here, because nothing else would notice it gone.
+test('the field tells a password manager it is not the login', () => {
+  render(pane);
+
+  expect(field().getAttribute('autocomplete')).toBe('one-time-code');
+  expect(field().type).toBe('password');
+});

@@ -3139,7 +3139,8 @@ bundle.js`. Bundle the code under test with esbuild, then lower it with
 `e2e/measure/password-manager.ts` (`npm run measure:password-manager`) reports
 what Chrome's password manager makes of each form that takes the account's
 password: which field it reads as the current password, which as the new one,
-and whether it offers to save. It reads `chrome://password-manager-internals`,
+and whether it offers to save. It also checks that Chrome offers nothing for a
+lock password, which is a secret but not this site's login. It reads `chrome://password-manager-internals`,
 open in a second tab of the same profile, which logs exactly that while it is
 open.
 
@@ -3150,20 +3151,29 @@ way. The specimen is change password's generated path, where Chrome offered to
 save the **old** password ([accessibility.md](./accessibility.md), _what a field
 tells the browser_). `WEB-ACCOUNT-006` pins the input that fixed it; this is the
 measurement that showed Chrome actually reads that input, and the thing to re-run
-when any form that takes a password changes shape.
+when any form that takes a password changes shape. The second specimen runs the
+other way. The lock surfaces said `off`, which Chrome ignores on a password
+field, so setting a lock or unlocking one made Chrome offer to replace the saved
+sign-in password with the lock password. They now say `one-time-code`
+([accessibility.md](./accessibility.md), _what a field tells the browser_).
 
 ```sh
 npm run dev                                         # the api and the web app
-npm run measure:password-manager                    # all five flows, ~30s
+npm run measure:password-manager                    # all seven flows, about a minute
 npm run measure:password-manager -- --flow change-generated,create-account
 npm run measure:password-manager -- --headed
 ```
 
-Five flows, each on a fresh account in a fresh profile — change password
+Seven flows, each on a fresh account in a fresh profile — change password
 (current password + generated, current password + typed, recovery code +
-generated), Settings → Recovery code, and create-account on its generated path —
-each against the submissions it should produce: the fields, Chrome's decision,
-and how many. The recovery-code view's expected field is the **current
+generated), Settings → Recovery code, create-account on its generated path, and
+the two lock flows (`lock-app`: set the app lock, close Settings, unlock;
+`lock-list`: lock a list, close Settings, unlock it in place) — each against the
+submissions it should produce: the fields, Chrome's decision, and how many. A
+lock flow's expected count is **zero**. Under `off` the app-lock flow logged two
+`ASK the user` lines, one for the set and one for the unlock, and the list flow
+logged one. A field Chrome chose that has no id prints as `#<renderer id>`
+rather than `—`, so a lock field is not mistaken for no field. The recovery-code view's expected field is the **current
 password**, never the code: the code is a second door, and saved as this site's
 password it would fill sign-in. Create-account's is **one** submission, at the
 end: an exposed passphrase on its setup step made Chrome treat Continue as a
@@ -3184,7 +3194,9 @@ Its limits, which it cannot see past:
 - **Every profile is fresh, with no saved login**, so Chrome's offer is always
   to _save_. What it does against a login it already holds — update, or nothing
   for an unchanged one — and the prompt it stops opening on its own after being
-  dismissed for a site a few times are a real profile's to show.
+  dismissed for a site a few times are a real profile's to show. So is the
+  _fill_ side of a lock field: with nothing saved there is nothing to suggest,
+  so a lock flow shows the save half only.
 
 ### state today
 

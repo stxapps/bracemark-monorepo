@@ -467,6 +467,17 @@ in the account ceremony. The reveal is default-off per mount and must stay that
 way: the onlooker in the threat model above is the person who'd be reading it.
 See `docs/account.md`, _every field that takes a secret reveals it_.
 
+⚠ **On web that field says `autocomplete="one-time-code"`, not `off`.** A lock
+password is a secret, but it is not this site's login. Chrome ignores `off` on a
+password field. With the account's login saved, it offered to replace that login
+with the lock password after a lock was set, and it suggested the sign-in
+password in the unlock field. The token keeps Chrome's save prompt away from
+both surfaces. A click on the field can still list the saved logins; no
+attribute stops that on a `type="password"` field. Nothing else reports a
+regression here, so `npm run measure:password-manager -- --flow
+lock-app,lock-list` is the check
+([accessibility.md](./accessibility.md), _what a field tells the browser_).
+
 `AppLockGate` is a **content swap, not a redirect**, mounted above
 `InitialSyncGate` so the lock screen is the first thing shown and the first sync
 proceeds behind it. Its `'checking'` phase (the first locks read) renders
