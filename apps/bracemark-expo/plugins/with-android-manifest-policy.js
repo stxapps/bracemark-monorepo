@@ -37,6 +37,16 @@ ${EXCLUSIONS}
  * Keep layout LTR until the direction-sensitive UI/gestures are qualified for
  * RTL. Backup is disabled in app.config.ts; these rules also exclude device
  * transfer on manufacturers that do not apply allowBackup to that mode.
+ *
+ * `smallestScreenSize` joins MainActivity's `configChanges`, which Expo's
+ * template lists without it (React Native's own template has it). A fold or
+ * unfold, a split-screen or freeform resize, and moving to another display all
+ * change the smallest width; a change the activity doesn't declare RECREATES it,
+ * and a recreated activity remounts the React surface — the open screen, the
+ * scroll position, a half-typed link, gone, on the gesture that most wants the
+ * app to simply re-lay out. With it declared, the window resize reaches JS as a
+ * `Dimensions` change like a rotation does (src/lib/window-class.ts).
+ *
  * android/ is generated, so both the manifest and XML belong to prebuild.
  * → docs/expo-build.md, _android manifest policy_.
  */
@@ -46,6 +56,11 @@ const withAndroidManifestPolicy = (config) => {
     application.$['android:supportsRtl'] = 'false';
     application.$['android:fullBackupContent'] = 'false';
     application.$['android:dataExtractionRules'] = '@xml/bracemark_data_extraction_rules';
+
+    const activity = AndroidConfig.Manifest.getMainActivityOrThrow(cfg.modResults);
+    const changes = new Set((activity.$['android:configChanges'] ?? '').split('|').filter(Boolean));
+    changes.add('smallestScreenSize');
+    activity.$['android:configChanges'] = [...changes].join('|');
     return cfg;
   });
 

@@ -1856,9 +1856,12 @@ at two layouts — `wide` (1280×900) and `narrow` (390×844) — and they are t
 Playwright **projects**, not a resize: the add surface is a popover wide and a
 sheet narrow, so resizing with it open would photograph something nobody sees.
 Each project drives its own account from scratch. The devices are the canonical
-phones, the iPhone 17 Pro simulator and the Pixel 8 AVD; the app is phone-only
-and portrait-locked ([expo-build.md](./expo-build.md)), so there is no tablet
-profile to add. The large-text case sets iOS's content size to
+phones, the iPhone 17 Pro simulator and the Pixel 8 AVD, upright. The app now
+runs on tablets and in every orientation ([expo-build.md](./expo-build.md),
+_devices_), and **the matrix has no tablet or landscape profile yet** — the docked
+rails ([safe-area.md](./safe-area.md), _wide windows on native_) are photographed
+nowhere. The natural pair is web's: an iPad simulator and a tablet AVD as the
+native `wide`. The large-text case sets iOS's content size to
 `extra-extra-extra-large` and Android's `font_scale` to 1.3 — both at or past the
 app's 1.3 cap ([accessibility.md](./accessibility.md), _font scaling_), so the
 capture is the largest text the app will ever lay out. The iOS share sheet is in

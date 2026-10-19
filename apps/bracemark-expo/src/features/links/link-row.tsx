@@ -27,8 +27,9 @@ import { useLinksViewActions } from './view-state-provider';
 // or 576px at Tailwind's 16px root. Use the row width main.tsx hands down rather
 // than Uniwind's viewport `lg:` (64rem): the row is the thing whose title the
 // date competes with, and the two breakpoint scales do not mean the same width.
-// Today the app is phone-only and portrait-locked, so this hides the date on all
-// supported devices while keeping the rule correct for a future wider surface.
+// So the date never shows on a phone held upright, and does on a phone on its
+// side, a tablet and an unfolded foldable — wherever the ROW reaches 576, which
+// with the docked rail (features/links/rail.tsx) is narrower than the window.
 const RELATIVE_TIME_MIN_ROW_WIDTH = 576;
 
 // Whether this row renders a chip strip, and so which of its two shapes it

@@ -305,14 +305,13 @@ function DialogContent({
             // paywall-provider.tsx and lock-password-dialog.tsx do exactly
             // that, landing on the same 24rem their web twins set through the
             // token.
-            // The cap binds on nothing shipped: `app.config.ts` is
-            // portrait-only with `supportsTablet: false`, so the widest box is
-            // a ~440dp phone minus the gutter, and only an unfolded foldable or
-            // a freeform window reaches 448. It is stated anyway so the two
-            // kits cannot disagree where it does show. Note `rem` is baked at
-            // BUILD time to value * 16 (docs/theme.md, _extending_), so this is
-            // a hard 448 that does NOT grow with the OS font scale, while the
-            // text inside it does up to the app-wide 1.3 cap.
+            // The cap binds on no phone held upright (the widest is ~440dp
+            // minus the gutter) and on every tablet, unfolded foldable and
+            // phone on its side, where a form 448 wide reads as a dialog
+            // rather than a sheet stretched across the screen. Note `rem` is
+            // baked at BUILD time to value * 16 (docs/theme.md, _extending_),
+            // so this is a hard 448 that does NOT grow with the OS font scale,
+            // while the text inside it does up to the app-wide 1.3 cap.
             'z-50 mx-auto flex max-h-full w-full max-w-md flex-col gap-6 rounded-4xl border border-border bg-popover p-6 shadow-lg shadow-black/5',
             Platform.select({
               web: 'animate-in fade-in-0 zoom-in-95 duration-200 web:max-w-[calc(100%-2rem)]',

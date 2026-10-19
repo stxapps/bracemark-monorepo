@@ -294,6 +294,10 @@ export interface SidebarViewValue {
   // Collapse ids — list/tag ids plus the two reserved section ids
   // (`section:lists` / `section:tags`). Present in the array == collapsed.
   collapsedIds: string[];
+  // Whether the user put the DOCKED links rail away — the wide-window rail
+  // (bracemark-expo `features/links/rail.tsx`; web's `SidebarRail.collapsed`).
+  // Optional because rows written before it existed lack it: absent == shown.
+  railCollapsed?: boolean;
 }
 export const sidebarView = sqliteTable('sidebar_view', {
   // Single-row table — one view bag per device, keyed by a constant.

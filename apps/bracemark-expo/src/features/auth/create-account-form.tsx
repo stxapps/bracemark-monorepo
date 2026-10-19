@@ -312,9 +312,8 @@ export function CreateAccountForm() {
           off. Shortening it is not available — the label is the outcome, word
           for word (docs/account.md) — and shrinking it is the fix
           docs/accessibility.md, _font scaling_, rules out. So `min-h` rather
-          than `h`, with the `sm:` pair restated because `cn` only cancels a
-          class in its own variant scope (ui/textarea.tsx). `py-2` is not the
-          padding ui/button.tsx removed: that rule is for a pinned box, and here
+          than `h`. `py-2` is not the padding ui/button.tsx removed: that rule
+          is for a pinned box, and here
           two `text-sm` lines are exactly the 40 minimum, so without it they
           would touch both edges; a one-line label still lands on 40. The two
           break strategies keep a lone "code" off the second line. */}
@@ -324,7 +323,7 @@ export function CreateAccountForm() {
         </Button>
         <Button
           variant="ghost"
-          className="h-auto min-h-10 py-2 sm:h-auto sm:min-h-9"
+          className="h-auto min-h-10 py-2"
           disabled={pending}
           onPress={() => submit(false)}
         >

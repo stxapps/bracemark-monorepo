@@ -35,13 +35,14 @@ test("the box takes the tall-control radius, not Input's pill", () => {
   expect(cls).not.toContain('rounded-4xl');
 });
 
-test("the floor replaces Input's fixed height at BOTH variant scopes", () => {
+test("the floor replaces Input's fixed height, at every scope", () => {
   const cls = classesOf(<Textarea aria-label="Note" />);
-  expect(cls).toEqual(expect.arrayContaining(['h-auto', 'sm:h-auto', 'min-h-16']));
-  // The unscoped half is what tailwind-merge cancels on its own; `sm:h-9` is
-  // the half it does NOT, because a different variant scope is not a conflict.
-  // Left standing, a note collapses to 36pt on the first screen wide enough to
-  // match `sm:` — which no device this app ships to is yet.
+  expect(cls).toEqual(expect.arrayContaining(['h-auto', 'min-h-16']));
+  // tailwind-merge cancels Input's `h-10` on its own. What it would NOT cancel is
+  // a height under a breakpoint — a different variant scope is not a conflict —
+  // and a note would collapse to it on any window wide enough to match. Input
+  // carried one (`sm:h-9`) until the tablet layout removed the controls' `sm:`
+  // steps (ui/input.tsx); this holds that none has come back to leak through.
   expect(cls).not.toContain('h-10');
-  expect(cls).not.toContain('sm:h-9');
+  expect(cls.filter((c) => /^(sm|md|lg|xl|2xl):h-/.test(c))).toEqual([]);
 });

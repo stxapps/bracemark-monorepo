@@ -315,11 +315,16 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
       </View>
       {/* `bottomOffset` adds the pinned footer's height to the usual 16: once
           the footer lifts onto the keyboard it covers that band, so a focused
-          field has to clear it too (components/sticky-footer.tsx). */}
+          field has to clear it too (components/sticky-footer.tsx).
+
+          `w-full max-w-2xl self-center` caps the form at the settings pane's
+          column for an Android tablet, where this modal is the whole window
+          and the `aspect-12/7 w-full` preview would otherwise grow to most of
+          the screen's height. Advanced Search carries the same cap. */}
       <StyledKeyboardAwareScrollView
         ref={scrollRef}
         className="flex-1"
-        contentContainerClassName="gap-4 p-4"
+        contentContainerClassName="w-full max-w-2xl gap-4 self-center p-4"
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         bottomOffset={16 + footerHeight}

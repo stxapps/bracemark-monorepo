@@ -43,10 +43,12 @@ import { LOCK_COPY } from '@stxapps/react';
 import { type LinkSortOn } from '@stxapps/shared';
 
 import { LockPane } from '../../components/lock-pane';
+import { RAIL_WIDTH } from '../../lib/window-class';
 import { BulkEditBar } from './bulk-edit-bar';
 import { CARD_H_CHROME, LinkCard } from './link-card';
 import { hasKnownTags, LinkRow } from './link-row';
 import { useLinksPage } from './page-provider';
+import { useLinksRail } from './rail';
 import { EmptyState, type LinkItemProps, RefreshPill, useTagMap } from './shared';
 import { useLinks } from './use-links';
 import { useLinksViewActions, useLinksViewState } from './view-state-provider';
@@ -79,9 +81,11 @@ const VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 0, minimumViewTime: 25
 // menu on one text-base line, and the host is the line that says where the link
 // goes: at two columns on a 390pt phone the card is 187 wide and the host gets
 // ~103 of it, about 13 characters, so `www.nytimes.com` truncates. One column
-// there gives it ~274. So the grid is one column on every phone (two needs
-// 648pt of outer width) and 2–4 on a tablet — which is where web lands at those
-// same widths, a 390px browser window included.
+// there gives it ~274. So the grid is one column on every phone held upright
+// (two needs 648pt of outer width), two on most phones on their side, and up to
+// four on a tablet — one fewer, often, while the rail is docked beside it,
+// which takes 280 of the width (lib/window-class.ts). That is where web lands
+// at those same widths, a 390px browser window included.
 const MIN_CARD_WIDTH = 300;
 // The pane's content padding in card layout: pairs with each card's own p-2
 // (link-card.tsx) so edges and inter-card gaps both come to 16 — web's p-4
@@ -276,15 +280,23 @@ function UnlockedMain() {
   // Window width MINUS what the pane doesn't get, rather than a measured
   // container: the window value is available synchronously, so there's no
   // DEFAULT_COLUMNS flash to paper over (web's useElementWidth dance isn't
-  // needed here). Two subtractions keep it honest — the screen's horizontal
-  // safe-area insets (the screen wraps this in an all-edges SafeAreaView; they
-  // are 0 in portrait, but the column math shouldn't silently depend on
-  // app.config.ts's orientation lock) and the grid's own content padding, which
-  // is inside the list and so is space no column can use. Feed the raw window
-  // width instead and MIN_CARD_WIDTH stops being the guarantee it exists to be.
+  // needed here). Three subtractions keep it honest — the docked rail, the
+  // screen's horizontal safe-area insets, and the grid's own content padding,
+  // which is inside the list and so is space no column can use. Feed the raw
+  // window width instead and MIN_CARD_WIDTH stops being the guarantee it exists
+  // to be.
+  //
+  // The rail and the LEFT inset are one or the other, never both. The insets
+  // are side insets in landscape (44–59 on a notched iPhone) and the screen's
+  // SafeAreaView measures its own natively, against where the view actually
+  // sits: docked, the screen starts RAIL_WIDTH in, past any left inset, so its
+  // own left inset is 0 — the rail's SafeAreaView already paid it out of the
+  // rail's 280. `useSafeAreaInsets()` is the WINDOW's, so subtracting its left
+  // while docked would take the notch off a pane that never touches it.
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const paneWidth = width - insets.left - insets.right - contentPadding * 2;
+  const { docked } = useLinksRail();
+  const paneWidth = width - (docked ? RAIL_WIDTH : insets.left) - insets.right - contentPadding * 2;
   const numColumns = columns(paneWidth);
   // One cell's width, for the item's own internal budgets — today just the tag
   // strip's, which estimates how many chips fit rather than measuring (see

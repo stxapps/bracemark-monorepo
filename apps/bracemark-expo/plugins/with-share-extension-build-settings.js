@@ -24,7 +24,7 @@ const plist = fromConfigPlugins('@expo/plist');
  * `expo-share-extension` creates `BracemarkShareExtension` from a hardcoded
  * build-settings map (`plugin/build/xcode/addToXCConfigurationList.js`) and a
  * hardcoded Info.plist (`plugin/build/withShareExtensionInfoPlist.js`), and
- * four values that are correct on the app target never reach it. All four are
+ * five values that are correct on the app target never reach it. All five are
  * SILENT — prebuild succeeds, the config is valid, and no lint, type or test
  * reads a pbxproj or a plist:
  *
@@ -43,6 +43,14 @@ const plist = fromConfigPlugins('@expo/plist');
  *   while `ios.deploymentTarget` puts the app — and, through
  *   `Podfile.properties.json`, every Pod — on 26.0. Symptom: pods built for a
  *   newer iOS than the target linking them.
+ * - **`TARGETED_DEVICE_FAMILY`.** Order again, the `DEVELOPMENT_TEAM` kind: core
+ *   `withDeviceFamily` writes `ios.supportsTablet` onto every target that
+ *   exists when it runs, which is before this one does, and the plugin's map
+ *   names no family — so the extension builds for Xcode's default, iPhone
+ *   only, inside an app that is iPad-native. Symptom: on an iPad the share
+ *   sheet runs the extension as an iPhone-sized box over Safari, the very
+ *   compatibility mode the app itself just left, and App Review exercises it
+ *   there (guideline 2.4.1).
  * - **`MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`.** The extension's
  *   Info.plist takes `CFBundleShortVersionString` from `$(MARKETING_VERSION)`,
  *   and the plugin seeds that setting from the TOP-LEVEL `config.version` —
@@ -78,12 +86,12 @@ const plist = fromConfigPlugins('@expo/plist');
  * take, and what is on disk is what prebuild is about to leave behind.
  *
  * Everything is COPIED FROM THE APP TARGET rather than restated here — the
- * deployment target from its build settings, the versions and the display name
- * from the Info.plist it actually ships — so `app.config.ts` stays the only
- * place any of these live and a bump can't leave the extension behind. The
- * project-level configurations keep the template's 15.1 and that is deliberate:
- * target-level settings win, and upstream leaves them alone for the app target
- * too.
+ * deployment target and the device family from its build settings, the
+ * versions and the display name from the Info.plist it actually ships — so
+ * `app.config.ts` stays the only place any of these live and a bump can't leave
+ * the extension behind. The project-level configurations keep the template's
+ * 15.1 and that is deliberate: target-level settings win, and upstream leaves
+ * them alone for the app target too.
  *
  * Unset `APPLE_TEAM_ID` stays safe, matching `withDevelopmentTeam`: a falsy id
  * is skipped and no team is written, so a fresh clone still prebuilds and you
@@ -137,6 +145,19 @@ const withShareExtensionBuildSettings = (config) =>
           .filter(([, deploymentTarget]) => deploymentTarget),
       );
       const fallbackDeploymentTarget = [...appDeploymentTargets.values()][0];
+      // The device families, the same way: keyed by configuration, app value as
+      // the fallback. Kept in its pbxproj spelling (`"1,2"`, quotes included),
+      // since it goes straight back into a pbxproj.
+      const appDeviceFamilies = new Map(
+        appTargets
+          .flatMap(configurationsOf)
+          .map((buildConfig) => [
+            buildConfig.name,
+            buildConfig.buildSettings?.TARGETED_DEVICE_FAMILY,
+          ])
+          .filter(([, family]) => family),
+      );
+      const fallbackDeviceFamily = [...appDeviceFamilies.values()][0];
 
       // A target's Info.plist, located the way the build locates it. Values in
       // it may be `$(BUILD_SETTING)` references, substituted at build time, so
@@ -185,6 +206,10 @@ const withShareExtensionBuildSettings = (config) =>
           if (deploymentTarget) {
             buildConfig.buildSettings.IPHONEOS_DEPLOYMENT_TARGET = deploymentTarget;
           }
+          const deviceFamily = appDeviceFamilies.get(buildConfig.name) ?? fallbackDeviceFamily;
+          if (deviceFamily) {
+            buildConfig.buildSettings.TARGETED_DEVICE_FAMILY = deviceFamily;
+          }
         }
 
         // The display name has no build setting to write — `GENERATE_INFOPLIST_FILE`
@@ -230,7 +255,8 @@ const withShareExtensionBuildSettings = (config) =>
       // unchanged if Expo or expo-share-extension ever fixes any of it
       // upstream — the writes are idempotent. What they catch is a write that
       // MISSED a target: an empty Team dropdown, a mismatched deployment
-      // target, or a bundle whose identity differs from the app's, each of
+      // target, an iPhone-only extension in an iPad app, or a bundle whose
+      // identity differs from the app's, each of
       // which otherwise surfaces at archive time or later.
       for (const target of targets) {
         const plistPath = infoPlistPathOf(target);
@@ -242,6 +268,15 @@ const withShareExtensionBuildSettings = (config) =>
             throw new Error(
               `with-share-extension-build-settings: ${where} has no DEVELOPMENT_TEAM — ` +
                 `that target is unsigned and Xcode will ask for its team.`,
+            );
+          }
+          const expectedFamily = appDeviceFamilies.get(buildConfig.name);
+          if (expectedFamily && settings.TARGETED_DEVICE_FAMILY !== expectedFamily) {
+            throw new Error(
+              `with-share-extension-build-settings: ${where} targets device family ` +
+                `${settings.TARGETED_DEVICE_FAMILY ?? '(unset — iPhone only)'}, but the app ` +
+                `targets ${expectedFamily} — on an iPad the share sheet would run it in ` +
+                `iPhone compatibility mode.`,
             );
           }
           const expected = appDeploymentTargets.get(buildConfig.name);

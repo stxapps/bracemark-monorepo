@@ -1,7 +1,8 @@
 // The bar above the links list — the expo port of bracemark-web's
 // `(app)/links/_panes/topbar.tsx`: the active selection's name (what the main
-// pane is showing) plus the screen's chrome actions. On mobile the leading
-// action is the drawer toggle (web's sidebar is always visible) and the
+// pane is showing) plus the screen's chrome actions. On a phone-width window the
+// leading action is the drawer toggle (on a wide one, the docked rail's Show
+// while it is put away, and nothing while it is docked) and the
 // trailing pair is the search toggle — web's persistent search box doesn't fit
 // a phone topbar, so it summons the SearchBar row below (view-state-provider
 // `searchOpen`) — and the ⋯ overflow menu (more-options-menu.tsx), which
@@ -24,8 +25,10 @@ import { ALL_LABEL, flattenTree } from '@stxapps/shared';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
+import { cn } from '../../lib/utils';
 import { MoreOptionsMenu } from './more-options-menu';
 import { useLinksPage } from './page-provider';
+import { ShowRailButton, useLinksRail } from './rail';
 import { useLinksViewState } from './view-state-provider';
 
 function useSelectionLabel(): string {
@@ -59,6 +62,7 @@ function useSelectionLabel(): string {
 export function Topbar() {
   const label = useSelectionLabel();
   const navigation = useNavigation();
+  const { wide, docked } = useLinksRail();
   const { searchVisible, setSearchOpen, restorePreSearch } = useLinksViewState();
 
   // Closing DISMISSES the search: with the bar gone, a committed search
@@ -106,7 +110,15 @@ export function Topbar() {
   };
 
   return (
-    <View className="h-14 shrink-0 flex-row items-center gap-2 border-b border-border px-3">
+    // `pl-4` while docked: with no leading button the title IS the bar's first
+    // element, and 16 puts it on the same inset as the rail's lockup across the
+    // border, where `px-3` alone was sized for a button's empty margin.
+    <View
+      className={cn(
+        'h-14 shrink-0 flex-row items-center gap-2 border-b border-border px-3',
+        docked && 'pl-4',
+      )}
+    >
       {/* hitSlop, on this and every other chrome button in the app: the boxes
           are 36, under both platform floors (iOS HIG 44pt, Material 48dp), and
           growing them would mean re-cutting both topbars — the bar is h-14, so
@@ -116,17 +128,25 @@ export function Topbar() {
           (the later sibling wins) and the loser's own visible box is what gets
           eaten. Nothing pressable sits beside this one — the title is a Text —
           so it takes the full 6. */}
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        testID="links-open-navigation"
-        onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
-        aria-label="Open navigation"
-        hitSlop={6}
-        className="-ml-1"
-      >
-        <Icon as={Menu} className="size-5 text-foreground" />
-      </Button>
+      {/* The leading slot follows the rail (features/links/rail.tsx): the drawer
+          toggle on a phone-width window; nothing while the rail is docked beside
+          the bar, since the rail IS the navigation it would open; and the
+          rail's Show while it is put away on a wide one. */}
+      {!wide ? (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          testID="links-open-navigation"
+          onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
+          aria-label="Open navigation"
+          hitSlop={6}
+          className="-ml-1"
+        >
+          <Icon as={Menu} className="size-5 text-foreground" />
+        </Button>
+      ) : (
+        !docked && <ShowRailButton />
+      )}
       {/* THE TITLE IS THE VIEW'S NAME AND CARRIES THE WEIGHT — the opposite of
           the settings topbar's, whose label is a surface marker over a pane that
           has its own heading. Here there is no heading below: the list starts

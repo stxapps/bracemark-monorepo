@@ -497,12 +497,24 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
           discard the draft. Claiming those taps is the job; `Keyboard.dismiss`
           is what to do with them, and it is share-kit.tsx's layer arriving by a
           different route (the scroller already covers the body, so this only
-          ever sees the chrome). */}
+          ever sees the chrome).
+
+          `max-w-xl self-center` is the wide-window answer, and it is a WIDTH
+          answer only. Web turns quick-add into an anchored popover at `md`;
+          here the sheet stays a bottom sheet at every width, because every
+          number above — the avoider's padding, the inset that the keyboard
+          cancels — is about the bottom edge, and none of it cares how wide the
+          panel is. What a tablet needed was not a different surface but a form
+          that doesn't run 1,000pt from its label to its Save: at 576 (the
+          widest phone's panel is ~440) the fields keep close to a phone's
+          measure and the sheet centres over the list, the way iPadOS centres
+          its own sheets. `sm:border-x` gives the detached sides the edge the top
+          already has; below `sm` the sides are the screen's. */}
         <StyledAnimatedView
           as="Pressable"
           accessible={false}
           onPress={Keyboard.dismiss}
-          className="max-h-full rounded-t-2xl border-t border-border bg-popover"
+          className="max-h-full w-full max-w-xl self-center rounded-t-2xl border-t border-border bg-popover sm:border-x"
           style={panelStyle}
         >
           {/* A sheet header rather than an app bar: the top padding aligns the
@@ -642,9 +654,9 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                 `-ml-3` to put the label on the LabeledField labels' text edge),
                 the trailing-icon padding trim derived from the children, and the
                 icon colour inherited through TextClassContext the way web's
-                inherits from the button. `h-9` on a phone, `h-8` from `sm:` — the size
-                variant already draws that touch/pointer split, which is exactly
-                the h-9-vs-web's-h-8 this hand-rolled one was reproducing. The
+                inherits from the button. `h-9` — the size variant is already the
+                touch step above web's `h-8`, which is exactly the h-9-vs-web's-h-8
+                this hand-rolled one was reproducing. The
                 press background is unchanged: ghost uses `accent`, and this theme
                 defines `--color-accent` and `--color-muted` to the same value.
 

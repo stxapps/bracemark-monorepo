@@ -4,8 +4,10 @@
 // three + the user's own, Tags — as selectable filters; parent rows carry a
 // separate chevron hit target; hidden-list pruning and the own-lock badge; a
 // final utility band with the Show All reset and the Manage lists/tags links
-// out to settings). On mobile the rail is a Drawer ((app)/links/_layout.tsx),
-// so selecting an entry also closes it.
+// out to settings). On a phone-width window the rail is a Drawer
+// ((app)/links/_layout.tsx), so selecting an entry also closes it; on a wide one
+// the same component is docked beside the list (features/links/rail.tsx), where
+// that close is a no-op.
 //
 // Collapse state persists device-locally (the `sidebar_view` table via
 // sidebar-view-store — expo's home for what web keeps in localStorage), the
@@ -405,7 +407,15 @@ function FooterLink({
   );
 }
 
-export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
+export function Sidebar({
+  closeDrawer,
+  headerAction,
+}: {
+  closeDrawer: () => void;
+  // The brand row's trailing control — the docked rail's Hide (rail.tsx), and
+  // nothing in the overlay drawer, which is dismissed the usual three ways.
+  headerAction?: ReactNode;
+}) {
   const lists = useLists();
   const tags = useTags();
   const { selection } = useLinksPage();
@@ -539,7 +549,7 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
           brand-lockup.tsx), as do bracemark-web's two rails, its auth card and
           the browser extension's popup header. */}
       <View className="h-14 justify-center border-b border-border px-4">
-        <BrandLockup />
+        <BrandLockup action={headerAction} />
       </View>
 
       {/* Count-gated find-in-nav over both trees (funnel icon, not a magnifier):

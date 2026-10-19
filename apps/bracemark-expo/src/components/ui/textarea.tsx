@@ -26,17 +26,18 @@ import { Input } from './input';
 //     the scale has two entries. (Both call sites drew a 32px pill before this
 //     file existed, having hand-rolled the control from Input at the call site —
 //     the failure that section marks ⚠.)
-//   `h-auto sm:h-auto min-h-16` — web's `field-sizing-content min-h-16`, value
-//     for value: a floor of 64 that GROWS with the text. `min-h-*` alone would
-//     not do it. `cn` is tailwind-merge, which drops Input's `h-10` for a
-//     conflicting `h-*` but leaves `sm:h-9` standing — a different variant
-//     scope is not a conflict — so the cancel has to be spelled at BOTH scopes
-//     or a long note collapses to 36pt the day a screen is wide enough to match
-//     `sm:`. Invisible today for input.tsx's reason (iOS `supportsTablet:
-//     false`, Android portrait-locked) and therefore exactly the kind of thing
-//     that ships. All three classes were run through the Uniwind probe
-//     (docs/theme.md, _extending_): `h-auto` reaches RN as `height: "auto"`,
-//     which is a valid DimensionValue, and the floor as a plain `minHeight`.
+//   `h-auto min-h-16` — web's `field-sizing-content min-h-16`, value for
+//     value: a floor of 64 that GROWS with the text. `min-h-*` alone would not
+//     do it: `cn` is tailwind-merge, which drops Input's `h-10` for the
+//     conflicting `h-auto`, and without one the pinned 40 would win. (This also
+//     used to restate `sm:h-auto`, because tailwind-merge only cancels within a
+//     variant scope and Input carried a `sm:h-9`; that step went with the tablet
+//     layout — ui/input.tsx — so the cancel has nothing left to cancel. A `sm:`
+//     height ever coming back to Input needs it back here, or a long note
+//     collapses to that height on any window past 640.) Both classes were run
+//     through the Uniwind probe (docs/theme.md, _extending_): `h-auto` reaches
+//     RN as `height: "auto"`, which is a valid DimensionValue, and the floor as
+//     a plain `minHeight`.
 //     Growth itself is Fabric's: the TextInput shadow node measures its own
 //     content and re-measures as it changes, so nothing here counts lines.
 //   `py-3` — web's, and it belongs to the floor rather than to the type: 64
@@ -72,7 +73,7 @@ function Textarea({
       autoCorrect={autoCorrect}
       spellCheck={spellCheck}
       smartInsertDelete={smartInsertDelete}
-      className={cn('h-auto min-h-16 rounded-xl py-3 sm:h-auto', className)}
+      className={cn('h-auto min-h-16 rounded-xl py-3', className)}
       style={[{ textAlignVertical: 'top' }, style]}
       {...props}
     />

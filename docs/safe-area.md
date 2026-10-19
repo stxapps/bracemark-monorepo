@@ -435,7 +435,8 @@ breakpoint math.
 From `md` up, bracemark-web's links rail (`(app)/links/_panes/sidebar.tsx`) is the
 user's to size and to put away; below `md` it is the drawer either way. Only that
 rail does this — the settings rail is six short destinations with nothing to
-truncate, and bracemark-expo has no rail until it supports tablets. The state is
+truncate. bracemark-expo's docked links rail can be put away but not resized
+(_wide windows on native_, below). The state is
 device-local (`sidebar-view-store.ts` in web-react: `localStorage`, wiped by the
 sign-out teardown with the collapsed ids, kept by delete-all-data like
 `localSettings`); the measure and the toggles are
@@ -475,6 +476,103 @@ Four things nothing would flag:
 - **Both toggles unmount the control that was pressed** — Hide is inside the rail
   it hides, Show only exists while the rail is gone — so focus is handed to the
   counterpart, and only when it was inside what disappeared.
+
+### wide windows on native (bracemark-expo)
+
+bracemark-expo runs on every window a phone, a tablet or a foldable can hand it
+([expo-build.md](./expo-build.md), _devices_): an iPad full screen or in Split
+View, Slide Over or Stage Manager; an Android tablet, a split-screen half, a
+freeform window; a foldable folded or open; a Flip's cover screen; any phone on
+its side. It does not ask which. **The layout changes at one window width, 768 —
+Uniwind's `md` — and at nothing else.**
+
+| window                                                                                              | frame                                              |
+| --------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| under 768 — every phone upright, Slide Over, a narrow Split View, an iPad mini or 7" tablet upright | one pane; the links and settings rails are drawers |
+| 768 and up — a tablet, an unfolded foldable, most phones on their side                              | the rails dock beside their panes (`permanent`)    |
+
+- **The number lives once, in `src/lib/window-class.ts`** (`WIDE_MIN_WIDTH`,
+  `useWideWindow()`), and it must stay `md`. Uniwind resolves a breakpoint
+  against `Dimensions.get('window').width` and bakes `rem` at 16, so `md:` is
+  exactly 768 there, and `useWindowDimensions()` reports the same window — split
+  and freeform windows included. A JS branch on this hook and an `md:` class on
+  the same screen therefore flip on the same frame. That is web's rule (_the core
+  problem_, above: never re-derive a breakpoint from a measured width) in its
+  native form: there is no scrollbar here to make the two widths disagree, so the
+  window width _is_ what the class matched. A second number — 600, Material's
+  "medium" — is how the drawer and the classes would come to disagree.
+- **The rails dock by turning the same Drawer `permanent`** (`(app)/links/_layout.tsx`,
+  `(app)/settings/_layout.tsx`), so the identical Sidebar component is both
+  hosts, the way web renders one `SidebarBody` in a rail and a sheet. A row press
+  still calls `closeDrawer`, which a permanent drawer ignores. Both rails are
+  `RAIL_WIDTH` (280, same file) so crossing between the two moves nothing; the
+  overlay drawer keeps react-navigation's own width.
+- **The links rail can be put away; the settings rail cannot** — web's split.
+  Collapsed, the links Drawer goes back to `front`: the list takes the full width,
+  the topbar's leading slot docks it again ("Show sidebar"), and an edge swipe
+  still slides it over for a one-off pick. Hide sits in the rail's brand row,
+  through `BrandLockup`'s `action` slot. The flag is device-local
+  (`sidebar_view.railCollapsed`, expo-react `sidebar-view-store.ts`, wiped by the
+  sign-out teardown with the collapse ids) and is read on the **mounting render**
+  in `features/links/rail.tsx` for web's reason. Each toggle unmounts the
+  button that was pressed, so accessibility focus is handed to its counterpart as
+  it mounts.
+- **No resize, no shortcut.** Web's splitter is found by hover and dragged by a
+  pointer; a touch screen has neither, and the rail's width feeds the card grid's
+  column count, so a drag would re-compose it per frame. ⌘\ needs a hardware
+  keyboard; both buttons are reachable by Full Keyboard Access instead.
+
+Five things nothing would flag:
+
+- **The card grid's width is computed, not measured, so the rail has to be
+  subtracted by hand** (`features/links/main.tsx`). And it replaces the LEFT
+  safe-area inset rather than adding to it: docked, the screen starts 280 in,
+  past any notch, so its own `SafeAreaView` measures a left inset of 0 — the
+  rail's `SafeAreaView` paid it out of the rail's 280. `useSafeAreaInsets()` is
+  the window's and would still report 59 on a notched iPhone on its side.
+  Forget the rail and the grid lays out columns for a pane 280 wider than it
+  has, every card under `MIN_CARD_WIDTH`; subtract the window's left inset as
+  well and a column drops up to 59 early, with the tag strip's budget short by
+  the same. No test runs at either width; the cards just look wrong.
+- **A permanent drawer brings its own edge.** react-navigation draws a hairline
+  `borderRight` on a `permanent` drawer in the navigation theme's `colors.border`
+  — the stock light grey, since `src/app/_layout.tsx` overrides only
+  `background`. The Sidebars already draw `border-r border-border` in the token,
+  so both layouts pass `borderRightWidth: 0`; drop it and dark mode gets two
+  edges, one of them light.
+- **A `sm:`/`md:` step on a CONTROL'S HEIGHT is a touch-target shrink, and there
+  are none left.** The registry's `h-10 sm:h-9` (Button's whole scale, Input,
+  DropdownMenu rows) answered a web question — a mouse past 640px — and on this
+  app 640 is a tablet or a phone on its side, all touch. They went with the
+  tablet layout (`ui/input.tsx`'s header carries the argument). Layout steps
+  stay (`md:px-6` in settings, the `sm:` row in `sync-paused-notice.tsx`).
+  `testing/line-budget.ts` skips breakpoint classes on exactly this premise:
+  reintroduce a height, a vertical padding or a `text-*` under a breakpoint and
+  the fit check silently becomes phone-only. (`ui/textarea.tsx` records the
+  tailwind-merge trap that came with it — a cancel has to be spelled at the same
+  variant scope as what it cancels.)
+- **Android recreates an activity for an undeclared config change**, and a fold,
+  a split-screen drag or a move to another display changes `smallestScreenSize`.
+  `plugins/with-android-manifest-policy.js` adds it to `MainActivity`'s
+  `configChanges`; without it the window resize is not a `Dimensions` event but a
+  remount, and the open screen and a half-typed link go with it.
+- **A full-window modal on an Android tablet is the full window.** The link
+  editor and Advanced Search present as an iOS `pageSheet` — already about 700
+  wide on an iPad — but full-screen on Android, so each caps its scroller's
+  content at the settings column (`w-full max-w-2xl self-center`), leaving the
+  bars to span. The add panel stays a bottom sheet at every width (its keyboard
+  arithmetic is all about the bottom edge) and caps at `max-w-xl`, centred, with
+  side borders from `sm`.
+
+**Not yet verified on a device.** This shape was written and checked on a desk
+— typecheck, lint, the unit specs, and an `expo prebuild` read back for both
+platforms — but not run on an iPad simulator, a tablet AVD or a foldable, and the
+e2e visual matrix has no tablet profile ([e2e.md](./e2e.md), _visual
+checkpoints_). Before a release: run each on an iPad (full screen, both Split
+View widths, rotation across 768), a tablet AVD, and a foldable AVD folding and
+unfolding with the add panel open; and on the iPad, the iPad keyboard's floating
+and split modes against the editors' sticky footers, whose lift assumes a
+keyboard docked to the bottom of the window ([soft-keyboard.md](./soft-keyboard.md)).
 
 ### popups & dialogs
 

@@ -195,7 +195,7 @@ function DropdownMenuSubTrigger({
     >
       <DropdownMenuPrimitive.SubTrigger
         className={cn(
-          'group flex flex-row items-center justify-between gap-2.5 rounded-xl px-3 py-2 active:bg-accent sm:py-1.5',
+          'group flex flex-row items-center justify-between gap-2.5 rounded-xl px-3 py-2 active:bg-accent',
           Platform.select({
             web: 'cursor-default outline-none focus:bg-accent focus:text-accent-foreground [&_svg]:pointer-events-none',
           }),
@@ -334,6 +334,10 @@ function DropdownMenuItem({
   inset?: boolean;
   variant?: 'default' | 'destructive';
 }) {
+  // `py-2` at every width — this and the three rows below it dropped the
+  // registry's `sm:py-1.5` with Button's and Input's `sm:` steps, for the reason
+  // ui/input.tsx's header gives: past 640 on this app is a tablet or a phone on
+  // its side, which is still a finger, never a mouse.
   return (
     <TextClassContext.Provider
       value={cn(
@@ -343,7 +347,7 @@ function DropdownMenuItem({
     >
       <DropdownMenuPrimitive.Item
         className={cn(
-          'group relative flex flex-row items-center gap-2.5 rounded-xl px-3 py-2 active:bg-accent sm:py-1.5',
+          'group relative flex flex-row items-center gap-2.5 rounded-xl px-3 py-2 active:bg-accent',
           Platform.select({
             web: cn(
               'cursor-default outline-none focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none',
@@ -374,7 +378,7 @@ function DropdownMenuCheckboxItem({
     <TextClassContext.Provider value="text-sm text-popover-foreground select-none group-active:text-accent-foreground">
       <DropdownMenuPrimitive.CheckboxItem
         className={cn(
-          'group relative flex flex-row items-center gap-2.5 rounded-xl py-2 pr-8 pl-3 active:bg-accent sm:py-1.5',
+          'group relative flex flex-row items-center gap-2.5 rounded-xl py-2 pr-8 pl-3 active:bg-accent',
           Platform.select({
             web: 'cursor-default outline-none focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none',
           }),
@@ -414,7 +418,7 @@ function DropdownMenuRadioItem({
     <TextClassContext.Provider value="text-sm text-popover-foreground select-none group-active:text-accent-foreground">
       <DropdownMenuPrimitive.RadioItem
         className={cn(
-          'group relative flex flex-row items-center gap-2.5 rounded-xl py-2 pr-8 pl-3 active:bg-accent sm:py-1.5',
+          'group relative flex flex-row items-center gap-2.5 rounded-xl py-2 pr-8 pl-3 active:bg-accent',
           Platform.select({
             web: 'cursor-default outline-none focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none',
           }),

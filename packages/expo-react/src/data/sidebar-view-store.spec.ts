@@ -16,7 +16,12 @@
 import { sql } from 'drizzle-orm';
 
 import * as db from './db';
-import { readSidebarCollapsedIds, writeSidebarCollapsedIds } from './sidebar-view-store';
+import {
+  readSidebarCollapsedIds,
+  readSidebarRailCollapsed,
+  writeSidebarCollapsedIds,
+  writeSidebarRailCollapsed,
+} from './sidebar-view-store';
 
 jest.mock('expo-sqlite', () => require('../testing/node-sqlite'));
 
@@ -98,5 +103,50 @@ describe('writeSidebarCollapsedIds', () => {
     });
 
     expect(() => writeSidebarCollapsedIds(['lists'])).not.toThrow();
+  });
+});
+
+describe('the docked rail flag', () => {
+  // Shown is the default for every failure, for the reason the module gives.
+  it('reads as shown when nothing has been stored', () => {
+    expect(readSidebarRailCollapsed()).toBe(false);
+  });
+
+  it('round-trips both values', () => {
+    writeSidebarRailCollapsed(true);
+    expect(readSidebarRailCollapsed()).toBe(true);
+
+    writeSidebarRailCollapsed(false);
+    expect(readSidebarRailCollapsed()).toBe(false);
+  });
+
+  // A row written before the field existed, and a value of the wrong type: neither may
+  // put the rail away.
+  it('reads as shown for a row without the field or with a non-boolean', () => {
+    seedRawValue({ collapsedIds: ['lists'] });
+    expect(readSidebarRailCollapsed()).toBe(false);
+
+    seedRawValue({ collapsedIds: [], railCollapsed: 'yes' });
+    expect(readSidebarRailCollapsed()).toBe(false);
+  });
+
+  // One row holds both halves, so each writer has to carry the other through.
+  it('keeps the collapse ids when the flag is written, and the flag when the ids are', () => {
+    writeSidebarCollapsedIds(['lists']);
+    writeSidebarRailCollapsed(true);
+    expect(readSidebarCollapsedIds()).toEqual(['lists']);
+
+    writeSidebarCollapsedIds(['tags']);
+    expect(readSidebarRailCollapsed()).toBe(true);
+    expect(readSidebarCollapsedIds()).toEqual(['tags']);
+  });
+
+  it('degrades to shown, and never throws, when the store is unavailable', () => {
+    jest.spyOn(db, 'getDb').mockImplementation(() => {
+      throw new Error('database is locked');
+    });
+
+    expect(readSidebarRailCollapsed()).toBe(false);
+    expect(() => writeSidebarRailCollapsed(true)).not.toThrow();
   });
 });
