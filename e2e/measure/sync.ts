@@ -99,8 +99,11 @@ const TRACE_FLAG = 'bracemark.syncTrace';
 // The settled reading: no pending op and no new span for this long.
 const QUIET_MS = 2000;
 // A queue that hasn't moved for this long, with nothing running, gets the Data
-// card's "Sync now" — and the nudge is reported, because the engine should not
-// need one.
+// card's one action — "Sync now" when the last cycle was clean, "Retry" when it
+// failed — and the press is reported, because the engine should need neither. A
+// failed background cycle schedules no retry of its own (web-react
+// sync-provider.tsx, the error branch), so without the "Retry" press one R2
+// timeout leaves the queue where it stopped for the rest of the run.
 const STUCK_MS = 60_000;
 const FLOOR_LEVELS = [6, 12, 24, 48];
 const FLOOR_SAMPLE = 480;
@@ -335,14 +338,14 @@ async function pushLeg(
   const throttle = await throttleCpu(page, options.cpuRate);
   const since = Date.now();
   let imported: number;
-  let nudges: number;
+  let drain: Drain;
   try {
     await page.locator('input[type=file]').setInputFiles(backup);
     await expect(receipt.or(failure)).toBeVisible({ timeout: LEG_TIMEOUT_MS });
     if (await failure.isVisible()) throw new Error(await failure.innerText());
     imported = Date.now();
     console.log(`  ${(await receipt.innerText()).trim()} after ${seconds(imported - since)}`);
-    nudges = await waitForDrain(page);
+    drain = await waitForDrain(page);
   } finally {
     await throttle.release();
   }
@@ -352,7 +355,7 @@ async function pushLeg(
     `import (file pick → receipt) ${seconds(imported - since)}; ` +
       `sync after the receipt ${seconds(result.window.until - imported)}`,
   );
-  if (nudges > 0) result.notes.push(`the queue stalled and needed ${nudges} "Sync now" nudge(s)`);
+  result.notes.push(...drainNotes(drain));
   report(result);
   return result;
 }
@@ -373,8 +376,14 @@ async function pullLeg(
   if (options.cpuRate > 1) {
     console.log('  (the pull ran inside the sign-in, before --cpu could apply: it is at 1x)');
   }
-  await waitForDrain(page);
+  const drain = await waitForDrain(page);
   const result = await readLeg(b, page, leg, links, initial.start, runDir, appOrigin, initial.end);
+  // A failed first sync still ends the span, so the leg would otherwise read as
+  // a pull that finished — of a fraction of the library.
+  if (initial.failed) {
+    result.notes.push(`the initial sync FAILED (${initial.failed}): this is a partial pull`);
+  }
+  result.notes.push(...drainNotes(drain));
   report(result);
   return result;
 }
@@ -398,7 +407,7 @@ async function incrementalLeg(
   await expect(a.app.page.getByText(/^Imported \d+ link/)).toBeVisible({
     timeout: LEG_TIMEOUT_MS,
   });
-  await waitForDrain(a.app.page);
+  const pushed = await waitForDrain(a.app.page);
 
   // Device B opens a page; reaching 'ready' kicks the cycle that pulls them.
   const { page } = b.app;
@@ -417,6 +426,7 @@ async function incrementalLeg(
     await throttle.release();
   }
   const result = await readLeg(b, page, leg, links, since, runDir, appOrigin, cycle.end);
+  result.notes.push(...drainNotes(pushed).map((note) => `the first browser’s push: ${note}`));
   report(result);
   return result;
 }
@@ -662,16 +672,31 @@ async function pendingCount(page: Page): Promise<number> {
 // the engine has recorded nothing new for QUIET_MS. Without navigating — a
 // reload would abort the cycle under measurement and drop its spans with the
 // document (the trap seed/steps.ts's waitForSync, which navigates, would set).
-// Returns how many times the queue had to be nudged.
-async function waitForDrain(page: Page): Promise<number> {
-  const deadline = Date.now() + LEG_TIMEOUT_MS;
-  const syncNow = page.getByRole('button', { name: 'Sync now' });
+// Returns what it took: the presses, and the cycles that failed on the way.
+interface Drain {
+  nudges: number;
+  retries: number;
+  failedCycles: string[];
+}
+
+async function waitForDrain(page: Page): Promise<Drain> {
+  const started = Date.now();
+  const deadline = started + LEG_TIMEOUT_MS;
+  // The Data card's single action (_data/data-section.tsx): "Retry" after a
+  // failed cycle, "Sync now" after a clean one, nothing while a cycle runs.
+  const action = page.getByRole('button', { name: /^(Sync now|Retry)$/ });
   let emptySince: number | null = null;
   let lastSpanCount = -1;
   let lastChange = Date.now();
   let lastPending = -1;
   let lastReport = 0;
-  let nudges = 0;
+  const drain: Drain = { nudges: 0, retries: 0, failedCycles: [] };
+  const settled = (spans: readonly SyncSpan[]): Drain => ({
+    ...drain,
+    failedCycles: spans
+      .filter((s) => s.name === 'cycle' && s.failed && s.end >= started)
+      .map((s) => s.failed ?? ''),
+  });
   while (Date.now() < deadline) {
     const pending = await pendingCount(page);
     const { spans } = await readTrace(page);
@@ -685,23 +710,43 @@ async function waitForDrain(page: Page): Promise<number> {
       emptySince ??= now;
       const empty = emptySince;
       const cycledSince = spans.some((s) => s.name === 'cycle' && s.end >= empty - 1000);
-      if (cycledSince && now - lastChange >= QUIET_MS) return nudges;
+      if (cycledSince && now - lastChange >= QUIET_MS) return settled(spans);
     } else {
       emptySince = null;
       if (now - lastReport > 10_000) {
         console.log(`  ${pending} waiting to sync`);
         lastReport = now;
       }
-      if (now - lastChange >= STUCK_MS && (await syncNow.isVisible())) {
-        console.log('  the queue has not moved for a minute — nudging with "Sync now"');
-        await syncNow.click();
-        nudges++;
+      if (now - lastChange >= STUCK_MS && (await action.isVisible())) {
+        const label = (await action.innerText()).trim();
+        const failed = spans.filter((s) => s.name === 'cycle').at(-1)?.failed;
+        console.log(
+          `  the queue has not moved for a minute — pressing "${label}"` +
+            `${failed ? ` (the last cycle failed: ${failed})` : ''}`,
+        );
+        await action.click();
+        if (label === 'Retry') drain.retries++;
+        else drain.nudges++;
         lastChange = now;
       }
     }
     await page.waitForTimeout(500);
   }
   throw new Error('timed out waiting for the queue to drain');
+}
+
+function drainNotes(drain: Drain): string[] {
+  const notes: string[] = [];
+  if (drain.failedCycles.length > 0) {
+    notes.push(`${drain.failedCycles.length} cycle(s) failed: ${drain.failedCycles.join('; ')}`);
+  }
+  if (drain.retries > 0) {
+    notes.push(`a failed cycle left the queue stuck; it took ${drain.retries} "Retry" press(es)`);
+  }
+  if (drain.nudges > 0) {
+    notes.push(`the queue stalled and needed ${drain.nudges} "Sync now" nudge(s)`);
+  }
+  return notes;
 }
 
 // The main-thread instrument's long tasks that overlap the window (main-thread.ts

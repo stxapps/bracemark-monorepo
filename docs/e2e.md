@@ -3082,7 +3082,13 @@ trace: open it in ui.perfetto.dev.
   empty with a cycle finished since and no new span for 2 s. `waitForSync`
   (`seed/steps.ts`) navigates, and a reload aborts the cycle under measurement
   and drops its spans with the document. A queue that sits still for a minute
-  gets "Sync now", and the nudge is reported: the engine should never need one.
+  gets the Data card's action pressed, and the press is reported: the engine
+  should never need one. That action is "Sync now" after a clean cycle and
+  "Retry" after a failed one, and a failed background cycle schedules no retry of
+  its own. So a run that pressed only "Sync now" sat at "6 waiting to sync"
+  forever after one R2 timeout (specimen, 2026-10-19, `--no-sw` on staging). A
+  failed cycle is reported too, and so is a failed `initial` cycle, whose pull
+  leg is then a partial pull.
 - **A request answered and then aborted is not a failure.** The R2 helpers abort
   their deadline's signal once a transfer settles, so Chrome reports most blob
   requests as canceled after a 200. They are counted as `aborted after the
