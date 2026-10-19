@@ -1,8 +1,9 @@
 'use client';
 
-// The rail, below `md`, where there is no room for a rail: the same
-// `SidebarBody` in a sheet that slides in over the pane (sidebar.tsx explains
-// why this nav gets a panel where the settings rail gets a dropdown).
+// The rail, below `md`, where there is no room for a rail — and at any width
+// while the user has collapsed it: the same `SidebarBody` in a sheet that slides
+// in over the pane (sidebar.tsx explains why this nav gets a panel where the
+// settings rail gets a dropdown).
 //
 // ITS TRIGGER IS THE PAGE TITLE. The topbar's heading already names the thing
 // the rail selects — "My List", "Archive", a tag — so making it the door to the
@@ -19,7 +20,9 @@
 //
 // Mounted only while OPEN (Radix unmounts closed content), so in the common
 // case — the drawer shut, or a desktop that never opens it — there is exactly
-// one copy of the trees subscribed to the store, not two.
+// one copy of the trees subscribed to the store, not two. A desktop that opens
+// it has collapsed the rail to get here, and a collapsed rail renders nothing,
+// so that holds there too.
 
 import { useCallback, useState } from 'react';
 import { ChevronDown, X } from 'lucide-react';

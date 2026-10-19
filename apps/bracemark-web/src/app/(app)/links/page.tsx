@@ -19,7 +19,9 @@ import { SyncPausedNotice } from '@/components/sync-paused-notice';
 // title summons it as a drawer instead (see those two files, and the settings
 // layout — the same trade at the same breakpoint). Nothing here needs to know:
 // the rail is `hidden md:flex`, so the main column simply takes the width it
-// gives up, and no JS measures a breakpoint the CSS already matched.
+// gives up, and no JS measures a breakpoint the CSS already matched. The same is
+// true of the width the user drags the rail to, or collapsing it from `md` up —
+// both are the rail's own (sidebar.tsx); the main column just takes what's left.
 //
 // `h-dvh`, not `h-screen`: on mobile browsers `100vh` is the viewport with the
 // URL bar RETRACTED, so a `h-screen` app shell hangs its bottom edge behind the

@@ -24,6 +24,14 @@
 // drawer's trigger), never by a measured width, so nothing can disagree with the
 // breakpoint the stylesheet matched (docs/safe-area.md, _the core problem_).
 //
+// From `md` up the rail is the user's to size and to put away: its right edge is
+// a drag/keyboard splitter, and the brand row's trailing slot — where the drawer
+// keeps its close — hides it (⌘\ / Ctrl+\ toggles). Hidden, the frame takes its
+// below-`md` shape at full width: the title opens the drawer, and the topbar
+// grows a control to dock the rail again. Both the width and the collapse are
+// device-local, kept by web-react's sidebar-view-store; `Sidebar` at the bottom
+// of this file carries the reasoning, `_hooks/use-sidebar-rail.ts` the state.
+//
 // Tree rows collapse: a parent row carries a chevron on the LEFT as a SEPARATE
 // hit target (row click = select filter, chevron = toggle), matching the Lists
 // settings section; childless rows get a same-width spacer so their icons stay
@@ -42,7 +50,15 @@
 // Search, which searches saved LINK content. It's count-gated so small accounts
 // never see a box that could be mistaken for link search.
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Archive,
   ChevronRight,
@@ -53,6 +69,7 @@ import {
   ListFilter,
   Lock,
   LockOpen,
+  PanelLeftClose,
   Settings2,
   Trash2,
 } from 'lucide-react';
@@ -78,10 +95,26 @@ import {
   writeSidebarCollapsedIds,
 } from '@stxapps/web-react';
 import { BrandLockup } from '@stxapps/web-ui/components/brand-lockup';
+import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Input } from '@stxapps/web-ui/components/ui/input';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { type Selection, useLinksPage } from '../_contexts/page-provider';
+import {
+  clampRailWidth,
+  isRailShortcut,
+  RAIL_ATTR,
+  RAIL_COLLAPSE_BELOW,
+  RAIL_SHORTCUT_ARIA,
+  RAIL_WIDTH,
+  railShortcutApplies,
+  railShortcutHint,
+  setRailCollapsed,
+  setRailWidth,
+  takeRailFocus,
+  toggleRailCollapsed,
+  useSidebarRail,
+} from '../_hooks/use-sidebar-rail';
 
 // Reserved collapse ids for the two section headers. Prefixed so they can't
 // collide with a real list/tag id in the shared collapsed set.
@@ -669,9 +702,24 @@ export function SidebarBody({
   );
 }
 
-// The rail itself: the body in a fixed 15rem column, from `md` up. Below that it
-// is not rendered at all (`hidden` — display:none, so its rows leave the tab
-// order and the a11y tree too) and the drawer carries the same body instead.
+// The rail itself: the body in a column the user can resize and collapse, from
+// `md` up. Below that it is not rendered at all (`hidden` — display:none, so its
+// rows leave the tab order and the a11y tree too) and the drawer carries the
+// same body instead.
+//
+// COLLAPSED, it renders NOTHING rather than a hidden column — so the trees
+// unsubscribe from the store, and opening the drawer at that width still leaves
+// exactly one copy of them mounted (sidebar-drawer.tsx). The frame then takes
+// the one-pane shape it has below `md`: the topbar's title becomes the drawer's
+// door, so a list is still one click away without docking the rail again, and a
+// "Show sidebar" control beside it docks it (topbar.tsx). There is no icon-only
+// "mini" rail in between: every user list wears the same folder, so a column of
+// icons would be a column of identical folders.
+//
+// The collapse is instant, not animated. The pane beside the rail is a
+// virtualized list whose card grid recomputes its columns from its own width
+// (docs/safe-area.md), so a tweened width would re-compose it on every frame of
+// the tween; one jump re-composes it once.
 //
 // `bg-background` here, `bg-popover` on the drawer (web-ui `sheet.tsx`), and the
 // two are not meant to be synced: this is a column OF the page, level with the
@@ -679,9 +727,184 @@ export function SidebarBody({
 // (docs/theme.md, _elevation_). The fill is each host's own, which is why the
 // shared body sets none.
 export function Sidebar() {
+  const { collapsed, width } = useSidebarRail();
+  const railRef = useRef<HTMLElement>(null);
+  useRailShortcut();
+
+  if (collapsed) return null;
   return (
-    <aside className="hidden h-full w-60 shrink-0 flex-col border-r border-border bg-background md:flex">
-      <SidebarBody />
+    <aside
+      ref={railRef}
+      id={RAIL_ID}
+      {...{ [RAIL_ATTR]: '' }}
+      // The width is inline (it's the user's), the 40vw cap a class: a rail
+      // dragged wide on a big window must not take a narrow window's pane with
+      // it, and the cap has to hold through a resize no JS is watching.
+      style={{ width }}
+      className={cn(
+        'relative hidden h-full max-w-[40vw] shrink-0 flex-col border-r border-border bg-background transition-opacity md:flex',
+        // The release-to-collapse cue (RailResizeHandle), set on the DOM while
+        // dragging so the drag doesn't re-render the trees on every move.
+        'data-[collapsing=true]:opacity-50',
+      )}
+    >
+      <SidebarBody action={<HideRailButton />} />
+      <RailResizeHandle railRef={railRef} width={width} />
     </aside>
+  );
+}
+
+const RAIL_ID = 'links-rail';
+
+// The shortcut's listener, on the rail component rather than on what it renders,
+// so it stays bound while the rail is collapsed — which is when it's needed to
+// bring it back.
+function useRailShortcut() {
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.repeat || !isRailShortcut(e) || !railShortcutApplies()) return;
+      e.preventDefault();
+      toggleRailCollapsed();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+}
+
+// The rail's dismiss sits where the drawer puts ITS dismiss — the brand row's
+// trailing slot — so the two hosts of one body close from one place.
+function HideRailButton() {
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (takeRailFocus('hide')) ref.current?.focus();
+  }, []);
+
+  return (
+    <Button
+      ref={ref}
+      variant="ghost"
+      size="icon-sm"
+      aria-label="Hide sidebar"
+      aria-keyshortcuts={RAIL_SHORTCUT_ARIA}
+      title={`Hide sidebar (${railShortcutHint()})`}
+      onClick={() => setRailCollapsed(true)}
+    >
+      <PanelLeftClose className="size-4" />
+    </Button>
+  );
+}
+
+// The rail's right edge, as a focusable WINDOW SPLITTER (the WAI-ARIA pattern:
+// `role="separator"` with a value, arrows to move it, Enter to collapse the pane
+// it sizes). Pointer: drag to resize, drag past `RAIL_COLLAPSE_BELOW` and
+// release to collapse, double-click to return to the default width.
+//
+// A drag writes the rail's width straight onto its DOM node and commits to the
+// store once, on release. Through React, every pointermove would re-render the
+// rail — and the rail is both trees, every row subscribed to the lock and
+// selection state — for a value nothing but the rail's own `width` reads. The
+// link pane beside it re-flows either way, which is what a live resize is.
+//
+// The hit target is 12px straddling the rail's 1px border; the visible line
+// (`after:`) only appears on hover, focus or drag, in the focus-ring colour, so
+// at rest the edge is the same hairline it always was.
+function RailResizeHandle({
+  railRef,
+  width,
+}: {
+  railRef: React.RefObject<HTMLElement | null>;
+  width: number;
+}) {
+  const drag = useRef<{ startX: number; startWidth: number; raw: number } | null>(null);
+
+  const finish = (handle: HTMLElement, commit: boolean) => {
+    const d = drag.current;
+    drag.current = null;
+    const rail = railRef.current;
+    if (!d || !rail) return;
+    handle.dataset.dragging = 'false';
+    rail.dataset.collapsing = 'false';
+    if (commit && d.raw < RAIL_COLLAPSE_BELOW) {
+      // Put the width back first: the stored one is what the rail should have
+      // when it is next shown, not wherever the drag was let go.
+      rail.style.width = `${width}px`;
+      setRailCollapsed(true);
+    } else if (commit) {
+      setRailWidth(d.raw);
+    } else {
+      rail.style.width = `${width}px`;
+    }
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const step = e.shiftKey ? 64 : 16;
+    let next: number;
+    switch (e.key) {
+      case 'ArrowLeft':
+        next = width - step;
+        break;
+      case 'ArrowRight':
+        next = width + step;
+        break;
+      case 'Home':
+        next = RAIL_WIDTH.min;
+        break;
+      case 'End':
+        next = RAIL_WIDTH.max;
+        break;
+      case 'Enter':
+        e.preventDefault();
+        setRailCollapsed(true);
+        return;
+      default:
+        return;
+    }
+    e.preventDefault();
+    setRailWidth(next);
+  };
+
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize sidebar"
+      aria-controls={RAIL_ID}
+      aria-valuenow={width}
+      aria-valuemin={RAIL_WIDTH.min}
+      aria-valuemax={RAIL_WIDTH.max}
+      tabIndex={0}
+      title="Drag to resize, double-click to reset"
+      onKeyDown={onKeyDown}
+      onDoubleClick={() => setRailWidth(null)}
+      onPointerDown={(e) => {
+        const rail = railRef.current;
+        if (e.button !== 0 || !rail) return;
+        // No text selection, and no compatibility mousedown to move focus onto
+        // the handle — a mouse drag isn't a visit to the splitter.
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        e.currentTarget.dataset.dragging = 'true';
+        const startWidth = rail.getBoundingClientRect().width;
+        drag.current = { startX: e.clientX, startWidth, raw: startWidth };
+      }}
+      onPointerMove={(e) => {
+        const d = drag.current;
+        const rail = railRef.current;
+        if (!d || !rail) return;
+        d.raw = d.startWidth + (e.clientX - d.startX);
+        rail.style.width = `${clampRailWidth(d.raw)}px`;
+        rail.dataset.collapsing = String(d.raw < RAIL_COLLAPSE_BELOW);
+      }}
+      onPointerUp={(e) => finish(e.currentTarget, true)}
+      // Cancelled by the browser (a touch turned into a scroll, the window lost
+      // focus mid-drag): put the rail back rather than committing half a drag.
+      onPointerCancel={(e) => finish(e.currentTarget, false)}
+      onLostPointerCapture={(e) => finish(e.currentTarget, false)}
+      className={cn(
+        'absolute inset-y-0 -right-1.5 z-10 w-3 cursor-col-resize touch-none outline-none select-none',
+        'after:absolute after:inset-y-0 after:left-1/2 after:w-0.5 after:-translate-x-1/2 after:transition-colors',
+        'hover:after:bg-ring/50 focus-visible:after:bg-ring data-[dragging=true]:after:bg-ring',
+      )}
+    />
   );
 }

@@ -20,7 +20,12 @@ import { putFavicon } from './favicon-store';
 import { setLocalSettings } from './local-settings-store';
 import { APP_LOCK_ID, putLock } from './lock-store';
 import { enqueuePut } from './pending-store';
-import { readSidebarCollapsedIds, writeSidebarCollapsedIds } from './sidebar-view-store';
+import {
+  getSidebarRail,
+  readSidebarCollapsedIds,
+  writeSidebarCollapsedIds,
+  writeSidebarRail,
+} from './sidebar-view-store';
 import { readCachedStatus, writeCachedStatus } from './subscription-store';
 import { seedNewAccount } from './sync-store';
 
@@ -51,6 +56,7 @@ async function seedEverything(): Promise<void> {
   await putLock({ id: APP_LOCK_ID, kind: 'app', salt: 'aa', hash: 'bb' });
   await putFavicon(USER, 'example.com', new Uint8Array([1]));
   writeSidebarCollapsedIds(['lists']);
+  writeSidebarRail({ collapsed: true, width: 320 });
   writeCachedStatus({
     plan: 'plus',
     status: 'active',
@@ -71,6 +77,7 @@ async function remaining(): Promise<Record<string, number>> {
     locks: await db.locks.count(),
     favicons: await db.favicons.count(),
     sidebarCollapsedIds: readSidebarCollapsedIds().length,
+    sidebarRail: getSidebarRail().collapsed || getSidebarRail().width !== null ? 1 : 0,
     cachedSubscription: readCachedStatus() === null ? 0 : 1,
   };
 }
@@ -122,6 +129,7 @@ describe('clearData', () => {
       locks: 0,
       favicons: 0,
       sidebarCollapsedIds: 0,
+      sidebarRail: 0,
       cachedSubscription: 0,
     });
   });
