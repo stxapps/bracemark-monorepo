@@ -19,11 +19,15 @@
 // no flex arithmetic, no wrapping. A box it passes can still clip in ways only
 // a device shows (docs/e2e.md, _visual checkpoints_); a box it fails clips.
 //
-// Only classes that apply on a phone count. An unprefixed class, or one under
-// `native:`/`ios:`/`android:`, applies; `web:`, `dark:`, `active:` and the
-// breakpoints do not. `sm:`/`md:` DO fire on a large screen — they are skipped
-// because the app ships phone-only (docs/expo-build.md), which is the same
-// unsettled question ui/input.tsx's header leaves for the tablet layout.
+// Only classes that apply on a phone held upright count. An unprefixed class,
+// or one under `native:`/`ios:`/`android:`, applies; `web:`, `dark:`, `active:`
+// and the breakpoints do not. `sm:`/`md:` DO fire on a tablet or a phone on
+// its side, and skipping them is sound only because no breakpoint in the app
+// sizes a box or a type step any more — the controls' `sm:` height steps went
+// with the tablet layout (ui/input.tsx), and what is left (`md:px-6`, the `sm:`
+// row in sync-paused-notice.tsx) moves boxes without shrinking them. A
+// breakpoint that sets a height, a vertical padding or a `text-*` makes this
+// a phone-only check, and it would have to sum the wide variant too.
 
 import { MAX_FONT_SIZE_MULTIPLIER } from '../lib/font-scale';
 

@@ -71,9 +71,10 @@ export function SyncPausedNotice() {
 // STACKED below `sm`, a row from it, with the ghost button pulled `-ml-3` onto
 // the text edge while it is stacked — web's classes, and the argument is in web's
 // file: a ghost aligns by its label, not by its box, so under the filled button it
-// read as indented by its own `px-3`. This app is portrait and phone-only, so
-// today it is ALWAYS the stack; the `sm:` half is kept so the two files stay the
-// same and a tablet layout gets the row. `align="center"` is the initial-sync
+// read as indented by its own `px-3`. A LAYOUT step, so it stays a breakpoint
+// where the controls' `sm:` height steps did not (ui/input.tsx): every phone held
+// upright gets the stack, and a tablet or a phone on its side — 640 and up —
+// gets the row, as web does. `align="center"` is the initial-sync
 // gate, whose column is centred: there the pair centres and nothing is pulled.
 export function SyncPausedActions({ align = 'start' }: { align?: 'start' | 'center' }) {
   const pending = usePendingChangesCount();

@@ -1122,9 +1122,11 @@ nothing will enforce.**
 **The mobile stores use the same four semantic pictures, not the same four
 files.** App Store receives native iOS captures at 1290x2796 for the 6.9-inch
 phone class; Play receives native Android captures composed at 1080x1920. These
-two phone families are the current eight-asset deliverable. If an iPad family is
-needed for submission, capture the same four jobs independently in the real iPad
-layout at 2064x2752 rather than stretching phone art. The Play size is deliberate
+two phone families were the eight-asset deliverable while the app was phone-only.
+It is iPad-native now ([expo-build.md](./expo-build.md), _devices_), so App Store
+submission also needs an iPad family: capture the same four jobs independently in
+the real iPad layout — rails docked — at 2064x2752 rather than stretching phone
+art. The Play size is deliberate
 9:16: it is recommendation-eligible and stays inside
 Play's 2:1 long-side ceiling, unlike a raw 1080x2400 emulator screenshot. Four
 is enough to meet Play's recommendation-surface minimum while leaving Apple's

@@ -581,12 +581,19 @@ function AdvancedSearch() {
 
               `+ footerHeight` because Clear/Search are pinned below this in a
               bar that lifts onto the keyboard and covers that band
-              (components/sticky-footer.tsx). */}
+              (components/sticky-footer.tsx).
+
+              `w-full max-w-2xl self-center` is the settings pane's column
+              (settings-kit.tsx), for an Android tablet: there this Modal is
+              the full window, and the word fields and checklists would
+              otherwise run the screen's width. The bars above and below still
+              span it, as the settings topbar does over its column. On an iPad
+              the pageSheet is already about that wide, so it binds on nothing. */}
           <StyledKeyboardAwareScrollView
             className="flex-1"
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
-            contentContainerClassName="gap-4 p-4"
+            contentContainerClassName="w-full max-w-2xl gap-4 self-center p-4"
             bottomOffset={16 + footerHeight}
           >
             {!entitlements.searchEditor && (

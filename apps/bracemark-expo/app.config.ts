@@ -31,7 +31,16 @@ const config: ExpoConfig = {
   // one number to bump. `buildNumber`/`versionCode` stay per-platform because
   // they are genuinely different concepts. → docs/expo-build.md, _versions_.
   version: '1.0.0',
-  orientation: 'portrait',
+  // Every orientation, on every device — not portrait with tablets excepted.
+  // iPadOS requires all four for Split View / Stage Manager unless the app
+  // opts out of multitasking (`UIRequiresFullScreen`), Android 16 ignores a
+  // lock on any display 600dp+ anyway, and on Android 13–15 a lock letterboxes
+  // a landscape tablet. A phone-only lock was weighed and dropped: it can't be
+  // said per device class in this file, and it would buy nothing a split-screen
+  // or freeform window — or a Flip's cover screen — doesn't already demand, since
+  // those hand the app the same short, wide windows a rotation does.
+  // docs/expo-build.md, _devices_.
+  orientation: 'default',
   icon: './assets/images/icon.png',
   scheme: 'bracemark',
   userInterfaceStyle: 'automatic',
@@ -42,10 +51,11 @@ const config: ExpoConfig = {
       dark: './assets/images/ios-dark.png',
       tinted: './assets/images/ios-tinted.png',
     },
-    // Phones only — and the Android half of that is a Play Console setting, not
-    // anything in this file. Turning tablets on is one-way on iOS and a list of
-    // other places to undo: docs/expo-build.md, _devices_.
-    supportsTablet: false,
+    // iPad-native, not the iPhone build in compatibility mode. ONE-WAY: once a
+    // build with iPad support ships, App Store Connect rejects any later build
+    // that drops it. The Android half is a Play Console setting, not anything in
+    // this file. docs/expo-build.md, _devices_.
+    supportsTablet: true,
     bundleIdentifier: 'com.bracemark.app',
     appleTeamId: process.env.APPLE_TEAM_ID,
     buildNumber: '1',

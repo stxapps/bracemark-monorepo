@@ -3,8 +3,9 @@
 // the section menu (Account, Subscription, Data, Lists, Tags, Misc., About).
 // Each entry navigates to `/settings/[section]`; the active one is derived from
 // the pathname (the URL is the source of truth), and the matching section route
-// renders the content. On mobile the rail is a Drawer (this group's _layout), so
-// selecting an entry also closes it — the links sidebar's pattern.
+// renders the content. On a phone-width window the rail is a Drawer (this
+// group's _layout), so selecting an entry also closes it — the links sidebar's
+// pattern; on a wide one it is docked beside the pane and the close is a no-op.
 //
 // THE LOCKUP REPLACED A BARE BACK ARROW, and the swap is the point: a drawer
 // slid over the app is the one moment the user can't see which app they are in,

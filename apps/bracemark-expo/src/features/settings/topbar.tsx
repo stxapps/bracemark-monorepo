@@ -38,29 +38,42 @@ import { Menu, X } from 'lucide-react-native';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
+import { cn } from '../../lib/utils';
+import { useWideWindow } from '../../lib/window-class';
 import { closeSettings } from './close';
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './sections';
 
 export function Topbar({ section }: { section: SettingsSectionId }) {
   const navigation = useNavigation();
+  // Docked beside this bar on a wide window ((app)/settings/_layout.tsx), the
+  // rail is the menu the toggle would open, so the toggle goes — and the label
+  // takes the links bar's docked inset (links/topbar.tsx), for the same reason.
+  const wide = useWideWindow();
   const label = SETTINGS_SECTIONS.find((s) => s.id === section)?.label ?? 'Settings';
 
   return (
-    <View className="h-14 shrink-0 flex-row items-center gap-2 border-b border-border px-3">
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        testID="settings-open-navigation"
-        onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
-        aria-label="Open settings navigation"
-        // 48x48 effective — see links/topbar.tsx for why the boxes stay 36 and
-        // the slop makes up the difference. Neither button here has a pressable
-        // neighbour (the label between them is a Text), so both take the full 6.
-        hitSlop={6}
-        className="-ml-1"
-      >
-        <Icon as={Menu} className="size-5 text-foreground" />
-      </Button>
+    <View
+      className={cn(
+        'h-14 shrink-0 flex-row items-center gap-2 border-b border-border px-3',
+        wide && 'pl-4',
+      )}
+    >
+      {!wide && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          testID="settings-open-navigation"
+          onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
+          aria-label="Open settings navigation"
+          // 48x48 effective — see links/topbar.tsx for why the boxes stay 36 and
+          // the slop makes up the difference. Neither button here has a pressable
+          // neighbour (the label between them is a Text), so both take the full 6.
+          hitSlop={6}
+          className="-ml-1"
+        >
+          <Icon as={Menu} className="size-5 text-foreground" />
+        </Button>
+      )}
       <Text numberOfLines={1} className="min-w-0 flex-1 text-base font-medium">
         {label}
       </Text>

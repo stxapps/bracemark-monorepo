@@ -1,5 +1,6 @@
 import * as React from 'react';
 import {
+  Dimensions,
   type GestureResponderEvent,
   Platform,
   type StyleProp,
@@ -10,7 +11,7 @@ import {
 } from 'react-native';
 import { KeyboardController } from 'react-native-keyboard-controller';
 import { FadeIn, ReduceMotion } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaFrame, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FullWindowOverlay as RNFullWindowOverlay } from 'react-native-screens';
 import * as DropdownMenuPrimitive from '@rn-primitives/dropdown-menu';
 import { Check, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react-native';
@@ -195,7 +196,7 @@ function DropdownMenuSubTrigger({
     >
       <DropdownMenuPrimitive.SubTrigger
         className={cn(
-          'group flex flex-row items-center justify-between gap-2.5 rounded-xl px-3 py-2 active:bg-accent sm:py-1.5',
+          'group flex flex-row items-center justify-between gap-2.5 rounded-xl px-3 py-2 active:bg-accent',
           Platform.select({
             web: 'cursor-default outline-none focus:bg-accent focus:text-accent-foreground [&_svg]:pointer-events-none',
           }),
@@ -263,17 +264,50 @@ function DropdownMenuContent({
   // A caller may still override with its own `insets`; passing `{}` opts out.
   // Native-only in effect: on web @rn-primitives defers to Radix, which does its
   // own collision handling and ignores this prop.
+  //
+  // THE CLAMP'S BOX IS THE WRONG ONE WHENEVER THE APP IS NOT THE WHOLE SCREEN,
+  // and the overhang below is what corrects it. The content is positioned in
+  // the app's own coordinates — the trigger is measured against the root view
+  // and the menu is drawn in it — but the library clamps against
+  // `Dimensions.get('screen')`. On a phone the two are the same box. In iPad
+  // Split View, Slide Over and Stage Manager, Android split-screen and freeform
+  // windows, and the centred compatibility window an iPhone Duo gives an app
+  // built against an older SDK, the screen is LARGER than the app, so a menu
+  // near the bottom or right edge "fits" by the screen's measure and is drawn
+  // past the app's own edge — clipped, or under the other app. Every clamp in
+  // the library is `dimensions - insetRight` or `dimensions - insetBottom`, so
+  // adding how far the screen reaches past the root view (`useSafeAreaFrame`,
+  // the provider's frame, reactive to a resize) to those two insets moves the
+  // clamp onto the app's edge exactly, and adds nothing when the app fills the
+  // screen. It applies to a caller's own `insets` as well, `{}` included: that
+  // opts out of the PADDING, not out of the menu staying inside the app.
+  // docs/safe-area.md, _wide windows on native_.
   const safeAreaInsets = useSafeAreaInsets();
-  const collisionInsets = React.useMemo(
-    () =>
-      insets ?? {
-        top: safeAreaInsets.top + 8,
-        bottom: safeAreaInsets.bottom + 8,
-        left: safeAreaInsets.left + 8,
-        right: safeAreaInsets.right + 8,
-      },
-    [insets, safeAreaInsets.top, safeAreaInsets.bottom, safeAreaInsets.left, safeAreaInsets.right],
-  );
+  const frame = useSafeAreaFrame();
+  const screen = Dimensions.get('screen');
+  const overhangRight = Math.max(0, screen.width - frame.width);
+  const overhangBottom = Math.max(0, screen.height - frame.height);
+  const collisionInsets = React.useMemo(() => {
+    const base = insets ?? {
+      top: safeAreaInsets.top + 8,
+      bottom: safeAreaInsets.bottom + 8,
+      left: safeAreaInsets.left + 8,
+      right: safeAreaInsets.right + 8,
+    };
+    return {
+      ...base,
+      right: (base.right ?? 0) + overhangRight,
+      bottom: (base.bottom ?? 0) + overhangBottom,
+    };
+  }, [
+    insets,
+    safeAreaInsets.top,
+    safeAreaInsets.bottom,
+    safeAreaInsets.left,
+    safeAreaInsets.right,
+    overhangRight,
+    overhangBottom,
+  ]);
   const { waitedOnKeyboard } = React.useContext(KeyboardHandOffContext);
   const covered = useAppCovered();
 
@@ -334,6 +368,10 @@ function DropdownMenuItem({
   inset?: boolean;
   variant?: 'default' | 'destructive';
 }) {
+  // `py-2` at every width — this and the three rows below it dropped the
+  // registry's `sm:py-1.5` with Button's and Input's `sm:` steps, for the reason
+  // ui/input.tsx's header gives: past 640 on this app is a tablet or a phone on
+  // its side, which is still a finger, never a mouse.
   return (
     <TextClassContext.Provider
       value={cn(
@@ -343,7 +381,7 @@ function DropdownMenuItem({
     >
       <DropdownMenuPrimitive.Item
         className={cn(
-          'group relative flex flex-row items-center gap-2.5 rounded-xl px-3 py-2 active:bg-accent sm:py-1.5',
+          'group relative flex flex-row items-center gap-2.5 rounded-xl px-3 py-2 active:bg-accent',
           Platform.select({
             web: cn(
               'cursor-default outline-none focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none',
@@ -374,7 +412,7 @@ function DropdownMenuCheckboxItem({
     <TextClassContext.Provider value="text-sm text-popover-foreground select-none group-active:text-accent-foreground">
       <DropdownMenuPrimitive.CheckboxItem
         className={cn(
-          'group relative flex flex-row items-center gap-2.5 rounded-xl py-2 pr-8 pl-3 active:bg-accent sm:py-1.5',
+          'group relative flex flex-row items-center gap-2.5 rounded-xl py-2 pr-8 pl-3 active:bg-accent',
           Platform.select({
             web: 'cursor-default outline-none focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none',
           }),
@@ -414,7 +452,7 @@ function DropdownMenuRadioItem({
     <TextClassContext.Provider value="text-sm text-popover-foreground select-none group-active:text-accent-foreground">
       <DropdownMenuPrimitive.RadioItem
         className={cn(
-          'group relative flex flex-row items-center gap-2.5 rounded-xl py-2 pr-8 pl-3 active:bg-accent sm:py-1.5',
+          'group relative flex flex-row items-center gap-2.5 rounded-xl py-2 pr-8 pl-3 active:bg-accent',
           Platform.select({
             web: 'cursor-default outline-none focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none',
           }),

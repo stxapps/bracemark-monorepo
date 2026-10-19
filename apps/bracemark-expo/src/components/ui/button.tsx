@@ -28,10 +28,14 @@ import { TextClassContext } from './text';
 // and `icon/icon-xs/icon-sm/icon-lg` all exist here, each at the height above
 // web's (h-10 against h-9, and so on) because a phone target is not a pointer
 // target — the pre-existing sizes already worked that way and the new ones
-// follow them, `sm:` shrink included. That `sm:` step is the registry's answer
-// to a web question and is still unsettled on a tablet, which is entirely touch
-// (`ui/input.tsx`'s header carries the argument); settle all of them together
-// with the tablet layout, not one size at a time. A call site that needs a box
+// follow them. AT EVERY WIDTH: the registry's `sm:` step down to web's height
+// (`h-10 sm:h-9`, and so on through the scale) is gone, settled with the tablet
+// layout together with Input's and DropdownMenu's. It answered a web question —
+// past 640px the pointer is probably a mouse — and on this app 640 is a
+// tablet, an unfolded foldable or a phone on its side, every one of them
+// entirely touch, so the step only shrank a finger's target where the screen
+// had MORE room for it (`ui/input.tsx`'s header carries the argument). A call
+// site that needs a box
 // the scale doesn't have restates it in `className` — `size-8` on the two dense
 // row affordances, whose web twins pin the same 32 for the same reason.
 //
@@ -47,8 +51,8 @@ import { TextClassContext } from './text';
 // for a label whose line box is 20 at 1× and 22.4 at the FIRST Dynamic Type
 // step above default (RN's iOS multiplier for ExtraLarge is 1.118), i.e. every
 // default-size button in the app clipped its g's and y's for anyone who has
-// ever touched the text-size slider — and 18 at `sm:`, which clips at 1×. The
-// three call sites that restated `text-base` clipped at 1× on a phone and are
+// ever touched the text-size slider — and 18 under the old `sm:` step, which
+// clipped at 1×. The three call sites that restated `text-base` clipped at 1× on a phone and are
 // what found this (components/links/list-select.tsx carries the measurement;
 // docs/theme.md, _extending_, carries the rule). Removing it is invisible at
 // 1× — the height is unchanged and `items-center` centres the same line box in
@@ -126,14 +130,14 @@ const buttonVariants = cva(
         link: '',
       },
       size: {
-        default: 'h-10 px-4 sm:h-9',
-        xs: 'h-7 gap-1 px-2.5 sm:h-6',
-        sm: 'h-9 gap-1.5 px-3 sm:h-8',
-        lg: 'h-11 px-6 sm:h-10',
-        icon: 'h-10 w-10 sm:h-9 sm:w-9',
-        'icon-xs': 'h-7 w-7 sm:h-6 sm:w-6',
-        'icon-sm': 'h-9 w-9 sm:h-8 sm:w-8',
-        'icon-lg': 'h-11 w-11 sm:h-10 sm:w-10',
+        default: 'h-10 px-4',
+        xs: 'h-7 gap-1 px-2.5',
+        sm: 'h-9 gap-1.5 px-3',
+        lg: 'h-11 px-6',
+        icon: 'h-10 w-10',
+        'icon-xs': 'h-7 w-7',
+        'icon-sm': 'h-9 w-9',
+        'icon-lg': 'h-11 w-11',
       },
       // Derived by the component from its children, never passed by a caller —
       // ButtonProps omits them for exactly that reason.

@@ -51,13 +51,16 @@ import { cn } from '../../lib/utils';
 //
 // It would also not sit STILL. Uniwind resolves a breakpoint against the window
 // and re-resolves on every `Dimensions` change, so a ported step would re-type
-// the controls as an iPad Split View divider crosses 768, and on rotation once
-// the app is not portrait-locked. Related and NOT settled: the `sm:h-9` below,
-// and Button's and DropdownMenu's `sm:` steps, are the same registry's answer to
-// the same web question and they DO fire on a large screen — shrinking touch
-// targets on a device that is entirely touch. They are invisible today only
-// because iOS is `supportsTablet: false` and Android is portrait-locked. Settle
-// those with the tablet layout; this file's answer is the type only. The one native control below it is the advanced-search WordField's
+// the controls as an iPad Split View divider crosses 768, and on rotation. The
+// HEIGHT had the same question and now has the same answer: the registry's
+// `sm:h-9` here, and Button's and DropdownMenu's `sm:` steps, were the same web
+// answer — past 640px the pointer is probably a mouse — and they fired on
+// exactly the screens that are all touch (a tablet, an unfolded foldable, a
+// phone on its side), shrinking the target where there was MORE room for it.
+// They went with the tablet layout: one height at every width
+// (docs/safe-area.md, _wide windows on native_).
+//
+// The one native control below it is the advanced-search WordField's
 // filter box (`h-8 py-0 text-sm`, features/links/search-bar.tsx) — dense on purpose,
 // and the one place the two clients now differ: its web twin takes the step
 // (`h-8 text-base md:h-7 md:text-sm`), because there it is a field a phone can
@@ -149,7 +152,7 @@ function Input({
   return (
     <TextInput
       className={cn(
-        'flex h-10 w-full min-w-0 flex-row items-center rounded-4xl border border-input bg-input/30 px-3 py-1 font-sans text-base leading-5 text-foreground sm:h-9',
+        'flex h-10 w-full min-w-0 flex-row items-center rounded-4xl border border-input bg-input/30 px-3 py-1 font-sans text-base leading-5 text-foreground',
         props.editable === false &&
           cn(
             'opacity-50',

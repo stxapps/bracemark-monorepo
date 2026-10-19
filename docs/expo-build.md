@@ -397,6 +397,11 @@ permission must be absent from release and retained in debug. Verify photo
 picking and file import/export/share in the rebuilt app; the generated main
 manifest alone does not prove the permissions shipped after library merging.
 
+**MainActivity also declares `smallestScreenSize`** in its `configChanges`, which
+the same plugin adds to Expo's template list, so a fold, a split-screen resize or
+a move to another display re-lays out instead of recreating the activity — see
+_devices_, below.
+
 #### versions — one key, three consumers ⚠
 
 `app.config.ts` carries **one** version string, the top-level `version`, and the
@@ -426,54 +431,134 @@ and About prints whichever the running platform has. Belt and braces:
 version onto the extension regardless, so re-adding `ios.version` can't
 resurrect the mismatch — see below.
 
-#### devices — phones only, and the two OS floors ⚠
+#### devices — every size, and the two OS floors ⚠
 
-**bracemark-expo ships for phones only, and half of that is not in this repo.**
-iOS is `ios.supportsTablet: false`, which prebuilds to `TARGETED_DEVICE_FAMILY =
-1`. Android has no manifest switch that does the job, so tablets are excluded in
-the **Play Console**, and this section is the only record of it.
+**bracemark-expo ships for phones AND tablets, in every orientation, and half of
+that is not in this repo.** iOS is `ios.supportsTablet: true`, which prebuilds to
+`TARGETED_DEVICE_FAMILY = "1,2"` on the app target — and on the iOS share
+extension's target, which only `plugins/with-share-extension-build-settings.js`
+puts there (_ios share extension build settings_, below). Android has no manifest
+switch for form factors at all; what the Play Store offers to which device is the
+**Play Console**'s, and this section is the only record of it.
 
-| device                                       | gets                                                      | set by                          |
-| -------------------------------------------- | --------------------------------------------------------- | ------------------------------- |
-| iPhone                                       | the app                                                   | —                               |
-| iPad                                         | the iPhone build in compatibility mode, a phone-sized box | `supportsTablet: false`         |
-| Android phone, foldables included            | the app                                                   | —                               |
-| Android tablet, Chromebook, TV, Wear OS, car | nothing — the Play Store does not offer it                | Play Console → _Device catalog_ |
+| device                                                                   | gets                                                                                                   | set by                          |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| iPhone                                                                   | the app, any orientation                                                                               | —                               |
+| iPad — full screen, Split View, Slide Over, Stage Manager                | the app, iPad-native, sized to whatever window it has                                                  | `supportsTablet: true`          |
+| iPhone Duo (Apple's foldable) — outer display, inner display, Split View | the app — but CENTRED, not resized, on the inner display until it is built with the iOS 27 SDK (below) | —                               |
+| Android phone, foldables and flips included                              | the app                                                                                                | —                               |
+| Android tablet (and Chromebook, if included)                             | the app                                                                                                | Play Console → _Device catalog_ |
+| TV, Wear OS, car                                                         | nothing — the Play Store does not offer it                                                             | Play Console → _Device catalog_ |
 
-**The Play Console half, as done on 2026-09-23.** Test and release → Reach and
-devices → _Device catalog_ → filter **Form factor** to every value except Phone
-→ select all → Exclude: 3,418 devices, out of those the manifest already
-allowed. The two cleaner routes don't exist: the catalog's exclusion **rules**
-have no form-factor field, and Advanced settings → _Form factors_ has no ChromeOS
-opt-out. Nor can `gplay` do any of it — the Android Publisher API has no
-device-catalog resource at all, and `gplay device-tiers` is asset-pack
-targeting, not availability. `<supports-screens>` doesn't filter Play either,
-and `<compatible-screens>`, which does, is deprecated and fragile.
+**The layout is one rule, by window width, not by device.** Below 768 (Uniwind's
+`md`) the app is the phone layout it always was; at or above it, the links and
+settings rails dock beside their panes. A device is never asked what it is — an
+iPad in Slide Over gets the phone layout, a phone on its side past 768 gets the
+docked rail — because a window's width is the only thing every case above
+(rotation, Split View, a fold, freeform, a Flip's cover screen) changes in common.
+The mechanism and its traps are [safe-area.md](./safe-area.md), _wide windows on
+native_.
 
-**⚠ It is a list of devices, not a rule, so it goes stale silently.** A tablet
-Google adds to the catalog after that date is offered the app until someone
-re-runs the filter, and nothing says so — the tablet user just gets the phone
-layout stretched to the screen. Re-run it before each production release:
-_Device catalog_ → form factor every value except Phone → status Supported →
-exclude whatever comes back.
+**The iPhone Duo is the one device here whose layout depends on the Xcode we
+build with, not on this repo.** Apple's first foldable iPhone (on sale October
+23, 2026) has a 5.4-inch outer display and a 7.6-inch inner one, and Apple's own
+_Prepare_ checklist (developer.apple.com/iphone-duo/prepare) ties what an app gets
+on it to the iOS SDK it was built with:
 
-**Foldables are phones in the catalog, and the portrait lock doesn't hold on
-them.** At `targetSdk` 36, Android 16 ignores `screenOrientation`,
-`resizeableActivity` and aspect-ratio limits on any display 600dp wide or more,
-so an unfolded Fold runs the phone layout full-width, and rotates.
-`MainActivity`'s `configChanges` already lists
-`orientation|screenSize|screenLayout`, so that re-lays out rather than restarting
-the activity. `PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY` would restore the
-lock and is **deliberately not set**: it is honoured only while targeting 36 and
-ignored from 37, so it defers the layout work by one `targetSdk` rather than
-removing it. Add it only if a foldable run shows a screen that is actually
-broken.
+| built with                    | on the iPhone Duo                                                                                                                  |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| iOS 26 SDK — **Xcode 26, us** | runs, doesn't adapt: the inner display shows the app centred with empty space around it; the outer shows it left of the status bar |
+| iOS 27 SDK                    | resizes to fill most of the inner display, still keeping clear of the status bar on the right edge                                 |
+| iOS 27.1 SDK or later         | uses the full display; the SYSTEM's toolbars and tab bars turn vertical, below the status bar                                      |
 
-**Compatibility mode still gets reviewed.** App Review runs iPhone apps on iPad
+So nothing in _wide windows on native_ ([safe-area.md](./safe-area.md)) reaches
+the Duo until the iOS build moves to Xcode 27, and whether Expo SDK 54 / React
+Native 0.81 builds with it has not been tried ([dependency-upgrades.md](./dependency-upgrades.md)
+records why the Expo SDK is held where it is). What is known about the 27.1
+tier, for when it arrives:
+
+- **Our bars are our own** — both topbars are hand-built `View`s, so they stay
+  horizontal at the top where the system's bars go vertical. Decide that on the
+  Duo simulator rather than by porting to system bars blind.
+- **The 768 rule lands on both of its sides.** The outer display and a Split View
+  half get the phone layout; the inner display held landscape docks the rail,
+  and with the fold down the middle of the long edge the fold then crosses the
+  links list. Lying flat the fold takes no width; folded like a book, the list's
+  titles run through the curve. Avoiding it means a native module over iOS
+  27.1's reserved-region API, which is not built — worth it only if book-folded
+  reading proves to matter.
+- **The insets are asymmetric at phone width** — the outer display reserves a
+  strip down its trailing edge — which is why every overlay pads per edge
+  ([safe-area.md](./safe-area.md), _wide windows on native_).
+- **Touch ID, not Face ID**, in the side button. The biometric copy already
+  names whichever the device reports ([locks.md](./locks.md)).
+
+The Duo point sizes quoted around the web — 466 × 678 outer, 951 × 669 inner, the
+fold at 475.5 — come from a community design kit traced over Apple's templates,
+not from Apple's own pages; confirm them on Xcode 27.1's iPhone Duo simulator
+before anything is designed to them, and never lay out against them. App Store
+Connect also takes iPhone Duo screenshots (2007 × 2853 for the inner display) and
+badges the product page "optimized for iPhone Duo" when they are present —
+optional, and only honest once the app is built at the 27.1 tier.
+
+**`supportsTablet: true` is one-way.** Once a build with iPad support ships, App
+Store Connect rejects any later build that drops it. It also makes **iPad
+screenshots required** at submission ([brand-assets.md](./brand-assets.md), _the
+store screenshots_, names the size).
+
+**No orientation lock, on any device.** `orientation: 'default'` writes all four
+`UISupportedInterfaceOrientations` (and the `~ipad` copy) and
+`screenOrientation="unspecified"`. A lock for phones alone was weighed and
+dropped: iPadOS requires all four orientations for Split View and Stage Manager
+unless the app gives up multitasking (`UIRequiresFullScreen`); Android 16 ignores
+`screenOrientation`, `resizeableActivity` and aspect-ratio limits on any display
+600dp or wider at `targetSdk` 36; Android 13–15 letterbox a portrait-locked app on
+a landscape tablet; and the lock can't be said per device class in app config
+anyway. Nor would it have bought anything: split-screen, freeform windows and a
+Flip's cover screen hand the app the same short, wide windows a rotation does, so
+the layout has to survive them regardless.
+
+**Android resizes without restarting — for one more reason than before.**
+`MainActivity`'s `configChanges` is Expo's template list (`orientation|screenSize|
+screenLayout`, among others) **plus `smallestScreenSize`**, which
+`plugins/with-android-manifest-policy.js` adds (_android manifest policy_, above).
+A fold, an unfold, a split-screen drag and a move to another display change the
+smallest width, and an undeclared change recreates the activity, which remounts
+the React surface: the open screen and a half-typed link are lost on exactly the
+gesture that should only re-lay out. React Native's own template declares it; the
+Expo template does not. The Android share activity already declared it for the
+same reason ([share-sheet.md](./share-sheet.md)).
+
+**The Play Console half, as of this change: tablets must be INCLUDED again by
+hand.** They were excluded on 2026-09-23 while the app was phone-only (Test and
+release → Reach and devices → _Device catalog_ → form factor every value except
+Phone → Exclude: 3,418 devices). Undo it before the first release that carries
+this change: _Device catalog_ → filter **Excluded**, form factor **Tablet** (and
+**Chromebook**, if it is in scope — it has not been run) → include them. TV, Wear OS
+and car stay excluded. There is no cleaner route: the catalog's exclusion rules have
+no form-factor field, the Android Publisher API has no device-catalog resource
+(`gplay device-tiers` is asset-pack targeting, not availability), and neither
+`<supports-screens>` nor the deprecated `<compatible-screens>` is a sane filter.
+
+**⚠ It is a list of devices, not a rule, so it goes stale silently** — now in the
+other direction too. A TV or car device Google adds after the last pass is
+offered the app until someone re-runs the filter, and nothing says so. Re-run it
+before each production release: _Device catalog_ → form factor TV, Wear OS, Car →
+status Supported → exclude whatever comes back.
+
+**Review runs it on the iPad.** App Review exercises iPad-capable apps on iPad
 (guideline 2.4.1) — the iOS share extension from Safari included — so check both
-on the iPad before a submission. App Store Connect → _Pricing and Availability_
-also offers the iPhone build to Apple silicon Macs and Apple Vision Pro by
-default, and neither has been run.
+there, full screen and in Split View, before a submission. App Store Connect →
+_Pricing and Availability_ also offers the iPad build to Apple silicon Macs and
+Apple Vision Pro by default, and neither has been run.
+
+**What still says phone-only, on purpose, until the release ships.** The
+marketing site says phone-only in three places: the FAQ's `platforms` and
+`need-extension` answers, and the home page capture card (`app/page.tsx`,
+"Phone"). The site deploys on its own schedule, so changing them in this commit
+would claim tablet support before any store carries it ([brand-assets.md](./brand-assets.md),
+_the source — what we may claim_). Change them when the first tablet-capable build
+is live.
 
 **The OS floors: iOS 26 and Android 13 (API 33).** Both are in the
 `expo-build-properties` entry. The iOS share extension copies the app target's
@@ -493,42 +578,28 @@ last compatible build, still talking to an api that moves on.
   promoting to production. API 35 (Android 15, where edge-to-edge is enforced) is
   the fallback floor if that report shows breakage there is no time to fix.
 
-**When the app supports tablets, undo all of it in one change:**
-
-1. `supportsTablet: true` — and it is **one-way**: once a build with iPad support
-   ships, App Store Connect rejects any later build that drops it.
-2. iPad screenshots become required at submission ([brand-assets.md](./brand-assets.md),
-   _the store screenshots_, already names the size).
-3. Play Console → _Device catalog_ → filter Excluded, form factor Tablet (and
-   Chromebook, if it is in scope) → include them again. TV, Wear OS and car stay
-   excluded unless they are supported too.
-4. Decide `orientation: 'portrait'` again — on large screens Android already
-   ignores it (above).
-5. The marketing site says phone-only on purpose in three places: the FAQ's
-   `platforms` and `need-extension` answers, and the home page capture card
-   (`app/page.tsx`, "Phone").
-
 #### ios share extension build settings ⚠
 
-**The `BracemarkShareExtension` target is born with four values wrong that are
+**The `BracemarkShareExtension` target is born with five values wrong that are
 right on the app target**, and nothing downstream reports any of them: prebuild
 succeeds, the config is valid, and no lint, type or test reads a pbxproj or a
 plist. `expo-share-extension` creates the target from a hardcoded build-settings
 map (`plugin/build/xcode/addToXCConfigurationList.js`) and a hardcoded
-`Info.plist` (`plugin/build/withShareExtensionInfoPlist.js`), and all four gaps
+`Info.plist` (`plugin/build/withShareExtensionInfoPlist.js`), and all five gaps
 come from those two files:
 
 | value                                          | app target      | share extension, unfixed          | symptom                                                       |
 | ---------------------------------------------- | --------------- | --------------------------------- | ------------------------------------------------------------- |
 | `DEVELOPMENT_TEAM`                             | `APPLE_TEAM_ID` | absent                            | empty **Team** in Signing & Capabilities                      |
 | `IPHONEOS_DEPLOYMENT_TARGET`                   | `26.0`          | literal `15.1`                    | Pods built for a newer iOS than the target links for          |
+| `TARGETED_DEVICE_FAMILY`                       | `"1,2"`         | absent — Xcode's default, iPhone  | on an iPad, the share sheet in iPhone compatibility mode      |
 | `MARKETING_VERSION`, `CURRENT_PROJECT_VERSION` | `ios.version`   | top-level `version`               | App Store rejects the upload on a version the app won't share |
 | `CFBundleDisplayName` (plist)                  | `Bracemark`     | `$(PRODUCT_NAME) Share Extension` | "BracemarkShareExtension Share Extension" in the share sheet  |
 
-The local `plugins/with-share-extension-build-settings.js` supplies all four;
+The local `plugins/with-share-extension-build-settings.js` supplies all five;
 the file carries the full reasoning, so this is the short version.
 
-**They have different causes, and only one is about order.**
+**They have different causes, and only two are about order — the same order.**
 
 - **`DEVELOPMENT_TEAM` — order.** Core config-plugins' `withDevelopmentTeam`
   does walk _every_ native target, but it runs before this one exists. `withMod`
@@ -538,6 +609,12 @@ the file carries the full reasoning, so this is the short version.
   `withIosExpoPlugins`, which is what registers `withDevelopmentTeam`. So it is
   registered last, runs first, and walks a pbxproj that still has exactly one
   native target.
+- **`TARGETED_DEVICE_FAMILY` — order, the same way.** Core `withDeviceFamily`
+  writes `ios.supportsTablet` onto every target that exists when it runs, which
+  is before this one does, and `expo-share-extension`'s settings map names no
+  family. It only mattered once the app went iPad-native (_devices_, above): a
+  prebuild before the plugin copied it left the extension with no
+  `TARGETED_DEVICE_FAMILY` line at all.
 - **`IPHONEOS_DEPLOYMENT_TARGET` — product type.** `expo-build-properties`
   filters its targets to `TargetType.APPLICATION` (`build/ios.js`,
   `updateDeploymentTargetXcodeProject`), so a `com.apple.product-type.app-extension`
