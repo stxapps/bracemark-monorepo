@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { Dimensions, View } from 'react-native';
 import { KeyboardController } from 'react-native-keyboard-controller';
+import * as SafeArea from 'react-native-safe-area-context';
 import * as DropdownMenuPrimitive from '@rn-primitives/dropdown-menu';
 import { PortalHost } from '@rn-primitives/portal';
 import { act, fireEvent, render } from '@testing-library/react-native';
@@ -148,4 +149,66 @@ test('a hide event that never arrives still places the menu, rather than leaving
   });
 
   expect(queryByText('Rename')).not.toBeNull();
+});
+
+// The clamp box (DropdownMenuContent's note). @rn-primitives clamps against the
+// physical screen while placing the menu in the app's own coordinates, so
+// whenever the app is smaller than the screen — Split View, Slide Over, Stage
+// Manager, Android split-screen, a compatibility window — the bottom and right
+// collision insets must grow by the difference or a menu is drawn past the
+// app's edge. Read off the primitive's `insets` prop, which is everything the
+// clamp knows; the placement itself needs an `onLayout` jest never fires.
+describe('the clamp box is the app, not the screen', () => {
+  function placedInsets(
+    contentInsets?: React.ComponentProps<typeof DropdownMenuContent>['insets'],
+  ) {
+    const { getByLabelText, UNSAFE_root } = render(
+      <>
+        <DropdownMenu>
+          <DropdownMenuTrigger aria-label="List actions">
+            <Text>⋯</Text>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent insets={contentInsets}>
+            <DropdownMenuItem>
+              <Text>Rename</Text>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <PortalHost />
+      </>,
+    );
+    fireEvent.press(getByLabelText('List actions'));
+    return UNSAFE_root.findByType(DropdownMenuPrimitive.Content).props.insets;
+  }
+
+  function given(
+    screen: { width: number; height: number },
+    app: { width: number; height: number },
+  ) {
+    const get = Dimensions.get.bind(Dimensions);
+    jest
+      .spyOn(Dimensions, 'get')
+      .mockImplementation((dim) => (dim === 'screen' ? { ...get(dim), ...screen } : get(dim)));
+    jest.spyOn(SafeArea, 'useSafeAreaFrame').mockReturnValue({ x: 0, y: 0, ...app });
+  }
+
+  // The positive control: a full-screen app is clamped exactly as before.
+  test('an app that fills the screen adds nothing to the gutter', () => {
+    given({ width: 390, height: 844 }, { width: 390, height: 844 });
+    expect(placedInsets()).toEqual({ top: 8, bottom: 8, left: 8, right: 8 });
+  });
+
+  // An iPad in Split View: the app is the left 507 of a 1032-wide screen, and
+  // shorter by nothing. Without the overhang a menu near the app's right edge
+  // would be allowed out to 1024.
+  test('an app narrower or shorter than the screen moves the right and bottom clamps onto its edge', () => {
+    given({ width: 1032, height: 1376 }, { width: 507, height: 1300 });
+    expect(placedInsets()).toEqual({ top: 8, left: 8, right: 8 + 525, bottom: 8 + 76 });
+  });
+
+  // `{}` opts out of the padding, never out of staying inside the app.
+  test("a caller's own insets get the overhang too", () => {
+    given({ width: 1032, height: 1376 }, { width: 507, height: 1376 });
+    expect(placedInsets({})).toEqual({ right: 525, bottom: 0 });
+  });
 });

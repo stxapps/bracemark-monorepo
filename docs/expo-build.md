@@ -441,13 +441,14 @@ puts there (_ios share extension build settings_, below). Android has no manifes
 switch for form factors at all; what the Play Store offers to which device is the
 **Play Console**'s, and this section is the only record of it.
 
-| device                                                    | gets                                                  | set by                          |
-| --------------------------------------------------------- | ----------------------------------------------------- | ------------------------------- |
-| iPhone                                                    | the app, any orientation                              | —                               |
-| iPad — full screen, Split View, Slide Over, Stage Manager | the app, iPad-native, sized to whatever window it has | `supportsTablet: true`          |
-| Android phone, foldables and flips included               | the app                                               | —                               |
-| Android tablet (and Chromebook, if included)              | the app                                               | Play Console → _Device catalog_ |
-| TV, Wear OS, car                                          | nothing — the Play Store does not offer it            | Play Console → _Device catalog_ |
+| device                                                                   | gets                                                                                                   | set by                          |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| iPhone                                                                   | the app, any orientation                                                                               | —                               |
+| iPad — full screen, Split View, Slide Over, Stage Manager                | the app, iPad-native, sized to whatever window it has                                                  | `supportsTablet: true`          |
+| iPhone Duo (Apple's foldable) — outer display, inner display, Split View | the app — but CENTRED, not resized, on the inner display until it is built with the iOS 27 SDK (below) | —                               |
+| Android phone, foldables and flips included                              | the app                                                                                                | —                               |
+| Android tablet (and Chromebook, if included)                             | the app                                                                                                | Play Console → _Device catalog_ |
+| TV, Wear OS, car                                                         | nothing — the Play Store does not offer it                                                             | Play Console → _Device catalog_ |
 
 **The layout is one rule, by window width, not by device.** Below 768 (Uniwind's
 `md`) the app is the phone layout it always was; at or above it, the links and
@@ -457,6 +458,48 @@ docked rail — because a window's width is the only thing every case above
 (rotation, Split View, a fold, freeform, a Flip's cover screen) changes in common.
 The mechanism and its traps are [safe-area.md](./safe-area.md), _wide windows on
 native_.
+
+**The iPhone Duo is the one device here whose layout depends on the Xcode we
+build with, not on this repo.** Apple's first foldable iPhone (on sale October
+23, 2026) has a 5.4-inch outer display and a 7.6-inch inner one, and Apple's own
+_Prepare_ checklist (developer.apple.com/iphone-duo/prepare) ties what an app gets
+on it to the iOS SDK it was built with:
+
+| built with                    | on the iPhone Duo                                                                                                                  |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| iOS 26 SDK — **Xcode 26, us** | runs, doesn't adapt: the inner display shows the app centred with empty space around it; the outer shows it left of the status bar |
+| iOS 27 SDK                    | resizes to fill most of the inner display, still keeping clear of the status bar on the right edge                                 |
+| iOS 27.1 SDK or later         | uses the full display; the SYSTEM's toolbars and tab bars turn vertical, below the status bar                                      |
+
+So nothing in _wide windows on native_ ([safe-area.md](./safe-area.md)) reaches
+the Duo until the iOS build moves to Xcode 27, and whether Expo SDK 54 / React
+Native 0.81 builds with it has not been tried ([dependency-upgrades.md](./dependency-upgrades.md)
+records why the Expo SDK is held where it is). What is known about the 27.1
+tier, for when it arrives:
+
+- **Our bars are our own** — both topbars are hand-built `View`s, so they stay
+  horizontal at the top where the system's bars go vertical. Decide that on the
+  Duo simulator rather than by porting to system bars blind.
+- **The 768 rule lands on both of its sides.** The outer display and a Split View
+  half get the phone layout; the inner display held landscape docks the rail,
+  and with the fold down the middle of the long edge the fold then crosses the
+  links list. Lying flat the fold takes no width; folded like a book, the list's
+  titles run through the curve. Avoiding it means a native module over iOS
+  27.1's reserved-region API, which is not built — worth it only if book-folded
+  reading proves to matter.
+- **The insets are asymmetric at phone width** — the outer display reserves a
+  strip down its trailing edge — which is why every overlay pads per edge
+  ([safe-area.md](./safe-area.md), _wide windows on native_).
+- **Touch ID, not Face ID**, in the side button. The biometric copy already
+  names whichever the device reports ([locks.md](./locks.md)).
+
+The Duo point sizes quoted around the web — 466 × 678 outer, 951 × 669 inner, the
+fold at 475.5 — come from a community design kit traced over Apple's templates,
+not from Apple's own pages; confirm them on Xcode 27.1's iPhone Duo simulator
+before anything is designed to them, and never lay out against them. App Store
+Connect also takes iPhone Duo screenshots (2007 × 2853 for the inner display) and
+badges the product page "optimized for iPhone Duo" when they are present —
+optional, and only honest once the app is built at the 27.1 tier.
 
 **`supportsTablet: true` is one-way.** Once a build with iPad support ships, App
 Store Connect rejects any later build that drops it. It also makes **iPad

@@ -459,7 +459,17 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
         // is what stops a tall form from running under the notch — measured, an
         // expanded form with the keyboard up reaches the status bar without it.
         // Padding rather than a margin on the panel so the cap sees it.
-        style={{ paddingTop: insets.top + 8 }}
+        //
+        // The SIDES take the bare insets, no gutter: the sheet is edge-attached,
+        // so where a side inset is 0 it should still meet the screen's edge.
+        // They used to be absent, which held only while every side inset was
+        // a landscape notch the `max-w-xl` cap happened to clear. It isn't: the
+        // iPhone Duo's outer display reserves a strip down its trailing edge
+        // for the status bar and camera, at phone width, where the panel spans
+        // the window and its ✕ (`right-3`) would sit inside that strip
+        // (docs/expo-build.md, _devices_). Same per-edge rule as DialogOverlay:
+        // each side its own inset, never one mirrored onto the other.
+        style={{ paddingTop: insets.top + 8, paddingLeft: insets.left, paddingRight: insets.right }}
       >
         {/* The panel. `max-h-full` resolves against the avoider — "the window
           minus the keyboard" — and `rounded-t-2xl` is the edge-attached sheet
@@ -508,13 +518,18 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
           that doesn't run 1,000pt from its label to its Save: at 576 (the
           widest phone's panel is ~440) the fields keep close to a phone's
           measure and the sheet centres over the list, the way iPadOS centres
-          its own sheets. `sm:border-x` gives the detached sides the edge the top
-          already has; below `sm` the sides are the screen's. */}
+          its own sheets. `sm:border-x` gives the detached sides the edge the
+          top already has, and so does any side inset, which detaches the
+          panel from that edge at any width; otherwise, below `sm`, the sides
+          are the screen's. */}
         <StyledAnimatedView
           as="Pressable"
           accessible={false}
           onPress={Keyboard.dismiss}
-          className="max-h-full w-full max-w-xl self-center rounded-t-2xl border-t border-border bg-popover sm:border-x"
+          className={cn(
+            'max-h-full w-full max-w-xl self-center rounded-t-2xl border-t border-border bg-popover sm:border-x',
+            (insets.left > 0 || insets.right > 0) && 'border-x',
+          )}
           style={panelStyle}
         >
           {/* A sheet header rather than an app bar: the top padding aligns the

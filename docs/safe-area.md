@@ -522,7 +522,7 @@ Uniwind's `md` — and at nothing else.**
   column count, so a drag would re-compose it per frame. ⌘\ needs a hardware
   keyboard; both buttons are reachable by Full Keyboard Access instead.
 
-Five things nothing would flag:
+Seven things nothing would flag:
 
 - **The card grid's width is computed, not measured, so the rail has to be
   subtracted by hand** (`features/links/main.tsx`). And it replaces the LEFT
@@ -562,7 +562,20 @@ Five things nothing would flag:
   content at the settings column (`w-full max-w-2xl self-center`), leaving the
   bars to span. The add panel stays a bottom sheet at every width (its keyboard
   arithmetic is all about the bottom edge) and caps at `max-w-xl`, centred, with
-  side borders from `sm`.
+  side borders from `sm` — or wherever a side inset detaches it from the edge.
+- **Insets are per edge, and a side inset is not always a landscape notch.**
+  The iPhone Duo's outer display reserves a strip down its trailing edge for
+  the status bar and camera, at PHONE width, upright
+  ([expo-build.md](./expo-build.md), _devices_). Anything that pads by
+  `insets.top` and `insets.bottom` only, or mirrors one side onto the other
+  (`width - insets.left * 2`), puts content in it. The screens' `SafeAreaView`s
+  and DialogOverlay were already per edge; the add panel's sides were not, and
+  now are; `main.tsx`'s column math subtracts each side separately.
+- **The app is not always the whole screen** — a Split View or Slide Over
+  window, an Android split-screen half, the Duo's centred compatibility window.
+  Anything that measures against `Dimensions.get('screen')` is measuring the
+  wrong box there. The dropdown menus did, through @rn-primitives, and are
+  corrected in `ui/dropdown-menu.tsx` (_safe area on native_, below).
 
 **Not yet verified on a device.** This shape was written and checked on a desk
 — typecheck, lint, the unit specs, and an `expo prebuild` read back for both
@@ -841,7 +854,9 @@ and both apps' surfaces are edge-to-edge by default (iOS always was; Android
   [soft-keyboard.md](./soft-keyboard.md), _the add panel_) is an absolute layer
   over the links screen, so it cannot inherit the screen's `SafeAreaView`: it
   pads its avoider by `insets.top + 8` — DialogOverlay's gutter, which is what
-  keeps a maxed-out panel out of the notch — and its own bottom by
+  keeps a maxed-out panel out of the notch — and by the bare `insets.left` /
+  `insets.right` on the sides (no gutter: it is an edge-attached sheet, so a
+  side with no inset still meets the screen's edge), and its own bottom by
   `max(insets.bottom + keyboardHeight, 0)`, where `keyboardHeight` is the
   UI-thread shared value from `useReanimatedKeyboardAnimation` (0 while closed,
   negative while opening). That is the share sheet's formula, so the
@@ -919,6 +934,20 @@ and both apps' surfaces are edge-to-edge by default (iOS always was; Android
     is anchored to the bottom of the screen so the clamp always fires, and the
     last visible row's ⋯ (`features/links/link-row-menu.tsx`) — both putting
     their final item inside the home indicator's own swipe region.
+
+    **And the screen is the wrong BOX whenever the app is not the whole screen.**
+    The menu is placed in the app's own coordinates — the trigger measured
+    against the root view, the content drawn in it — while every clamp in the
+    library is `dimensions.width - insets.right` or `dimensions.height -
+insets.bottom` against that physical screen. In iPad Split View, Slide Over
+    and Stage Manager, Android split-screen and freeform windows, and the
+    centred window an iPhone Duo gives an app built with an older iOS SDK
+    ([expo-build.md](./expo-build.md), _devices_), the screen is larger than the
+    app, so a menu near the app's right or bottom edge "fits" and is drawn past
+    it. `DropdownMenuContent` adds the overhang — screen minus
+    `useSafeAreaFrame()`, the provider's frame — to the right and bottom insets,
+    a caller's `{}` included, which puts the clamp exactly on the app's edge and
+    adds 0 when the app fills the screen. `ui/dropdown-menu.spec.tsx` pins both.
 
   - **Hand-rolled absolute positioning** (a future toast, a bottom bar in an
     overlay): nothing inherits — apply `useSafeAreaInsets()` offsets yourself,
