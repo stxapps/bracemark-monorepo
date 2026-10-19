@@ -15,8 +15,13 @@
 
 import {
   clearSidebarCollapsedIds,
+  clearSidebarRail,
+  DEFAULT_SIDEBAR_RAIL,
+  getSidebarRail,
   readSidebarCollapsedIds,
+  subscribeSidebarRail,
   writeSidebarCollapsedIds,
+  writeSidebarRail,
 } from './sidebar-view-store';
 
 const STORAGE_KEY = 'bracemark:sidebar-collapsed';
@@ -38,6 +43,9 @@ function removeStorage(): void {
 }
 
 afterEach(() => {
+  // The rail's in-memory fallback outlives a storage swap by design (that is its
+  // job), so each case starts from a wiped rail rather than inheriting one.
+  clearSidebarRail();
   removeStorage();
 });
 
@@ -137,5 +145,103 @@ describe('clearSidebarCollapsedIds', () => {
     removeStorage();
 
     expect(() => clearSidebarCollapsedIds()).not.toThrow();
+  });
+});
+
+// The desktop rail's dock state. Two things are pinned beyond the ids' contract above:
+// it is read through `useSyncExternalStore`, which re-renders forever on a snapshot that
+// is a new object for an unchanged store; and it is the ONLY copy of the rail's state —
+// so a storage that refuses the write must still leave the toggle working for the tab.
+describe('the rail', () => {
+  it('is docked at the default width when nothing has been stored', () => {
+    installStorage();
+
+    expect(getSidebarRail()).toEqual(DEFAULT_SIDEBAR_RAIL);
+  });
+
+  it('merges a write into what is stored, and the next read returns it', () => {
+    installStorage();
+    writeSidebarRail({ width: 300 });
+    writeSidebarRail({ collapsed: true });
+
+    expect(getSidebarRail()).toEqual({ collapsed: true, width: 300 });
+  });
+
+  // The loop guard: `useSyncExternalStore` compares snapshots by identity.
+  it('returns the same object until the stored value changes', () => {
+    installStorage();
+    writeSidebarRail({ width: 300 });
+    const first = getSidebarRail();
+
+    expect(getSidebarRail()).toBe(first);
+    writeSidebarRail({ width: 320 });
+    expect(getSidebarRail()).not.toBe(first);
+  });
+
+  it.each([
+    ['not JSON', 'nope'],
+    ['not an object', JSON.stringify(['collapsed'])],
+    ['a truthy non-boolean collapse', JSON.stringify({ collapsed: 'yes', width: 300 })],
+    ['a non-numeric width', JSON.stringify({ collapsed: false, width: '300px' })],
+    ['a non-finite width', '{"collapsed":false,"width":1e999}'],
+    ['a negative width', JSON.stringify({ collapsed: false, width: -5 })],
+  ])('reads %s as docked and/or default-width, never hidden', (_label, raw) => {
+    installStorage({ 'bracemark:sidebar-rail': raw });
+    const rail = getSidebarRail();
+
+    expect(rail.collapsed).toBe(false);
+    expect(rail.width === null || rail.width === 300).toBe(true);
+  });
+
+  it('notifies subscribers on a write and on the wipe, and not after unsubscribing', () => {
+    installStorage();
+    const listener = jest.fn();
+    const unsubscribe = subscribeSidebarRail(listener);
+
+    writeSidebarRail({ collapsed: true });
+    clearSidebarRail();
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    unsubscribe();
+    writeSidebarRail({ collapsed: false });
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  // Storage refusing the write would otherwise leave the snapshot — which IS the stored
+  // value — unchanged, and Hide sidebar would do nothing at all.
+  it.each([
+    ['absent', () => removeStorage()],
+    [
+      'throwing',
+      () =>
+        Object.defineProperty(globalThis, 'localStorage', {
+          configurable: true,
+          value: {
+            getItem: () => null,
+            setItem: () => {
+              throw new DOMException('QuotaExceededError');
+            },
+            removeItem: () => undefined,
+          },
+        }),
+    ],
+  ])('still collapses for this tab when storage is %s', (_label, install) => {
+    install();
+
+    writeSidebarRail({ collapsed: true });
+
+    expect(getSidebarRail().collapsed).toBe(true);
+    clearSidebarRail();
+    expect(getSidebarRail()).toEqual(DEFAULT_SIDEBAR_RAIL);
+  });
+
+  // The sign-out teardown — the next account on this device starts from the default.
+  it('is back at the default after the wipe', () => {
+    installStorage();
+    writeSidebarRail({ collapsed: true, width: 320 });
+
+    clearSidebarRail();
+
+    expect(getSidebarRail()).toEqual(DEFAULT_SIDEBAR_RAIL);
   });
 });

@@ -430,6 +430,52 @@ breakpoint edge; if it actually breaks, size that region with a **container quer
 (`@container`) so it responds to its own post-inset width, rather than fighting the
 breakpoint math.
 
+### the links rail: resizable and collapsible
+
+From `md` up, bracemark-web's links rail (`(app)/links/_panes/sidebar.tsx`) is the
+user's to size and to put away; below `md` it is the drawer either way. Only that
+rail does this — the settings rail is six short destinations with nothing to
+truncate, and bracemark-expo has no rail until it supports tablets. The state is
+device-local (`sidebar-view-store.ts` in web-react: `localStorage`, wiped by the
+sign-out teardown with the collapsed ids, kept by delete-all-data like
+`localSettings`); the measure and the toggles are
+`(app)/links/_hooks/use-sidebar-rail.ts`.
+
+- **Width**: 192–400px, default 240 (the old fixed `w-60`), dragged at the right
+  edge or stepped from the keyboard — the edge is a focusable WAI-ARIA window
+  splitter (arrows ±16, Shift ±64, Home/End, Enter collapses), double-click
+  resets. A **40vw** cap rides in CSS so a width dragged on a wide window can't
+  starve a narrow one's pane, and the same fraction is applied in JS while
+  dragging, so the stored number is the one on screen and the one the separator
+  announces.
+- **Collapsed**, the rail renders **nothing**, and the frame takes its below-`md`
+  shape at full width: the topbar's title opens the drawer, and a "Show sidebar"
+  control ahead of it docks the rail again. Hide sits in the rail's brand row,
+  where the drawer keeps its close. ⌘\ / Ctrl+\ toggles — not ⌘B, which in
+  Firefox opens the browser's own bookmarks sidebar — and only where the CSS
+  matched `md` (`MD_QUERY`, read at the keystroke). No icon-only mini rail: every
+  user list wears the same folder.
+
+Four things nothing would flag:
+
+- **The state is read on the mounting render, not in an effect.** The collapsed
+  ids load after mount; the rail can't — a user who collapsed it would watch it
+  appear and vanish on every visit, one who narrowed it would watch the link list
+  jump. The store is a `useSyncExternalStore` source whose snapshot is cached
+  against the raw stored string (a fresh object per read loops forever), and
+  whose writes fall back to memory when storage refuses them, since the snapshot
+  _is_ the stored value and the toggle would otherwise do nothing.
+- **A drag writes the rail's DOM width, not the store**, and commits once on
+  release. The store re-renders the rail, and the rail is both trees; per
+  pointermove that is the whole nav. A cancelled drag (`pointercancel`, lost
+  capture) puts the width back and commits nothing.
+- **The collapse is instant.** The pane beside the rail is a virtualized list
+  whose card grid recomputes its columns from its own width (above, the
+  `scrollbar-gutter-stable` panes), so a tweened rail re-composes it every frame.
+- **Both toggles unmount the control that was pressed** — Hide is inside the rail
+  it hides, Show only exists while the rail is gone — so focus is handed to the
+  counterpart, and only when it was inside what disappeared.
+
 ### popups & dialogs
 
 1. **Prefer shadcn/Radix** (`Dialog`, `Popover`, `DropdownMenu`, `Tooltip`,

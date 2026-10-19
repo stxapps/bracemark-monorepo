@@ -14,7 +14,8 @@
 //   (sidebar.tsx) and this heading — which already names what the rail selects —
 //   grows a chevron and opens it as a drawer (sidebar-drawer.tsx). No hamburger
 //   slot to pay for, and the word for where you are is the control for going
-//   elsewhere.
+//   elsewhere. The same happens at any width while the user has COLLAPSED the
+//   rail, plus a "Show sidebar" control ahead of the title to dock it again.
 //
 //   THE SEARCH BOX BECOMES A SUMMONED ROW. A phone-width bar can hold a title
 //   and four actions or a search box, not both, so below `md` the box moves out
@@ -36,8 +37,8 @@
 // toggles view-state-provider's `bulkEditing` — rows become selectable and the
 // main pane shows the BulkEditToolbar).
 
-import { useCallback } from 'react';
-import { Search, SquarePen } from 'lucide-react';
+import { useCallback, useEffect, useRef } from 'react';
+import { PanelLeftOpen, Search, SquarePen } from 'lucide-react';
 
 import { ALL_LABEL, flattenTree } from '@stxapps/shared';
 import { useLists, useTags } from '@stxapps/web-react';
@@ -49,6 +50,14 @@ import { MoreOptionsMenu } from '../_components/more-options-menu';
 import { SearchBar } from '../_components/search-bar';
 import { useLinksPage } from '../_contexts/page-provider';
 import { useLinksViewState } from '../_contexts/view-state-provider';
+import {
+  RAIL_SHORTCUT_ARIA,
+  railShortcutHint,
+  setRailCollapsed,
+  SHOW_RAIL_ATTR,
+  takeRailFocus,
+  useSidebarRail,
+} from '../_hooks/use-sidebar-rail';
 import { SidebarDrawer } from './sidebar-drawer';
 
 function useSelectionLabel(): string {
@@ -79,8 +88,38 @@ function useSelectionLabel(): string {
   return flattenTree(tags).find((n) => n.item.id === selection.id)?.item.name ?? '';
 }
 
+// Docks the rail again, from `md` up, while it is collapsed — the counterpart of
+// the rail's own Hide control, and the one that catches focus when Hide is
+// pressed from the keyboard (use-sidebar-rail.ts, _focus handoff_). Below `md`
+// there is no rail to dock; the title is the drawer's door there either way.
+function ShowRailButton() {
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (takeRailFocus('show')) ref.current?.focus();
+  }, []);
+
+  return (
+    <Button
+      ref={ref}
+      {...{ [SHOW_RAIL_ATTR]: '' }}
+      variant="ghost"
+      size="icon"
+      aria-label="Show sidebar"
+      aria-keyshortcuts={RAIL_SHORTCUT_ARIA}
+      title={`Show sidebar (${railShortcutHint()})`}
+      onClick={() => setRailCollapsed(false)}
+      // `-ml-2` pulls the 36px box's empty margin into the bar's 16px inset, so
+      // the glyph lands about where the rail's lockup mark sat.
+      className="-ml-2 hidden shrink-0 md:inline-flex"
+    >
+      <PanelLeftOpen className="size-4" />
+    </Button>
+  );
+}
+
 export function Topbar() {
   const label = useSelectionLabel();
+  const { collapsed: railCollapsed } = useSidebarRail();
   const {
     bulkEditing,
     enterBulkEdit,
@@ -119,16 +158,27 @@ export function Topbar() {
   return (
     <>
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
+        {railCollapsed && <ShowRailButton />}
+
         {/* One `h1` at every width — what changes is whether its content is a
             plain label (the rail is showing, so the title is only a title) or
             the button that opens the rail. A button is phrasing content, so it
             nests here legally; two headings, one per breakpoint, would not have
-            been legal or honest. */}
+            been legal or honest.
+
+            "The rail is showing" is the breakpoint AND the rail's dock state:
+            collapsed, the frame is one-pane at every width, so the title is the
+            drawer's door at every width too — a list stays one click away
+            without docking the rail back. */}
         <h1 className="flex min-w-0 flex-1 items-center md:max-w-48 md:flex-initial">
-          <span className="flex min-w-0 md:hidden">
+          <span className={cn('flex min-w-0', !railCollapsed && 'md:hidden')}>
             <SidebarDrawer label={label} />
           </span>
-          <span className="hidden truncate text-lg font-semibold md:block">{label}</span>
+          <span
+            className={cn('hidden truncate text-lg font-semibold', !railCollapsed && 'md:block')}
+          >
+            {label}
+          </span>
         </h1>
 
         {/* The inline box, `md` and up. The measure lives HERE, on the slot,

@@ -88,7 +88,7 @@ that reading comes _before_ the edit; nothing downstream will tell you.
 | app lock + list locks                                                          | `locks.md`                      |
 | **error messages, labels, roles, font scaling**                                | `accessibility.md` ⚠            |
 | light/dark theme; a Tailwind class, a `data-*` variant, a `--color-*` token    | `theme.md` ⚠                    |
-| safe-area insets, viewport sizing, popup positioning                           | `safe-area.md`                  |
+| safe-area insets, viewport sizing, popup positioning; the links rail's width   | `safe-area.md`                  |
 | **the soft keyboard** — avoidance, dismissal, why a field is stuck             | `soft-keyboard.md` ⚠            |
 | `bracemark-extension` auth flow                                                | `browser-extension.md`          |
 | the iOS **share extension** — its process, its imports, its sheet              | `share-sheet.md` ⚠              |
