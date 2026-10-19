@@ -331,7 +331,9 @@ async function measureSize(
     if (options.legs.has('incremental')) {
       const html = join(runDir, `bookmarks-${INCREMENTAL_LINKS}.html`);
       await writeBookmarksHtml(html, INCREMENTAL_LINKS);
-      results.push(await incrementalLeg(a, await second(), html, links, runDir, appOrigin, options));
+      results.push(
+        await incrementalLeg(a, await second(), html, links, runDir, appOrigin, options),
+      );
     }
 
     if (options.legs.has('bulk-edit')) {
