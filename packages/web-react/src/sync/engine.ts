@@ -1252,9 +1252,10 @@ async function uploadBlobs(
       const sealed = await trace.span('blob.encrypt', () =>
         encryptEntity(deps.encryptionKey, data, op.path),
       );
-      // A 5xx or 429 is tried again here rather than failing the cycle — one span
-      // per attempt, so a retried PUT shows in the trace as a failed one before it
-      // (@stxapps/shared sync/blob-transfer.ts, retryTransientBlobTransfer).
+      // A 5xx, a 429 or a dropped connection is tried again here rather than
+      // failing the cycle — one span per attempt, so a retried PUT shows in the
+      // trace as a failed one before it (@stxapps/shared sync/blob-transfer.ts,
+      // retryTransientBlobTransfer).
       await retryTransientBlobTransfer(
         () =>
           trace.span('blob.put', () => putBlob(signed.url, sealed, signed.authorization), {
@@ -1271,14 +1272,18 @@ async function uploadBlobs(
   }
 }
 
-// A transfer the host refused for now, not on its merits — what `send` and every
-// download try again (@stxapps/shared sync/blob-transfer.ts).
+// A transfer the host refused for now, not on its merits, or one the connection
+// under it dropped — what `send` and every download try again (@stxapps/shared
+// sync/blob-transfer.ts). A browser's fetch rejects with a TypeError only when the
+// transport failed: an abort is a DOMException, and these transfers have no abort
+// but their deadline, which rejects first as a BlobTimeoutError (sync/r2.ts).
 function isTransientBlobError(err: unknown): boolean {
+  if (err instanceof TypeError) return true;
   return err instanceof BlobRequestError && isTransientBlobStatus(err.status);
 }
 
-// One GET, tried again on a 5xx or 429. The 404 a caller skips is not transient,
-// so it still reaches the caller on the first try.
+// One GET, tried again on a 5xx, a 429 or a dropped connection. The 404 a caller
+// skips is not transient, so it still reaches the caller on the first try.
 function getBlobRetrying(signed: SignedUrl): Promise<Uint8Array> {
   return retryTransientBlobTransfer(
     () => getBlob(signed.url, signed.authorization),
@@ -1366,7 +1371,8 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
     try {
       if (!signed) return;
 
-      // A 5xx or 429 is tried again, one span per attempt, as an upload's is.
+      // A 5xx, a 429 or a dropped connection is tried again, one span per
+      // attempt, as an upload's is.
       const blob = await retryTransientBlobTransfer(
         () =>
           trace.span(

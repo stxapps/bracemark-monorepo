@@ -49,7 +49,7 @@ import {
   runInitialSync,
   type SyncDeps,
 } from './engine';
-import { BlobRequestError, getBlob, putBlob } from './r2';
+import { BlobRequestError, BlobTimeoutError, getBlob, putBlob } from './r2';
 
 // The crypto boundary is not what these specs are about: a reversible stand-in keeps
 // the assertions on BYTES the test wrote, so "the local copy survived" is checkable by
@@ -1120,6 +1120,32 @@ describe('a transfer the host refused for now', () => {
     expect(await settleCycle()).toBe(unavailable);
     expect(mockPutBlob).toHaveBeenCalledTimes(3);
     expect(await pendingPaths()).toEqual([LINK_PATH]);
+  });
+
+  // The connection under a 10,000-link push on staging dropped mid-chunk: 35
+  // blob-route PUTs canceled at once, and the one whose fetch rejected failed its
+  // cycle and parked the last op until Retry. A browser reports that as a TypeError.
+  it('is tried again when the connection dropped under it, and the cycle ends clean', async () => {
+    await seedQueued(LINK_PATH, 'the link');
+    let drops = 1;
+    mockPutBlob.mockImplementation(async (url: string) => {
+      if (pathFor(url) === LINK_PATH && drops-- > 0) throw new TypeError('Failed to fetch');
+      uploaded.add(pathFor(url));
+    });
+
+    expect(await settleCycle()).not.toBeInstanceOf(Error);
+    expect(mockPutBlob).toHaveBeenCalledTimes(2);
+    expect(committedPaths()).toEqual([LINK_PATH]);
+    expect(await pendingPaths()).toEqual([]);
+  });
+
+  it('is never tried again after its deadline — that attempt already spent it', async () => {
+    await seedQueued(LINK_PATH, 'the link');
+    const stalled = new BlobTimeoutError('PUT', 15_000);
+    mockPutBlob.mockRejectedValue(stalled);
+
+    await expect(runIncrementalSync(deps())).rejects.toBe(stalled);
+    expect(mockPutBlob).toHaveBeenCalledTimes(1);
   });
 
   it('is never tried again on an expired url — the next cycle signs a fresh one', async () => {

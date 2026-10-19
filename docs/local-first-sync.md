@@ -775,8 +775,14 @@ duplicate path.
 > retried: any other `4xx` (the expired `403` above wants a fresh URL, which only
 > the next cycle signs, and a GET `404` is an object deleted since it was listed,
 > which the engines skip), a `BlobTimeoutError` (the attempt already spent its
-> whole deadline), and a network error (expo's fetch can't tell one from an
-> abort). Each attempt is its own `blob.put` or `blob.get` span, so `measure:sync`
+> whole deadline), and, **on expo only**, a network error (its transfers fail with
+> an untyped error, so a dropped connection can't be told from a missing temp
+> file). **The web engine retries a network error too** — fetch's `TypeError`,
+> which an abort and the deadline never produce. That was the next stall at the
+> same scale: later the same day, the connection under a 10,000-link push dropped
+> mid-chunk (35 blob-route PUTs `canceled` within a second), and one PUT's
+> `TypeError` failed the cycle, parking the last op until Retry and its minute-long
+> listing. Each attempt is its own `blob.put` or `blob.get` span, so `measure:sync`
 > shows a retried transfer as a failed span before it. The share sheet's upload
 > (`share-upload.ts`) does not retry: its process outlives the ✓ by about a
 > second, and the outbox is its retry.

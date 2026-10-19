@@ -77,9 +77,20 @@ export function blobTransferTimeoutMs(bytes: number): number {
 //   - a BlobTimeoutError. That attempt already spent its whole deadline, and
 //     another would multiply the wait (the same reasoning as an ApiTimeoutError's,
 //     api/retry.ts).
-//   - a network error. expo's fetch reports one as the same FetchError as an
-//     abort, so the two platforms couldn't agree on it, and a device that just
-//     went offline gains nothing from a second try one second later.
+//   - on expo, a network error. Its transfers fail with no type to tell one by —
+//     expo's fetch reports a FetchError, the native file transfers a bare Error
+//     with a message — so a predicate there could not separate a dropped
+//     connection from a missing temp file.
+//
+// The web engine DOES retry a network error: a browser's fetch reports every
+// transport failure as a TypeError, and its other ways out are typed apart (an
+// abort is a DOMException; the deadline rejects as a BlobTimeoutError before it
+// aborts). On staging, 2026-10-19, the
+// connection under a 10,000-link push dropped mid-chunk — 35 blob-route PUTs
+// canceled within a second — and one of them failed its cycle with that
+// TypeError, which then waited a minute for Retry and another for its listing.
+// A device that really went offline pays the two waits below before failing,
+// as it would anyway.
 //
 // Three tries, about 1 s then 2 s apart: a few seconds, set against a PUT token
 // that lives five minutes from its chunk's sign and a GET token that lives an
