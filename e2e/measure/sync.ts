@@ -303,6 +303,18 @@ async function measureSize(
 
   const a = await openDevice(`measure-sync-a-${links}`, options);
   let b: Device | undefined;
+  // The second browser for a leg that only reads it later. Signing in starts its
+  // first sync — the whole library — in the background, so it is run to the end
+  // here, unmeasured: left running, it shared the network with the next leg's
+  // writes and held the leg's own queue behind ~23,000 downloads at 10,000 links.
+  const second = async (): Promise<Device> => {
+    if (!b) {
+      const opened = await openDevice(`measure-sync-b-${links}`, options, a.app.credentials);
+      b = opened;
+      await settleFirstSync(opened);
+    }
+    return b;
+  };
   try {
     await grantPlusAndLoad(a.app.page, a.app.credentials.username);
     results.push(await pushLeg(a, backup, links, runDir, appOrigin, options));
@@ -317,24 +329,23 @@ async function measureSize(
     }
 
     if (options.legs.has('incremental')) {
-      b ??= await openDevice(`measure-sync-b-${links}`, options, a.app.credentials);
       const html = join(runDir, `bookmarks-${INCREMENTAL_LINKS}.html`);
       await writeBookmarksHtml(html, INCREMENTAL_LINKS);
-      results.push(await incrementalLeg(a, b, html, links, runDir, appOrigin, options));
+      results.push(await incrementalLeg(a, await second(), html, links, runDir, appOrigin, options));
     }
 
     if (options.legs.has('bulk-edit')) {
-      b ??= await openDevice(`measure-sync-b-${links}`, options, a.app.credentials);
+      const other = await second();
       for (const size of options.bulk) {
-        results.push(...(await bulkEditLeg(a, b, size, links, runDir, appOrigin, options)));
+        results.push(...(await bulkEditLeg(a, other, size, links, runDir, appOrigin, options)));
       }
     }
 
     // Last: it removes links every leg before it reads.
     if (options.legs.has('bulk-delete')) {
-      b ??= await openDevice(`measure-sync-b-${links}`, options, a.app.credentials);
+      const other = await second();
       results.push(
-        ...(await bulkDeleteLeg(a, b, options.deleteSize, links, runDir, appOrigin, options)),
+        ...(await bulkDeleteLeg(a, other, options.deleteSize, links, runDir, appOrigin, options)),
       );
     }
   } finally {
@@ -456,6 +467,18 @@ async function pullLeg(
   return result;
 }
 
+// The second browser's first sync, waited out unmeasured (measureSize, `second`):
+// the `initial` cycle, then the cycle the provider kicks after it.
+async function settleFirstSync(b: Device): Promise<void> {
+  const { page } = b.app;
+  await assertTraced(page);
+  const since = Date.now();
+  const initial = await waitForSpan(page, (s) => s.name === 'cycle' && s.attrs?.kind === 'initial');
+  if (initial.failed) throw new Error(`the second browser’s first sync failed: ${initial.failed}`);
+  await waitForDrain(page, initial.start);
+  console.log(`  (the second browser’s first sync, unmeasured: ${seconds(Date.now() - since)})`);
+}
+
 async function incrementalLeg(
   a: Device,
   b: Device,
@@ -529,8 +552,7 @@ async function bulkEditLeg(
   const onto = `onto ${links.toLocaleString('en-US')}`;
   console.log(`\n${name} (${onto})`);
   const { page } = a.app;
-  await page.goto(ALL_LINKS_VIEW);
-  await assertTraced(page);
+  await openSettled(page, ALL_LINKS_VIEW);
   const edited = await selectLinks(page, size);
 
   await toolbarAction(page, 'Edit tags');
@@ -575,7 +597,7 @@ async function bulkDeleteLeg(
   console.log(`\n${name} (${onto})`);
   const { page } = a.app;
 
-  await page.goto(ALL_LINKS_VIEW);
+  await openSettled(page, ALL_LINKS_VIEW);
   await selectLinks(page, size);
   await toolbarAction(page, 'Remove');
   await waitForDrain(page);
@@ -633,6 +655,19 @@ async function pushAfter(
   );
   result.notes.push(...drainNotes(drain));
   return result;
+}
+
+// Open `path` and wait out the cycle the page kicks on reaching 'ready', before the
+// leg writes. After a push of its own that cycle is no quick check: a push that
+// went through the fallback leaves the cursor below its own commits
+// (web-react sync/engine.ts, fallbackCycle), so the next cycle lists every one of
+// them back — ~23,000 ops at 10,000 links — and the leg's write would queue
+// behind it.
+async function openSettled(page: Page, path: string): Promise<void> {
+  const since = Date.now();
+  await page.goto(path);
+  await assertTraced(page);
+  await waitForDrain(page, since);
 }
 
 // Enter Bulk edit on the current links view and select `size` links in display
@@ -976,9 +1011,11 @@ interface Drain {
   failedCycles: string[];
 }
 
-async function waitForDrain(page: Page): Promise<Drain> {
-  const started = Date.now();
-  const deadline = started + LEG_TIMEOUT_MS;
+async function waitForDrain(page: Page, since = Date.now()): Promise<Drain> {
+  // `since`: a cycle that ended after it counts as the settling one — the caller's
+  // navigation, when the page's own on-open cycle is what it waits out.
+  const started = since;
+  const deadline = Date.now() + LEG_TIMEOUT_MS;
   // The Data card's single action (_data/data-section.tsx): "Retry" after a
   // failed cycle, "Sync now" after a clean one, nothing while a cycle runs.
   const action = page.getByRole('button', { name: /^(Sync now|Retry)$/ });
@@ -987,6 +1024,8 @@ async function waitForDrain(page: Page): Promise<Drain> {
   let lastChange = Date.now();
   let lastPending = -1;
   let lastReport = 0;
+  let reportedRecorded = 0;
+  let toldNoAction = false;
   const drain: Drain = { nudges: 0, retries: 0, failedCycles: [] };
   const settled = (cycles: readonly Pick<SyncSpan, 'end' | 'failed'>[]): Drain => ({
     ...drain,
@@ -1008,8 +1047,21 @@ async function waitForDrain(page: Page): Promise<Drain> {
     } else {
       busyAt = readAt;
       if (now - lastReport > 10_000) {
-        console.log(`  ${pending} waiting to sync`);
+        // The spans the engine recorded since the last line: a queue that reads the
+        // same between two lines is idle at 0, and busy elsewhere (a long listing,
+        // another path's downloads) otherwise.
+        const busy = lastReport ? ` (${recorded - reportedRecorded} new spans)` : '';
+        console.log(`  ${pending} waiting to sync${busy}`);
         lastReport = now;
+        reportedRecorded = recorded;
+      }
+      if (now - lastChange >= STUCK_MS && !toldNoAction && !(await action.isVisible())) {
+        const failed = cycles.at(-1)?.failed;
+        console.log(
+          `  the queue has not moved for a minute, and this page has no "Sync now" or "Retry"` +
+            `${failed ? ` (the last cycle failed: ${failed})` : ''}`,
+        );
+        toldNoAction = true;
       }
       if (now - lastChange >= STUCK_MS && (await action.isVisible())) {
         const label = (await action.innerText()).trim();
