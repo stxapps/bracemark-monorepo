@@ -890,6 +890,23 @@ async function readTrace(page: Page): Promise<{ spans: SyncSpan[]; dropped: numb
   });
 }
 
+// What the drain loop needs from the trace, and no more: how many spans it holds
+// (refused ones included, so a full recorder still reads as moving) and the
+// `cycle` spans. Copying every span out on each poll — readTrace — took seconds
+// at 10,000 links (~70,000 spans through Playwright's protocol), twice a second.
+async function readCycles(
+  page: Page,
+): Promise<{ recorded: number; cycles: Pick<SyncSpan, 'end' | 'failed'>[] }> {
+  return page.evaluate(() => {
+    const trace = (window as unknown as TraceWindow).__bracemarkSyncTrace;
+    if (!trace) return { recorded: 0, cycles: [] };
+    const cycles = trace.spans
+      .filter((s) => s.name === 'cycle')
+      .map((s) => ({ end: s.end, failed: s.failed }));
+    return { recorded: trace.spans.length + trace.dropped, cycles };
+  });
+}
+
 async function waitForSpan(page: Page, match: (span: SyncSpan) => boolean): Promise<SyncSpan> {
   const deadline = Date.now() + LEG_TIMEOUT_MS;
   while (Date.now() < deadline) {
@@ -940,11 +957,19 @@ async function backToDataOverview(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { level: 1, name: 'Data', exact: true })).toBeVisible();
 }
 
-// Settled: nothing queued, a cycle has finished since the queue emptied, and
-// the engine has recorded nothing new for QUIET_MS. Without navigating — a
-// reload would abort the cycle under measurement and drop its spans with the
-// document (the trap seed/steps.ts's waitForSync, which navigates, would set).
-// Returns what it took: the presses, and the cycles that failed on the way.
+// Settled: nothing queued, a cycle has finished since the queue was last seen
+// holding anything, and the engine has recorded nothing new for QUIET_MS.
+// Without navigating — a reload would abort the cycle under measurement and drop
+// its spans with the document (the trap seed/steps.ts's waitForSync, which
+// navigates, would set). Returns what it took: the presses, and the cycles that
+// failed on the way.
+//
+// "Since last seen holding anything" is the time the busy poll READ the queue,
+// taken before its reads. The cycle that empties the queue clears its ops after
+// that read, so it ends after it, however long the polls take. Timing it from
+// the first empty poll instead — after both of that poll's reads — waited
+// forever at 10,000 links: a poll there took seconds, the draining cycle had
+// ended before the clock was read, and an empty queue starts no other cycle.
 interface Drain {
   nudges: number;
   retries: number;
@@ -957,41 +982,38 @@ async function waitForDrain(page: Page): Promise<Drain> {
   // The Data card's single action (_data/data-section.tsx): "Retry" after a
   // failed cycle, "Sync now" after a clean one, nothing while a cycle runs.
   const action = page.getByRole('button', { name: /^(Sync now|Retry)$/ });
-  let emptySince: number | null = null;
-  let lastSpanCount = -1;
+  let busyAt = started;
+  let lastRecorded = -1;
   let lastChange = Date.now();
   let lastPending = -1;
   let lastReport = 0;
   const drain: Drain = { nudges: 0, retries: 0, failedCycles: [] };
-  const settled = (spans: readonly SyncSpan[]): Drain => ({
+  const settled = (cycles: readonly Pick<SyncSpan, 'end' | 'failed'>[]): Drain => ({
     ...drain,
-    failedCycles: spans
-      .filter((s) => s.name === 'cycle' && s.failed && s.end >= started)
-      .map((s) => s.failed ?? ''),
+    failedCycles: cycles.filter((s) => s.failed && s.end >= started).map((s) => s.failed ?? ''),
   });
   while (Date.now() < deadline) {
+    const readAt = Date.now();
     const pending = await pendingCount(page);
-    const { spans } = await readTrace(page);
+    const { recorded, cycles } = await readCycles(page);
     const now = Date.now();
-    if (spans.length !== lastSpanCount || pending !== lastPending) {
-      lastSpanCount = spans.length;
+    if (recorded !== lastRecorded || pending !== lastPending) {
+      lastRecorded = recorded;
       lastPending = pending;
       lastChange = now;
     }
     if (pending === 0) {
-      emptySince ??= now;
-      const empty = emptySince;
-      const cycledSince = spans.some((s) => s.name === 'cycle' && s.end >= empty - 1000);
-      if (cycledSince && now - lastChange >= QUIET_MS) return settled(spans);
+      const cycledSince = cycles.some((s) => s.end >= busyAt - 1000);
+      if (cycledSince && now - lastChange >= QUIET_MS) return settled(cycles);
     } else {
-      emptySince = null;
+      busyAt = readAt;
       if (now - lastReport > 10_000) {
         console.log(`  ${pending} waiting to sync`);
         lastReport = now;
       }
       if (now - lastChange >= STUCK_MS && (await action.isVisible())) {
         const label = (await action.innerText()).trim();
-        const failed = spans.filter((s) => s.name === 'cycle').at(-1)?.failed;
+        const failed = cycles.at(-1)?.failed;
         console.log(
           `  the queue has not moved for a minute — pressing "${label}"` +
             `${failed ? ` (the last cycle failed: ${failed})` : ''}`,
