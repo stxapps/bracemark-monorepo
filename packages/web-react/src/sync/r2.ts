@@ -1,11 +1,17 @@
 'use client';
 
-// Direct blob transfer to/from Cloudflare R2 over a presigned URL — the ONE data
-// path that bypasses the API (docs/local-first-sync.md: "the blob bytes never
-// touch the API"). The URL is a short-lived SigV4 presign minted by
-// `files/sign`; the bytes are already AES-GCM encrypted (@stxapps/web-crypto blob.ts), so R2
-// only ever sees ciphertext. No auth header here — the signature in the URL is
-// the credential.
+// Blob transfer over a URL `files/sign` minted — the data path, kept apart from
+// the api client's JSON calls (docs/local-first-sync.md, _the blob route_). The
+// URL is one of two kinds, and these helpers don't care which:
+//
+//   - a SigV4 presign of R2's S3 endpoint, whose signature is the credential, or
+//   - the api's blob route, with an `authorization` value to send as the header —
+//     a token for this one object and method, not the session's bearer.
+//
+// `authorization` is passed through when `files/sign` returned one and omitted
+// when it didn't; that is the whole of the difference. The bytes are already
+// AES-GCM encrypted (@stxapps/web-crypto blob.ts), so either host only ever sees
+// ciphertext.
 
 import {
   BLOB_BASE_TIMEOUT_MS,
@@ -40,12 +46,25 @@ export class BlobTimeoutError extends Error {
   }
 }
 
+function headersFor(authorization: string | undefined): HeadersInit | undefined {
+  return authorization ? { authorization } : undefined;
+}
+
 // The whole body is known up front, so the deadline is sized once. A browser
-// resolves a PUT's fetch only once the upload has gone and R2 has answered.
-export async function putBlob(url: string, body: Uint8Array<ArrayBuffer>): Promise<void> {
+// resolves a PUT's fetch only once the upload has gone and the host has answered.
+export async function putBlob(
+  url: string,
+  body: Uint8Array<ArrayBuffer>,
+  authorization?: string,
+): Promise<void> {
   await withDeadline(
     async (signal) => {
-      const res = await fetch(url, { method: 'PUT', body, signal });
+      const res = await fetch(url, {
+        method: 'PUT',
+        body,
+        headers: headersFor(authorization),
+        signal,
+      });
       if (!res.ok) throw new BlobRequestError('PUT', res.status);
     },
     blobTransferTimeoutMs(body.byteLength),
@@ -60,10 +79,24 @@ export async function putBlob(url: string, body: Uint8Array<ArrayBuffer>): Promi
 // slower than the floor; this one fails only a body that stops arriving. The
 // timeout's `timeoutMs` is therefore the length of the silence, not of the
 // transfer.
-export async function getBlob(url: string): Promise<Uint8Array> {
+//
+// A blob-route read is a POST whose whole body is the `authorization` value,
+// sent as `text/plain` with no header of its own (the api's routes/blob.ts).
+// Every blob-route read has the SAME URL, and both shapes of GET measured badly
+// for that in Chrome: with `Authorization` it is preflighted, and with
+// `cache: 'no-store'` — needed so the cache doesn't hold each read of the one URL
+// behind the last, which ran a pull on two sockets of six — the preflight cache
+// is skipped, so every read paid one (673 for 673). A text body makes the POST a
+// CORS "simple" request, never preflighted, and no HTTP cache stores a POST. A
+// presigned read has no token and a URL of its own, and is a plain GET as it
+// always was.
+export async function getBlob(url: string, authorization?: string): Promise<Uint8Array> {
   return withDeadline(
     async (signal, rearm) => {
-      const res = await fetch(url, { method: 'GET', signal });
+      const res = await fetch(
+        url,
+        authorization ? { method: 'POST', body: authorization, signal } : { method: 'GET', signal },
+      );
       if (!res.ok) throw new BlobRequestError('GET', res.status);
       return readBody(res, () => rearm(BLOB_IDLE_TIMEOUT_MS));
     },

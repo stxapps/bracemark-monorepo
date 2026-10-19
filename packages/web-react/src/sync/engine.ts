@@ -4,7 +4,8 @@
 // app/background level, NOT in React (no hooks): it drives the four-endpoint
 // control plane through the shared contract client (`api.call`, which is
 // `callEndpoint` bound to bracemark-api's baseUrl with the bearer token attached) and
-// moves blob bytes to/from R2 over presigned URLs, doing the crypto boundary
+// moves blob bytes to/from R2 over the URLs `files/sign` mints (the api's blob
+// route, or a presign of R2 from an api that predates it), doing the crypto boundary
 // (encrypt before PUT / decrypt after GET) with @stxapps/web-crypto. Decrypted
 // results land in the Dexie store (db.ts), which the UI observes reactively.
 //
@@ -43,6 +44,7 @@ import {
   type ProgressFn,
   recordBlocked,
   sessionVerdictFromResponse,
+  type SignedUrl,
   type SignOp,
   syncNamespace,
   type SyncOutcome,
@@ -100,9 +102,11 @@ const FILES_PAGE = MAX_LIST_LIMIT;
 // Blob fan-out, split by what moves rather than which way, because the two kinds
 // bind on opposite resources (a bounded cap also keeps a first sync of thousands
 // of blobs from opening thousands of sockets at once). Index blobs (links/tags/
-// lists/settings) are KB-sized over HTTP/2 and RTT-bound in either direction, so a
-// wide fan-out cuts first-sync time, drains the presigned GET URLs sooner, and
-// pushes a large import's index faster. `files/` content can be MB-sized, bound by
+// lists/settings) are KB-sized and RTT-bound in either direction, so a wide
+// fan-out cuts first-sync time, drains the signed GET URLs sooner, and pushes a
+// large import's index faster — over the blob route's HTTP/2 or HTTP/3, that is.
+// Against R2's S3 endpoint, which speaks HTTP/1.1 only, the fan-out ran six at a
+// time whatever it was set to (docs/local-first-sync.md, _the blob route_). `files/` content can be MB-sized, bound by
 // bandwidth + memory (each transfer holds its blob in the JS heap, so peak ≈
 // concurrency × blob size), so it stays modest whether it is uploaded
 // (uploadBlobs) or fetched (loadEntityContents). Starting points — tune against a
@@ -112,7 +116,7 @@ const FILE_CONCURRENCY = 8;
 
 // One put-pipeline pass (pushPuts) signs, uploads, and commits a single chunk, so
 // a chunk must fit BOTH the sign cap and the commit cap in one call each, and it
-// keeps each presigned PUT URL's mint-to-PUT latency inside its own chunk's upload
+// keeps each signed PUT URL's mint-to-PUT latency inside its own chunk's upload
 // window. The chunk is also the step the pending count moves in: its ops leave the
 // queue only when it commits (commitBatched). So the size is per blob kind, the
 // same split as the fan-out above.
@@ -467,10 +471,10 @@ export async function loadEntityContent(
   if (!rec) return undefined;
   if (rec.data) return rec.data;
 
-  const url = (await signPaths(withRetry(deps.api), 'get', [path])).get(path);
-  if (!url) return undefined;
+  const signed = (await signPaths(withRetry(deps.api), 'get', [path])).get(path);
+  if (!signed) return undefined;
 
-  const blob = await getBlob(url).catch((err: unknown) => {
+  const blob = await getBlob(signed.url, signed.authorization).catch((err: unknown) => {
     if (err instanceof BlobRequestError && err.status === 404) return undefined;
     throw err;
   });
@@ -560,7 +564,7 @@ export async function loadEntityContents(
   const failedPaths: string[] = [];
   const batches = chunk(wanted, SIGN_BATCH);
   for (const [index, batch] of batches.entries()) {
-    let urls: Map<string, string>;
+    let urls: Map<string, SignedUrl>;
     try {
       urls = await signPaths(deps.api, 'get', batch);
     } catch (err) {
@@ -572,11 +576,11 @@ export async function loadEntityContents(
       break;
     }
     await mapLimit(batch, FILE_CONCURRENCY, async (path) => {
-      const url = urls.get(path);
+      const signed = urls.get(path);
       let data: Uint8Array | undefined;
       try {
-        const blob = url
-          ? await getBlob(url).catch((err: unknown) => {
+        const blob = signed
+          ? await getBlob(signed.url, signed.authorization).catch((err: unknown) => {
               if (err instanceof BlobRequestError && err.status === 404) return undefined;
               throw err;
             })
@@ -787,7 +791,7 @@ interface UploadFailures {
 // references it; a delete removes that metadata before the content it referenced.
 // So no crash or partial push ever leaves metadata pointing at a missing content
 // file. Crucially each PHASE commits durably before the next, and each CHUNK within
-// the put phases signs + uploads + commits as one unit (pushPuts) — so a presigned
+// the put phases signs + uploads + commits as one unit (pushPuts) — so a signed
 // PUT URL never outlives its own chunk's upload window, and a push too large to
 // finish inside one 5-min TTL still makes monotonic progress instead of livelocking
 // on an all-up-front sign whose tail expires before it can be uploaded.
@@ -984,7 +988,7 @@ async function signPushable(
   deps: SyncDeps,
   batch: PendingOpRecord[],
   outcome: SyncOutcome,
-): Promise<{ ops: PendingOpRecord[]; urls: Map<string, string> } | null> {
+): Promise<{ ops: PendingOpRecord[]; urls: Map<string, SignedUrl> } | null> {
   try {
     return {
       ops: batch,
@@ -1078,7 +1082,7 @@ async function commitOne(deps: SyncDeps, batch: PendingOpRecord[]): Promise<void
 //    applyDeletes stopped producing that state it should be unreachable; it stays
 //    as the self-heal for queues already wedged by it, because a queue that can't
 //    drain is invisible to every other repair.
-//  - `failed` — the PUT itself threw (network blip, an expired presigned URL on a
+//  - `failed` — the PUT itself threw (network blip, an expired signed URL on a
 //    chunk that outlived the TTL). TRANSIENT: the op stays queued and re-signs
 //    next drain; recorded on `failures` so the cycle still rejects after the
 //    phases instead of reporting a false 'idle'. Caught per op, so one bad blob
@@ -1089,7 +1093,7 @@ async function commitOne(deps: SyncDeps, batch: PendingOpRecord[]): Promise<void
 async function uploadBlobs(
   deps: SyncDeps,
   ops: PendingOpRecord[],
-  urls: Map<string, string>,
+  urls: Map<string, SignedUrl>,
   concurrency: number,
   failures: UploadFailures,
 ): Promise<{
@@ -1119,8 +1123,8 @@ async function uploadBlobs(
       return;
     }
 
-    const url = urls.get(op.path);
-    if (!url) return;
+    const signed = urls.get(op.path);
+    if (!signed) return;
 
     const data = rec.data;
     const ns = syncNamespace(op.path);
@@ -1128,7 +1132,10 @@ async function uploadBlobs(
       const sealed = await trace.span('blob.encrypt', () =>
         encryptEntity(deps.encryptionKey, data, op.path),
       );
-      await trace.span('blob.put', () => putBlob(url, sealed), { bytes: sealed.byteLength, ns });
+      await trace.span('blob.put', () => putBlob(signed.url, sealed, signed.authorization), {
+        bytes: sealed.byteLength,
+        ns,
+      });
     } catch (err) {
       failed.push(op);
       failures.count += 1;
@@ -1229,14 +1236,14 @@ async function storeDownloadsTraced(
   // total and read as a hang on the one screen the user is watching. The
   // increment is safe unsynchronized — these callbacks interleave at await
   // points, they don't run in parallel.
-  const pullOne = async (e: Entry, url: string | undefined): Promise<void> => {
+  const pullOne = async (e: Entry, signed: SignedUrl | undefined): Promise<void> => {
     try {
-      if (!url) return;
+      if (!signed) return;
 
       const blob = await trace.span(
         'blob.get',
         (note) =>
-          getBlob(url).then(
+          getBlob(signed.url, signed.authorization).then(
             (bytes) => {
               note({ bytes: bytes.byteLength });
               return bytes;
@@ -1262,7 +1269,7 @@ async function storeDownloadsTraced(
     }
   };
 
-  // Index: sign → GET → decrypt → store one chunk at a time, so the presigned-URL
+  // Index: sign → GET → decrypt → store one chunk at a time, so the signed-URL
   // map never grows past a single batch (a large first sync holds ~1k URLs, not all
   // of them) and each URL's mint-to-GET latency stays well inside its 1-hour TTL.
   // Each record is stored the moment it's decrypted, so an interrupted run resumes
@@ -1430,18 +1437,25 @@ async function listAllFiles(api: ApiClient): Promise<Entry[]> {
   return out;
 }
 
-// Mint presigned URLs for a set of paths, batched under the contract cap, returned
-// as a path→url map. `get` needs no quota so it batches freely; `put` is
+// Mint signed URLs for a set of paths, batched under the contract cap, returned
+// as a path→signed-URL map. `get` needs no quota so it batches freely; `put` is
 // quota-checked server-side at issuance.
+//
+// Always asks for the api's blob route (`via: 'api'`): R2's S3 endpoint is
+// HTTP/1.1, so a browser runs six of the fan-outs below at a time against it, and
+// preflights every PUT; the api's host carries all of them on one HTTP/2 or
+// HTTP/3 connection (docs/local-first-sync.md, _the blob route_). What comes back
+// is self-describing — an `authorization` to send, or a presign that needs none —
+// so an api that predates the field, and answers with presigns, still syncs.
 async function signPaths(
   api: ApiClient,
   op: SignOp,
   paths: string[],
-): Promise<Map<string, string>> {
-  const urls = new Map<string, string>();
+): Promise<Map<string, SignedUrl>> {
+  const urls = new Map<string, SignedUrl>();
   for (const batch of chunk(paths, SIGN_BATCH)) {
-    const res = await api.call(filesSignEndpoint, { op, paths: batch });
-    for (const u of res.urls) urls.set(u.path, u.url);
+    const res = await api.call(filesSignEndpoint, { op, paths: batch, via: 'api' });
+    for (const u of res.urls) urls.set(u.path, u);
   }
   return urls;
 }

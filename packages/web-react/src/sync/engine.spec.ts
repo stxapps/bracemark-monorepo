@@ -113,12 +113,19 @@ interface Handlers {
 
 // Every commit the cycle made, in call order — the phase-ordering assertions read this.
 let commits: { op: string; path: string }[][];
+// Every files/sign request's transport, in order.
+let signVias: unknown[];
 // R2 objects this fake server holds, so `ops/commit` can enforce the real
 // op-without-object rule instead of rubber-stamping every op.
 let uploaded: Set<string>;
 
 const urlFor = (path: string): string => `https://r2.test/${path}`;
 const pathFor = (url: string): string => url.slice('https://r2.test/'.length);
+// What files/sign answers a `via: 'api'` request with beside the URL: the blob
+// route's token for that path, which the engine must send as the header. The URLs
+// above stay per-path so a mock can tell the transfers apart; the engine treats
+// both as opaque.
+const tokenFor = (path: string): string => `Blob token-for-${path}`;
 
 // An ApiClient that dispatches on endpoint IDENTITY (not path strings), so a renamed
 // route can't silently turn a handler into the "unexpected endpoint" throw below.
@@ -136,9 +143,12 @@ function makeApi(handlers: Handlers = {}): SyncDeps['api'] {
         return { files: (await handlers.filesList?.()) ?? [], nextPageToken: null };
       }
       if (endpoint === filesSignEndpoint) {
+        signVias.push(input.via);
         const paths = input.paths as string[];
         const granted = (await handlers.filesSign?.(paths, input.op as 'put' | 'get')) ?? paths;
-        return { urls: granted.map((path) => ({ path, url: urlFor(path) })) };
+        return {
+          urls: granted.map((path) => ({ path, url: urlFor(path), authorization: tokenFor(path) })),
+        };
       }
       if (endpoint === opsCommitEndpoint) {
         const ops = input.ops as { op: 'put' | 'delete'; path: string }[];
@@ -221,6 +231,7 @@ function failUploadsFor(...paths: string[]): void {
 
 beforeEach(async () => {
   commits = [];
+  signVias = [];
   uploaded = new Set();
   jest.clearAllMocks();
   mockPutBlob.mockImplementation(async (url: string) => {
@@ -442,6 +453,7 @@ describe('a local write that lands mid-cycle', () => {
     expect(mockPutBlob).toHaveBeenCalledWith(
       `https://r2.test/${EXTRACTION_PATH}`,
       expect.any(Uint8Array),
+      tokenFor(EXTRACTION_PATH),
     );
     expect(committedPaths()).toEqual([EXTRACTION_PATH]);
     expect(await pendingPaths()).toEqual([]);
@@ -521,6 +533,7 @@ describe('a local write that lands mid-PUSH', () => {
     expect(mockPutBlob).toHaveBeenCalledWith(
       urlFor(SETTINGS_PATH),
       new Uint8Array([0xee, ...utf8('theme: dark')]),
+      tokenFor(SETTINGS_PATH),
     );
     expect(await bodyAt(SETTINGS_PATH)).toBe('theme: system');
     expect(await pendingPaths()).toEqual([SETTINGS_PATH]);
@@ -541,6 +554,7 @@ describe('a local write that lands mid-PUSH', () => {
     expect(mockPutBlob).toHaveBeenLastCalledWith(
       urlFor(SETTINGS_PATH),
       new Uint8Array([0xee, ...utf8('theme: system')]),
+      tokenFor(SETTINGS_PATH),
     );
     expect(await pendingPaths()).toEqual([]);
   });
@@ -665,9 +679,38 @@ describe('the push', () => {
     expect(mockPutBlob).toHaveBeenCalledWith(
       `https://r2.test/${LINK_PATH}`,
       new Uint8Array([0xee, ...utf8('the link')]),
+      tokenFor(LINK_PATH),
     );
     expect((await db.items.get(LINK_PATH))?.updatedAt).toBe(7777);
     expect(await pendingPaths()).toEqual([]);
+  });
+
+  // R2's S3 endpoint is HTTP/1.1: six sockets per host in a browser, and a
+  // preflight before every PUT. The blob route is one HTTP/2 or HTTP/3
+  // connection, so every sign asks for it, and every transfer carries the token
+  // it was answered with (docs/local-first-sync.md, _the blob route_).
+  it('asks for the blob route and sends its token on every transfer', async () => {
+    await seedQueued(LINK_PATH, 'the link');
+    mockGetBlob.mockResolvedValue(new Uint8Array([0xee, ...utf8('the server copy')]));
+
+    await runIncrementalSync(
+      deps({
+        opsList: () => ({
+          ops: [{ op: 'put', path: OTHER_LINK_PATH, updatedAt: 2000 }],
+          oldestUpdatedAt: 500,
+          newestUpdatedAt: 2000,
+          hasMore: false,
+        }),
+      }),
+    );
+
+    expect(signVias).toEqual(['api', 'api']); // the push's put, the pull's get
+    expect(mockPutBlob).toHaveBeenCalledWith(
+      urlFor(LINK_PATH),
+      expect.any(Uint8Array),
+      tokenFor(LINK_PATH),
+    );
+    expect(mockGetBlob).toHaveBeenCalledWith(urlFor(OTHER_LINK_PATH), tokenFor(OTHER_LINK_PATH));
   });
 
   it('commits content before the metadata that references it', async () => {
@@ -799,6 +842,7 @@ describe('a transient upload failure', () => {
     expect(mockPutBlob).toHaveBeenLastCalledWith(
       urlFor(LINK_PATH),
       new Uint8Array([0xee, ...utf8('the link')]),
+      tokenFor(LINK_PATH),
     );
     expect(committedPaths()).toEqual([LINK_PATH]);
     expect(await pendingPaths()).toEqual([]);
@@ -814,7 +858,7 @@ describe('a transient upload failure', () => {
     // The metadata is never even uploaded, let alone committed: landing it now would
     // publish a record whose content 404s on every other device — the exact breach
     // the content-before-metadata phase order exists to prevent.
-    expect(mockPutBlob).not.toHaveBeenCalledWith(urlFor(EXTRACTION_PATH), expect.anything());
+    expect(mockPutBlob.mock.calls.map(([url]) => url)).not.toContain(urlFor(EXTRACTION_PATH));
     expect(committedPaths()).toEqual([]);
     expect(await pendingPaths()).toEqual([EXTRACTION_PATH, FILE_PATH]);
   });

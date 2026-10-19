@@ -32,6 +32,19 @@ export const RATE_LIMIT_TIERS = {
   // auth — see routes/iap.ts). Per-IP, like `standard` (the caller is anonymous
   // Paddle — no session to key on).
   webhook: 'API_RATE_LIMIT_WEBHOOK',
+  // PER-USER tier, sole limiter for the blob route (routes/blob.ts), which is
+  // EXEMPT from `standard` for the webhook's reason inverted: it is one path for
+  // every object, so an IP+path bucket sized for API calls would 429 a sync's
+  // transfers within seconds. Keyed by the user the blob token names
+  // (blobRateLimitKey), not the IP. Wide on purpose (configured 10,000 req /
+  // 10s): it bounds replaying a token — a GET token is good for an hour — and
+  // must never bound a sync, because a 429 here FAILS that transfer, and a pull
+  // fails whole on one (the engines retry a cycle, not a transfer). The bucket is
+  // the account's, so every device of it shares it, and a fast path is fast:
+  // locally one account's two browsers went past 2,000 in 10 s (a floor leg's
+  // 1,920 GETs, then a push), and 99 PUTs were refused. A 24-wide fan-out reaches
+  // 10,000 only below a 24 ms round trip.
+  blob: 'API_RATE_LIMIT_BLOB',
 } as const satisfies Record<string, keyof Bindings>;
 
 export type RateLimitTier = keyof typeof RATE_LIMIT_TIERS;
@@ -45,6 +58,7 @@ export const RATE_LIMIT_PERIODS: Record<RateLimitTier, number> = {
   standard: 60,
   tight: 10,
   webhook: 10,
+  blob: 10,
 };
 
 // The counter key. Per-IP + per-path by default: each (caller, endpoint) pair
@@ -62,6 +76,49 @@ export function userRateLimitKey(c: Context<AppEnv>): string {
   const userId = c.get('session')?.userId;
   if (userId) return `user:${userId}:${c.req.path}`;
   return ipRateLimitKey(c);
+}
+
+// Key the blob route by the user its token grants (routes/blob.ts), which has no
+// session. Falls back to IP if the grant is somehow absent; the route's token
+// check runs first, so it never is.
+export function blobRateLimitKey(c: Context<AppEnv>): string {
+  const userId = c.get('blobGrant')?.userId;
+  if (userId) return `blob:${userId}`;
+  return ipRateLimitKey(c);
+}
+
+// Name the account a refused blob transfer was for. The invocation log already
+// has the IP beside every request, but not the account: the token that names it
+// rides in the masked `authorization` header or, on a browser read, in a body the
+// log never stores. A sync stays far under this tier, so a refusal is the abuse
+// signal, and this line is what makes an account-wide response possible against
+// a replayer who rotates IPs. The account id only — never the path, which would
+// put which object was read into the log (docs/local-first-sync.md, _the blob
+// route_).
+//
+// Once per account per window per isolate: past the limit every request is
+// refused, and a line for each would add a log event to a flood that is already
+// costing one.
+//
+// Bounded by time, not a count: an entry is re-inserted on each line, so the
+// map's insertion order is oldest-logged first, and every refusal drops the
+// expired entries off the front. What it holds is the accounts refused in the
+// last window — a cap by count would instead forget an account early under a
+// many-account flood, and log it again.
+const blobRefusalLogged = new Map<string, number>();
+
+function noteBlobRefusal(c: Context<AppEnv>): void {
+  const userId = c.get('blobGrant')?.userId;
+  if (!userId) return;
+  const now = Date.now();
+  const windowMs = RATE_LIMIT_PERIODS.blob * 1000;
+  for (const [id, at] of blobRefusalLogged) {
+    if (now - at < windowMs) break;
+    blobRefusalLogged.delete(id);
+  }
+  if (blobRefusalLogged.has(userId)) return;
+  blobRefusalLogged.set(userId, now);
+  console.warn(`rateLimit: blob tier refused ${userId}`);
 }
 
 // Rate-limit middleware backed by Cloudflare's native Workers Rate Limiting
@@ -88,6 +145,7 @@ export function rateLimit(
 
     const { success } = await limiter.limit({ key: key(c) });
     if (!success) {
+      if (tier === 'blob') noteBlobRefusal(c);
       throw new HttpError(429, 'rate_limited', 'Too many requests', {
         'retry-after': String(RATE_LIMIT_PERIODS[tier]),
       });

@@ -20,9 +20,10 @@ import type { AppEnv } from './env';
 // That is the half a sync measurement needs; CPU time is in the Workers
 // dashboard.
 //
-// Repeated names accumulate — `r2-head` over a 500-op commit is the SUM of its
-// HEADs, written with `desc="n=500"`, while `r2-heads` beside it is the wall
-// time of the whole parallel fan-out. Their ratio is how parallel it really was.
+// Repeated names accumulate — `r2-list` over a commit is the SUM of its listing
+// calls, written with `desc="n=3"`, and `r2-head` the sum of its HEADs, while
+// `r2-stat` beside them is the wall time of the whole existence check
+// (r2/user-files.ts statMany). A sum over a wall is how parallel it really was.
 
 export type ServerTimings = Map<string, { ms: number; n: number }>;
 

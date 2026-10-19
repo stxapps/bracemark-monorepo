@@ -11,19 +11,26 @@ in services, routes, or the DO.
   (see `syncPathSchema` in `@stxapps/shared`). The server prepends the prefix
   derived from the authenticated session, so a client can't name another user's
   object — that prefixing IS the authorization check.
-- **`presign.ts`** — SigV4 presigner for R2's S3-compatible endpoint. The native
-  binding can read/write from inside the Worker but can't mint a URL the BROWSER
-  can PUT/GET directly, which is the whole point of the local-first data path
-  (blob bytes never touch the API). A GET is signed with
-  `response-cache-control=no-store`: R2 sends a blob with no caching header of its
-  own, and the api cannot set one on a response it never sees. See
+- **`presign.ts`** — SigV4 presigner for R2's S3-compatible endpoint: what
+  `files/sign` answers a client that names no transport — every client shipped
+  before the blob route. The native binding can read/write from inside the
+  Worker but can't mint a URL the BROWSER can PUT/GET directly. A GET is signed
+  with `response-cache-control=no-store`: R2 sends a blob with no caching header
+  of its own, and the api cannot set one on a response it never sees.
+- **`blob-token.ts`** — the blob route's credential (`../routes/blob.ts`): an
+  HMAC token for one object, one method, until an expiry, under a key derived
+  from `R2_SECRET_ACCESS_KEY` — the presign's grant in the api's own format, for
+  the transfer that goes through the api over HTTP/2/3 instead of to R2's
+  HTTP/1.1-only endpoint. See _the blob route_ in
   [../../../../docs/local-first-sync.md](../../../../docs/local-first-sync.md).
 - **`user-files.ts`** — the bucket **gateway** (the R2 analogue of the `db`/`do`
-  repositories): `list` (fallback full sync), `head` (op-commit existence check +
-  quota size), and `presignUrls` (batch). Unlike the D1/DO repos, which each take
-  a single storage handle, `userFilesRepo(env)` takes the whole `env`: R2's
-  surface spans TWO bindings — the native bucket binding (`USER_FILES`) AND the
-  S3 credential vars (`R2_*`, see [`../lib/env.ts`](../lib/env.ts)).
+  repositories): `list` (fallback full sync), `statMany` (the op-commit
+  existence check + quota size, by listing or `head`), the blob route's
+  `get`/`put`, and the signers `presignUrls` / `blobUrls` (batch). Unlike the
+  D1/DO repos, which each take a single storage handle, `userFilesRepo(env)` takes
+  the whole `env`: R2's surface spans TWO bindings — the native bucket binding
+  (`USER_FILES`) AND the S3 credential vars (`R2_*`, see
+  [`../lib/env.ts`](../lib/env.ts)).
 
 There is **no schema or migration** here (unlike `db`/`do`): R2 is schemaless
 object storage, so this folder is access-only.

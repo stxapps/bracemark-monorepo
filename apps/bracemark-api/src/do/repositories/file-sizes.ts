@@ -1,9 +1,9 @@
 // File-size repository — the durable per-path size map that backs the per-user
 // quota, in the same per-user DO SQLite as the op log (../user-data.ts). Quota is
 // NOT summed from the op log: the log is compactable and disposable, so it would
-// undercount. This map is the authoritative `path → size`, set from the commit
-// HEAD on `put` and read-and-subtracted on `delete` (a delete has no object left
-// to HEAD, so the freed size must already be recorded here). See
+// undercount. This map is the authoritative `path → size`, set from the commit's
+// existence check on `put` and read-and-subtracted on `delete` (a delete has no
+// object left to check, so the freed size must already be recorded here). See
 // docs/local-first-sync.md "authorization & quota".
 
 // Aggregate usage the `files/sign` quota check reads before minting upload URLs.

@@ -123,3 +123,40 @@ describe('getBlob', () => {
     expect(f.signal()?.aborted).toBe(true);
   });
 });
+
+// The blob route's credential is a header and a presign's is its URL, and which
+// one a transfer gets is whatever files/sign answered. A header sent to R2 would
+// be ignored; one dropped on the way to the blob route is a 403 on every transfer.
+describe('the authorization a URL was signed with', () => {
+  const ok = () => jest.fn(async () => new Response(new Uint8Array([1]), { status: 200 }));
+  const init = (fetch: jest.Mock) => (fetch.mock.calls[0] as unknown[])[1] as RequestInit;
+
+  it('goes on a PUT as the Authorization header, and is absent for a presign', async () => {
+    const fetch = ok();
+    globalThis.fetch = fetch;
+
+    await putBlob(URL_A, new Uint8Array([1]), 'Blob v1.token');
+    await putBlob(URL_A, new Uint8Array([1]));
+
+    expect(init(fetch).headers).toEqual({ authorization: 'Blob v1.token' });
+    expect(((fetch.mock.calls[1] as unknown[])[1] as RequestInit).headers).toBeUndefined();
+  });
+
+  // Every blob-route read is the same URL. A GET with the header is preflighted,
+  // and one with `cache: 'no-store'` (which the one URL needs) skips the preflight
+  // cache: a preflight per read. A POST with a string body and no header of its
+  // own is a CORS-simple request, and no cache stores it.
+  it('reads the blob route as a POST carrying the token as its body, with no header', async () => {
+    const fetch = ok();
+    globalThis.fetch = fetch;
+
+    await getBlob(URL_A, 'Blob v1.token');
+    await getBlob(URL_A);
+
+    expect(init(fetch)).toMatchObject({ method: 'POST', body: 'Blob v1.token' });
+    expect(init(fetch).headers).toBeUndefined();
+    // A presign is read as it always was: a GET, nothing added.
+    expect((fetch.mock.calls[1] as unknown[])[1]).toMatchObject({ method: 'GET' });
+    expect(((fetch.mock.calls[1] as unknown[])[1] as RequestInit).body).toBeUndefined();
+  });
+});

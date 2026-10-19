@@ -5,9 +5,11 @@ import { ENC_SUFFIX, ID_KEYED_PREFIXES, PATH_ID_PATTERN, SETTINGS_PREFIX } from 
 // Local-first sync endpoint contracts — the four-endpoint control plane the
 // background sync engine drives (see docs/local-first-sync.md). Two endpoints per
 // resource: `ops` (the per-user op log, the incremental-pull accelerator) and
-// `files` (the R2 objects, the source of truth). The blob bytes never touch the
-// API — clients PUT/GET R2 directly over a `files/sign` URL — so these endpoints
-// only ever move metadata: paths, timestamps, and signed URLs.
+// `files` (the R2 objects, the source of truth). These endpoints only ever move
+// metadata: paths, timestamps, and signed URLs. The blob bytes move over the URL
+// `files/sign` mints — either straight to R2 (a presigned URL) or through the
+// api's blob route (`BLOB_PATH`, below), which is the same bytes on a faster
+// path, not a content gateway (docs/local-first-sync.md, _the blob route_).
 //
 // Defined once here in `shared` (the lowest layer), exactly like the auth
 // contracts, so bracemark-api validates against the same schema every client builds
@@ -245,18 +247,45 @@ export const filesListEndpoint = defineEndpoint({
 export const signOpSchema = z.enum(['put', 'get']);
 export type SignOp = z.infer<typeof signOpSchema>;
 
+// Where the bytes go. `r2` is a SigV4 presign of R2's S3 endpoint — the only
+// answer before the blob route existed, and still the answer to a request that
+// names no `via`, which is every client shipped before it. `api` is the blob
+// route on this api (`BLOB_PATH`). The difference is a connection, not a format:
+// R2's S3 endpoint speaks HTTP/1.1 only, so a browser gives it six sockets and a
+// sync's 24-wide fan-out runs six at a time, each PUT behind its own CORS
+// preflight; the api's host is HTTP/2 and HTTP/3, so the fan-out is real
+// (docs/local-first-sync.md, _the blob route_).
+//
+// A REQUEST FOR `api` IS A PREFERENCE, NOT A CONTRACT. The answer is
+// self-describing — an `api` URL carries `authorization`, a presigned one does
+// not — so a client sends the header when it is there and nothing when it is not,
+// and works against an api that predates the field (which strips it and presigns)
+// as well as one that has it. Neither deploy order breaks a sync.
+export const blobTransportSchema = z.enum(['r2', 'api']);
+export type BlobTransport = z.infer<typeof blobTransportSchema>;
+
 export const filesSignRequestSchema = z.object({
   op: signOpSchema,
   paths: z.array(syncPathSchema).min(1).max(MAX_SIGN_PATHS),
+  // Absent = `r2`, the shape every shipped client sends.
+  via: blobTransportSchema.optional(),
 });
 export type FilesSignRequest = z.infer<typeof filesSignRequestSchema>;
 
-// Each requested path paired with its presigned URL, returned in request order.
-// The client PUTs/GETs the blob bytes directly to `url` (R2), never through the
-// API — `files/sign` is a thin envelope check, not a content gateway.
+// Each requested path paired with its signed URL, returned in request order. The
+// client PUTs/GETs the blob bytes to `url` and nowhere else.
+//
+// `authorization`, when present, means the URL is the api's blob route and this
+// is its credential: sent as the `Authorization` header on a PUT and a native
+// GET, and as the whole body of the POST a browser reads with (api
+// routes/blob.ts says why). Never in the URL, because a URL is what the api's
+// invocation log writes down whole, query string included (docs/api-contracts.md,
+// _a GET's query string reaches the request log_). Absent, the URL is a presign
+// and its signature is the credential.
 export const signedUrlSchema = z.object({
   path: z.string(),
   url: z.string(),
+  authorization: z.string().optional(),
 });
 export type SignedUrl = z.infer<typeof signedUrlSchema>;
 
@@ -265,10 +294,21 @@ export const filesSignResponseSchema = z.object({
 });
 export type FilesSignResponse = z.infer<typeof filesSignResponseSchema>;
 
-// POST /v1/files/sign → { urls: [{ path, url }, …] }
+// POST /v1/files/sign → { urls: [{ path, url, authorization? }, …] }
 export const filesSignEndpoint = defineEndpoint({
   method: 'POST',
   path: `${API_V1}/files/sign`,
   request: filesSignRequestSchema,
   response: filesSignResponseSchema,
 });
+
+// --- PUT / POST / GET /v1/files/blob — the blob route -------------------------
+
+// Not a contract: its body is the blob's ciphertext, not JSON, so there is no
+// schema to define once. The route is mounted by hand (bracemark-api
+// routes/blob.ts) and reached only through a URL `files/sign` minted with
+// `via: 'api'`, which names it whole — a client never builds it. ONE path for
+// every object, the object named by the token, so a browser's one PUT preflight
+// is cached for the path rather than asked again per blob (api app.ts, `maxAge`),
+// and the log line of a transfer names no object.
+export const BLOB_PATH = `${API_V1}/files/blob`;

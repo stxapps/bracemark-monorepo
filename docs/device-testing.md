@@ -140,11 +140,13 @@ Because the Workers bind `0.0.0.0`, one local api answers on **several origins a
 once** — `http://localhost:8787` for the Mac's browser and for Android via
 `adb reverse`, `http://<lan-ip>:8787` for the iPhone. So a URL the api _mints_ for
 a client can't name a fixed origin: it has to echo whichever one that client just
-used. There is one such URL, the local blob proxy that stands in for R2 in dev
+used. There are two such URLs, and both point back at the Worker itself: the
+blob route's (`apps/bracemark-api/src/r2/user-files.ts`, `blobUrls` — every
+current client's transfers, local or deployed) and the local blob proxy that
+stands in for R2 in dev for a request that names no transport
 (`apps/bracemark-api/src/r2/local.ts` — miniflare's emulated bucket has no
-presignable S3 endpoint, so `files/sign` hands out URLs back to the Worker itself).
-It builds its origin from the incoming request, which is what keeps the Mac's
-address out of the api entirely: **no committed file carries it.**
+presignable S3 endpoint). Each builds its origin from the incoming request,
+which is what keeps the Mac's address out of the api entirely: **no committed file carries it.**
 `npm run start:lan` (in `apps/bracemark-expo`) computes it at run time from
 `scutil --get LocalHostName`, and the gitignored `apps/bracemark-expo/.env.local`
 holds the same pair written out by hand ([env-files.md](./env-files.md),

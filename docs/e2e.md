@@ -3069,11 +3069,15 @@ trace: open it in ui.perfetto.dev.
   the first leg when the page has no trace recorder, and notes a leg whose api
   responses carried no Server-Timing.
 - **The local stack can't answer the network question.** Blob bytes go through
-  the api there (no presigned R2, no R2 CORS, no R2 protocol), and the dev server
+  the api's blob route on every tier now ([local-first-sync.md](./local-first-sync.md),
+  _the blob route_), but locally that api is `wrangler dev` on loopback over
+  miniflare's bucket — no edge, no R2 latency, no HTTP/3 — and the dev server
   registers no service worker. A local reading prices the client: IndexedDB, the
-  engine, re-renders. Specimen, 2026-10-19: 1,000 links (2,363 files) pushed in
-  9 s locally, with 2,365 CORS preflights (one per PUT), against roughly ten minutes
-  reported against staging. That puts the missing time on the real path.
+  engine, re-renders. Specimen, 2026-10-19, before the blob route: 1,000 links
+  (2,363 files) pushed in 9 s locally, with 2,365 CORS preflights (one per PUT,
+  through the dev proxy), against roughly ten minutes against staging. That put
+  the missing time on the real path, and the staging reading in
+  local-first-sync.md, _measuring a sync_, says where.
 - **The window opens at the file pick, not at the receipt.** An import kicks
   cycles while it is still writing, so the push starts before the import ends.
   The report splits the two.
@@ -3094,10 +3098,12 @@ trace: open it in ui.perfetto.dev.
   requests as canceled after a 200. They are counted as `aborted after the
 answer`, because an abort before the body drains can cost the socket. Watch the
   socket count.
-- **The floor is GET-only, and its URLs never touch disk.** A PUT floor would
-  overwrite the account's objects with bytes the app didn't write. A GET URL is a
-  credential for an hour, so `network.ts` keeps only origin + path in every file
-  it writes.
+- **The floor is GET-only, and its URLs and tokens never touch disk.** A PUT
+  floor would overwrite the account's objects with bytes the app didn't write. A
+  GET URL — or the blob-route token beside it — is a credential for an hour, so
+  `network.ts` keeps only origin + path in every file it writes and records no
+  request header at all. It counts the blob route's `/v1/files/blob` as blob
+  traffic (`blob PUT`, `blob GET`, `blob OPTIONS`), beside presigned R2's.
 - **The plan grant on staging** is `measure/sync.ts`'s own door into staging D1,
   with the same preflight as the web runner ([STAGING.md](../e2e/STAGING.md)).
 - **bracemark-expo has the same spans and no runner yet.** Build the bundle with

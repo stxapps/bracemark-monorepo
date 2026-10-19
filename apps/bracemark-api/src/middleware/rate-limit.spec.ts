@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AppEnv, Bindings, RateLimit } from '../lib/env';
 import { errorHandler } from '../lib/errors';
-import { ipRateLimitKey, rateLimit, userRateLimitKey } from './rate-limit';
+import { blobRateLimitKey, ipRateLimitKey, rateLimit, userRateLimitKey } from './rate-limit';
 
 // The limiter's two silent-failure surfaces. app.spec.ts pins the standard
 // tier's 429 envelope through the real app; what a route test can't show is
@@ -138,6 +138,68 @@ describe('rateLimit', () => {
       'user:u_42:/authed', // same bucket from a second IP
       '203.0.113.7:/anon', // no session yet → IP+path
     ]);
+  });
+});
+
+// The blob tier's refusal log is the only place an abusing account is named
+// (rate-limit.ts noteBlobRefusal) — nothing in a response shows whether it was
+// written, so a regression is silent until the day it is needed.
+describe('a refused blob transfer', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  function blobApp(userId: string) {
+    return new Hono<AppEnv>()
+      .onError(errorHandler)
+      .use('/blob', async (c, next) => {
+        c.set('blobGrant', { userId, path: 'links/a.enc' });
+        await next();
+      })
+      .put('/blob', rateLimit('blob', blobRateLimitKey), ok);
+  }
+
+  it('names the account, and never the path', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const env = bindings({ API_RATE_LIMIT_BLOB: limiter(false) });
+
+    const res = await blobApp('u_refused').request('/blob', { method: 'PUT' }, env);
+
+    expect(res.status).toBe(429);
+    expect(warn).toHaveBeenCalledTimes(1);
+    const line = String(warn.mock.calls[0]?.[0]);
+    expect(line).toContain('u_refused');
+    expect(line).not.toContain('links/a.enc');
+  });
+
+  it('logs once per account per window, so a flood adds one line, not one per request', async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const env = bindings({ API_RATE_LIMIT_BLOB: limiter(false) });
+    const app = blobApp('u_flood');
+
+    for (let i = 0; i < 5; i++) await app.request('/blob', { method: 'PUT' }, env);
+    expect(warn).toHaveBeenCalledTimes(1);
+
+    // Literal 10 s: the blob binding's `simple.period` in wrangler.jsonc.
+    vi.advanceTimersByTime(10_000);
+    await app.request('/blob', { method: 'PUT' }, env);
+    expect(warn).toHaveBeenCalledTimes(2);
+  });
+
+  it('logs nothing for an allowed transfer, or a refusal on another tier', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await blobApp('u_allowed').request(
+      '/blob',
+      { method: 'PUT' },
+      bindings({ API_RATE_LIMIT_BLOB: limiter(true) }),
+    );
+    const tight = new Hono<AppEnv>().onError(errorHandler).get('/t', rateLimit('tight'), ok);
+    await tight.request('/t', {}, bindings({ API_RATE_LIMIT_TIGHT: limiter(false) }));
+
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 

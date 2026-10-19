@@ -139,9 +139,10 @@ header in place: the stored response's own headers read `no-store`. So a dev
 build says nothing either way about what a release build's URL cache keeps, and
 no run here has measured one.
 
-**A blob read is not this api's response, so the instruction rides in the URL
-it signs.** In staging and production a blob is read straight from
-`<account>.r2.cloudflarestorage.com`, which answers with an ETag, a
+**A presigned blob read is not this api's response, so the instruction rides in
+the URL it signs.** A client that asks `files/sign` for no transport
+([local-first-sync.md](./local-first-sync.md), _the blob route_) reads a blob
+straight from `<account>.r2.cloudflarestorage.com`, which answers with an ETag, a
 Last-Modified and no caching header at all — a response a cache may keep, under
 a URL that names the user id and the object. So `files/sign` adds
 `response-cache-control=no-store` to every presigned GET (`r2/presign.ts`), S3's
@@ -150,6 +151,15 @@ signed query, so a client cannot drop it. ⚠ Under `wrangler dev` the same read
 goes through this api's blob proxy and carries the middleware's header instead,
 so **a local run — the native residue case included — cannot tell whether the
 override is there**; only a deployed tier can.
+
+**A blob-route read is this api's response**, so it carries the middleware's
+`no-store` like any other (`routes/blob.spec.ts` pins it), and needs it more: the
+route answers every object of every account on one URL, `GET /v1/files/blob`, and
+a cache that stored one would answer the next read with it. A browser does not
+GET it at all: web-react's `getBlob` reads with a `POST` whose body is the token,
+which no cache stores and which is never preflighted
+([local-first-sync.md](./local-first-sync.md), _the blob route_, for the
+measurement); a native client GETs it with the token in its header.
 
 Measured in Chrome 2026-10-08, a throwaway account driven through create, write,
 sign out, sign in, sign out, then the profile directory read from disk:
@@ -231,6 +241,20 @@ that sentence up, and only one of them is a test:
   same position was stored as typed. That is a pattern match on what looks like
   a secret, on their release schedule — a reason the one secret-in-a-query
   endpoint is tolerable, never a reason to add a second.
+
+**The blob route's credential is a header or a body for that reason**
+([local-first-sync.md](./local-first-sync.md), _the blob route_). Its URL is
+`/v1/files/blob` for every object, no query, no parameter — so the log line of
+a transfer names nothing — and the object is named by a token: in
+`Authorization`, the header the bearer token already travels in, on a PUT and a
+native GET; as the body of the POST a browser reads with, which the log never
+stores. The token holds
+ids the server minted (the user id, the path) and grants one object for at most
+an hour, so it breaks no rule above even read back unmasked, and the session
+bearer beside it in every other request would be the larger exposure. It was
+not read back from a stored entry before the route shipped: after its first
+deploy, read one back as on 2026-10-13 and record here whether `Blob …` is
+stored masked like `Bearer …`.
 
 **What that rule buys is "not written to a log", never "not seen".** Cloudflare
 terminates TLS, so it reads a POST body in transit exactly as it reads a query
@@ -412,8 +436,9 @@ On web a cycle also holds a lock every tab of the origin waits on, so the same
 deadlines are what stop one tab's hung call from holding every tab's sync
 (_two tabs, one queue_, in the same doc).
 
-**Outside this client.** The R2 presigned transfers (`sync/r2.ts`) bypass it, so
-they bound themselves with the same `withDeadline`. A body can be KB or MB, and
+**Outside this client.** The blob transfers (`sync/r2.ts`) — presigned R2, or the
+api's blob route with its own token — bypass it, so they bound themselves with
+the same `withDeadline`. A body can be KB or MB, and
 which kind of deadline it gets depends on whether the transfer can see its own
 progress (`sync/blob-transfer.ts` in `shared`):
 

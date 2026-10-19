@@ -1196,8 +1196,9 @@ which is why each one shipped.
   it did, Android's cache kept the api's GETs after a sign-out, the username in
   a request URL among them; `SIGN-OUT-RESIDUE-NATIVE-001` found it by listing
   what a signed-out device still held, and now carries the username as a marker
-  there. A blob is R2's response rather than the api's, so its `no-store` is
-  asked for in the presigned URL (same section). What still lands in that cache
+  there. A presigned blob is R2's response rather than the api's, so its
+  `no-store` is asked for in the presigned URL; a blob-route read is the api's,
+  and carries the header like any other (same section). What still lands in that cache
   is whatever a saved site's own response allows — a page, a preview image, a
   favicon — and, on an iOS **dev** build, everything, because the dev client's
   network inspector stores every response regardless (same section).

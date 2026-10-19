@@ -48,21 +48,23 @@ export const syncRoutes = new Hono<AppEnv>()
     );
     return c.json(body);
   })
-  // --- files/sign — mint presigned R2 URL(s) -------------------------------
+  // --- files/sign — mint signed URL(s): presigned R2, or the blob route ------
   .post(
     filesSignEndpoint.path,
     rateLimit('tight', userRateLimitKey),
     zValidator('json', filesSignEndpoint.request),
     async (c) => {
-      const { op, paths } = c.req.valid('json');
+      const { op, paths, via } = c.req.valid('json');
       const { userId } = c.get('session');
       // put: quota-checked at issuance, then short-lived PUT URLs. get: no quota,
       // longer-lived GET URLs minted in batch. signUserFileUrls namespaces every
       // path under the caller's prefix, so cross-user signing is structurally impossible.
-      // `c.req.url` rides along for the local-dev blob proxy only, which mints URLs
-      // back to THIS Worker and so has to name the origin the caller just used —
-      // localhost from the Mac, the Mac's LAN IP from a physical iPhone (r2/local.ts).
-      const urls = await signUserFileUrls(c.env, userId, op, paths, c.req.url, timerFor(c));
+      // `via` absent is a presign, as it always was (routes/blob.ts for `api`).
+      // `c.req.url` rides along for the URLs that point back at THIS Worker — the
+      // blob route's and the local-dev blob proxy's — which have to name the origin
+      // the caller just used: localhost from the Mac, the Mac's LAN IP from a
+      // physical iPhone (r2/local.ts).
+      const urls = await signUserFileUrls(c.env, userId, op, paths, c.req.url, timerFor(c), via);
       const body: FilesSignResponse = { urls };
       return c.json(body);
     },

@@ -196,6 +196,8 @@ interface Handlers {
 // Every commit the cycle made, in call order — the phase-ordering assertions
 // read this.
 let commits: { op: string; path: string }[][];
+// Every files/sign request's transport, in order.
+let signVias: unknown[];
 // R2 objects this fake server holds, so `ops/commit` can enforce the real
 // op-without-object rule instead of rubber-stamping every op.
 let uploaded: Set<string>;
@@ -207,6 +209,11 @@ let r2Content: Map<string, string>;
 
 const urlFor = (path: string): string => `https://r2.test/${path}`;
 const pathFor = (url: string): string => url.slice('https://r2.test/'.length);
+// The blob route's token for a path, as files/sign answers a `via: 'api'`
+// request beside the URL — what every transfer must send as its header. The URLs
+// stay per-path so a mock can tell transfers apart; the engine treats both as
+// opaque.
+const tokenFor = (path: string): string => `Blob token-for-${path}`;
 
 // An ApiClient that dispatches on endpoint IDENTITY (not path strings), so a
 // renamed route can't silently turn a handler into the "unexpected endpoint"
@@ -233,7 +240,10 @@ function makeApi(handlers: Handlers = {}): SyncDeps['api'] {
       if (endpoint === filesSignEndpoint) {
         const paths = input.paths as string[];
         const granted = (await handlers.filesSign?.(paths, input.op as 'put' | 'get')) ?? paths;
-        return { urls: granted.map((path) => ({ path, url: urlFor(path) })) };
+        signVias.push(input.via);
+        return {
+          urls: granted.map((path) => ({ path, url: urlFor(path), authorization: tokenFor(path) })),
+        };
       }
       if (endpoint === opsCommitEndpoint) {
         const ops = input.ops as { op: 'put' | 'delete'; path: string }[];
@@ -345,6 +355,7 @@ function failUploadsFor(...paths: string[]): void {
 
 beforeEach(async () => {
   commits = [];
+  signVias = [];
   uploaded = new Set();
   uploadedFiles = new Map();
   r2Content = new Map();
@@ -489,8 +500,16 @@ describe('a content push', () => {
     expect(mockPutBlob).toHaveBeenCalledWith(
       urlFor(LINK_PATH),
       new Uint8Array([0xee, ...utf8('the link')]),
+      tokenFor(LINK_PATH),
     );
-    expect(mockPutBlob).not.toHaveBeenCalledWith(urlFor(FILE_PATH), expect.anything());
+    expect(mockPutBlob.mock.calls.map(([url]) => url)).not.toContain(urlFor(FILE_PATH));
+    // Both pipelines carry the blob route's token, the native one included.
+    expect(mockPutBlobFromFile).toHaveBeenCalledWith(
+      urlFor(FILE_PATH),
+      expect.anything(),
+      tokenFor(FILE_PATH),
+    );
+    expect(signVias.every((via) => via === 'api')).toBe(true);
 
     expect(await pendingPaths()).toEqual([]);
     expect((await getItem(FILE_PATH))?.updatedAt).toBe(7777);
@@ -564,7 +583,7 @@ describe('a content push', () => {
 
     await expect(runIncrementalSync(deps())).rejects.toBe(EXPIRED_URL);
 
-    expect(mockPutBlob).not.toHaveBeenCalledWith(urlFor(EXTRACTION_PATH), expect.anything());
+    expect(mockPutBlob.mock.calls.map(([url]) => url)).not.toContain(urlFor(EXTRACTION_PATH));
     expect(committedPaths()).toEqual([]);
     expect(await pendingPaths()).toEqual([EXTRACTION_PATH, FILE_PATH]);
   });

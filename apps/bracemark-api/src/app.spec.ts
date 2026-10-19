@@ -164,6 +164,10 @@ describe('bracemark-api', () => {
         // `users/{userId}/…` — ids the server minted — and it answers 404 off the
         // local env (routes/local-r2.ts).
         `GET ${LOCAL_BLOB_PATH_PREFIX}:key{.+}`,
+        // The blob route: no query and no parameter — the object it reads is
+        // named by the token in `Authorization` (routes/blob.ts), so its log line
+        // is the same for every blob.
+        `GET ${shared.BLOB_PATH}`,
       ].sort(),
     );
   });

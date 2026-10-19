@@ -265,6 +265,17 @@
           "namespace_id": "1003",
           "simple": { "limit": 100, "period": 10 },
         },
+        {
+          // PER-USER tier — sole limiter for the blob route, which is exempt from
+          // the 'standard' baseline (one path for every object). See
+          // middleware/rate-limit.ts (`blob` tier). ⚠ 10× the deployed tiers'
+          // here, for the reason 'standard' is far above them, in another shape:
+          // on loopback a read takes milliseconds, and measure:sync's floor leg
+          // reads ~1,000 a second — the deployed limit — from one account.
+          "name": "API_RATE_LIMIT_BLOB",
+          "namespace_id": "1004",
+          "simple": { "limit": 100000, "period": 10 },
+        },
       ],
     },
     "staging": {
@@ -382,6 +393,14 @@
           "namespace_id": "1003",
           "simple": { "limit": 100, "period": 10 },
         },
+        {
+          // PER-USER tier — sole limiter for the blob route, which is exempt from
+          // the 'standard' baseline (one path for every object). See
+          // middleware/rate-limit.ts (`blob` tier).
+          "name": "API_RATE_LIMIT_BLOB",
+          "namespace_id": "1004",
+          "simple": { "limit": 10000, "period": 10 },
+        },
       ],
       "routes": [{ "pattern": "api.dryrunbase.com", "custom_domain": true }],
     },
@@ -490,6 +509,14 @@
           "name": "API_RATE_LIMIT_WEBHOOK",
           "namespace_id": "1003",
           "simple": { "limit": 100, "period": 10 },
+        },
+        {
+          // PER-USER tier — sole limiter for the blob route, which is exempt from
+          // the 'standard' baseline (one path for every object). See
+          // middleware/rate-limit.ts (`blob` tier).
+          "name": "API_RATE_LIMIT_BLOB",
+          "namespace_id": "1004",
+          "simple": { "limit": 10000, "period": 10 },
         },
       ],
       "routes": [{ "pattern": "api.bracemark.com", "custom_domain": true }],

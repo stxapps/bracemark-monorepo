@@ -1,4 +1,5 @@
 import type {
+  BlobTransport,
   CommitFailure,
   CommitOp,
   FilesListResponse,
@@ -22,9 +23,10 @@ import { getQuotaCeilings } from './iap';
 // genuinely single-store endpoint (a pure DO keyset query), so it stays a direct
 // DO passthrough in the route. See docs/local-first-sync.md.
 
-// Presigned-URL lifetimes. PUT URLs are short-lived (a commit follows immediately,
-// so a few minutes covers retry/backoff); GET URLs live longer because first sync
-// mints them in BATCH and the client streams downloads lazily over a session.
+// Signed-URL lifetimes, the same for a presign and a blob-route token. PUT URLs
+// are short-lived (a commit follows immediately, so a few minutes covers
+// retry/backoff); GET URLs live longer because first sync mints them in BATCH and
+// the client streams downloads lazily over a session.
 const PUT_URL_TTL_SECONDS = 5 * 60; // 5 minutes
 const GET_URL_TTL_SECONDS = 60 * 60; // 1 hour
 
@@ -41,15 +43,23 @@ export async function listUserFiles(
   return userFilesRepo(env).listPage(userId, pageToken, limit);
 }
 
-// Mint presigned R2 URLs (POST /v1/files/sign). Paths arrive already shape-
-// validated by the contract (syncPathSchema); the gateway namespaces each under
-// the caller's prefix, so cross-user access is structurally impossible. `put`
-// additionally clears the per-user quota at issuance (the only place abuse is
-// boundable when content is opaque); `get` needs no quota (reading your own
-// data), so download URLs batch freely.
-// `requestUrl` is the caller's own request URL, carried down to the gateway for
-// the local-dev blob proxy alone: off `wrangler dev` the URL names R2's S3
-// endpoint and this is ignored. See r2/local.ts for why it can't be a constant.
+// Mint signed URLs (POST /v1/files/sign). Paths arrive already shape-validated by
+// the contract (syncPathSchema); the gateway namespaces each under the caller's
+// prefix, so cross-user access is structurally impossible. `put` additionally
+// clears the per-user quota at issuance (the only place abuse is boundable when
+// content is opaque); `get` needs no quota (reading your own data), so download
+// URLs batch freely.
+//
+// `via` picks where the bytes go — R2 directly over a presign, or the api's blob
+// route over a token (@stxapps/shared sync/endpoints.ts, blobTransportSchema).
+// Absent is `r2`, which is what every client shipped before the blob route
+// sends, and what they keep getting. Both grant the same thing for the same
+// time, so the gate above is the whole of the authorization either way.
+//
+// `requestUrl` is the caller's own request URL: the blob route's URL and the
+// local-dev blob proxy's both name the origin the caller reached the api on
+// (r2/user-files.ts blobUrls; r2/local.ts for why it can't be a constant). A
+// presign names R2's S3 endpoint and ignores it.
 export async function signUserFileUrls(
   env: Bindings,
   userId: string,
@@ -57,6 +67,7 @@ export async function signUserFileUrls(
   paths: string[],
   requestUrl: string,
   time: Timer = untimed,
+  via: BlobTransport = 'r2',
 ): Promise<SignedUrl[]> {
   if (op === 'put') {
     // The put gate is a plan-aware COST BACKSTOP — byte and object ceilings from
@@ -81,16 +92,21 @@ export async function signUserFileUrls(
   const method = op === 'put' ? 'PUT' : 'GET';
   const expiresIn = op === 'put' ? PUT_URL_TTL_SECONDS : GET_URL_TTL_SECONDS;
 
+  const repo = userFilesRepo(env);
   return time('presign', () =>
-    userFilesRepo(env).presignUrls(userId, paths, method, expiresIn, requestUrl),
+    via === 'api'
+      ? repo.blobUrls(userId, paths, method, expiresIn, requestUrl)
+      : repo.presignUrls(userId, paths, method, expiresIn, requestUrl),
   );
 }
 
 // Record committed mutations (POST /v1/ops/commit) — the R2-first, log-last
-// handshake, batched. For each `put` we HEAD R2: that doubles as the existence
-// check upholding the op-without-object invariant and reads R2's authoritative
-// `LastModified` + size, which the DO stores as the op's cursor clock and quota
-// entry. The HEADs fan out in parallel — the win of batching. A `put` whose
+// handshake, batched. Every `put` is checked against R2: that doubles as the
+// existence check upholding the op-without-object invariant and reads R2's
+// authoritative `LastModified` + size, which the DO stores as the op's cursor
+// clock and quota entry. The check is batched too — a listing per run of keys
+// where the batch is dense, a HEAD per path where it is sparse (r2/user-files.ts
+// statMany, which says why a HEAD per put stopped being enough). A `put` whose
 // object is MISSING is not logged (that would 404 every puller) but is reported in
 // `failed` with reason 'no_object', so the client gets an explicit per-path
 // outcome and re-PUTs + re-commits. A `delete` has no surviving object to HEAD, so
@@ -116,20 +132,18 @@ export async function commitOps(
   const deletes = ops.filter((o) => o.op === 'delete').map((o) => o.path);
   await time('r2-delete', () => repo.deleteMany(userId, deletes));
 
-  // `r2-heads` is the fan-out's wall time, `r2-head` the sum of its calls
-  // (lib/server-timing.ts).
-  const resolved = await time('r2-heads', () =>
-    Promise.all(
-      ops.map(async ({ op, path }): Promise<CommitEntry | CommitFailure> => {
-        if (op === 'delete') return { op, path, updatedAt: now, size: 0 };
+  // `r2-stat` is the existence check's wall time; `r2-list` and `r2-head` beside
+  // it are the sums of the calls it made (lib/server-timing.ts).
+  const puts = ops.filter((o) => o.op === 'put').map((o) => o.path);
+  const objects = await time('r2-stat', () => repo.statMany(userId, puts, { time }));
+  const resolved = ops.map(({ op, path }): CommitEntry | CommitFailure => {
+    if (op === 'delete') return { op, path, updatedAt: now, size: 0 };
 
-        const object = await time('r2-head', () => repo.head(userId, path));
-        if (!object) return { path, reason: 'no_object' }; // op-without-object invariant
+    const object = objects.get(path);
+    if (!object) return { path, reason: 'no_object' }; // op-without-object invariant
 
-        return { op, path, updatedAt: object.updatedAt, size: object.size };
-      }),
-    ),
-  );
+    return { op, path, updatedAt: object.updatedAt, size: object.size };
+  });
 
   const entries: CommitEntry[] = [];
   const failed: CommitFailure[] = [];

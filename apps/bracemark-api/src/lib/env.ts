@@ -1,4 +1,5 @@
 import type { UserDataDO } from '../do/user-data';
+import type { BlobGrant } from '../r2/blob-token';
 import type { ServerTimings } from './server-timing';
 
 // Typed Workers runtime context for the whole app. Hono is parameterized with
@@ -50,10 +51,13 @@ export type Bindings = {
   USER_DATA: DurableObjectNamespace<UserDataDO>;
 
   // --- R2 — encrypted bookmark blobs (see docs/local-first-sync.md) -------
-  // The binding reads/writes objects from inside the Worker (commit HEADs, the
-  // fallback listing). It can NOT mint browser-usable signed URLs, so `files/sign`
-  // presigns R2's S3 endpoint with the access keys below instead (r2/presign.ts).
-  // All R2 access goes through the r2/user-files gateway.
+  // The binding reads/writes objects from inside the Worker: the commit's
+  // existence check, the fallback listing, and the blob route's bytes
+  // (routes/blob.ts). It can NOT mint browser-usable signed URLs, so `files/sign`
+  // either presigns R2's S3 endpoint with the access keys below (r2/presign.ts)
+  // or mints a token for the blob route, whose key is derived from the same
+  // secret (r2/blob-token.ts). All R2 access goes through the r2/user-files
+  // gateway.
   USER_FILES: R2Bucket;
 
   // R2 S3-API credentials for presigning. The bucket name is a non-secret `var`;
@@ -129,6 +133,7 @@ export type Bindings = {
   API_RATE_LIMIT: RateLimit; // standard tier
   API_RATE_LIMIT_TIGHT: RateLimit; // tight tier (sensitive endpoints)
   API_RATE_LIMIT_WEBHOOK: RateLimit; // wide tier (sole limiter for the Paddle webhook)
+  API_RATE_LIMIT_BLOB: RateLimit; // per-user tier (sole limiter for the blob route)
 
   // "1" adds a Server-Timing header to every response (lib/server-timing.ts).
   // Set in development and staging only; unset is off.
@@ -149,6 +154,9 @@ export type Variables = {
   session: SessionContext;
   // Present only while SERVER_TIMING is on (lib/server-timing.ts).
   serverTimings?: ServerTimings;
+  // The object a verified blob token grants — set on the blob route only, in
+  // place of `session` (routes/blob.ts).
+  blobGrant?: BlobGrant;
 };
 
 // The single Hono generic used across the app: `new Hono<AppEnv>()`.

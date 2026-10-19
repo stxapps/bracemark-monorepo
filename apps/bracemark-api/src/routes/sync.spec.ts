@@ -155,6 +155,42 @@ describe('sync control plane', () => {
       expect(pulled.ops.map((o) => o.path).sort()).toEqual(['files/b.enc', 'links/a.enc']);
     });
 
+    // Big enough that the existence check lists instead of HEADing (r2/user-files.ts
+    // statMany): the answer must be the one a HEAD per put gave — R2's own stamp
+    // per committed path, and the missing one refused.
+    it('commits a dense batch with R2’s own stamps, refusing the one never uploaded', async () => {
+      const { userId, auth } = await authFor('sync-commit-dense-1');
+      const paths = Array.from(
+        { length: 40 },
+        (_, n) => `links/d-${String(n).padStart(3, '0')}.enc`,
+      );
+      const missing = paths[17];
+      await Promise.all(
+        paths
+          .filter((p) => p !== missing)
+          .map((p) => env.USER_FILES.put(userFileKey(userId, p), 'ciphertext')),
+      );
+
+      const commit = await app.request(
+        opsCommitEndpoint.path,
+        json(auth, { ops: paths.map((path) => ({ op: 'put', path })) }),
+        env,
+      );
+      const { results, failed } = (await commit.json()) as {
+        results: { path: string; updatedAt: number }[];
+        failed: { path: string; reason: string }[];
+      };
+
+      expect(failed).toEqual([{ path: missing, reason: 'no_object' }]);
+      expect(results).toHaveLength(39);
+      // Every stamp is R2's LastModified, or the clamp's lift above the log —
+      // never below what R2 recorded.
+      for (const r of results) {
+        const head = await env.USER_FILES.head(userFileKey(userId, r.path));
+        expect(r.updatedAt).toBeGreaterThanOrEqual(head?.uploaded.getTime() ?? Infinity);
+      }
+    });
+
     it('commits a delete: removes the R2 object, logs the op, frees the listing', async () => {
       const { userId, auth } = await authFor('sync-delete-1');
       // Put-then-commit so the object, its op, and its quota entry all exist.

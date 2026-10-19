@@ -94,7 +94,15 @@ rule would cache:
 - bracemark-extractor's image proxy, while it was `GET /v1/image?url=…`, whose
   URL **named a third-party image from a page the user saved** (a POST since,
   for the same reason and with the same effect here);
-- presigned R2 downloads.
+- presigned R2 downloads;
+- the api's blob route, had the web app read it with a GET — **every object of
+  every account under one URL**, told apart only by a token
+  ([local-first-sync.md](./local-first-sync.md), _the blob route_). This rule
+  would answer one object's read with whichever object it cached last, a
+  wrong-path blob the engines then skip as unreadable (_crypto boundary_, same
+  doc) — silently, for an hour. The web app reads it with a POST, which this
+  rule never matched; a change back to GET is one this route would have to
+  stop.
 
 Cache Storage keys on the URL, not on the `Authorization` header, so sign-out
 would leave the previous account's `iap/status` — and, while the proxy was a

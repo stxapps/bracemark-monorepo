@@ -141,9 +141,18 @@ op-log entries) and `files` (the R2 objects):
 
 ```
 GET  /v1/ops/list      incremental pull: ops since the cursor      (→ the ops/list endpoint)
-POST /v1/ops/commit    record committed mutations (batched; HEADs puts, deletes objects) (→ the three flows: push)
+POST /v1/ops/commit    record committed mutations (batched; checks puts exist, deletes objects) (→ the three flows: push)
 GET  /v1/files/list    fallback R2 listing, paginated (download-truth) (→ fallback full sync)
-POST /v1/files/sign    mint presigned R2 URL(s); op: 'put' | 'get' (→ authorization & quota)
+POST /v1/files/sign    mint signed URL(s); op: 'put' | 'get'; via: 'api' | 'r2' (→ authorization & quota)
+```
+
+Beside them sits the one data-plane route a sync uses, which moves bytes rather
+than metadata and so has no contract (→ _the blob route_):
+
+```
+PUT  /v1/files/blob    one object's ciphertext in, authorized by a files/sign token
+POST /v1/files/blob    one object's ciphertext out — a browser's read, the token as its body
+GET  /v1/files/blob    one object's ciphertext out — a native read, the token in its header
 ```
 
 **Every endpoint is bounded — never one-path-per-call, never unbounded.** The two
@@ -157,7 +166,9 @@ over the cap `400`s at the contract before any work runs (the abuse gate).
 > **The two write caps differ, and `ops/commit`'s is a subrequest budget.**
 > `files/sign` takes 1000 paths (`MAX_SIGN_PATHS`) — signing is local crypto, one
 > subrequest whatever the batch. `ops/commit` takes **500** (`MAX_COMMIT_OPS`),
-> because it `HEAD`s every put: one R2 binding call per op, on top of the auth
+> because its existence check may `HEAD` every put: one R2 binding call per op in
+> the worst case (a sparse batch; a dense one is a few listings, _the three flows:
+> push_), on top of the auth
 > middleware's D1 read (and renewal write), the bulk delete and the DO RPC, all
 > in one invocation. Workers Free — staging's plan — allows **1000 calls to
 > Cloudflare services per invocation**, bindings included. At a cap of 1000 a full
@@ -166,9 +177,11 @@ over the cap `400`s at the contract before any work runs (the abuse gate).
 > way. **Nothing local catches it**: miniflare enforces no such limit, no spec
 > sends a full batch against a real Worker, and production's plan allows 10,000.
 > 500 leaves half the budget for whatever the next middleware reads, and halves
-> what a failed chunk re-uploads. Anything that adds a per-op binding call to the
-> commit (a second `HEAD`, a conditional write) spends this same budget — lower
-> the cap with it. The client's index put chunk is the smaller of the two caps;
+> what a failed chunk re-uploads. The listing that now answers a dense batch
+> spends less of it, never more: its worst case is the `HEAD`s plus a thirteenth
+> as many listing pages (`r2/user-files.ts`, `statMany`). Anything that adds a per-op
+> binding call to the commit (a second `HEAD`, a conditional write) spends this
+> same budget — lower the cap with it. The client's index put chunk is the smaller of the two caps;
 > its content put chunk is smaller still (_a push is chunked_, below).
 
 All four live in `apps/bracemark-api/src/routes/sync.ts` (each behind `requireAuth`).
@@ -178,27 +191,107 @@ prefix — in one authed call; other devices then converge through the wiped-log
 fallback row below. See [data-lifecycle.md](./data-lifecycle.md).)
 The op-plane endpoints (`ops/list`, `ops/commit`) are thin passthroughs to the
 user's Durable Object; the file-plane logic — paging R2, the quota gate, the
-presigner — is in `services/sync.ts`. The shared contracts are in
+signer — is in `services/sync.ts`. The shared contracts are in
 `@stxapps/shared` (`sync/endpoints.ts`).
 
-The blob bytes themselves never touch the API — the client PUTs/GETs R2 directly
-over a `files/sign` URL. So `files/sign` is the **only** endpoint on the hot path
-of bulk data, and it's deliberately a thin envelope check (ownership + quota), not
-a content gateway. The signed URL is an **AWS SigV4 presign of R2's S3 endpoint**
-(`r2/presign.ts`), because the Workers R2 _binding_ can read/write objects
-from inside the Worker but can't mint a URL the browser can use directly; the S3
-access keys come from per-env secrets (`R2_*` in `wrangler.jsonc` / `lib/env.ts`).
-A GET is signed with `response-cache-control=no-store`, so R2 answers the blob
-with that header and no HTTP cache keeps it
-([api-contracts.md](./api-contracts.md), _no response is cacheable_).
+`files/sign` is the **only** control-plane endpoint on the hot path of bulk data,
+and it's deliberately a thin envelope check (ownership + quota), not a content
+gateway: it decides who may move which object, and the bytes then move over the
+URL it mints. That URL is one of two kinds.
 
-**Local dev is the one place the bytes do pass through the api.** miniflare's
-emulated R2 has no S3 endpoint to presign, so under `wrangler dev` `files/sign`
-returns URLs to an in-Worker blob proxy instead (`r2/local.ts` builds them,
+- **A presign of R2's S3 endpoint** (`r2/presign.ts`) — `via: 'r2'`, or no `via`
+  at all, which is what every client shipped before the blob route sends. An
+  **AWS SigV4 presign**, because the Workers R2 _binding_ can read/write objects
+  from inside the Worker but can't mint a URL the browser can use directly; the
+  S3 access keys come from per-env secrets (`R2_*` in `wrangler.jsonc` /
+  `lib/env.ts`). A GET is signed with `response-cache-control=no-store`, so R2
+  answers the blob with that header and no HTTP cache keeps it
+  ([api-contracts.md](./api-contracts.md), _no response is cacheable_).
+- **The api's blob route** — `via: 'api'`, which both engines and the iOS share
+  extension's upload send. Same grant, faster connection: next section.
+
+#### the blob route
+
+`PUT`/`GET /v1/files/blob` (`routes/blob.ts`) streams one object's ciphertext
+between the client and R2 through the bucket binding. It grants exactly what a
+presign grants — one object, one method, five minutes for a PUT and an hour for
+a GET — and exists because of the connection, not the format. The 2026-10-19
+staging readings (_measuring a sync_, below) put a 1,000-link push at ~10
+minutes, nearly all of it waiting on sockets:
+
+- **R2's S3 endpoint speaks HTTP/1.1 only** — ALPN refuses `h2` — so a browser
+  holds six sockets to it and queues the rest. The engines' 24-wide fan-out ran
+  six at a time whatever `INDEX_CONCURRENCY` said: content (8 at once) and index
+  (24) uploads both measured ~5 PUTs/s, and the median PUT waited 3.4 s for a
+  socket. URLSession and OkHttp cap a host at a handful of connections too.
+- **Every presigned PUT is CORS-preflighted**, and a preflight is cached per URL.
+  Each presigned URL is unique, so every upload paid a second round trip on the
+  same six sockets (2,365 preflights in one push).
+
+The api's host is HTTP/2 and HTTP/3, so one connection carries the whole
+fan-out. Every transfer has **the same URL**, the object named by a token in its
+`Authorization` header, so a browser asks one preflight per two hours (the
+api's `maxAge`, [hosting.md](./hosting.md), _cors & frontend↔backend wiring_)
+rather than one per blob. Each request is its own Worker invocation making one R2
+call, so the Workers limit of six concurrent outgoing connections per invocation
+never applies — it is what made the commit slow instead (_the three flows_,
+push).
+
+- **The token** (`r2/blob-token.ts`) is an HMAC over `{user, path, method,
+expiry}` under a key **derived from `R2_SECRET_ACCESS_KEY`** (HKDF, its own
+  label). It is the presign's grant in the api's own format, so the two share a
+  root: rotating the R2 key retires both, and there is no second secret to
+  provision per env. Checking one is an HMAC and a clock — **no session read**,
+  which would cost ~280 ms of D1 per transfer (the `auth` metric); authorization
+  was decided at `files/sign`, behind `requireAuth` and the quota gate. As with a
+  presign, a revoked session's tokens live out their expiry.
+- **A bad or expired token answers `403`**, as R2 answers a bad presign — never
+  `401`, which every client reads as a statement about its session
+  ([sessions.md](./sessions.md)). An object that is gone answers `404`, which the
+  engines skip as an unpulled delete, as they do R2's.
+- **The token rides in a header, not the URL**, because the api's invocation log
+  stores every request URL whole and a header named `authorization` is the one it
+  masks ([api-contracts.md](./api-contracts.md), _a GET's query string reaches the
+  request log_). The route's log line is the same for every object.
+- **It has its own rate limit.** The `standard` limiter buckets by IP + path and
+  this is one path for every object, so it is exempt from it (`app.ts`) and
+  carries a per-user `blob` tier (`middleware/rate-limit.ts`) — wide, an abuse
+  bound on replaying an hour-long GET token, not a sync's pace. A refusal logs
+  the account id, once per account per window, and never the path: the token
+  that names the account is masked or unlogged, so without that line a replayer
+  who rotates IPs could not be traced to an account.
+- **A browser reads with a POST.** Every read is the same URL, and both shapes
+  of GET measured badly for it in Chrome against `wrangler dev` (2026-10-19): a
+  GET carrying `Authorization` is preflighted, and with `cache: 'no-store'` the
+  preflight cache is skipped (673 preflights for 673 reads); without it, the
+  HTTP cache holds each read of the one URL behind the last (the pull ran on two
+  sockets of six). So web-react's `getBlob` sends the `authorization` value as
+  the whole `text/plain` body of a `POST`: a CORS-simple request, never
+  preflighted, which no cache stores and the invocation log does not record.
+  The same pull then took 3 preflights. expo reads with `GET` and the header —
+  native has no CORS, and `File.downloadFileAsync` sends nothing else. PUT keeps
+  the header: a PUT is preflighted whatever it carries, and the one URL lets the
+  preflight cache answer it (8 preflights for 759 PUTs).
+
+**Both answers stay, and a request for `api` is a preference.** The response is
+self-describing — a blob-route URL carries `authorization`, a presign does not —
+so the clients send the header when it is there and nothing when it is not. An
+api that predates the field strips it and presigns, and the client syncs over R2
+as before; a client that predates the field never asks, and is presigned as
+before. Neither deploy order breaks a sync, and nothing shipped changes what it
+is answered. The presign path, its R2 CORS policy and R2 in the web CSP stay
+until no client that sends no `via` is left in use
+([hosting.md](./hosting.md)).
+
+**Local dev mints blob-route URLs too**, signed with the `development` env's
+committed placeholder secret, so a local run takes the path a deployed client
+takes. Only a request with no `via` still gets the older stand-in:
+miniflare's emulated R2 has no S3 endpoint to presign, so `files/sign` returns
+URLs to an in-Worker blob proxy instead (`r2/local.ts` builds them,
 `routes/local-r2.ts` serves them), gated on the placeholder `R2_ACCOUNT_ID` that
 only the `development` env carries — staging and production presign R2 directly
-and the route 404s there. Those URLs take their **origin from the incoming
-request**, never a constant, because one `wrangler dev` answers on both
+and the route 404s there. Both kinds of local URL take their **origin from the
+incoming request**, never a constant, because one `wrangler dev` answers on both
 `localhost:8787` and the Mac's LAN address at once; see
 [device-testing.md](./device-testing.md), _the LAN address is set in exactly one
 file_, for the failure a fixed origin produces on a physical phone.
@@ -568,19 +661,39 @@ The commit protocol (3 round-trips), **batched** across files — `files/sign` a
 `ops/commit` each take an array (up to 1000 and 500), so a multi-file create or a
 first-sync push is a handful of round trips, not one per file:
 
-1. `POST /v1/files/sign` with `{ op: 'put', paths: [...] }` to mint signed upload
-   URL(s) (the Worker verifies each path is under `/users/{authedUid}/` and checks
-   quota — see _authorization & quota_);
-2. encrypt and PUT each blob directly to R2 via its signed URL;
+1. `POST /v1/files/sign` with `{ op: 'put', paths: [...], via: 'api' }` to mint
+   signed upload URL(s) (the Worker verifies each path is under
+   `/users/{authedUid}/` and checks quota — see _authorization & quota_);
+2. encrypt and PUT each blob over its signed URL — the blob route, or R2 directly
+   (_the blob route_);
 3. `POST /v1/ops/commit` with `{ ops: [{ op, path }, …] }`; for each `put` the
-   Worker **`HEAD`s the object** — which both confirms it exists in R2 and reads
+   Worker **checks the object in R2** — which both confirms it exists and reads
    R2's authoritative `LastModified` — records the op with that timestamp (the DO's
    `commitOps`, which also stores R2's reported object size in the per-user quota
-   map). The per-put HEADs fan out in parallel; one DO RPC then writes the whole
-   batch. The Worker returns `{ results: [{ path, updatedAt }, …], failed: [{ path,
-reason }, …] }` — `results` for the committed ops, `failed` for the refused ones.
-   The `HEAD` does double duty: existence check _and_ the single clock that
-   incremental and fallback both compare against.
+   map). One DO RPC then writes the whole batch. The Worker returns
+   `{ results: [{ path, updatedAt }, …], failed: [{ path, reason }, …] }` —
+   `results` for the committed ops, `failed` for the refused ones. The check does
+   double duty: existence check _and_ the single clock that incremental and
+   fallback both compare against.
+
+**The existence check is a listing where the batch is dense and a `HEAD` where it
+is sparse** (`r2/user-files.ts`, `statMany`). It used to be a `HEAD` per put,
+fanned out in parallel — but a Worker invocation runs at most **six** outgoing
+calls at once that are waiting on their response headers, and a `HEAD` is nothing
+but headers, so 500 of them ran six at a time: **25.6 s per full index chunk** on
+staging, a fifth of a 1,000-link push. An R2 listing answers up to a thousand
+keys per call, in key order, so the batch is sorted, each namespace walked page
+by page from its first unanswered key (`startAfter`), and a page answers every
+batch key up to its last key: listed is present, unlisted is absent. The same
+facts from the same strongly consistent bucket, so the invariant below holds
+exactly as it did. Under 12 puts it `HEAD`s outright, and a page that answers
+fewer than 13 keys hands the rest of its namespace to `HEAD`s — the few-edits
+case, where a page would answer one. The 13 is R2's price list, not a speed
+guess: a listing is a Class A operation and a `HEAD` Class B, so one page costs
+what 12.5 `HEAD`s do, and a page kept is never the dearer way to answer its keys
+(at most one page per namespace per commit is spent finding out). Both
+thresholds are starting points; the commit's Server-Timing (`r2-stat` wall beside
+the `r2-list` and `r2-head` sums) is what to tune them against.
 
 A `put` whose R2 object is **missing** (its PUT never landed, or died before the
 commit) is **not recorded — logging it would break the op-without-object
@@ -1195,12 +1308,12 @@ live in two different places **because of what each side can observe and
 control** — the split is forced, not stylistic.
 
 - **A — R2 ↔ op-log, _within_ one commit.** The R2 mutation must land before the
-  DO log write: a `put` is `HEAD`-verified to exist before its op is logged, a
+  DO log write: a `put` is verified to exist (listed or `HEAD`ed) before its op is logged, a
   `delete` removes the R2 object before logging the delete. This is the
   `op-without-object` invariant (see _source of truth_), and **only the server
   can own it** — the client can't write the op-log at all, and can't DELETE R2
   directly (`files/sign` mints only PUT/GET). Both halves happen inside
-  `commitOps` (`services/sync.ts`): `deleteMany` R2 → `HEAD` puts → one DO
+  `commitOps` (`services/sync.ts`): `deleteMany` R2 → check puts → one DO
   `commitOps` last. The DO write is the atomic point, so a puller sees an op only
   once its object is real.
 
@@ -1217,8 +1330,10 @@ control** — the split is forced, not stylistic.
      content files.
   2. **It sees one batch, not the order.** Each commit is handled in isolation
      with no memory of phase; the phase order lives in the client's pending queue.
-  3. **It isn't in the upload path.** Content is PUT client→R2 over a presigned
-     URL out of band; the server only learns of it at commit-time `HEAD`.
+  3. **It doesn't read the upload path.** Content is PUT over a signed URL out of
+     band — past the server entirely when presigned, through a route that streams
+     opaque bytes and records nothing when not (_the blob route_); either way the
+     server only learns of it at the commit's existence check.
 
 A is the **primitive B is built on**: because every commit is R2-first/log-last
 and the DO write is atomic, each phase is durable as a unit before the next
@@ -1654,7 +1769,14 @@ its current extraction), or withhold updates. None of these passes one path's
 content off as another's, which is the part the AAD closes.
 
 Even with E2E, the server still learns the **number of files, each file's size,
-its timestamps, and access patterns** (which blobs are fetched when). It does
+its timestamps, and access patterns** (which blobs are fetched when). Through the
+blob route the api Worker observes those itself, transfer by transfer — the
+token names the path — where a presigned transfer showed them only to R2; it is
+the same set of facts and the same ciphertext, seen by one more of our
+components. Its invocation log records that a transfer happened — when, from
+which IP — and not which object: the URL is the same for every one, and the
+token rides in the masked `authorization` header (_the blob route_). A transfer
+the `blob` rate limit refuses adds the account id, still not the object. It does
 **not** learn titles, URLs, tag/list names, or the metadata→content reference
 graph (all inside the ciphertext). Keeping metadata uniformly small (`< ~2 KB`)
 blunts size correlation. Acceptable for a bookmark manager — named here so it's a
@@ -1681,8 +1803,8 @@ Because the server can't inspect contents, it must enforce policy on the
 The byte total backing that quota is **not** summed from the op log — the log is
 compactable and disposable, so it would undercount. It comes from a separate,
 durable **per-path size map** — the `file_sizes` table in the same per-user DO
-(`do/repositories/file-sizes.ts`): `path → size`, set from the commit `HEAD` on
-`put`, read-and-subtracted on `delete` (a delete has no object left to `HEAD`, so
+(`do/repositories/file-sizes.ts`): `path → size`, set from the commit's existence
+check on `put`, read-and-subtracted on `delete` (a delete has no object left to check, so
 the size to free must already be recorded). That map, not the op log, is where size
 is persisted; the op-log row is just `{ seq, op, path, updated_at }`. The limits
 themselves live in `lib/quota.ts`, checked by `services/sync.ts` against the DO's
@@ -1769,8 +1891,9 @@ measurement they were waiting for.
   got, time to first byte, CORS preflights. Six sockets to R2's host with long
   queueing is HTTP/1.1's per-host cap, not the engine.
 - **bracemark-api's `Server-Timing`** (`apps/bracemark-api/src/lib/server-timing.ts`):
-  the session read, the Durable Object call, `r2-heads` (the commit's HEAD
-  fan-out, wall) beside `r2-head` (the sum of its calls), presigning. It tells a
+  the session read, the Durable Object call, `r2-stat` (the commit's existence
+  check, wall) beside `r2-list` and `r2-head` (the sums of its calls), signing,
+  and the blob route's `r2-put` / `r2-get`. It tells a
   slow `ops/commit` apart as time in the Worker or time on the wire. A Worker's
   clock moves only across I/O, so every metric is a wait, never CPU.
 
@@ -1819,12 +1942,47 @@ established until a staging reading shows it:
 6. **Main-thread contention.** Each pulled record is its own IndexedDB transaction
    and a live-query invalidation. Visible as `blob.store` time and long-task
    blocking.
-7. **The commit's server side.** Visible as `r2-heads` and `do-commit` in the api's
-   timing.
+7. **The commit's server side.** Visible as `r2-stat` (before the listing:
+   `r2-heads`) and `do-commit` in the api's timing.
 
 Record a reading where the change it justifies is made, with the date, the
 target, the variant and the machine, like the readings in
 [data-lifecycle.md](./data-lifecycle.md).
+
+**Reading, 2026-10-19 — staging, 1,000 links (2,363 files), service worker allowed
+and blocked, Chrome 155 on an Apple M1 Mac, before the blob route.** It settled
+1, 2, 3 and 7 and ruled out 4 and 5, and the blob route and the listing
+existence check are what it justified:
+
+|                                                        | service worker allowed | `--no-sw`                  |
+| ------------------------------------------------------ | ---------------------- | -------------------------- |
+| push wall                                              | 614 s                  | 628 s                      |
+| upload (8 chunks)                                      | 476 s                  | 493 s                      |
+| commit (8 calls)                                       | 127 s                  | 125 s                      |
+| PUT time to first byte, p50 / queued for a socket, p50 | 1.0 s / 3.4 s          | 1.0 s / 3.6 s              |
+| R2 protocol, sockets                                   | `http/1.1`, 6          | `http/1.1`, 6              |
+| CORS preflights                                        | 2,367                  | 2,365                      |
+| pull                                                   | 253 s, 8.6 GETs/s      | failed after 122 s (below) |
+
+- **The uploads were socket-bound** (1, 2): content at 8 in flight and index at
+  24 ran the same ~5 PUTs/s — six sockets over ~1.2 s per PUT and its preflight.
+  The GET floor, fetched with nothing around it, levelled at 16.7/s from 12 to
+  48 at once.
+- **The commit was the Workers connection limit** (7): a 500-op commit was 25.6 s
+  of `r2-heads`, ~19.5 `HEAD`s/s — six at a time at ~300 ms each — and its
+  Server-Timing total matched the client's time to first byte.
+- **The service worker's hop was noise** (3): 476 against 493 s of upload, and
+  8.6 against 9.0 GETs/s before the stall below.
+- **No `429`s** (4), and one cycle carried all 2,363 ops (5). `blob.store` totalled
+  about a second (6); the main-thread instrument reported no long task at all,
+  which this reading did not check.
+- **The pool stalls, and the deadline counts the wait.** In the `--no-sw` pull all
+  six R2 sockets stopped at once ~62 s in and no new connection opened for ~60 s.
+  Twelve GETs that never got a socket hit `BLOB_BASE_TIMEOUT_MS`, which runs from
+  the `fetch` call and so includes the browser's queue, and one failed GET failed
+  the whole first sync (`BlobTimeoutError`, 496 of 2,363 stored). The same run's
+  incremental push left six link PUTs queued after a failed cycle. One run of
+  each, so it is not pinned on `--no-sw`.
 
 ### deferred
 

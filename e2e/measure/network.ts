@@ -9,10 +9,12 @@ import { type CDPSession, type Page } from '@playwright/test';
 // meanwhile. The page's own Resource Timing can't: cross-origin entries without
 // Timing-Allow-Origin come back zeroed, and R2 sends none.
 //
-// ⚠ A PRESIGNED URL IS A CREDENTIAL — a GET one for an hour. Every URL is kept
-// as origin + path; the query, where the signature lives, never reaches a
-// result file. The one place full URLs are handled at all is
-// `signedGetUrls`, whose answer stays in memory for the floor leg.
+// ⚠ A SIGNED URL IS A CREDENTIAL — a GET one for an hour — and so is the
+// blob route's token beside it. Every URL is kept as origin + path; the query,
+// where a presign's signature lives, never reaches a result file, and no request
+// header is recorded at all, so the token never does either. The one place full
+// URLs and tokens are handled is `signedGets`, whose answer stays in memory for
+// the floor leg.
 //
 // ⚠ A SERVICE WORKER HIDES THE WIRE. A production build's worker answers every
 // cross-origin request (bracemark-web sw.ts, the NetworkOnly route), so the page
@@ -25,7 +27,17 @@ import { type CDPSession, type Page } from '@playwright/test';
 // dev` (bracemark-api r2/local.ts, LOCAL_BLOB_PATH_PREFIX). Duplicated rather
 // than imported: e2e reads the running system from outside.
 const LOCAL_BLOB_PREFIX = '/v1/files/blob/';
+// bracemark-api's blob route (@stxapps/shared BLOB_PATH, api routes/blob.ts):
+// every object's transfer on one path, named by the token in its header.
+const BLOB_PATH = '/v1/files/blob';
 const SIGN_PATH = '/v1/files/sign';
+
+// One GET the pull was signed for, as the floor leg replays it: the URL, and the
+// header the blob route needs beside it (absent for a presign).
+export interface SignedGet {
+  url: string;
+  authorization?: string;
+}
 
 export interface NetRequest {
   id: string;
@@ -79,9 +91,10 @@ interface Pending {
 
 export interface NetworkCapture {
   requests(): NetRequest[];
-  // The GET URLs this page's `files/sign` calls minted, full — for the floor
-  // leg, in memory only (see the ⚠ above).
-  signedGetUrls(): Promise<string[]>;
+  // The GETs this page's `files/sign` calls minted, full — URL and token both,
+  // for the floor leg, in memory only (see the ⚠ above: a blob-route token is
+  // the same credential a presigned URL is).
+  signedGets(): Promise<SignedGet[]>;
   stop(): Promise<void>;
 }
 
@@ -158,8 +171,8 @@ export async function captureNetwork(page: Page): Promise<NetworkCapture> {
 
   return {
     requests: () => [...done],
-    async signedGetUrls() {
-      const urls: string[] = [];
+    async signedGets() {
+      const urls: SignedGet[] = [];
       for (const id of signIds) {
         try {
           const { postData } = await cdp.send('Network.getRequestPostData', { requestId: id });
@@ -168,8 +181,10 @@ export async function captureNetwork(page: Page): Promise<NetworkCapture> {
           const text = body.base64Encoded
             ? Buffer.from(body.body, 'base64').toString('utf8')
             : body.body;
-          const parsed = JSON.parse(text) as { urls?: { url: string }[] };
-          urls.push(...(parsed.urls ?? []).map((u) => u.url));
+          const parsed = JSON.parse(text) as { urls?: SignedGet[] };
+          urls.push(
+            ...(parsed.urls ?? []).map(({ url, authorization }) => ({ url, authorization })),
+          );
         } catch {
           // Evicted from Chrome's buffer, or not JSON (an error body): skip it.
         }
@@ -232,7 +247,11 @@ export function parseServerTiming(header: string): Record<string, number> {
 export function requestGroup(req: NetRequest, appOrigin: string): string | null {
   if (req.origin === appOrigin) return null;
   const preflight = req.method === 'OPTIONS' || req.type === 'Preflight';
-  if (req.path.startsWith(LOCAL_BLOB_PREFIX) || !req.path.startsWith('/v1/')) {
+  if (
+    req.path === BLOB_PATH ||
+    req.path.startsWith(LOCAL_BLOB_PREFIX) ||
+    !req.path.startsWith('/v1/')
+  ) {
     return preflight ? 'blob OPTIONS' : `blob ${req.method}`;
   }
   return preflight ? `api OPTIONS ${req.path}` : `api ${req.path}`;

@@ -345,6 +345,7 @@ async function pushLeg(
     if (await failure.isVisible()) throw new Error(await failure.innerText());
     imported = Date.now();
     console.log(`  ${(await receipt.innerText()).trim()} after ${seconds(imported - since)}`);
+    await backToDataOverview(page);
     drain = await waitForDrain(page);
   } finally {
     await throttle.release();
@@ -407,6 +408,7 @@ async function incrementalLeg(
   await expect(a.app.page.getByText(/^Imported \d+ link/)).toBeVisible({
     timeout: LEG_TIMEOUT_MS,
   });
+  await backToDataOverview(a.app.page);
   const pushed = await waitForDrain(a.app.page);
 
   // Device B opens a page; reaching 'ready' kicks the cycle that pulls them.
@@ -441,7 +443,7 @@ async function floorLeg(
 ): Promise<LegResult> {
   const leg = `floor (GETs of the pull’s blobs)`;
   console.log(`\n${leg}`);
-  const urls = (await b.net.signedGetUrls()).slice(0, FLOOR_SAMPLE);
+  const urls = (await b.net.signedGets()).slice(0, FLOOR_SAMPLE);
   if (urls.length === 0) throw new Error('the pull minted no GET URL the floor could reuse');
   const { page } = b.app;
   const since = Date.now();
@@ -456,10 +458,18 @@ async function floorLeg(
         await Promise.all(
           Array.from({ length: concurrency }, async () => {
             while (next < urls.length) {
-              const url = urls[next++];
+              const { url, authorization } = urls[next++];
               const t0 = performance.now();
               try {
-                const res = await fetch(url, { cache: 'no-store' });
+                // Read as the engine reads (web-react sync/r2.ts getBlob): a
+                // blob-route token goes as a POST body, which is never
+                // preflighted; a presign is a plain GET.
+                const res = await fetch(
+                  url,
+                  authorization
+                    ? { method: 'POST', body: authorization }
+                    : { method: 'GET', cache: 'no-store' },
+                );
                 await res.arrayBuffer();
                 if (!res.ok) failed++;
               } catch {
@@ -666,6 +676,15 @@ async function pendingCount(page: Page): Promise<number> {
         };
       }),
   );
+}
+
+// Out of the Import sub-view to the Data overview, where the Sync row and its
+// action live (_data/data-section.tsx): the receipt is shown in the sub-view, and
+// waitForDrain can press nothing it cannot see. The "Data" back link swaps the
+// view in place — no navigation, so no cycle is interrupted.
+async function backToDataOverview(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Data', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Data', exact: true })).toBeVisible();
 }
 
 // Settled: nothing queued, a cycle has finished since the queue emptied, and

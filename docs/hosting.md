@@ -251,15 +251,23 @@ The constraints baked in:
   The chunks the bootstrap imports are same-origin and fall under `script-src`.
 - `connect-src` is `'self'`, that tier's api and extractor origins, **and that
   tier's R2 endpoint** — `https://<cloudflare-account-id>.r2.cloudflarestorage.com`.
-  R2 is the one that gets forgotten, because it is the one data path that never
-  touches the api: `packages/web-react/src/sync/r2.ts` PUTs and GETs the encrypted
-  blobs straight from the browser over a presigned URL
-  ([local-first-sync.md](./local-first-sync.md)). Omit it and the app still signs
+  R2 is the one that gets forgotten, because it is the one data path that need
+  not touch the api: `packages/web-react/src/sync/r2.ts` PUTs and GETs the
+  encrypted blobs over whatever URL `files/sign` answered, and that is a presign
+  of R2 whenever the api serving the page's build predates the blob route, or a
+  build that predates it is the one running
+  ([local-first-sync.md](./local-first-sync.md), _the blob route_). A current
+  build against a current api goes through the api's own origin instead, so a
+  staging run of today's checkout no longer exercises R2 here at all — which is
+  exactly why the entry has to stay until no such build or api is left, not until
+  a test notices. Omit it while one is and the app still signs
   in, still lists links, and silently loses every image, screenshot and page copy —
   a console violation is the only symptom, and local runners do not execute
-  under a CSP. The staging image-import/cross-profile case exercises this path
-  with the deployed headers, and the violation guard fails it on the violation
-  itself rather than on the missing image. Name the tier's **exact** account host rather than
+  under a CSP. The staging image-import/cross-profile case exercised this path
+  with the deployed headers, and its violation guard fails on the violation
+  itself rather than on the missing image — but against a tier serving the blob
+  route it moves its images through the api, so it now guards the api origin's
+  entry, not this one. Name the tier's **exact** account host rather than
   `https://*.r2.cloudflarestorage.com`; the wildcard authorises every Cloudflare
   account's R2 as a destination, and the id it hides is already visible to any
   signed-in user in devtools.
@@ -1146,9 +1154,20 @@ an origin added to `CORS_ORIGINS` works at once, and one removed loses the
 response at once, because the allow-list is read on every response and not only
 on the preflight.
 
-**R2 needs a CORS policy of its own, and `CORS_ORIGINS` is not it.** The blob
-PUT/GET in `packages/web-react/src/sync/r2.ts` goes from the browser straight to
-`<account-id>.r2.cloudflarestorage.com` over a presigned URL, so the api's CORS
+**The blob route rides `CORS_ORIGINS`, and asks one preflight per two hours.**
+`PUT /v1/files/blob` ([local-first-sync.md](./local-first-sync.md), _the blob
+route_) carries its token in `Authorization` and is preflighted — but it is one
+URL for every object, so the two-hour `maxAge` above covers a whole sync with one
+preflight. That is the point of the shape: a presigned URL is unique per object,
+so its preflight is never reused. A browser reads with `POST /v1/files/blob` and
+the token as a `text/plain` body, a CORS-simple request that is never
+preflighted at all; the same doc has the measurement that ruled out a GET. The browser extension reaches it under its `host_permissions` for the
+api host, without CORS at all.
+
+**R2 needs a CORS policy of its own, and `CORS_ORIGINS` is not it.** A presigned
+blob PUT/GET — what `files/sign` answers a client that names no transport, or an
+api that predates the blob route answers everyone — goes from the browser
+straight to `<account-id>.r2.cloudflarestorage.com`, so the api's CORS
 middleware never sees it — the **bucket** answers the preflight, and a new bucket
 has no policy at all. Forget it and every PUT dies at preflight with _"No
 'Access-Control-Allow-Origin' header is present"_, while sign-in, lists and link
@@ -1201,9 +1220,11 @@ npx wrangler r2 bucket cors list bracemark-user-files-<tier> --env <tier>
   wildcard `*.r2.cloudflarestorage.com` reaches every account's R2, which is the
   shape the CSP rejects. Either way, users see an install warning naming an opaque
   storage host. With `*` on the bucket, the permission would add nothing.
-- **No `headers`.** `putBlob` sends a raw byte body and no custom header, so the
-  preflight asks for none. If the client starts sending one, add it here in the
-  same change.
+- **No `headers`.** `putBlob` sends a raw byte body and no custom header to R2,
+  so the preflight asks for none. The `authorization` it sends goes only with a
+  blob-route URL — `files/sign` returns one only beside those — and never to a
+  presign. If the client starts sending a header to R2, add it here in the same
+  change.
 - **No `exposeHeaders`.** The client reads only the status and the body.
 - **`maxAgeSeconds` matches the Workers' two hours, and buys nothing here.** A
   preflight is remembered per URL, and every presigned PUT URL is its own and dies

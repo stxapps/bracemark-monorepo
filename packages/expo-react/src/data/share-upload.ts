@@ -150,12 +150,14 @@ export async function uploadShareDraft(deps: ShareUploadDeps, draft: ShareDraft)
   );
 
   const paths = blobs.map((b) => b.path);
-  const { urls } = await deps.api.call(filesSignEndpoint, { op: 'put', paths });
-  const urlByPath = new Map(urls.map((u) => [u.path, u.url]));
+  // The blob route, as the engines ask for it (sync/engine.ts signPaths); an api
+  // that predates it answers with presigns, which need no header.
+  const { urls } = await deps.api.call(filesSignEndpoint, { op: 'put', paths, via: 'api' });
+  const signedByPath = new Map(urls.map((u) => [u.path, u]));
   for (const { path, blob } of blobs) {
-    const url = urlByPath.get(path);
-    if (!url) throw new Error(`uploadShareDraft: no signed URL for ${path}`);
-    await putBlob(url, blob);
+    const signed = signedByPath.get(path);
+    if (!signed) throw new Error(`uploadShareDraft: no signed URL for ${path}`);
+    await putBlob(signed.url, blob, signed.authorization);
   }
 
   await deps.api.call(opsCommitEndpoint, {

@@ -132,8 +132,8 @@ export class UserDataDO extends DurableObject<Bindings> {
   // by the caller in services/sync.ts, which passes only the survivors in. The log
   // must never point at an object that isn't in R2 (op-without-object 404s every
   // client that pulls it; an object with no op is harmless and healed by the
-  // fallback R2 listing), so the service HEADs R2, never hands a put without an
-  // object here, and reports those in the response's `failed` (not this RPC, which
+  // fallback R2 listing), so the service checks R2 (r2/user-files.ts statMany),
+  // never hands a put without an object here, and reports those in the response's `failed` (not this RPC, which
   // only ever sees survivors and so returns only `results`). See
   // docs/local-first-sync.md.
   //
@@ -142,7 +142,7 @@ export class UserDataDO extends DurableObject<Bindings> {
   // sourced per kind by the service:
   //  - put:    R2's authoritative `LastModified`, with `size` its reported size,
   //            recorded in the quota map.
-  //  - delete: the worker's commit clock (no object survives to HEAD), and the
+  //  - delete: the worker's commit clock (no object survives to check), and the
   //            path's recorded size is freed from the quota map (`size` ignored).
   // Mixing the two clocks is safe because of THE CLAMP below, not because a deleted
   // path is never put again: `pins/` and `extractions/` are keyed by their link's

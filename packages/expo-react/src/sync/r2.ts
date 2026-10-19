@@ -1,7 +1,9 @@
-// Direct blob transfer to/from Cloudflare R2 over a presigned URL — the expo
-// sibling of web-react's sync/r2.ts (see there for the trust model: the ONE
-// data path that bypasses the API; the SigV4 signature in the URL is the
-// credential; the bytes are already AES-GCM ciphertext).
+// Blob transfer over a URL `files/sign` minted — the expo sibling of web-react's
+// sync/r2.ts (see there for the two kinds of URL: a presign of R2, whose
+// signature is the credential, or the api's blob route, whose token rides in the
+// `authorization` passed here; the bytes are already AES-GCM ciphertext either
+// way). Every transfer below takes that `authorization` and sends it as the
+// header when there is one.
 //
 // Two transports, split by payload size (the same split as the crypto boundary,
 // sync/crypto.ts): small ENTITY blobs ride Expo's native fetch as in-memory
@@ -52,10 +54,23 @@ export class BlobTimeoutError extends Error {
 // `expo/fetch` sets the request's `timeoutInterval` to 0 on iOS. The two native
 // file transfers below don't need one: their own URLSession/OkHttp idle timeouts
 // fail a stalled connection.
-export async function putBlob(url: string, body: Uint8Array<ArrayBuffer>): Promise<void> {
+function headersFor(authorization: string | undefined): Record<string, string> | undefined {
+  return authorization ? { authorization } : undefined;
+}
+
+export async function putBlob(
+  url: string,
+  body: Uint8Array<ArrayBuffer>,
+  authorization?: string,
+): Promise<void> {
   await withDeadline(
     async (signal) => {
-      const res = await expoFetch(url, { method: 'PUT', body, signal });
+      const res = await expoFetch(url, {
+        method: 'PUT',
+        body,
+        headers: headersFor(authorization),
+        signal,
+      });
       if (!res.ok) throw new BlobRequestError('PUT', res.status);
     },
     blobTransferTimeoutMs(body.byteLength),
@@ -67,10 +82,10 @@ export async function putBlob(url: string, body: Uint8Array<ArrayBuffer>): Promi
 // getBlobToFile. A total deadline, not web's idle one: React Native's fetch
 // resolves only after the whole body has arrived, so there is no progress to
 // restart the clock on, and the base allowance covers an entity body anyway.
-export async function getBlob(url: string): Promise<Uint8Array> {
+export async function getBlob(url: string, authorization?: string): Promise<Uint8Array> {
   return withDeadline(
     async (signal) => {
-      const res = await fetch(url, { method: 'GET', signal });
+      const res = await fetch(url, { method: 'GET', headers: headersFor(authorization), signal });
       if (!res.ok) throw new BlobRequestError('GET', res.status);
       return new Uint8Array(await res.arrayBuffer());
     },
@@ -83,10 +98,15 @@ export async function getBlob(url: string): Promise<Uint8Array> {
 // (BINARY_CONTENT: the file IS the request body, same shape putBlob sends), so
 // a MB-sized ciphertext never enters the JS heap. Unlike fetch, uploadAsync
 // resolves on any HTTP status, so the ok-check is ours.
-export async function putBlobFromFile(url: string, file: File): Promise<void> {
+export async function putBlobFromFile(
+  url: string,
+  file: File,
+  authorization?: string,
+): Promise<void> {
   const res = await uploadAsync(url, file.uri, {
     httpMethod: 'PUT',
     uploadType: FileSystemUploadType.BINARY_CONTENT,
+    headers: headersFor(authorization),
   });
   if (res.status < 200 || res.status >= 300) throw new BlobRequestError('PUT', res.status);
 }
@@ -100,9 +120,16 @@ const DOWNLOAD_STATUS_RE = /response has status:? (\d{3})/;
 
 // GET a blob straight to `file` on disk (overwriting a previous temp), never
 // through the JS heap — the download half of the `files/` content pipeline.
-export async function getBlobToFile(url: string, file: File): Promise<void> {
+export async function getBlobToFile(
+  url: string,
+  file: File,
+  authorization?: string,
+): Promise<void> {
   try {
-    await File.downloadFileAsync(url, file, { idempotent: true });
+    await File.downloadFileAsync(url, file, {
+      idempotent: true,
+      headers: headersFor(authorization),
+    });
   } catch (err: unknown) {
     const match = err instanceof Error ? DOWNLOAD_STATUS_RE.exec(err.message) : null;
     if (match) throw new BlobRequestError('GET', Number(match[1]));

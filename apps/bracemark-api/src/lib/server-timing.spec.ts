@@ -48,10 +48,10 @@ describe('Server-Timing', () => {
   it('writes a repeated metric as its sum with a count', () => {
     const header = formatTimings(
       new Map([
-        ['r2-heads', { ms: 40, n: 1 }],
+        ['r2-stat', { ms: 40, n: 1 }],
         ['r2-head', { ms: 900, n: 500 }],
       ]),
     );
-    expect(header).toBe('r2-heads;dur=40, r2-head;dur=900;desc="n=500"');
+    expect(header).toBe('r2-stat;dur=40, r2-head;dur=900;desc="n=500"');
   });
 });

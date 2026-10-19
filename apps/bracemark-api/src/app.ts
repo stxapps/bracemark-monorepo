@@ -1,11 +1,14 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 
+import { BLOB_PATH } from '@stxapps/shared';
+
 import type { AppEnv, Bindings } from './lib/env';
 import { errorHandler } from './lib/errors';
 import { serverTiming } from './lib/server-timing';
 import { rateLimit } from './middleware/rate-limit';
 import { authRoutes } from './routes/auth';
+import { blobRoutes } from './routes/blob';
 import { dataRoutes } from './routes/data';
 import {
   APPSTORE_NOTIFY_PATH,
@@ -100,9 +103,18 @@ app.use('*', serverTiming);
 // body; the store notify routes re-fetch authoritative state from the store's
 // API instead of trusting the payload (see routes/iap.ts), so a forged flood
 // costs an attacker a rate-limited no-op.
-const WEBHOOK_PATHS = new Set([PADDLE_WEBHOOK_PATH, APPSTORE_NOTIFY_PATH, PLAYSTORE_NOTIFY_PATH]);
+//
+// The blob route is exempt for the opposite reason: ONE path carries every
+// object a sync moves, so an IP+path bucket sized for api calls would 429 a push
+// within seconds. It carries the per-user 'blob' tier instead (routes/blob.ts).
+const OWN_LIMIT_PATHS = new Set([
+  PADDLE_WEBHOOK_PATH,
+  APPSTORE_NOTIFY_PATH,
+  PLAYSTORE_NOTIFY_PATH,
+  BLOB_PATH,
+]);
 const standardRateLimit = rateLimit('standard');
-app.use('*', (c, next) => (WEBHOOK_PATHS.has(c.req.path) ? next() : standardRateLimit(c, next)));
+app.use('*', (c, next) => (OWN_LIMIT_PATHS.has(c.req.path) ? next() : standardRateLimit(c, next)));
 
 app.get('/', (c) => {
   return c.json({ message: 'Welcome to bracemark-api' });
@@ -123,6 +135,10 @@ app.route('/', iapRoutes);
 // routes/sync.ts and docs/local-first-sync.md.
 app.route('/', syncRoutes);
 
+// The blob route: one object's bytes in or out, authorized by a token files/sign
+// minted with `via: 'api'` rather than a session. See routes/blob.ts.
+app.route('/', blobRoutes);
+
 // Data lifecycle (delete-all). Protected, destructive, whole-namespace — beside
 // the sync plane, not in it. See routes/data.ts and docs/data-lifecycle.md.
 app.route('/', dataRoutes);
@@ -130,5 +146,6 @@ app.route('/', dataRoutes);
 // DEV-ONLY blob proxy (routes/local-r2.ts). Always mounted but self-gates to 404
 // off the local miniflare env, so it's inert in staging/prod (which presign R2
 // directly). It stands in for direct browser↔R2 transfer under `wrangler dev`,
-// where the emulated bucket has no presignable S3 endpoint.
+// where the emulated bucket has no presignable S3 endpoint — for a `files/sign`
+// that names no `via`; one that asks for the blob route gets it locally too.
 app.route('/', localR2Routes);
