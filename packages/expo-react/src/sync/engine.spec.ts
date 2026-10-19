@@ -362,6 +362,28 @@ function failUploadsFor(...paths: string[]): void {
   });
 }
 
+// Run `start` to its end with the blob retry's backoff skipped: fake timers,
+// stepped until it settles. Resolves with its value or its rejection. Only the
+// backoff's timers are faked; the sqlite shim and the file mock keep running on
+// the real loop.
+async function settleSkippingBackoff(start: () => Promise<unknown>): Promise<unknown> {
+  jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
+  try {
+    let settled = false;
+    const outcome = start().then(
+      (value) => value,
+      (err: unknown) => err,
+    );
+    void outcome.finally(() => {
+      settled = true;
+    });
+    for (let step = 0; !settled && step < 100; step++) await jest.advanceTimersByTimeAsync(500);
+    return await outcome;
+  } finally {
+    jest.useRealTimers();
+  }
+}
+
 beforeEach(async () => {
   commits = [];
   signVias = [];
@@ -644,6 +666,28 @@ describe('a content push', () => {
     expect(tempFiles()).toEqual([]);
   });
 
+  // The engine's own retry of a 5xx (@stxapps/shared sync/blob-transfer.ts) — the
+  // drift guard for this copy of it, on the transport only expo has: the second
+  // attempt must find the sealed temp file the first one sent, and the temp must
+  // still go once it lands.
+  it('tries a refused upload again from the same sealed file, and still clears the temp', async () => {
+    await seedQueuedContent(FILE_ID, 'image bytes');
+    let refusals = 1;
+    mockPutBlobFromFile.mockImplementation(async (url: string, file: { uri: string }) => {
+      if (refusals-- > 0) throw new BlobRequestError('PUT', 500);
+      uploaded.add(pathFor(url));
+      uploadedFiles.set(pathFor(url), readFileText(file.uri));
+    });
+
+    expect(await settleSkippingBackoff(() => runIncrementalSync(deps()))).not.toBeInstanceOf(Error);
+
+    expect(mockPutBlobFromFile).toHaveBeenCalledTimes(2);
+    expect(uploadedFiles.get(FILE_PATH)).toBe('enc:image bytes');
+    expect(committedPaths()).toEqual([FILE_PATH]);
+    expect(await pendingPaths()).toEqual([]);
+    expect(tempFiles()).toEqual([]);
+  });
+
   it('drops a content op whose plaintext file is gone', async () => {
     await seedQueuedContent(FILE_ID, 'image bytes');
     dataFileFor(FILE_PATH).delete();
@@ -901,6 +945,27 @@ describe('loadEntityContent', () => {
     expect(tempFiles()).toEqual([]);
   });
 
+  // The drift guard for the download retry, on expo's to-file transport: the
+  // second attempt overwrites what the first left in the temp, and the temp still
+  // goes once the plaintext is materialized.
+  it('fetches again after a refused download, and still clears the temp', async () => {
+    let refusals = 1;
+    mockGetBlobToFile.mockImplementation(async (url: string, file: { uri: string }) => {
+      if (refusals-- > 0) {
+        writeFileText(file.uri, 'half a response');
+        throw new BlobRequestError('GET', 500);
+      }
+      writeFileText(file.uri, `enc:${r2Content.get(pathFor(url))}`);
+    });
+
+    const file = await settleSkippingBackoff(() => loadEntityContent(deps(), FILE_PATH));
+
+    expect(mockGetBlobToFile).toHaveBeenCalledTimes(2);
+    expect((file as { uri: string } | undefined)?.uri).toBe(dataFileFor(FILE_PATH).uri);
+    expect(plaintextAt(FILE_PATH)).toBe('page copy');
+    expect(tempFiles()).toEqual([]);
+  });
+
   it('returns undefined and leaves no temp behind when the object is gone server-side', async () => {
     r2Content.clear();
 
@@ -999,9 +1064,10 @@ describe('loadEntityContents', () => {
       writeFileText(file.uri, `enc:${r2Content.get(path)}`);
     });
 
-    const result = await loadEntityContents(deps(), [FILE_PATH, OTHER_FILE_PATH], undefined, {
-      bestEffort: true,
-    });
+    // A 503 every time: the retry's three tries all fail, and only then the path.
+    const result = await settleSkippingBackoff(() =>
+      loadEntityContents(deps(), [FILE_PATH, OTHER_FILE_PATH], undefined, { bestEffort: true }),
+    );
 
     expect(result).toEqual({ missingPaths: [], failedPaths: [FILE_PATH] });
     expect(plaintextAt(FILE_PATH)).toBeUndefined();

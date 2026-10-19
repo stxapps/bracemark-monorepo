@@ -1,3 +1,5 @@
+import { jitteredDelayMs } from '../api/retry';
+
 // The deadline for one R2 blob transfer over a presigned URL (sync/r2.ts on both
 // platforms). Those transfers bypass the contract client, so they don't get its
 // default deadline (api/client.ts), and `fetch` has none of its own: a stalled
@@ -46,4 +48,80 @@ export const BLOB_MIN_BYTES_PER_SEC = 8 * 1024;
 
 export function blobTransferTimeoutMs(bytes: number): number {
   return BLOB_BASE_TIMEOUT_MS + Math.ceil((bytes / BLOB_MIN_BYTES_PER_SEC) * 1000);
+}
+
+// --- a transfer the host answered with "try again" --------------------------
+//
+// The engines retry one blob transfer IN PLACE — an upload or a download — when
+// the host answered with a status that means "not this time": a 5xx or a 429.
+// Without it, one such answer fails the whole cycle. The cycle keeps what it
+// committed, but the failed op (or the entry it was pulling) waits for the next
+// cycle, and no timer starts one: the next edit or a press of Retry does
+// (docs/local-first-sync.md, _the three flows: push_). On staging, 2026-10-19,
+// the R2 binding refused 7 of ~14,000 blob-route PUTs in a 10,000-link push with
+// `put: We encountered an internal error. Please try again. (10001)`. A push that
+// size is all but certain to meet one, and a first sync's retry starts with a
+// whole listing — a minute at that size before the 7 went up again. A pull of
+// the same library reads as many objects through the same binding.
+//
+// Safe to repeat. An upload's bytes are sealed once, before the first attempt,
+// and a PUT of the same bytes to the same key leaves the same object; nothing is
+// committed until the chunk's uploads are done, so a retry never races its own
+// commit. A download changes nothing on the host, and expo's to-file download
+// overwrites the temp file a failed attempt left (sync/r2.ts, `idempotent`).
+//
+// What it does NOT retry, deliberately:
+//   - any other 4xx. A 403 is an expired or bad token, and the next cycle's fresh
+//     one is the fix. A GET 404 is an object deleted since it was listed, which
+//     the engines skip; a second try would only 404 again.
+//   - a BlobTimeoutError. That attempt already spent its whole deadline, and
+//     another would multiply the wait (the same reasoning as an ApiTimeoutError's,
+//     api/retry.ts).
+//   - a network error. expo's fetch reports one as the same FetchError as an
+//     abort, so the two platforms couldn't agree on it, and a device that just
+//     went offline gains nothing from a second try one second later.
+//
+// Three tries, about 1 s then 2 s apart: a few seconds, set against a PUT token
+// that lives five minutes from its chunk's sign and a GET token that lives an
+// hour. It holds its pool slot while it waits, which a handful of retries in a
+// sync of thousands can afford.
+export const BLOB_TRANSFER_TRIES = 3;
+export const BLOB_TRANSFER_RETRY_BASE_MS = 1_000;
+
+export function isTransientBlobStatus(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+export interface BlobRetryOptions {
+  /** Total attempts including the first (default BLOB_TRANSFER_TRIES). */
+  tries?: number;
+  /** The first wait; each later one doubles it (default BLOB_TRANSFER_RETRY_BASE_MS). */
+  baseDelayMs?: number;
+  /** Test seam. */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+// Run `transfer`, and run it again while it throws something `isTransient`
+// accepts — each platform's BlobRequestError class is its own, so the caller
+// says which. The last attempt's error propagates unchanged.
+export async function retryTransientBlobTransfer<T>(
+  transfer: () => Promise<T>,
+  isTransient: (err: unknown) => boolean,
+  options: BlobRetryOptions = {},
+): Promise<T> {
+  const {
+    tries = BLOB_TRANSFER_TRIES,
+    baseDelayMs = BLOB_TRANSFER_RETRY_BASE_MS,
+    sleep = defaultSleep,
+  } = options;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await transfer();
+    } catch (err) {
+      if (attempt >= tries - 1 || !isTransient(err)) throw err;
+      await sleep(jitteredDelayMs(baseDelayMs * 2 ** attempt));
+    }
+  }
 }

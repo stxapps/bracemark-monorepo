@@ -238,6 +238,28 @@ function failUploadsFor(...paths: string[]): void {
   });
 }
 
+// Run `start` to its end with the blob retry's backoff skipped: fake timers,
+// stepped until it settles. Resolves with its value or its rejection, so a spec
+// can assert either. Only the timers the backoff uses are faked; fake-indexeddb
+// schedules its own work on setImmediate and must keep running.
+async function settleSkippingBackoff(start: () => Promise<unknown>): Promise<unknown> {
+  jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
+  try {
+    let settled = false;
+    const outcome = start().then(
+      (value) => value,
+      (err: unknown) => err,
+    );
+    void outcome.finally(() => {
+      settled = true;
+    });
+    for (let step = 0; !settled && step < 100; step++) await jest.advanceTimersByTimeAsync(500);
+    return await outcome;
+  } finally {
+    jest.useRealTimers();
+  }
+}
+
 beforeEach(async () => {
   commits = [];
   signVias = [];
@@ -1070,6 +1092,93 @@ describe('a transient upload failure', () => {
   });
 });
 
+describe('a transfer the host refused for now', () => {
+  const settleCycle = () => settleSkippingBackoff(() => runIncrementalSync(deps()));
+
+  // R2 answering a blob-route PUT with its own "internal error, please try again"
+  // reached the client as a 500 — 7 times in a 10,000-link push on staging — and
+  // each one failed its cycle and waited for a human to press Retry.
+  it('is tried again inside the cycle, and the cycle ends clean', async () => {
+    await seedQueued(LINK_PATH, 'the link');
+    let refusals = 1;
+    mockPutBlob.mockImplementation(async (url: string) => {
+      if (pathFor(url) === LINK_PATH && refusals-- > 0) throw new BlobRequestError('PUT', 500);
+      uploaded.add(pathFor(url));
+    });
+
+    expect(await settleCycle()).not.toBeInstanceOf(Error);
+    expect(mockPutBlob).toHaveBeenCalledTimes(2);
+    expect(committedPaths()).toEqual([LINK_PATH]);
+    expect(await pendingPaths()).toEqual([]);
+  });
+
+  it('fails the cycle after three tries when it never lands, with the op still queued', async () => {
+    await seedQueued(LINK_PATH, 'the link');
+    const unavailable = new BlobRequestError('PUT', 503);
+    mockPutBlob.mockRejectedValue(unavailable);
+
+    expect(await settleCycle()).toBe(unavailable);
+    expect(mockPutBlob).toHaveBeenCalledTimes(3);
+    expect(await pendingPaths()).toEqual([LINK_PATH]);
+  });
+
+  it('is never tried again on an expired url — the next cycle signs a fresh one', async () => {
+    await seedQueued(LINK_PATH, 'the link');
+    failUploadsFor(LINK_PATH);
+
+    await expect(runIncrementalSync(deps())).rejects.toBe(EXPIRED_URL);
+    expect(mockPutBlob).toHaveBeenCalledTimes(1);
+  });
+
+  // A pull reads as many objects through the same binding as a push writes.
+  it('pulls an entry whose GET was refused once, and the cycle ends clean', async () => {
+    let refusals = 1;
+    mockGetBlob.mockImplementation(async (url: string) => {
+      if (refusals-- > 0) throw new BlobRequestError('GET', 500);
+      return new Uint8Array([0xee, ...utf8(`server ${pathFor(url)}`)]);
+    });
+
+    const outcome = await settleSkippingBackoff(() =>
+      runIncrementalSync(
+        deps({
+          opsList: () => ({
+            ops: [{ op: 'put', path: LINK_PATH, updatedAt: 2000 }],
+            oldestUpdatedAt: 500,
+            newestUpdatedAt: 2000,
+            hasMore: false,
+          }),
+        }),
+      ),
+    );
+
+    expect(outcome).not.toBeInstanceOf(Error);
+    expect(mockGetBlob).toHaveBeenCalledTimes(2);
+    expect(await bodyAt(LINK_PATH)).toBe(`server ${LINK_PATH}`);
+  });
+
+  it('loads content whose GET was refused once', async () => {
+    await db.items.put(toItemRecord(FILE_PATH, 1000));
+    let refusals = 1;
+    mockGetBlob.mockImplementation(async (url: string) => {
+      if (refusals-- > 0) throw new BlobRequestError('GET', 503);
+      return new Uint8Array([0xee, ...utf8(`server ${pathFor(url)}`)]);
+    });
+
+    const data = await settleSkippingBackoff(() => loadEntityContent(deps(), FILE_PATH));
+
+    expect(data).toEqual(utf8(`server ${FILE_PATH}`));
+    expect(mockGetBlob).toHaveBeenCalledTimes(2);
+  });
+
+  it('never tries a GET 404 again — the object is gone, and the pull skips it', async () => {
+    await db.items.put(toItemRecord(FILE_PATH, 1000));
+    mockGetBlob.mockRejectedValue(new BlobRequestError('GET', 404));
+
+    await expect(loadEntityContent(deps(), FILE_PATH)).resolves.toBeUndefined();
+    expect(mockGetBlob).toHaveBeenCalledTimes(1);
+  });
+});
+
 // --- the self-heal, completed ------------------------------------------------
 
 // Dropping the wedged op (above) unwedges the QUEUE but, on its own, leaves the
@@ -1693,9 +1802,10 @@ describe('loadEntityContents, best-effort', () => {
       return new Uint8Array([0xee, ...utf8(`server ${pathFor(url)}`)]);
     });
 
-    const result = await loadEntityContents(deps(), [FILE_PATH, OTHER_FILE_PATH], undefined, {
-      bestEffort: true,
-    });
+    // A 503 every time: the retry's three tries all fail, and only then the path.
+    const result = await settleSkippingBackoff(() =>
+      loadEntityContents(deps(), [FILE_PATH, OTHER_FILE_PATH], undefined, { bestEffort: true }),
+    );
 
     expect(result).toEqual({ missingPaths: [], failedPaths: [FILE_PATH] });
     expect(await bodyAt(FILE_PATH)).toBeUndefined();
@@ -1747,7 +1857,9 @@ describe('loadEntityContents, best-effort', () => {
     await seedBoth();
     mockGetBlob.mockRejectedValue(new BlobRequestError('GET', 503));
 
-    await expect(loadEntityContents(deps(), [FILE_PATH])).rejects.toBeInstanceOf(BlobRequestError);
+    expect(
+      await settleSkippingBackoff(() => loadEntityContents(deps(), [FILE_PATH])),
+    ).toBeInstanceOf(BlobRequestError);
   });
 });
 

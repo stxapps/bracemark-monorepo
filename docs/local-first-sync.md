@@ -760,6 +760,27 @@ duplicate path.
 > same too-big chunk and re-expired at the same point, so the push never advanced.
 > Absorbing it per blob makes the remainder **shrink every cycle**.
 >
+> **A host that answers "try again" is tried again in place.** A blob transfer
+> refused with a `5xx` or a `429` is retried where it stands, three tries about
+> 1 s then 2 s apart (`retryTransientBlobTransfer`, `@stxapps/shared`
+> `sync/blob-transfer.ts`), before it counts as failed. That covers every PUT a
+> push makes and every GET a pull, `loadEntityContent` and `loadEntityContents`
+> make, on both engines. Without it, one refusal fails the cycle, and no timer
+> starts the next one; the next edit or a press of Retry does. It is not rare at
+> scale: on staging, 2026-10-19, the R2 binding refused 7 of ~14,000 blob-route
+> PUTs in a 10,000-link first sync with `(10001) internal error`, and the retry
+> that recovered them started with a minute-long whole listing. A retry is safe:
+> an upload's bytes are sealed once and a PUT of the same bytes to the same key
+> leaves the same object, and a download changes nothing on the host. **Not**
+> retried: any other `4xx` (the expired `403` above wants a fresh URL, which only
+> the next cycle signs, and a GET `404` is an object deleted since it was listed,
+> which the engines skip), a `BlobTimeoutError` (the attempt already spent its
+> whole deadline), and a network error (expo's fetch can't tell one from an
+> abort). Each attempt is its own `blob.put` or `blob.get` span, so `measure:sync`
+> shows a retried transfer as a failed span before it. The share sheet's upload
+> (`share-upload.ts`) does not retry: its process outlives the ✓ by about a
+> second, and the outbox is its retry.
+>
 > Three rules keep that from becoming a correctness hole:
 >
 > - **A failed op is left queued but kept OUT of the commit.** Unlike an unsigned

@@ -52,6 +52,7 @@ import {
   filesListEndpoint,
   filesSignEndpoint,
   type InitialSyncProgressFn,
+  isTransientBlobStatus,
   mapLimit,
   MAX_COMMIT_OPS,
   MAX_LIST_LIMIT,
@@ -63,6 +64,7 @@ import {
   type OpsListResponse,
   type ProgressFn,
   recordBlocked,
+  retryTransientBlobTransfer,
   sessionVerdictFromResponse,
   type SignedUrl,
   type SignOp,
@@ -563,7 +565,7 @@ export async function loadEntityContent(deps: SyncDeps, path: string): Promise<F
   const enc = newTempEncFile();
   try {
     try {
-      await getBlobToFile(signed.url, enc, signed.authorization);
+      await getBlobToFileRetrying(signed, enc);
     } catch (err: unknown) {
       if (err instanceof BlobRequestError && err.status === 404) return undefined;
       throw err;
@@ -674,7 +676,7 @@ export async function loadEntityContents(
         const enc = newTempEncFile();
         try {
           try {
-            await getBlobToFile(signed.url, enc, signed.authorization);
+            await getBlobToFileRetrying(signed, enc);
             fetched = true;
           } catch (err: unknown) {
             if (!(err instanceof BlobRequestError && err.status === 404)) throw err;
@@ -1280,10 +1282,16 @@ async function uploadBlobs(
       await trace.span('blob.encrypt', () =>
         encryptFile(plain.uri, enc.uri, deps.encryptionKey, op.path),
       );
-      await trace.span('blob.put', () => putBlobFromFile(signed.url, enc, signed.authorization), {
-        bytes: enc.size,
-        ns: syncNamespace(op.path),
-      });
+      // A 5xx or 429 is tried again from the same sealed file, one span per
+      // attempt (@stxapps/shared sync/blob-transfer.ts, retryTransientBlobTransfer).
+      await retryTransientBlobTransfer(
+        () =>
+          trace.span('blob.put', () => putBlobFromFile(signed.url, enc, signed.authorization), {
+            bytes: enc.size,
+            ns: syncNamespace(op.path),
+          }),
+        isTransientBlobError,
+      );
     } catch (err) {
       recordFailure(op, err);
     } finally {
@@ -1330,15 +1338,35 @@ async function uploadBlobs(
       const sealed = await trace.span('blob.encrypt', () =>
         encryptEntity(deps.encryptionKey, data, op.path),
       );
-      await trace.span('blob.put', () => putBlob(signed.url, sealed, signed.authorization), {
-        bytes: sealed.byteLength,
-        ns: syncNamespace(op.path),
-      });
+      await retryTransientBlobTransfer(
+        () =>
+          trace.span('blob.put', () => putBlob(signed.url, sealed, signed.authorization), {
+            bytes: sealed.byteLength,
+            ns: syncNamespace(op.path),
+          }),
+        isTransientBlobError,
+      );
     } catch (err) {
       recordFailure(op, err);
     }
   });
   return { orphaned, failed, superseded };
+}
+
+// A transfer the host refused for now, not on its merits — what the two sends above
+// and every download try again (@stxapps/shared sync/blob-transfer.ts).
+function isTransientBlobError(err: unknown): boolean {
+  return err instanceof BlobRequestError && isTransientBlobStatus(err.status);
+}
+
+// One `files/` download to `file`, tried again on a 5xx or 429; each attempt
+// overwrites what the last one left there (sync/r2.ts, `idempotent`). The 404 a
+// caller skips is not transient, so it still reaches the caller on the first try.
+function getBlobToFileRetrying(signed: SignedUrl, file: File): Promise<void> {
+  return retryTransientBlobTransfer(
+    () => getBlobToFile(signed.url, file, signed.authorization),
+    isTransientBlobError,
+  );
 }
 
 // --- download / store / delete ----------------------------------------------
@@ -1415,23 +1443,28 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
     try {
       if (!signed) return;
 
-      const blob = await trace.span(
-        'blob.get',
-        (note) =>
-          getBlob(signed.url, signed.authorization).then(
-            (bytes) => {
-              note({ bytes: bytes.byteLength });
-              return bytes;
-            },
-            (err: unknown) => {
-              // Deleted between the op pull / listing and this GET: the delete op
-              // sits past our window and reconciles next sync — skip it, don't fail
-              // the cycle.
-              if (err instanceof BlobRequestError && err.status === 404) return undefined;
-              throw err;
-            },
+      // A 5xx or 429 is tried again, one span per attempt, as an upload's is.
+      const blob = await retryTransientBlobTransfer(
+        () =>
+          trace.span(
+            'blob.get',
+            (note) =>
+              getBlob(signed.url, signed.authorization).then(
+                (bytes) => {
+                  note({ bytes: bytes.byteLength });
+                  return bytes;
+                },
+                (err: unknown) => {
+                  // Deleted between the op pull / listing and this GET: the delete
+                  // op sits past our window and reconciles next sync — skip it,
+                  // don't fail the cycle.
+                  if (err instanceof BlobRequestError && err.status === 404) return undefined;
+                  throw err;
+                },
+              ),
+            { ns: syncNamespace(e.path) },
           ),
-        { ns: syncNamespace(e.path) },
+        isTransientBlobError,
       );
       if (!blob) return;
 
