@@ -111,24 +111,28 @@ const FILES_PAGE = MAX_LIST_LIMIT;
 // fan-out over that wait, and it scales with the fan-out until something else
 // binds. The 2026-10-19 staging floor held its p50 at ~355 ms from 24 to 48 GETs
 // at once; the server was not the limit (docs/local-first-sync.md, _measuring a
-// sync_). Every index blob (links/tags/lists/settings) is small, and so is a
-// `files/` blob up to LARGE_CONTENT_BYTES, in either direction.
+// sync_). The pass after it ran 42–47 of 48 in flight, so 96 is the next step,
+// for a bulk edit's ~1,000 `links/` PUTs; not yet read. Every index blob
+// (links/tags/lists/settings) is small, and so is a `files/` blob up to
+// LARGE_CONTENT_BYTES, in either direction.
 //
 // A large `files/` blob is bound by bandwidth and memory — each transfer holds
 // its blob in the JS heap, so peak ≈ concurrency × blob size — so it keeps the
 // narrow fan-out, whether it is uploaded (uploadBlobs, through a gate inside the
 // wide pass) or fetched (loadEntityContents, where the size is unknown until it
 // arrives, so every content GET counts as large).
-const INDEX_CONCURRENCY = 48;
+const INDEX_CONCURRENCY = 96;
 const FILE_CONCURRENCY = 8;
 
 // Where a `files/` upload stops counting as small. Sized against the one
 // deadline it can miss: a web PUT gets BLOB_BASE_TIMEOUT_MS plus its size over
-// BLOB_MIN_BYTES_PER_SEC (@stxapps/shared sync/blob-transfer.ts), so a 64 KiB
-// blob has ~68 s. A full fan-out of them is 3 MiB, which a 512 kbps uplink
+// BLOB_MIN_BYTES_PER_SEC (@stxapps/shared sync/blob-transfer.ts), so a 32 KiB
+// blob has ~64 s. A full fan-out of them is 3 MiB, which a 512 kbps uplink
 // moves in ~49 s — inside that, with the large gate's transfers alongside. Every
 // seeded test library's content is far below it; a real preview image may not be.
-const LARGE_CONTENT_BYTES = 64 * 1024;
+// It is tied to INDEX_CONCURRENCY: the product, not either one, is what has to
+// fit the deadline, so a wider fan-out halves this (64 KiB at 48 was the same 3 MiB).
+const LARGE_CONTENT_BYTES = 32 * 1024;
 
 // One put-pipeline pass (pushPuts) signs, uploads, and commits a single chunk, so
 // a chunk must fit BOTH the sign cap and the commit cap in one call each, and it

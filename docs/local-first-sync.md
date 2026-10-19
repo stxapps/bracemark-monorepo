@@ -1651,7 +1651,7 @@ is why it is closed rather than written down as accepted.
   upload-time `writeId` test narrows what that cycle can still do: an op whose
   queue row the wipe cleared is superseded and sends nothing. What is left is
   the transfers already in flight when the queue was cleared, which had passed
-  that test: at most one fan-out of them, `INDEX_CONCURRENCY` (48) blobs, of
+  that test: at most one fan-out of them, `INDEX_CONCURRENCY` (96) blobs, of
   which at most `FILE_CONCURRENCY` (8) are large content. Such a transfer can end
   two ways. If it lands after the wipe's last R2 listing, the object survives and
   its commit logs it — a link back on a wiped account, up to that fan-out of
@@ -1900,7 +1900,7 @@ measurement they were waiting for.
   `blob.put`, `commit`, `pull`, `blob.get`, `blob.store`, one `api <path>` per
   contract-call _attempt_ — and the summary turns them into, per name, the wall
   time it owned, the work it did, and their ratio: **how many were really in
-  flight**. `INDEX_CONCURRENCY` is 48; a `blob.put` row that reads 5 says
+  flight**. `INDEX_CONCURRENCY` is 96; a `blob.put` row that reads 5 says
   something is holding the fan-out back, and the other two instruments say what.
   The vocabulary is listed in the module and pinned by
   `packages/web-react/src/sync/engine.spec.ts`, _the timing trace_.
@@ -1960,8 +1960,8 @@ established until a staging reading shows it:
 3. **The service worker's hop** (above): the sw-allowed and `--no-sw` walls side
    by side.
 4. **The `tight` rate limit** (10 calls per 10 s per user and per path, so
-   `files/sign` and `ops/commit` each have a bucket) and `withRetry` waiting out `Retry-After`. Visible as `api` spans
-   with `status: 429`.
+   `files/sign` and `ops/commit` each have a bucket) and `withRetry` waiting out
+   `Retry-After`. Visible as `api` spans with `status: 429`.
 5. **Many cycles instead of one.** An import kicks cycles while it is still
    writing. Visible as the cycle count and the `cycle.lock` waits.
 6. **Main-thread contention.** Each pulled record is its own IndexedDB transaction
@@ -1969,6 +1969,15 @@ established until a staging reading shows it:
    blocking.
 7. **The commit's server side.** Visible as `r2-stat` (before the listing:
    `r2-heads`) and `do-commit` in the api's timing.
+8. **The commit's existence check on a sparse batch.** `statMany` walks R2's
+   listing in key order, a page after a page within a namespace, and hands the
+   rest to `HEAD`s — six at a time — once a page answers fewer than
+   `LIST_MIN_HITS` keys. An import's chunks are dense, so the push legs never
+   meet it. A bulk edit of N links scattered among L does: about L / 1,000 pages
+   while each answers 13 or more, `HEAD`s below that, so on a large library a
+   500-op commit could take tens of seconds — by arithmetic, not yet by reading.
+   Visible as `r2-list` and `r2-head` on a `bulk-edit` leg's commit, at
+   `--links 10000` or more ([e2e.md](./e2e.md), _the sync leg_).
 
 Record a reading where the change it justifies is made, with the date, the
 target, the variant and the machine, like the readings in
@@ -2053,8 +2062,8 @@ is R2 itself:
   masked on every PUT, a read's token rides in a body the log does not keep, and
   every blob entry's URL is the bare route. The refusal line never fired.
 
-It justified three engine changes, in both engines, and the next staging reading
-is what will price them:
+It justified three engine changes, in both engines, priced by the reading after
+it:
 
 - `INDEX_CONCURRENCY` 48, and content sized rather than counted: a `files/` blob
   up to 64 KiB goes at the full fan-out, a larger one waits for one of
@@ -2069,6 +2078,66 @@ is what will price them:
 Not taken: a bucket nearer its users (above), and holding small records outside
 R2 — in the user's Durable Object, or packed — which would make a push or pull of
 a thousand links a handful of calls, and reverses _source of truth_.
+
+**Reading, 2026-10-19 — the same, with those three changes** (`2b19789`), service
+worker allowed and blocked:
+
+|                                    | service worker allowed | `--no-sw`        |
+| ---------------------------------- | ---------------------- | ---------------- |
+| push wall                          | 78.5 s                 | 77.0 s           |
+| upload (8 chunks) / signs (8)      | 66.5 s / 5.4 s         | 65.2 s / 6.1 s   |
+| PUTs in flight, rate               | 42.6, 35.6 per s       | 42.8, 36.3 per s |
+| CORS preflights                    | 50                     | 50               |
+| pull                               | 34.8 s                 | 43.7 s           |
+| GETs in flight, rate               | 47.3, 65 per s         | 37.1, 51 per s   |
+| floor at 24 / 48 at once           | 60 / 107 per s         | 66 / 124 per s   |
+| incremental (100 links onto 1,000) | 4.6 s                  | 5.7 s            |
+
+- **The push went from 179 s to 78 s and the pull from 74 s to 35 s**, the
+  fan-out running full: 42–47 transfers in flight of 48.
+- **The commits disappeared behind the uploads.** They still took 12.3 s, but
+  the chunks overlapped by 10 s: the push is now its signs, its uploads and its
+  last commit.
+- **The listing ran inside the downloads.** The pull's download phase covered
+  32.2 s of its 34.0 s, the four listing pages (7 s) among them.
+- **The pull is at its fan-out's rate.** 47.3 GETs in flight over a 0.67 s GET is
+  ~70 a second, and it ran 65. The floor's 0.35 s is a re-read of the same
+  objects: R2 answered a first read in ~0.65 s on both runs (`r2-get`), a second
+  in about half that.
+- **One straggler cost the `--no-sw` pull 9 s.** Its last GET took 19.5 s; every
+  other had ended at 31.9 s. A read is idempotent, so a second request for a GET
+  that runs past a few seconds — a hedge — would cut such a tail. Not made.
+- **What is left of the client's own seams**: the 8 signs (5.4 s, 7% of the push)
+  run in line before each chunk's upload, and each chunk's upload narrows to its
+  slowest PUT before the next can start.
+- **50 preflights instead of 10**: 48 PUTs leave before the first preflight's
+  answer is cached. 0.2 s in all.
+
+The bulk-edit and bulk-delete legs came after it; their first staging run is what
+settles 8.
+
+**Reading, 2026-10-19 — staging, bulk edits onto 1,000 links** (`2b19789`, service
+worker allowed, Chrome 155 on an Apple M1 Mac). Select all overshoots a size that
+is not a whole page, so 100 and 1,000 asked were 158 and 1,058 done:
+
+|                           | 10              | 158             | 1,058                          |
+| ------------------------- | --------------- | --------------- | ------------------------------ |
+| push wall                 | 4.4 s           | 10.8 s          | 37.0 s                         |
+| upload / commit           | 2.2 s / 1.0 s   | 6.3 s / 3.1 s   | 32.7 s / 5.8 s (3, overlapped) |
+| commit's `r2-stat`        | 0.6 s (`HEAD`s) | 2.5 s (listing) | 1.3 + 1.3 + 0.4 s (listing)    |
+| pull on the second device | 3.0 s           | 5.1 s           | 20.7 s                         |
+
+- **A bulk edit is its uploads.** 1,058 `links/` PUTs at ~1.05 s each, 40.2 in
+  flight of 48: ~32 a second, 88% of the push. The commits ran beside them.
+- **The existence check is not where it goes at this size**, and 8 is untouched:
+  a 1,000-link library is a few listing pages, so this reading cannot show how
+  the check grows with the library. One oddity to read again: the 158-edit
+  commit's listing (2.5 s) took longer than each 500-op chunk's (1.3 s).
+
+It justified `INDEX_CONCURRENCY` 96, and `LARGE_CONTENT_BYTES` halved to 32 KiB
+with it so a full fan-out of small content stays the 3 MiB its deadline was sized
+for (the arithmetic is at `LARGE_CONTENT_BYTES`). Not yet read: the next staging
+reading prices it.
 
 ### deferred
 

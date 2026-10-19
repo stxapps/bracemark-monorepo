@@ -3052,6 +3052,8 @@ npm run measure:sync:staging                        # dryrunbase.com, 1,000 link
 npm run measure:sync:staging -- --links 1000,5000
 npm run measure:sync:staging -- --no-sw             # the app's service worker blocked
 npm run measure:sync:staging -- --legs push         # push only (pull, incremental, floor)
+npm run measure:sync:staging -- --legs bulk-edit --bulk 10,100,500 --links 10000
+npm run measure:sync:staging -- --legs bulk-delete --delete 500
 npm run measure:sync:staging -- --no-images --cpu 4
 npm run dev && npm run measure:sync                 # the local stack, for client-side questions
 ```
@@ -3061,12 +3063,30 @@ scaled and with its preview images (**push**). A second browser signs in to it
 (**pull**, the `initial` cycle). The first imports 100 more links and the second
 opens a page whose cycle pulls them (**incremental**). Then the pull's own GET
 URLs are fetched again with no engine around them, at 6, 12, 24 and 48 at once
-(**floor**). Each leg prints its highlights, the engine's phase table, the network
+(**floor**). The first browser then bulk-edits the newest 10, 100 and 1,000 links
+(`--bulk`): Bulk edit, select, Edit tags, a new tag, Save — one `links/` put per
+link — read once on its own push and once on the second browser's pull of it
+(**bulk-edit**). Last, it moves 100 links (`--delete`) to Trash, unmeasured, and
+deletes them permanently from there: no upload, the commit carries each delete
+and removes the object itself, read on both browsers again (**bulk-delete**). A
+bulk leg reports the links it actually changed: Select all takes every loaded
+row, so it overshoots a size that is not a whole page (60 asked was 114 done on
+a 120-link library), and a small library can fall short.
+Each leg prints its highlights, the engine's phase table, the network
 by request kind and the api's Server-Timing. Each also writes
 `<leg>-<links>.spans.json`, `.network.json` and `.waterfall.json` into
 `.artifacts/measure/<run>/`, beside `results.json`. The waterfall is a Chrome
 trace: open it in ui.perfetto.dev.
 
+- **⚠ A bulk edit is only as sparse as the library is large.** The restored
+  library's link ids are scattered over the key space (`measure/library.ts`,
+  `scatterIds`), as the app's own random ids are; the seed numbers them in date
+  order, and the newest N would be adjacent keys. That matters to the commit's
+  existence check, which pages through R2 in key order
+  ([local-first-sync.md](./local-first-sync.md), _measuring a sync_, item 8): N
+  edits among L links cost about L / 1,000 listing pages. At the default 1,000
+  links every bulk commit is one page, so the sparse case needs `--links 10000`
+  or more, and a push of that size first.
 - **⚠ Staging must be running this checkout.** The spans and the header ship in
   the deployed app and api, and an older deploy has neither. The run refuses on
   the first leg when the page has no trace recorder, and notes a leg whose api

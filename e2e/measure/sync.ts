@@ -4,7 +4,13 @@ import { pathToFileURL } from 'node:url';
 
 import { type BrowserContext, expect, type Page } from '@playwright/test';
 
-import { formatSyncTraceSummary, summarizeSyncTrace, type SyncSpan } from '@stxapps/shared';
+import {
+  ALL_ID,
+  formatSyncTraceSummary,
+  summarizeSyncTrace,
+  type SyncSpan,
+  TRASH_ID,
+} from '@stxapps/shared';
 
 import { E2E_ROOT, MEASURE_OUTPUT, profileDir } from '../paths';
 import { E2E_ORIGINS, IS_STAGING } from '../runner/environment';
@@ -39,6 +45,7 @@ import {
 //   npm run measure:sync:staging -- --links 1000,5000
 //   npm run measure:sync:staging -- --no-sw           # the service worker blocked
 //   npm run measure:sync:staging -- --legs push       # just the push
+//   npm run measure:sync:staging -- --links 10000 --legs bulk-edit --bulk 100,500
 //   npm run measure:sync                              # the local stack (`npm run dev`)
 //
 // THREE INSTRUMENTS, read together per leg:
@@ -88,9 +95,25 @@ import {
 //                engine around them: the fastest this browser can move these
 //                blobs from R2. The engine's own GET rate beside it is its
 //                overhead.
+//   bulk-edit    per --bulk size (10, 100 and 1,000 by default), the first
+//                browser selects that many links in the all-links view and
+//                adds a new tag to them through Bulk edit → Edit tags — one
+//                `links/` put each — and the leg is read twice: the editing
+//                browser's push, then the second browser's pull of it.
+//   bulk-delete  the first browser moves --delete links (100) to Trash,
+//                unmeasured, then deletes them permanently from the Trash
+//                view: deletes ride the commit alone, no upload, and the
+//                commit removes the objects. Read on both browsers again.
 //
 // The floor is GET-only on purpose. A PUT floor would have to write over the
 // account's objects with bytes the app did not produce.
+//
+// THE LIBRARY'S IDS ARE SCATTERED (library.ts, `scatterIds`), as an app-minted
+// library's are. The bulk legs are where it shows: the commit's existence check
+// pages through R2's key order, so N edits among L links cost about L / 1,000
+// listing pages when they are spread out and one when they are adjacent. A
+// bulk edit is cheap at the default 1,000 links either way; the sparse case —
+// the one a large library's owner meets — needs --links 10000 or more.
 
 const LEG_TIMEOUT_MS = 60 * 60 * 1000;
 // web-react sync/trace.ts, SYNC_TRACE_FLAG — duplicated: e2e reads the app from
@@ -108,12 +131,24 @@ const STUCK_MS = 60_000;
 const FLOOR_LEVELS = [6, 12, 24, 48];
 const FLOOR_SAMPLE = 480;
 const INCREMENTAL_LINKS = 100;
-const LEGS = ['push', 'pull', 'incremental', 'floor'] as const;
+const BULK_SIZES = [10, 100, 1000];
+const BULK_DELETE_SIZE = 100;
+// Every link outside Trash, oldest-added last: `sort`/`order` are the read-only
+// URL override of the synced sort (docs/search.md), so an edit — which moves a
+// link's date MODIFIED — never reorders the rows the next size selects.
+const ALL_LINKS_VIEW = `/links?list=${ALL_ID}&sort=createdAt&order=desc`;
+const TRASH_VIEW = `/links?list=${TRASH_ID}&sort=createdAt&order=desc`;
+// useLinks' page (bracemark-web links/_hooks/use-links.ts, PAGE_SIZE): Select
+// all takes the loaded rows, and "Show more" loads this many more.
+const LINKS_PAGE = 50;
+const LEGS = ['push', 'pull', 'incremental', 'floor', 'bulk-edit', 'bulk-delete'] as const;
 type Leg = (typeof LEGS)[number];
 
 interface Options {
   links: number[];
   legs: Set<Leg>;
+  bulk: number[];
+  deleteSize: number;
   images: boolean;
   serviceWorkers: 'allow' | 'block';
   cpuRate: number;
@@ -124,6 +159,8 @@ function parseOptions(argv: string[]): Options {
   const options: Options = {
     links: [1000],
     legs: new Set(LEGS),
+    bulk: BULK_SIZES,
+    deleteSize: BULK_DELETE_SIZE,
     images: true,
     serviceWorkers: 'allow',
     cpuRate: 1,
@@ -148,6 +185,18 @@ function parseOptions(argv: string[]): Options {
       const unknown = legs.filter((leg) => !(LEGS as readonly string[]).includes(leg));
       if (unknown.length > 0) throw new Error(`unknown leg(s) ${unknown.join(', ')}`);
       options.legs = new Set(legs as Leg[]);
+    } else if (arg === '--bulk') {
+      options.bulk = value()
+        .split(',')
+        .map((part) => Number(part.replaceAll('_', '')));
+      if (options.bulk.some((n) => !Number.isInteger(n) || n < 1)) {
+        throw new Error('--bulk takes positive whole numbers, comma-separated');
+      }
+    } else if (arg === '--delete') {
+      options.deleteSize = Number(value().replaceAll('_', ''));
+      if (!Number.isInteger(options.deleteSize) || options.deleteSize < 1) {
+        throw new Error('--delete takes a positive whole number');
+      }
     } else if (arg === '--no-images') options.images = false;
     else if (arg === '--no-sw') options.serviceWorkers = 'block';
     else if (arg === '--cpu') {
@@ -166,6 +215,9 @@ function parseOptions(argv: string[]): Options {
 interface LegResult {
   leg: string;
   links: number;
+  // The links a bulk leg actually changed — Select all takes whole pages, so it
+  // can overshoot the size asked for, and a small library can fall short of it.
+  edited?: number;
   wallMs: number;
   window: { since: number; until: number };
   // Whether the app's service worker answered this page's requests.
@@ -246,7 +298,7 @@ async function measureSize(
   options: Options,
 ): Promise<LegResult[]> {
   const backup = join(runDir, `backup-${links}.zip`);
-  await writeBackupLibrary(backup, links, { images: options.images });
+  await writeBackupLibrary(backup, links, { images: options.images, scatterIds: true });
   const results: LegResult[] = [];
 
   const a = await openDevice(`measure-sync-a-${links}`, options);
@@ -269,6 +321,21 @@ async function measureSize(
       const html = join(runDir, `bookmarks-${INCREMENTAL_LINKS}.html`);
       await writeBookmarksHtml(html, INCREMENTAL_LINKS);
       results.push(await incrementalLeg(a, b, html, links, runDir, appOrigin, options));
+    }
+
+    if (options.legs.has('bulk-edit')) {
+      b ??= await openDevice(`measure-sync-b-${links}`, options, a.app.credentials);
+      for (const size of options.bulk) {
+        results.push(...(await bulkEditLeg(a, b, size, links, runDir, appOrigin, options)));
+      }
+    }
+
+    // Last: it removes links every leg before it reads.
+    if (options.legs.has('bulk-delete')) {
+      b ??= await openDevice(`measure-sync-b-${links}`, options, a.app.credentials);
+      results.push(
+        ...(await bulkDeleteLeg(a, b, options.deleteSize, links, runDir, appOrigin, options)),
+      );
     }
   } finally {
     await b?.close();
@@ -411,7 +478,22 @@ async function incrementalLeg(
   await backToDataOverview(a.app.page);
   const pushed = await waitForDrain(a.app.page);
 
-  // Device B opens a page; reaching 'ready' kicks the cycle that pulls them.
+  const result = await pullOnOpen(b, leg, links, runDir, appOrigin, options);
+  result.notes.push(...drainNotes(pushed).map((note) => `the first browser’s push: ${note}`));
+  report(result);
+  return result;
+}
+
+// Device B opens a page; reaching 'ready' kicks the cycle that pulls what the
+// other browser pushed. The leg is that one cycle, from the navigation.
+async function pullOnOpen(
+  b: Device,
+  leg: string,
+  links: number,
+  runDir: string,
+  appOrigin: string,
+  options: Options,
+): Promise<LegResult> {
   const { page } = b.app;
   const since = Date.now();
   await page.goto('/settings/data');
@@ -427,10 +509,181 @@ async function incrementalLeg(
   } finally {
     await throttle.release();
   }
-  const result = await readLeg(b, page, leg, links, since, runDir, appOrigin, cycle.end);
-  result.notes.push(...drainNotes(pushed).map((note) => `the first browser’s push: ${note}`));
-  report(result);
+  return readLeg(b, page, leg, links, since, runDir, appOrigin, cycle.end);
+}
+
+// A bulk edit as a user makes one: Bulk edit → select → Edit tags → a new tag →
+// Save. A tag the selection does not carry, so every selected link takes a
+// write (the dialog skips a link already in the target state). Read on the
+// editing browser from the Save, then on the other from its next page open.
+async function bulkEditLeg(
+  a: Device,
+  b: Device,
+  size: number,
+  links: number,
+  runDir: string,
+  appOrigin: string,
+  options: Options,
+): Promise<LegResult[]> {
+  const name = `bulk edit of ${size.toLocaleString('en-US')}`;
+  const onto = `onto ${links.toLocaleString('en-US')}`;
+  console.log(`\n${name} (${onto})`);
+  const { page } = a.app;
+  await page.goto(ALL_LINKS_VIEW);
+  await assertTraced(page);
+  const edited = await selectLinks(page, size);
+
+  await toolbarAction(page, 'Edit tags');
+  const dialog = page.getByRole('dialog', { name: 'Edit tags' });
+  const tag = `bulk-${size}-${Date.now().toString(36)}`;
+  await dialog.getByPlaceholder('Search or create tags…').fill(tag);
+  await dialog.getByRole('option', { name: `Create “${tag}”` }).click();
+  // Creating the tag is a write of its own, and its cycle would otherwise run
+  // into the measured one.
+  await waitForDrain(page);
+
+  const push = await pushAfter(a, `${name}: push (${onto})`, links, runDir, appOrigin, options, {
+    act: async () => {
+      await dialog.getByRole('button', { name: 'Save' }).click();
+      await expect(dialog).toBeHidden({ timeout: LEG_TIMEOUT_MS });
+    },
+  });
+  push.edited = edited;
+  report(push);
+
+  const pull = await pullOnOpen(b, `${name}: pull (${onto})`, links, runDir, appOrigin, options);
+  pull.edited = edited;
+  report(pull);
+  return [push, pull];
+}
+
+// A permanent bulk delete: --delete links moved to Trash (unmeasured, and
+// pulled by the other browser so its measured pull holds only the deletes),
+// then deleted from the Trash view. No upload: each path is a `delete` op the
+// commit carries, and the commit deletes the objects in R2 itself.
+async function bulkDeleteLeg(
+  a: Device,
+  b: Device,
+  size: number,
+  links: number,
+  runDir: string,
+  appOrigin: string,
+  options: Options,
+): Promise<LegResult[]> {
+  const name = `bulk delete of ${size.toLocaleString('en-US')}`;
+  const onto = `from ${links.toLocaleString('en-US')}`;
+  console.log(`\n${name} (${onto})`);
+  const { page } = a.app;
+
+  await page.goto(ALL_LINKS_VIEW);
+  await selectLinks(page, size);
+  await toolbarAction(page, 'Remove');
+  await waitForDrain(page);
+  await b.app.page.goto('/settings/data');
+  await waitForDrain(b.app.page);
+
+  await page.goto(TRASH_VIEW);
+  await assertTraced(page);
+  const deleted = await selectLinks(page, size);
+  await toolbarAction(page, 'Delete permanently');
+  const confirm = page.getByRole('alertdialog', { name: 'Delete permanently?' });
+  const push = await pushAfter(a, `${name}: push (${onto})`, links, runDir, appOrigin, options, {
+    act: async () => {
+      await confirm.getByRole('button', { name: 'Delete permanently' }).click();
+      await expect(confirm).toBeHidden({ timeout: LEG_TIMEOUT_MS });
+    },
+  });
+  push.edited = deleted;
+  report(push);
+
+  const pull = await pullOnOpen(b, `${name}: pull (${onto})`, links, runDir, appOrigin, options);
+  pull.edited = deleted;
+  report(pull);
+  return [push, pull];
+}
+
+// Read the editing browser's side of a bulk leg: `act` makes the write, and the
+// leg runs from it to a drained queue. Its own page, not a navigation — the
+// cycle under measurement keeps running and keeps its spans.
+async function pushAfter(
+  a: Device,
+  leg: string,
+  links: number,
+  runDir: string,
+  appOrigin: string,
+  options: Options,
+  { act }: { act: () => Promise<void> },
+): Promise<LegResult> {
+  const { page } = a.app;
+  const throttle = await throttleCpu(page, options.cpuRate);
+  const since = Date.now();
+  let written: number;
+  let drain: Drain;
+  try {
+    await act();
+    written = Date.now();
+    drain = await waitForDrain(page);
+  } finally {
+    await throttle.release();
+  }
+  const result = await readLeg(a, page, leg, links, since, runDir, appOrigin);
+  result.notes.push(
+    `the write (click → dialog closed) ${seconds(written - since)}; ` +
+      `sync after it ${seconds(result.window.until - written)}`,
+  );
+  result.notes.push(...drainNotes(drain));
   return result;
+}
+
+// Enter Bulk edit on the current links view and select `size` links in display
+// order: one checkbox at a time below a page, else Select all — which takes every
+// loaded row, so it can overshoot — growing the page with "Show more" until it
+// covers `size` or the view runs out. Returns how many are selected, from the
+// toolbar's own count.
+async function selectLinks(page: Page, size: number): Promise<number> {
+  await page.getByRole('button', { name: 'Bulk edit' }).click();
+  const selectAll = page.getByRole('checkbox', { name: 'Select all' });
+  await expect(selectAll).toBeVisible();
+  if (size < LINKS_PAGE) {
+    // The first unchecked row, scrolled to: the list is virtualized, so only the
+    // rows near the viewport exist to be clicked, and in display order the next
+    // unchecked one is always the next row down.
+    const unchecked = page.getByRole('checkbox', { name: 'Select link', checked: false });
+    await expect(unchecked.first()).toBeVisible();
+    while ((await selectedCount(page)) < size && (await unchecked.count()) > 0) {
+      const box = unchecked.first();
+      await box.scrollIntoViewIfNeeded();
+      await box.click();
+    }
+  } else {
+    const more = page.getByRole('button', { name: 'Show more' });
+    for (;;) {
+      if ((await selectAll.getAttribute('aria-checked')) !== 'true') await selectAll.click();
+      await expect(selectAll).toHaveAttribute('aria-checked', 'true');
+      if ((await selectedCount(page)) >= size || !(await more.isVisible())) break;
+      await more.click();
+      // The new page's rows arrive unselected, which unchecks Select all.
+      await expect(selectAll).not.toHaveAttribute('aria-checked', 'true');
+    }
+  }
+  return selectedCount(page);
+}
+
+async function selectedCount(page: Page): Promise<number> {
+  const text = await page.getByText(/^\d+ selected$/).innerText();
+  return Number.parseInt(text, 10);
+}
+
+// A bulk-edit toolbar action by name. Below the toolbar's collapse width the
+// secondary ones live in its ⋯ menu (bulk-edit-toolbar.tsx, COLLAPSE_WIDTH).
+async function toolbarAction(page: Page, name: string): Promise<void> {
+  const inline = page.getByRole('button', { name, exact: true });
+  if (await inline.isVisible()) {
+    await inline.click();
+    return;
+  }
+  await page.getByRole('button', { name: 'More actions' }).click();
+  await page.getByRole('menuitem', { name, exact: true }).click();
 }
 
 // Fetch what the pull fetched, with nothing around the fetch: see THE LEGS above.

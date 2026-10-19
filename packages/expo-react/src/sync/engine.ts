@@ -130,9 +130,10 @@ const FILES_PAGE = MAX_LIST_LIMIT;
 // Blob fan-out, split by SIZE rather than direction — web engine's constants,
 // which carry the reading behind them: a small blob is latency-bound, each
 // transfer one blob-route request whose time is nearly all the Worker waiting
-// on R2, so the rate scales with the fan-out; and the 2026-10-19 staging floor
-// held its p50 from 24 to 48 at once. Every index blob (links/tags/lists/
-// settings) is small, and so is a `files/` blob up to LARGE_CONTENT_BYTES.
+// on R2, so the rate scales with the fan-out; the 2026-10-19 staging floor
+// held its p50 from 24 to 48 at once, and 96 is the next step, not yet read.
+// Every index blob (links/tags/lists/settings) is small, and so is a `files/`
+// blob up to LARGE_CONTENT_BYTES.
 //
 // A large `files/` blob is bound by bandwidth (the native path-to-path pipeline
 // keeps memory flat, but a phone's radio saturates early), so it keeps the narrow
@@ -140,14 +141,15 @@ const FILES_PAGE = MAX_LIST_LIMIT;
 // pass) or fetched (loadEntityContents, where the size is unknown until it
 // arrives, so every content GET counts as large). Measured on web, not yet on a
 // device — tune against a large first sync there.
-const INDEX_CONCURRENCY = 48;
+const INDEX_CONCURRENCY = 96;
 const FILE_CONCURRENCY = 8;
 
 // Where a `files/` upload stops counting as small — web engine's, for the same
-// arithmetic. Here the plaintext file's size decides it before anything is read,
-// and the native upload has an idle deadline rather than a total one, so the
-// bound is the radio's share per transfer, not a timer.
-const LARGE_CONTENT_BYTES = 64 * 1024;
+// arithmetic, and halved with it when the fan-out doubled. Here the plaintext
+// file's size decides it before anything is read, and the native upload has an
+// idle deadline rather than a total one, so the bound is the radio's share per
+// transfer, not a timer.
+const LARGE_CONTENT_BYTES = 32 * 1024;
 
 // One put-pipeline pass (pushPuts) signs, uploads, and commits a single chunk, so
 // a chunk must fit BOTH the sign cap and the commit cap in one call each, and it

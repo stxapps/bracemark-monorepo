@@ -70,12 +70,22 @@ export async function writeBookmarksHtml(path: string, count: number): Promise<v
 // references a file the archive does not carry. The sync measurement
 // (measure/sync.ts) asks for them (`images: true`): there the upload IS the
 // subject, and `seed_plus_full` — the import whose push this measures — has them.
+//
+// `scatterIds` gives the links ids spread over the key space the way the app's
+// own are (web-crypto `newId`, a random UUID), where the seed numbers them
+// `seed-link-0000` upward in date order. R2 lists keys in order, and the
+// commit's existence check walks that listing (bracemark-api r2/user-files.ts
+// statMany), so with sequential ids the newest N links — what a bulk edit
+// selects — are one run of adjacent keys, a page answers all of them, and the
+// reading shows a cost no real library has. The sync measurement asks for it;
+// data.ts, which reads an import's local cost, keeps the seed's own ids.
 export async function writeBackupLibrary(
   path: string,
   count: number,
-  options: { images?: boolean } = {},
+  options: { images?: boolean; scatterIds?: boolean } = {},
 ): Promise<void> {
-  const library = buildLibrary({ ...seedUser('plus-full'), links: count }, { now: Date.now() });
+  const seeded = buildLibrary({ ...seedUser('plus-full'), links: count }, { now: Date.now() });
+  const library = options.scatterIds ? { ...seeded, items: scatterLinkIds(seeded.items) } : seeded;
   await mkdir(dirname(path), { recursive: true });
   if (options.images) {
     await writeFile(path, buildBackupArchive(library));
@@ -92,4 +102,22 @@ export async function writeBackupLibrary(
     path,
     buildBackupArchive({ items, files: [], counts: { ...library.counts, files: 0 } }),
   );
+}
+
+// Every `seed-link-<n>` — a link's path, its extraction's and its pin's, and the
+// ids inside them — renamed to `seed-link-<8 hex>`, by a bijection on n so no
+// two links collide. The hex is a 32-bit integer hash (multiply by an odd
+// constant, xor-shift, twice: each step is invertible mod 2^32), so neighbouring
+// numbers land far apart in key order. Rewritten through JSON because the id
+// recurs in paths and fields alike, and nothing else in a seeded item has that
+// shape.
+function scatterLinkIds<T>(items: T[]): T[] {
+  const json = JSON.stringify(items).replace(/seed-link-(\d+)/g, (_, digits: string) => {
+    let x = Math.imul(Number(digits), 0x9e3779b1) >>> 0;
+    x = (x ^ (x >>> 16)) >>> 0;
+    x = Math.imul(x, 0x85ebca6b) >>> 0;
+    x = (x ^ (x >>> 13)) >>> 0;
+    return `seed-link-${x.toString(16).padStart(8, '0')}`;
+  });
+  return JSON.parse(json) as T[];
 }

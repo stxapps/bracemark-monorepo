@@ -778,7 +778,7 @@ describe('the fan-out', () => {
     const LARGE = 'x'.repeat(70 * 1024);
     for (let i = 0; i < 12; i++) await seedQueued(`files/big_${i}.enc`, LARGE);
     for (let i = 0; i < 12; i++) await seedQueued(`files/small_${i}.enc`, 'tiny');
-    const maxInFlight = holdPuts((bytes) => bytes > 64 * 1024);
+    const maxInFlight = holdPuts((bytes) => bytes > 32 * 1024);
 
     await runIncrementalSync(deps());
 
