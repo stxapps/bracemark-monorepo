@@ -61,5 +61,6 @@ export * from './lib/device-extraction';
 export * from './lib/image';
 export * from './lib/query-managers';
 export * from './lib/stall-probe';
+export * from './lib/sync-trace';
 export * from './sync/engine';
 export * from './sync/r2';

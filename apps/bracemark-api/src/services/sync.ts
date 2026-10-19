@@ -11,6 +11,7 @@ import type { CommitEntry } from '../do/user-data';
 import { userDataStub } from '../do/user-data';
 import type { Bindings } from '../lib/env';
 import { checkPutQuota } from '../lib/quota';
+import { type Timer, untimed } from '../lib/server-timing';
 import { userFilesRepo } from '../r2/user-files';
 import { getQuotaCeilings } from './iap';
 
@@ -55,6 +56,7 @@ export async function signUserFileUrls(
   op: SignOp,
   paths: string[],
   requestUrl: string,
+  time: Timer = untimed,
 ): Promise<SignedUrl[]> {
   if (op === 'put') {
     // The put gate is a plan-aware COST BACKSTOP — byte and object ceilings from
@@ -70,8 +72,8 @@ export async function signUserFileUrls(
     // put: it compares CURRENT usage against the ceilings, which is what freed
     // this path from the per-batch existence check it used to make.
     const [usage, ceilings] = await Promise.all([
-      userDataStub(env, userId).usage(),
-      getQuotaCeilings(env, userId),
+      time('do-usage', () => userDataStub(env, userId).usage()),
+      time('d1-ceilings', () => getQuotaCeilings(env, userId)),
     ]);
     checkPutQuota(ceilings, usage);
   }
@@ -79,7 +81,9 @@ export async function signUserFileUrls(
   const method = op === 'put' ? 'PUT' : 'GET';
   const expiresIn = op === 'put' ? PUT_URL_TTL_SECONDS : GET_URL_TTL_SECONDS;
 
-  return userFilesRepo(env).presignUrls(userId, paths, method, expiresIn, requestUrl);
+  return time('presign', () =>
+    userFilesRepo(env).presignUrls(userId, paths, method, expiresIn, requestUrl),
+  );
 }
 
 // Record committed mutations (POST /v1/ops/commit) — the R2-first, log-last
@@ -104,24 +108,27 @@ export async function commitOps(
   env: Bindings,
   userId: string,
   ops: CommitOp[],
+  time: Timer = untimed,
 ): Promise<OpsCommitResponse> {
   const repo = userFilesRepo(env);
   const now = Date.now();
 
-  await repo.deleteMany(
-    userId,
-    ops.filter((o) => o.op === 'delete').map((o) => o.path),
-  );
+  const deletes = ops.filter((o) => o.op === 'delete').map((o) => o.path);
+  await time('r2-delete', () => repo.deleteMany(userId, deletes));
 
-  const resolved = await Promise.all(
-    ops.map(async ({ op, path }): Promise<CommitEntry | CommitFailure> => {
-      if (op === 'delete') return { op, path, updatedAt: now, size: 0 };
+  // `r2-heads` is the fan-out's wall time, `r2-head` the sum of its calls
+  // (lib/server-timing.ts).
+  const resolved = await time('r2-heads', () =>
+    Promise.all(
+      ops.map(async ({ op, path }): Promise<CommitEntry | CommitFailure> => {
+        if (op === 'delete') return { op, path, updatedAt: now, size: 0 };
 
-      const object = await repo.head(userId, path);
-      if (!object) return { path, reason: 'no_object' }; // op-without-object invariant
+        const object = await time('r2-head', () => repo.head(userId, path));
+        if (!object) return { path, reason: 'no_object' }; // op-without-object invariant
 
-      return { op, path, updatedAt: object.updatedAt, size: object.size };
-    }),
+        return { op, path, updatedAt: object.updatedAt, size: object.size };
+      }),
+    ),
   );
 
   const entries: CommitEntry[] = [];
@@ -133,7 +140,7 @@ export async function commitOps(
 
   if (entries.length === 0) return { results: [], failed };
 
-  const { results } = await userDataStub(env, userId).commitOps(entries);
+  const { results } = await time('do-commit', () => userDataStub(env, userId).commitOps(entries));
   return { results, failed };
 }
 

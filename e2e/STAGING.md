@@ -76,7 +76,10 @@ through to a `wrangler login` session.
   declared none (`seed/d1.ts`), and the registry allows the declaration on web
   and browser-extension cases only — the two runners that carry the preflight.
   So the native runner, the account seed and an undeclared case are all still
-  refused.
+  refused. **The one door outside the registry is `npm run measure:sync:staging`**
+  (`measure/sync.ts`, below), which needs Plus for a 1,000-link library and is a
+  measurement, not a case. It runs the same preflight before it creates an
+  account, and marks only its own process.
 - **It cannot spell production.** The statement is addressed to the
   `database_id` committed under `env.staging` in the api's `wrangler.jsonc`, in
   the account `apps/bracemark-api/.env.staging.local` names. The other tier's
@@ -471,3 +474,19 @@ under this policy.
 Runner checks passed 6/6, browser and header-comparison checks 6/6, registry
 validation passed for 161 cases, and scoped lint/typecheck passed. Two local
 smoke cases passed with the guard in place, under no CSP.
+
+## Sync measurement
+
+```sh
+npm run measure:sync:staging                      # 1,000 links: push, pull, incremental, floor
+npm run measure:sync:staging -- --links 1000,5000
+npm run measure:sync:staging -- --no-sw           # the app's service worker blocked
+```
+
+Where a sync spends its time, against the deployed app, api and R2
+(`docs/e2e.md`, _the sync leg_; `docs/local-first-sync.md`, _measuring a sync_).
+**Deploy this checkout's bracemark-web and bracemark-api to staging first**: the
+engine's timing spans and the api's `Server-Timing` header ship in them, and the
+run stops on the first leg against an older deploy. It needs the plan-grant
+credential above. Each run leaves two disposable Plus accounts, each holding the
+measured library.

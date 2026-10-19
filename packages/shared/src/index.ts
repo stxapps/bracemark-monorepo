@@ -66,6 +66,7 @@ export * from './sync/rank';
 export * from './sync/sort';
 export * from './sync/status';
 export * from './sync/system-lists';
+export * from './sync/trace';
 export * from './sync/tree';
 export * from './sync/tree-dnd';
 export * from './theme/theme';

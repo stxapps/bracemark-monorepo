@@ -14,6 +14,7 @@ import {
 
 import { userDataStub } from '../do/user-data';
 import type { AppEnv } from '../lib/env';
+import { timerFor } from '../lib/server-timing';
 import { requireAuth } from '../middleware/auth';
 import { rateLimit, userRateLimitKey } from '../middleware/rate-limit';
 import { commitOps, listUserFiles, signUserFileUrls } from '../services/sync';
@@ -42,7 +43,9 @@ export const syncRoutes = new Hono<AppEnv>()
     const { userId } = c.get('session');
     // One R2 page per call; the client pages via nextPageToken (R2's opaque list
     // cursor) until it's null. See docs/local-first-sync.md "fallback full sync".
-    const body: FilesListResponse = await listUserFiles(c.env, userId, pageToken, limit);
+    const body: FilesListResponse = await timerFor(c)('r2-list', () =>
+      listUserFiles(c.env, userId, pageToken, limit),
+    );
     return c.json(body);
   })
   // --- files/sign — mint presigned R2 URL(s) -------------------------------
@@ -59,7 +62,7 @@ export const syncRoutes = new Hono<AppEnv>()
       // `c.req.url` rides along for the local-dev blob proxy only, which mints URLs
       // back to THIS Worker and so has to name the origin the caller just used —
       // localhost from the Mac, the Mac's LAN IP from a physical iPhone (r2/local.ts).
-      const urls = await signUserFileUrls(c.env, userId, op, paths, c.req.url);
+      const urls = await signUserFileUrls(c.env, userId, op, paths, c.req.url, timerFor(c));
       const body: FilesSignResponse = { urls };
       return c.json(body);
     },
@@ -70,10 +73,8 @@ export const syncRoutes = new Hono<AppEnv>()
     const { userId } = c.get('session');
     // The DO owns the keyset query + retained-range bounds; the client routes
     // incremental-vs-fallback on the bounds it returns.
-    const body: OpsListResponse = await userDataStub(c.env, userId).listOps(
-      since ?? null,
-      sincePath ?? null,
-      limit,
+    const body: OpsListResponse = await timerFor(c)('do-list', () =>
+      userDataStub(c.env, userId).listOps(since ?? null, sincePath ?? null, limit),
     );
     return c.json(body);
   })
@@ -93,7 +94,7 @@ export const syncRoutes = new Hono<AppEnv>()
       // every puller), so `results` omits it and the client retries. The contract
       // caps `ops` at MAX_COMMIT_OPS, sized so the HEADs fit the invocation's
       // subrequest budget; over the cap zValidator 400s before any work runs.
-      const body: OpsCommitResponse = await commitOps(c.env, userId, ops);
+      const body: OpsCommitResponse = await commitOps(c.env, userId, ops, timerFor(c));
       return c.json(body);
     },
   );

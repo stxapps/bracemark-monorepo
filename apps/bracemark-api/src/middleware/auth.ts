@@ -7,6 +7,7 @@ import { sessionsRepo } from '../db/repositories/sessions';
 import type { AppEnv } from '../lib/env';
 import { HttpError } from '../lib/errors';
 import { hashToken } from '../lib/ids';
+import { timerFor } from '../lib/server-timing';
 import { renewSession, SESSION_IDLE_MS, SESSION_SLIDE_MS } from '../services/session';
 
 // Auth guard. Applied to protected routes (not globally), e.g.
@@ -37,7 +38,10 @@ export const requireAuth = createMiddleware<AppEnv>(async (c, next) => {
   // One server timestamp for the whole decision: the expiry check and the
   // renewal must agree on what "now" is.
   const now = Date.now();
-  const session = await sessionsRepo(c.env.SESSIONS_DB).findByTokenHash(await hashToken(token));
+  const tokenHash = await hashToken(token);
+  const session = await timerFor(c)('auth', () =>
+    sessionsRepo(c.env.SESSIONS_DB).findByTokenHash(tokenHash),
+  );
   if (!session) {
     throw new HttpError(401, SESSION_ERROR.unknown, 'Unknown session');
   }

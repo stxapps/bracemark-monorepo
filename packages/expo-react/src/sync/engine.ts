@@ -54,6 +54,7 @@ import {
   MAX_COMMIT_OPS,
   MAX_LIST_LIMIT,
   MAX_SIGN_PATHS,
+  NO_TRACE,
   type OpEntry,
   opsCommitEndpoint,
   opsListEndpoint,
@@ -62,7 +63,10 @@ import {
   recordBlocked,
   sessionVerdictFromResponse,
   type SignOp,
+  syncNamespace,
   type SyncOutcome,
+  type SyncTrace,
+  traceApi,
   untilAborted,
   withRetry,
 } from '@stxapps/shared';
@@ -180,7 +184,17 @@ interface Entry {
 // that still fails after the retries surfaces exactly as before. Wrapped per
 // flow (not stored) so SyncDeps stays a plain value the callers construct freely.
 function withRetryDeps(deps: SyncDeps): SyncDeps {
-  return { ...deps, api: withRetry(deps.api) };
+  return { ...deps, api: withRetry(traceApi(deps.api, trace)) };
+}
+
+// The timing spans `measure:sync` reads (@stxapps/shared sync/trace.ts) — web
+// engine's `trace`, which carries why it is module state. NO_TRACE unless
+// installed; lib/sync-trace.ts installs a recorder in a bundle built with
+// EXPO_PUBLIC_SYNC_TRACE=1.
+let trace: SyncTrace = NO_TRACE;
+
+export function installSyncTrace(next: SyncTrace | undefined): void {
+  trace = next ?? NO_TRACE;
 }
 
 // A cycle that will write at least this many paths holds live reads
@@ -279,6 +293,10 @@ async function initialSyncOnce(deps: SyncDeps, onProgress: InitialSyncProgressFn
   // again would be a pull running where cycles are allowed.
   if (await isFirstSyncDone(deps.username)) return;
   deps = withRetryDeps(deps);
+  await trace.span('cycle', () => initialPull(deps, onProgress), { kind: 'initial' });
+}
+
+async function initialPull(deps: SyncDeps, onProgress: InitialSyncProgressFn): Promise<void> {
   // The bookkeeping row is claimed before this runs, under the lifecycle lock
   // (sync-store.ts, claimIfStillSignedIn). The engine never claims it: a stale
   // cycle must not recreate the row a teardown dropped.
@@ -349,12 +367,14 @@ async function withCycleLock<T>(
   void tail.then(() => {
     if (cycleLockTails.get(username) === tail) cycleLockTails.delete(username);
   });
+  const asked = trace.now();
   try {
     await untilAborted(before, signal);
   } catch (err) {
     release();
     throw err;
   }
+  if (trace.enabled) trace.record({ name: 'cycle.lock', start: asked, end: trace.now() });
   try {
     return await run();
   } finally {
@@ -459,7 +479,7 @@ async function runCycle(deps: SyncDeps): Promise<SyncOutcome> {
   // sentinel).
   const since = meta.syncCursorUpdatedAt;
   const sincePath = meta.syncCursorPath;
-  const pending = await listPendingOps(deps.username);
+  const pending = await trace.span('queue.read', () => listPendingOps(deps.username));
 
   // Peek the first page: its retained-range bounds decide incremental vs.
   // fallback before we commit to paging the op log.
@@ -472,9 +492,17 @@ async function runCycle(deps: SyncDeps): Promise<SyncOutcome> {
   if (needsFallback(since, first)) {
     // `first` was answered before the listing the fallback is about to take, so
     // its newest stamp is the high-water mark that listing will reflect.
-    await fallbackCycle(deps, pending, outcome, first.newestUpdatedAt ?? 0);
+    await trace.span(
+      'cycle',
+      () => fallbackCycle(deps, pending, outcome, first.newestUpdatedAt ?? 0),
+      { kind: 'fallback', pending: pending.length },
+    );
   } else {
-    await incrementalCycle(deps, since, sincePath, first, pending, outcome);
+    await trace.span(
+      'cycle',
+      () => incrementalCycle(deps, since, sincePath, first, pending, outcome),
+      { kind: 'incremental', pending: pending.length },
+    );
   }
   return outcome;
 }
@@ -845,7 +873,17 @@ async function pushPending(
   outcome: SyncOutcome,
 ): Promise<string[]> {
   if (ops.length === 0) return [];
+  return trace.span('push', () => pushPhases(deps, ops, outcome), {
+    puts: ops.filter((o) => o.op === 'put').length,
+    deletes: ops.filter((o) => o.op === 'delete').length,
+  });
+}
 
+async function pushPhases(
+  deps: SyncDeps,
+  ops: PendingOpRecord[],
+  outcome: SyncOutcome,
+): Promise<string[]> {
   const puts = ops.filter((o) => o.op === 'put');
   const deletes = ops.filter((o) => o.op === 'delete');
   const orphanedPaths: string[] = [];
@@ -928,7 +966,10 @@ async function pushPuts(
   failures: UploadFailures,
 ): Promise<boolean> {
   let unsigned = puts.length;
+  // Homogeneous by contract (the caller splits the kinds), so the first op names it.
+  const kind = puts.length > 0 && isContentPath(puts[0].path) ? 'content' : 'index';
   for (const batch of chunk(puts, batchSize)) {
+    const chunkStart = trace.now();
     const signed = await signPushable(deps, batch, outcome);
     unsigned -= batch.length;
     // The quota gate refuses on the account's usage, never on which paths a
@@ -939,12 +980,10 @@ async function pushPuts(
       recordBlocked(outcome, unsigned);
       return true;
     }
-    const { orphaned, failed, superseded } = await uploadBlobs(
-      deps,
-      signed.ops,
-      signed.urls,
-      concurrency,
-      failures,
+    const { orphaned, failed, superseded } = await trace.span(
+      'upload',
+      () => uploadBlobs(deps, signed.ops, signed.urls, concurrency, failures),
+      { ops: signed.ops.length, concurrency },
     );
     // A put with nothing local left to send (see uploadBlobs) can never be
     // satisfied, so it is dropped from the queue rather than committed into a
@@ -977,6 +1016,10 @@ async function pushPuts(
       uploaded = uploaded.filter((o) => !skipped.has(o.path));
     }
     await commitBatched(deps, uploaded);
+    if (trace.enabled) {
+      const attrs = { kind, ops: batch.length };
+      trace.record({ name: 'push.chunk', start: chunkStart, end: trace.now(), attrs });
+    }
   }
   return false;
 }
@@ -1050,15 +1093,21 @@ async function signPushable(
 // its own older base, which local-wins reconcile never reads against it.
 async function commitBatched(deps: SyncDeps, ops: PendingOpRecord[]): Promise<void> {
   for (const batch of chunk(ops, COMMIT_BATCH)) {
-    const { results } = await deps.api.call(opsCommitEndpoint, {
-      ops: batch.map((o) => ({ op: o.op, path: o.path })),
-    });
-    // All of a batch's restamps ride one transaction (stampItemUpdatedAts) rather
-    // than a statement-per-result round trip; each row-gone stamp is still a no-op.
-    await stampItemUpdatedAts(deps.username, results);
-    const accepted = new Set(results.map((r) => r.path));
-    await clearDrainedOps(batch.filter((o) => accepted.has(o.path)));
+    await trace.span('commit', () => commitOne(deps, batch), { ops: batch.length });
   }
+}
+
+async function commitOne(deps: SyncDeps, batch: PendingOpRecord[]): Promise<void> {
+  const { results } = await deps.api.call(opsCommitEndpoint, {
+    ops: batch.map((o) => ({ op: o.op, path: o.path })),
+  });
+  // All of a batch's restamps ride one transaction (stampItemUpdatedAts) rather
+  // than a statement-per-result round trip; each row-gone stamp is still a no-op.
+  await trace.span('commit.restamp', () => stampItemUpdatedAts(deps.username, results));
+  const accepted = new Set(results.map((r) => r.path));
+  await trace.span('commit.clear', () =>
+    clearDrainedOps(batch.filter((o) => accepted.has(o.path))),
+  );
 }
 
 // Encrypt and PUT each op's local blob to its signed URL. This is where the
@@ -1125,7 +1174,7 @@ async function uploadBlobs(
     failures.firstError ??= err;
   };
   await mapLimit(ops, concurrency, async (op) => {
-    const { row: rec, stillQueued } = await getItemForOp(op);
+    const { row: rec, stillQueued } = await trace.span('blob.read', () => getItemForOp(op));
     if (!stillQueued) {
       superseded.push(op);
       return;
@@ -1147,8 +1196,13 @@ async function uploadBlobs(
 
       const enc = newTempEncFile();
       try {
-        await encryptFile(plain.uri, enc.uri, deps.encryptionKey, op.path);
-        await putBlobFromFile(url, enc);
+        await trace.span('blob.encrypt', () =>
+          encryptFile(plain.uri, enc.uri, deps.encryptionKey, op.path),
+        );
+        await trace.span('blob.put', () => putBlobFromFile(url, enc), {
+          bytes: enc.size,
+          ns: syncNamespace(op.path),
+        });
       } catch (err) {
         recordFailure(op, err);
       } finally {
@@ -1165,8 +1219,15 @@ async function uploadBlobs(
     const url = urls.get(op.path);
     if (!url) return;
 
+    const data = rec.data;
     try {
-      await putBlob(url, await encryptEntity(deps.encryptionKey, rec.data, op.path));
+      const sealed = await trace.span('blob.encrypt', () =>
+        encryptEntity(deps.encryptionKey, data, op.path),
+      );
+      await trace.span('blob.put', () => putBlob(url, sealed), {
+        bytes: sealed.byteLength,
+        ns: syncNamespace(op.path),
+      });
     } catch (err) {
       recordFailure(op, err);
     }
@@ -1189,7 +1250,16 @@ async function storeDownloads(
   onProgress?: InitialSyncProgressFn,
 ): Promise<void> {
   if (entries.length === 0) return;
+  await trace.span('pull', () => storeDownloadsTraced(deps, entries, onProgress), {
+    entries: entries.length,
+  });
+}
 
+async function storeDownloadsTraced(
+  deps: SyncDeps,
+  entries: Entry[],
+  onProgress?: InitialSyncProgressFn,
+): Promise<void> {
   // Skip paths whose local record is already current (same-or-newer server
   // stamp, with the decrypted bytes present for an index path). That makes a
   // re-run of an interrupted first sync RESUME instead of re-downloading
@@ -1235,9 +1305,55 @@ async function storeDownloads(
   let done = 0;
   // Hoisted out of the batch loop below so the per-entry callback closes over a
   // `const` — a closure declared inside the loop that incremented `done` itself
-  // reads to no-loop-func as a stale-capture bug, which it isn't here.
+  // reads to no-loop-func as a stale-capture bug, which it isn't here. The
+  // per-entry pull is hoisted with it, for the same reason over the module's
+  // `trace`.
   const tick = () => onProgress?.(++done, index.length);
   if (index.length > 0) onProgress?.(done, index.length);
+
+  // `finally`, so the two skips below tick the counter too: an entry dropped
+  // for a missing URL or a mid-pull 404 still leaves the pull with one fewer
+  // thing to do, and a counter that ignored them would stop short of its
+  // total and read as a hang on the one screen the user is watching. The
+  // increment is safe unsynchronized — these callbacks interleave at await
+  // points, they don't run in parallel.
+  const pullOne = async (e: Entry, url: string | undefined): Promise<void> => {
+    try {
+      if (!url) return;
+
+      const blob = await trace.span(
+        'blob.get',
+        (note) =>
+          getBlob(url).then(
+            (bytes) => {
+              note({ bytes: bytes.byteLength });
+              return bytes;
+            },
+            (err: unknown) => {
+              // Deleted between the op pull / listing and this GET: the delete op
+              // sits past our window and reconciles next sync — skip it, don't fail
+              // the cycle.
+              if (err instanceof BlobRequestError && err.status === 404) return undefined;
+              throw err;
+            },
+          ),
+        { ns: syncNamespace(e.path) },
+      );
+      if (!blob) return;
+
+      const data = await trace.span('blob.decrypt', () => openPulled(deps, blob, e.path));
+      if (!data) return;
+      // Per record, not per batch: each arrives after its own GET, so this is the
+      // largest group that can share one transaction with its queue check without
+      // holding decrypted blobs in memory or losing the resume-where-interrupted
+      // property the staleness skip above depends on.
+      await trace.span('blob.store', () =>
+        putItemsUnqueued(deps.username, [toItemRecord(e.path, e.updatedAt, data)]),
+      );
+    } finally {
+      tick();
+    }
+  };
 
   // Index: sign → GET → decrypt → store one chunk at a time, so the presigned-URL
   // map never grows past a single batch (a large first sync holds ~1k URLs, not
@@ -1251,37 +1367,11 @@ async function storeDownloads(
       'get',
       batch.map((e) => e.path),
     );
-    await mapLimit(batch, INDEX_CONCURRENCY, async (e) => {
-      // `finally`, so the two skips below tick the counter too: an entry dropped
-      // for a missing URL or a mid-pull 404 still leaves the pull with one fewer
-      // thing to do, and a counter that ignored them would stop short of its
-      // total and read as a hang on the one screen the user is watching. The
-      // increment is safe unsynchronized — these callbacks interleave at await
-      // points, they don't run in parallel.
-      try {
-        const url = urls.get(e.path);
-        if (!url) return;
-
-        const blob = await getBlob(url).catch((err: unknown) => {
-          // Deleted between the op pull / listing and this GET: the delete op sits
-          // past our window and reconciles next sync — skip it, don't fail the
-          // cycle.
-          if (err instanceof BlobRequestError && err.status === 404) return;
-          throw err;
-        });
-        if (!blob) return;
-
-        const data = await openPulled(deps, blob, e.path);
-        if (!data) return;
-        // Per record, not per batch: each arrives after its own GET, so this is the
-        // largest group that can share one transaction with its queue check without
-        // holding decrypted blobs in memory or losing the resume-where-interrupted
-        // property the staleness skip above depends on.
-        await putItemsUnqueued(deps.username, [toItemRecord(e.path, e.updatedAt, data)]);
-      } finally {
-        tick();
-      }
-    });
+    await trace.span(
+      'download',
+      () => mapLimit(batch, INDEX_CONCURRENCY, (e) => pullOne(e, urls.get(e.path))),
+      { entries: batch.length, concurrency: INDEX_CONCURRENCY },
+    );
   }
 }
 
@@ -1330,6 +1420,12 @@ async function openFetchedFile(deps: SyncDeps, enc: File, path: string): Promise
 // guard still has a queued op, and that op's upload reads the plaintext file.
 async function applyDeletes(username: string, paths: string[]): Promise<void> {
   if (paths.length === 0) return;
+  await trace.span('deletes.apply', () => applyDeletesNow(username, paths), {
+    paths: paths.length,
+  });
+}
+
+async function applyDeletesNow(username: string, paths: string[]): Promise<void> {
   // Rows (plus junction rows) first, disk files after — the fail-safe direction
   // (clear-data.ts): a crash in between leaves orphan files no row points at.
   const deleted = await deleteItemsUnqueued(username, paths);

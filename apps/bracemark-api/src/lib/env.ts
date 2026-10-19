@@ -1,4 +1,5 @@
 import type { UserDataDO } from '../do/user-data';
+import type { ServerTimings } from './server-timing';
 
 // Typed Workers runtime context for the whole app. Hono is parameterized with
 // `AppEnv` (see app.ts), so `c.env` (bindings) and `c.var` (request-scoped
@@ -128,6 +129,10 @@ export type Bindings = {
   API_RATE_LIMIT: RateLimit; // standard tier
   API_RATE_LIMIT_TIGHT: RateLimit; // tight tier (sensitive endpoints)
   API_RATE_LIMIT_WEBHOOK: RateLimit; // wide tier (sole limiter for the Paddle webhook)
+
+  // "1" adds a Server-Timing header to every response (lib/server-timing.ts).
+  // Set in development and staging only; unset is off.
+  SERVER_TIMING?: string;
 };
 
 // The session resolved by the auth guard (middleware/auth.ts) and read by
@@ -142,6 +147,8 @@ export type SessionContext = {
 
 export type Variables = {
   session: SessionContext;
+  // Present only while SERVER_TIMING is on (lib/server-timing.ts).
+  serverTimings?: ServerTimings;
 };
 
 // The single Hono generic used across the app: `new Hono<AppEnv>()`.

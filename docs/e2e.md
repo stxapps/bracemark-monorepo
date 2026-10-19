@@ -3036,6 +3036,70 @@ What each design choice protects against:
   a Chrome that moved the method would fail loudly, not hang on an invisible
   dialog.
 
+#### the sync leg — `measure:sync`
+
+`e2e/measure/sync.ts` breaks a bracemark-web sync down by phase, by request and
+by server call, so a fix goes where the time actually is. The instruments, what
+each reading settles, and the reasons behind them are in
+[local-first-sync.md](./local-first-sync.md), _measuring a sync_. This section is
+how to run it.
+
+```sh
+npm run measure:sync:staging                        # dryrunbase.com, 1,000 links, all four legs
+npm run measure:sync:staging -- --links 1000,5000
+npm run measure:sync:staging -- --no-sw             # the app's service worker blocked
+npm run measure:sync:staging -- --legs push         # push only (pull, incremental, floor)
+npm run measure:sync:staging -- --no-images --cpu 4
+npm run dev && npm run measure:sync                 # the local stack, for client-side questions
+```
+
+Per size: a fresh Plus account restores a backup of `seed_plus_full`'s shape,
+scaled and with its preview images (**push**). A second browser signs in to it
+(**pull**, the `initial` cycle). The first imports 100 more links and the second
+opens a page whose cycle pulls them (**incremental**). Then the pull's own GET
+URLs are fetched again with no engine around them, at 6, 12, 24 and 48 at once
+(**floor**). Each leg prints its highlights, the engine's phase table, the network
+by request kind and the api's Server-Timing. Each also writes
+`<leg>-<links>.spans.json`, `.network.json` and `.waterfall.json` into
+`.artifacts/measure/<run>/`, beside `results.json`. The waterfall is a Chrome
+trace: open it in ui.perfetto.dev.
+
+- **⚠ Staging must be running this checkout.** The spans and the header ship in
+  the deployed app and api, and an older deploy has neither. The run refuses on
+  the first leg when the page has no trace recorder, and notes a leg whose api
+  responses carried no Server-Timing.
+- **The local stack can't answer the network question.** Blob bytes go through
+  the api there (no presigned R2, no R2 CORS, no R2 protocol), and the dev server
+  registers no service worker. A local reading prices the client: IndexedDB, the
+  engine, re-renders. Specimen, 2026-10-19: 1,000 links (2,363 files) pushed in
+  9 s locally, with 2,365 CORS preflights (one per PUT), against roughly ten minutes
+  reported against staging. That puts the missing time on the real path.
+- **The window opens at the file pick, not at the receipt.** An import kicks
+  cycles while it is still writing, so the push starts before the import ends.
+  The report splits the two.
+- **Settled is read from IndexedDB and the trace, without navigating.** The
+  pending-ops count reads `bracemark-data`/`pendingOps`, and the queue has to be
+  empty with a cycle finished since and no new span for 2 s. `waitForSync`
+  (`seed/steps.ts`) navigates, and a reload aborts the cycle under measurement
+  and drops its spans with the document. A queue that sits still for a minute
+  gets "Sync now", and the nudge is reported: the engine should never need one.
+- **A request answered and then aborted is not a failure.** The R2 helpers abort
+  their deadline's signal once a transfer settles, so Chrome reports most blob
+  requests as canceled after a 200. They are counted as `aborted after the
+answer`, because an abort before the body drains can cost the socket. Watch the
+  socket count.
+- **The floor is GET-only, and its URLs never touch disk.** A PUT floor would
+  overwrite the account's objects with bytes the app didn't write. A GET URL is a
+  credential for an hour, so `network.ts` keeps only origin + path in every file
+  it writes.
+- **The plan grant on staging** is `measure/sync.ts`'s own door into staging D1,
+  with the same preflight as the web runner ([STAGING.md](../e2e/STAGING.md)).
+- **bracemark-expo has the same spans and no runner yet.** Build the bundle with
+  `EXPO_PUBLIC_SYNC_TRACE=1` in Metro's environment, and every cycle prints a
+  `[sync-trace]` table to Metro or the device log
+  ([env-files.md](./env-files.md), _bracemark-expo_). Import through the app and
+  read the push's cycles there.
+
 #### the native leg — `measure:native`
 
 `e2e/measure/native.ts` measures the same flows on bracemark-expo through Maestro:

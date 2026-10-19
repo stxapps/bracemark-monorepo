@@ -24,7 +24,12 @@ import { getSession } from '../data/session-store';
 import { claimIfStillSignedIn, isFirstSyncDone } from '../data/sync-store';
 import { useUpdateRequired } from '../hooks/use-update-required';
 import { runIncrementalSync, runInitialSync, type SyncDeps } from '../sync/engine';
+import { installSyncTraceFromFlag } from '../sync/trace';
 import { useAuth } from './auth-provider';
+
+// The timing spans `measure:sync` reads, when this browser's flag asks for them
+// (sync/trace.ts). At module scope so the recorder is in place before any cycle.
+installSyncTraceFromFlag();
 
 // Sync state for the signed-in app — deliberately SEPARATE from auth state (see
 // auth-provider). Auth answers "do you have a session?" and drives redirects;

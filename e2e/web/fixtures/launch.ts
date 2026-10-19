@@ -83,6 +83,11 @@ export interface LaunchOptions {
   // starts the moment its sign-in lands, inside this function, so a route added
   // after `launchApp` returns is already too late for it (SYNC-LISTING-001).
   prepare?: (context: BrowserContext) => Promise<void>;
+  // Keep the app's service worker from registering. Only the sync measurement
+  // (measure/sync.ts) asks: a production build's worker carries every
+  // cross-origin request, R2's included, and blocking it is how that run
+  // prices the worker and sees the requests it otherwise hides.
+  serviceWorkers?: 'allow' | 'block';
 }
 
 export async function launchApp(
@@ -107,6 +112,7 @@ export async function launchApp(
     // when a failure needs eyeballing.
     deviceScaleFactor: options.deviceScaleFactor ?? 2,
     viewport: { width: 1280, height: 900 },
+    ...(options.serviceWorkers ? { serviceWorkers: options.serviceWorkers } : {}),
   });
 
   // Before the account ceremony: Argon2's wasm and its blob-started worker are

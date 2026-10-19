@@ -63,21 +63,31 @@ export async function writeBookmarksHtml(path: string, count: number): Promise<v
 // generator at the `plus-full` shape (nested lists, tags, pins, Archive and
 // Trash, an extraction per link), scaled to `count` links.
 //
-// WITHOUT the preview images. They are files the restore writes one at a time
-// and the sync then uploads — bandwidth and IndexedDB, not main-thread work, and
-// at 10,000 links they would turn the run into a half-hour wait for local R2.
-// Every extraction's `imageId` goes with them, so no link references a file the
-// archive does not carry.
-export async function writeBackupLibrary(path: string, count: number): Promise<void> {
+// WITHOUT the preview images by default. They are files the restore writes one
+// at a time and the sync then uploads — bandwidth and IndexedDB, not main-thread
+// work, and at 10,000 links they would turn the data-path run into a half-hour
+// wait for local R2. Every extraction's `imageId` goes with them, so no link
+// references a file the archive does not carry. The sync measurement
+// (measure/sync.ts) asks for them (`images: true`): there the upload IS the
+// subject, and `seed_plus_full` — the import whose push this measures — has them.
+export async function writeBackupLibrary(
+  path: string,
+  count: number,
+  options: { images?: boolean } = {},
+): Promise<void> {
   const library = buildLibrary({ ...seedUser('plus-full'), links: count }, { now: Date.now() });
+  await mkdir(dirname(path), { recursive: true });
+  if (options.images) {
+    await writeFile(path, buildBackupArchive(library));
+    return;
+  }
+
   const items = library.items.map((item) => {
     if (!item.path.startsWith(EXTRACTIONS_PREFIX)) return item;
     const extraction: Extraction = { ...(item.data as Extraction) };
     delete extraction.imageId;
     return { path: item.path, data: extraction };
   });
-
-  await mkdir(dirname(path), { recursive: true });
   await writeFile(
     path,
     buildBackupArchive({ items, files: [], counts: { ...library.counts, files: 0 } }),

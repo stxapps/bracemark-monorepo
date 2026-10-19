@@ -508,6 +508,12 @@ Current public vars:
   purpose.** Only `npm run measure:native` sets it, in the environment of the
   Metro it starts, so a shipped build compiles the check to nothing
   ([e2e.md](./e2e.md), _the native leg_).
+- `EXPO_PUBLIC_SYNC_TRACE` → `1` installs the sync engine's timing recorder
+  (`lib/sync-trace.ts`, started in `src/app/_layout.tsx`), which prints each
+  cycle's phase table to the log as `[sync-trace]`. Same arrangement as the stall
+  probe: it is in no env file, and you set it in Metro's environment for a
+  measuring run ([local-first-sync.md](./local-first-sync.md), _measuring a
+  sync_).
 
 **A physical iPhone is the one target `localhost` cannot serve, and
 `npm run start:lan` (or the first `.env.local` pair) is where that is fixed.** Both default URLs are `localhost`
@@ -618,6 +624,11 @@ on Workers (`src/worker.ts`, `export default app`) — there is no Node entry.
 default. On Workers `c.env` is the source; the `process.env` fallback only covers
 non-Workers callers like `app.request()` in jest tests. `globalThis.process`
 (not bare `process`) keeps it safe on Workers, which has no `process` global.
+
+**`SERVER_TIMING`** is `"1"` in the `development` and `staging` vars and absent
+from `production`'s. It adds the Server-Timing breakdown to every response
+(`src/lib/server-timing.ts`; [local-first-sync.md](./local-first-sync.md),
+_measuring a sync_). To measure production, set it there.
 
 **Per-environment values live in `wrangler.jsonc`**, as three wrangler
 environments matching the project's tiers — `development` / `staging` /

@@ -133,6 +133,9 @@
         "R2_ACCESS_KEY_ID": "local-access-key-id",
         "R2_SECRET_ACCESS_KEY": "local-secret-access-key",
         "R2_USER_FILES_BUCKET": "bracemark-user-files-dev",
+        // The Server-Timing breakdown (src/lib/server-timing.ts) — on here and in
+        // staging, where sync is measured; production leaves it unset.
+        "SERVER_TIMING": "1",
         // Paddle Billing (routes/iap.ts). Local dev talks to the SANDBOX; the
         // price ids are the sandbox catalog's pri_… ids (Plus exists; Pro is a
         // placeholder until its sandbox product does). The webhook secret + API
@@ -289,6 +292,9 @@
         // Mint the keys in the R2 dashboard (Manage R2 API Tokens) scoped to the
         // bucket below. See docs/hosting.md.
         "R2_USER_FILES_BUCKET": "bracemark-user-files-staging",
+        // The Server-Timing breakdown (src/lib/server-timing.ts) — on here, where
+        // `measure:sync` runs; production leaves it unset.
+        "SERVER_TIMING": "1",
         // Paddle Billing — staging uses the Paddle SANDBOX (separate account,
         // separate pri_… catalog from live). Secrets, set separately:
         //   wrangler secret put PADDLE_WEBHOOK_SECRET --env staging

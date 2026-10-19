@@ -14,6 +14,7 @@ import {
   ApiTimeoutError,
   BlobUnreadableError,
   createApiClient,
+  createSyncTraceRecorder,
   DEFAULT_LIST_ID,
   filesListEndpoint,
   filesSignEndpoint,
@@ -41,6 +42,7 @@ import { beginInitialSync, getSyncMeta } from '../data/sync-store';
 import { AccountFencedError } from '../data/sync-store';
 import {
   holdSyncCycles,
+  installSyncTrace,
   loadEntityContent,
   loadEntityContents,
   runIncrementalSync,
@@ -705,6 +707,59 @@ describe('the push', () => {
 // so a chunk too big to finish inside one TTL window re-signed and re-failed forever:
 // a deterministic livelock that no retry could break, because every retry restarted
 // the same too-big chunk.
+// --- the timing trace ---------------------------------------------------------
+
+// The spans `measure:sync` reads (@stxapps/shared sync/trace.ts). Pinned by name,
+// because the runner's report and both engines share the vocabulary: a span that
+// quietly moved or vanished would leave a phase's time unaccounted for, and the
+// reading would blame the rest.
+describe('the timing trace', () => {
+  afterEach(() => installSyncTrace(undefined));
+
+  it('records each phase of a push, and a PUT span per blob with its size', async () => {
+    const trace = createSyncTraceRecorder();
+    installSyncTrace(trace);
+    await seedQueued(FILE_PATH, 'image bytes');
+    await seedQueued(LINK_PATH, 'the link');
+
+    await runIncrementalSync(deps());
+
+    const names = trace.spans.map((s) => s.name);
+    for (const name of [
+      'cycle.lock',
+      'queue.read',
+      'api /v1/ops/list',
+      'push',
+      'push.chunk',
+      'api /v1/files/sign',
+      'upload',
+      'blob.read',
+      'blob.encrypt',
+      'blob.put',
+      'commit',
+      'api /v1/ops/commit',
+      'commit.restamp',
+      'commit.clear',
+      'cycle',
+    ]) {
+      expect(names).toContain(name);
+    }
+    // The stub's op log is empty, which routes the cycle to the fallback.
+    expect(trace.spans.find((s) => s.name === 'cycle')?.attrs).toEqual({
+      kind: 'fallback',
+      pending: 2,
+    });
+    expect(trace.spans.filter((s) => s.name === 'push.chunk').map((s) => s.attrs?.kind)).toEqual([
+      'content',
+      'index',
+    ]);
+    expect(trace.spans.filter((s) => s.name === 'blob.put').map((s) => s.attrs)).toEqual([
+      { ns: 'files', bytes: 12 },
+      { ns: 'links', bytes: 9 },
+    ]);
+  });
+});
+
 describe('a transient upload failure', () => {
   it('rejects the cycle with the transport error rather than reporting a clean run', async () => {
     await seedQueued(LINK_PATH, 'the link');

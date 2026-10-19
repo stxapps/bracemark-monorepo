@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 
 import type { AppEnv, Bindings } from './lib/env';
 import { errorHandler } from './lib/errors';
+import { serverTiming } from './lib/server-timing';
 import { rateLimit } from './middleware/rate-limit';
 import { authRoutes } from './routes/auth';
 import { dataRoutes } from './routes/data';
@@ -77,6 +78,11 @@ app.use(
     maxAge: 7200,
   }),
 );
+
+// The Server-Timing breakdown, where SERVER_TIMING turns it on (development and
+// staging; lib/server-timing.ts). After CORS, before everything that waits on a
+// store, so `total` covers the rate limiter, the auth read and the handler.
+app.use('*', serverTiming);
 
 // Baseline rate limit on every endpoint EXCEPT the provider webhooks (standard
 // tier, ~60 req/60s per IP+path; configured in wrangler.jsonc). Sensitive routes

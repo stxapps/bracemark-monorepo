@@ -21,7 +21,9 @@ import { promisify } from 'node:util';
 export const STAGING_D1_KEYCHAIN_SERVICE = 'bracemark-cf-token-staging-e2e';
 
 // Set by the web and browser-extension runners for their Playwright child once
-// the credential is proved, and required by the remote executor in seed/d1.ts. It
+// the credential is proved — and by the sync measurement (measure/sync.ts) for
+// its own process, after the same proof — and required by the remote executor
+// in seed/d1.ts. It
 // is what keeps the opening as narrow as the registry says it is: a grant from a
 // run that declared none — an undeclared case, the native runner, the account
 // seed pointed at staging — is refused rather than quietly resolving a credential

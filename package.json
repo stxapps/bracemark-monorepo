@@ -63,6 +63,8 @@
     "measure:data": "nx measure:data @stxapps/e2e",
     "measure:native": "nx measure:native @stxapps/e2e",
     "measure:password-manager": "nx measure:password-manager @stxapps/e2e",
+    "measure:sync": "nx measure:sync @stxapps/e2e",
+    "measure:sync:staging": "nx measure:sync:staging @stxapps/e2e",
     "build": "nx run-many -t build --output-style=stream",
     "deploy:web:staging": "bash tools/scripts/deploy-static.sh web staging",
     "deploy:web:production": "bash tools/scripts/deploy-static.sh web production",

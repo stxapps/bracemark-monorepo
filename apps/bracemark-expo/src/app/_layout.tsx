@@ -9,7 +9,12 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useCSSVariable } from 'uniwind';
 
-import { AuthProvider, startStallProbe, useQueryManagers } from '@stxapps/expo-react';
+import {
+  AuthProvider,
+  startStallProbe,
+  startSyncTrace,
+  useQueryManagers,
+} from '@stxapps/expo-react';
 import { ApiClientProvider } from '@stxapps/react';
 
 import { SplashHold } from '../components/splash-hold';
@@ -23,6 +28,11 @@ import '../../global.css';
 // tool sets it — in Metro's environment, never in an env file
 // (e2e/measure/native.ts) — so every other build compiles this to nothing.
 if (process.env.EXPO_PUBLIC_MEASURE_STALLS === '1') startStallProbe();
+
+// The sync engine's timing spans (expo-react lib/sync-trace.ts), printed per
+// cycle as `[sync-trace]` tables. Same arrangement as the probe above: inlined
+// at build time, set only in Metro's environment for a measuring run.
+if (process.env.EXPO_PUBLIC_SYNC_TRACE === '1') startSyncTrace();
 
 // The root route. expo-router auto-detects this `src/app` directory as the app
 // root (no EXPO_ROUTER_APP_ROOT needed), and `expo-router/entry` (package.json

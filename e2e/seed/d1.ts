@@ -69,7 +69,8 @@ export async function d1(binding: string, sql: string): Promise<Record<string, u
 //
 // On staging it runs only inside a run that declared it. The web or
 // browser-extension runner proves the credential first (`proveStagingPlanAccess`)
-// and marks its Playwright child; without that mark this throws, so a grant can
+// and marks its Playwright child; the sync measurement (measure/sync.ts) proves it
+// the same way and marks itself. Without that mark this throws, so a grant can
 // never be the first moment a missing token is discovered, and no other
 // entrypoint reaches staging by importing plan.ts.
 export async function planD1(sql: string): Promise<Record<string, unknown>[]> {

@@ -1743,6 +1743,89 @@ background sync engine → the same client via `SyncDeps.api`; R2 blobs → plai
 `fetch`.** All control-plane calls share the same `@stxapps/shared` contracts and
 the one injected client.
 
+### measuring a sync
+
+A push of the `seed_plus_full` library (1,000 links, ~2,000 files) took about ten
+minutes on bracemark-web and bracemark-expo alike. A stopwatch can only confirm a
+number like that, so the engines carry their own instrument, and `measure:sync`
+reads it alongside two more ([e2e.md](./e2e.md), _the sync leg_). Read this before
+tuning anything named in _a push is chunked_ — the fan-outs, the chunk sizes, the
+rate limit — because each of those comments says "a starting point" and this is the
+measurement they were waiting for.
+
+**Three instruments, one window.**
+
+- **The engine's spans** (`@stxapps/shared` `sync/trace.ts`). Both engines time
+  the same steps under the same names — `cycle`, `push.chunk`, `upload`,
+  `blob.put`, `commit`, `pull`, `blob.get`, `blob.store`, one `api <path>` per
+  contract-call _attempt_ — and the summary turns them into, per name, the wall
+  time it owned, the work it did, and their ratio: **how many were really in
+  flight**. `INDEX_CONCURRENCY` is 24; a `blob.put` row that reads 5 says
+  something is holding the fan-out back, and the other two instruments say what.
+  The vocabulary is listed in the module and pinned by
+  `packages/web-react/src/sync/engine.spec.ts`, _the timing trace_.
+- **Chrome's Network domain** (`e2e/measure/network.ts`): per request, the time
+  it queued in the browser for a socket, its protocol, the sockets each host
+  got, time to first byte, CORS preflights. Six sockets to R2's host with long
+  queueing is HTTP/1.1's per-host cap, not the engine.
+- **bracemark-api's `Server-Timing`** (`apps/bracemark-api/src/lib/server-timing.ts`):
+  the session read, the Durable Object call, `r2-heads` (the commit's HEAD
+  fan-out, wall) beside `r2-head` (the sum of its calls), presigning. It tells a
+  slow `ops/commit` apart as time in the Worker or time on the wire. A Worker's
+  clock moves only across I/O, so every metric is a wait, never CPU.
+
+**All of it is off in what users run.** Each engine holds `NO_TRACE` until a
+recorder is installed: on web behind the `bracemark.syncTrace` localStorage flag
+(`packages/web-react/src/sync/trace.ts`, read once per page load); on expo only in
+a bundle built with `EXPO_PUBLIC_SYNC_TRACE=1`, which prints each cycle's table as
+`[sync-trace]` to the log (`packages/expo-react/src/lib/sync-trace.ts`). With
+`NO_TRACE`, `span` runs its body and `traceApi` returns the client it was given. The
+header is on where `SERVER_TIMING` is `"1"`, which is development and staging
+(`wrangler.jsonc`), not production: it would tell any client which stores a
+request touched, and no client needs that.
+
+**The trace is module state in each engine, not a `SyncDeps` field.** A trace
+belongs to the engine. Overlapping callers share one cycle (`runIncrementalSync`'s
+single-flight), and an import's deps or an export's deps would otherwise decide
+whether the cycle they happened to join was timed.
+
+**⚠ On bracemark-web the service worker carries every sync request.** `sw.ts`
+routes every cross-origin request through `NetworkOnly`, so in a production build
+each R2 PUT and GET, and each api call, is answered by the worker, which makes the
+real request itself. Two consequences for a reading. The worker's hop is part of
+the cost, and the only way to price it is to measure with it blocked
+(`measure:sync --no-sw`) and compare. And a page-level network capture sees those
+requests end to end but not their wire: no preflight, socket or protocol, which
+happen in the worker. The dev server registers no worker, so a local reading has
+neither the cost nor the blind spot. Nothing about this is visible in a test.
+
+**What a reading should settle**, in the order the code suggests them. None is
+established until a staging reading shows it:
+
+1. **A preflight per PUT.** A cross-origin `PUT` is always preflighted, and Chrome
+   caches a preflight per URL. Every presigned URL is unique, so the cache never
+   hits, and every upload costs two round trips. Visible as `blob OPTIONS` rows in
+   a `--no-sw` run.
+2. **HTTP/1.1 to R2's S3 endpoint**, which would cap a host at six sockets and
+   make `INDEX_CONCURRENCY` 24 effectively 6. Visible as the protocol column, the
+   socket count and the queued time.
+3. **The service worker's hop** (above): the sw-allowed and `--no-sw` walls side
+   by side.
+4. **The `tight` rate limit** (10 calls per 10 s, shared by `files/sign` and
+   `ops/commit`) and `withRetry` waiting out `Retry-After`. Visible as `api` spans
+   with `status: 429`.
+5. **Many cycles instead of one.** An import kicks cycles while it is still
+   writing. Visible as the cycle count and the `cycle.lock` waits.
+6. **Main-thread contention.** Each pulled record is its own IndexedDB transaction
+   and a live-query invalidation. Visible as `blob.store` time and long-task
+   blocking.
+7. **The commit's server side.** Visible as `r2-heads` and `do-commit` in the api's
+   timing.
+
+Record a reading where the change it justifies is made, with the date, the
+target, the variant and the machine, like the readings in
+[data-lifecycle.md](./data-lifecycle.md).
+
 ### deferred
 
 - **R2 conditional writes** for same-file concurrent-edit detection (see
