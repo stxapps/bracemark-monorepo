@@ -27,6 +27,8 @@ import {
   apiErrorCode,
   BlobUnreadableError,
   chunk,
+  createLimiter,
+  createSignedFanOut,
   emptySyncOutcome,
   FILES_PREFIX,
   filesListEndpoint,
@@ -99,20 +101,34 @@ const COMMIT_BATCH = MAX_COMMIT_OPS;
 const OPS_PAGE = MAX_LIST_LIMIT;
 const FILES_PAGE = MAX_LIST_LIMIT;
 
-// Blob fan-out, split by what moves rather than which way, because the two kinds
-// bind on opposite resources (a bounded cap also keeps a first sync of thousands
-// of blobs from opening thousands of sockets at once). Index blobs (links/tags/
-// lists/settings) are KB-sized and RTT-bound in either direction, so a wide
-// fan-out cuts first-sync time, drains the signed GET URLs sooner, and pushes a
-// large import's index faster — over the blob route's HTTP/2 or HTTP/3, that is.
-// Against R2's S3 endpoint, which speaks HTTP/1.1 only, the fan-out ran six at a
-// time whatever it was set to (docs/local-first-sync.md, _the blob route_). `files/` content can be MB-sized, bound by
-// bandwidth + memory (each transfer holds its blob in the JS heap, so peak ≈
-// concurrency × blob size), so it stays modest whether it is uploaded
-// (uploadBlobs) or fetched (loadEntityContents). Starting points — tune against a
-// measured large first sync.
-const INDEX_CONCURRENCY = 24;
+// Blob fan-out, split by SIZE rather than direction, because small and large
+// blobs bind on opposite resources (a bounded cap also keeps a first sync of
+// thousands of blobs from opening thousands of streams at once).
+//
+// A small blob is latency-bound. Each transfer is one blob-route request whose
+// time is nearly all the Worker waiting on R2 — ~1.1 s a PUT and ~0.6 s a GET
+// in the staging reading, against ~40 ms of wire — so the rate is the
+// fan-out over that wait, and it scales with the fan-out until something else
+// binds. The 2026-10-19 staging floor held its p50 at ~355 ms from 24 to 48 GETs
+// at once; the server was not the limit (docs/local-first-sync.md, _measuring a
+// sync_). Every index blob (links/tags/lists/settings) is small, and so is a
+// `files/` blob up to LARGE_CONTENT_BYTES, in either direction.
+//
+// A large `files/` blob is bound by bandwidth and memory — each transfer holds
+// its blob in the JS heap, so peak ≈ concurrency × blob size — so it keeps the
+// narrow fan-out, whether it is uploaded (uploadBlobs, through a gate inside the
+// wide pass) or fetched (loadEntityContents, where the size is unknown until it
+// arrives, so every content GET counts as large).
+const INDEX_CONCURRENCY = 48;
 const FILE_CONCURRENCY = 8;
+
+// Where a `files/` upload stops counting as small. Sized against the one
+// deadline it can miss: a web PUT gets BLOB_BASE_TIMEOUT_MS plus its size over
+// BLOB_MIN_BYTES_PER_SEC (@stxapps/shared sync/blob-transfer.ts), so a 64 KiB
+// blob has ~68 s. A full fan-out of them is 3 MiB, which a 512 kbps uplink
+// moves in ~49 s — inside that, with the large gate's transfers alongside. Every
+// seeded test library's content is far below it; a real preview image may not be.
+const LARGE_CONTENT_BYTES = 64 * 1024;
 
 // One put-pipeline pass (pushPuts) signs, uploads, and commits a single chunk, so
 // a chunk must fit BOTH the sign cap and the commit cap in one call each, and it
@@ -124,15 +140,18 @@ const FILE_CONCURRENCY = 8;
 // Index: the full cap — the commit cap (500) is the smaller today. KB-sized blobs
 // at INDEX_CONCURRENCY drain it in seconds, well under the 5-min TTL, and a smaller
 // chunk would only spend more of bracemark-api's `tight` rate limit (10 calls per
-// 10 s per user, shared by files/sign and ops/commit — two per chunk).
+// 10 s per user and per path, so files/sign and ops/commit each have a bucket and
+// a chunk spends one call of each).
 //
-// Content: ~12× FILE_CONCURRENCY. At the full cap a `files/` chunk of MB-sized
-// blobs ran for minutes on an ordinary uplink: minutes with the pending count
-// frozen, and long enough for its tail to outlive the TTL. That expiry is absorbed
-// per blob (uploadBlobs fails only its own op, the chunk commits what landed), but
-// any failed content PUT holds the whole metadata phase until the next cycle. 100
-// is ~a minute at 1 MB a blob over 10 Mbps, and still ≥ 12 fan-out rounds for tiny
-// blobs, which keeps a chunk's two calls under the rate limit.
+// Content: 100. At the full cap a `files/` chunk of MB-sized blobs ran for minutes
+// on an ordinary uplink: minutes with the pending count frozen, and long enough for
+// its tail to outlive the TTL. That expiry is absorbed per blob (uploadBlobs fails
+// only its own op, the chunk commits what landed), but any failed content PUT holds
+// the whole metadata phase until the next cycle. 100 is ~a minute at 1 MB a blob
+// over 10 Mbps, gated FILE_CONCURRENCY wide. Small blobs go through at the full
+// fan-out, a chunk in two or three rounds, and a chunk still spends one sign and
+// one commit: under a second per chunk is what would reach either bucket's limit,
+// and the commit alone measured ~1.6 s on staging.
 const INDEX_PUT_BATCH = Math.min(SIGN_BATCH, COMMIT_BATCH);
 const CONTENT_PUT_BATCH = 100;
 
@@ -186,8 +205,9 @@ export function installSyncTrace(next: SyncTrace | undefined): void {
 // background cycle has no blocked UI waiting on a count. Passing it per call makes
 // "only the blocking pull reports progress" structural instead of a convention.
 // It stays silent through the listing below (no denominator exists yet, and
-// inventing one is the fake-progress-bar failure); the first tick arrives once
-// storeDownloads knows exactly how much it is about to fetch.
+// inventing one is the fake-progress-bar failure) — even though the GETs start
+// on its first page — and the first tick arrives once the listing is done and
+// the pull knows exactly how much it is fetching (startPull).
 export async function runInitialSync(
   deps: SyncDeps,
   onProgress?: InitialSyncProgressFn,
@@ -212,8 +232,17 @@ async function initialPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): 
   // Read BEFORE the listing — it is the cursor this pull may claim once the
   // listing is stored, where the listing's own newest stamp is not.
   const watermark = await logWatermark(deps.api);
-  const files = await listAllFiles(deps.api);
-  await storeDownloads(deps, files, onProgress);
+  // Each page is fetched as it is listed rather than after the whole listing: the
+  // pages come one round trip at a time, and a GET has nothing to wait for but its
+  // own page (startPull).
+  const files = await trace.span('pull', async (note) => {
+    let listed: Entry[] = [];
+    await feedPull(startPull(deps, onProgress), async (pull) => {
+      listed = await listAllFiles(deps.api, (page) => pull.add(page));
+    });
+    note({ entries: listed.length });
+    return listed;
+  });
   // The store is not always empty here. A pull that died partway (a dropped
   // connection, a closed tab) left what it had stored, and this is its retry —
   // minutes or days later, against a namespace that may have lost some of that
@@ -836,15 +865,16 @@ async function pushPhases(
     ...deletes.filter((o) => isContentPath(o.path)),
   ]);
 
-  // Phase 3 then 4: drain ALL content puts (every chunk) before ANY metadata put, so
-  // the content-before-metadata invariant holds across chunk boundaries too. Each
-  // phase uploads at its own blob kind's chunk size and fan-out.
+  // Phase 3 then 4: drain ALL content puts (every chunk, every commit) before ANY
+  // metadata put, so the content-before-metadata invariant holds across chunk
+  // boundaries too. Each phase uploads at its own blob kind's chunk size; both at
+  // the full fan-out, with large content gated narrower inside it (uploadBlobs).
   const metadataPuts = puts.filter((o) => !isContentPath(o.path));
   const contentRefused = await pushPuts(
     deps,
     puts.filter((o) => isContentPath(o.path)),
     CONTENT_PUT_BATCH,
-    FILE_CONCURRENCY,
+    INDEX_CONCURRENCY,
     outcome,
     orphanedPaths,
     failures,
@@ -881,11 +911,33 @@ async function pushPhases(
 
 // Drive a homogeneous put set (all content OR all metadata — the caller splits and
 // orders them) through the sign → PUT → commit pipeline one chunk at a time, so each
-// chunk's PUT URLs are minted immediately before that chunk's upload and the chunk
-// commits before the next is signed. `batchSize` (≤ both caps) keeps the sign and
-// the commit a single round trip each; it and `concurrency` are the set's kind's.
-// Resolves true when the quota gate refused the set — the caller holds the metadata
-// phase on it, as it does on a failed upload.
+// chunk's PUT URLs are minted immediately before that chunk's upload. `batchSize`
+// (≤ both caps) keeps the sign and the commit a single round trip each; it and
+// `concurrency` are the set's kind's. Resolves true when the quota gate refused the
+// set — the caller holds the metadata phase on it, as it does on a failed upload.
+//
+// A CHUNK'S COMMIT OVERLAPS THE NEXT CHUNK'S SIGN AND UPLOAD. The commit is a
+// round trip of its own (~1.6 s on staging, most of it R2 answering the existence
+// check), and run in line it left the fan-out idle for that long eight times in a
+// 1,000-link push. It runs behind the next chunk instead, and what made the line
+// safe still holds:
+//
+//  - Commits stay in order. One is in flight at most, each starting once the one
+//    before has landed, so the op log takes them in input order and a failed one
+//    stops the set.
+//  - The pending count still steps down per chunk, at most one chunk behind.
+//  - The next chunk's tokens are minted after this chunk's upload ended, so the
+//    mint-to-PUT latency the chunking bounds grows by nothing.
+//  - Nothing leaves while a commit is in flight. The set resolves only once its
+//    last commit has — which is the phase barrier pushPhases relies on — and a
+//    throw waits for the one in flight before it rejects, so a failed cycle never
+//    lets the next one read a queue a commit is still clearing.
+//
+// What it does loosen is the quota gate's view: `files/sign` reads usage the
+// commits record, and a chunk signed beside the previous one's commit is checked
+// without it. The gate already charges each batch's growth to the next one (api
+// lib/quota.ts — a cost backstop), so the overshoot it allows grows from one
+// chunk to two.
 async function pushPuts(
   deps: SyncDeps,
   puts: PendingOpRecord[],
@@ -895,21 +947,60 @@ async function pushPuts(
   orphanedPaths: string[],
   failures: UploadFailures,
 ): Promise<boolean> {
-  let unsigned = puts.length;
-  // Homogeneous by contract (the caller splits the kinds), so the first op names it.
-  const kind = puts.length > 0 && isContentPath(puts[0].path) ? 'content' : 'index';
-  for (const batch of chunk(puts, batchSize)) {
-    const chunkStart = trace.now();
-    const signed = await signPushable(deps, batch, outcome);
-    unsigned -= batch.length;
-    // The quota gate refuses on the account's usage, never on which paths a chunk
-    // holds, so every later chunk of this set would be refused too: record them
-    // without asking. One refused sign call per put phase, not per chunk — which
-    // CONTENT_PUT_BATCH would otherwise multiply against the rate limit.
-    if (signed === null) {
-      recordBlocked(outcome, unsigned);
-      return true;
+  let committing: Promise<void> = Promise.resolve();
+  try {
+    return await pushChunks();
+  } catch (err) {
+    await committing.catch(() => undefined);
+    throw err;
+  }
+
+  async function pushChunks(): Promise<boolean> {
+    let unsigned = puts.length;
+    // Homogeneous by contract (the caller splits the kinds), so the first op names it.
+    const kind = puts.length > 0 && isContentPath(puts[0].path) ? 'content' : 'index';
+    for (const batch of chunk(puts, batchSize)) {
+      const chunkStart = trace.now();
+      const signed = await signPushable(deps, batch, outcome);
+      unsigned -= batch.length;
+      // The quota gate refuses on the account's usage, never on which paths a chunk
+      // holds, so every later chunk of this set would be refused too: record them
+      // without asking. One refused sign call per put phase, not per chunk — which
+      // CONTENT_PUT_BATCH would otherwise multiply against the rate limit.
+      if (signed === null) {
+        await committing;
+        recordBlocked(outcome, unsigned);
+        return true;
+      }
+      const uploaded = await uploadChunk(signed);
+      // One commit in flight at most: this chunk's starts once the last one's has
+      // landed, so the queue is never more than one chunk behind the uploads, and a
+      // failed commit stops the set once the chunk already uploading is done.
+      await committing;
+      committing = commitChunk(uploaded, { kind, ops: batch.length }, chunkStart);
+      // Observed here so a failure is never unhandled while the next chunk signs
+      // and uploads; the next `await committing` still sees the rejection.
+      void committing.catch(() => undefined);
     }
+    await committing;
+    return false;
+  }
+
+  // Commit one uploaded chunk, and time the chunk from its sign to its commit.
+  async function commitChunk(
+    uploaded: PendingOpRecord[],
+    attrs: { kind: string; ops: number },
+    start: number,
+  ): Promise<void> {
+    await commitBatched(deps, uploaded);
+    if (trace.enabled) trace.record({ name: 'push.chunk', start, end: trace.now(), attrs });
+  }
+
+  // Upload one signed chunk and return the ops its commit should carry.
+  async function uploadChunk(signed: {
+    ops: PendingOpRecord[];
+    urls: Map<string, SignedUrl>;
+  }): Promise<PendingOpRecord[]> {
     const { orphaned, failed, superseded } = await trace.span(
       'upload',
       () => uploadBlobs(deps, signed.ops, signed.urls, concurrency, failures),
@@ -945,13 +1036,8 @@ async function pushPuts(
       const skipped = new Set(superseded.map((o) => o.path));
       uploaded = uploaded.filter((o) => !skipped.has(o.path));
     }
-    await commitBatched(deps, uploaded);
-    if (trace.enabled) {
-      const attrs = { kind, ops: batch.length };
-      trace.record({ name: 'push.chunk', start: chunkStart, end: trace.now(), attrs });
-    }
+    return uploaded;
   }
-  return false;
 }
 
 // Sign one put chunk, surviving the server's quota gate instead of failing the
@@ -1090,6 +1176,13 @@ async function commitOne(deps: SyncDeps, batch: PendingOpRecord[]): Promise<void
 //    which on a chunk too big for one TTL window was a deterministic livelock.
 //  - an unsigned path (no URL came back): also transient — leaving it queued IS
 //    the retry, and the commit's `no_object` is the honest report.
+//
+// A `files/` blob past LARGE_CONTENT_BYTES waits for one of FILE_CONCURRENCY
+// slots inside the pass's own fan-out, and lets go of its bytes while it waits:
+// its size is known only once its record is read, and a pass of large blobs each
+// holding its bytes in a queue would put the full fan-out of them in the heap.
+// It reads its record again once it has a slot — the same paired read, so the
+// writeId test is taken again on the bytes it actually sends.
 async function uploadBlobs(
   deps: SyncDeps,
   ops: PendingOpRecord[],
@@ -1104,7 +1197,10 @@ async function uploadBlobs(
   const orphaned: PendingOpRecord[] = [];
   const failed: PendingOpRecord[] = [];
   const superseded: PendingOpRecord[] = [];
-  await mapLimit(ops, concurrency, async (op) => {
+  const largeGate = createLimiter(FILE_CONCURRENCY);
+
+  // The op's bytes if its queue row is still this op, sorted into its bucket if not.
+  const readForUpload = async (op: PendingOpRecord): Promise<Uint8Array | undefined> => {
     // One read transaction for the pair, so no local write can land between the
     // row and the record it describes — IndexedDB orders this against the write
     // edge's rw transactions on the same two stores.
@@ -1116,17 +1212,35 @@ async function uploadBlobs(
     );
     if (queued?.writeId !== op.writeId) {
       superseded.push(op);
-      return;
+      return undefined;
     }
     if (!rec?.data) {
       orphaned.push(op);
-      return;
+      return undefined;
     }
+    return rec.data;
+  };
+
+  await mapLimit(ops, concurrency, async (op) => {
+    let data = await readForUpload(op);
+    if (!data) return;
 
     const signed = urls.get(op.path);
     if (!signed) return;
 
-    const data = rec.data;
+    if (isContentPath(op.path) && data.byteLength > LARGE_CONTENT_BYTES) {
+      data = undefined;
+      await largeGate(async () => {
+        const held = await readForUpload(op);
+        if (held) await send(op, held, signed);
+      });
+      return;
+    }
+    await send(op, data, signed);
+  });
+  return { orphaned, failed, superseded };
+
+  async function send(op: PendingOpRecord, data: Uint8Array, signed: SignedUrl): Promise<void> {
     const ns = syncNamespace(op.path);
     try {
       const sealed = await trace.span('blob.encrypt', () =>
@@ -1141,8 +1255,7 @@ async function uploadBlobs(
       failures.count += 1;
       failures.firstError ??= err;
     }
-  });
-  return { orphaned, failed, superseded };
+  }
 }
 
 // --- download / store / delete ----------------------------------------------
@@ -1150,85 +1263,70 @@ async function uploadBlobs(
 // Fetch, decrypt, and store a set of entries. Content (`files/`) records keep only
 // their `updatedAt` — the blob stays lazy (and a CHANGED record drops any
 // previously-cached `data` so a stale copy isn't served after an update). The index
-// is pulled in chunks — each chunk signs its own GET URLs, then GETs + decrypts +
-// stores at bounded concurrency — so the URL set never outgrows one batch.
+// is fetched by one fan-out that signs its GET URLs a batch at a time, so the URL
+// set never outgrows about one batch (startPull).
 async function storeDownloads(
   deps: SyncDeps,
   entries: Entry[],
   onProgress?: InitialSyncProgressFn,
 ): Promise<void> {
   if (entries.length === 0) return;
-  await trace.span('pull', () => storeDownloadsTraced(deps, entries, onProgress), {
-    entries: entries.length,
-  });
+  await trace.span(
+    'pull',
+    () =>
+      feedPull(startPull(deps, onProgress), async (pull) => {
+        await pull.add(entries);
+      }),
+    { entries: entries.length },
+  );
 }
 
-async function storeDownloadsTraced(
-  deps: SyncDeps,
-  entries: Entry[],
-  onProgress?: InitialSyncProgressFn,
-): Promise<void> {
-  // Selective sync: drop the namespaces this client doesn't materialize before any
-  // sign/GET work (the cursor is advanced by the caller from the full op/file set, so
-  // skipping these downloads never strands it). A no-op for a full-sync client.
-  const { pathFilter } = deps;
-  if (pathFilter) entries = entries.filter((e) => pathFilter(e.path));
-  if (entries.length === 0) return;
+// A pull in progress. Entries go in as they are known — a cycle's whole set at once,
+// or a first sync's listing a page at a time (initialPull) — and every index GET
+// rides one fan-out (@stxapps/shared createSignedFanOut), so a page's downloads
+// start while the next page is still being listed, and no batch waits for the last
+// one's slowest GET.
+interface PullRun {
+  // Sort a set of entries and start fetching what it needs. Resolves once they
+  // are queued, not fetched.
+  add(entries: Entry[]): Promise<void>;
+  // Nothing more is coming: resolves once every queued GET has been stored.
+  finish(): Promise<void>;
+  // The feed failed: stop starting GETs.
+  abandon(reason: unknown): void;
+}
 
-  // Skip paths whose local record is already current (same-or-newer server stamp,
-  // with the decrypted bytes present for an index path). That makes a re-run of an
-  // interrupted first sync RESUME instead of re-downloading everything, keeps a
-  // current content record's lazily-cached blob, and makes the echo of our own
-  // commit free — which matters on every cycle now, not only after a failed one:
-  // the cursor no longer skips our commits, so each one is listed back once.
-  //
-  // Content paths already at their entry's stamp are settled first, without being
-  // read (contentAtStamp) — the echo of a content push names exactly the records
-  // that hold their megabytes.
-  const settled = await contentAtStamp(entries.filter((e) => isContentPath(e.path)));
-  const unsettled = entries.filter((e) => !settled.has(e.path));
-  const locals = await db.items.bulkGet(unsettled.map((e) => e.path));
-  const stale = unsettled.filter((e, i) => {
-    const local = locals[i];
-    if (!local || local.updatedAt < e.updatedAt) return true;
-    return !isContentPath(e.path) && !local.data;
-  });
+// Run `feed` against a pull and finish it — or, when the feed throws, abandon the
+// fan-out so it starts nothing more, and rethrow.
+async function feedPull(pull: PullRun, feed: (pull: PullRun) => Promise<void>): Promise<void> {
+  try {
+    await feed(pull);
+  } catch (err) {
+    pull.abandon(err);
+    throw err;
+  }
+  await pull.finish();
+}
 
-  const content = stale.filter((e) => isContentPath(e.path));
-  const index = stale.filter((e) => !isContentPath(e.path));
-
-  // toItemRecord is the single projector that derives the queryable `item*`
-  // columns from the decrypted bytes (data/projection.ts) — the engine stays
-  // schema-blind, it just routes every write through it so the indexes can't
-  // drift from `data`. A content record carries no bytes here, so it projects
-  // none (only its `itemType`/`updatedAt`) — which is exactly why this one must go
-  // through the guarded put too: landing it on a path whose bytes are still queued
-  // would strip them, and the drain would then find nothing to upload.
-  //
-  // The whole content set rides ONE transaction: nothing awaits the network between
-  // these records, so there's no reason to open a transaction per row (the index
-  // records below can't do the same — each waits on its own GET).
-  await putPulled(
-    deps.username,
-    content.map((e) => toItemRecord(e.path, e.updatedAt)),
-  );
-  // The counter's denominator is `index` — what this pull is actually about to
-  // fetch, after both filters above. Emitted once at zero before the first round
-  // trip so the gate can swap its indeterminate state for a real bar right away
-  // rather than waiting for the first blob to land. Nothing to fetch reports
-  // nothing at all: the gate reads that as "still working" and stays
-  // indeterminate, which beats flashing a full bar over a pull that is already
-  // over. Content records are excluded because their blobs aren't downloaded here
-  // (only their `updatedAt` rows are) — counting them would inflate the total with
-  // work that costs no time.
+function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun {
+  // The counter's denominator is every index entry this pull is about to fetch,
+  // after both filters in `add`. It is reported only once it is final — at
+  // `finish`, when no more entries can come — because a first sync adds a page at
+  // a time, and a total that grew under the bar would be the fake-progress failure
+  // the gate refuses. So the gate stays indeterminate through the listing, as it
+  // always did, and its first tick may already count GETs the early pages
+  // finished. Nothing to fetch reports nothing at all: the gate reads that as
+  // "still working" and stays indeterminate, which beats flashing a full bar over a
+  // pull that is already over. Content records are excluded because their blobs
+  // aren't downloaded here (only their `updatedAt` rows are) — counting them would
+  // inflate the total with work that costs no time.
   let done = 0;
-  // Hoisted out of the batch loop below so the per-entry callback closes over a
-  // `const` — a closure declared inside the loop that incremented `done` itself
-  // reads to no-loop-func as a stale-capture bug, which it isn't here. The
-  // per-entry pull is hoisted with it, for the same reason over the module's
-  // `trace`.
-  const tick = () => onProgress?.(++done, index.length);
-  if (index.length > 0) onProgress?.(done, index.length);
+  let total = 0;
+  let totalKnown = false;
+  const report = (): void => {
+    if (totalKnown && total > 0) onProgress?.(done, total);
+  };
+  let downloadStart: number | undefined;
 
   // `finally`, so the two skips below tick the counter too: an entry dropped
   // for a missing URL or a mid-pull 404 still leaves the pull with one fewer
@@ -1265,28 +1363,102 @@ async function storeDownloadsTraced(
         putPulled(deps.username, [toItemRecord(e.path, e.updatedAt, data)]),
       );
     } finally {
-      tick();
+      done += 1;
+      report();
     }
   };
 
-  // Index: sign → GET → decrypt → store one chunk at a time, so the signed-URL
-  // map never grows past a single batch (a large first sync holds ~1k URLs, not all
-  // of them) and each URL's mint-to-GET latency stays well inside its 1-hour TTL.
-  // Each record is stored the moment it's decrypted, so an interrupted run resumes
-  // via the staleness skip above (fresh URLs for the shrinking remainder) rather
-  // than restarting.
-  for (const batch of chunk(index, SIGN_BATCH)) {
-    const urls = await signPaths(
-      deps.api,
-      'get',
-      batch.map((e) => e.path),
-    );
-    await trace.span(
-      'download',
-      () => mapLimit(batch, INDEX_CONCURRENCY, (e) => pullOne(e, urls.get(e.path))),
-      { entries: batch.length, concurrency: INDEX_CONCURRENCY },
-    );
-  }
+  // Index: sign → GET → decrypt → store, one signed batch ahead of the GETs, so the
+  // signed-URL set never grows past about one batch (a large first sync holds ~1k
+  // URLs, not all of them) and each URL's mint-to-GET latency stays well inside its
+  // 1-hour TTL. Each record is stored the moment it's decrypted, so an interrupted
+  // run resumes via the staleness skip in `add` (fresh URLs for the shrinking
+  // remainder) rather than restarting.
+  const fanOut = createSignedFanOut<Entry, SignedUrl>({
+    concurrency: INDEX_CONCURRENCY,
+    signBatch: SIGN_BATCH,
+    sign: (paths) => signPaths(deps.api, 'get', paths),
+    run: pullOne,
+  });
+
+  return {
+    async add(entries) {
+      // Selective sync: drop the namespaces this client doesn't materialize before
+      // any sign/GET work (the cursor is advanced by the caller from the full op/file
+      // set, so skipping these downloads never strands it). A no-op for a full-sync
+      // client.
+      const { pathFilter } = deps;
+      if (pathFilter) entries = entries.filter((e) => pathFilter(e.path));
+      if (entries.length === 0) return;
+
+      // Skip paths whose local record is already current (same-or-newer server stamp,
+      // with the decrypted bytes present for an index path). That makes a re-run of an
+      // interrupted first sync RESUME instead of re-downloading everything, keeps a
+      // current content record's lazily-cached blob, and makes the echo of our own
+      // commit free — which matters on every cycle now, not only after a failed one:
+      // the cursor no longer skips our commits, so each one is listed back once.
+      //
+      // Content paths already at their entry's stamp are settled first, without being
+      // read (contentAtStamp) — the echo of a content push names exactly the records
+      // that hold their megabytes.
+      const settled = await contentAtStamp(entries.filter((e) => isContentPath(e.path)));
+      const unsettled = entries.filter((e) => !settled.has(e.path));
+      const locals = await db.items.bulkGet(unsettled.map((e) => e.path));
+      const stale = unsettled.filter((e, i) => {
+        const local = locals[i];
+        if (!local || local.updatedAt < e.updatedAt) return true;
+        return !isContentPath(e.path) && !local.data;
+      });
+
+      const content = stale.filter((e) => isContentPath(e.path));
+      const index = stale.filter((e) => !isContentPath(e.path));
+
+      // toItemRecord is the single projector that derives the queryable `item*`
+      // columns from the decrypted bytes (data/projection.ts) — the engine stays
+      // schema-blind, it just routes every write through it so the indexes can't
+      // drift from `data`. A content record carries no bytes here, so it projects
+      // none (only its `itemType`/`updatedAt`) — which is exactly why this one must go
+      // through the guarded put too: landing it on a path whose bytes are still queued
+      // would strip them, and the drain would then find nothing to upload.
+      //
+      // The whole content set rides ONE transaction: nothing awaits the network
+      // between these records, so there's no reason to open a transaction per row (the
+      // index records can't do the same — each waits on its own GET).
+      await putPulled(
+        deps.username,
+        content.map((e) => toItemRecord(e.path, e.updatedAt)),
+      );
+
+      if (index.length === 0) return;
+      total += index.length;
+      downloadStart ??= trace.now();
+      fanOut.add(index);
+    },
+    async finish() {
+      totalKnown = true;
+      report();
+      let failed: string | undefined;
+      try {
+        await fanOut.close();
+      } catch (err) {
+        failed = err instanceof Error ? err.name : 'Error';
+        throw err;
+      } finally {
+        if (trace.enabled && downloadStart !== undefined) {
+          trace.record({
+            name: 'download',
+            start: downloadStart,
+            end: trace.now(),
+            attrs: { entries: total, concurrency: INDEX_CONCURRENCY },
+            ...(failed ? { failed } : {}),
+          });
+        }
+      }
+    },
+    abandon(reason) {
+      fanOut.abandon(reason);
+    },
+  };
 }
 
 // Decrypt one pulled blob, or skip it when it does not open under its path
@@ -1426,12 +1598,17 @@ async function localOnlyPaths(files: Entry[]): Promise<string[]> {
 // already passed is simply absent. That is safe for what gets DOWNLOADED (every
 // consumer compares `updatedAt`) and is exactly why the listing never supplies the
 // CURSOR — both callers end on the log's high-water mark instead (logWatermark).
-async function listAllFiles(api: ApiClient): Promise<Entry[]> {
+// `onPage` sees each page before the next is asked for.
+async function listAllFiles(
+  api: ApiClient,
+  onPage?: (page: Entry[]) => Promise<void>,
+): Promise<Entry[]> {
   const out: Entry[] = [];
   let pageToken: string | undefined;
   do {
     const res = await api.call(filesListEndpoint, { pageToken, limit: FILES_PAGE });
     out.push(...res.files);
+    await onPage?.(res.files);
     pageToken = res.nextPageToken ?? undefined;
   } while (pageToken);
   return out;

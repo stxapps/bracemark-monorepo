@@ -98,6 +98,12 @@ interface Handlers {
   opsList?: () => Promise<OpsListReply> | OpsListReply;
   filesList?: () =>
     Promise<{ path: string; updatedAt: number }[]> | { path: string; updatedAt: number }[];
+  // A listing in pages, for the specs about what happens between them. Wins over
+  // `filesList` when both are set.
+  filesListPage?: (pageToken: string | undefined) => Promise<{
+    files: { path: string; updatedAt: number }[];
+    nextPageToken: string | null;
+  }>;
   // Called with the paths being signed — the hook a test uses to land a write
   // mid-cycle. Returning an array signs only those (a test for the unsigned-path
   // branch); returning nothing signs them all. `op` is passed so a handler can
@@ -140,6 +146,9 @@ function makeApi(handlers: Handlers = {}): SyncDeps['api'] {
     call: async (endpoint: unknown, input: Record<string, unknown>) => {
       if (endpoint === opsListEndpoint) return (await handlers.opsList?.()) ?? empty;
       if (endpoint === filesListEndpoint) {
+        if (handlers.filesListPage) {
+          return handlers.filesListPage(input.pageToken as string | undefined);
+        }
         return { files: (await handlers.filesList?.()) ?? [], nextPageToken: null };
       }
       if (endpoint === filesSignEndpoint) {
@@ -741,6 +750,169 @@ describe('the push', () => {
   });
 });
 
+// --- the fan-out --------------------------------------------------------------
+
+// What the 2026-10-19 blob-route reading moved (docs/local-first-sync.md,
+// _measuring a sync_): small blobs go at the full fan-out whichever their kind, a
+// large `files/` blob still waits for one of the narrow gate's slots, a chunk's
+// commit runs beside the next chunk, and a first sync's GETs start on its first
+// listed page.
+describe('the fan-out', () => {
+  // Hold every PUT open until the test lets them go, counting how many of each size
+  // are in flight at once.
+  function holdPuts(isLarge: (bytes: number) => boolean) {
+    const maxInFlight = { large: 0, small: 0 };
+    const inFlight = { large: 0, small: 0 };
+    mockPutBlob.mockImplementation(async (url: string, body: Uint8Array) => {
+      const kind = isLarge(body.byteLength) ? 'large' : 'small';
+      inFlight[kind] += 1;
+      maxInFlight[kind] = Math.max(maxInFlight[kind], inFlight[kind]);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight[kind] -= 1;
+      uploaded.add(pathFor(url));
+    });
+    return maxInFlight;
+  }
+
+  it('sends small content wide, and holds large content to the narrow gate', async () => {
+    const LARGE = 'x'.repeat(70 * 1024);
+    for (let i = 0; i < 12; i++) await seedQueued(`files/big_${i}.enc`, LARGE);
+    for (let i = 0; i < 12; i++) await seedQueued(`files/small_${i}.enc`, 'tiny');
+    const maxInFlight = holdPuts((bytes) => bytes > 64 * 1024);
+
+    await runIncrementalSync(deps());
+
+    // FILE_CONCURRENCY for the large ones, however wide the pass around them.
+    expect(maxInFlight.large).toBe(8);
+    // Every small one at once: the pass is wider than the twelve of them.
+    expect(maxInFlight.small).toBe(12);
+    expect(await pendingPaths()).toEqual([]);
+  });
+
+  it('sends what a write replaced while a large blob waited for its slot', async () => {
+    // The gate's wait is a window, and the paired read is taken again once a blob has
+    // a slot: a write that landed in it supersedes the op, which sends nothing.
+    const LARGE = 'x'.repeat(70 * 1024);
+    const paths = Array.from({ length: 9 }, (_, i) => `files/big_${i}.enc`);
+    for (const path of paths) await seedQueued(path, LARGE);
+    // Hold the PUTs until the gate is full; the one path not among them is the one
+    // waiting for a slot, and it is rewritten before any slot frees.
+    const sent: string[] = [];
+    let release!: () => void;
+    const full = new Promise<void>((resolve) => (release = resolve));
+    let waiting: string | undefined;
+    mockPutBlob.mockImplementation(async (url: string) => {
+      sent.push(pathFor(url));
+      if (sent.length === 8) {
+        waiting = paths.find((p) => !sent.includes(p));
+        if (waiting) await seedQueued(waiting, 'rewritten');
+        release();
+      }
+      await full;
+      uploaded.add(pathFor(url));
+    });
+
+    await runIncrementalSync(deps());
+
+    expect(waiting).toBeDefined();
+    expect(sent).not.toContain(waiting);
+    // The rewrite is still queued under its own op, for the cycle that carries it.
+    expect(await pendingPaths()).toEqual([waiting]);
+  });
+
+  it('stops a put set at a failed commit, and leaves the rest queued', async () => {
+    // Two content chunks: the second signs and uploads beside the first one's
+    // commit, and the first one's failure stops the set before the second commits.
+    for (let i = 0; i < 150; i++) await seedQueued(`files/f_${i}.enc`, 'bytes');
+    const refused = new ApiError(400, JSON.stringify({ error: 'bad_request' }));
+    let putSigns = 0;
+
+    await expect(
+      runIncrementalSync(
+        deps({
+          filesSign: (_paths, op) => {
+            if (op === 'put') putSigns += 1;
+          },
+          opsCommit: () => {
+            throw refused;
+          },
+        }),
+      ),
+    ).rejects.toBe(refused);
+
+    expect(commits).toHaveLength(1);
+    expect(putSigns).toBe(2);
+    expect(await pendingPaths()).toHaveLength(150);
+  }, 30_000);
+
+  describe('a first sync', () => {
+    beforeEach(async () => {
+      await db.syncMeta.clear();
+      await beginInitialSync(USER);
+      mockGetBlob.mockImplementation(async (url: string) => {
+        return new Uint8Array([0xee, ...utf8(pathFor(url))]);
+      });
+    });
+
+    it('fetches a listed page while the next is still listing', async () => {
+      let releaseSecondPage = (): void => undefined;
+      const ticks: [number, number][] = [];
+      const pull = runInitialSync(
+        deps({
+          filesListPage: async (pageToken) => {
+            if (pageToken === undefined) {
+              return {
+                files: [
+                  { path: LINK_PATH, updatedAt: 100 },
+                  { path: OTHER_LINK_PATH, updatedAt: 101 },
+                ],
+                nextPageToken: 'page-2',
+              };
+            }
+            await new Promise<void>((resolve) => (releaseSecondPage = resolve));
+            return { files: [{ path: EXTRACTION_PATH, updatedAt: 102 }], nextPageToken: null };
+          },
+        }),
+        (done, total) => ticks.push([done, total]),
+      );
+
+      // The first page is stored with the second still unanswered…
+      for (let i = 0; i < 1000 && (await bodyAt(OTHER_LINK_PATH)) === undefined; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      }
+      expect(await bodyAt(LINK_PATH)).toBe(LINK_PATH);
+      expect(await bodyAt(OTHER_LINK_PATH)).toBe(OTHER_LINK_PATH);
+      // …and the counter has said nothing: its total is not known yet.
+      expect(ticks).toEqual([]);
+
+      releaseSecondPage();
+      await pull;
+
+      expect(await bodyAt(EXTRACTION_PATH)).toBe(EXTRACTION_PATH);
+      // One total, the whole listing's, from the first tick to the last.
+      expect(ticks.every(([, total]) => total === 3)).toBe(true);
+      expect(ticks.at(-1)).toEqual([3, 3]);
+    });
+
+    it('stops fetching when the listing fails partway', async () => {
+      const listingDown = new ApiError(400, JSON.stringify({ error: 'bad_request' }));
+      await expect(
+        runInitialSync(
+          deps({
+            filesListPage: async (pageToken) => {
+              if (pageToken !== undefined) throw listingDown;
+              return { files: [{ path: LINK_PATH, updatedAt: 100 }], nextPageToken: 'page-2' };
+            },
+          }),
+        ),
+      ).rejects.toBe(listingDown);
+
+      // Not a first sync done: the flag stays unset, and the next run lists again.
+      expect((await getSyncMeta(USER))?.firstSyncDoneAt).toBe(0);
+    });
+  });
+});
+
 // --- a PUT that fails mid-chunk ----------------------------------------------
 
 // The third skip shape (uploadBlobs): not a missing record and not an unsigned path,
@@ -1206,10 +1378,12 @@ describe('the put chunk', () => {
     expect(await pendingPaths()).toHaveLength(2 * COUNT);
   });
 
-  slowIt('clears each chunk from the queue before it signs the next', async () => {
+  slowIt('clears each chunk from the queue at most one chunk behind its sign', async () => {
     // The whole point of a smaller content chunk: the pending count steps down per
-    // chunk, not once per phase. A pass that signed ahead, or held its commits to
-    // the end of the phase, would show the count frozen across every sign.
+    // chunk, not once per phase. A chunk's commit runs beside the next chunk's sign
+    // and upload (pushPuts), so at a sign the chunk just uploaded may still be
+    // queued — but the one before it never is. A pass that signed further ahead, or
+    // held its commits to the end of the phase, would show the count frozen.
     const signs: { size: number; pendingBefore: number }[] = [];
     await runIncrementalSync(
       deps({
@@ -1223,9 +1397,14 @@ describe('the put chunk', () => {
 
     expect(signs.length).toBeGreaterThan(2);
     expect(signs[0].pendingBefore).toBe(2 * COUNT);
+    let signedBefore = 0;
     for (let i = 1; i < signs.length; i++) {
-      expect(signs[i].pendingBefore).toBe(signs[i - 1].pendingBefore - signs[i - 1].size);
+      const allButLast = signedBefore;
+      signedBefore += signs[i - 1].size;
+      expect(signs[i].pendingBefore).toBeLessThanOrEqual(2 * COUNT - allButLast);
+      expect(signs[i].pendingBefore).toBeGreaterThanOrEqual(2 * COUNT - signedBefore);
     }
+    expect(await pendingPaths()).toEqual([]);
   });
 
   slowIt('keeps what it pushed before a mid-phase refusal, and counts only the rest', async () => {

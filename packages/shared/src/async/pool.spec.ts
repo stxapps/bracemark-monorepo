@@ -8,7 +8,7 @@
 // Driven by deferreds rather than timers: the interleavings under test are the
 // point, and a timer would race the test against the thing it's measuring.
 
-import { mapLimit } from './pool';
+import { createLimiter, mapLimit } from './pool';
 
 interface Deferred {
   promise: Promise<void>;
@@ -212,5 +212,51 @@ describe('mapLimit', () => {
     } finally {
       process.off('unhandledRejection', onUnhandled);
     }
+  });
+});
+
+// The gate the engines hold large `files/` uploads to inside a wider mapLimit
+// (sync/engine.ts uploadBlobs). Its contracts: the cap, the order a freed slot
+// is handed on in, and that one caller's rejection is that caller's alone.
+describe('createLimiter', () => {
+  it('runs at most `limit` at once, and hands a freed slot to the longest waiter', async () => {
+    const limit = createLimiter(2);
+    const gates = Array.from({ length: 4 }, deferred);
+    const started: number[] = [];
+
+    const runs = gates.map((gate, i) =>
+      limit(async () => {
+        started.push(i);
+        await gate.promise;
+      }),
+    );
+
+    await flush();
+    expect(started).toEqual([0, 1]);
+
+    // Freed by 1, taken by 2 — the first to queue — never by a later arrival.
+    gates[1].resolve();
+    await flush();
+    expect(started).toEqual([0, 1, 2]);
+
+    gates.forEach((g) => g.resolve());
+    await Promise.all(runs);
+    expect(started).toEqual([0, 1, 2, 3]);
+  });
+
+  it('frees the slot of a call that rejects, and rejects only that call', async () => {
+    const limit = createLimiter(1);
+    const boom = new Error('this one');
+    const failing = limit(async () => {
+      throw boom;
+    });
+    const after = limit(async () => 'ran');
+
+    await expect(failing).rejects.toBe(boom);
+    await expect(after).resolves.toBe('ran');
+  });
+
+  it.each([0, -1, 1.5, NaN])('refuses a limit of %p', (n) => {
+    expect(() => createLimiter(n)).toThrow(RangeError);
   });
 });

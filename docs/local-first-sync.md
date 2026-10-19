@@ -220,8 +220,8 @@ staging readings (_measuring a sync_, below) put a 1,000-link push at ~10
 minutes, nearly all of it waiting on sockets:
 
 - **R2's S3 endpoint speaks HTTP/1.1 only** — ALPN refuses `h2` — so a browser
-  holds six sockets to it and queues the rest. The engines' 24-wide fan-out ran
-  six at a time whatever `INDEX_CONCURRENCY` said: content (8 at once) and index
+  holds six sockets to it and queues the rest. The engines' fan-out (24 wide then)
+  ran six at a time whatever `INDEX_CONCURRENCY` said: content (8 at once) and index
   (24) uploads both measured ~5 PUTs/s, and the median PUT waited 3.4 s for a
   socket. URLSession and OkHttp cap a host at a handful of connections too.
 - **Every presigned PUT is CORS-preflighted**, and a preflight is cached per URL.
@@ -729,12 +729,27 @@ duplicate path.
 > kind. An **index** chunk is the smaller of the `files/sign` and `ops/commit`
 > caps (500): KB-sized blobs drain it in seconds, far under the 5-minute TTL, and
 > a smaller chunk would only spend more of the `tight` rate limit (10 calls per
-> 10 s per user; every chunk costs a sign and a commit). A `files/` **content**
-> chunk is **100**, because the chunk is also the step the pending count moves in
-> — its ops leave the queue only when it commits — and 500 MB-sized blobs took
-> minutes on an ordinary uplink, with "N changes waiting to sync" frozen
-> throughout. 100 is about a minute at 1 MB a blob over 10 Mbps, and still ≥ 12
-> fan-out rounds for tiny blobs, which keeps it under the rate limit.
+> 10 s per user and per path, so `files/sign` and `ops/commit` each have a bucket;
+> every chunk spends one call of each). A `files/` **content** chunk is **100**,
+> because the chunk is also the step the pending count moves in — its ops leave
+> the queue only when it commits — and 500 MB-sized blobs took minutes on an
+> ordinary uplink, with "N changes waiting to sync" frozen throughout. 100 is
+> about a minute at 1 MB a blob over 10 Mbps. Small content goes at the full
+> fan-out (_measuring a sync_), so a chunk of it is two or three rounds — but a
+> chunk still spends one sign and one commit, and only a chunk under a second long
+> would reach either bucket's limit.
+>
+> **A chunk's commit runs beside the next chunk's sign and upload**, one commit
+> in flight at most. The commit is a round trip of its own (~1.6 s on staging,
+> mostly R2 answering the existence check), and run in line it left the fan-out
+> idle between every pair of chunks. Overlapped, the order still holds: each
+> commit starts once the one before has landed, a failed one stops the set, the
+> pending count steps down per chunk at most one chunk behind, and a set — so a
+> phase — ends only when its last commit has. The next chunk's URLs are minted
+> after this chunk's upload ended, so the mint-to-PUT window grows by nothing.
+> What it loosens is the quota gate's view: `files/sign` reads usage the commits
+> record, and the gate already charges a batch's growth to the next one (a cost
+> backstop, `lib/quota.ts`), so the overshoot it allows grows from one chunk to two.
 >
 > Even at 100 a content chunk can outlive the TTL on a slow enough uplink, so the
 > expiry is absorbed **per blob**: an expired-URL PUT (R2 answers 403) fails only
@@ -1636,16 +1651,19 @@ is why it is closed rather than written down as accepted.
   upload-time `writeId` test narrows what that cycle can still do: an op whose
   queue row the wipe cleared is superseded and sends nothing. What is left is
   the transfers already in flight when the queue was cleared, which had passed
-  that test: at most one fan-out of them, `INDEX_CONCURRENCY` (24) metadata
-  blobs or `FILE_CONCURRENCY` (8) content blobs. Such a transfer can end two
-  ways. If it lands after the wipe's last R2 listing, the object survives and
+  that test: at most one fan-out of them, `INDEX_CONCURRENCY` (48) blobs, of
+  which at most `FILE_CONCURRENCY` (8) are large content. Such a transfer can end
+  two ways. If it lands after the wipe's last R2 listing, the object survives and
   its commit logs it — a link back on a wiped account, up to that fan-out of
   them. If it lands sooner and its commit falls between the log wipe and the
   delete of its object, the commit's `HEAD` finds the object, the op goes into
   the emptied log, and the paging then removes the object: `op-without-object`
   (_source of truth_), with the path's size left in the quota map until that
   path is next committed or the account is wiped again. A puller skips the 404,
-  so nothing shows. Both are read from source, not reproduced. Running the wipe
+  so nothing shows. A chunk's commit runs beside the next chunk's upload
+  (_a push is chunked_), so the commit of a chunk already sent can be in flight
+  too, and its objects meet the second way — up to a chunk of them. Both are read
+  from source, not reproduced. Running the wipe
   under the cycle lock would close both for a second tab; that is a change to a
   destructive path with its own watchdog, and has not been made. The second is
   not a tab's alone — another device committing during the wipe meets the same
@@ -1882,7 +1900,7 @@ measurement they were waiting for.
   `blob.put`, `commit`, `pull`, `blob.get`, `blob.store`, one `api <path>` per
   contract-call _attempt_ — and the summary turns them into, per name, the wall
   time it owned, the work it did, and their ratio: **how many were really in
-  flight**. `INDEX_CONCURRENCY` is 24; a `blob.put` row that reads 5 says
+  flight**. `INDEX_CONCURRENCY` is 48; a `blob.put` row that reads 5 says
   something is holding the fan-out back, and the other two instruments say what.
   The vocabulary is listed in the module and pinned by
   `packages/web-react/src/sync/engine.spec.ts`, _the timing trace_.
@@ -1912,15 +1930,22 @@ belongs to the engine. Overlapping callers share one cycle (`runIncrementalSync`
 single-flight), and an import's deps or an export's deps would otherwise decide
 whether the cycle they happened to join was timed.
 
-**⚠ On bracemark-web the service worker carries every sync request.** `sw.ts`
-routes every cross-origin request through `NetworkOnly`, so in a production build
-each R2 PUT and GET, and each api call, is answered by the worker, which makes the
-real request itself. Two consequences for a reading. The worker's hop is part of
-the cost, and the only way to price it is to measure with it blocked
-(`measure:sync --no-sw`) and compare. And a page-level network capture sees those
-requests end to end but not their wire: no preflight, socket or protocol, which
-happen in the worker. The dev server registers no worker, so a local reading has
-neither the cost nor the blind spot. Nothing about this is visible in a test.
+**⚠ On bracemark-web the service worker carries the sync's GETs, and only those.**
+`sw.ts` routes cross-origin requests through `NetworkOnly`, and a Serwist route
+matches `GET` unless it names another method. So in a production build each api
+GET (`ops/list`, `files/list`, `iap/status`) — and, before the blob route, each
+presigned R2 GET — is answered by the worker, which makes the real request
+itself. A `PUT` or a `POST` matches no route, and the browser sends it as if no
+worker were registered. Both readings below show it: before the blob route, none
+of 2,363 PUTs and 1,836 of 2,073 pull GETs went through the worker; with it, the
+blob route's reads are POSTs, and none of the blob transfers did. Two
+consequences for a reading. The worker's hop is part of what it carries, and the
+only way to price it is a `--no-sw` run beside an allowed one — which, with the
+blob route, prices a cycle's few api GETs and nothing else. And a page-level
+network capture sees a worker-carried request end to end but not its wire: no
+preflight, socket or protocol, which happen in the worker. The dev server
+registers no worker, so a local reading has neither the cost nor the blind spot.
+Nothing about this is visible in a test.
 
 **What a reading should settle**, in the order the code suggests them. None is
 established until a staging reading shows it:
@@ -1934,8 +1959,8 @@ established until a staging reading shows it:
    socket count and the queued time.
 3. **The service worker's hop** (above): the sw-allowed and `--no-sw` walls side
    by side.
-4. **The `tight` rate limit** (10 calls per 10 s, shared by `files/sign` and
-   `ops/commit`) and `withRetry` waiting out `Retry-After`. Visible as `api` spans
+4. **The `tight` rate limit** (10 calls per 10 s per user and per path, so
+   `files/sign` and `ops/commit` each have a bucket) and `withRetry` waiting out `Retry-After`. Visible as `api` spans
    with `status: 429`.
 5. **Many cycles instead of one.** An import kicks cycles while it is still
    writing. Visible as the cycle count and the `cycle.lock` waits.
@@ -1983,6 +2008,67 @@ existence check are what it justified:
   the whole first sync (`BlobTimeoutError`, 496 of 2,363 stored). The same run's
   incremental push left six link PUTs queued after a failed cycle. One run of
   each, so it is not pinned on `--no-sw`.
+
+**Reading, 2026-10-19 — the same, with the blob route** (`1f06d82`), service
+worker allowed and blocked. Push and pull both ran ~3.4× faster, and what is left
+is R2 itself:
+
+|                                                 | service worker allowed | `--no-sw`       |
+| ----------------------------------------------- | ---------------------- | --------------- |
+| push wall                                       | 179 s                  | 188 s           |
+| upload (8 chunks) / commit (8 calls)            | 156 s / 12.1 s         | 164 s / 14.2 s  |
+| PUT p50 / `r2-put` mean                         | 1.04 s / 1.10 s        | 1.06 s / 1.14 s |
+| PUTs in flight (content 8, index 24 configured) | 17.9                   | 17.7            |
+| protocol, sockets, queued p50                   | `h3`, 1, 0.6 ms        | `h3`, 1, 0.4 ms |
+| CORS preflights                                 | 10                     | 10              |
+| pull                                            | 74 s, 33 GETs/s        | 73 s, 32 GETs/s |
+| GET p50 / `r2-get` mean                         | 0.68 s / 0.63 s        | 0.68 s / 0.63 s |
+| floor at 24 / 48 at once                        | 65 / 60 per s          | 63 / 112 per s  |
+| incremental (100 links onto 1,000)              | 8.7 s                  | 9.1 s           |
+
+- **The transport is settled.** One HTTP/3 connection carried every transfer,
+  nothing waited for a socket, and ten preflights answered a 2,363-PUT push. The
+  commit went from 127 s to 12 s on the listing existence check.
+- **What is left is the Worker waiting on R2**: `r2-put` and `r2-get` are
+  nearly all of each transfer, against tens of milliseconds of wire. Both tiers'
+  buckets are in eastern North America (`ENAM`); on loopback the same calls take milliseconds. A bucket's region is fixed when it
+  is created, and production's holds users' data, so that factor stays. A sync's
+  time is then about objects × R2 latency ÷ fan-out, and the fan-out is the only
+  factor the client owns.
+- **The fan-out was the limit.** 17.9 PUTs in flight against 8 for content and
+  24 for the index: the 290 content blobs — 343 B each in this library — went up
+  at ~5 a second. The floor's p50 held at ~355 ms from 24 to 48 GETs at once, so
+  the server was not the limit; its rate at 48 differs by run (60 and 112 a
+  second) because 480 GETs at 48 wide is ten rounds, and one straggler sets the
+  wall.
+- **Serial seams.** Between each pair of the push's 8 chunks, a sign (~0.7 s)
+  and a commit (~1.6 s) ran with no transfer in flight. The pull listed all of
+  its pages (6–8.5 s) before its first GET, signed each 1,000-path batch only
+  after the one before had drained, and narrowed to its slowest GET at every
+  batch's end.
+- **The service worker carried none of it** (above), so the two columns differ
+  by noise.
+- **No 4xx, no 5xx, no 429.** The api's stored invocation log for both runs —
+  13,711 entries — held no blob token and no object path: `authorization` was
+  masked on every PUT, a read's token rides in a body the log does not keep, and
+  every blob entry's URL is the bare route. The refusal line never fired.
+
+It justified three engine changes, in both engines, and the next staging reading
+is what will price them:
+
+- `INDEX_CONCURRENCY` 48, and content sized rather than counted: a `files/` blob
+  up to 64 KiB goes at the full fan-out, a larger one waits for one of
+  `FILE_CONCURRENCY` (8) slots inside it (`uploadBlobs`; the threshold's
+  arithmetic is at `LARGE_CONTENT_BYTES`).
+- A chunk's commit runs beside the next chunk's sign and upload (_a push is
+  chunked_).
+- A pull is one fan-out that signs a batch ahead (`createSignedFanOut`,
+  `@stxapps/shared`), and a first sync's GETs start on its first listed page; its
+  counter still waits for the whole listing before it shows a total.
+
+Not taken: a bucket nearer its users (above), and holding small records outside
+R2 — in the user's Durable Object, or packed — which would make a push or pull of
+a thousand links a handful of calls, and reverses _source of truth_.
 
 ### deferred
 

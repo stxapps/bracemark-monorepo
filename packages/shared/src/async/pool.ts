@@ -51,3 +51,31 @@ export async function mapLimit<T>(
   });
   await Promise.all(workers);
 }
+
+// A gate that lets at most `limit` calls run at once, for work that is not one
+// list: the sync engines' uploads hold their large `files/` blobs to a narrower
+// fan-out than the pass around them (sync/engine.ts uploadBlobs), and those
+// blobs arrive one at a time from inside a mapLimit. Waiters are served in the
+// order they arrived. A rejection belongs to its own caller and frees the slot;
+// it never closes the gate, unlike mapLimit's failure policy, because the gate
+// has no queue of its own to abandon.
+export function createLimiter(limit: number): <T>(run: () => Promise<T>) => Promise<T> {
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw new RangeError(`createLimiter: limit must be a positive integer, got ${limit}`);
+  }
+  let active = 0;
+  const waiting: (() => void)[] = [];
+  return async (run) => {
+    if (active >= limit) await new Promise<void>((resolve) => waiting.push(resolve));
+    else active += 1;
+    try {
+      return await run();
+    } finally {
+      // Hand the slot straight to the next waiter rather than freeing it, so a
+      // caller arriving between the two can never jump the queue.
+      const next = waiting.shift();
+      if (next) next();
+      else active -= 1;
+    }
+  };
+}

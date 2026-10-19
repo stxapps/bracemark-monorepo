@@ -33,9 +33,10 @@ export const BLOB_BASE_TIMEOUT_MS = 60_000;
 // URLSession's default request timeout, the idle deadline the expo file
 // transfers already live by on iOS.
 export const BLOB_IDLE_TIMEOUT_MS = 60_000;
-// Per TRANSFER, not per link: the web engine runs FILE_CONCURRENCY (8) `files/`
-// PUTs at once over one uplink, so 8 KB/s each is ~512 kbps when they are all
-// MB-sized.
+// Per TRANSFER, not per link: the web engine runs at most FILE_CONCURRENCY (8)
+// large `files/` PUTs at once over one uplink, so 8 KB/s each is ~512 kbps when
+// they are all MB-sized. Small ones run beside them at the full fan-out, each
+// under LARGE_CONTENT_BYTES and so inside the base allowance (sync/engine.ts).
 // Set low on purpose, because the two ways to be wrong don't cost the same. Too
 // high fails a slow-but-healthy upload on every cycle, so that blob never syncs;
 // too low only holds a cycle longer behind a PUT that has truly stalled, and

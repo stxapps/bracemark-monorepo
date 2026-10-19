@@ -185,6 +185,12 @@ interface Handlers {
   opsList?: (asked: { since?: number; sincePath?: string }) => Promise<OpsListReply> | OpsListReply;
   filesList?: () =>
     Promise<{ path: string; updatedAt: number }[]> | { path: string; updatedAt: number }[];
+  // A listing in pages, for the specs about what happens between them. Wins over
+  // `filesList` when both are set.
+  filesListPage?: (pageToken: string | undefined) => Promise<{
+    files: { path: string; updatedAt: number }[];
+    nextPageToken: string | null;
+  }>;
   // The hook a test uses to land a write mid-cycle — it runs after the pending
   // snapshot and before the apply. `op` is passed so a handler can refuse PUT
   // signing while leaving GETs alone, the way the quota gate does.
@@ -235,6 +241,9 @@ function makeApi(handlers: Handlers = {}): SyncDeps['api'] {
         return (await handlers.opsList?.(asked)) ?? empty;
       }
       if (endpoint === filesListEndpoint) {
+        if (handlers.filesListPage) {
+          return handlers.filesListPage(input.pageToken as string | undefined);
+        }
         return { files: (await handlers.filesList?.()) ?? [], nextPageToken: null };
       }
       if (endpoint === filesSignEndpoint) {
@@ -389,6 +398,108 @@ beforeEach(async () => {
   // state.
   await beginInitialSync(USER);
   await markFirstSyncDone(USER, 1000, 'links/l_seed.enc');
+});
+
+// --- the fan-out --------------------------------------------------------------
+
+// Web engine's spec carries the reading behind these. Here the size that picks a
+// content upload's fan-out is the plaintext file's, read before anything is sent.
+describe('the fan-out', () => {
+  it('sends small content wide, and holds large content to the narrow gate', async () => {
+    const LARGE = 'x'.repeat(70 * 1024);
+    for (let i = 0; i < 12; i++) await seedQueuedContent(`big_${i}`, LARGE);
+    for (let i = 0; i < 12; i++) await seedQueuedContent(`small_${i}`, 'tiny');
+    const inFlight = { large: 0, small: 0 };
+    const maxInFlight = { large: 0, small: 0 };
+    mockPutBlobFromFile.mockImplementation(async (url: string) => {
+      const kind = pathFor(url).includes('big_') ? 'large' : 'small';
+      inFlight[kind] += 1;
+      maxInFlight[kind] = Math.max(maxInFlight[kind], inFlight[kind]);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight[kind] -= 1;
+      uploaded.add(pathFor(url));
+    });
+
+    await runIncrementalSync(deps());
+
+    expect(maxInFlight.large).toBe(8);
+    expect(maxInFlight.small).toBe(12);
+    expect(await pendingPaths()).toEqual([]);
+    expect(tempFiles()).toEqual([]);
+  });
+
+  it('stops a put set at a failed commit, and leaves the rest queued', async () => {
+    // Two content chunks (100 each) are what put a sign beside a commit; the
+    // links are the metadata phase the failure must keep from starting.
+    for (let i = 0; i < 150; i++) seedQueued(pathFromId(`l_${i}`, LINKS_PREFIX), 'bytes');
+    for (let i = 0; i < 150; i++) await seedQueuedContent(`f_${i}`, 'bytes');
+    const refused = new ApiError(400, JSON.stringify({ error: 'bad_request' }));
+    let putSigns = 0;
+
+    await expect(
+      runIncrementalSync(
+        deps({
+          filesSign: (_paths, op) => {
+            if (op === 'put') putSigns += 1;
+          },
+          opsCommit: () => {
+            throw refused;
+          },
+        }),
+      ),
+    ).rejects.toBe(refused);
+
+    // The first content chunk's commit failed; the second was signed and uploaded
+    // beside it and never committed, and the metadata phase never started.
+    expect(commits).toHaveLength(1);
+    expect(putSigns).toBe(2);
+    expect(await pendingPaths()).toHaveLength(300);
+  }, 30_000);
+
+  it('fetches a first sync’s listed page while the next is still listing', async () => {
+    // No first-sync flag — this IS the first sync (the shared beforeEach seeds a
+    // returning client).
+    getDb().delete(syncMeta).run();
+    await beginInitialSync(USER);
+    mockGetBlob.mockImplementation(
+      async (url: string) => new Uint8Array([0xee, ...utf8(pathFor(url))]),
+    );
+
+    let releaseSecondPage = (): void => undefined;
+    const ticks: [number, number][] = [];
+    const pull = runInitialSync(
+      deps({
+        filesListPage: async (pageToken) => {
+          if (pageToken === undefined) {
+            return {
+              files: [
+                { path: LINK_PATH, updatedAt: 100 },
+                { path: OTHER_LINK_PATH, updatedAt: 101 },
+              ],
+              nextPageToken: 'page-2',
+            };
+          }
+          await new Promise<void>((resolve) => (releaseSecondPage = resolve));
+          return { files: [{ path: EXTRACTION_PATH, updatedAt: 102 }], nextPageToken: null };
+        },
+      }),
+      (done, total) => ticks.push([done, total]),
+    );
+
+    for (let i = 0; i < 1000 && (await bodyAt(OTHER_LINK_PATH)) === undefined; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+    expect(await bodyAt(LINK_PATH)).toBe(LINK_PATH);
+    expect(await bodyAt(OTHER_LINK_PATH)).toBe(OTHER_LINK_PATH);
+    expect(ticks).toEqual([]);
+
+    releaseSecondPage();
+    await pull;
+
+    expect(await bodyAt(EXTRACTION_PATH)).toBe(EXTRACTION_PATH);
+    expect(ticks.every(([, total]) => total === 3)).toBe(true);
+    expect(ticks.at(-1)).toEqual([3, 3]);
+  });
 });
 
 // The delete-all flow's hold (web engine's spec carries the full set): a cycle already

@@ -63,6 +63,7 @@ export * from './sync/link-query';
 export * from './sync/lock-coverage';
 export * from './sync/paths';
 export * from './sync/rank';
+export * from './sync/signed-fan-out';
 export * from './sync/sort';
 export * from './sync/status';
 export * from './sync/system-lists';

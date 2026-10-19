@@ -22,7 +22,8 @@ import { type ApiClient, ApiError } from '../api/client';
 //   api <path>       one contract call ATTEMPT, so a retried 429 is two spans with
 //                    the backoff between them {status on failure, retryAfterMs}
 //   push             a whole drain {puts, deletes}
-//   push.chunk       one sign → upload → commit pass {kind: content|index, ops}
+//   push.chunk       one sign → upload → commit pass, to its commit's end — beside
+//                    the next chunk's sign and upload {kind: content|index, ops}
 //   upload           a chunk's PUT fan-out {ops, concurrency}
 //   blob.read        reading one op's local record (and its queue row)
 //   blob.encrypt     sealing one blob
@@ -31,7 +32,7 @@ import { type ApiClient, ApiError } from '../api/client';
 //   commit.restamp   writing the commit's stamps onto the local records
 //   commit.clear     removing the committed ops from the queue
 //   pull             a download set {entries}
-//   download         a chunk's GET fan-out {entries, concurrency}
+//   download         a pull's GET fan-out, first queued GET to last {entries, concurrency}
 //   blob.get         one R2 GET {bytes, ns}
 //   blob.decrypt     opening one blob
 //   blob.store       writing one pulled record

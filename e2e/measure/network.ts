@@ -17,11 +17,13 @@ import { type CDPSession, type Page } from '@playwright/test';
 // the floor leg.
 //
 // ⚠ A SERVICE WORKER HIDES THE WIRE. A production build's worker answers every
-// cross-origin request (bracemark-web sw.ts, the NetworkOnly route), so the page
-// sees each one as `fromServiceWorker` with the worker's timing, and the real
-// request — its preflight, its socket, its protocol — happens in the worker,
-// out of this session's sight. Those requests are still counted and timed end
-// to end; the breakdown needs a run with the worker blocked (`--no-sw`).
+// cross-origin GET (bracemark-web sw.ts, the NetworkOnly route; a Serwist route
+// matches no other method), so the page sees each one as `fromServiceWorker`
+// with the worker's timing, and the real request — its preflight, its socket,
+// its protocol — happens in the worker, out of this session's sight. Those
+// requests are still counted and timed end to end; the breakdown needs a run
+// with the worker blocked (`--no-sw`). The blob route's PUTs and POST reads
+// never reach it (docs/local-first-sync.md, _measuring a sync_).
 
 // bracemark-api's local-dev blob proxy, which stands in for R2 under `wrangler
 // dev` (bracemark-api r2/local.ts, LOCAL_BLOB_PATH_PREFIX). Duplicated rather

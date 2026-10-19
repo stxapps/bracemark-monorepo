@@ -99,6 +99,12 @@ export class File extends FileSystemNode {
     return files.has(this.uri);
   }
 
+  // Bytes, and 0 for a file that does not exist — the native API's answer. The
+  // sync engine reads it to choose a content upload's fan-out (uploadBlobs).
+  get size(): number {
+    return files.get(this.uri)?.byteLength ?? 0;
+  }
+
   delete(): void {
     if (!files.delete(this.uri)) throw new Error(`No such file: ${this.uri}`);
   }
