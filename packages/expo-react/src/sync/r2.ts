@@ -22,7 +22,7 @@ import { fetch as expoFetch } from 'expo/fetch';
 import { File } from 'expo-file-system';
 import { FileSystemUploadType, uploadAsync } from 'expo-file-system/legacy';
 
-import { blobTransferTimeoutMs, withDeadline } from '@stxapps/shared';
+import { blobTransferTimeoutMs, receiptOf, withDeadline } from '@stxapps/shared';
 
 // Carries the HTTP status so callers can branch on it — the one the sync engine
 // cares about is a GET 404 (the object was deleted between the op pull / listing
@@ -58,12 +58,14 @@ function headersFor(authorization: string | undefined): Record<string, string> |
   return authorization ? { authorization } : undefined;
 }
 
+// Both PUTs resolve with the upload receipt the blob route answered with, or
+// undefined when there was none — see web-react's sync/r2.ts putBlob.
 export async function putBlob(
   url: string,
   body: Uint8Array<ArrayBuffer>,
   authorization?: string,
-): Promise<void> {
-  await withDeadline(
+): Promise<string | undefined> {
+  return withDeadline(
     async (signal) => {
       const res = await expoFetch(url, {
         method: 'PUT',
@@ -72,6 +74,7 @@ export async function putBlob(
         signal,
       });
       if (!res.ok) throw new BlobRequestError('PUT', res.status);
+      return receiptOf(await res.text().catch(() => ''));
     },
     blobTransferTimeoutMs(body.byteLength),
     (ms) => new BlobTimeoutError('PUT', ms),
@@ -102,13 +105,14 @@ export async function putBlobFromFile(
   url: string,
   file: File,
   authorization?: string,
-): Promise<void> {
+): Promise<string | undefined> {
   const res = await uploadAsync(url, file.uri, {
     httpMethod: 'PUT',
     uploadType: FileSystemUploadType.BINARY_CONTENT,
     headers: headersFor(authorization),
   });
   if (res.status < 200 || res.status >= 300) throw new BlobRequestError('PUT', res.status);
+  return receiptOf(res.body ?? '');
 }
 
 // Both native implementations reject a non-2xx download with only a MESSAGE —

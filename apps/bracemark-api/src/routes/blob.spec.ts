@@ -4,9 +4,12 @@ import { describe, expect, it } from 'vitest';
 import { BLOB_PATH, filesSignEndpoint, opsCommitEndpoint, type SignedUrl } from '@stxapps/shared';
 
 import { app } from '../app';
+import { userDataStub } from '../do/user-data';
 import type { Bindings } from '../lib/env';
+import { BLOB_AUTH_SCHEME, mintBlobToken } from '../r2/blob-token';
 import { userFileKey } from '../r2/keys';
 import { issueSession } from '../services/session';
+import { deleteAllUserData } from '../services/sync';
 
 // The blob route (routes/blob.ts) end to end through the real app and the real
 // (miniflare) bucket: a client signs with `via: 'api'`, moves the bytes over the
@@ -170,5 +173,161 @@ describe('the blob route', () => {
 
     expect((await transfer(get, {}, { ...env, API_RATE_LIMIT: deny })).status).toBe(404);
     expect((await transfer(get, {}, { ...env, API_RATE_LIMIT_BLOB: deny })).status).toBe(429);
+  });
+
+  // A PUT answers with an upload receipt, and a commit that carries it records the
+  // put without asking R2 whether it landed (r2/upload-receipt.ts) — the check
+  // whose time grew with the library (docs/local-first-sync.md, _upload
+  // receipts_). Each case below is a way the shortcut could record an op for an
+  // object that is not there, or refuse one that is; the fence's own semantics
+  // are pinned against the DO in do/user-data.spec.ts.
+  describe('upload receipts', () => {
+    type Committed = {
+      results: { path: string; updatedAt: number }[];
+      failed: { path: string; reason: string }[];
+    };
+
+    async function upload(signed: SignedUrl, body = 'ciphertext'): Promise<string | undefined> {
+      const res = await transfer(signed, { method: 'PUT', body });
+      expect(res.status).toBe(200);
+      return ((await res.json()) as { receipt?: string }).receipt;
+    }
+
+    async function commit(
+      auth: Record<string, string>,
+      ops: { op: 'put' | 'delete'; path: string; receipt?: string }[],
+    ): Promise<Committed> {
+      const res = await app.request(
+        opsCommitEndpoint.path,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...auth },
+          body: JSON.stringify({ ops }),
+        },
+        env,
+      );
+      expect(res.status).toBe(200);
+      return (await res.json()) as Committed;
+    }
+
+    // Proven by taking the object away behind the api's back: a commit that
+    // still records the put never looked at R2, and one without the receipt,
+    // which must, refuses it.
+    it('records a receipted put at R2’s own stamp and size without asking R2', async () => {
+      const userId = 'receipt-skip';
+      const auth = await authFor(userId);
+      const [a, b] = await sign(auth, 'put', ['links/a.enc', 'links/b.enc']);
+      const receipt = await upload(a, 'ciphertext');
+      await upload(b);
+      const object = await env.USER_FILES.head(userFileKey(userId, 'links/a.enc'));
+      await env.USER_FILES.delete([
+        userFileKey(userId, 'links/a.enc'),
+        userFileKey(userId, 'links/b.enc'),
+      ]);
+
+      expect(receipt).toMatch(/^v1\./);
+      const committed = await commit(auth, [
+        { op: 'put', path: 'links/a.enc', receipt },
+        { op: 'put', path: 'links/b.enc' },
+      ]);
+
+      expect(committed.results).toEqual([
+        { path: 'links/a.enc', updatedAt: object?.uploaded.getTime() },
+      ]);
+      expect(committed.failed).toEqual([{ path: 'links/b.enc', reason: 'no_object' }]);
+      expect(await userDataStub(env, userId).usage()).toEqual({
+        fileCount: 1,
+        totalBytes: 'ciphertext'.length,
+      });
+    });
+
+    it('checks R2 for a put whose receipt is another user’s', async () => {
+      const auth = await authFor('receipt-owner');
+      const [signed] = await sign(auth, 'put', ['links/a.enc']);
+      const receipt = await upload(signed);
+
+      const committed = await commit(await authFor('receipt-thief'), [
+        { op: 'put', path: 'links/a.enc', receipt },
+      ]);
+
+      expect(committed.results).toEqual([]);
+      expect(committed.failed).toEqual([{ path: 'links/a.enc', reason: 'no_object' }]);
+    });
+
+    // Another device's delete of the path, committed between this device's sign
+    // and its commit, took the object this receipt describes.
+    it('checks R2 for a receipted put whose path was deleted since its sign', async () => {
+      const userId = 'receipt-deleted';
+      const auth = await authFor(userId);
+      const [signed] = await sign(auth, 'put', ['pins/l_a.enc']);
+      const receipt = await upload(signed);
+      await commit(auth, [{ op: 'delete', path: 'pins/l_a.enc' }]);
+
+      const committed = await commit(auth, [{ op: 'put', path: 'pins/l_a.enc', receipt }]);
+
+      expect(committed.failed).toEqual([{ path: 'pins/l_a.enc', reason: 'no_object' }]);
+      const { ops } = await userDataStub(env, userId).listOps(null, null);
+      expect(ops.map((o) => o.op)).toEqual(['delete']);
+    });
+
+    // The same fence, where the object DOES exist again — the delete landed
+    // before this PUT re-created it. The receipt is turned down, R2 is asked,
+    // and the whole batch lands, the clear receipt beside it included.
+    it('records the whole batch from R2 when the fence turns one receipt down', async () => {
+      const userId = 'receipt-recheck';
+      const auth = await authFor(userId);
+      const [pin, link] = await sign(auth, 'put', ['pins/l_a.enc', 'links/b.enc']);
+      await commit(auth, [{ op: 'delete', path: 'pins/l_a.enc' }]);
+      const pinReceipt = await upload(pin);
+      const linkReceipt = await upload(link);
+
+      const committed = await commit(auth, [
+        { op: 'put', path: 'pins/l_a.enc', receipt: pinReceipt },
+        { op: 'put', path: 'links/b.enc', receipt: linkReceipt },
+      ]);
+
+      expect(committed.results.map((r) => r.path)).toEqual(['pins/l_a.enc', 'links/b.enc']);
+      expect(committed.failed).toEqual([]);
+    });
+
+    // A wipe appends no delete; only the log's generation says one happened.
+    it('checks R2 for a receipted put from before a wipe', async () => {
+      const userId = 'receipt-wiped';
+      const auth = await authFor(userId);
+      const [signed] = await sign(auth, 'put', ['links/a.enc']);
+      const receipt = await upload(signed);
+      await deleteAllUserData(env, userId);
+
+      const committed = await commit(auth, [{ op: 'put', path: 'links/a.enc', receipt }]);
+
+      expect(committed.failed).toEqual([{ path: 'links/a.enc', reason: 'no_object' }]);
+      expect((await userDataStub(env, userId).listOps(null, null)).ops).toEqual([]);
+    });
+
+    // A token minted before receipts carries no fence, so the receipt it would
+    // need cannot be vouched for — the PUT answers with none, and its commit is
+    // checked against R2 as before.
+    it('answers a PUT under a token with no fence with no receipt', async () => {
+      const userId = 'receipt-old-token';
+      const token = await mintBlobToken(env.R2_SECRET_ACCESS_KEY ?? '', {
+        userId,
+        path: 'links/a.enc',
+        method: 'PUT',
+        expiresIn: 300,
+      });
+
+      const res = await app.request(
+        BLOB_PATH,
+        {
+          method: 'PUT',
+          body: 'ciphertext',
+          headers: { authorization: `${BLOB_AUTH_SCHEME} ${token}` },
+        },
+        env,
+      );
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({});
+    });
   });
 });

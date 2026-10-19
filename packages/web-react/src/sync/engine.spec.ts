@@ -132,6 +132,16 @@ const pathFor = (url: string): string => url.slice('https://r2.test/'.length);
 // above stay per-path so a mock can tell the transfers apart; the engine treats
 // both as opaque.
 const tokenFor = (path: string): string => `Blob token-for-${path}`;
+// What the blob route answers a PUT with: the upload receipt the commit carries
+// back (sync/r2.ts putBlob). As opaque to the engine as the token.
+const receiptFor = (path: string): string => `receipt-for-${path}`;
+
+// A PUT that landed: the fake bucket holds the object, and the route answered
+// with its receipt.
+function landed(path: string): string {
+  uploaded.add(path);
+  return receiptFor(path);
+}
 
 // An ApiClient that dispatches on endpoint IDENTITY (not path strings), so a renamed
 // route can't silently turn a handler into the "unexpected endpoint" throw below.
@@ -234,7 +244,7 @@ function failUploadsFor(...paths: string[]): void {
   mockPutBlob.mockImplementation(async (url: string) => {
     const path = pathFor(url);
     if (failing.has(path)) throw EXPIRED_URL;
-    uploaded.add(path);
+    return landed(path);
   });
 }
 
@@ -266,7 +276,7 @@ beforeEach(async () => {
   uploaded = new Set();
   jest.clearAllMocks();
   mockPutBlob.mockImplementation(async (url: string) => {
-    uploaded.add(pathFor(url));
+    return landed(pathFor(url));
   });
   await db.items.clear();
   await db.pendingOps.clear();
@@ -744,6 +754,31 @@ describe('the push', () => {
     expect(mockGetBlob).toHaveBeenCalledWith(urlFor(OTHER_LINK_PATH), tokenFor(OTHER_LINK_PATH));
   });
 
+  // The receipt lets the server record a put without asking R2 whether it landed —
+  // on a large library the commit's whole cost (docs/local-first-sync.md, _upload
+  // receipts_). Dropped on the way, every commit is back on R2 and nothing fails.
+  // A PUT answered with none (a presign, an older api) commits without one.
+  it('commits each put with the receipt its PUT answered with, when it had one', async () => {
+    await seedQueued(LINK_PATH, 'the link');
+    await seedQueued(OTHER_LINK_PATH, 'the other link');
+    mockPutBlob.mockImplementation(async (url: string) => {
+      const path = pathFor(url);
+      uploaded.add(path);
+      return path === LINK_PATH ? receiptFor(path) : undefined;
+    });
+
+    await runIncrementalSync(deps());
+
+    expect(commits.flat()).toEqual(
+      expect.arrayContaining([
+        { op: 'put', path: LINK_PATH, receipt: receiptFor(LINK_PATH) },
+        { op: 'put', path: OTHER_LINK_PATH },
+      ]),
+    );
+    expect(commits.flat()).toHaveLength(2);
+    expect(commits.flat().find((o) => o.path === OTHER_LINK_PATH)).not.toHaveProperty('receipt');
+  });
+
   it('commits content before the metadata that references it', async () => {
     await seedQueued(FILE_PATH, 'image bytes');
     await seedQueued(EXTRACTION_PATH, 'refers to the image');
@@ -791,7 +826,7 @@ describe('the fan-out', () => {
       maxInFlight[kind] = Math.max(maxInFlight[kind], inFlight[kind]);
       await new Promise((resolve) => setTimeout(resolve, 5));
       inFlight[kind] -= 1;
-      uploaded.add(pathFor(url));
+      return landed(pathFor(url));
     });
     return maxInFlight;
   }
@@ -831,7 +866,7 @@ describe('the fan-out', () => {
         release();
       }
       await full;
-      uploaded.add(pathFor(url));
+      return landed(pathFor(url));
     });
 
     await runIncrementalSync(deps());
@@ -1028,7 +1063,7 @@ describe('a transient upload failure', () => {
 
     // The retry is the whole point of leaving it queued: same bytes, new presign.
     mockPutBlob.mockImplementation(async (url: string) => {
-      uploaded.add(pathFor(url));
+      return landed(pathFor(url));
     });
     commits = [];
     await runIncrementalSync(deps());
@@ -1079,7 +1114,7 @@ describe('a transient upload failure', () => {
     await expect(runIncrementalSync(deps())).rejects.toBe(EXPIRED_URL);
 
     mockPutBlob.mockImplementation(async (url: string) => {
-      uploaded.add(pathFor(url));
+      return landed(pathFor(url));
     });
     commits = [];
     await runIncrementalSync(deps());
@@ -1103,7 +1138,7 @@ describe('a transfer the host refused for now', () => {
     let refusals = 1;
     mockPutBlob.mockImplementation(async (url: string) => {
       if (pathFor(url) === LINK_PATH && refusals-- > 0) throw new BlobRequestError('PUT', 500);
-      uploaded.add(pathFor(url));
+      return landed(pathFor(url));
     });
 
     expect(await settleCycle()).not.toBeInstanceOf(Error);
@@ -1130,7 +1165,7 @@ describe('a transfer the host refused for now', () => {
     let drops = 1;
     mockPutBlob.mockImplementation(async (url: string) => {
       if (pathFor(url) === LINK_PATH && drops-- > 0) throw new TypeError('Failed to fetch');
-      uploaded.add(pathFor(url));
+      return landed(pathFor(url));
     });
 
     expect(await settleCycle()).not.toBeInstanceOf(Error);
@@ -2237,6 +2272,7 @@ function onServer(
 function r2On(server: SyncServer): void {
   mockPutBlob.mockImplementation(async (url: string, body: Uint8Array) => {
     server.put(pathFor(url), body);
+    return undefined;
   });
   mockGetBlob.mockImplementation(async (url: string) => server.get(pathFor(url)));
 }
@@ -2572,6 +2608,7 @@ describe('two tabs, one queue', () => {
     });
     tab.r2.putBlob.mockImplementation(async (url: string, body: Uint8Array) => {
       server.put(pathFor(url), body);
+      return undefined;
     });
     tab.r2.getBlob.mockImplementation(async (url: string) => server.get(pathFor(url)));
     return tab;
@@ -2612,6 +2649,7 @@ describe('two tabs, one queue', () => {
       started();
       await held;
       server.put(pathFor(url), body);
+      return undefined;
     });
     return { uploading, land };
   }

@@ -154,13 +154,21 @@ export async function uploadShareDraft(deps: ShareUploadDeps, draft: ShareDraft)
   // that predates it answers with presigns, which need no header.
   const { urls } = await deps.api.call(filesSignEndpoint, { op: 'put', paths, via: 'api' });
   const signedByPath = new Map(urls.map((u) => [u.path, u]));
+  // Each PUT's upload receipt, which the commit carries back so the server records
+  // the op without asking R2 again (docs/local-first-sync.md, _upload receipts_);
+  // a PUT answered with none commits without one, checked against R2 as before.
+  const receipts = new Map<string, string>();
   for (const { path, blob } of blobs) {
     const signed = signedByPath.get(path);
     if (!signed) throw new Error(`uploadShareDraft: no signed URL for ${path}`);
-    await putBlob(signed.url, blob, signed.authorization);
+    const receipt = await putBlob(signed.url, blob, signed.authorization);
+    if (receipt) receipts.set(path, receipt);
   }
 
   await deps.api.call(opsCommitEndpoint, {
-    ops: paths.map((path) => ({ op: 'put' as const, path })),
+    ops: paths.map((path) => {
+      const receipt = receipts.get(path);
+      return receipt ? { op: 'put' as const, path, receipt } : { op: 'put' as const, path };
+    }),
   });
 }

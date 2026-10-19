@@ -220,6 +220,9 @@ const pathFor = (url: string): string => url.slice('https://r2.test/'.length);
 // stay per-path so a mock can tell transfers apart; the engine treats both as
 // opaque.
 const tokenFor = (path: string): string => `Blob token-for-${path}`;
+// What the blob route answers a PUT with: the upload receipt the commit carries
+// back (sync/r2.ts). As opaque to the engine as the token.
+const receiptFor = (path: string): string => `receipt-for-${path}`;
 
 // An ApiClient that dispatches on endpoint IDENTITY (not path strings), so a
 // renamed route can't silently turn a handler into the "unexpected endpoint"
@@ -354,11 +357,13 @@ function failUploadsFor(...paths: string[]): void {
   mockPutBlob.mockImplementation(async (url: string) => {
     if (failing.has(pathFor(url))) throw EXPIRED_URL;
     uploaded.add(pathFor(url));
+    return receiptFor(pathFor(url));
   });
   mockPutBlobFromFile.mockImplementation(async (url: string, file: { uri: string }) => {
     if (failing.has(pathFor(url))) throw EXPIRED_URL;
     uploaded.add(pathFor(url));
     uploadedFiles.set(pathFor(url), readFileText(file.uri));
+    return receiptFor(pathFor(url));
   });
 }
 
@@ -394,10 +399,12 @@ beforeEach(async () => {
 
   mockPutBlob.mockImplementation(async (url: string) => {
     uploaded.add(pathFor(url));
+    return receiptFor(pathFor(url));
   });
   mockPutBlobFromFile.mockImplementation(async (url: string, file: { uri: string }) => {
     uploaded.add(pathFor(url));
     uploadedFiles.set(pathFor(url), readFileText(file.uri));
+    return receiptFor(pathFor(url));
   });
   mockGetBlobToFile.mockImplementation(async (url: string, file: { uri: string }) => {
     const plain = r2Content.get(pathFor(url));
@@ -440,6 +447,7 @@ describe('the fan-out', () => {
       await new Promise((resolve) => setTimeout(resolve, 5));
       inFlight[kind] -= 1;
       uploaded.add(pathFor(url));
+      return receiptFor(pathFor(url));
     });
 
     await runIncrementalSync(deps());
@@ -677,6 +685,7 @@ describe('a content push', () => {
       if (refusals-- > 0) throw new BlobRequestError('PUT', 500);
       uploaded.add(pathFor(url));
       uploadedFiles.set(pathFor(url), readFileText(file.uri));
+      return receiptFor(pathFor(url));
     });
 
     expect(await settleSkippingBackoff(() => runIncrementalSync(deps()))).not.toBeInstanceOf(Error);
@@ -728,6 +737,21 @@ describe('a content push', () => {
     expect(commits.map((batch) => batch.map((o) => o.path))).toEqual([
       [FILE_PATH],
       [EXTRACTION_PATH],
+    ]);
+  });
+
+  // Drift guard for web's receipt case: both of this engine's uploads — the
+  // native file PUT and the in-memory entity PUT — hand their receipt to the
+  // chunk's commit (docs/local-first-sync.md, _upload receipts_).
+  it('commits each put with the receipt its PUT answered with', async () => {
+    await seedQueuedContent(FILE_ID, 'image bytes');
+    seedQueued(EXTRACTION_PATH, 'refers to the image');
+
+    await runIncrementalSync(deps());
+
+    expect(commits).toEqual([
+      [{ op: 'put', path: FILE_PATH, receipt: receiptFor(FILE_PATH) }],
+      [{ op: 'put', path: EXTRACTION_PATH, receipt: receiptFor(EXTRACTION_PATH) }],
     ]);
   });
 

@@ -1,7 +1,7 @@
 import { type Context, Hono } from 'hono';
 import { createMiddleware } from 'hono/factory';
 
-import { BLOB_PATH } from '@stxapps/shared';
+import { BLOB_PATH, type BlobPutResponse } from '@stxapps/shared';
 
 import type { AppEnv } from '../lib/env';
 import { HttpError } from '../lib/errors';
@@ -14,6 +14,7 @@ import {
   BlobTokenError,
   verifyBlobToken,
 } from '../r2/blob-token';
+import { mintUploadReceipt } from '../r2/upload-receipt';
 import { userFilesRepo } from '../r2/user-files';
 
 // PUT / GET / POST /v1/files/blob — the blob route: one object's ciphertext in or out,
@@ -127,18 +128,26 @@ export const blobRoutes = new Hono<AppEnv>()
   .get(BLOB_PATH, requireBlobToken('GET'), rateLimit('blob', blobRateLimitKey), read)
   .post(BLOB_PATH, requireBlobToken('GET', 'body'), rateLimit('blob', blobRateLimitKey), read)
   .put(BLOB_PATH, requireBlobToken('PUT'), rateLimit('blob', blobRateLimitKey), async (c) => {
-    const { userId, path } = grantOf(c);
+    const { userId, path, fence } = grantOf(c);
     const repo = userFilesRepo(c.env);
     // R2 takes a stream only when its length is known, which a request body is
     // when it declares one — every client's does (fetch and both native uploads
     // send Content-Length for a fixed body). Without one it is read whole first;
     // the request is bounded by Cloudflare's body limit either way.
     const body = c.req.raw.body;
-    await timerFor(c)('r2-put', async () => {
-      if (body && c.req.header('content-length')) await repo.put(userId, path, body);
-      else await repo.putBytes(userId, path, await c.req.arrayBuffer());
-    });
-    // Nothing to answer with: the commit, not this response, is where the object
-    // is recorded (services/sync.ts commitOps), exactly as after a presigned PUT.
-    return c.body(null, 200);
+    const stat = await timerFor(c)('r2-put', async () =>
+      body && c.req.header('content-length')
+        ? repo.put(userId, path, body)
+        : repo.putBytes(userId, path, await c.req.arrayBuffer()),
+    );
+    // The commit, not this response, is where the object is recorded
+    // (services/sync.ts commitOps), exactly as after a presigned PUT. What this
+    // answers is the receipt the commit can take instead of asking R2 again
+    // whether the object landed (r2/upload-receipt.ts): R2's answer to this PUT,
+    // signed, under the fence the token carries. A token minted before receipts
+    // carries no fence, and its PUT answers with none.
+    const secret = c.env?.R2_SECRET_ACCESS_KEY;
+    if (!stat || !fence || !secret) return c.json({} satisfies BlobPutResponse, 200);
+    const receipt = await mintUploadReceipt(secret, { userId, path, stat, fence });
+    return c.json({ receipt } satisfies BlobPutResponse, 200);
   });

@@ -49,6 +49,30 @@ describe('putBlob', () => {
   });
 });
 
+// The blob route answers a PUT with the upload receipt the commit carries back, so
+// the server can record the op without asking R2 whether it landed
+// (docs/local-first-sync.md, _upload receipts_). A PUT that dropped it would put
+// every commit back on R2 and nothing would fail; one that FAILED on an answer
+// without one would fail every presigned upload, whose R2 answer is empty.
+describe('the receipt a PUT answers with', () => {
+  const answering = (body: string | null) => {
+    globalThis.fetch = jest.fn(async () => new Response(body, { status: 200 }));
+  };
+
+  it('is what the PUT resolves with', async () => {
+    answering(JSON.stringify({ receipt: 'v1.receipt' }));
+
+    await expect(putBlob(URL_A, new Uint8Array([1]), 'Blob v1.token')).resolves.toBe('v1.receipt');
+  });
+
+  it('is undefined, and the upload still succeeds, when the answer carries none', async () => {
+    for (const body of [null, '', '{}', '<xml/>', JSON.stringify({ receipt: 7 })]) {
+      answering(body);
+      await expect(putBlob(URL_A, new Uint8Array([1]))).resolves.toBeUndefined();
+    }
+  });
+});
+
 describe('getBlob', () => {
   it('fails a GET whose response never starts at the base allowance', async () => {
     globalThis.fetch = jest.fn(() => new Promise<Response>(() => undefined));

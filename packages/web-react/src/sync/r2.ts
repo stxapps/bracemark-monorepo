@@ -17,6 +17,7 @@ import {
   BLOB_BASE_TIMEOUT_MS,
   BLOB_IDLE_TIMEOUT_MS,
   blobTransferTimeoutMs,
+  receiptOf,
   withDeadline,
 } from '@stxapps/shared';
 
@@ -52,12 +53,19 @@ function headersFor(authorization: string | undefined): HeadersInit | undefined 
 
 // The whole body is known up front, so the deadline is sized once. A browser
 // resolves a PUT's fetch only once the upload has gone and the host has answered.
+//
+// Resolves with the upload receipt the blob route answered with, for the commit
+// to carry back (@stxapps/shared receiptOf, docs/local-first-sync.md _upload
+// receipts_), or undefined: a presigned PUT answers with nothing, nor does an
+// api that predates receipts. The bytes landed either way — the status said so —
+// so a body that cannot be read only costs the commit a look at R2, and never
+// fails the upload.
 export async function putBlob(
   url: string,
   body: Uint8Array<ArrayBuffer>,
   authorization?: string,
-): Promise<void> {
-  await withDeadline(
+): Promise<string | undefined> {
+  return withDeadline(
     async (signal) => {
       const res = await fetch(url, {
         method: 'PUT',
@@ -66,6 +74,7 @@ export async function putBlob(
         signal,
       });
       if (!res.ok) throw new BlobRequestError('PUT', res.status);
+      return receiptOf(await res.text().catch(() => ''));
     },
     blobTransferTimeoutMs(body.byteLength),
     (ms) => new BlobTimeoutError('PUT', ms),

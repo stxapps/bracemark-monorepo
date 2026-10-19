@@ -8,12 +8,13 @@ import type {
   SignOp,
 } from '@stxapps/shared';
 
-import type { CommitEntry } from '../do/user-data';
+import type { CommitEntry, LogFence } from '../do/user-data';
 import { userDataStub } from '../do/user-data';
 import type { Bindings } from '../lib/env';
 import { checkPutQuota } from '../lib/quota';
 import { type Timer, untimed } from '../lib/server-timing';
-import { userFilesRepo } from '../r2/user-files';
+import { readUploadReceipt, type UploadReceipt } from '../r2/upload-receipt';
+import { type ObjectStat, userFilesRepo } from '../r2/user-files';
 import { getQuotaCeilings } from './iap';
 
 // Service layer for the sync endpoints. It holds the POLICY and the cross-store
@@ -69,6 +70,7 @@ export async function signUserFileUrls(
   time: Timer = untimed,
   via: BlobTransport = 'r2',
 ): Promise<SignedUrl[]> {
+  let fence: LogFence | undefined;
   if (op === 'put') {
     // The put gate is a plan-aware COST BACKSTOP — byte and object ceilings from
     // the shared entitlements table, applied by checkPutQuota (lib/quota.ts). It
@@ -82,11 +84,18 @@ export async function signUserFileUrls(
     // Note the check needs nothing about `paths` beyond the fact that this is a
     // put: it compares CURRENT usage against the ceilings, which is what freed
     // this path from the per-batch existence check it used to make.
-    const [usage, ceilings] = await Promise.all([
-      time('do-usage', () => userDataStub(env, userId).usage()),
+    //
+    // The same DO call answers the op log's fence, which every blob-route PUT
+    // token carries into the upload receipt its PUT answers with (do/user-data.ts
+    // putGate, r2/upload-receipt.ts). Read here, BEFORE any of the batch's PUTs
+    // can land, which is what makes it a fence: every delete the commit has to
+    // know about is appended after it.
+    const [gate, ceilings] = await Promise.all([
+      time('do-usage', () => userDataStub(env, userId).putGate()),
       time('d1-ceilings', () => getQuotaCeilings(env, userId)),
     ]);
-    checkPutQuota(ceilings, usage);
+    checkPutQuota(ceilings, gate.usage);
+    fence = gate.fence;
   }
 
   const method = op === 'put' ? 'PUT' : 'GET';
@@ -95,24 +104,41 @@ export async function signUserFileUrls(
   const repo = userFilesRepo(env);
   return time('presign', () =>
     via === 'api'
-      ? repo.blobUrls(userId, paths, method, expiresIn, requestUrl)
+      ? repo.blobUrls(userId, paths, method, expiresIn, requestUrl, fence)
       : repo.presignUrls(userId, paths, method, expiresIn, requestUrl),
   );
 }
 
 // Record committed mutations (POST /v1/ops/commit) — the R2-first, log-last
-// handshake, batched. Every `put` is checked against R2: that doubles as the
-// existence check upholding the op-without-object invariant and reads R2's
-// authoritative `LastModified` + size, which the DO stores as the op's cursor
-// clock and quota entry. The check is batched too — a listing per run of keys
-// where the batch is dense, a HEAD per path where it is sparse (r2/user-files.ts
-// statMany, which says why a HEAD per put stopped being enough). A `put` whose
-// object is MISSING is not logged (that would 404 every puller) but is reported in
-// `failed` with reason 'no_object', so the client gets an explicit per-path
-// outcome and re-PUTs + re-commits. A `delete` has no surviving object to HEAD, so
-// it's stamped on the worker's commit clock and the path's recorded size is freed.
-// A single DO RPC then writes every surviving entry (one round trip to the user's
-// serialized SQLite). `results` + `failed` together account for every op sent.
+// handshake, batched. Every `put` is resolved to R2's authoritative
+// `LastModified` + size, which the DO stores as the op's cursor clock and quota
+// entry, and resolving it is also the existence check upholding the
+// op-without-object invariant. Two ways to resolve one:
+//
+//   - FROM ITS UPLOAD RECEIPT, when it carries one this api can trust
+//     (r2/upload-receipt.ts): the blob route's signed record of R2's answer to
+//     the PUT. No R2 call at all — which is the point: the check below grows
+//     with the user's library, not the commit's size, and a 500-edit commit on
+//     a 10,000-link library spent 13.4 s in it (docs/local-first-sync.md,
+//     _upload receipts_). The receipt proves the object landed, not that it is
+//     still there; the DO's fence checks the gap against the log (do/user-data.ts
+//     commitOps, THE FENCE).
+//   - FROM R2, for every put without one — a presigned PUT, a client or a token
+//     from before receipts, a receipt that is expired, malformed or another
+//     user's — exactly as before receipts: a listing per run of keys where the
+//     batch is dense, a HEAD per path where it is sparse (r2/user-files.ts
+//     statMany, which says why a HEAD per put stopped being enough).
+//
+// A `put` whose object is MISSING is not logged (that would 404 every puller) but
+// is reported in `failed` with reason 'no_object', so the client gets an explicit
+// per-path outcome and re-PUTs + re-commits. A `delete` has no surviving object to
+// check, so it's stamped on the worker's commit clock and the path's recorded size
+// is freed. A single DO RPC then writes every surviving entry (one round trip to
+// the user's serialized SQLite) — or, when the fence turns a receipt down, writes
+// NOTHING and names the stale paths, and the batch is resolved again with every
+// receipted put checked against R2 and written by a second RPC that carries no
+// receipts, so it always lands. `results` + `failed` together account for every
+// op sent.
 //
 // The R2 object of every `delete` is removed HERE, server-side — files/sign mints
 // only PUT/GET URLs, so the client never DELETEs R2 directly. R2 first, log last,
@@ -132,30 +158,85 @@ export async function commitOps(
   const deletes = ops.filter((o) => o.op === 'delete').map((o) => o.path);
   await time('r2-delete', () => repo.deleteMany(userId, deletes));
 
+  const receipts = await readReceipts(env, userId, ops, now);
   // `r2-stat` is the existence check's wall time; `r2-list` and `r2-head` beside
-  // it are the sums of the calls it made (lib/server-timing.ts).
-  const puts = ops.filter((o) => o.op === 'put').map((o) => o.path);
-  const objects = await time('r2-stat', () => repo.statMany(userId, puts, { time }));
-  const resolved = ops.map(({ op, path }): CommitEntry | CommitFailure => {
-    if (op === 'delete') return { op, path, updatedAt: now, size: 0 };
+  // it are the sums of the calls it made (lib/server-timing.ts). A commit whose
+  // every put carried a receipt checks nothing, and reads ~0.
+  const unreceipted = ops.filter((o) => o.op === 'put' && !receipts.has(o.path)).map((o) => o.path);
+  const objects = await time('r2-stat', () => repo.statMany(userId, unreceipted, { time }));
 
-    const object = objects.get(path);
-    if (!object) return { path, reason: 'no_object' }; // op-without-object invariant
+  const stub = userDataStub(env, userId);
+  const first = resolveOps(ops, now, objects, receipts);
+  if (first.entries.length === 0) return { results: [], failed: first.failed };
+  const { results, stale } = await time('do-commit', () => stub.commitOps(first.entries));
+  if (stale.length === 0) return { results, failed: first.failed };
 
-    return { op, path, updatedAt: object.updatedAt, size: object.size };
-  });
+  // The fence turned at least one receipt down — a delete of its path, or a wipe,
+  // landed since its token was signed — and the DO wrote none of the batch. Check
+  // every receipted put against R2, as if none had a receipt, and commit the
+  // batch again: without fences it cannot be turned down twice.
+  const rechecked = await time('r2-stat', () =>
+    repo.statMany(userId, [...receipts.keys()], { time }),
+  );
+  for (const [path, stat] of rechecked) objects.set(path, stat);
+  const second = resolveOps(ops, now, objects, new Map());
+  if (second.entries.length === 0) return { results: [], failed: second.failed };
+  const retried = await time('do-commit', () => stub.commitOps(second.entries));
+  return { results: retried.results, failed: second.failed };
+}
 
+// The upload receipts in a commit that this api can trust, by path. One the api
+// cannot read is left out, and its put is checked against R2 like any other: a
+// receipt is a shortcut and never the reason a commit fails (r2/upload-receipt.ts).
+async function readReceipts(
+  env: Bindings,
+  userId: string,
+  ops: CommitOp[],
+  now: number,
+): Promise<Map<string, UploadReceipt>> {
+  const receipts = new Map<string, UploadReceipt>();
+  const secret = env.R2_SECRET_ACCESS_KEY;
+  if (!secret) return receipts;
+  await Promise.all(
+    ops.map(async ({ op, path, receipt }) => {
+      if (op !== 'put' || !receipt) return;
+      const read = await readUploadReceipt(secret, receipt, { userId, path }, now);
+      if (read) receipts.set(path, read);
+    }),
+  );
+  return receipts;
+}
+
+// Each op as the DO records it, or as the `failed` entry it becomes. A receipted
+// put takes its facts and its fence from the receipt; any other put takes them
+// from `objects`, and is `no_object` without one.
+function resolveOps(
+  ops: CommitOp[],
+  now: number,
+  objects: Map<string, ObjectStat>,
+  receipts: Map<string, UploadReceipt>,
+): { entries: CommitEntry[]; failed: CommitFailure[] } {
   const entries: CommitEntry[] = [];
   const failed: CommitFailure[] = [];
-  for (const r of resolved) {
-    if ('reason' in r) failed.push(r);
-    else entries.push(r);
+  for (const { op, path } of ops) {
+    if (op === 'delete') {
+      entries.push({ op, path, updatedAt: now, size: 0 });
+      continue;
+    }
+    const receipt = receipts.get(path);
+    if (receipt) {
+      const { updatedAt, size, fence } = receipt;
+      entries.push({ op, path, updatedAt, size, fence });
+      continue;
+    }
+    const object = objects.get(path);
+    if (!object) {
+      failed.push({ path, reason: 'no_object' }); // op-without-object invariant
+      continue;
+    }
+    entries.push({ op, path, updatedAt: object.updatedAt, size: object.size });
   }
-
-  if (entries.length === 0) return { results: [], failed };
-
-  const { results } = await time('do-commit', () => userDataStub(env, userId).commitOps(entries));
-  return { results, failed };
+  return { entries, failed };
 }
 
 // Wipe the user's whole data plane (POST /v1/data/delete-all; also step one of

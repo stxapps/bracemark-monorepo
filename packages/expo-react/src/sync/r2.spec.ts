@@ -23,18 +23,24 @@ beforeEach(() => {
   mockExpoFetch.mockReset();
 });
 
+// The route's answer is read too: the upload receipt in it is what lets the commit
+// skip asking R2 whether the object landed (docs/local-first-sync.md, _upload
+// receipts_), and a PUT that dropped it would quietly put every commit back on R2.
 it('PUTs in-memory ciphertext through Expo native fetch as bytes', async () => {
-  mockExpoFetch.mockResolvedValue({ ok: true, status: 200 } as unknown as Awaited<
-    ReturnType<typeof expoFetch>
-  >);
+  mockExpoFetch.mockResolvedValue({
+    ok: true,
+    status: 200,
+    text: async () => JSON.stringify({ receipt: 'v1.receipt' }),
+  } as unknown as Awaited<ReturnType<typeof expoFetch>>);
   const bytes = new Uint8Array([0x01, 0x00, 0xff]);
 
-  await putBlob('http://localhost:8787/v1/files/blob/users/u/links/a.enc', bytes);
+  const receipt = await putBlob('http://localhost:8787/v1/files/blob/users/u/links/a.enc', bytes);
 
   expect(mockExpoFetch).toHaveBeenCalledWith(
     'http://localhost:8787/v1/files/blob/users/u/links/a.enc',
     expect.objectContaining({ method: 'PUT', body: bytes }),
   );
+  expect(receipt).toBe('v1.receipt');
 });
 
 // Neither JS transport has a deadline of its own (RN's OkHttp client sets every

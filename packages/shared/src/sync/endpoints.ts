@@ -71,6 +71,10 @@ export const syncPathSchema = z
 // Nothing local catches it — miniflare enforces no such limit, and production's
 // plan allows 10,000. 500 keeps half the budget free for whatever the next
 // middleware reads, and halves what a failed chunk costs to re-upload.
+//
+// Upload receipts (commitOpSchema) take a receipted put out of that check, but
+// they do not raise the cap: a batch from a client without them, or one the
+// receipt fence sends back to R2 whole, still spends the budget as above.
 export const MAX_COMMIT_OPS = 500;
 export const MAX_SIGN_PATHS = 1000;
 export const MAX_LIST_LIMIT = 1000;
@@ -131,14 +135,34 @@ export const opsListEndpoint = defineEndpoint({
 
 // One mutation to record, sent AFTER its R2 PUT (for `put`) succeeds. Batched —
 // the client drains its pending-ops queue in one round trip (a first-sync push is
-// thousands of files), and the server fans the per-put HEADs out in parallel
-// rather than paying a request each. Capped at MAX_COMMIT_OPS — 500, half of
-// files/sign's, because the HEADs spend the invocation's subrequest budget (the
-// caps above); over the cap the whole request 400s at the contract before any
-// work runs — the abuse gate.
+// thousands of files), and the server checks the batch's puts against R2 in a few
+// listings or parallel HEADs rather than a request each. Capped at MAX_COMMIT_OPS —
+// 500, half of files/sign's, because those R2 calls spend the invocation's
+// subrequest budget (the caps above); over the cap the whole request 400s at the
+// contract before any work runs — the abuse gate.
+//
+// `receipt` is what the blob route answered this path's PUT with (bracemark-api
+// r2/upload-receipt.ts): the api's own signed statement that the object landed,
+// with R2's `LastModified` and size. A put that carries a valid one is recorded
+// without asking R2 again, which is what kept a commit's time growing with the
+// size of the library (docs/local-first-sync.md, _upload receipts_). OPAQUE to a
+// client, which passes back exactly what it was given, and OPTIONAL: a presigned
+// PUT has none, nor does a PUT answered by an api that predates receipts, and the
+// server checks R2 for any put without a receipt it can trust — so it is never
+// the reason a commit fails. Ignored on a `delete`.
+//
+// MAX_RECEIPT_LENGTH bounds a request field, not stored bytes (docs/data-limits.md):
+// a receipt carries five integers and its MAC and binds the path without
+// repeating it, so its length does not grow with the path's. A receipt at the
+// integers' extremes is ~200 characters (pinned in the api's r2/upload-receipt
+// spec), so the cap can never refuse a genuine one — a refusal would 400 the
+// whole batch, on every retry.
+export const MAX_RECEIPT_LENGTH = 512;
+
 export const commitOpSchema = z.object({
   op: opKindSchema,
   path: syncPathSchema,
+  receipt: z.string().max(MAX_RECEIPT_LENGTH).optional(),
 });
 export type CommitOp = z.infer<typeof commitOpSchema>;
 
@@ -148,7 +172,8 @@ export const opsCommitRequestSchema = z.object({
 export type OpsCommitRequest = z.infer<typeof opsCommitRequestSchema>;
 
 // One COMMITTED op: the path and the `updatedAt` the server stamped — R2's
-// `LastModified` for a put (read via the commit HEAD), the deletion commit time
+// `LastModified` for a put (from its upload receipt, or read from R2 at commit
+// when it has none), the deletion commit time
 // for a delete, either one lifted by the commit clamp when it would not otherwise
 // sort above the log. The client stores this as the path's `updatedAt` (never the
 // local clock) and clears the op from its pending-ops queue. It does NOT move its
@@ -312,3 +337,29 @@ export const filesSignEndpoint = defineEndpoint({
 // is cached for the path rather than asked again per blob (api app.ts, `maxAge`),
 // and the log line of a transfer names no object.
 export const BLOB_PATH = `${API_V1}/files/blob`;
+
+// What a blob-route PUT answers with: `{ "receipt": "…" }` as JSON, the receipt
+// the commit takes back (commitOpSchema). Absent when the route had none to give
+// — a token minted by an api that predates receipts — and never sent by R2's
+// own endpoint, whose PUT answers with an empty body. So a client reads it with
+// receiptOf and treats every other answer as "no receipt", never as a failed
+// upload: the bytes landed either way, and a put without a receipt still commits.
+export const blobPutResponseSchema = z.object({
+  receipt: z.string().max(MAX_RECEIPT_LENGTH).optional(),
+});
+export type BlobPutResponse = z.infer<typeof blobPutResponseSchema>;
+
+// The receipt in a 2xx PUT's body text, or undefined for anything that is not
+// one: an empty body (R2, an older api), a body that is not JSON, or a receipt
+// over the contract's cap, which the commit would refuse whole.
+export function receiptOf(body: string): string | undefined {
+  if (!body) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return undefined;
+  }
+  const result = blobPutResponseSchema.safeParse(parsed);
+  return result.success ? result.data.receipt : undefined;
+}

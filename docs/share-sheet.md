@@ -1016,7 +1016,9 @@ rank is only a tie), then the **link**, then the provisional
 **extraction title** when the payload carried one — encrypts each with the v1
 frame, and pushes sign → PUT → commit — the same three round trips as one
 engine put-chunk, minus the store bookkeeping (the extension must never open
-the app's sqlite). Uploading the taxonomy entities is what makes the upload's
+the app's sqlite). Like a chunk, its commit carries each PUT's upload receipt
+back, so the server records the draft without asking R2 again
+([local-first-sync.md](./local-first-sync.md), _upload receipts_). Uploading the taxonomy entities is what makes the upload's
 payoff whole: another device sees the link **in its new list, with its new tag
 chips**, without waiting for the phone app to be reopened. Since rank is
 required on the draft, there is no partial-entity case here — the set is always

@@ -1,5 +1,6 @@
 import { BLOB_PATH, type FilesListResponse, type SignedUrl } from '@stxapps/shared';
 
+import type { LogFence } from '../do/user-data';
 import type { Bindings } from '../lib/env';
 import { HttpError } from '../lib/errors';
 import { type Timer, untimed } from '../lib/server-timing';
@@ -41,6 +42,12 @@ const HEAD_ONLY_BELOW = 12;
 const LIST_MIN_HITS = 13;
 const LIST_PAGE = 1000;
 
+// The facts a commit records for a put, as R2 reports them on any of its
+// answers about one object — a HEAD, a listing's entry, a PUT.
+function statOf(object: R2Object | null): ObjectStat | null {
+  return object ? { updatedAt: object.uploaded.getTime(), size: object.size } : null;
+}
+
 // Assemble the R2 S3 credentials, failing loudly if a deploy is missing one — a
 // misconfigured signer must not silently hand out unusable URLs.
 function r2Credentials(env: Bindings): R2Credentials {
@@ -59,11 +66,8 @@ function r2Credentials(env: Bindings): R2Credentials {
 export function userFilesRepo(env: Bindings) {
   const bucket = env.USER_FILES;
 
-  const head = async (userId: string, path: string): Promise<ObjectStat | null> => {
-    const object = await bucket.head(userFileKey(userId, path));
-    if (!object) return null;
-    return { updatedAt: object.uploaded.getTime(), size: object.size };
-  };
+  const head = async (userId: string, path: string): Promise<ObjectStat | null> =>
+    statOf(await bucket.head(userFileKey(userId, path)));
 
   return {
     // ONE page of the per-user prefix as wire-relative paths with R2's own
@@ -244,12 +248,17 @@ export function userFilesRepo(env: Bindings) {
     // Local dev mints these too, signed with the placeholder secret: the blob
     // route works against miniflare's bucket exactly as against R2's, so a local
     // run exercises the path a deployed client takes.
+    //
+    // `fence` is the op log as the put gate read it (do/user-data.ts LogFence),
+    // carried by every PUT token into the receipt its PUT answers with
+    // (upload-receipt.ts); a GET token has none.
     async blobUrls(
       userId: string,
       paths: string[],
       method: BlobMethod,
       expiresIn: number,
       requestUrl: string,
+      fence?: LogFence,
     ): Promise<SignedUrl[]> {
       const secret = env.R2_SECRET_ACCESS_KEY;
       if (!secret) {
@@ -265,6 +274,7 @@ export function userFilesRepo(env: Bindings) {
             path,
             method,
             expiresIn,
+            fence,
           })}`,
         })),
       );
@@ -280,12 +290,17 @@ export function userFilesRepo(env: Bindings) {
     // `body` must have a known length — R2 refuses a stream that doesn't — which
     // a request body declaring a Content-Length has. The route reads a body that
     // declares none whole and writes it with putBytes (routes/blob.ts).
-    async put(userId: string, path: string, body: ReadableStream): Promise<void> {
-      await bucket.put(userFileKey(userId, path), body);
+    //
+    // Both answer the object R2 just wrote, as the facts a commit records for it
+    // (the same `uploaded` and `size` a HEAD or a listing reads back) — the
+    // route's upload receipt (upload-receipt.ts). Null only where R2 wrote
+    // nothing, which an unconditional put never answers.
+    async put(userId: string, path: string, body: ReadableStream): Promise<ObjectStat | null> {
+      return statOf(await bucket.put(userFileKey(userId, path), body));
     },
 
-    async putBytes(userId: string, path: string, body: ArrayBuffer): Promise<void> {
-      await bucket.put(userFileKey(userId, path), body);
+    async putBytes(userId: string, path: string, body: ArrayBuffer): Promise<ObjectStat | null> {
+      return statOf(await bucket.put(userFileKey(userId, path), body));
     },
 
     // Mint presigned URLs for the given wire-relative paths, each namespaced under

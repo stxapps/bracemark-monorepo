@@ -3086,7 +3086,12 @@ trace: open it in ui.perfetto.dev.
   ([local-first-sync.md](./local-first-sync.md), _measuring a sync_, item 8): N
   edits among L links cost about L / 1,000 listing pages. At the default 1,000
   links every bulk commit is one page, so the sparse case needs `--links 10000`
-  or more, and a push of that size first.
+  or more, and a push of that size first. That is what a commit WITHOUT upload
+  receipts pays — 13.4 s for a 500-op chunk on 10,000 links (2026-10-19). With
+  them a current client's commit checks nothing in R2 (`r2-stat` ~0), so a
+  `bulk-edit` leg against a current deploy reads the receipts, and the sparse
+  check is left to old clients and to a batch the receipt fence sends back
+  ([local-first-sync.md](./local-first-sync.md), _upload receipts_).
 - **⚠ Staging must be running this checkout.** The spans and the header ship in
   the deployed app and api, and an older deploy has neither. The run refuses on
   the first leg when the page has no trace recorder, and notes a leg whose api

@@ -180,3 +180,91 @@ describe('UserDataDO op log', () => {
     expect(otherUser.ops).toHaveLength(0);
   });
 });
+
+// THE FENCE (user-data.ts commitOps): an upload receipt proves its object landed,
+// not that it is still there, so a receipted put is recorded only if the log
+// shows nothing since its token was signed that could have removed it — a delete
+// of its path, or a wipe. Recording one the log cannot vouch for is an op for a
+// missing object, which every puller 404s on and nothing reports.
+describe('UserDataDO receipt fence', () => {
+  const put = (path: string, fence?: { generation: number; position: number }) => ({
+    op: 'put' as const,
+    path,
+    updatedAt: 1000,
+    size: 10,
+    ...(fence ? { fence } : {}),
+  });
+
+  it('hands out the log as it stands, moving on with each append and each wipe', async () => {
+    const stub = userDataStub(env, 'fence-gate');
+    const first = await stub.putGate();
+    expect(first).toEqual({
+      usage: { fileCount: 0, totalBytes: 0 },
+      fence: { generation: 0, position: 0 },
+    });
+
+    await stub.commitOps([put('links/a.enc')]);
+    const appended = await stub.putGate();
+    expect(appended.usage).toEqual({ fileCount: 1, totalBytes: 10 });
+    expect(appended.fence.generation).toBe(0);
+    expect(appended.fence.position).toBeGreaterThan(0);
+
+    await stub.wipeAll();
+    expect((await stub.putGate()).fence).toEqual({ generation: 1, position: 0 });
+  });
+
+  it('records a receipted put when nothing since its fence touched its path', async () => {
+    const stub = userDataStub(env, 'fence-clear');
+    await stub.commitOps([put('links/other.enc')]);
+    const { fence } = await stub.putGate();
+    // A delete of ANOTHER path after the fence, and one of this path before it.
+    await stub.commitOps([{ op: 'delete', path: 'links/other.enc', updatedAt: 2000, size: 0 }]);
+
+    const { results, stale } = await stub.commitOps([put('links/a.enc', fence)]);
+
+    expect(stale).toEqual([]);
+    expect(results.map((r) => r.path)).toEqual(['links/a.enc']);
+  });
+
+  it('records a re-put of a path whose delete came before the fence', async () => {
+    const stub = userDataStub(env, 'fence-before');
+    await stub.commitOps([put('pins/l_a.enc')]);
+    await stub.commitOps([{ op: 'delete', path: 'pins/l_a.enc', updatedAt: 2000, size: 0 }]);
+    const { fence } = await stub.putGate();
+
+    const { stale } = await stub.commitOps([put('pins/l_a.enc', fence)]);
+
+    expect(stale).toEqual([]);
+  });
+
+  it('writes none of a batch when a delete of one of its paths came after the fence', async () => {
+    const stub = userDataStub(env, 'fence-deleted');
+    await stub.commitOps([put('links/a.enc')]);
+    const { fence } = await stub.putGate();
+    await stub.commitOps([{ op: 'delete', path: 'links/a.enc', updatedAt: 2000, size: 0 }]);
+    const before = await stub.listOps(null, null, 500);
+
+    const { results, stale } = await stub.commitOps([
+      put('links/b.enc', fence),
+      put('links/a.enc', fence),
+      put('links/c.enc'),
+    ]);
+
+    expect(stale).toEqual(['links/a.enc']);
+    expect(results).toEqual([]);
+    // All or nothing: the clear receipted put and the unreceipted one wait too.
+    expect(await stub.listOps(null, null, 500)).toEqual(before);
+    expect(await stub.usage()).toEqual({ fileCount: 0, totalBytes: 0 });
+  });
+
+  it('turns down every receipt from before a wipe', async () => {
+    const stub = userDataStub(env, 'fence-wiped');
+    const { fence } = await stub.putGate();
+    await stub.wipeAll();
+
+    const { results, stale } = await stub.commitOps([put('links/a.enc', fence)]);
+
+    expect(stale).toEqual(['links/a.enc']);
+    expect(results).toEqual([]);
+  });
+});

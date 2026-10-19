@@ -18,15 +18,25 @@ import { type OpKind, opLogsRepo } from './repositories/op-logs';
 // `seq`), split it into a distinct type here at that point.
 export type { FileUsage };
 
+// Where the op log stood at one moment: its `generation` (bumped by every wipe)
+// and its `position` (the newest seq it held). `files/sign` reads one for a
+// batch of PUT tokens (putGate), each token carries it into the upload receipt
+// its PUT answers with (r2/upload-receipt.ts), and the commit asks the log
+// whether the object could have been removed since (commitOps, THE FENCE).
+export type LogFence = { generation: number; position: number };
+
 // One mutation ready to record — what the service hands the DO after resolving
 // each op against R2. `updatedAt`/`size` are sourced per kind in services/sync.ts:
 // a put carries R2's `LastModified` + reported size; a delete carries the worker's
 // commit clock and size 0 (the freed size is read from the quota map, not here).
+// A put whose facts came from an upload receipt rather than from R2 carries the
+// receipt's `fence` too, and is recorded only if the log can vouch for it.
 export type CommitEntry = {
   op: OpKind;
   path: string;
   updatedAt: number;
   size: number;
+  fence?: LogFence;
 };
 
 // Per-user data store. One Durable Object instance per user (addressed by
@@ -62,7 +72,8 @@ const MIGRATIONS: string[][] = [
   // listSince/bounds/append/clear), and an index here is paid on `append` — the
   // hottest write in the system, once per committed put and delete. Compaction
   // (dedupe-by-path, not built yet) is the one plausible reader; add it in a new
-  // MIGRATIONS entry then, alongside the code that uses it.
+  // MIGRATIONS entry then, alongside the code that uses it. (The receipt fence's
+  // `deletesAfter` reads by seq, a primary-key range, and needs no such index.)
   [
     `CREATE TABLE IF NOT EXISTS op_logs (
        seq        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,6 +87,10 @@ const MIGRATIONS: string[][] = [
        size INTEGER NOT NULL
      )`,
   ],
+  // 1 -> 2: the log's generation, for the upload-receipt fence (commitOps). One
+  // row, written by the first wipe; absent reads as generation 0, so a DO that
+  // has never been wiped needs nothing backfilled.
+  [`CREATE TABLE IF NOT EXISTS log_generation (generation INTEGER NOT NULL)`],
 ];
 
 function migrate(sql: SqlStorage): void {
@@ -132,10 +147,11 @@ export class UserDataDO extends DurableObject<Bindings> {
   // by the caller in services/sync.ts, which passes only the survivors in. The log
   // must never point at an object that isn't in R2 (op-without-object 404s every
   // client that pulls it; an object with no op is harmless and healed by the
-  // fallback R2 listing), so the service checks R2 (r2/user-files.ts statMany),
-  // never hands a put without an object here, and reports those in the response's `failed` (not this RPC, which
-  // only ever sees survivors and so returns only `results`). See
-  // docs/local-first-sync.md.
+  // fallback R2 listing), so the service checks R2 (r2/user-files.ts statMany) —
+  // or takes the facts from the put's upload receipt, which THE FENCE below
+  // checks against this log — never hands a put without an object here, and
+  // reports those in the response's `failed` (not this RPC, which only ever sees
+  // survivors). See docs/local-first-sync.md.
   //
   // Each entry's `path` is the wire-relative path (the DO is the user's whole
   // scope, so rows carry no userId). `updatedAt` is the op log's cursor clock,
@@ -184,9 +200,37 @@ export class UserDataDO extends DurableObject<Bindings> {
   // re-download when it later meets the lifted op. The committer itself stores the
   // lifted stamp, so a fallback listing — which downloads only what is stamped
   // newer than the local copy — just passes over the path.
-  commitOps(entries: CommitEntry[]): { results: CommitResult[] } {
+  //
+  // THE FENCE: an entry carrying a `fence` came from an upload receipt, which
+  // proves its object LANDED and not that it is still there — and the log must
+  // never point at an object that is not (above). Nothing removes a user's object
+  // but a committed delete of its path (R2 first, then its op here) or a wipe
+  // (wipeAll here first, then R2). So the receipted put is recorded only if the
+  // log is in the receipt's generation AND holds no delete of its path appended
+  // after the receipt's position. Any later delete, whichever side of the PUT its
+  // R2 call fell on, was appended after the token was signed and so sits above
+  // the position; a delete still between its R2 call and its op here will append
+  // after this entry and leave the path's last op a delete, as the object is.
+  //
+  // A stale entry is NOT refused. The batch is recorded ATOMICALLY OR NOT AT ALL —
+  // nothing is written, and the stale paths come back in `stale` — and the
+  // service re-checks those puts against R2 and commits the batch again
+  // (services/sync.ts commitOps). All-or-nothing because a batch can order its
+  // paths (the share sheet's commits referenced-before-referencing), and a
+  // partial write would let a puller see a later path without an earlier one.
+  // Stale is rare: it takes a delete of the same path from another device, or a
+  // wipe, landing inside one push.
+  //
+  // The fence can only see what the log still holds. Compaction, when it lands,
+  // must keep every op younger than a receipt can be (r2/upload-receipt.ts,
+  // RECEIPT_TTL_SECONDS); a delete older than that predates every receipt's
+  // token, and with it every PUT a live receipt describes.
+  commitOps(entries: CommitEntry[]): { results: CommitResult[]; stale: string[] } {
     const sizes = fileSizesRepo(this.sql);
     const ops = opLogsRepo(this.sql);
+    const stale = staleReceipts(ops, entries);
+    if (stale.length > 0) return { results: [], stale };
+
     const { newestUpdatedAt } = ops.bounds();
     const floor = newestUpdatedAt === null ? 0 : newestUpdatedAt + 1;
     const results = entries.map(({ op, path, updatedAt, size }) => {
@@ -197,15 +241,26 @@ export class UserDataDO extends DurableObject<Bindings> {
       ops.append(op, path, stamped);
       return { path, updatedAt: stamped };
     });
-    return { results };
+    return { results, stale: [] };
   }
 
-  // RPC: current storage usage for this user, read by the `files/sign` put-quota
-  // check. Sourced from the durable size map, never the compactable op log. The
-  // only DO call on the sign path — the companion existence lookup went away
-  // with the link cap (lib/quota.ts).
+  // RPC: current storage usage for this user. Sourced from the durable size map,
+  // never the compactable op log.
   usage(): FileUsage {
     return fileSizesRepo(this.sql).usage();
+  }
+
+  // RPC: what a `files/sign` put reads — the usage its quota check compares
+  // (lib/quota.ts), and the log's fence for the PUT tokens it mints
+  // (r2/blob-token.ts). One RPC for both, so a sign still makes ONE call to this
+  // DO: the only DO call on the sign path (the companion existence lookup went
+  // away with the link cap, lib/quota.ts).
+  putGate(): { usage: FileUsage; fence: LogFence } {
+    const ops = opLogsRepo(this.sql);
+    return {
+      usage: fileSizesRepo(this.sql).usage(),
+      fence: { generation: ops.generation(), position: ops.newestSeq() },
+    };
   }
 
   // RPC: delete-all-data — clear the op log AND the quota map in one serialized
@@ -223,10 +278,40 @@ export class UserDataDO extends DurableObject<Bindings> {
   // recorded sizes for objects that no longer exist (a path is all but never
   // written again — only `pins/` and `extractions/` reuse one, by link id — so no
   // later commit would free them).
+  //
+  // It also starts a new GENERATION of the log: the wipe appends no delete, so
+  // without it an upload receipt minted before the wipe would find nothing in the
+  // emptied log to stop it, and its put would be recorded over an object the R2
+  // half is about to remove (commitOps, THE FENCE).
   wipeAll(): void {
-    opLogsRepo(this.sql).clear();
+    const ops = opLogsRepo(this.sql);
+    ops.clear();
+    ops.bumpGeneration();
     fileSizesRepo(this.sql).clear();
   }
+}
+
+// The paths of the receipted entries the log cannot vouch for — commitOps' fence.
+// Empty when no entry carries a fence, which is every commit from a client
+// without receipts, at the cost of nothing.
+function staleReceipts(ops: ReturnType<typeof opLogsRepo>, entries: CommitEntry[]): string[] {
+  const fenced = entries.filter((e): e is CommitEntry & { fence: LogFence } => !!e.fence);
+  if (fenced.length === 0) return [];
+
+  const generation = ops.generation();
+  const current = fenced.filter((e) => e.fence.generation === generation);
+  const lastDelete = new Map<string, number>();
+  if (current.length > 0) {
+    const from = current.reduce((min, e) => Math.min(min, e.fence.position), Infinity);
+    for (const { path, seq } of ops.deletesAfter(from)) {
+      lastDelete.set(path, Math.max(lastDelete.get(path) ?? 0, seq));
+    }
+  }
+  return fenced
+    .filter(
+      (e) => e.fence.generation !== generation || (lastDelete.get(e.path) ?? 0) > e.fence.position,
+    )
+    .map((e) => e.path);
 }
 
 // Resolve the caller's per-user DO stub. Deterministic: the same userId always

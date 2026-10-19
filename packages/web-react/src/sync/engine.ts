@@ -994,20 +994,21 @@ async function pushPuts(
 
   // Commit one uploaded chunk, and time the chunk from its sign to its commit.
   async function commitChunk(
-    uploaded: PendingOpRecord[],
+    uploaded: UploadedChunk,
     attrs: { kind: string; ops: number },
     start: number,
   ): Promise<void> {
-    await commitBatched(deps, uploaded);
+    await commitBatched(deps, uploaded.ops, uploaded.receipts);
     if (trace.enabled) trace.record({ name: 'push.chunk', start, end: trace.now(), attrs });
   }
 
-  // Upload one signed chunk and return the ops its commit should carry.
+  // Upload one signed chunk and return the ops its commit should carry, with the
+  // upload receipts their PUTs answered with.
   async function uploadChunk(signed: {
     ops: PendingOpRecord[];
     urls: Map<string, SignedUrl>;
-  }): Promise<PendingOpRecord[]> {
-    const { orphaned, failed, superseded } = await trace.span(
+  }): Promise<UploadedChunk> {
+    const { orphaned, failed, superseded, receipts } = await trace.span(
       'upload',
       () => uploadBlobs(deps, signed.ops, signed.urls, concurrency, failures),
       { ops: signed.ops.length, concurrency },
@@ -1042,8 +1043,18 @@ async function pushPuts(
       const skipped = new Set(superseded.map((o) => o.path));
       uploaded = uploaded.filter((o) => !skipped.has(o.path));
     }
-    return uploaded;
+    return { ops: uploaded, receipts };
   }
+}
+
+// One chunk's uploaded ops and, by path, the upload receipt each PUT answered
+// with (sync/r2.ts putBlob) — the receipts ride the chunk's commit (commitOne).
+// Kept in memory only, never in the queue: a receipt is good for the commit
+// that follows its upload, and an op whose commit never happens is re-PUT next
+// drain, which answers with a fresh one.
+interface UploadedChunk {
+  ops: PendingOpRecord[];
+  receipts: ReadonlyMap<string, string>;
 }
 
 // Sign one put chunk, surviving the server's quota gate instead of failing the
@@ -1105,21 +1116,43 @@ async function signPushable(
 // accepted. `failed` (only `no_object` today) is intentionally ignored: leaving the
 // path queued is exactly the retry.
 //
+// A put goes with its upload receipt when its PUT answered with one, so the server
+// can record it without asking R2 whether it landed — what kept a commit's time
+// growing with the size of the library (docs/local-first-sync.md, _upload
+// receipts_). A put without one is checked against R2 as before; a receipt is
+// never what decides whether the op commits.
+//
 // The clear takes the OP ROWS this drain read, not the committed paths, so it removes
 // only the writes it actually pushed (clearDrainedOps): an edit made during the push
 // sits at the same path under a new `writeId` and must outlive this commit — its bytes
 // are not the bytes that just went up. The restamp is unconditional even then: R2 does
 // hold that path at `r.updatedAt` now, and the surviving op keeps its own older base,
 // which local-wins reconcile never reads against it.
-async function commitBatched(deps: SyncDeps, ops: PendingOpRecord[]): Promise<void> {
+async function commitBatched(
+  deps: SyncDeps,
+  ops: PendingOpRecord[],
+  receipts: ReadonlyMap<string, string> = NO_RECEIPTS,
+): Promise<void> {
   for (const batch of chunk(ops, COMMIT_BATCH)) {
-    await trace.span('commit', () => commitOne(deps, batch), { ops: batch.length });
+    await trace.span('commit', () => commitOne(deps, batch, receipts), {
+      ops: batch.length,
+      receipts: batch.filter((o) => receipts.has(o.path)).length,
+    });
   }
 }
 
-async function commitOne(deps: SyncDeps, batch: PendingOpRecord[]): Promise<void> {
+const NO_RECEIPTS: ReadonlyMap<string, string> = new Map();
+
+async function commitOne(
+  deps: SyncDeps,
+  batch: PendingOpRecord[],
+  receipts: ReadonlyMap<string, string>,
+): Promise<void> {
   const { results } = await deps.api.call(opsCommitEndpoint, {
-    ops: batch.map((o) => ({ op: o.op, path: o.path })),
+    ops: batch.map((o) => {
+      const receipt = o.op === 'put' ? receipts.get(o.path) : undefined;
+      return receipt ? { op: o.op, path: o.path, receipt } : { op: o.op, path: o.path };
+    }),
   });
   // All of a batch's restamps share one rw transaction — update() per result
   // opened a transaction each, which made a 1000-op commit pay a thousand IDB
@@ -1199,10 +1232,13 @@ async function uploadBlobs(
   orphaned: PendingOpRecord[];
   failed: PendingOpRecord[];
   superseded: PendingOpRecord[];
+  receipts: Map<string, string>;
 }> {
   const orphaned: PendingOpRecord[] = [];
   const failed: PendingOpRecord[] = [];
   const superseded: PendingOpRecord[] = [];
+  // Each landed PUT's upload receipt, by path, for the commit (commitBatched).
+  const receipts = new Map<string, string>();
   const largeGate = createLimiter(FILE_CONCURRENCY);
 
   // The op's bytes if its queue row is still this op, sorted into its bucket if not.
@@ -1244,7 +1280,7 @@ async function uploadBlobs(
     }
     await send(op, data, signed);
   });
-  return { orphaned, failed, superseded };
+  return { orphaned, failed, superseded, receipts };
 
   async function send(op: PendingOpRecord, data: Uint8Array, signed: SignedUrl): Promise<void> {
     const ns = syncNamespace(op.path);
@@ -1256,7 +1292,7 @@ async function uploadBlobs(
       // failing the cycle — one span per attempt, so a retried PUT shows in the
       // trace as a failed one before it (@stxapps/shared sync/blob-transfer.ts,
       // retryTransientBlobTransfer).
-      await retryTransientBlobTransfer(
+      const receipt = await retryTransientBlobTransfer(
         () =>
           trace.span('blob.put', () => putBlob(signed.url, sealed, signed.authorization), {
             bytes: sealed.byteLength,
@@ -1264,6 +1300,7 @@ async function uploadBlobs(
           }),
         isTransientBlobError,
       );
+      if (receipt) receipts.set(op.path, receipt);
     } catch (err) {
       failed.push(op);
       failures.count += 1;

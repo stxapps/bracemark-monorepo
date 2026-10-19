@@ -30,6 +30,35 @@ describe('blob tokens', () => {
     });
   });
 
+  // A PUT token carries the op log's fence from its sign to its PUT, which copies
+  // it into the upload receipt the commit checks against the log
+  // (upload-receipt.ts). Lost on the way, the PUT answers with no receipt and
+  // every commit goes back to R2; changed on the way, the fence vouches for a
+  // window it never saw.
+  it('carry the log fence they were minted with, and none when minted without', async () => {
+    const fence = { generation: 3, position: 1234 };
+    const fenced = await mintBlobToken(SECRET, { ...grant, fence }, NOW);
+
+    await expect(verifyBlobToken(SECRET, fenced, 'PUT', NOW)).resolves.toEqual({
+      userId: 'u1',
+      path: 'links/a.enc',
+      fence,
+    });
+    await expect(
+      verifyBlobToken(SECRET, await mintBlobToken(SECRET, grant, NOW), 'PUT', NOW),
+    ).resolves.not.toHaveProperty('fence');
+  });
+
+  it('refuse a fence that is not two non-negative integers, even under a valid mac', async () => {
+    const token = await mintBlobToken(
+      SECRET,
+      { ...grant, fence: { generation: -1, position: 0.5 } },
+      NOW,
+    );
+
+    expect(await refusal(verifyBlobToken(SECRET, token, 'PUT', NOW))).toBe('blob_token_invalid');
+  });
+
   // A GET token is good for an hour; if it could also write, an hour-long read
   // grant would be an hour-long write grant.
   it('grant one method only', async () => {

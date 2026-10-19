@@ -182,7 +182,10 @@ over the cap `400`s at the contract before any work runs (the abuse gate).
 > as many listing pages (`r2/user-files.ts`, `statMany`). Anything that adds a per-op
 > binding call to the commit (a second `HEAD`, a conditional write) spends this
 > same budget — lower the cap with it. The client's index put chunk is the smaller of the two caps;
-> its content put chunk is smaller still (_a push is chunked_, below).
+> its content put chunk is smaller still (_a push is chunked_, below). Upload
+> receipts (_the three flows: push_) take a receipted put out of the check, but
+> do not raise the cap: a batch from a client without them, or one the receipt
+> fence sends back to R2, spends the budget as before.
 
 All four live in `apps/bracemark-api/src/routes/sync.ts` (each behind `requireAuth`).
 (One data-plane endpoint sits deliberately OUTSIDE this control plane:
@@ -249,6 +252,11 @@ expiry}` under a key **derived from `R2_SECRET_ACCESS_KEY`** (HKDF, its own
   `401`, which every client reads as a statement about its session
   ([sessions.md](./sessions.md)). An object that is gone answers `404`, which the
   engines skip as an unpulled delete, as they do R2's.
+- **A PUT answers with an upload receipt** — `{ "receipt": … }`, R2's own
+  `LastModified` and size for the object it just wrote, signed — which the
+  commit takes instead of asking R2 again whether the object landed (_the three
+  flows: push_, _upload receipts_). A presigned PUT answers with nothing, and a
+  client reads any answer without a receipt as an upload that landed.
 - **The token rides in a header, not the URL**, because the api's invocation log
   stores every request URL whole and a header named `authorization` is the one it
   masks ([api-contracts.md](./api-contracts.md), _a GET's query string reaches the
@@ -373,7 +381,8 @@ rewrites the user's file (see [link-extraction.md](./link-extraction.md)):
 addressed by `idFromName(userId)`), backed by the DO's SQLite. See
 `apps/bracemark-api/src/do/user-data.ts` and `do/repositories/op-logs.ts`. Each row is
 `{ seq, op: 'put' | 'delete', path, updated_at }`, where **`updated_at` is
-R2's `LastModified`** for that path (read via a `HEAD` at commit — see _push_),
+R2's `LastModified`** for that path (from the put's upload receipt, or read from
+R2 at commit — see _push_),
 and the **client's sync cursor is that timestamp**, never `seq`.
 
 `seq` (`INTEGER PRIMARY KEY AUTOINCREMENT`) stays **internal**: it orders rows
@@ -665,12 +674,14 @@ first-sync push is a handful of round trips, not one per file:
    signed upload URL(s) (the Worker verifies each path is under
    `/users/{authedUid}/` and checks quota — see _authorization & quota_);
 2. encrypt and PUT each blob over its signed URL — the blob route, or R2 directly
-   (_the blob route_);
-3. `POST /v1/ops/commit` with `{ ops: [{ op, path }, …] }`; for each `put` the
-   Worker **checks the object in R2** — which both confirms it exists and reads
-   R2's authoritative `LastModified` — records the op with that timestamp (the DO's
-   `commitOps`, which also stores R2's reported object size in the per-user quota
-   map). One DO RPC then writes the whole batch. The Worker returns
+   (_the blob route_). The blob route answers each PUT with an **upload receipt**
+   (_upload receipts_, below);
+3. `POST /v1/ops/commit` with `{ ops: [{ op, path, receipt? }, …] }`; for each
+   `put` the Worker takes R2's authoritative `LastModified` and size from its
+   receipt, or, for a put without one it can trust, **checks the object in R2** —
+   which both confirms it exists and reads them — and records the op with that
+   timestamp (the DO's `commitOps`, which also stores the object's size in the
+   per-user quota map). One DO RPC then writes the whole batch. The Worker returns
    `{ results: [{ path, updatedAt }, …], failed: [{ path, reason }, …] }` —
    `results` for the committed ops, `failed` for the refused ones. The check does
    double duty: existence check _and_ the single clock that incremental and
@@ -694,6 +705,92 @@ what 12.5 `HEAD`s do, and a page kept is never the dearer way to answer its keys
 (at most one page per namespace per commit is spent finding out). Both
 thresholds are starting points; the commit's Server-Timing (`r2-stat` wall beside
 the `r2-list` and `r2-head` sums) is what to tune them against.
+
+#### upload receipts
+
+**A put that carries its upload receipt is recorded without asking R2.** The
+blob route already holds R2's answer to each PUT — the object's `LastModified`
+and size, the two facts the commit records — so it signs them into a **receipt**
+(`r2/upload-receipt.ts`) and answers the PUT with `{ "receipt": … }`. The engine
+keeps it in memory beside the chunk (`UploadedChunk`), the commit carries it back
+on the op (`commitOpSchema.receipt`), and the Worker checks its HMAC — local
+crypto, no subrequest — instead of the listing or `HEAD`s above. The 10,000-link
+reading (_measuring a sync_, 2026-10-19) is why: a 500-op commit scattered over
+10,000 links walked its listing one page after another for 13.4 s, and 158 edits
+fell to `HEAD`s six at a time for 8.9 s. The check grows with the **library**, not
+the edit, and with one commit in flight at a time it sat on the push's critical
+path — 14.5 s of a 1,058-edit push's 41.9 s.
+
+**A receipt proves the object landed, not that it is still there — so the log
+fences it.** The invariant below needs the object present when its op is logged.
+Nothing removes a user's object but a committed `delete` of its path (R2 first,
+then its op) or a wipe (the log first, then R2; `deleteAllUserData`). So:
+
+- `files/sign` reads the **log fence** — the DO's `generation`, bumped by every
+  wipe, and its `position`, the newest `seq` — in the same DO call as the quota
+  usage (`putGate`, so a sign still makes one), before any of the batch's PUTs
+  can land. Each blob-route PUT token carries it; the route copies it into the
+  receipt.
+- The DO records a receipted put only if the log is still in that generation
+  and holds no `delete` of its path above that position (`commitOps`, THE FENCE).
+  A delete that could have removed the object made its R2 call after the PUT,
+  so after the sign, so its op sits above the position; a delete still between
+  its R2 call and its op appends after the put, and leaves the path's last op a
+  delete, as the object is. The scan is a primary-key range — the rows appended
+  since the oldest receipt's sign — so the log still needs no index on `path`.
+- **Turned down is not refused.** The DO then writes **none** of the batch — a
+  batch can order its paths (the share sheet commits referenced-before-
+  referencing), and a partial write would show a puller a later path without an
+  earlier one — and names the stale paths. The Worker checks every receipted put
+  of the batch against R2 and commits it again without fences: the commit as it
+  was before receipts, so exactly as right as it was. It takes another device
+  deleting the same path, or a wipe, inside one push.
+
+**Optional at every step, so no deploy order breaks a sync.** A presigned PUT
+answers with no receipt, nor does a blob-route PUT under a token minted before
+receipts (it has no fence to carry). An api that predates them strips the field;
+a client that predates them never sends it. A receipt that is malformed, expired
+(`RECEIPT_TTL_SECONDS`, an hour — a commit follows its uploads by seconds),
+another user's, another path's or under another key reads as none, and its put
+is checked against R2. A client reads a 2xx PUT without a readable receipt as an
+upload that landed (`receiptOf`). A receipt is never why a commit fails.
+
+**Bound to its owner, bounded in length.** The MAC covers the user id and the
+path without the receipt carrying either — the commit knows both — so a receipt
+handed in under any other op reads as none, and its length does not grow with the
+path's (`syncPathSchema` puts no bound on an id's length): ~200 characters at its integers'
+extremes, under the contract's `MAX_RECEIPT_LENGTH` of 512. A genuine receipt
+over that cap would 400 the whole batch on every retry, so
+`r2/upload-receipt.spec.ts` pins the extremes against the contract. The size is
+under the MAC, so the quota map records what R2 reported, never what a client
+chose. The key is HKDF from `R2_SECRET_ACCESS_KEY` under its own label
+(`r2/hmac-key.ts`), so a blob token never verifies as a receipt.
+
+**What it leaves where it was:**
+
+- **One crash window grows.** A `delete` commit that dies between its R2 delete
+  and its op, while a receipted put of the same path from another device commits
+  in between, logs the put over a missing object. Without a receipt that window
+  is the put's own check-to-append, milliseconds; with one it is PUT-to-commit,
+  seconds. Both need a same-path delete from another device and a Worker dying
+  mid-commit, and end as _source of truth_ says an op-without-object does: a
+  puller skips the 404, and the committer's copy stands until a fallback or the
+  path's next edit.
+- **`MAX_COMMIT_OPS`**: above.
+- **Compaction** (_deferred_) must keep every op younger than
+  `RECEIPT_TTL_SECONDS`; the fence sees only what the log still holds.
+- **The stamp** is R2's answer to the PUT. Under miniflare `put()` answers the
+  very `uploaded` a `HEAD` reads (pinned in `routes/blob.spec.ts`); against
+  staging's R2 it has not been read yet — compare a receipted commit's stamps
+  with a listing on the next staging run. Were they ever to differ, the effect is
+  the commit clamp's own benign case below: a client that stored a listing's
+  stamp re-downloads once.
+- **The bill**, nearly: a push's R2 cost is its PUTs (Class A), and the check
+  was ~0.4% of an import's R2 operations' cost, ~2% of 1,058 edits' and ~8% of
+  158 edits' on 10,000 links (one listing page costs what 12.5 `HEAD`s do;
+  estimated from page counts, which the readings do not carry).
+  Faster, and a little cheaper; fewer R2 calls per commit is also fewer chances
+  at the transient `(10001)` refusals (_a push is chunked_).
 
 A `put` whose R2 object is **missing** (its PUT never landed, or died before the
 commit) is **not recorded — logging it would break the op-without-object
@@ -741,7 +838,8 @@ duplicate path.
 >
 > **A chunk's commit runs beside the next chunk's sign and upload**, one commit
 > in flight at most. The commit is a round trip of its own (~1.6 s on staging,
-> mostly R2 answering the existence check), and run in line it left the fan-out
+> mostly R2 answering the existence check — 14 s for a sparse chunk on a
+> 10,000-link library, which is what _upload receipts_ took out of it), and run in line it left the fan-out
 > idle between every pair of chunks. Overlapped, the order still holds: each
 > commit starts once the one before has landed, a failed one stops the set, the
 > pending count steps down per chunk at most one chunk behind, and a set — so a
@@ -901,7 +999,8 @@ GET /v1/ops/list?since=2026-04-13T10:00:00.000Z&sincePath=links/l_abc.enc&limit=
   }
 ```
 
-`updatedAt` is R2's `LastModified` for a `put` (recorded via the commit `HEAD`)
+`updatedAt` is R2's `LastModified` for a `put` (from its upload receipt, or read
+from R2 at commit)
 and the deletion commit time for a `delete` (no surviving object — see _push_).
 Both bounds are plain aggregates over the retained rows — `MIN(updated_at)` and
 `MAX(updated_at)` — with **no high-water-mark table needed** (unlike a seq):
@@ -1350,7 +1449,8 @@ live in two different places **because of what each side can observe and
 control** — the split is forced, not stylistic.
 
 - **A — R2 ↔ op-log, _within_ one commit.** The R2 mutation must land before the
-  DO log write: a `put` is verified to exist (listed or `HEAD`ed) before its op is logged, a
+  DO log write: a `put` is verified to exist (listed, `HEAD`ed, or attested by an
+  upload receipt the log's fence vouches for — _upload receipts_) before its op is logged, a
   `delete` removes the R2 object before logging the delete. This is the
   `op-without-object` invariant (see _source of truth_), and **only the server
   can own it** — the client can't write the op-log at all, and can't DELETE R2
@@ -1687,7 +1787,9 @@ is why it is closed rather than written down as accepted.
   the emptied log, and the paging then removes the object: `op-without-object`
   (_source of truth_), with the path's size left in the quota map until that
   path is next committed or the account is wiped again. A puller skips the 404,
-  so nothing shows. A chunk's commit runs beside the next chunk's upload
+  so nothing shows. A receipted put meets the same window and no new one: its
+  receipt predates the wipe's generation, so the fence sends it to R2 like a
+  put without one (_upload receipts_). A chunk's commit runs beside the next chunk's upload
   (_a push is chunked_), so the commit of a chunk already sent can be in flight
   too, and its objects meet the second way — up to a chunk of them. Both are read
   from source, not reproduced. Running the wipe
@@ -1849,17 +1951,20 @@ The byte total backing that quota is **not** summed from the op log — the log 
 compactable and disposable, so it would undercount. It comes from a separate,
 durable **per-path size map** — the `file_sizes` table in the same per-user DO
 (`do/repositories/file-sizes.ts`): `path → size`, set from the commit's existence
-check on `put`, read-and-subtracted on `delete` (a delete has no object left to check, so
+check — or the put's upload receipt, which carries R2's size under its MAC — on
+`put`, read-and-subtracted on `delete` (a delete has no object left to check, so
 the size to free must already be recorded). That map, not the op log, is where size
 is persisted; the op-log row is just `{ seq, op, path, updated_at }`. The limits
-themselves live in `lib/quota.ts`, checked by `services/sync.ts` against the DO's
-`usage()` before any `put` URL is minted.
+themselves live in `lib/quota.ts`, checked by `services/sync.ts` against the usage
+the DO's `putGate()` answers before any `put` URL is minted.
 
 **The gate is namespace-blind, and reads only CURRENT usage.** It compares
 `fileCount` and `totalBytes` against the plan's ceilings and ignores what the
 batch is about to add — the same conservatism the byte check always had, since a
 new object's size is unknown until it's uploaded, so growth is charged on the next
-batch. One DO RPC (`usage()`) and one D1 read, in parallel, per put batch.
+batch. One DO RPC (`putGate()`, which also answers the log fence the batch's
+upload receipts carry — _upload receipts_) and one D1 read, in parallel, per put
+batch.
 
 Namespace-blind means `fileCount` counts **paths, not links** — one link is 2
 objects (`links/` + `extractions/`) before its preview image makes 3 — so the
@@ -1940,7 +2045,15 @@ measurement they were waiting for.
   check, wall) beside `r2-list` and `r2-head` (the sums of its calls), signing,
   and the blob route's `r2-put` / `r2-get`. It tells a
   slow `ops/commit` apart as time in the Worker or time on the wire. A Worker's
-  clock moves only across I/O, so every metric is a wait, never CPU.
+  clock moves only across I/O, so every metric is a wait, never CPU. A commit
+  whose every put carried an upload receipt checks nothing in R2, so its
+  `r2-stat` reads ~0 with no `r2-list` or `r2-head` beside it. The client's
+  `commit` span says how many of its ops carried a receipt (`receipts`), so a
+  commit whose every op carried one and whose `r2-stat` is not ~0 is a batch the
+  receipt fence sent back to R2 (_upload receipts_). ⚠ `r2-head` is not a concurrency sum: a
+  commit starts its `HEAD`s all at once, so each one's time includes its wait
+  for one of the six connections, and 150 of them summed to 574 s over a 8.9 s
+  wall.
 
 **All of it is off in what users run.** Each engine holds `NO_TRACE` until a
 recorder is installed: on web behind the `bracemark.syncTrace` localStorage flag
@@ -2004,7 +2117,8 @@ established until a staging reading shows it:
    while each answers 13 or more, `HEAD`s below that, so on a large library a
    500-op commit could take tens of seconds — by arithmetic, not yet by reading.
    Visible as `r2-list` and `r2-head` on a `bulk-edit` leg's commit, at
-   `--links 10000` or more ([e2e.md](./e2e.md), _the sync leg_).
+   `--links 10000` or more ([e2e.md](./e2e.md), _the sync leg_). **Settled** by
+   the 10,000-link reading below, and answered by _upload receipts_.
 
 Record a reading where the change it justifies is made, with the date, the
 target, the variant and the machine, like the readings in
@@ -2163,8 +2277,91 @@ is not a whole page, so 100 and 1,000 asked were 158 and 1,058 done:
 
 It justified `INDEX_CONCURRENCY` 96, and `LARGE_CONTENT_BYTES` halved to 32 KiB
 with it so a full fan-out of small content stays the 3 MiB its deadline was sized
-for (the arithmetic is at `LARGE_CONTENT_BYTES`). Not yet read: the next staging
-reading prices it.
+for (the arithmetic is at `LARGE_CONTENT_BYTES`). The reading below prices it.
+
+**Reading, 2026-10-19 — staging, 1,000 links, `INDEX_CONCURRENCY` 96**
+(`21efb3a`, service worker allowed, Chrome 155 on an Apple M1 Mac). Every wall
+is the leg's, as in the tables above; the left column is the `2b19789` readings:
+
+|                                     | `2b19789`           | `21efb3a`          |
+| ----------------------------------- | ------------------- | ------------------ |
+| push wall                           | 78.5 s              | 51.8 s             |
+| upload (8 chunks) / signs (8)       | 66.5 s / 5.4 s      | 41.5 s / 4.7 s     |
+| PUTs in flight, rate                | 42.6, 35.6 per s    | 72.7, 57.1 per s   |
+| PUT p50                             | 1.00 s              | 1.04 s             |
+| CORS preflights                     | 50                  | 66                 |
+| pull wall                           | 34.8 s              | 24.2 s             |
+| GETs in flight, rate                | 47.3, 65 per s      | 68.5, 94.8 per s   |
+| floor at 24 / 48 at once            | 60 / 107 per s      | 65 / 119 per s     |
+| incremental (100 links onto 1,000)  | 4.6 s               | 4.3 s              |
+| bulk edit of 10 / 158 / 1,058: push | 4.4 / 10.8 / 37.0 s | 4.5 / 8.0 / 21.8 s |
+| … and its pull on the second device | 3.0 / 5.1 / 20.7 s  | 2.8 / 4.4 / 11.0 s |
+
+- **96 wide paid where it had room.** The push went from 78.5 s to 51.8 s and
+  the pull from 34.8 s to 24.2 s, the PUT's own time all but unmoved (1.00 s,
+  then 1.04 s): R2 was not the limit at 48. 72.7 PUTs were in flight of 96, and the pull fetched
+  93 a second against a floor of 119 at 48 at once.
+- **A large bulk edit is still its uploads.** 1,058 edits went from 37.0 s to
+  21.8 s, 18.4 s of it uploading at 72.7 in flight; its three commits (1.9, 2.2
+  and 0.7 s, listings of 1.3, 1.8 and 0.4 s) ran beside the uploads.
+- **What is left at this size**: the uploads (80% of the push), the signs in
+  line before each chunk (4.7 s, 9%), and R2's ~1 s a PUT.
+- **66 preflights instead of 50**: more PUTs leave before the first preflight's
+  answer is cached, 96 at once rather than 48.
+- The 158-edit commit's listing read 2.5 s again, against 1.3–1.8 s for a 500-op
+  chunk's: still unexplained.
+
+**Reading, 2026-10-19 — staging, a 10,000-link push, then bulk edits onto it**
+(`f5d6bad` with an uncommitted change, service worker allowed, Chrome 155 on an
+Apple M1 Mac; `--links 10000 --legs bulk-edit --bulk 10,100,1000`). It settled 8:
+
+|                           | 10                | 158                                  | 1,058                           |
+| ------------------------- | ----------------- | ------------------------------------ | ------------------------------- |
+| push wall                 | 5.4 s             | 19.0 s                               | 42.7 s                          |
+| sign / upload / commit    | 0.7 / 2.8 / 1.0 s | 0.6 / 8.0 / 9.6 s                    | 7.4 / 20.0 / 30.4 s (3 commits) |
+| commit's `r2-stat`        | 0.6 s (`HEAD`s)   | 8.9 s (a listing page, then `HEAD`s) | 13.4 + 13.6 + 1.3 s (listing)   |
+| pull on the second device | 3.1 s             | 4.1 s                                | 11.9 s                          |
+
+and the push of the library itself, 22,972 files:
+
+|                                  | 10,000 links                                 |
+| -------------------------------- | -------------------------------------------- |
+| push wall                        | 474.2 s, one cycle carrying every op         |
+| upload (70 chunks)               | 405.3 s, 71.4 PUTs in flight, 56.8 per s     |
+| PUT p50                          | 1.13 s                                       |
+| signs (70, in line)              | 53.0 s — `auth` 19.1 s, `d1-ceilings` 18.1 s |
+| commits (70, beside the uploads) | 125.1 s, of which the push waited 4.4 s      |
+| `commit.restamp`                 | 9.0 s                                        |
+| CORS preflights                  | 98                                           |
+
+- **8 is settled: the existence check grows with the library.** A 500-op chunk
+  scattered over 10,000 links walked its namespace's listing one page after
+  another — 13.4 s and 13.6 s, its `r2-list` sum equal to its wall, so no call
+  ran beside another; at 1,000 keys a page, about ten pages — against 1.3–1.8 s
+  on 1,000 links. 158 edits answered too few keys on their first page and fell
+  to `HEAD`s six at a time: 8.9 s.
+- **And it was on the push's critical path.** One commit is in flight at a time,
+  and the next chunk's sign waits for it. Of the 1,058-edit push's 41.9 s (its
+  `push` span, inside the leg's 42.7 s), 14.5 s
+  was waiting on commits — 0.9 s before the last chunk's sign, 13.6 s after the
+  last upload; of the 158-edit push's 18.4 s, the commit's 9.8 s.
+- **Not at an import's scale.** A dense chunk answers hundreds of keys a page,
+  and the commits ran beside the uploads: the push waited on them for 4.4 s of
+  463 s. A first push is its uploads (85%) and its signs (11%).
+- **The signs are the next lever for an import**: 53 s run in line before each
+  chunk's upload, each a session read (`auth`, ~270 ms) and a ceilings read
+  (`d1-ceilings`, ~260 ms) from D1. One sign in the 1,058-edit leg spent 5.2 s
+  in `do-usage`, once.
+- **The retry in place held**: 3 PUTs failed with a `BlobRequestError` and were
+  tried again where they stood, and the one cycle carried all 22,972 ops.
+- Read again: the 10- and 158-edit PUTs' p50 was 2.6 s and 2.3 s against ~1.1 s
+  at the full fan-out, and Server-Timing carried no call counts (no
+  `desc="n=…"` reached the capture), so the page count above is arithmetic.
+
+It justified upload receipts (_the three flows: push_, _upload receipts_). By
+arithmetic, not yet by reading: the 158-edit push from 18.4 s to ~9 s, the
+1,058-edit push from 41.9 s to ~28 s, the 10-edit one by ~0.4 s, an import by
+under 1%. The next staging reading prices it.
 
 ### deferred
 

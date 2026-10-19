@@ -44,6 +44,13 @@ function toEntity(r: OpLogRow): OpLogEntity {
 // Bound to a SqlStorage handle (the DO's `ctx.storage.sql`). SqlStorage is
 // SYNCHRONOUS — no awaits here, unlike the D1-backed master repos (users/sessions).
 export function opLogsRepo(sql: SqlStorage) {
+  const generation = (): number => {
+    const row = sql
+      .exec<{ generation: number }>(`SELECT generation FROM log_generation LIMIT 1`)
+      .toArray()[0];
+    return row ? Number(row.generation) : 0;
+  };
+
   return {
     // Incremental pull: a KEYSET scan over the compound cursor (updated_at, path),
     // ordered the same way, capped at `limit`. `since`/`sincePath` are the client's
@@ -108,6 +115,43 @@ export function opLogsRepo(sql: SqlStorage) {
     // post-wipe seqs stay strictly increasing — which compaction relies on.
     clear(): void {
       sql.exec(`DELETE FROM op_logs`);
+    },
+
+    // The log's position: the newest seq it holds, 0 on an empty log. With the
+    // generation below it is the LogFence a PUT token carries into its upload
+    // receipt (../user-data.ts putGate, commitOps). A primary-key seek. Monotonic
+    // within a generation, because seqs only grow (AUTOINCREMENT, above) and
+    // compaction, when it lands, trims oldest-first and keeps the newest row.
+    newestSeq(): number {
+      const row = sql.exec<{ seq: number | null }>(`SELECT MAX(seq) AS seq FROM op_logs`).one();
+      return row.seq ?? 0;
+    },
+
+    // Every `delete` appended after `seq`: what the receipt fence asks, for the
+    // paths a commit's receipted puts name (../user-data.ts commitOps). A range
+    // over the primary key, so it reads only the rows appended since the oldest
+    // receipt's token was signed — a commit's worth or two, not the user's
+    // history — and needs no index on `path` (the MIGRATIONS note on why there
+    // is none still holds).
+    deletesAfter(seq: number): { path: string; seq: number }[] {
+      return sql
+        .exec<{ path: string; seq: number }>(
+          `SELECT path, seq FROM op_logs WHERE seq > ? AND op = 'delete'`,
+          seq,
+        )
+        .toArray();
+    },
+
+    // The log's generation: 0 until the first wipe, then one more per wipe
+    // (bumpGeneration). A wipe empties the log without appending a delete, so a
+    // receipt minted before it could not otherwise tell that its object was
+    // removed. One row in `log_generation`, absent until the first bump.
+    generation,
+
+    bumpGeneration(): void {
+      const next = generation() + 1;
+      sql.exec(`DELETE FROM log_generation`);
+      sql.exec(`INSERT INTO log_generation (generation) VALUES (?)`, next);
     },
 
     // Push: record a committed mutation AFTER its blob is in R2 (R2-first, log-

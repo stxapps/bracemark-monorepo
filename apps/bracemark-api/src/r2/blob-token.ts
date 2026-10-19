@@ -21,7 +21,8 @@
 // reveals the other, and an HMAC under one never verifies under the other. The
 // `development` env's placeholder secret is committed (wrangler.jsonc), which is
 // fine for the reason the dev blob proxy is (routes/local-r2.ts): the bucket it
-// guards is miniflare's.
+// guards is miniflare's. The upload receipt (upload-receipt.ts) derives its key
+// from the same root under a label of its own (hmac-key.ts).
 //
 // Format: `v1.<payload>.<mac>`, both base64url; the payload is JSON. The MAC
 // covers the version and the payload bytes as sent, so nothing is re-serialized
@@ -29,6 +30,9 @@
 // the server minted — and is not the secret part; the MAC is.
 
 import { base64UrlToBytes, bytesToBase64Url, syncPathSchema, utf8 } from '@stxapps/shared';
+
+import type { LogFence } from '../do/user-data';
+import { derivedHmacKey } from './hmac-key';
 
 export type BlobMethod = 'PUT' | 'GET';
 
@@ -47,9 +51,16 @@ type Payload = {
   m: BlobMethod;
   // expiry, unix seconds
   e: number;
+  // A PUT token's log fence, `[generation, position]` — the op log as it stood
+  // when `files/sign` minted it (do/user-data.ts LogFence). The blob route copies
+  // it into the upload receipt it answers with, and the commit asks the log
+  // whether anything since could have removed the object (upload-receipt.ts).
+  // Absent on a GET token, and on a PUT token minted before receipts, whose PUT
+  // then answers with no receipt.
+  f?: [number, number];
 };
 
-export type BlobGrant = { userId: string; path: string };
+export type BlobGrant = { userId: string; path: string; fence?: LogFence };
 
 export class BlobTokenError extends Error {
   constructor(readonly code: 'blob_token_invalid' | 'blob_token_expired') {
@@ -58,27 +69,8 @@ export class BlobTokenError extends Error {
   }
 }
 
-// One derived key per isolate per secret: an isolate serves thousands of
-// transfers, and HKDF + importKey per request would be the only CPU a transfer
-// spends. Keyed on the secret so a test env, or a rotated secret on a warm
-// isolate, never reuses another's key.
-let cached: { secret: string; key: Promise<CryptoKey> } | undefined;
-
 function tokenKey(secret: string): Promise<CryptoKey> {
-  if (cached?.secret !== secret) {
-    const key = (async () => {
-      const base = await crypto.subtle.importKey('raw', utf8(secret), 'HKDF', false, ['deriveKey']);
-      return crypto.subtle.deriveKey(
-        { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: utf8(HKDF_INFO) },
-        base,
-        { name: 'HMAC', hash: 'SHA-256', length: 256 },
-        false,
-        ['sign', 'verify'],
-      );
-    })();
-    cached = { secret, key };
-  }
-  return cached.key;
+  return derivedHmacKey(secret, HKDF_INFO);
 }
 
 function signedPart(payload: string): Uint8Array<ArrayBuffer> {
@@ -96,6 +88,7 @@ export async function mintBlobToken(
     p: grant.path,
     m: grant.method,
     e: Math.floor(now / 1000) + grant.expiresIn,
+    ...(grant.fence ? { f: [grant.fence.generation, grant.fence.position] } : {}),
   };
   const payload = bytesToBase64Url(utf8(JSON.stringify(body)));
   const mac = await crypto.subtle.sign('HMAC', await tokenKey(secret), signedPart(payload));
@@ -149,5 +142,11 @@ export async function verifyBlobToken(
   if (typeof body.e !== 'number' || Math.floor(now / 1000) >= body.e) {
     throw new BlobTokenError('blob_token_expired');
   }
-  return { userId: body.u, path: body.p };
+  if (body.f === undefined) return { userId: body.u, path: body.p };
+  if (!isFence(body.f)) throw new BlobTokenError('blob_token_invalid');
+  return { userId: body.u, path: body.p, fence: { generation: body.f[0], position: body.f[1] } };
+}
+
+function isFence(f: unknown): f is [number, number] {
+  return Array.isArray(f) && f.length === 2 && f.every((n) => Number.isSafeInteger(n) && n >= 0);
 }

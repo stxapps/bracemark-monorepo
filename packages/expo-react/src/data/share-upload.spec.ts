@@ -25,9 +25,9 @@ jest.mock('@stxapps/expo-crypto', () => ({
   encryptEntity: jest.fn(async (_key: Uint8Array, data: Uint8Array) => data),
 }));
 
-const mockPutBlob = jest.fn(async () => undefined);
+const mockPutBlob = jest.fn(async (..._args: unknown[]): Promise<string | undefined> => undefined);
 jest.mock('../sync/r2', () => ({
-  putBlob: (...args: unknown[]) => mockPutBlob(...(args as [])),
+  putBlob: (...args: unknown[]) => mockPutBlob(...args),
 }));
 
 const NOW = 1_700_000_000_000;
@@ -50,7 +50,7 @@ const LINK_PATH = pathFromId('link-1', LINKS_PREFIX);
 const EXTRACTION_PATH = pathFromId('link-1', EXTRACTIONS_PREFIX);
 
 beforeEach(() => {
-  mockPutBlob.mockClear();
+  mockPutBlob.mockReset().mockImplementation(async () => undefined);
   (encryptEntity as jest.Mock).mockClear();
 });
 
@@ -148,6 +148,30 @@ describe('uploadShareDraft', () => {
           { op: 'put', path: LIST_PATH },
           { op: 'put', path: TAG_PATH },
           { op: 'put', path: LINK_PATH },
+          { op: 'put', path: EXTRACTION_PATH },
+        ],
+      },
+    ]);
+  });
+
+  // The share extension's commit takes the receipts back like an engine's, so the
+  // server records the draft without asking R2 again whether each PUT landed
+  // (docs/local-first-sync.md, _upload receipts_); a PUT that answered with none
+  // commits without one.
+  it('commits each put with the receipt its PUT answered with, when it had one', async () => {
+    const { api, commits, encryptionKey } = deps();
+    mockPutBlob.mockImplementation(async (url: unknown) =>
+      url === `https://r2.test/${LINK_PATH}` ? 'v1.link-receipt' : undefined,
+    );
+
+    await uploadShareDraft({ api, encryptionKey }, draft);
+
+    expect(commits).toEqual([
+      {
+        ops: [
+          { op: 'put', path: LIST_PATH },
+          { op: 'put', path: TAG_PATH },
+          { op: 'put', path: LINK_PATH, receipt: 'v1.link-receipt' },
           { op: 'put', path: EXTRACTION_PATH },
         ],
       },
