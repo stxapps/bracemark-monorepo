@@ -21,12 +21,16 @@ import { db } from './db';
 import {
   AccountFencedError,
   advanceCursor,
+  assertAccountStillOwnsStore,
   beginInitialSync,
   claimIfStillSignedIn,
+  forgetUnreadablePaths,
   getSyncMeta,
   isFirstSyncDone,
   markFirstSyncDone as markDone,
+  recordUnreadablePaths,
   resetCursor,
+  resetToSeededState,
   seedNewAccount,
 } from './sync-store';
 
@@ -123,6 +127,77 @@ describe('beginInitialSync / markFirstSyncDone', () => {
 
     await expect(markDone(USER, 10, 'links/l_1.enc')).rejects.toBeInstanceOf(AccountFencedError);
     expect(await getSyncMeta(USER)).toBeUndefined();
+  });
+});
+
+// The paths a pull skipped as unreadable (SyncMetaRecord.unreadablePaths). The pull
+// records them as it finishes and BEFORE the first sync is marked done, so the mark
+// must not rewrite the row whole: on a fresh sign-in that record is the only thing that
+// says those links exist, and the dangling-extraction sweep, which judges by local
+// absence, reads it to keep their extractions.
+describe('the unreadable record', () => {
+  const unreadable = async () => (await getSyncMeta(USER))?.unreadablePaths;
+
+  it('survives the first sync being marked done', async () => {
+    await beginInitialSync(USER);
+    await recordUnreadablePaths(USER, ['links/l_1.enc']);
+
+    await markDone(USER, 10, '');
+
+    expect(await unreadable()).toEqual(['links/l_1.enc']);
+    expect(await isFirstSyncDone(USER)).toBe(true);
+  });
+
+  it('adds each path once, however many pulls skip it', async () => {
+    await seedNewAccount(USER);
+
+    await recordUnreadablePaths(USER, ['links/l_1.enc']);
+    await recordUnreadablePaths(USER, ['links/l_1.enc', 'links/l_2.enc']);
+
+    expect(await unreadable()).toEqual(['links/l_1.enc', 'links/l_2.enc']);
+  });
+
+  // A union, not an overwrite: a later pull reports only what IT skipped, and the
+  // earlier skips are still unreadable with the cursor past them.
+  it('keeps what earlier pulls recorded when a later one records something else', async () => {
+    await seedNewAccount(USER);
+
+    await recordUnreadablePaths(USER, ['links/l_1.enc']);
+    await recordUnreadablePaths(USER, ['links/l_2.enc']);
+
+    expect(await unreadable()).toEqual(['links/l_1.enc', 'links/l_2.enc']);
+  });
+
+  // Fenced like the pull's own writes: a pull that outlived its account fails here
+  // rather than creating a row for it.
+  it('refuses to record for an account that is no longer on the device', async () => {
+    await expect(recordUnreadablePaths(USER, ['links/l_1.enc'])).rejects.toBeInstanceOf(
+      AccountFencedError,
+    );
+    expect(await getSyncMeta(USER)).toBeUndefined();
+  });
+
+  it('forgets only the paths a pull has since stored or deleted', async () => {
+    await seedNewAccount(USER);
+    await recordUnreadablePaths(USER, ['links/l_1.enc', 'links/l_2.enc']);
+
+    await db.transaction('rw', db.syncMeta, async () => {
+      const meta = await assertAccountStillOwnsStore(USER);
+      await forgetUnreadablePaths(meta, ['links/l_1.enc', 'links/l_3.enc']);
+    });
+
+    expect(await unreadable()).toEqual(['links/l_2.enc']);
+  });
+
+  // Delete-all wipes the store and the server: nothing skipped before it is held
+  // anywhere afterwards.
+  it('is dropped by delete-all’s reset', async () => {
+    await seedNewAccount(USER);
+    await recordUnreadablePaths(USER, ['links/l_1.enc']);
+
+    await db.transaction('rw', db.syncMeta, () => resetToSeededState(USER));
+
+    expect(await unreadable()).toBeUndefined();
   });
 });
 

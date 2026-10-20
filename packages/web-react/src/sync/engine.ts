@@ -72,9 +72,11 @@ import { toItemRecord } from '../data/projection';
 import {
   advanceCursor,
   assertAccountStillOwnsStore,
+  forgetUnreadablePaths,
   getSyncMeta,
   isFirstSyncDone,
   markFirstSyncDone,
+  recordUnreadablePaths,
   resetCursor,
 } from '../data/sync-store';
 import { BlobRequestError, getBlob, putBlob } from './r2';
@@ -100,6 +102,24 @@ export interface SyncDeps {
   // PUSH is never filtered (a client may still create a tag it doesn't materialize).
   // Omitted on bracemark-web → full sync, every namespace.
   pathFilter?: (path: string) => boolean;
+  // Work to run at the END of an incremental cycle that succeeded, while the cycle
+  // still holds the cycle lock (runIncrementalSync). What that guarantees: no pull
+  // of this account in flight in any context (where Web Locks exist; without them,
+  // in this one), and none left half-done by the cycle just run, since a cycle that
+  // fails never gets here. It is the best moment for a judgment by local ABSENCE,
+  // and bracemark-web's dangling-extraction sweep is the one that uses it. It is
+  // not proof that the store holds every path the server does: a recorded skip
+  // (SyncMetaRecord.unreadablePaths) is one known exception, and the sweep's header
+  // lists the others (data/sweep-dangling-extractions.ts). The lock is per account,
+  // too: another account's pull is kept out of this store by the write fence
+  // (AccountFencedError), not by the lock. Resolve `true` when it queued local
+  // writes: the run then goes once
+  // more, as a requestSync made mid-cycle would, and pushes them. Best-effort — a
+  // rejection is logged and the cycle's outcome stands. Never a cycle's own work:
+  // it must not wait on a sync (that would wait on the lock it is holding).
+  // Omitted by the browser extension, a selective client, which must never judge
+  // by absence.
+  afterCycle?: () => Promise<boolean>;
 }
 
 // Batch/page sizes — this client's policy is to use the contract caps in full
@@ -482,7 +502,24 @@ async function incrementalSyncOnce(
   deps: SyncDeps,
   report: SyncCycleProgressFn,
 ): Promise<SyncOutcome> {
-  return withCycleLock(deps.username, () => runCycle(deps, report));
+  return withCycleLock(deps.username, async () => {
+    const outcome = await runCycle(deps, report);
+    await runAfterCycle(deps);
+    return outcome;
+  });
+}
+
+// SyncDeps.afterCycle, inside the lock of the cycle that just succeeded. A request
+// for one more run is the single-flight's own rerun flag, which runIncrementalSync
+// reads as soon as this cycle returns — so the writes it queued are pushed within
+// the same run, not left for whenever the next cycle happens to be asked for.
+async function runAfterCycle(deps: SyncDeps): Promise<void> {
+  if (!deps.afterCycle) return;
+  try {
+    if (await deps.afterCycle()) rerunRequests.add(deps.username);
+  } catch (err) {
+    console.warn('sync: the after-cycle work failed', err);
+  }
 }
 
 async function runCycle(deps: SyncDeps, report: SyncCycleProgressFn): Promise<SyncOutcome> {
@@ -1557,6 +1594,14 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
   const setAside: Entry[] = [];
   let failedGets = 0;
 
+  // The paths this pull skipped as unreadable (openPulled), recorded on the account's
+  // row when the pull finishes (recordUnreadablePaths) — before the caller claims the
+  // cursor or the first sync, which is what lets a reader that judges by local
+  // absence trust a completed cycle at all (SyncMetaRecord.unreadablePaths). Once,
+  // at the end, rather than per skip: if every blob fails (a key or reader bug), a
+  // per-skip write would rewrite a growing list once per path.
+  const unreadable: string[] = [];
+
   // `finally`, so the two skips below tick the counter too: an entry dropped
   // for a mid-pull 404 or a blob that will not open still leaves the pull with
   // one fewer thing to do, and a counter that ignored them would stop short of
@@ -1605,7 +1650,10 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
       if (!blob) return;
 
       const data = await trace.span('blob.decrypt', () => openPulled(deps, blob, e.path));
-      if (!data) return;
+      if (!data) {
+        unreadable.push(e.path);
+        return;
+      }
       await trace.span('blob.store', () =>
         putPulled(deps.username, [toItemRecord(e.path, e.updatedAt, data)]),
       );
@@ -1723,6 +1771,9 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
           });
         }
       }
+      // Only a pull that finished: one that failed or was abandoned claims nothing,
+      // so the next one meets the same paths again and records them then.
+      await recordUnreadablePaths(deps.username, unreadable);
     },
     abandon(reason) {
       return fanOut.abandon(reason);
@@ -1740,7 +1791,10 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
 // path is read again only when it is rewritten or a fallback lists it
 // (docs/local-first-sync.md, _crypto boundary_). Anything else still throws —
 // an unknown format version above all, which an update fixes. The batch content
-// fetch (loadEntityContents) opens through here too, for the same reason.
+// fetch (loadEntityContents) opens through here too, for the same reason. The pull
+// records what it skipped on the account's row (SyncMetaRecord.unreadablePaths),
+// since past the cursor the store is complete only with that record beside it; the
+// batch fetch records nothing, because it hands its caller `missingPaths` instead.
 async function openPulled(
   deps: SyncDeps,
   blob: Uint8Array,
@@ -1796,16 +1850,21 @@ async function contentAtStamp(entries: Entry[]): Promise<Set<string>> {
 // It also re-checks that this account still owns the store (AccountFencedError,
 // sync-store.ts), inside the same transaction: a cycle that outlived a sign-out or
 // an account switch in any tab must not write the old account's plaintext into the
-// new store.
+// new store. And a path it stores is no longer one a pull could not read, so it
+// leaves the account's unreadable record in the same transaction.
 async function putPulled(username: string, records: ItemRecord[]): Promise<void> {
   if (records.length === 0) return;
   await db.transaction('rw', db.items, db.pendingOps, db.syncMeta, async () => {
-    await assertAccountStillOwnsStore(username);
+    const meta = await assertAccountStillOwnsStore(username);
     const ops = await db.pendingOps.bulkGet(
       records.map((r) => [username, r.path] as [string, string]),
     );
     const writable = records.filter((_, i) => ops[i] === undefined);
     if (writable.length > 0) await db.items.bulkPut(writable);
+    await forgetUnreadablePaths(
+      meta,
+      writable.map((r) => r.path),
+    );
   });
 }
 
@@ -1841,12 +1900,14 @@ async function applyDeletes(username: string, paths: string[]): Promise<void> {
 
 async function applyDeletesTx(username: string, paths: string[]): Promise<void> {
   await db.transaction('rw', db.items, db.pendingOps, db.syncMeta, async () => {
-    await assertAccountStillOwnsStore(username);
+    const meta = await assertAccountStillOwnsStore(username);
     const ops = await db.pendingOps.bulkGet(
       paths.map((path) => [username, path] as [string, string]),
     );
     const deletable = paths.filter((_, i) => ops[i] === undefined);
     if (deletable.length > 0) await db.items.bulkDelete(deletable);
+    // Deleted on the server: absent here is now the truth, not an unreadable blob.
+    await forgetUnreadablePaths(meta, deletable);
   });
 }
 

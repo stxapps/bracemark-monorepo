@@ -352,14 +352,48 @@ and in every device's local store, with no other reclamation path. So it's fixed
 deletion: `sweepDanglingExtractions` (web-react) scans extraction paths against
 their co-keyed links (keys only — blobs are read only when a dangling is actually
 found) and tears each one down content-before-entity through the normal delete
-mutations, queuing the server deletes. **bracemark-web** fires it once per session,
-after the session's first **completed** sync cycle — never mid-pull, where absence
-proves nothing (the fallback listing walks in path order and `extractions/` sorts
-before `links/`) — and only a **full-sync** client may run it: the test is "link
+mutations, queuing the server deletes. **bracemark-web** runs it once per session,
+at the **end of a successful sync cycle and inside that cycle's lock** (the engine's
+`afterCycle`, handed to its `SyncProvider`; the cycle runs once more to push the
+deletes). ⚠ Nowhere else does absence mean much, and even there it is not proof
+(below). Mid-pull it means nothing: the
+fallback listing walks in path order, `extractions/` sorts before `links/`, and a
+pull's GETs land in any order — in another tab as much as this one, which is why
+the lock and not this tab's own status is the gate. After a cycle that **failed**
+it doesn't either: what that cycle pulled stays stored while its cursor stays put,
+so an extraction can sit there without the link the next cycle brings; a failed
+cycle never reaches its end. And only a **full-sync** client may run it: the test is "link
 absent locally" and the remedy is a remote delete, so a selective-sync client (see
 _what each client syncs_ below) would judge healthy extractions dangling and delete
-them for every device. If a sweep races an edit-vs-delete link resurrection, the
-loss is the machine half only: the link re-queues as pending and re-extracts.
+them for every device. ⚠ A completed cycle is not a complete store either: a link
+blob that does not open under its path is skipped and the cycle completes without
+it ([local-first-sync.md](./local-first-sync.md), _crypto boundary_). So the sweep
+also passes over any extraction whose link is in the pull's record of skipped paths
+(`unreadablePaths` on the account's sync bookkeeping row). Without that, one link
+blob this device could not read deleted that link's extraction and its image,
+screenshot and page copy on every device. The record outlives the session because
+the cursor is past the skipped link: a later session's cycle completes without
+meeting it again.
+
+⚠ **Known gaps: a successful cycle can still lack a link the server holds**, and
+the sweep then deletes that link's extraction and its `files/` for every device:
+
+- **A skip from before the record existed.** Builds older than the record, or a
+  tab still running one, skipped without recording, and the cursor is already
+  past those links.
+- **An op log restored beneath a device's cursor, then written to.** The next
+  commit is stamped above the stale cursor, so the cycle is routed incremental
+  rather than to the fallback and never lists the ops the restore lost; the
+  device never gets those links at all. A fallback that failed partway and is
+  followed by such a cycle leaves its half-done pull uncompleted the same way.
+- **A queued put whose local record went missing** (a queue an older build
+  wedged). The push drops it as orphaned, and the path stays absent unless that
+  cycle's own window lists it.
+- **A browser without Web Locks.** Only the tab's own cycles are held off, so
+  another tab's pull can be in flight.
+
+If a sweep races an edit-vs-delete link resurrection, the loss is the machine
+half only: the link re-queues as pending and re-extracts.
 
 The cost is a **render-time join**: drawing a row needs both files, co-keyed by the
 same `{id}` (the UI resolves `customTitle ?? extraction.title ?? host(url)` and

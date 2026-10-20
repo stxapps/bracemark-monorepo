@@ -1986,7 +1986,20 @@ cursor moves on. It used to propagate, and one such path then failed every
 cycle for good: the pull rejected with the cursor where it was, met the same
 blob on the next cycle, and no other path in the account synced again. Skipped,
 the path is read again only when it is rewritten or a fallback lists it, which
-is what the server could already achieve by withholding it (below). An
+is what the server could already achieve by withholding it (below). ⚠ **A
+completed cycle does not mean the store holds everything up to the cursor**: a
+skip is one way it can lack a path the server holds, and not the only one
+([link-extraction.md](./link-extraction.md) lists the known others where the
+dangling-extraction sweep has to live with them). On web the pull records skipped paths
+on the account's bookkeeping row (`unreadablePaths`) as it finishes, before the
+cursor or the first-sync flag is claimed, and drops a path again once a later
+pull stores or deletes it; `markFirstSyncDone` updates that row rather than
+rewriting it, or a fresh sign-in would lose the record it has just made. (expo
+keeps no such record; nothing there turns a local absence into a server
+delete.) Any
+logic that reads local absence as server absence has to consult the record.
+The dangling-extraction sweep, the one place a local absence becomes a server
+delete, does ([link-extraction.md](./link-extraction.md)). An
 **unknown version** is deliberately not skipped: that is a newer client's
 format, an update reads it, and skipping would move the cursor past it for
 good. The batch content fetch (`loadEntityContents` — an export's file phase,

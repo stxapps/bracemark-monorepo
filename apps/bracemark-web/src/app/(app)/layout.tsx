@@ -3,14 +3,13 @@ import {
   FaviconProvider,
   FileContentProvider,
   LockProvider,
-  SyncProvider,
 } from '@stxapps/web-react';
 import { SignOutProvider } from '@stxapps/web-ui/contexts/sign-out-provider';
 
 import { AppLockGate } from '@/components/app-lock-gate';
 import { AuthGuard } from '@/components/auth-guard';
-import { DanglingExtractionSweep } from '@/components/dangling-extraction-sweep';
 import { InitialSyncGate } from '@/components/initial-sync-gate';
+import { SyncProviderWithSweep } from '@/components/sync-provider-with-sweep';
 import { PaywallProvider } from '@/contexts/paywall-provider';
 
 // Guard for the signed-in app (/links, /settings, …). The stack below, in
@@ -29,7 +28,12 @@ import { PaywallProvider } from '@/contexts/paywall-provider';
 //                     in IndexedDB, not a cookie, so the server can't gate).
 //                     Redirects.
 //   SyncProvider    — runs initial/incremental sync and exposes
-//                     storeStatus/requestSync. Never redirects.
+//                     storeStatus/requestSync. Never redirects. Mounted as
+//                     SyncProviderWithSweep, which hands it the once-per-session
+//                     dangling-extraction janitor to run at the end of a
+//                     successful cycle, inside the cycle lock — bracemark-web
+//                     only, on purpose: see that file's header for why a
+//                     selective-sync client must never inherit it.
 //   SignOutProvider — the hoisted sign-out flow (@stxapps/web-ui): a sync first
 //                     when a change hasn't synced, the question for what that
 //                     could not save, and the cover over the page while the
@@ -61,17 +65,11 @@ import { PaywallProvider } from '@/contexts/paywall-provider';
 //   InitialSyncGate — "is the local store ready?" Renders a decrypting screen on
 //                     first sync, then the app. Never redirects (sync-provider).
 //   PaywallProvider — the hoisted upgrade dialog behind the entitlement gates.
-// DanglingExtractionSweep is a render-null trigger, not a gate: it fires the
-// once-per-session dangling-extraction janitor after the first completed sync
-// cycle. It reads useAuth + useSync only (not useExtraction), so it sits
-// directly under SyncProvider. Mounted HERE (bracemark-web only) on purpose — see
-// its header for why a selective-sync client must never inherit it.
 // This layout stays a server component and just composes the client wrappers.
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard>
-      <SyncProvider>
-        <DanglingExtractionSweep />
+      <SyncProviderWithSweep>
         <SignOutProvider>
           <FileContentProvider>
             <FaviconProvider>
@@ -100,7 +98,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </FaviconProvider>
           </FileContentProvider>
         </SignOutProvider>
-      </SyncProvider>
+      </SyncProviderWithSweep>
     </AuthGuard>
   );
 }

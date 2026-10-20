@@ -58,8 +58,25 @@ export interface SyncMetaRecord {
   syncCursorPath: string;
   // Epoch ms the first full sync COMPLETED, or 0 while it hasn't. The invariant:
   // > 0 means "the local store is a complete, consistent snapshot up to the
-  // cursor."
+  // cursor." — complete, that is, except for paths the first sync skipped, which
+  // `unreadablePaths` below records.
   firstSyncDoneAt: number;
+  // Paths a pull SKIPPED because their blob did not open under its path (sync/engine.ts
+  // openPulled), and that no pull has stored or deleted since. The skip moves the
+  // cursor past them, so the store can lack them while a completed cycle says
+  // nothing of it; this record is how a reader judging by local ABSENCE tells "not
+  // on the server" from "on the server, unreadable here" (sweepDanglingExtractions).
+  // It is not the only way the store can lack a path the server holds — the sweep's
+  // header lists the others. Written by the pull before it claims anything (the
+  // cursor, `firstSyncDoneAt`), so a cycle that skips a path never completes without
+  // recording it. But skips made before this field existed, or by a tab still running
+  // such a build, are in no record, and nothing meets them again until a rewrite or a
+  // fallback lists them: a row with no field, or an empty one, is not proof that
+  // nothing was skipped. Dropped from as a later pull stores or deletes a path; gone
+  // with the row on sign-out, and with delete-all-data's reset, which rewrites the
+  // row whole along with wiping the items. Optional, and not indexed, so adding it
+  // needed no schema version.
+  unreadablePaths?: string[];
 }
 
 // One decrypted entity, keyed by its per-file path — the generic local store the

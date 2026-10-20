@@ -41,6 +41,7 @@ import {
 } from '../data/mutations';
 import { enqueuePut } from '../data/pending-store';
 import { toItemRecord } from '../data/projection';
+import { sweepDanglingExtractions } from '../data/sweep-dangling-extractions';
 import { beginInitialSync, getSyncMeta } from '../data/sync-store';
 import { AccountFencedError } from '../data/sync-store';
 import {
@@ -405,6 +406,149 @@ describe('holding the sync cycles off', () => {
       }),
     ).rejects.toThrow('refused');
     // And the lock is free again after a failure: a cycle runs.
+    await expect(runIncrementalSync(deps({ opsList: () => EMPTY_PAGE }))).resolves.toBeDefined();
+  });
+});
+
+// SyncDeps.afterCycle: work that judges by local ABSENCE (bracemark-web's dangling-
+// extraction sweep) runs at the end of a cycle that succeeded, inside its lock. Not
+// during a pull (a link whose GET hasn't landed is absent), and not after a cycle that
+// failed (what it pulled stays, the cursor doesn't move, so an extraction can sit there
+// without its link). What that timing cannot rule out is in the sweep's header.
+describe('the after-cycle work', () => {
+  const EMPTY_PAGE: OpsListReply = {
+    ops: [],
+    oldestUpdatedAt: 500,
+    newestUpdatedAt: 1000,
+    hasMore: false,
+  };
+
+  afterEach(() => {
+    mockGetBlob.mockReset();
+  });
+
+  it('runs after a cycle that succeeded, with the cycle lock still held', async () => {
+    const order: string[] = [];
+    let probe: Promise<void> | undefined;
+    const onWait = jest.fn();
+    const afterCycle = jest.fn(async () => {
+      order.push('after');
+      // Anything that wants the cycles held off — another tab's cycle, delete-all —
+      // has to wait for this work to finish.
+      probe = holdSyncCycles(USER, async () => void order.push('held work'), { onWait });
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      order.push('after done');
+      return false;
+    });
+
+    await runIncrementalSync({
+      ...deps({
+        opsList: () => {
+          order.push('cycle listed');
+          return EMPTY_PAGE;
+        },
+      }),
+      afterCycle,
+    });
+    await probe;
+
+    expect(afterCycle).toHaveBeenCalledTimes(1);
+    expect(onWait).toHaveBeenCalledTimes(1);
+    expect(order).toEqual(['cycle listed', 'after', 'after done', 'held work']);
+  });
+
+  // A failed cycle keeps what it pulled — here the extraction — while the cursor stays
+  // put, and the link it never got is what the next cycle brings. Swept in between, the
+  // extraction would be deleted for every device.
+  it('does not run after a cycle that failed, and runs on the next that succeeds', async () => {
+    const BOTH: OpsListReply = {
+      ops: [
+        { op: 'put', path: EXTRACTION_PATH, updatedAt: 2000 },
+        { op: 'put', path: LINK_PATH, updatedAt: 2001 },
+      ],
+      oldestUpdatedAt: 500,
+      newestUpdatedAt: 2001,
+      hasMore: false,
+    };
+    const extractionJson = JSON.stringify({
+      id: 'l_a',
+      pageCopyId: 'f_a',
+      facets: {},
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    let linkFails = true;
+    mockGetBlob.mockImplementation(async (url: string) => {
+      const path = pathFor(url);
+      if (path === LINK_PATH && linkFails) {
+        // Fail only once the extraction is stored, so the failed cycle leaves it. No
+        // count on the wait: a slow run waits longer, and jest's timeout bounds it.
+        while (!(await db.items.get(EXTRACTION_PATH))) {
+          await new Promise((resolve) => setTimeout(resolve, 1));
+        }
+        throw new Error('link GET failed');
+      }
+      return new Uint8Array([
+        0xee,
+        ...utf8(path === EXTRACTION_PATH ? extractionJson : `server ${path}`),
+      ]);
+    });
+    const swept: number[] = [];
+    const afterCycle = jest.fn(async () => {
+      const n = await sweepDanglingExtractions(USER);
+      swept.push(n);
+      return n > 0;
+    });
+
+    await expect(
+      runIncrementalSync({ ...deps({ opsList: () => BOTH }), afterCycle }),
+    ).rejects.toThrow('link GET failed');
+    expect(await bodyAt(EXTRACTION_PATH)).toBe(extractionJson);
+    expect(await db.items.get(LINK_PATH)).toBeUndefined();
+    expect(afterCycle).not.toHaveBeenCalled();
+
+    linkFails = false;
+    await runIncrementalSync({ ...deps({ opsList: () => BOTH }), afterCycle });
+
+    expect(swept).toEqual([0]);
+    expect(await bodyAt(EXTRACTION_PATH)).toBe(extractionJson);
+    expect(await pendingPaths()).toEqual([]);
+  });
+
+  // The sweep's deletes are local writes, and they have to reach the server or every
+  // other device keeps pulling the garbage. Resolving true runs the cycle once more,
+  // within the same call, and that pushes them.
+  it('runs the cycle once more when it queued writes, which pushes them', async () => {
+    await seedSynced(
+      EXTRACTION_PATH,
+      JSON.stringify({ id: 'l_a', facets: {}, createdAt: 1, updatedAt: 1 }),
+      900,
+    );
+    const afterCycle = jest.fn(async () => (await sweepDanglingExtractions(USER)) > 0);
+
+    await runIncrementalSync({ ...deps({ opsList: () => EMPTY_PAGE }), afterCycle });
+
+    expect(committedPaths()).toEqual([EXTRACTION_PATH]);
+    expect(await pendingPaths()).toEqual([]);
+    // Once for the cycle, once for the run it asked for — which found nothing more.
+    expect(afterCycle).toHaveBeenCalledTimes(2);
+  });
+
+  it('cannot fail the cycle it follows', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      await expect(
+        runIncrementalSync({
+          ...deps({ opsList: () => EMPTY_PAGE }),
+          afterCycle: async () => {
+            throw new Error('sweep failed');
+          },
+        }),
+      ).resolves.toBeDefined();
+    } finally {
+      warn.mockRestore();
+    }
+    // …and the lock was let go: the next cycle runs.
     await expect(runIncrementalSync(deps({ opsList: () => EMPTY_PAGE }))).resolves.toBeDefined();
   });
 });
@@ -1964,6 +2108,210 @@ describe('a pulled blob that does not open under its path', () => {
     );
 
     expect((await getSyncMeta(USER))?.syncCursorUpdatedAt).toBe(1000);
+  });
+
+  // THE RECORD (SyncMetaRecord.unreadablePaths). The cursor is past a skipped path, so
+  // the store lacks it below the cursor with nothing else to say so — and a reader that
+  // judges by local absence (the dangling-extraction sweep) has to be able to tell.
+  describe('the record of what was skipped', () => {
+    const unreadable = async () => (await getSyncMeta(USER))?.unreadablePaths;
+    const quietly = async (run: () => Promise<unknown>): Promise<void> => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+      try {
+        await run();
+      } finally {
+        warn.mockRestore();
+      }
+    };
+
+    it('holds the path once the cycle that skipped it has completed', async () => {
+      failToOpen(LINK_PATH, new BlobUnreadableError(LINK_PATH));
+
+      await quietly(() => runIncrementalSync(deps({ opsList: () => TWO_PUTS })));
+
+      expect(await unreadable()).toEqual([LINK_PATH]);
+    });
+
+    // A pull that failed claims nothing: the cursor stays, the next cycle meets the
+    // same path again, and records it then.
+    it('is not written by a cycle that fails', async () => {
+      (decryptEntity as jest.Mock).mockImplementation(
+        async (_key: unknown, bytes: Uint8Array, at: string) => {
+          if (at === LINK_PATH) throw new BlobUnreadableError(LINK_PATH);
+          if (at === OTHER_LINK_PATH) throw new Error('Unknown blob format version: 2');
+          return bytes.slice(1);
+        },
+      );
+
+      await quietly(() =>
+        expect(runIncrementalSync(deps({ opsList: () => TWO_PUTS }))).rejects.toThrow(),
+      );
+
+      expect(await unreadable()).toBeUndefined();
+    });
+
+    // The second pass (L2) runs the entries the first could not fetch; a blob that
+    // fails to open THERE is skipped like any other, and has to be recorded too.
+    it('holds a path skipped in the second pass', async () => {
+      failToOpen(LINK_PATH, new BlobUnreadableError(LINK_PATH));
+      let getSigns = 0;
+
+      await quietly(() =>
+        runIncrementalSync(
+          deps({
+            opsList: () => TWO_PUTS,
+            // The first GET sign answers nothing, which sets both entries aside.
+            filesSign: (paths, op) => (op === 'get' && getSigns++ === 0 ? [] : paths),
+          }),
+        ),
+      );
+
+      expect(getSigns).toBe(2);
+      expect(await unreadable()).toEqual([LINK_PATH]);
+      expect(await bodyAt(OTHER_LINK_PATH)).toBe(`server ${OTHER_LINK_PATH}`);
+    });
+
+    // The fallback (a cursor ahead of the op log) re-lists the whole namespace through
+    // the same pull, and claims its cursor after it — so its skips are recorded first.
+    it('holds a path a fallback skipped', async () => {
+      failToOpen(LINK_PATH, new BlobUnreadableError(LINK_PATH));
+
+      await quietly(() =>
+        runIncrementalSync(
+          deps({
+            opsList: () => ({
+              ops: [],
+              oldestUpdatedAt: 100,
+              newestUpdatedAt: 500,
+              hasMore: false,
+            }),
+            filesList: () => [
+              { path: LINK_PATH, updatedAt: 400 },
+              { path: OTHER_LINK_PATH, updatedAt: 401 },
+            ],
+          }),
+        ),
+      );
+
+      expect((await getSyncMeta(USER))?.syncCursorUpdatedAt).toBe(500);
+      expect(await unreadable()).toEqual([LINK_PATH]);
+    });
+
+    // A later pull that skips something else must ADD to the record, not replace it:
+    // the earlier link is still unreadable, and the cursor is still past it.
+    it('keeps an earlier skip when a later pull skips another path', async () => {
+      failToOpen(LINK_PATH, new BlobUnreadableError(LINK_PATH));
+      await quietly(() => runIncrementalSync(deps({ opsList: () => TWO_PUTS })));
+      failToOpen(OTHER_LINK_PATH, new BlobUnreadableError(OTHER_LINK_PATH));
+
+      await quietly(() =>
+        runIncrementalSync(
+          deps({
+            opsList: () => ({
+              ops: [{ op: 'put', path: OTHER_LINK_PATH, updatedAt: 3000 }],
+              oldestUpdatedAt: 500,
+              newestUpdatedAt: 3000,
+              hasMore: false,
+            }),
+          }),
+        ),
+      );
+
+      expect(await unreadable()).toEqual([LINK_PATH, OTHER_LINK_PATH]);
+    });
+
+    it('lets the path go once a later pull stores it', async () => {
+      failToOpen(LINK_PATH, new BlobUnreadableError(LINK_PATH));
+      await quietly(() => runIncrementalSync(deps({ opsList: () => TWO_PUTS })));
+      (decryptEntity as jest.Mock).mockImplementation(async (_key: unknown, bytes: Uint8Array) =>
+        bytes.slice(1),
+      );
+
+      await runIncrementalSync(
+        deps({
+          opsList: () => ({
+            ops: [{ op: 'put', path: LINK_PATH, updatedAt: 3000 }],
+            oldestUpdatedAt: 500,
+            newestUpdatedAt: 3000,
+            hasMore: false,
+          }),
+        }),
+      );
+
+      expect(await bodyAt(LINK_PATH)).toBe(`server ${LINK_PATH}`);
+      expect(await unreadable()).toEqual([]);
+    });
+
+    it('lets the path go once the server deletes it', async () => {
+      failToOpen(LINK_PATH, new BlobUnreadableError(LINK_PATH));
+      await quietly(() => runIncrementalSync(deps({ opsList: () => TWO_PUTS })));
+
+      await runIncrementalSync(
+        deps({
+          opsList: () => ({
+            ops: [{ op: 'delete', path: LINK_PATH, updatedAt: 3000 }],
+            oldestUpdatedAt: 500,
+            newestUpdatedAt: 3000,
+            hasMore: false,
+          }),
+        }),
+      );
+
+      expect(await unreadable()).toEqual([]);
+    });
+
+    // The whole chain on a fresh sign-in, where nothing else holds the link: the link
+    // fails to open, its extraction opens, the first sync completes and so does the next
+    // cycle — which is exactly when bracemark-web runs the sweep. Before the record, the
+    // sweep deleted that extraction and its page copy, and the next cycle pushed both
+    // deletes to every device. A real dangling beside it is still swept.
+    it('keeps the sweep off the extraction of a link a first sync skipped', async () => {
+      const DANGLING_PATH = 'extractions/l_gone.enc';
+      const extractionJson = (id: string, pageCopyId: string): string =>
+        JSON.stringify({ id, pageCopyId, facets: {}, createdAt: 1, updatedAt: 1 });
+      const bodies = new Map([
+        [EXTRACTION_PATH, extractionJson('l_a', 'f_a')],
+        [DANGLING_PATH, extractionJson('l_gone', 'f_b')],
+      ]);
+      mockGetBlob.mockImplementation(async (url: string) => {
+        const path = pathFor(url);
+        return new Uint8Array([0xee, ...utf8(bodies.get(path) ?? `server ${path}`)]);
+      });
+      failToOpen(LINK_PATH, new BlobUnreadableError(LINK_PATH));
+      const NO_OPS: OpsListReply = {
+        ops: [],
+        oldestUpdatedAt: 50,
+        newestUpdatedAt: 200,
+        hasMore: false,
+      };
+      await db.syncMeta.clear();
+      await beginInitialSync(USER);
+
+      await quietly(async () => {
+        await runInitialSync(
+          deps({
+            filesList: () => [
+              { path: LINK_PATH, updatedAt: 100 },
+              { path: EXTRACTION_PATH, updatedAt: 101 },
+              { path: DANGLING_PATH, updatedAt: 102 },
+              { path: FILE_PATH, updatedAt: 103 },
+              { path: OTHER_FILE_PATH, updatedAt: 104 },
+            ],
+            opsList: () => NO_OPS,
+          }),
+        );
+        await runIncrementalSync(deps({ opsList: () => NO_OPS }));
+      });
+      expect(await db.items.get(LINK_PATH)).toBeUndefined();
+
+      expect(await sweepDanglingExtractions(USER)).toBe(1);
+      commits = [];
+      await runIncrementalSync(deps({ opsList: () => NO_OPS }));
+
+      expect(await bodyAt(EXTRACTION_PATH)).toBe(extractionJson('l_a', 'f_a'));
+      expect(await db.items.get(FILE_PATH)).toBeDefined();
+      expect(committedPaths().sort()).toEqual([DANGLING_PATH, OTHER_FILE_PATH].sort());
+    });
   });
 });
 

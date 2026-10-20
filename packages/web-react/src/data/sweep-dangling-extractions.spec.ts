@@ -34,7 +34,7 @@ import { db } from './db';
 import { writeExtraction, writeFile, writeLink } from './mutations';
 import { listPendingOps } from './pending-store';
 import { sweepDanglingExtractions } from './sweep-dangling-extractions';
-import { seedNewAccount } from './sync-store';
+import { recordUnreadablePaths, seedNewAccount } from './sync-store';
 
 // The teardown ORDER is the thing under test below, and the finished state can't show it
 // — the queue is keyed on (account, path), so it comes back in path order however the
@@ -124,6 +124,27 @@ describe('sweepDanglingExtractions', () => {
 
     expect(await sweepDanglingExtractions(USER)).toBe(0);
     expect(await listPendingOps(USER)).toEqual([]);
+  });
+
+  // A link the pull SKIPPED — its blob did not open under its path — is absent here and
+  // still on the server, and the cycle completed without it. Swept, its extraction and
+  // media would be deleted for every device on the strength of one blob this device
+  // could not read. The pull's record of the skip is what tells the two absences apart.
+  it('spares an extraction whose link a pull could not read', async () => {
+    await seedExtraction('l_unreadable', { imageId: 'f_image', pageCopyId: 'f_copy' });
+    await seedExtraction('l_orphan');
+    await db.pendingOps.clear();
+    await recordUnreadablePaths(USER, [pathFromId('l_unreadable', LINKS_PREFIX)]);
+
+    expect(await sweepDanglingExtractions(USER)).toBe(1);
+    expect(await exists(pathFromId('l_unreadable', EXTRACTIONS_PREFIX))).toBe(true);
+    expect(await exists(pathFromId('f_image', FILES_PREFIX))).toBe(true);
+    expect(await exists(pathFromId('f_copy', FILES_PREFIX))).toBe(true);
+    // …while a real dangling beside it is still swept.
+    expect(await exists(pathFromId('l_orphan', EXTRACTIONS_PREFIX))).toBe(false);
+    expect((await listPendingOps(USER)).map((op) => op.path)).toEqual([
+      pathFromId('l_orphan', EXTRACTIONS_PREFIX),
+    ]);
   });
 
   it('deletes an extraction whose link is gone', async () => {

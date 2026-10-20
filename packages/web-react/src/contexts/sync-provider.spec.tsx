@@ -72,6 +72,36 @@ beforeEach(() => {
   mockSession = ALICE;
 });
 
+// The app's after-cycle work (the engine's SyncDeps.afterCycle) rides on every cycle's
+// deps, bound to the account the cycle runs as — and only where the app passed one:
+// the provider must never default a judgment by absence onto a client.
+describe('afterCycle', () => {
+  const depsOfLastCycle = () =>
+    mockRunIncrementalSync.mock.calls.at(-1)?.[0] as { afterCycle?: () => Promise<boolean> };
+
+  it('is absent from the deps when the app passes none', async () => {
+    const { result } = await readySync();
+    act(() => result.current.syncNow());
+
+    expect(depsOfLastCycle()).not.toHaveProperty('afterCycle');
+    await waitFor(() => expect(result.current.bgSyncStatus).toBe('idle'));
+  });
+
+  it('is handed to the engine bound to the cycle’s account', async () => {
+    const afterCycle = jest.fn((_username: string) => Promise.resolve(true));
+    const { result } = renderHook(() => useSync(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <SyncProvider afterCycle={afterCycle}>{children}</SyncProvider>
+      ),
+    });
+    await waitFor(() => expect(result.current.bgSyncStatus).toBe('idle'));
+    await waitFor(() => expect(mockRunIncrementalSync).toHaveBeenCalled());
+
+    await expect(depsOfLastCycle().afterCycle?.()).resolves.toBe(true);
+    expect(afterCycle).toHaveBeenCalledWith('alice');
+  });
+});
+
 it('marks a local write for requestSync', async () => {
   const { result } = await readySync();
   const before = result.current.localWriteNonce;

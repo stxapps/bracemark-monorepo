@@ -22,9 +22,10 @@ import { SignOutProvider } from '../../contexts/sign-out-provider';
 // Gate stack, in the SAME order as bracemark-web's `(app)/layout.tsx`, whose header
 // carries the matching list — keep the two in step. Nesting depth tracks
 // dependency strength: session-only providers sit shallow, ready-store ones
-// deeper, gates last. The only deliberate differences from web are the
-// platform-specific render-null triggers: ShareBridge here,
-// DanglingExtractionSweep there.
+// deeper, gates last. The only deliberate differences from web are
+// platform-specific: the render-null ShareBridge here, and there a SyncProvider
+// that carries the dangling-extraction sweep (SyncProviderWithSweep), which this
+// app does not run.
 //
 // Guard vs Gate is a rule, not decoration: a GUARD's non-pass branch NAVIGATES
 // (it redirects off the route), a GATE's swaps content in place and never leaves

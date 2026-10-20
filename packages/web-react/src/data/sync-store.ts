@@ -56,9 +56,12 @@ export class AccountFencedError extends Error {
 }
 
 // Inside a transaction that includes db.syncMeta: throw unless `username` still
-// owns this device's store.
-export async function assertAccountStillOwnsStore(username: string): Promise<void> {
-  if (!(await db.syncMeta.get(username))) throw new AccountFencedError(username);
+// owns this device's store. Hands back the row it read, for a caller that has more
+// to do with it in the same transaction.
+export async function assertAccountStillOwnsStore(username: string): Promise<SyncMetaRecord> {
+  const meta = await db.syncMeta.get(username);
+  if (!meta) throw new AccountFencedError(username);
+  return meta;
 }
 
 // Claim the bookkeeping row — only ever under the lifecycle lock: from setSession,
@@ -127,7 +130,11 @@ export async function resetToSeededState(username: string): Promise<void> {
 // ends on the same value, for the same reason.
 //
 // Fenced like the pull's writes: the row beginInitialSync claimed must still be
-// there, or the account was torn down mid-pull and this must not resurrect it.
+// there, or the account was torn down mid-pull and this must not resurrect it. An
+// `update`, not a `put`: the pull it closes has just recorded the paths it skipped
+// on this row (recordUnreadablePaths), and rewriting the row whole would drop that
+// record at the one moment it matters most — a fresh sign-in, where nothing else
+// holds those paths.
 export async function markFirstSyncDone(
   username: string,
   syncCursorUpdatedAt: number,
@@ -135,13 +142,49 @@ export async function markFirstSyncDone(
 ): Promise<void> {
   await db.transaction('rw', db.syncMeta, async () => {
     await assertAccountStillOwnsStore(username);
-    await db.syncMeta.put({
-      username,
+    await db.syncMeta.update(username, {
       syncCursorUpdatedAt,
       syncCursorPath,
       firstSyncDoneAt: Date.now(),
     });
   });
+}
+
+// Add paths a pull skipped as unreadable to the account's record
+// (SyncMetaRecord.unreadablePaths). The pull calls it once, as it finishes and
+// before its caller claims anything, so the record is never behind a completed
+// cycle. Fenced like the pull's own writes: a pull that outlived its account fails
+// here, as its puts and deletes would.
+export async function recordUnreadablePaths(
+  username: string,
+  paths: readonly string[],
+): Promise<void> {
+  if (paths.length === 0) return;
+  await db.transaction('rw', db.syncMeta, async () => {
+    const meta = await assertAccountStillOwnsStore(username);
+    const held = new Set(meta.unreadablePaths);
+    const before = held.size;
+    for (const path of paths) held.add(path);
+    if (held.size !== before) await db.syncMeta.update(username, { unreadablePaths: [...held] });
+  });
+}
+
+// Inside a transaction that includes db.syncMeta, with the row its fence just read:
+// drop paths a pull has now stored or deleted from the unreadable record. A path
+// left in it by mistake costs nothing worse than a dangling extraction the sweep
+// passes over; one dropped by mistake can cost a deleted extraction, so only the
+// pull's own successful writes call this.
+export async function forgetUnreadablePaths(
+  meta: SyncMetaRecord,
+  paths: readonly string[],
+): Promise<void> {
+  const held = meta.unreadablePaths;
+  if (!held?.length || paths.length === 0) return;
+  const settled = new Set(paths);
+  const left = held.filter((path) => !settled.has(path));
+  if (left.length !== held.length) {
+    await db.syncMeta.update(meta.username, { unreadablePaths: left });
+  }
 }
 
 // Advance the compound `(updatedAt, path)` cursor after an incremental cycle —
