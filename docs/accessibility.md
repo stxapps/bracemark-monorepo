@@ -806,6 +806,19 @@ right answers:
   `npm run measure:password-manager` has a flow for each lock kind, expecting
   no submission ([e2e.md](./e2e.md), _measuring the password manager_). The
   lock specs pin the token.
+- **On bracemark-expo the same secret says `textContentType="oneTimeCode"`
+  (iOS).** ⚠ `off` does not cover it there either: React Native turns `off`
+  into `textContentType="none"`, which states no purpose, so iOS Password
+  AutoFill infers a password from `secureTextEntry`. With the account's login
+  saved in Passwords, setting a lock and unlocking one each had iOS offer to
+  **update** that login with the lock password. `oneTimeCode` names a purpose
+  that is not a password, and the field is no longer saved from. It is set as
+  `textContentType`, not as `autoComplete="one-time-code"`: an explicit
+  `textContentType` wins over the mapped one on iOS, and `autoComplete` stays
+  `off` for Android, where it means "not important for autofill" and
+  `one-time-code` would become an SMS-code hint. The cost is that the QuickType
+  bar may offer a code from Messages in the field. The sheet is system UI, so
+  no spec or Maestro flow sees it; the two lock specs pin the type.
 - **Everything else is `off`, and it is `off` by default.** The input
   primitives apply it themselves — web-ui's `ui/input.tsx` and `ui/textarea.tsx`,
   expo's `ui/input.tsx` (which `Textarea` and `PasswordInput` both go through) —

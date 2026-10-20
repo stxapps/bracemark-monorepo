@@ -180,7 +180,10 @@ function Input({
       // as if it were this app's login. React Native turns `off` into "not
       // important for autofill" on Android and `textContentType="none"` on iOS.
       // The credential fields name themselves (`username`, `current-password`,
-      // `new-password`) and override this default. What this does not
+      // `new-password`) and override this default. ⚠ On iOS `none` is not
+      // enough for a SECRET that is not the login: AutoFill still reads a
+      // secure field as a password, so the lock fields add
+      // `textContentType="oneTimeCode"` (lock-pane.tsx). What this does not
       // reach is the keyboard's own learning, which belongs to the keyboard.
       autoComplete={autoComplete}
       // Exact entry, independent of autofill. iOS smartInsertDelete can adjust

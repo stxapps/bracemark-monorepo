@@ -106,3 +106,14 @@ test('a failed verification still shows when the field was edited and put back m
 
   expect(screen.getByTestId('lock-dialog-error')).toBeTruthy();
 });
+
+// Not this app's login — lock-pane.spec.tsx has the reasoning. Here it was the
+// save prompt: setting a lock had iOS offer to replace the saved sign-in
+// password with the lock's.
+test('the field tells the OS it is not the login', () => {
+  render(tree(jest.fn()));
+
+  expect(field().props.textContentType).toBe('oneTimeCode');
+  expect(field().props.autoComplete).toBe('off');
+  expect(field().props.secureTextEntry).toBe(true);
+});

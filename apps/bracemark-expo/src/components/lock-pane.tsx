@@ -185,6 +185,17 @@ export function LockPane({
             autoFocus={solicited && !biometric}
             placeholder={LOCK_COPY.passwordLabel}
             aria-label={LOCK_COPY.passwordLabel}
+            // NOT this app's login, and the `off` default cannot say so on iOS:
+            // it becomes `textContentType="none"`, which leaves Password AutoFill
+            // to infer a password from `secureTextEntry`. After an unlock, iOS
+            // offered to UPDATE the saved sign-in password with the lock password.
+            // `oneTimeCode` names a purpose that is not a password, so no save
+            // prompt. iOS-only: `autoComplete` stays `off`, which is the stronger
+            // answer on Android ("not important for autofill"); `one-time-code`
+            // there would become an SMS-code hint. The web twin's
+            // `autoComplete="one-time-code"` is the same fix for Chrome.
+            // docs/accessibility.md, _what a field tells the browser_.
+            textContentType="oneTimeCode"
             value={password}
             // NO `editable={!busy}`, which this field carried and its web twin
             // never did. On native that prop is a keyboard dismissal as much as

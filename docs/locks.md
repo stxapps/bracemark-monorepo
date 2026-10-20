@@ -478,6 +478,13 @@ regression here, so `npm run measure:password-manager -- --flow
 lock-app,lock-list` is the check
 ([accessibility.md](./accessibility.md), _what a field tells the browser_).
 
+⚠ **On bracemark-expo it says `textContentType="oneTimeCode"`, for iOS.** The
+`off` default became `textContentType="none"`, and iOS Password AutoFill still
+offered to replace the saved sign-in password with the lock password, after a
+lock was set and after an unlock. Android keeps `off`. The lock specs pin it;
+only a device with a saved login shows the sheet
+([accessibility.md](./accessibility.md), _what a field tells the browser_).
+
 `AppLockGate` is a **content swap, not a redirect**, mounted above
 `InitialSyncGate` so the lock screen is the first thing shown and the first sync
 proceeds behind it. Its `'checking'` phase (the first locks read) renders
