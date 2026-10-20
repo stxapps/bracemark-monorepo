@@ -23,8 +23,8 @@
 //     visible copy of the same string is `aria-hidden` so it isn't read twice.
 //
 // The `role="progressbar"` also carries `aria-valuemax={total}`, which is the
-// honest denominator the engine hands over — the reason this screen shows a
-// count rather than an invented percentage.
+// honest denominator the engine hands over — the reason this screen may show a
+// bar and a percent at all, rather than an invented one easing toward 90%.
 
 import { act, render, screen } from '@testing-library/react';
 
@@ -200,18 +200,21 @@ describe('InitialSyncGate', () => {
       mockProgress = { done: 40, total: 200 };
       mount();
 
-      expect(screen.queryByText('40 of 200 items')?.getAttribute('aria-hidden')).toBe('true');
+      expect(screen.getByText('40 of 200 items').closest('[aria-hidden="true"]')).not.toBeNull();
     });
 
     // The engine only reports a positive total, but this component is a package
-    // boundary away from that guarantee and the failure mode is a NaN width.
-    it('survives a zero total rather than rendering a NaN width', () => {
+    // boundary away from that guarantee and the failure mode is a NaN fill — so a
+    // zero total draws the indeterminate track, claiming no value at all.
+    it('survives a zero total rather than rendering a NaN fill', () => {
       mockStoreStatus = 'syncing-initial';
       mockProgress = { done: 0, total: 0 };
       mount();
 
-      const fill = screen.getByRole('progressbar').firstElementChild as HTMLElement;
-      expect(fill.style.width).toBe('0%');
+      const bar = screen.getByRole('progressbar');
+      expect(bar.getAttribute('aria-valuenow')).toBeNull();
+      expect(bar.firstElementChild).toBeNull();
+      expect(document.body.textContent).not.toContain('NaN');
     });
   });
 

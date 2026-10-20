@@ -18,6 +18,10 @@ import { SyncDetail, SyncPill } from './Sync';
 //     only fix is freeing space.
 //   - A QUOTA REFUSAL IS NOT AN ERROR. The cycle completed. Offering "Retry" would
 //     send the user round a loop that cannot help them.
+//   - A RUN IN FLIGHT SAYS HOW FAR. The first sync used to be a bare "Setting up
+//     this device…" for as long as it took; the pill now carries the percent and
+//     the detail view the bar and the count, and only while the phase is the one
+//     the numbers belong to.
 
 const mockUseSync = jest.fn();
 const mockUsePendingChangesCount = jest.fn(() => 0);
@@ -103,6 +107,95 @@ describe('SyncPill', () => {
     fireEvent.click(screen.getByRole('button'));
 
     expect(onClick).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('SyncPill — a run in flight', () => {
+  it('carries the first pull’s percent beside its label', () => {
+    setSync('syncing-initial', 'syncing', { initialSyncProgress: { done: 1240, total: 3600 } });
+
+    render(<SyncPill onClick={jest.fn()} />);
+
+    expect(screen.getByRole('button').textContent).toContain('Setting up this device…');
+    expect(screen.getByRole('button').textContent).toContain('34%');
+  });
+
+  it('carries a background cycle’s percent too', () => {
+    setSync('ready', 'syncing', { syncProgress: { step: 'upload', done: 1, total: 4 } });
+
+    render(<SyncPill onClick={jest.fn()} />);
+
+    expect(screen.getByRole('button').textContent).toContain('25%');
+  });
+
+  // The provider may still hold the last leg's count; once the phase has moved
+  // on it is history, and a percent beside "Synced just now" would contradict it.
+  it('shows no percent at rest, whatever the provider still holds', () => {
+    setSync('ready', 'idle', {
+      lastSyncAt: Date.now(),
+      syncProgress: { step: 'download', done: 2, total: 2 },
+    });
+
+    render(<SyncPill onClick={jest.fn()} />);
+
+    expect(screen.getByRole('button').textContent).not.toContain('%');
+  });
+});
+
+describe('SyncDetail — a run in flight', () => {
+  it('draws the first pull as a progressbar carrying its count', () => {
+    setSync('syncing-initial', 'syncing', { initialSyncProgress: { done: 1240, total: 3600 } });
+
+    render(<SyncDetail onBack={jest.fn()} onResume={jest.fn()} />);
+
+    const bar = screen.getByRole('progressbar', { name: 'Setting up this device' });
+    expect(bar.getAttribute('aria-valuetext')).toBe('1,240 of 3,600 items');
+    expect(bar.getAttribute('aria-valuenow')).toBe('1240');
+    expect(screen.getByText('34%')).toBeTruthy();
+    // A value repainting ten times a second must not be a live region.
+    expect(document.querySelector('[aria-live]')).toBeNull();
+  });
+
+  // The listing has no denominator yet: something must still say what is
+  // happening, and claim no value.
+  it('draws the first pull’s listing as an indeterminate bar that says what it is', () => {
+    setSync('syncing-initial', 'syncing');
+
+    render(<SyncDetail onBack={jest.fn()} onResume={jest.fn()} />);
+
+    const bar = screen.getByRole('progressbar', { name: 'Finding your links' });
+    expect(bar.getAttribute('aria-valuenow')).toBeNull();
+    expect(screen.getByText('Finding your links…')).toBeTruthy();
+  });
+
+  it('tells the user the first pull does not need the popup open', () => {
+    setSync('syncing-initial', 'syncing');
+
+    render(<SyncDetail onBack={jest.fn()} onResume={jest.fn()} />);
+
+    expect(screen.getByText(/You can close this popup/)).toBeTruthy();
+  });
+
+  it('names a background cycle’s leg in the status row', () => {
+    setSync('ready', 'syncing', { syncProgress: { step: 'upload', done: 3, total: 10 } });
+
+    render(<SyncDetail onBack={jest.fn()} onResume={jest.fn()} />);
+
+    const status = [...document.querySelectorAll('dt')].find((dt) => dt.textContent === 'Status');
+    expect(status?.nextElementSibling?.textContent).toBe('Sending your changes…');
+    expect(
+      screen
+        .getByRole('progressbar', { name: 'Sending your changes' })
+        .getAttribute('aria-valuetext'),
+    ).toBe('3 of 10 changes');
+  });
+
+  it('draws nothing at rest, whatever the provider still holds', () => {
+    setSync('ready', 'idle', { syncProgress: { step: 'download', done: 2, total: 2 } });
+
+    render(<SyncDetail onBack={jest.fn()} onResume={jest.fn()} />);
+
+    expect(screen.queryByRole('progressbar')).toBeNull();
   });
 });
 

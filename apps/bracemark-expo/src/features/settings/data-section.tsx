@@ -52,13 +52,16 @@ import {
   getSyncPhase,
   type ImportQuotaAnswer,
   type ImportQuotaPrompt,
+  SYNC_CYCLE_STEP_LABELS,
   SYNC_PHASE_LABELS,
   syncBlockedDetail,
+  syncCycleProgressLabel,
   TREE_MAX_DEPTH,
 } from '@stxapps/shared';
 
 import { ErrorText } from '../../components/error-text';
 import { FirstLineSlot } from '../../components/first-line-slot';
+import { ProgressMeter } from '../../components/progress-meter';
 import { SyncPausedActions } from '../../components/sync-paused-notice';
 import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
@@ -73,10 +76,12 @@ type DataView = 'overview' | 'import' | 'export' | 'delete';
 // The sync status card: collapses the two sync dimensions into one phase
 // (@stxapps/shared's getSyncPhase — the same derivation as web and the ⋯ menu)
 // with an icon, an optional detail, and the single relevant action (Sync now /
-// Retry). Sync is status-based, not a percentage, so there's no progress bar;
-// the pending-changes line is the "how much is left" signal instead.
+// Retry) — and, while a cycle moves something, the step line plus the shared
+// ProgressMeter. Web's SyncStatus carries why the meter replaces the
+// pending-changes line during a push.
 function SyncStatus() {
-  const { storeStatus, bgSyncStatus, lastSyncAt, lastError, blockedCount, syncNow } = useSync();
+  const { storeStatus, bgSyncStatus, lastSyncAt, lastError, blockedCount, syncProgress, syncNow } =
+    useSync();
   const pendingCount = usePendingChangesCount();
   const phase = getSyncPhase(storeStatus, bgSyncStatus);
   // Rendered inside InitialSyncGate, so storeStatus is never 'error' here —
@@ -94,6 +99,8 @@ function SyncStatus() {
   // spinner and no Sync button — the card carries the resume itself, since the
   // settings screens have no notice of their own. Not an error: nothing failed.
   const isPaused = phase === 'paused';
+  // Only a cycle in flight has progress worth drawing.
+  const progress = phase === 'syncing' ? syncProgress : null;
 
   // `size-5` is the SettingsRow icon size (the three action rows at the bottom of
   // this file, account-section's four), not the `size-4` of the receipt lines and
@@ -113,8 +120,9 @@ function SyncStatus() {
     <ActivityIndicator size="small" />
   );
 
-  const text =
-    phase === 'idle' && lastSyncAt
+  const text = progress
+    ? SYNC_CYCLE_STEP_LABELS[progress.step]
+    : phase === 'idle' && lastSyncAt
       ? `Last synced ${formatSyncedAt(lastSyncAt)}`
       : SYNC_PHASE_LABELS[phase];
   const detail = isError ? lastError : null;
@@ -141,6 +149,19 @@ function SyncStatus() {
             {text}
           </Text>
           {detail && <Text className="text-sm text-destructive">{detail}</Text>}
+          {/* `my-1` is the air a bar needs from the lines around it — the
+              column's `gap-0.5` is a line step. No `max-w-*`: rem is baked at
+              build time here (docs/theme.md), and a phone's card is narrow
+              enough that the full column already reads as a meter. */}
+          {progress && (
+            <ProgressMeter
+              label={SYNC_CYCLE_STEP_LABELS[progress.step].replace(/…$/, '')}
+              done={progress.done}
+              total={progress.total}
+              valueText={syncCycleProgressLabel(progress)}
+              className="my-1"
+            />
+          )}
           {/* The one place a blocked sync is explained. Inline rather than the
               hoisted paywall dialog: this is a STATUS the user came to read,
               not an action being interrupted (paywall-provider's header). No
@@ -160,7 +181,8 @@ function SyncStatus() {
               <SyncPausedActions />
             </>
           )}
-          {pendingCount > 0 && (
+          {/* Not beside an upload's meter — the same unit, counted twice. */}
+          {pendingCount > 0 && progress?.step !== 'upload' && (
             <Text className="text-sm text-muted-foreground">
               {pendingCount} {pendingCount === 1 ? 'change' : 'changes'} waiting to sync
             </Text>

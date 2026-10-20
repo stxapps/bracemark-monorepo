@@ -66,12 +66,9 @@ export interface FakeBrowser {
     };
   };
   storage: {
-    local: {
-      get: (key?: string | string[] | null) => Promise<Record<string, unknown>>;
-      set: (items: Record<string, unknown>) => Promise<void>;
-      /** Read a key synchronously, for assertions. */
-      peek: (key: string) => unknown;
-    };
+    local: FakeStorageArea;
+    /** Memory-backed in the real browser; the sync progress mirror lives here. */
+    session: FakeStorageArea;
     onChanged: {
       addListener: jest.Mock<void, [StorageChangedListener]>;
       removeListener: jest.Mock<void, [StorageChangedListener]>;
@@ -81,8 +78,51 @@ export interface FakeBrowser {
   };
 }
 
-export function createFakeBrowser(): FakeBrowser {
+export interface FakeStorageArea {
+  get: (key?: string | string[] | null) => Promise<Record<string, unknown>>;
+  set: (items: Record<string, unknown>) => Promise<void>;
+  remove: (key: string | string[]) => Promise<void>;
+  /** Read a key synchronously, for assertions. */
+  peek: (key: string) => unknown;
+}
+
+// One area over a real map, firing `onChanged` with its own area name — as the
+// browser does, so a listener that forgets to check the area is caught.
+function createStorageArea(
+  areaName: string,
+  emit: (changes: Record<string, StorageChange>, areaName: string) => void,
+): FakeStorageArea {
   const store = new Map<string, unknown>();
+  return {
+    get: async (key) => {
+      if (key == null) return Object.fromEntries(store);
+      const keys = Array.isArray(key) ? key : [key];
+      const out: Record<string, unknown> = {};
+      for (const k of keys) if (store.has(k)) out[k] = store.get(k);
+      return out;
+    },
+    set: async (items) => {
+      const changes: Record<string, StorageChange> = {};
+      for (const [k, v] of Object.entries(items)) {
+        changes[k] = { oldValue: store.get(k), newValue: v };
+        store.set(k, v);
+      }
+      emit(changes, areaName);
+    },
+    remove: async (key) => {
+      const changes: Record<string, StorageChange> = {};
+      for (const k of Array.isArray(key) ? key : [key]) {
+        if (!store.has(k)) continue;
+        changes[k] = { oldValue: store.get(k) };
+        store.delete(k);
+      }
+      if (Object.keys(changes).length > 0) emit(changes, areaName);
+    },
+    peek: (key) => store.get(key),
+  };
+}
+
+export function createFakeBrowser(): FakeBrowser {
   const storageListeners = new Set<StorageChangedListener>();
   const alarmListeners = new Set<AlarmListener>();
 
@@ -130,24 +170,8 @@ export function createFakeBrowser(): FakeBrowser {
       },
     },
     storage: {
-      local: {
-        get: async (key) => {
-          if (key == null) return Object.fromEntries(store);
-          const keys = Array.isArray(key) ? key : [key];
-          const out: Record<string, unknown> = {};
-          for (const k of keys) if (store.has(k)) out[k] = store.get(k);
-          return out;
-        },
-        set: async (items) => {
-          const changes: Record<string, StorageChange> = {};
-          for (const [k, v] of Object.entries(items)) {
-            changes[k] = { oldValue: store.get(k), newValue: v };
-            store.set(k, v);
-          }
-          onChanged.emit(changes, 'local');
-        },
-        peek: (key) => store.get(key),
-      },
+      local: createStorageArea('local', onChanged.emit),
+      session: createStorageArea('session', onChanged.emit),
       onChanged,
     },
   };

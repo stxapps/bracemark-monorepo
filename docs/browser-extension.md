@@ -190,6 +190,11 @@ silent visual regression, so they're written down:
   (destructive) and `capacity-blocked` (amber) are chromatic. A green "all good"
   dot is the obvious move and the wrong one: it spends the surface's only colour
   on the state that needs no attention, and then the red has to shout over it.
+  The pill's progress follows the same rule: while a run has a number, the
+  pill's own top hairline fills in `bg-foreground/50` and the percent sits
+  beside the label — the footer's existing line, not a new element, so the pill
+  at rest is unchanged. The full count and the real progressbar are the detail
+  view's (`popup/Sync.tsx`).
 
 ### storage across extension contexts
 
@@ -202,6 +207,23 @@ context that has to reach the data:
   in memory dies with it) and the **MV3 background service worker has no DOM and
   no `localStorage`** at all. `.session` is memory-backed and cleared on browser
   restart — the right home for ephemeral unlocked state.
+  The sync mirror uses both, split by how often it changes: the status
+  (`utils/mirrored-sync-state.ts`) is `.local`, written a few times a cycle and
+  read on every popup open; the **progress** (`utils/mirrored-sync-progress.ts` —
+  the count behind the pill's percent and the detail view's bar) is `.session`,
+  written up to ten times a second through `@stxapps/shared`'s
+  `createProgressCoalescer` and removed when the run ends. Folding the progress
+  into the status record would rewrite a persisted value per tick and re-render
+  every `useSync()` consumer with it.
+- **The worker's copy of the status mirror is seeded from storage, never from
+  the initial state.** An MV3 worker is torn down idle and spun up cold for the
+  next trigger, and a copy seeded with `INITIAL_MIRRORED_SYNC_STATE` made each
+  such cycle's first write `storeStatus: 'checking', lastSyncAt: null` — the
+  popup read "Checking…" and "Last sync: Never" for the whole cycle on a device
+  that had synced a minute before. The runner also writes the gate's answer
+  (`ready` / `syncing-initial`) in the same write as `bgSyncStatus: 'syncing'`,
+  and a failed first pull as `storeStatus: 'error'`, so the popup offers its
+  Retry instead of "Setting up this device…" over an error (`utils/sync-runner.ts`).
 - **IndexedDB** — for larger structured data and richer local querying (e.g. a
   local encrypted link index for search), available in both popup and background
   contexts. It is also where the extension keeps its **non-extractable

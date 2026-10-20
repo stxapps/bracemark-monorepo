@@ -1,5 +1,6 @@
 import { render } from '@testing-library/react';
 
+import type { MirroredSyncProgress } from '../utils/mirrored-sync-progress';
 import type { MirroredSyncState } from '../utils/mirrored-sync-state';
 import { Providers } from './providers';
 
@@ -18,6 +19,7 @@ import { Providers } from './providers';
 // error or a failed render; it is a popup that quietly never stops syncing.
 
 const mockUseMirroredSyncState = jest.fn<MirroredSyncState, []>();
+const mockUseMirroredSyncProgress = jest.fn<MirroredSyncProgress | null, []>(() => null);
 const mockSendMessage = jest.fn(async () => ({ ok: true }));
 
 // Everything above the sync context is passed through: this spec is about what
@@ -39,6 +41,11 @@ jest.mock('@/utils/api-client', () => ({ apiClient: { baseUrl: 'https://api.test
 jest.mock('@/hooks/use-mirrored-sync-state', () => ({
   get useMirroredSyncState() {
     return mockUseMirroredSyncState;
+  },
+}));
+jest.mock('@/hooks/use-mirrored-sync-progress', () => ({
+  get useMirroredSyncProgress() {
+    return mockUseMirroredSyncProgress;
   },
 }));
 jest.mock('@/utils/messages', () => ({
@@ -73,6 +80,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   externalSyncProps.length = 0;
   mockUseMirroredSyncState.mockReturnValue(IDLE);
+  mockUseMirroredSyncProgress.mockReturnValue(null);
 });
 
 describe('Providers', () => {
@@ -88,6 +96,33 @@ describe('Providers', () => {
 
     expect(externalSyncProps[0]).toMatchObject(mirror);
   });
+
+  // One mirrored value, two context fields: the first sync's count is the
+  // gate-shaped one, a cycle's leg the other, and the popup's surfaces read each
+  // only in its own phase. Crossed, the pill would show a first sync's percent
+  // under "Syncing…" — or none at all.
+  it.each([
+    [
+      'the first pull',
+      { step: 'initial', done: 40, total: 200 } as MirroredSyncProgress,
+      { initialSyncProgress: { done: 40, total: 200 }, syncProgress: null },
+    ],
+    [
+      'a background cycle’s leg',
+      { step: 'upload', done: 3, total: 10 } as MirroredSyncProgress,
+      { initialSyncProgress: null, syncProgress: { step: 'upload', done: 3, total: 10 } },
+    ],
+    ['no run in flight', null, { initialSyncProgress: null, syncProgress: null }],
+  ])(
+    'splits the progress mirror into the context’s two readouts: %s',
+    (_name, mirrored, expected) => {
+      mockUseMirroredSyncProgress.mockReturnValue(mirrored);
+
+      render(<Providers>ok</Providers>);
+
+      expect(externalSyncProps[0]).toMatchObject(expected);
+    },
+  );
 
   it('keeps `requestSync` referentially stable while the mirror changes underneath it', () => {
     const { rerender } = render(<Providers>ok</Providers>);

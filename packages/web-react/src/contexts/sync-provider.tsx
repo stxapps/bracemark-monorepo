@@ -15,11 +15,13 @@ import { SESSION_COPY, useApiClient } from '@stxapps/react';
 import {
   bgStatusForOutcome,
   type BgSyncStatus,
+  createProgressCoalescer,
   createSyncRetryScheduler,
   type InitialSyncProgress,
   type InitialSyncProgressFn,
   runInitialSyncWithRetries,
   type StoreStatus,
+  type SyncCycleProgress,
 } from '@stxapps/shared';
 
 import { getSession } from '../data/session-store';
@@ -57,16 +59,13 @@ installSyncTraceFromFlag();
 // platform-free sync vocabulary — defined in @stxapps/shared so a native client
 // speaks the same language — and imported above. SyncProvider is one concrete
 // producer of them.
-// How often the first-sync counter is allowed to re-render the gate. The engine
-// reports once per decrypted record and runs 24 downloads at a time, so an
-// unthrottled feed is hundreds of setStates a second — competing with WebCrypto
-// for the same main thread, to move a number faster than anyone can read it.
-// ~10 renders a second looks continuous and costs nothing.
-//
-// The coalescing lives HERE rather than in the engine deliberately: the engine is
-// React-free (it also runs in the extension's service worker, which has no
-// renders to schedule), so a rendering cadence is not its policy to hold.
-const PROGRESS_FLUSH_MS = 100;
+// Both progress readouts below (the gate's counter, the Data card's cycle bar)
+// repaint through @stxapps/shared's createProgressCoalescer at its
+// PROGRESS_FLUSH_MS — ~10 renders a second however fast the engine ticks
+// (async/progress.ts carries the reasoning). The coalescing lives HERE rather
+// than in the engine deliberately: the engine is React-free (it also runs in the
+// browser extension's service worker, which has no renders to schedule), so a
+// rendering cadence is not its policy to hold.
 
 interface SyncContextValue {
   storeStatus: StoreStatus;
@@ -92,6 +91,14 @@ interface SyncContextValue {
   // dropping back to a bare spinner; it's cleared when a run fails, and reset with
   // the rest of the state on retry.
   initialSyncProgress: InitialSyncProgress | null;
+  // Determinate progress for the BACKGROUND cycle in flight — the Data card's bar
+  // (SyncCycleProgress, @stxapps/shared sync/status.ts): which leg, and how far
+  // through it. Null while no leg has a number yet — the op-log page, a
+  // fallback's listing, a cycle with nothing to move — which the card reads as a
+  // bare "Syncing…". It holds the last leg's final count across the gap to the
+  // next leg instead of dropping back to that bare line between them, and is
+  // cleared when the cycle settles, either way.
+  syncProgress: SyncCycleProgress | null;
   // The blocking first sync failed for a reason that may clear by itself, and is
   // being retried on its own short schedule (@stxapps/shared sync/retry.ts,
   // INITIAL_SYNC_RETRY_DELAYS_MS) — the gate's "Retrying…" line. Stays true until
@@ -144,6 +151,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [lastError, setLastError] = useState<string | null>(null);
   const [blockedCount, setBlockedCount] = useState(0);
   const [initialSyncProgress, setInitialSyncProgress] = useState<InitialSyncProgress | null>(null);
+  const [syncProgress, setSyncProgress] = useState<SyncCycleProgress | null>(null);
   const [initialSyncRetrying, setInitialSyncRetrying] = useState(false);
   // Bumped by retryInitialSync() to re-run the effect.
   const [attempt, setAttempt] = useState(0);
@@ -195,6 +203,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       setBgSyncStatus('paused');
       setBlockedCount(0);
       setInitialSyncProgress(null);
+      setSyncProgress(null);
       setInitialSyncRetrying(false);
       void isFirstSyncDone(username).then(
         (done) => {
@@ -234,35 +243,42 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     setLastError(null);
     setBlockedCount(0);
     setInitialSyncProgress(null);
+    setSyncProgress(null);
     setInitialSyncRetrying(false);
 
-    // Trailing-edge coalescer for the first-sync counter (see PROGRESS_FLUSH_MS):
-    // every tick overwrites the pending value, and at most one flush is scheduled
-    // at a time, so a burst of records costs one render. Effect-scoped locals
-    // rather than refs — the scope is exactly right, since a new account (or a
-    // retry) re-runs the effect and must not inherit the previous run's count.
-    let progressTimer: ReturnType<typeof setTimeout> | null = null;
-    let pendingProgress: InitialSyncProgress | null = null;
-    const flushProgress = () => {
-      progressTimer = null;
-      if (!active || !pendingProgress) return;
-      setInitialSyncProgress(pendingProgress);
-      pendingProgress = null;
-    };
-    const reportProgress: InitialSyncProgressFn = (done, total) => {
-      pendingProgress = { done, total };
-      progressTimer ??= setTimeout(flushProgress, PROGRESS_FLUSH_MS);
-    };
+    // The two readouts' coalescers (see the note above SyncContextValue): every
+    // tick overwrites the pending value and a burst costs one render.
+    // Effect-scoped rather than refs — the scope is exactly right, since a new
+    // account (or a retry) re-runs the effect and must not inherit the previous
+    // run's count. The `active` check is the flush's, so a timer that outlives the
+    // effect paints nothing.
+    const initialProgress = createProgressCoalescer<InitialSyncProgress>((p) => {
+      if (active) setInitialSyncProgress(p);
+    });
+    const reportProgress: InitialSyncProgressFn = (done, total) =>
+      initialProgress.report({ done, total });
     // Settle at the end of a run. On success the final count is pushed through
     // immediately instead of waiting out the last coalescing window, so the bar the
     // gate holds up during its minimum-visible floor is a full one rather than the
     // second-to-last tick. On failure it's dropped: the error screen carries no bar.
     const settleProgress = (keep: boolean) => {
-      if (progressTimer !== null) clearTimeout(progressTimer);
-      progressTimer = null;
-      if (keep && pendingProgress) setInitialSyncProgress(pendingProgress);
-      if (!keep) setInitialSyncProgress(null);
-      pendingProgress = null;
+      if (keep) {
+        initialProgress.flush();
+      } else {
+        initialProgress.cancel();
+        setInitialSyncProgress(null);
+      }
+    };
+    // One reporter for every cycle this effect starts, so overlapping
+    // backgroundSync calls — which join one engine run — add one listener, not two.
+    const cycleProgress = createProgressCoalescer<SyncCycleProgress>((p) => {
+      if (active) setSyncProgress(p);
+    });
+    const reportCycleProgress = (step: SyncCycleProgress['step'], done: number, total: number) =>
+      cycleProgress.report({ step, done, total });
+    const settleCycleProgress = () => {
+      cycleProgress.cancel();
+      setSyncProgress(null);
     };
 
     // L3 — a failed cycle that may clear by itself starts the next one on a
@@ -288,13 +304,14 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       const deps = cycleDeps();
       if (!deps) return Promise.resolve();
       setBgSyncStatus('syncing');
-      const cycle = runIncrementalSync(deps);
+      const cycle = runIncrementalSync(deps, reportCycleProgress);
       retries.watch(cycle);
       // Returned for syncAndWait. Both branches below are handled, so it settles
       // with the cycle and never rejects.
       return cycle.then(
         (outcome) => {
           if (!active) return;
+          settleCycleProgress();
           // A completed cycle is 'idle' UNLESS the plan/quota gate refused part
           // of the push — that resolves rather than rejects (the rest of the
           // cycle succeeded), so it would otherwise read as a clean sync while
@@ -309,6 +326,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         },
         (err: unknown) => {
           if (!active) return;
+          settleCycleProgress();
           setBgSyncStatus('error');
           setBlockedCount(0);
           setLastSyncAt(Date.now());
@@ -397,7 +415,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
       backgroundSyncRef.current = () => Promise.resolve();
-      if (progressTimer !== null) clearTimeout(progressTimer);
+      initialProgress.cancel();
+      cycleProgress.cancel();
       retries.dispose();
       window.removeEventListener('online', wake);
       document.removeEventListener('visibilitychange', wakeIfVisible);
@@ -416,6 +435,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       lastError,
       blockedCount,
       initialSyncProgress,
+      syncProgress,
       initialSyncRetrying,
       localWriteNonce,
       retryInitialSync,
@@ -430,6 +450,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       lastError,
       blockedCount,
       initialSyncProgress,
+      syncProgress,
       initialSyncRetrying,
       localWriteNonce,
       retryInitialSync,
@@ -453,6 +474,12 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 // idle store so the editor is usable as soon as the page mounts. `localWriteNonce`
 // still bumps on each requestSync so any read edge keyed on it stays correct.
 //
+// The two progress readouts are passed in the same way, and default to null (no
+// number yet) for a caller whose engine reports none. The extension's background
+// mirrors them through `browser.storage.session` rather than the status mirror's
+// `.local` (bracemark-extension utils/mirrored-sync-progress.ts) — memory-backed,
+// so ten writes a second cost an IPC each and no disk.
+//
 // `syncAndWait` is delegated the same way and is REQUIRED, with no default: it has
 // to settle when that other context's cycle does, which only the caller can know,
 // and a default that resolved at once would quietly turn the sign-out flow's "sync
@@ -464,6 +491,8 @@ export function ExternalSyncProvider({
   lastSyncAt = null,
   lastError = null,
   blockedCount = 0,
+  initialSyncProgress = null,
+  syncProgress = null,
   requestSync,
   syncAndWait,
 }: {
@@ -473,6 +502,8 @@ export function ExternalSyncProvider({
   lastSyncAt?: number | null;
   lastError?: string | null;
   blockedCount?: number;
+  initialSyncProgress?: InitialSyncProgress | null;
+  syncProgress?: SyncCycleProgress | null;
   requestSync: () => void;
   syncAndWait: () => Promise<void>;
 }) {
@@ -494,15 +525,13 @@ export function ExternalSyncProvider({
       lastSyncAt,
       lastError,
       blockedCount,
-      // Not a prop, and deliberately always null: the first-sync counter is a
-      // per-record feed, and the mirror these clients read is a `browser.storage`
-      // write per state change — pushing ~10 writes a second through it to animate
-      // a bar would cost more than the bar is worth. The only surface that wants
-      // the number is the blocking decrypting screen, and no external-engine client
-      // renders one (the extension popup shows the phase as a pill). A consumer
-      // reads null exactly as it reads the listing phase: indeterminate.
-      initialSyncProgress: null,
-      // Same reason: the engine's own context retries its first sync, and no
+      // Whatever the engine's context mirrors. An external-engine client renders
+      // no gate, so the first-sync count is not a gate's here: the browser
+      // extension's popup shows it on its sync pill and detail view, the one wait
+      // there long enough to need a number.
+      initialSyncProgress,
+      syncProgress,
+      // Not mirrored: the engine's own context retries its first sync, and no
       // external-engine client renders a gate to show it on.
       initialSyncRetrying: false,
       localWriteNonce,
@@ -518,6 +547,8 @@ export function ExternalSyncProvider({
       lastSyncAt,
       lastError,
       blockedCount,
+      initialSyncProgress,
+      syncProgress,
       localWriteNonce,
       requestSyncWithNonce,
       requestSync,

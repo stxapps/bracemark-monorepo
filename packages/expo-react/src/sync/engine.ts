@@ -47,6 +47,7 @@ import {
   chunk,
   createLimiter,
   createSignedFanOut,
+  createUnitCounter,
   emptySyncOutcome,
   FILES_PREFIX,
   filesListEndpoint,
@@ -72,6 +73,7 @@ import {
   SET_OUTAGE_FAILURES,
   type SignedUrl,
   type SignOp,
+  type SyncCycleProgressFn,
   SyncIncompleteError,
   syncNamespace,
   type SyncOutcome,
@@ -386,6 +388,10 @@ async function logWatermark(api: ApiClient): Promise<number> {
 // between CYCLES; the cycle lock below is for holding them off (holdSyncCycles).
 const inflightSyncs = new Map<string, Promise<SyncOutcome>>();
 const rerunRequests = new Set<string>();
+// Who is watching the in-flight run's progress — web engine's cycleListeners.
+const cycleListeners = new Map<string, Set<SyncCycleProgressFn>>();
+
+const NO_PROGRESS: SyncCycleProgressFn = () => undefined;
 
 // The cycle lock — web's Web Lock of the same name, scoped to this runtime: per
 // account, first come first served, taken by each cycle (incrementalSyncOnce) and
@@ -457,24 +463,37 @@ export function holdSyncCycles<T>(
 // gate (signPushable, below). Callers that only care about failure can ignore
 // the value; the provider maps it through shared's `bgStatusForOutcome` to show
 // a `blocked-*` status (with the refused count) rather than a false 'idle'.
-export function runIncrementalSync(deps: SyncDeps): Promise<SyncOutcome> {
+//
+// `onProgress` is the cycle's per-unit feed — web engine's runIncrementalSync
+// carries what each leg reports and when.
+export function runIncrementalSync(
+  deps: SyncDeps,
+  onProgress?: SyncCycleProgressFn,
+): Promise<SyncOutcome> {
   const key = deps.username;
   const inflight = inflightSyncs.get(key);
   if (inflight) {
+    if (onProgress) cycleListeners.get(key)?.add(onProgress);
     rerunRequests.add(key);
     return inflight;
   }
+  const listeners = new Set<SyncCycleProgressFn>(onProgress ? [onProgress] : []);
+  cycleListeners.set(key, listeners);
+  const report: SyncCycleProgressFn = (step, done, total) => {
+    for (const listener of listeners) listener(step, done, total);
+  };
   const run = (async () => {
     try {
       // The LAST run's outcome is the answer, not the union: a trailing rerun
       // re-reads the same pending queue, so if it pushed cleanly the block is
       // genuinely gone (the user upgraded, or freed space mid-cycle).
-      let outcome = await incrementalSyncOnce(deps);
-      while (rerunRequests.delete(key)) outcome = await incrementalSyncOnce(deps);
+      let outcome = await incrementalSyncOnce(deps, report);
+      while (rerunRequests.delete(key)) outcome = await incrementalSyncOnce(deps, report);
       return outcome;
     } finally {
       inflightSyncs.delete(key);
       rerunRequests.delete(key);
+      cycleListeners.delete(key);
     }
   })();
   inflightSyncs.set(key, run);
@@ -483,11 +502,11 @@ export function runIncrementalSync(deps: SyncDeps): Promise<SyncOutcome> {
 
 // One cycle, under the cycle lock from its first read to its last write — so a
 // holdSyncCycles caller is never overlapped by one.
-function incrementalSyncOnce(deps: SyncDeps): Promise<SyncOutcome> {
-  return withCycleLock(deps.username, () => runCycle(deps));
+function incrementalSyncOnce(deps: SyncDeps, report: SyncCycleProgressFn): Promise<SyncOutcome> {
+  return withCycleLock(deps.username, () => runCycle(deps, report));
 }
 
-async function runCycle(deps: SyncDeps): Promise<SyncOutcome> {
+async function runCycle(deps: SyncDeps, report: SyncCycleProgressFn): Promise<SyncOutcome> {
   deps = withRetryDeps(deps);
   // Collected DOWN the call chain (the cycles → pushPending → pushPuts) and
   // returned UP, so the provider can tell a clean cycle from one the quota gate
@@ -536,13 +555,13 @@ async function runCycle(deps: SyncDeps): Promise<SyncOutcome> {
     // its newest stamp is the high-water mark that listing will reflect.
     await trace.span(
       'cycle',
-      () => fallbackCycle(deps, pending, outcome, first.newestUpdatedAt ?? 0),
+      () => fallbackCycle(deps, pending, outcome, first.newestUpdatedAt ?? 0, report),
       { kind: 'fallback', pending: pending.length },
     );
   } else {
     await trace.span(
       'cycle',
-      () => incrementalCycle(deps, since, sincePath, first, pending, outcome),
+      () => incrementalCycle(deps, since, sincePath, first, pending, outcome, report),
       { kind: 'incremental', pending: pending.length },
     );
   }
@@ -729,6 +748,7 @@ async function incrementalCycle(
   first: OpsListResponse,
   pending: PendingOpRecord[],
   outcome: SyncOutcome,
+  report: SyncCycleProgressFn = NO_PROGRESS,
 ): Promise<void> {
   // 1. Pull: page the op log via keyset, coalescing to the latest op per path.
   const serverOps = new Map<string, OpEntry>();
@@ -768,7 +788,7 @@ async function incrementalCycle(
   // 3. Push, 4. Pull — disjoint sets, so order is a sensible default, not a
   // requirement (local changes durable first).
   await withBulkHold(pending.length + downloads.length + localDeletes.length, async () => {
-    const orphanedPaths = await pushPending(deps, pending, outcome);
+    const orphanedPaths = await pushPending(deps, pending, outcome, report);
     // Complete the self-heal: a wedged op the push dropped (uploadOne) had its
     // path reserved for the push by the reconcile above, keeping the server's copy
     // OUT of the download set — re-add whatever this window shows for it, so the
@@ -779,7 +799,7 @@ async function incrementalCycle(
       const op = serverOps.get(path);
       if (op?.op === 'put') downloads.push({ path: op.path, updatedAt: op.updatedAt });
     }
-    await storeDownloads(deps, downloads);
+    await storeDownloads(deps, downloads, (done, total) => report('download', done, total));
     await applyDeletes(deps.username, localDeletes);
   });
 
@@ -816,6 +836,7 @@ async function fallbackCycle(
   pending: PendingOpRecord[],
   outcome: SyncOutcome,
   watermark: number,
+  report: SyncCycleProgressFn = NO_PROGRESS,
 ): Promise<void> {
   const files = await listAllFiles(deps.api);
   const serverFiles = new Map(files.map((f) => [f.path, f.updatedAt]));
@@ -852,14 +873,14 @@ async function fallbackCycle(
   // is idempotent on both stores, so pushing unconditionally is always safe;
   // dropping the op would leak the quota entry forever.
   await withBulkHold(pending.length + downloads.length + localDeletes.length, async () => {
-    const orphanedPaths = await pushPending(deps, pending, outcome);
+    const orphanedPaths = await pushPending(deps, pending, outcome, report);
     // Same heal as the incremental cycle: a dropped op's path was excluded from the
     // download set above — re-add the listed server copy so it comes back.
     for (const path of orphanedPaths) {
       const updatedAt = serverFiles.get(path);
       if (updatedAt !== undefined) downloads.push({ path, updatedAt });
     }
-    await storeDownloads(deps, downloads);
+    await storeDownloads(deps, downloads, (done, total) => report('download', done, total));
     await applyDeletes(deps.username, localDeletes);
   });
 
@@ -925,13 +946,18 @@ interface PassFailures {
 // not silently, because a rejection is the contract the caller shows an error
 // status through. A transient one is retried by the provider's timer
 // (@stxapps/shared sync/retry.ts, docs/local-first-sync.md _retrying a failure_).
+//
+// The upload leg's counter ticks per op as its transfer settles (a delete, as
+// its commit lands) — web engine's pushPending carries why not per chunk.
 async function pushPending(
   deps: SyncDeps,
   ops: PendingOpRecord[],
   outcome: SyncOutcome,
+  report: SyncCycleProgressFn = NO_PROGRESS,
 ): Promise<string[]> {
   if (ops.length === 0) return [];
-  return trace.span('push', () => pushPhases(deps, ops, outcome), {
+  const tick = createUnitCounter(ops.length, (done, total) => report('upload', done, total));
+  return trace.span('push', () => pushPhases(deps, ops, outcome, tick), {
     puts: ops.filter((o) => o.op === 'put').length,
     deletes: ops.filter((o) => o.op === 'delete').length,
   });
@@ -941,6 +967,7 @@ async function pushPhases(
   deps: SyncDeps,
   ops: PendingOpRecord[],
   outcome: SyncOutcome,
+  tick: (path: string) => void,
 ): Promise<string[]> {
   const puts = ops.filter((o) => o.op === 'put');
   const deletes = ops.filter((o) => o.op === 'delete');
@@ -957,10 +984,15 @@ async function pushPhases(
   // log write (the safe direction, never content-before-metadata), so splitting
   // it would only cost a redundant partial commit when the metadata count isn't
   // a multiple of COMMIT_BATCH.
-  await commitBatched(deps, [
-    ...deletes.filter((o) => !isContentPath(o.path)),
-    ...deletes.filter((o) => isContentPath(o.path)),
-  ]);
+  await commitBatched(
+    deps,
+    [
+      ...deletes.filter((o) => !isContentPath(o.path)),
+      ...deletes.filter((o) => isContentPath(o.path)),
+    ],
+    NO_RECEIPTS,
+    (batch) => batch.forEach((o) => tick(o.path)),
+  );
 
   // Phase 3 then 4: drain ALL content puts (every chunk, every commit) before
   // ANY metadata put, so the content-before-metadata invariant holds across chunk
@@ -975,6 +1007,7 @@ async function pushPhases(
     outcome,
     orphanedPaths,
     failures,
+    tick,
   );
   // A content upload that failed left its op queued — so the metadata phase
   // (which may reference that content) is HELD this cycle, or a puller could
@@ -1001,6 +1034,7 @@ async function pushPhases(
       outcome,
       orphanedPaths,
       failures,
+      tick,
     );
   }
 
@@ -1022,8 +1056,9 @@ async function pushPuts(
   outcome: SyncOutcome,
   orphanedPaths: string[],
   failures: UploadFailures,
+  tick: (path: string) => void,
 ): Promise<boolean> {
-  const first = await pushPutPass(deps, puts, batchSize, concurrency, orphanedPaths);
+  const first = await pushPutPass(deps, puts, batchSize, concurrency, orphanedPaths, tick);
   let refused = first.refused;
   let left = first.left;
   const again = new Set(refused === 0 ? left.filter(isWorthAnotherPass) : []);
@@ -1037,6 +1072,7 @@ async function pushPuts(
           batchSize,
           concurrency,
           orphanedPaths,
+          tick,
         ),
       { ops: again.size },
     );
@@ -1075,6 +1111,7 @@ async function pushPutPass(
   batchSize: number,
   concurrency: number,
   orphanedPaths: string[],
+  tick: (path: string) => void,
 ): Promise<{ refused: number; left: LeftOp[] }> {
   // Homogeneous by contract (the caller splits the kinds), so the first op names it.
   const kind = puts.length > 0 && isContentPath(puts[0].path) ? 'content' : 'index';
@@ -1093,7 +1130,9 @@ async function pushPutPass(
     concurrency,
     lead: kind === 'content' ? 2 * FILE_CONCURRENCY : 2 * concurrency,
     sign: (batch) => signPushable(deps, batch),
-    upload: (op, signed) => uploadOne(deps, op, signed, largeGate, pass),
+    // Ticked as the transfer settles, not as its chunk commits (pushPending).
+    upload: (op, signed) =>
+      uploadOne(deps, op, signed, largeGate, pass).finally(() => tick(op.path)),
     commit: commitChunk,
     now: trace.now,
   });
@@ -1214,6 +1253,7 @@ async function commitBatched(
   deps: SyncDeps,
   ops: PendingOpRecord[],
   receipts: ReadonlyMap<string, string> = NO_RECEIPTS,
+  onCommitted?: (batch: PendingOpRecord[]) => void,
 ): Promise<string[]> {
   const refused: string[] = [];
   for (const batch of chunk(ops, COMMIT_BATCH)) {
@@ -1222,6 +1262,7 @@ async function commitBatched(
       receipts: batch.filter((o) => receipts.has(o.path)).length,
     });
     refused.push(...failed);
+    onCommitted?.(batch);
   }
   return refused;
 }

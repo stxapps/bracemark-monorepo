@@ -4,11 +4,16 @@ import { SESSION_COPY } from '@stxapps/react';
 import {
   formatSyncedAt,
   getSyncPhase,
+  initialSyncProgressLabel,
+  progressPercent,
+  SYNC_CYCLE_STEP_LABELS,
   SYNC_PHASE_LABELS,
   syncBlockedDetail,
+  syncCycleProgressLabel,
   type SyncPhase,
 } from '@stxapps/shared';
 import { usePendingChangesCount, useSync } from '@stxapps/web-react';
+import { ProgressMeter } from '@stxapps/web-ui/components/progress-meter';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
@@ -85,25 +90,91 @@ function pillLabel(phase: SyncPhase, lastSyncAt: number | null): string {
   }
 }
 
+// What a run in flight can say with numbers, read once for both surfaces: the
+// first sync's count while the store is still being set up, a background
+// cycle's leg while one is moving something. Null for every other phase — a
+// value the provider still holds once the phase has moved on is not a readout.
+interface SyncReadout {
+  // The line naming what is happening ("Setting up this device…").
+  what: string;
+  // The progressbar's accessible name: that line without its ellipsis.
+  label: string;
+  done: number;
+  total: number;
+  // "1,240 of 3,600 items"
+  count: string;
+}
+
+function useSyncReadout(phase: SyncPhase): SyncReadout | null {
+  const { initialSyncProgress, syncProgress } = useSync();
+  if (phase === 'initial-syncing' && initialSyncProgress) {
+    const what = SYNC_PHASE_LABELS['initial-syncing'];
+    return {
+      what,
+      label: what.replace(/…$/, ''),
+      ...initialSyncProgress,
+      count: initialSyncProgressLabel(initialSyncProgress),
+    };
+  }
+  if (phase === 'syncing' && syncProgress) {
+    const what = SYNC_CYCLE_STEP_LABELS[syncProgress.step];
+    return {
+      what,
+      label: what.replace(/…$/, ''),
+      done: syncProgress.done,
+      total: syncProgress.total,
+      count: syncCycleProgressLabel(syncProgress),
+    };
+  }
+  return null;
+}
+
+// The pill's progress. Two things carry it, both at the pill's own scale: the
+// percent beside the label, and the pill's top hairline — the border that
+// separates it from the save flow — filling left to right as the run goes. The
+// hairline is the footer's existing line, not a new element on the screen, so
+// at rest the pill is exactly what it was. The full count is the detail view's;
+// at 12px beside the label it would truncate the very words that say what is
+// happening.
 export function SyncPill({ onClick }: { onClick: () => void }) {
   const { storeStatus, bgSyncStatus, lastSyncAt } = useSync();
   const phase = getSyncPhase(storeStatus, bgSyncStatus);
+  const readout = useSyncReadout(phase);
 
   return (
     <button
       type="button"
       className={cn(
-        'group flex w-full items-center gap-2 border-t border-border px-4 py-2.5 text-left text-xs',
+        'group relative flex w-full items-center gap-2 border-t border-border px-4 py-2.5 text-left text-xs',
         'transition-colors hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none',
       )}
       onClick={onClick}
     >
+      {/* Over the border-t, 1px tall: decorative, since the button's own text
+          already says the percent, and the detail view carries the real
+          progressbar. Same glide as ProgressMeter's fill. */}
+      {readout && (
+        <span aria-hidden="true" className="absolute inset-x-0 -top-px h-px overflow-hidden">
+          <span
+            className="block h-full w-full bg-foreground/50 transition-transform duration-200 ease-out motion-reduce:transition-none"
+            style={{
+              transform: `translateX(-${(1 - Math.min(1, readout.done / readout.total)) * 100}%)`,
+            }}
+          />
+        </span>
+      )}
       <StatusDot phase={phase} />
       <span className={cn('truncate text-muted-foreground')}>{pillLabel(phase, lastSyncAt)}</span>
+      {readout && (
+        <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">
+          {progressPercent(readout.done, readout.total)}%
+        </span>
+      )}
       <ChevronRight
         aria-hidden="true"
         className={cn(
-          'ml-auto size-3.5 shrink-0 text-muted-foreground',
+          'size-3.5 shrink-0 text-muted-foreground',
+          !readout && 'ml-auto',
           'transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none',
         )}
       />
@@ -140,6 +211,11 @@ export function SyncDetail({ onBack, onResume }: { onBack: () => void; onResume:
   // The blocked explanation + its fix, worded per reason in shared so this
   // surface, both Data cards, and any future one can't drift.
   const blockedDetail = syncBlockedDetail(phase, blockedCount);
+  const readout = useSyncReadout(phase);
+  // The first sync's listing: real work with no denominator yet. Drawn as the
+  // meter's indeterminate track with a line saying what it is, so the screen is
+  // never the bare "Setting up…" it used to be for however long the pull took.
+  const listing = phase === 'initial-syncing' && !readout;
 
   // The one action of this screen. `requestSync` (KICK_SYNC → background runSync)
   // covers every actionable phase: it re-runs the initial pull when it hasn't
@@ -161,9 +237,29 @@ export function SyncDetail({ onBack, onResume }: { onBack: () => void; onResume:
           <DetailRow label="Status">
             <span className={cn('flex items-center justify-end gap-2')}>
               <StatusDot phase={phase} />
-              <span className={cn('truncate')}>{SYNC_PHASE_LABELS[phase]}</span>
+              <span className={cn('truncate')}>{readout?.what ?? SYNC_PHASE_LABELS[phase]}</span>
             </span>
           </DetailRow>
+          {/* The how-far under the what: a full-width row, since a bar can't sit
+              in the right-hand value column. The `dt` is for the list's
+              structure; the meter names itself. */}
+          {(readout || listing) && (
+            <div className={cn('px-3 py-3')}>
+              <dt className="sr-only">Progress</dt>
+              <dd>
+                {readout ? (
+                  <ProgressMeter
+                    label={readout.label}
+                    done={readout.done}
+                    total={readout.total}
+                    valueText={readout.count}
+                  />
+                ) : (
+                  <ProgressMeter label="Finding your links" valueText="Finding your links…" />
+                )}
+              </dd>
+            </div>
+          )}
           <DetailRow label="Pending changes">{pendingCount}</DetailRow>
           <DetailRow label="Last sync">{lastSync}</DetailRow>
           {lastError && (
@@ -172,6 +268,18 @@ export function SyncDetail({ onBack, onResume }: { onBack: () => void; onResume:
             </DetailRow>
           )}
         </dl>
+
+        {/* Standing prose, not an announcement — on screen from the moment the
+            pull is. Without it a first sync reads as something to sit and watch:
+            the popup is the only window onto it, and nothing said that closing
+            it doesn't stop it (the worker runs it), or that an interrupted pull
+            resumes (storeDownloads' staleness skip) rather than starting over. */}
+        {phase === 'initial-syncing' && (
+          <p className={cn('text-xs leading-5 text-muted-foreground')}>
+            You can close this popup — syncing carries on, and picks up where it left off if it’s
+            interrupted.
+          </p>
+        )}
 
         {/* Not styled as an error and given no Retry: the cycle completed, and
             only upgrading / freeing space clears this. */}

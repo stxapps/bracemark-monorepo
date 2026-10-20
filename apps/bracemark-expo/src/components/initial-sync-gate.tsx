@@ -10,6 +10,7 @@ import { type InitialSyncProgress, initialSyncProgressLabel } from '@stxapps/sha
 import { Button } from './ui/button';
 import { Text } from './ui/text';
 import { ErrorText } from './error-text';
+import { ProgressMeter } from './progress-meter';
 import { SyncPausedActions } from './sync-paused-notice';
 
 const StyledSafeAreaView = withUniwind(SafeAreaView);
@@ -30,8 +31,9 @@ const StyledSafeAreaView = withUniwind(SafeAreaView);
 // subsequent incremental/background syncs never gate the UI — they report on the
 // separate bgSyncStatus dimension instead (see sync-provider).
 //
-// The screen shows a real COUNT rather than a percentage or a bare spinner — the
-// reasoning is on the web twin, which is the canonical copy. The one divergence is
+// The screen shows a real COUNT beside its bar and percent rather than a bare
+// spinner — the reasoning is on the web twin, which is the canonical copy, and
+// the drawing is ProgressMeter, shared with the Data card. The one divergence is
 // the ActivityIndicator: it stands in for the bar while the pull is still listing
 // (native expects a spinner where web is happy with a line of text), and the two
 // never show at once.
@@ -165,7 +167,17 @@ function DecryptingScreen({
     <StyledSafeAreaView className="flex-1 bg-background">
       <View className="flex-1 items-center justify-center gap-3 px-6">
         <Text className="text-center">Decrypting your links…</Text>
-        {progress ? <SyncProgressBar progress={progress} /> : <ActivityIndicator size="small" />}
+        {progress ? (
+          <ProgressMeter
+            label="Decrypting your links"
+            done={progress.done}
+            total={progress.total}
+            valueText={initialSyncProgressLabel(progress)}
+            className="w-56"
+          />
+        ) : (
+          <ActivityIndicator size="small" />
+        )}
         {/*
           A status, not ErrorText: it arrives on its own and asks nothing of the
           user — the pull resumes by itself (docs/accessibility.md, "what must
@@ -193,57 +205,5 @@ function DecryptingScreen({
         </Text>
       </View>
     </StyledSafeAreaView>
-  );
-}
-
-function SyncProgressBar({ progress }: { progress: InitialSyncProgress }) {
-  const { done, total } = progress;
-  const label = initialSyncProgressLabel(progress);
-  // The engine only reports a positive total, but this component is a package
-  // boundary away from that guarantee, and the failure mode is a NaN width.
-  const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
-
-  return (
-    <View className="w-56 items-center gap-2">
-      {/*
-        `role` + the four `aria-value*` props are the RN-supported spelling (they
-        map onto accessibilityRole/accessibilityValue — docs/accessibility.md, the
-        note on ARIA-shaped props), so `aria-valuetext` really does reach VoiceOver
-        and TalkBack here. It is NOT a live region and must not become one: this
-        updates ~10 times a second, and announcing every tick would be the
-        password-strength mistake multiplied by a thousand.
-      */}
-      <View
-        role="progressbar"
-        aria-label="Decrypting your links"
-        aria-valuemin={0}
-        aria-valuemax={total}
-        aria-valuenow={done}
-        aria-valuetext={label}
-        className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
-      >
-        <View className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
-      </View>
-      {/*
-        Hidden from assistive tech because the progressbar above already announces
-        this exact string as its value — left visible to it, the count is read
-        twice.
-
-        ⚠ The wrapping View is load-bearing: `aria-hidden` on the Text ITSELF does
-        nothing. RN's View.js maps the prop onto `accessibilityElementsHidden` +
-        `importantForAccessibility="no-hide-descendants"`, but its Text.js
-        destructures exactly six aria props — busy, checked, disabled, expanded,
-        label, selected — and `hidden` is not one of them, so on a Text the prop
-        type-checks, renders, and does nothing. It is the inert-`aria-*` trap in
-        docs/accessibility.md, sprung by a prop that doc's list of fourteen says is
-        supported. Verified on device with `uiautomator dump --compressed` (the
-        accessibility-filtered tree — the plain dump shows every view either way):
-        with this wrapper the duplicate "N of 10 items" node is gone, leaving only
-        the progressbar's own description.
-      */}
-      <View aria-hidden>
-        <Text className="text-xs text-muted-foreground">{label}</Text>
-      </View>
-    </View>
   );
 }

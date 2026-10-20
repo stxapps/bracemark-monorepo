@@ -646,6 +646,35 @@ engine's — the engine is React-free and also runs in the browser extension's
 service worker, which has no renders to schedule. What the two gates then draw
 with it is [accessibility.md](./accessibility.md), _the first-sync counter_.
 
+**A background cycle reports progress too**, for the surfaces that watch one —
+both Data cards and the browser extension's popup; nothing blocks on it.
+`runIncrementalSync(deps, onProgress?)` takes a `(step, done, total)` feed
+(`SyncCycleProgress`, `@stxapps/shared` `sync/status.ts`), and a caller that
+joins a run in flight adds its reporter to that run's rather than getting a
+promise with no numbers behind it. A cycle reports its two legs **one at a time,
+never summed**: `upload` once the push starts (its total is the pending ops it
+read), `download` once the pull's staleness skip has run (the same count the
+first sync reports). Summing them would mean a total that grows when the second
+leg learns its size — the invented denominator the first sync refuses.
+
+**The push counts per transfer, not per commit.** An op leaves the queue only
+when its whole chunk commits (_a push is chunked_), so a readout taken off the
+pending count moves in steps of up to 500 and sits frozen in between — on a large
+push that reads as a hang. The upload leg ticks each op the first time its
+transfer settles, either way and in either pass (`createUnitCounter`, so a
+second pass's re-send is still one change), and a delete — which has no transfer
+— as its commit lands. Ops a push never reaches (a refused or held phase) never
+tick; the next leg, or the end of the cycle, takes the readout over.
+
+**One repaint cadence everywhere: `PROGRESS_FLUSH_MS`, 100 ms**, through
+`createProgressCoalescer` (`@stxapps/shared` `async/progress.ts`, which carries
+the reasoning). Trailing-edge, so a cycle shorter than one interval paints no bar
+at all. The extension's worker runs the same coalescer into
+`browser.storage.session` ([browser-extension.md](./browser-extension.md),
+_storage across extension contexts_). What makes a number climb in small steps
+is the unit, not the interval: at 100 ms a per-transfer feed moves in tens, a
+per-chunk one would still move in hundreds.
+
 **2. Incremental sync (next visit).** Call `GET /v1/ops/list` with the cursor,
 get the ops whose `updatedAt` is newer than the cursor, apply them (download +
 decrypt + store for `put`, remove for `delete`), and advance the cursor to the

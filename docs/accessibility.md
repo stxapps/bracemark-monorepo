@@ -174,9 +174,16 @@ a **non-string** child there has to carry its own.
 
 ### the first-sync counter — a value that must not speak
 
-The decrypting screen (`initial-sync-gate.tsx`, both platforms) is the one place
-in the app that renders a number changing ten times a second, and it is the
-clearest case of the two rules above pulling in opposite directions on one screen.
+The decrypting screen (`initial-sync-gate.tsx`, both platforms) is where the app
+first rendered a number changing ten times a second, and it is the clearest case
+of the two rules above pulling in opposite directions on one screen. The same
+drawing now carries every sync readout — the Data cards' cycle bar and the
+browser extension's sync detail too — through one component per platform
+(web-ui's `components/progress-meter.tsx`, bracemark-expo's
+`components/progress-meter.tsx`), so everything below is held there once rather
+than at each call site. Its indeterminate state (web only — expo draws a spinner
+instead) is `role="progressbar"` with no `aria-valuenow`, which is ARIA's
+spelling of "no value yet".
 
 The **count** is `role="progressbar"` carrying `aria-valuemin` / `aria-valuemax` /
 `aria-valuenow` / `aria-valuetext`, and it is **not** a live region. Putting
@@ -189,8 +196,9 @@ native intact: `role="progressbar"` and all four `aria-value*` are on RN's
 supported list (see the note at the top), so `aria-valuetext` really does reach
 VoiceOver and TalkBack rather than type-checking and doing nothing.
 
-The visible counter line beside it is `aria-hidden`, because the progressbar
-already announces that exact string as its value and a screen reader would
+The visible counter line beside it — the count and the percent — is
+`aria-hidden`, because the progressbar already announces that exact string as
+its value and a screen reader would
 otherwise read the count twice — and on expo that prop **has to ride a wrapping
 `View`**. `aria-hidden` is on RN's list of fourteen, but only `View.js` implements
 it (mapping it to `accessibilityElementsHidden` plus

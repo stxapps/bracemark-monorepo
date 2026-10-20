@@ -7,6 +7,7 @@ import {
   recordBlocked,
   SYNC_PHASE_LABELS,
   syncBlockedDetail,
+  syncCycleProgressLabel,
 } from './status';
 
 // The two-field → one-phase collapse every status surface shares. Covered here
@@ -154,6 +155,21 @@ describe('initialSyncProgressLabel', () => {
     // has to be able to render the completed state the gate holds up during its
     // minimum-visible floor.
     expect(initialSyncProgressLabel({ done: 8, total: 8 })).toBe('8 of 8 items');
+  });
+});
+
+describe('syncCycleProgressLabel', () => {
+  it('counts a push in changes — the unit of the "waiting to sync" line it stands in for', () => {
+    expect(syncCycleProgressLabel({ step: 'upload', done: 340, total: 1000 })).toBe(
+      '340 of 1,000 changes',
+    );
+    expect(syncCycleProgressLabel({ step: 'upload', done: 0, total: 1 })).toBe('0 of 1 change');
+  });
+
+  it('counts a pull in items, as the first sync does', () => {
+    expect(syncCycleProgressLabel({ step: 'download', done: 12, total: 40 })).toBe(
+      initialSyncProgressLabel({ done: 12, total: 40 }),
+    );
   });
 });
 

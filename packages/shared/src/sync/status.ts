@@ -68,8 +68,54 @@ export type InitialSyncProgressFn = ProgressFn;
 // argument and returns the ungrouped digits — cosmetic, and the same string the
 // unpinned call would have produced there anyway.
 export function initialSyncProgressLabel(progress: InitialSyncProgress): string {
-  const grouped = (n: number) => n.toLocaleString('en-US');
   return `${grouped(progress.done)} of ${grouped(progress.total)} items`;
+}
+
+const grouped = (n: number) => n.toLocaleString('en-US');
+
+// Determinate progress for a BACKGROUND cycle — the Data cards and the browser
+// extension's popup, never a gate. A cycle has two legs that each know their own
+// denominator before they start, so it reports them one at a time rather than
+// as one bar: summing them would mean a total that grows when the second leg
+// learns its size (the download set is final only after the staleness skip),
+// which is the invented denominator the first-sync counter refuses.
+//
+//   upload   — the pending ops this cycle pushes. `done` ticks as each op's
+//              transfer settles (a delete, which has none, as its commit lands),
+//              NOT as the queue drains: the queue only shrinks a whole chunk at a
+//              time (up to 500 ops), so "changes waiting" moves in hundreds where
+//              this moves in ones.
+//   download — the index blobs this cycle fetches, the same count the first sync
+//              reports (startPull), so the two readouts mean the same thing.
+//
+// Either leg may be absent — a cycle with nothing queued never reports 'upload',
+// one with nothing new never reports 'download' — and most cycles report neither
+// for long enough to paint (the coalescer is trailing; createProgressCoalescer).
+export type SyncCycleStep = 'upload' | 'download';
+
+export interface SyncCycleProgress {
+  step: SyncCycleStep;
+  done: number;
+  total: number;
+}
+
+// The engines' per-unit callback: the step plus the generic two numbers.
+export type SyncCycleProgressFn = (step: SyncCycleStep, done: number, total: number) => void;
+
+// What the cycle is doing, worded for the line above its bar. "Sending" /
+// "Getting", not upload/download: the user's mental model is their changes going
+// out and other devices' changes coming in, not blobs and buckets.
+export const SYNC_CYCLE_STEP_LABELS: Record<SyncCycleStep, string> = {
+  upload: 'Sending your changes…',
+  download: 'Getting changes from your other devices…',
+};
+
+// The counter under that bar. "changes" for the push, matching the "N changes
+// waiting to sync" line it replaces while it runs (the same unit: a pending op);
+// "items" for the pull, for the reason initialSyncProgressLabel gives.
+export function syncCycleProgressLabel(progress: SyncCycleProgress): string {
+  const unit = progress.step === 'upload' ? (progress.total === 1 ? 'change' : 'changes') : 'items';
+  return `${grouped(progress.done)} of ${grouped(progress.total)} ${unit}`;
 }
 
 // The indicator's phases. Only post-'ready' cycles report here — while the gate

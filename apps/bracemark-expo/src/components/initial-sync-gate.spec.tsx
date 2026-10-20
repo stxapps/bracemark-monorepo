@@ -154,17 +154,18 @@ test('exposes determinate progress as one non-live progressbar', () => {
   expect(screen.UNSAFE_getByProps({ 'aria-hidden': true })).toBeTruthy();
 });
 
-test('turns a zero total into a safe zero-width bar', () => {
+// The engine only reports a positive total, but the meter is a package boundary
+// away from that guarantee and the failure mode is a NaN fill: a zero total
+// draws an empty track that claims no value.
+test('turns a zero total into an empty track that claims no value', () => {
   mockStoreStatus = 'syncing-initial';
   mockProgress = { done: 0, total: 0 };
   mount();
 
   const bar = screen.getByLabelText('Decrypting your links');
-  const fill = bar.children[0];
-  expect(typeof fill).not.toBe('string');
-  if (typeof fill !== 'string') {
-    expect(fill.props.style).toEqual(expect.objectContaining({ width: '0%' }));
-  }
+  expect(bar.props['aria-valuenow']).toBeUndefined();
+  expect(bar.children).toHaveLength(0);
+  expect(screen.queryByText(/NaN/, { includeHiddenElements: true })).toBeNull();
 });
 
 test('announces a first-sync failure, reassures, and retries without leaking the app', () => {

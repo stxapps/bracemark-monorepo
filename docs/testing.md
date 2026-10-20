@@ -356,7 +356,7 @@ The split settled on is **cover the protocol once, cover the divergence
 always**, plus a thin drift guard:
 
 - **web's `engine.spec.ts` is canonical for the cycle.** The mid-cycle write
-  hazards, the commit phase order, the first-sync counter, the quota gate, what
+  hazards, the commit phase order, the first-sync and cycle counters, the quota gate, what
   the cursor may claim, the upload-time `writeId` test — all of it is asserted
   there, in the app that has the most surfaces riding on it. So is the one thing
   only web has: two tabs over one queue, and the lock between them.

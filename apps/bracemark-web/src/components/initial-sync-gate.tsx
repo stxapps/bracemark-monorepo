@@ -5,6 +5,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { SESSION_COPY } from '@stxapps/react';
 import { type InitialSyncProgress, initialSyncProgressLabel } from '@stxapps/shared';
 import { useAuth, useSync } from '@stxapps/web-react';
+import { ProgressMeter } from '@stxapps/web-ui/components/progress-meter';
 
 import { SyncPausedActions } from './sync-paused-notice';
 
@@ -23,16 +24,18 @@ import { SyncPausedActions } from './sync-paused-notice';
 // subsequent incremental/background syncs never gate the UI — they report on the
 // separate bgSyncStatus dimension instead (see sync-provider).
 //
-// The screen shows a real COUNT, not a percentage and not a bare spinner, because
-// the engine hands it an honest denominator: the pull lists every file before it
-// fetches anything, so it knows exactly how many blobs it is about to decrypt (see
-// InitialSyncProgress). Two reasons the count is the right shape. A number
+// The screen shows a real COUNT beside its bar and percent, not a bare spinner,
+// because the engine hands it an honest denominator: the pull lists every file
+// before it fetches anything, so it knows exactly how many blobs it is about to
+// decrypt (see InitialSyncProgress). The count is the number that matters. It
 // EXPLAINS the wait — someone with a large library learns why it takes twenty
-// seconds, where a percentage just sits there — and a climbing integer is better
-// evidence of life than a bar, since a bar that pauses reads as hung while a
-// counter that jumps still reads as working. What it must never become is a bar
-// with an invented denominator: this pull is resumable and blocking, and a fake
-// percentage on the one screen that is only about trust is a bad trade.
+// seconds, where a percentage alone just sits there — and a climbing integer is
+// better evidence of life than a bar, since a bar that pauses reads as hung while
+// a counter that moves still reads as working. The percent rides beside it as the
+// glanceable half (web-ui's ProgressMeter, the drawing every sync readout shares).
+// What it must never become is a bar with an invented denominator: this pull is
+// resumable and blocking, and a fake percentage on the one screen that is only
+// about trust is a bad trade.
 
 // How long the first-sync screen stays up once shown, so a fast pull can't flash
 // it. Only relevant to 'syncing-initial' (a network pull); 'checking' never shows
@@ -163,7 +166,15 @@ function DecryptingScreen({
     // every other full-height box in this app uses it (links/page.tsx).
     <div className="flex min-h-dvh flex-col items-center justify-center gap-3 safe-area">
       <p>Decrypting your links…</p>
-      {progress ? <SyncProgressBar progress={progress} /> : null}
+      {progress ? (
+        <ProgressMeter
+          label="Decrypting your links"
+          done={progress.done}
+          total={progress.total}
+          valueText={initialSyncProgressLabel(progress)}
+          className="w-56"
+        />
+      ) : null}
       {/*
         A polite status, not an alert (docs/accessibility.md, "what must NOT
         announce"): it arrives without the user doing anything, and nothing is
@@ -191,49 +202,6 @@ function DecryptingScreen({
       */}
       <p className="max-w-xs text-center text-xs text-muted-foreground">
         Your links are encrypted — only you, with your password, can read them.
-      </p>
-    </div>
-  );
-}
-
-function SyncProgressBar({ progress }: { progress: InitialSyncProgress }) {
-  const { done, total } = progress;
-  const label = initialSyncProgressLabel(progress);
-  // The engine only reports a positive total, but this component is a package
-  // boundary away from that guarantee, and the failure mode is a NaN width.
-  const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
-
-  return (
-    <div className="flex w-56 flex-col gap-2">
-      {/*
-        The progressbar carries the value for assistive tech, via `aria-valuetext`
-        — the same sentence the sighted user reads. It is NOT a live region and
-        must not become one: this updates ~10 times a second, and an `aria-live`
-        here would be the password-strength mistake (docs/accessibility.md, "what
-        must NOT announce") multiplied by a thousand. A screen-reader user hears
-        the count when they land on it, which is how a progressbar is meant to work.
-      */}
-      <div
-        role="progressbar"
-        aria-label="Decrypting your links"
-        aria-valuemin={0}
-        aria-valuemax={total}
-        aria-valuenow={done}
-        aria-valuetext={label}
-        className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
-      >
-        <div
-          className="h-full rounded-full bg-primary transition-[width] duration-200 ease-out"
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-      {/*
-        `aria-hidden` because the progressbar above already announces this exact
-        string as its value — without it the count is read twice. `tabular-nums`
-        keeps the line from twitching as digits change width.
-      */}
-      <p aria-hidden className="text-center text-xs text-muted-foreground tabular-nums">
-        {label}
       </p>
     </div>
   );

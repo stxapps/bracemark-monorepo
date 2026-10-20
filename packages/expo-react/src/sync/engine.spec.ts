@@ -851,6 +851,29 @@ describe('a content push', () => {
   });
 });
 
+// Drift guard for the cycle counter (web's engine.spec.ts, _the cycle counter_, is
+// canonical): the push ticks per transfer — here through BOTH pipelines, the
+// native file one included — and so has moved before the queue does.
+describe('the cycle counter', () => {
+  it('counts each transfer as it settles, ahead of the commit that drains the queue', async () => {
+    await seedQueuedContent(FILE_ID, 'image bytes');
+    seedQueued(LINK_PATH, 'the link');
+    const ticks: [string, number, number][] = [];
+    const atCommits: number[] = [];
+
+    await runIncrementalSync(
+      deps({ opsCommit: () => void atCommits.push(ticks.at(-1)?.[1] ?? 0) }),
+      (step, done, total) => ticks.push([step, done, total]),
+    );
+
+    expect(ticks[0]).toEqual(['upload', 0, 2]);
+    expect(ticks.at(-1)).toEqual(['upload', 2, 2]);
+    // The content phase's commit, then the metadata phase's: each one's transfer
+    // had already ticked.
+    expect(atCommits).toEqual([1, 2]);
+  });
+});
+
 // --- the pull: the row and the file must move together -----------------------
 
 describe('a pull that re-stores a content record', () => {

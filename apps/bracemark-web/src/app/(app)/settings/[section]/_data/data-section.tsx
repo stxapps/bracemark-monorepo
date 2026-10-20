@@ -41,8 +41,10 @@ import {
   getSyncPhase,
   type ImportQuotaAnswer,
   type ImportQuotaPrompt,
+  SYNC_CYCLE_STEP_LABELS,
   SYNC_PHASE_LABELS,
   syncBlockedDetail,
+  syncCycleProgressLabel,
   TREE_MAX_DEPTH,
 } from '@stxapps/shared';
 import {
@@ -56,6 +58,7 @@ import {
   usePendingChangesCount,
   useSync,
 } from '@stxapps/web-react';
+import { ProgressMeter } from '@stxapps/web-ui/components/progress-meter';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
 import { Label } from '@stxapps/web-ui/components/ui/label';
@@ -73,10 +76,19 @@ type DataView = 'overview' | 'import' | 'export' | 'delete';
 // The sync status card: collapses the two sync dimensions into one phase
 // (@stxapps/shared's getSyncPhase — same derivation as the extension popup)
 // with an icon, an optional detail, and the single relevant action (Sync now /
-// Retry). Sync is status-based, not a percentage, so there's no progress bar;
-// the pending-changes line is the "how much is left" signal instead.
+// Retry).
+//
+// While a cycle moves something, the card says WHAT (the step line — "Sending
+// your changes…") and HOW FAR (web-ui's ProgressMeter: a bar, the count and the
+// percent, the same drawing as the first-sync gate). The count is the engine's
+// per-transfer tick (SyncCycleProgress), so it climbs in ones and tens; the
+// pending-changes line it replaces during the push only moves when a whole chunk
+// commits — up to 500 at a time, frozen in between — which on a large push read
+// as a hang. Before a leg has a number (the op-log page, a fallback's listing)
+// and for a cycle too short to paint one, the card stays the bare "Syncing…".
 function SyncStatus() {
-  const { storeStatus, bgSyncStatus, lastSyncAt, lastError, blockedCount, syncNow } = useSync();
+  const { storeStatus, bgSyncStatus, lastSyncAt, lastError, blockedCount, syncProgress, syncNow } =
+    useSync();
   const pendingCount = usePendingChangesCount();
   const phase = getSyncPhase(storeStatus, bgSyncStatus);
   // Rendered inside InitialSyncGate, so storeStatus is never 'error' here —
@@ -94,6 +106,9 @@ function SyncStatus() {
   // spinner and no button here — the "Sign in to resume" notice above the section
   // carries the one action. Not an error either: nothing failed, nothing is lost.
   const isPaused = phase === 'paused';
+  // Only a cycle in flight has progress worth drawing; anything the provider
+  // still holds once the phase has moved on is not this card's to show.
+  const progress = phase === 'syncing' ? syncProgress : null;
 
   // `size-5` is the SettingsRow icon size — the three action rows below, and
   // account-section's four. NOT the `size-4` the receipts and SettingsNotice use
@@ -111,8 +126,9 @@ function SyncStatus() {
     <Loader2 className="size-5 animate-spin text-muted-foreground" />
   );
 
-  const text =
-    phase === 'idle' && lastSyncAt
+  const text = progress
+    ? SYNC_CYCLE_STEP_LABELS[progress.step]
+    : phase === 'idle' && lastSyncAt
       ? `Last synced ${formatSyncedAt(lastSyncAt)}`
       : SYNC_PHASE_LABELS[phase];
   const detail = isError ? lastError : null;
@@ -149,6 +165,18 @@ function SyncStatus() {
             {text}
           </span>
           {detail && <span className="wrap-break-words text-sm text-destructive">{detail}</span>}
+          {/* `max-w-sm` so it reads as a meter, not a rule across the card.
+              `my-1` is the air a bar needs from the lines it sits between — the
+              column's own `gap-0.5` is a line step, sized for text. */}
+          {progress && (
+            <ProgressMeter
+              label={SYNC_CYCLE_STEP_LABELS[progress.step].replace(/…$/, '')}
+              done={progress.done}
+              total={progress.total}
+              valueText={syncCycleProgressLabel(progress)}
+              className="my-1 max-w-sm"
+            />
+          )}
           {/* The one place a blocked sync is explained. Inline rather than the
               hoisted paywall dialog: this is a STATUS the user came to read,
               not an action being interrupted (paywall-provider's header). No
@@ -160,7 +188,9 @@ function SyncStatus() {
               {syncBlockedDetail(phase, blockedCount)} Everything already saved is safe.
             </span>
           )}
-          {pendingCount > 0 && (
+          {/* Not beside an upload's meter: the same unit, counted twice, and the
+              queue's copy is the one that moves in chunks (see SyncStatus). */}
+          {pendingCount > 0 && progress?.step !== 'upload' && (
             <span className="text-sm text-muted-foreground">
               {pendingCount} {pendingCount === 1 ? 'change' : 'changes'} waiting to sync
             </span>

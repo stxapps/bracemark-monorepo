@@ -1,5 +1,6 @@
 import {
   bgStatusForOutcome,
+  createProgressCoalescer,
   EXTRACTIONS_PREFIX,
   FILES_PREFIX,
   LINKS_PREFIX,
@@ -18,8 +19,13 @@ import {
 
 import { apiClient } from './api-client';
 import {
-  INITIAL_MIRRORED_SYNC_STATE,
+  clearMirroredSyncProgress,
+  type MirroredSyncProgress,
+  writeMirroredSyncProgress,
+} from './mirrored-sync-progress';
+import {
   type MirroredSyncState,
+  readMirroredSyncState,
   writeMirroredSyncState,
 } from './mirrored-sync-state';
 
@@ -84,8 +90,16 @@ function buildDeps(): SyncDeps | null {
 let inflight: Promise<void> | null = null;
 let rerunRequested = false;
 
-let state: MirroredSyncState = INITIAL_MIRRORED_SYNC_STATE;
+// The worker's copy of the mirror, which every write patches. Seeded from the
+// PERSISTED mirror on first use, not from INITIAL_MIRRORED_SYNC_STATE: an MV3
+// worker is torn down soon after it goes idle and spun up cold for the next
+// trigger, and a cold copy seeded with the initial state turned the first
+// patch of every such cycle into `storeStatus: 'checking', lastSyncAt: null` —
+// so the popup read "Checking…" and "Last sync: Never" for the whole of a cycle
+// on a device that had synced a minute before.
+let state: MirroredSyncState | null = null;
 async function setState(patch: Partial<MirroredSyncState>): Promise<void> {
+  state ??= await readMirroredSyncState();
   state = { ...state, ...patch };
   await writeMirroredSyncState(state);
 }
@@ -96,10 +110,24 @@ export function runSync(): Promise<void> {
     return inflight;
   }
 
+  // The run's progress feed into storage.session (mirrored-sync-progress.ts),
+  // coalesced to PROGRESS_FLUSH_MS like the apps' renders — a write per decrypted
+  // record would be hundreds a second. A write that fails costs one tick of a
+  // readout, never the cycle.
+  const progress = createProgressCoalescer<MirroredSyncProgress>((p) => {
+    void writeMirroredSyncProgress(p).catch(() => undefined);
+  });
+
   inflight = (async () => {
     try {
       do {
+        // Synchronously first, before any await: a trigger that lands during this
+        // pass must still find the flag it sets standing at the `while`.
         rerunRequested = false;
+        // A worker torn down mid-run left its last tick behind, and a rerun's
+        // legs are its own; neither is this pass's.
+        progress.cancel();
+        await clearMirroredSyncProgress().catch(() => undefined);
 
         // EXPIRED (docs/sessions.md): the popup or options page recorded the
         // server's `session_expired` on the shared session record. This worker
@@ -118,7 +146,14 @@ export function runSync(): Promise<void> {
           return;
         }
 
-        await setState({ bgSyncStatus: 'syncing' });
+        // The gate's answer is read BEFORE the first write, and goes out with it:
+        // a write of `bgSyncStatus` alone left whatever `storeStatus` the copy
+        // held standing for the whole cycle (see `state` above).
+        const firstSyncDone = await isFirstSyncDone(deps.username);
+        await setState({
+          storeStatus: firstSyncDone ? 'ready' : 'syncing-initial',
+          bgSyncStatus: 'syncing',
+        });
         // A cycle that COMPLETES can still have had part of its push refused by
         // the plan/quota gate — the engine resolves with that rather than
         // throwing (SyncOutcome, shared sync/status.ts). Reporting a flat 'idle'
@@ -127,19 +162,25 @@ export function runSync(): Promise<void> {
         // The initial sync never pushes, so it has no outcome to report.
         let bgSyncStatus: MirroredSyncState['bgSyncStatus'] = 'idle';
         let blockedCount = 0;
-        if (await isFirstSyncDone(deps.username)) {
-          const outcome = await runIncrementalSync(deps);
+        if (firstSyncDone) {
+          const outcome = await runIncrementalSync(deps, (step, done, total) =>
+            progress.report({ step, done, total }),
+          );
           bgSyncStatus = bgStatusForOutcome(outcome);
           blockedCount = outcome.blockedCount;
         } else {
-          await setState({ storeStatus: 'syncing-initial' });
           // The pull's writes are fenced on the account's ownership row, and the
           // engine never claims it. The popup's sign-in does; a session an older
           // build adopted may have none, and this worker may be the first to pull.
           // The claim takes the lifecycle lock and re-reads the persisted account,
           // so it is not this worker acting on a session (web-react sync-store.ts).
           await claimIfStillSignedIn(deps.username);
-          await runInitialSync(deps);
+          // The count the popup's pill and detail view draw — the one wait in this
+          // extension long enough to need a number, which used to show as a bare
+          // "Setting up this device…" for as long as the pull took.
+          await runInitialSync(deps, (done, total) =>
+            progress.report({ step: 'initial', done, total }),
+          );
         }
         await setState({
           storeStatus: 'ready',
@@ -151,12 +192,19 @@ export function runSync(): Promise<void> {
       } while (rerunRequested);
     } catch (err) {
       await setState({
+        // A failed FIRST pull is the gate's failure, not a cycle's: left at
+        // 'syncing-initial', the phase stayed "Setting up this device…" with no
+        // Retry under the error. 'error' reads as `initial-error` (shared
+        // getSyncPhase), whose Retry re-runs the pull, which resumes.
+        ...(state?.storeStatus === 'syncing-initial' ? { storeStatus: 'error' as const } : {}),
         bgSyncStatus: 'error',
         blockedCount: 0,
         lastSyncAt: Date.now(),
         lastError: err instanceof Error ? err.message : String(err),
       });
     } finally {
+      progress.cancel();
+      await clearMirroredSyncProgress().catch(() => undefined);
       inflight = null;
       rerunRequested = false;
     }

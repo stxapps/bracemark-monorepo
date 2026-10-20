@@ -2,6 +2,7 @@ import type { SyncOutcome } from '@stxapps/shared';
 import type { SyncDeps } from '@stxapps/web-react';
 
 import { type FakeBrowser, installFakeBrowser } from '../testing/fake-browser';
+import { MIRRORED_SYNC_PROGRESS_KEY } from './mirrored-sync-progress';
 import { MIRRORED_SYNC_STATE_KEY, type MirroredSyncState } from './mirrored-sync-state';
 
 // The background's sync runner. The engine itself is pinned in web-react's
@@ -27,8 +28,9 @@ import { MIRRORED_SYNC_STATE_KEY, type MirroredSyncState } from './mirrored-sync
 const mockClaim = jest.fn<Promise<void>, [string]>();
 const mockGetSession = jest.fn<{ username: string; encryptionKey: unknown } | null, []>();
 const mockIsFirstSyncDone = jest.fn<Promise<boolean>, [string]>();
-const mockRunInitialSync = jest.fn<Promise<void>, [SyncDeps]>();
-const mockRunIncrementalSync = jest.fn<Promise<SyncOutcome>, [SyncDeps]>();
+type Report = (...args: number[] | [string, number, number]) => void;
+const mockRunInitialSync = jest.fn<Promise<void>, [SyncDeps, Report?]>();
+const mockRunIncrementalSync = jest.fn<Promise<SyncOutcome>, [SyncDeps, Report?]>();
 
 jest.mock('@stxapps/web-react', () => ({
   claimIfStillSignedIn: mockClaim,
@@ -115,9 +117,54 @@ describe('runSync — what it mirrors', () => {
     expect(mockRunInitialSync).toHaveBeenCalledTimes(1);
     expect(mockRunIncrementalSync).not.toHaveBeenCalled();
     // The gate has to be raised BEFORE the pull, or the popup renders an empty
-    // library as if it were the whole library.
-    expect(seen.map((s) => s.storeStatus)).toEqual(['checking', 'syncing-initial', 'ready']);
+    // library as if it were the whole library — and in the same write as the
+    // cycle's 'syncing', or the phase reads 'checking' meanwhile.
+    expect(seen.map((s) => s.storeStatus)).toEqual(['syncing-initial', 'ready']);
     expect(mirror().bgSyncStatus).toBe('idle');
+  });
+
+  // A cold worker — torn down idle, spun up for the next trigger — used to start
+  // its copy of the mirror from the initial state, so its first write said
+  // 'checking' with no lastSyncAt: "Checking…" and "Last sync: Never" in the
+  // popup for the whole of every such cycle.
+  it('keeps a cold worker’s cycle reading as a sync of a ready store, with its history', async () => {
+    await fake.storage.local.set({
+      [MIRRORED_SYNC_STATE_KEY]: {
+        storeStatus: 'ready',
+        bgSyncStatus: 'idle',
+        lastSyncAt: 1234,
+        lastError: null,
+        blockedCount: 0,
+      },
+    });
+    const cycle = deferred<SyncOutcome>();
+    mockRunIncrementalSync.mockReturnValue(cycle.promise);
+
+    const run = freshRunner().runSync();
+    while (mockRunIncrementalSync.mock.calls.length === 0) await Promise.resolve();
+
+    expect(mirror()).toMatchObject({
+      storeStatus: 'ready',
+      bgSyncStatus: 'syncing',
+      lastSyncAt: 1234,
+    });
+    cycle.resolve(CLEAN);
+    await run;
+  });
+
+  // Left at 'syncing-initial', a failed first pull read as "Setting up this
+  // device…" forever, with the error underneath and no Retry.
+  it('mirrors a failed FIRST pull as the gate’s failure, so the popup offers its retry', async () => {
+    mockIsFirstSyncDone.mockResolvedValue(false);
+    mockRunInitialSync.mockRejectedValue(new Error('offline'));
+
+    await freshRunner().runSync();
+
+    expect(mirror()).toMatchObject({
+      storeStatus: 'error',
+      bgSyncStatus: 'error',
+      lastError: 'offline',
+    });
   });
 
   // The pull's writes are fenced on the account's ownership row, which the engine
@@ -194,6 +241,79 @@ describe('runSync — what it mirrors', () => {
     await runner.runSync();
 
     expect(mirror()).toMatchObject({ bgSyncStatus: 'idle', lastError: null });
+  });
+});
+
+// The progress mirror (mirrored-sync-progress.ts): storage.SESSION, coalesced to
+// the apps' repaint rate, and gone once the run is — a number left behind would
+// draw a bar over a sync that has ended.
+describe('runSync — the progress mirror', () => {
+  const progress = () => fake.storage.session.peek(MIRRORED_SYNC_PROGRESS_KEY);
+
+  it('mirrors the first pull’s count into session storage, coalesced, then clears it', async () => {
+    jest.useFakeTimers();
+    try {
+      mockIsFirstSyncDone.mockResolvedValue(false);
+      const pull = deferred<void>();
+      mockRunInitialSync.mockImplementation((_deps, report) => {
+        for (let done = 0; done <= 40; done++) report?.(done, 200);
+        return pull.promise;
+      });
+      const writes = jest.spyOn(fake.storage.session, 'set');
+
+      const run = freshRunner().runSync();
+      while (mockRunInitialSync.mock.calls.length === 0) await Promise.resolve();
+      await jest.advanceTimersByTimeAsync(100);
+
+      // Forty-one ticks, one write: the latest.
+      expect(writes).toHaveBeenCalledTimes(1);
+      expect(progress()).toEqual({ step: 'initial', done: 40, total: 200 });
+      // Never the persisted status mirror's job.
+      expect(fake.storage.local.peek(MIRRORED_SYNC_PROGRESS_KEY)).toBeUndefined();
+
+      pull.resolve();
+      await run;
+      expect(progress()).toBeUndefined();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('mirrors a background cycle’s leg by name', async () => {
+    jest.useFakeTimers();
+    try {
+      const cycle = deferred<SyncOutcome>();
+      mockRunIncrementalSync.mockImplementation((_deps, report) => {
+        (report as (s: string, d: number, t: number) => void)?.('upload', 3, 10);
+        return cycle.promise;
+      });
+
+      const run = freshRunner().runSync();
+      while (mockRunIncrementalSync.mock.calls.length === 0) await Promise.resolve();
+      await jest.advanceTimersByTimeAsync(100);
+
+      expect(progress()).toEqual({ step: 'upload', done: 3, total: 10 });
+      cycle.resolve(CLEAN);
+      await run;
+      expect(progress()).toBeUndefined();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('clears what a torn-down worker left behind before it reports anything', async () => {
+    await fake.storage.session.set({
+      [MIRRORED_SYNC_PROGRESS_KEY]: { step: 'download', done: 5, total: 9 },
+    });
+    let seenAtStart: unknown = 'unread';
+    mockRunIncrementalSync.mockImplementation(async () => {
+      seenAtStart = progress();
+      return CLEAN;
+    });
+
+    await freshRunner().runSync();
+
+    expect(seenAtStart).toBeUndefined();
   });
 });
 

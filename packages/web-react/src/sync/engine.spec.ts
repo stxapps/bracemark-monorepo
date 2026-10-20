@@ -2109,6 +2109,129 @@ describe('the first-sync counter', () => {
   });
 });
 
+// The Data cards' and the browser extension popup's readout of a BACKGROUND cycle
+// (SyncCycleProgress, @stxapps/shared sync/status.ts). What it must not become is
+// the readout it replaced: the pending count, which only moves when a whole chunk
+// commits — up to 500 ops at a time — and sits frozen in between, which on a
+// large push reads as a hang. So the push counts per TRANSFER, and these cases
+// pin that the number moves before the queue does.
+describe('the cycle counter', () => {
+  type Tick = [step: string, done: number, total: number];
+  function recordTicks(): { ticks: Tick[]; onProgress: (s: string, d: number, t: number) => void } {
+    const ticks: Tick[] = [];
+    return { ticks, onProgress: (step, done, total) => ticks.push([step, done, total]) };
+  }
+
+  it('counts a push per transfer, so it has reached its total before the chunk commits', async () => {
+    await seedQueued(LINK_PATH, 'one');
+    await seedQueued(OTHER_LINK_PATH, 'two');
+    await seedQueued(SETTINGS_PATH, 'three');
+    const { ticks, onProgress } = recordTicks();
+    let atCommit: Tick | undefined;
+
+    // One index chunk, so ONE commit — the moment the queue would have moved.
+    await runIncrementalSync(
+      deps({
+        opsCommit: () => {
+          atCommit = ticks.at(-1);
+        },
+      }),
+      onProgress,
+    );
+
+    expect(ticks[0]).toEqual(['upload', 0, 3]);
+    expect(atCommit).toEqual(['upload', 3, 3]);
+    expect(ticks.map(([, done]) => done)).toEqual([0, 1, 2, 3]);
+  });
+
+  it('counts a delete as its commit lands — it has no transfer to tick on', async () => {
+    await seedSynced(EXTRACTION_PATH, 'gone soon', 100);
+    await deleteExtraction(USER, 'l_a');
+    const { ticks, onProgress } = recordTicks();
+
+    await runIncrementalSync(deps(), onProgress);
+
+    expect(ticks.filter(([step]) => step === 'upload').at(-1)).toEqual(['upload', 1, 1]);
+  });
+
+  // A transfer the second pass sends again is one change, not two: a counter that
+  // ticked per attempt ran past its own total ("4 of 3 changes").
+  it('never runs past its total when a transfer is sent twice', async () => {
+    await seedQueued(LINK_PATH, 'the link');
+    await seedQueued(OTHER_LINK_PATH, 'the other link');
+    let expiries = 1;
+    mockPutBlob.mockImplementation(async (url: string) => {
+      if (pathFor(url) === LINK_PATH && expiries-- > 0) throw EXPIRED_URL;
+      return landed(pathFor(url));
+    });
+    const { ticks, onProgress } = recordTicks();
+
+    await runIncrementalSync(deps(), onProgress);
+
+    expect(mockPutBlob).toHaveBeenCalledTimes(3);
+    expect(ticks.every(([, done, total]) => done <= total)).toBe(true);
+    expect(ticks.at(-1)).toEqual(['upload', 2, 2]);
+  });
+
+  it('counts the pull as its own leg, in the index blobs it actually fetches', async () => {
+    mockGetBlob.mockImplementation(async (url: string) => new Uint8Array([0xee, ...utf8(url)]));
+    const { ticks, onProgress } = recordTicks();
+
+    await runIncrementalSync(
+      deps({
+        opsList: () => ({
+          ops: [
+            { op: 'put', path: LINK_PATH, updatedAt: 2000 },
+            { op: 'put', path: OTHER_LINK_PATH, updatedAt: 2001 },
+            // Content: only its stamp is stored here, so it costs no time and no tick.
+            { op: 'put', path: FILE_PATH, updatedAt: 2002 },
+          ],
+          oldestUpdatedAt: 500,
+          newestUpdatedAt: 2002,
+          hasMore: false,
+        }),
+      }),
+      onProgress,
+    );
+
+    expect(ticks).toEqual([
+      ['download', 0, 2],
+      ['download', 1, 2],
+      ['download', 2, 2],
+    ]);
+  });
+
+  // The provider's cycle often lands on one an import or an edit already started.
+  // Joining the run must not mean joining it blind.
+  it('feeds a caller that joins the run in flight', async () => {
+    await seedQueued(LINK_PATH, 'the link');
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    mockPutBlob.mockImplementation(async (url: string) => {
+      await held;
+      return landed(pathFor(url));
+    });
+    const joiner = recordTicks();
+
+    const first = runIncrementalSync(deps());
+    // Let the first run reach its PUT before the second caller arrives.
+    while (mockPutBlob.mock.calls.length === 0) await new Promise((r) => setTimeout(r, 1));
+    const joined = runIncrementalSync(deps(), joiner.onProgress);
+    release();
+    await Promise.all([first, joined]);
+
+    expect(joiner.ticks).toContainEqual(['upload', 1, 1]);
+  });
+
+  it('reports nothing for a cycle with nothing to move', async () => {
+    const { ticks, onProgress } = recordTicks();
+
+    await runIncrementalSync(deps(), onProgress);
+
+    expect(ticks).toEqual([]);
+  });
+});
+
 // --- the account fence -------------------------------------------------------
 
 // A cycle is many round trips long, and a sign-out, a revocation wipe or an account
