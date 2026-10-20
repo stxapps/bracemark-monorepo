@@ -108,19 +108,19 @@ export function blobRateLimitKey(c: Context<AppEnv>): string {
 // expired entries off the front. What it holds is the accounts refused in the
 // last window — a cap by count would instead forget an account early under a
 // many-account flood, and log it again.
-const blobRefusalLogged = new Map<string, number>();
+const blobRefusalLoggedAtByUser = new Map<string, number>();
 
 function noteBlobRefusal(c: Context<AppEnv>): void {
   const userId = c.get('blobGrant')?.userId;
   if (!userId) return;
   const now = Date.now();
   const windowMs = RATE_LIMIT_PERIODS.blob * 1000;
-  for (const [id, at] of blobRefusalLogged) {
+  for (const [id, at] of blobRefusalLoggedAtByUser) {
     if (now - at < windowMs) break;
-    blobRefusalLogged.delete(id);
+    blobRefusalLoggedAtByUser.delete(id);
   }
-  if (blobRefusalLogged.has(userId)) return;
-  blobRefusalLogged.set(userId, now);
+  if (blobRefusalLoggedAtByUser.has(userId)) return;
+  blobRefusalLoggedAtByUser.set(userId, now);
   console.warn(`rateLimit: blob tier refused ${userId}`);
 }
 

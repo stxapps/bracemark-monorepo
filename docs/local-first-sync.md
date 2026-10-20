@@ -769,6 +769,11 @@ where it was_ below):
   its R2 call and its op appends after the put, and leaves the path's last op a
   delete, as the object is. The scan is a primary-key range — the rows appended
   since the oldest receipt's sign — so the log still needs no index on `path`.
+  That range is bounded by the receipt's TTL, not by the batch (another device's
+  bulk delete inside it is thousands of rows), so the query filters it to the
+  batch's paths and takes each one's newest delete in SQL (`lastDeletesAfter`,
+  the paths as one `json_each` parameter): it hands back a row per path at most,
+  never the range.
 - **Turned down is not refused.** The DO then writes **none** of the batch — a
   batch can order its paths (the share sheet commits referenced-before-
   referencing), and a partial write would show a puller a later path without an
