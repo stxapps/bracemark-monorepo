@@ -34,7 +34,8 @@ import {
   filesListEndpoint,
   filesSignEndpoint,
   type InitialSyncProgressFn,
-  isTransientBlobStatus,
+  isSecondPassFailure,
+  isTransientBlobError as isTransientBlobAnswer,
   mapLimit,
   MAX_COMMIT_OPS,
   MAX_LIST_LIMIT,
@@ -50,8 +51,10 @@ import {
   retryTransientBlobTransfer,
   runChunkedPush,
   sessionVerdictFromResponse,
+  SET_OUTAGE_FAILURES,
   type SignedUrl,
   type SignOp,
+  SyncIncompleteError,
   syncNamespace,
   type SyncOutcome,
   type SyncTrace,
@@ -806,13 +809,28 @@ async function fallbackCycle(
 
 // --- push (the 3-round-trip commit protocol) --------------------------------
 
-// Transient upload failures collected across the put phases (uploadOne) — the
-// count decides whether the metadata phase may run and whether the cycle must
-// reject; the first error is what it rejects with (the real transport failure,
-// not a summary). An accumulator for the same reason SyncOutcome is one.
+// Upload failures collected across the put phases — what each set's second pass
+// could not move (pushPuts). The count decides whether the metadata phase may run
+// and whether the cycle must reject; the first error is what it rejects with (the
+// real transport failure, not a summary), or a SyncIncompleteError when nothing
+// threw — a path left unsigned, or refused at its commit as `no_object`. An
+// accumulator for the same reason SyncOutcome is one.
 interface UploadFailures {
   count: number;
   firstError: unknown;
+}
+
+// An op a put pass did not move, and why: the transfer's error, or none for a path
+// that was never signed or that its commit refused as `no_object`.
+interface LeftOp {
+  op: PendingOpRecord;
+  error?: unknown;
+}
+
+// How many of one pass's transfers have spent their L1 tries — the outage stop's
+// count (SET_OUTAGE_FAILURES).
+interface PassFailures {
+  count: number;
 }
 
 // Drain a set of pending ops: sign → PUT → commit (docs flow #3). Returns the paths
@@ -833,12 +851,12 @@ interface UploadFailures {
 // finish inside one 5-min TTL still makes monotonic progress instead of livelocking
 // on an all-up-front sign whose tail expires before it can be uploaded.
 //
-// THROWS after the phases when any upload transiently failed — not before them, so
-// the cycle keeps its progress (committed chunks stay committed; failed ops stay
-// queued for fresh URLs next drain), and not silently, because a rejection is the
-// contract every caller shows an error status through. No caller schedules a
-// retry: the next local write, Sync now / Retry, or the next launch runs the
-// next cycle (docs/local-first-sync.md, _a push is chunked_).
+// THROWS after the phases when any op still failed to move after its set's second
+// pass — not before them, so the cycle keeps its progress (committed chunks stay
+// committed; failed ops stay queued for fresh URLs next drain), and not silently,
+// because a rejection is the contract every caller shows an error status through.
+// A transient one is retried by the provider's timer (@stxapps/shared
+// sync/retry.ts, docs/local-first-sync.md _retrying a failure_).
 async function pushPending(
   deps: SyncDeps,
   ops: PendingOpRecord[],
@@ -915,17 +933,71 @@ async function pushPhases(
     );
   }
 
-  if (failures.count > 0) throw failures.firstError;
+  if (failures.count > 0) throw failures.firstError ?? new SyncIncompleteError(failures.count);
   return orphanedPaths;
 }
 
 // Drive a homogeneous put set (all content OR all metadata — the caller splits and
-// orders them) through sign → PUT → commit, chunk by chunk, as ONE fan-out across
-// the chunks (@stxapps/shared sync/chunked-push.ts, runChunkedPush). `batchSize`
-// (≤ both caps) keeps a chunk's sign and its commit a single round trip each; it
-// and `concurrency` are the set's kind's. Resolves true when the quota gate refused
-// the set — the caller holds the metadata phase on it, as it does on a failed
-// upload.
+// orders them) through sign → PUT → commit, then run what it could not move once
+// more. Resolves true when the quota gate refused the set — the caller holds the
+// metadata phase on it, as it does on a failed upload.
+//
+// THE SECOND PASS (L2 — docs/local-first-sync.md, _retrying a failure_). What the
+// first pass left for a reason a fresh try can fix — a transfer that outlived L1,
+// a deadline, an expired token, a path left unsigned or refused as `no_object` —
+// is signed again and run once, after the rest of the set has moved: a stall has
+// had the whole set to clear, and a 403 gets a token that is not past its expiry.
+// One pass, never a loop: what fails it is recorded on `failures`, and the cycle
+// rejects into the provider's timer. Inside the set, so the content phase's second
+// pass ends before the metadata phase is decided. Skipped when the gate refused
+// the set (it would refuse again), and never reached when the first pass stopped
+// for an outage (pushPutPass).
+async function pushPuts(
+  deps: SyncDeps,
+  puts: PendingOpRecord[],
+  batchSize: number,
+  concurrency: number,
+  outcome: SyncOutcome,
+  orphanedPaths: string[],
+  failures: UploadFailures,
+): Promise<boolean> {
+  const first = await pushPutPass(deps, puts, batchSize, concurrency, orphanedPaths);
+  let refused = first.refused;
+  let left = first.left;
+  const again = new Set(refused === 0 ? left.filter(isWorthAnotherPass) : []);
+  if (again.size > 0) {
+    const second = await trace.span(
+      'push.again',
+      () =>
+        pushPutPass(
+          deps,
+          [...again].map((l) => l.op),
+          batchSize,
+          concurrency,
+          orphanedPaths,
+        ),
+      { ops: again.size },
+    );
+    refused += second.refused;
+    left = [...left.filter((l) => !again.has(l)), ...second.left];
+  }
+  if (refused > 0) recordBlocked(outcome, refused);
+  for (const { error } of left) {
+    failures.count += 1;
+    if (error !== undefined) failures.firstError ??= error;
+  }
+  return refused > 0;
+}
+
+function isWorthAnotherPass({ error }: LeftOp): boolean {
+  return error === undefined || isSecondPassBlobError(error);
+}
+
+// One pass over a put set: sign → PUT → commit, chunk by chunk, as ONE fan-out
+// across the chunks (@stxapps/shared sync/chunked-push.ts, runChunkedPush).
+// `batchSize` (≤ both caps) keeps a chunk's sign and its commit a single round
+// trip each; it and `concurrency` are the set's kind's. Resolves with how many ops
+// the quota gate refused and the ops that did not move.
 //
 // THE CHUNKS OVERLAP, AND THEIR COMMITS DO NOT. A chunk is signed while the one
 // before is still uploading, and its PUTs take the slots the earlier chunk's free,
@@ -948,36 +1020,40 @@ async function pushPhases(
 //    last commit has — the phase barrier pushPhases relies on — and a throw waits
 //    for what is in flight, so a failed cycle never lets the next one read a queue
 //    a commit is still clearing.
-async function pushPuts(
+//
+// STOP FEEDING AN OUTAGE. The SET_OUTAGE_FAILURES-th transfer to spend its L1 tries
+// throws instead of failing alone (send), which stops the pass: nothing more is
+// signed or sent, the chunks already committed stay committed, and the throw
+// skips the second pass and fails the cycle into the timer.
+async function pushPutPass(
   deps: SyncDeps,
   puts: PendingOpRecord[],
   batchSize: number,
   concurrency: number,
-  outcome: SyncOutcome,
   orphanedPaths: string[],
-  failures: UploadFailures,
-): Promise<boolean> {
+): Promise<{ refused: number; left: LeftOp[] }> {
   // Homogeneous by contract (the caller splits the kinds), so the first op names it.
   const kind = puts.length > 0 && isContentPath(puts[0].path) ? 'content' : 'index';
   // Per set, not per chunk: chunks overlap, and the cap is on the set's heap.
   const largeGate = createLimiter(FILE_CONCURRENCY);
+  const pass: PassFailures = { count: 0 };
+  const left: LeftOp[] = [];
 
+  // The quota gate refuses on the account's usage, never on which paths a chunk
+  // holds, so every later chunk of this set would be refused too: they are counted
+  // without asking. One refused sign call per put phase, not per chunk — which
+  // CONTENT_PUT_BATCH would otherwise multiply against the rate limit.
   const { refused } = await runChunkedPush<PendingOpRecord, SignedUrl, PutResult>({
     ops: puts,
     chunkSize: batchSize,
     concurrency,
     lead: kind === 'content' ? 2 * FILE_CONCURRENCY : 2 * concurrency,
     sign: (batch) => signPushable(deps, batch),
-    upload: (op, signed) => uploadOne(deps, op, signed, largeGate, failures),
+    upload: (op, signed) => uploadOne(deps, op, signed, largeGate, pass),
     commit: commitChunk,
     now: trace.now,
   });
-  // The quota gate refuses on the account's usage, never on which paths a chunk
-  // holds, so every later chunk of this set would be refused too: they are counted
-  // without asking. One refused sign call per put phase, not per chunk — which
-  // CONTENT_PUT_BATCH would otherwise multiply against the rate limit.
-  if (refused > 0) recordBlocked(outcome, refused);
-  return refused > 0;
+  return { refused, left };
 
   // Commit one uploaded chunk: the ops its PUTs sent, with the upload receipts
   // they answered with.
@@ -1003,20 +1079,22 @@ async function pushPuts(
     // A transiently-failed PUT stays queued but is excluded from the commit: unlike an
     // unsigned path there is nothing gained by asking the server to HEAD an object we
     // know we didn't send — on a big failed chunk that's up to a chunk's worth (100 or
-    // 500) of doomed entries per cycle — and the failure is already surfaced through
-    // `failures`. A superseded op sent nothing either, and is no failure: the write
-    // that replaced it sits queued under its own `writeId` and asked for the cycle
-    // that will carry it. Kept out for the reason a failed one is — the server would
-    // HEAD an object this cycle did not send, and where an earlier version exists it
-    // would log an op for bytes that are not these. An unsigned path goes in: leaving
-    // it queued IS the retry, and the commit's `no_object` is the honest report.
+    // 500) of doomed entries per cycle — and it is left for the second pass. A
+    // superseded op sent nothing either, and is no failure: the write that replaced it
+    // sits queued under its own `writeId` and asked for the cycle that will carry it.
+    // Kept out for the reason a failed one is — the server would HEAD an object this
+    // cycle did not send, and where an earlier version exists it would log an op for
+    // bytes that are not these. An unsigned path goes in: the commit's `no_object` is
+    // the honest report, and leaves it for the second pass too.
     const receipts = new Map<string, string>();
     const committed = pushed.ops.filter((op, i) => {
       const result = pushed.results[i];
+      if (result.kind === 'failed') left.push({ op, error: result.error });
       if (result.kind === 'sent' && result.receipt) receipts.set(op.path, result.receipt);
       return result.kind === 'sent' || result.kind === 'unsigned';
     });
-    await commitBatched(deps, committed, receipts);
+    const notRecorded = new Set(await commitBatched(deps, committed, receipts));
+    for (const op of committed) if (notRecorded.has(op.path)) left.push({ op });
     if (trace.enabled) {
       trace.record({
         name: 'push.chunk',
@@ -1079,8 +1157,8 @@ async function signPushable(
 // out sequentially, so the caller's phase ordering is preserved across chunks. For
 // each committed put, stamp R2's authoritative `updatedAt` onto the local record (a
 // delete has no record left to stamp — update is a no-op), then clear the ops it
-// accepted. `failed` (only `no_object` today) is intentionally ignored: leaving the
-// path queued is exactly the retry.
+// accepted. Resolves with the paths the server refused (`failed`, only `no_object`
+// today), which stay queued: a put set runs them again in its second pass.
 //
 // A put goes with its upload receipt when its PUT answered with one, so the server
 // can record it without asking R2 whether it landed — what kept a commit's time
@@ -1098,13 +1176,16 @@ async function commitBatched(
   deps: SyncDeps,
   ops: PendingOpRecord[],
   receipts: ReadonlyMap<string, string> = NO_RECEIPTS,
-): Promise<void> {
+): Promise<string[]> {
+  const refused: string[] = [];
   for (const batch of chunk(ops, COMMIT_BATCH)) {
-    await trace.span('commit', () => commitOne(deps, batch, receipts), {
+    const failed = await trace.span('commit', () => commitOne(deps, batch, receipts), {
       ops: batch.length,
       receipts: batch.filter((o) => receipts.has(o.path)).length,
     });
+    refused.push(...failed);
   }
+  return refused;
 }
 
 const NO_RECEIPTS: ReadonlyMap<string, string> = new Map();
@@ -1113,8 +1194,8 @@ async function commitOne(
   deps: SyncDeps,
   batch: PendingOpRecord[],
   receipts: ReadonlyMap<string, string>,
-): Promise<void> {
-  const { results } = await deps.api.call(opsCommitEndpoint, {
+): Promise<string[]> {
+  const { results, failed } = await deps.api.call(opsCommitEndpoint, {
     ops: batch.map((o) => {
       const receipt = o.op === 'put' ? receipts.get(o.path) : undefined;
       return receipt ? { op: o.op, path: o.path, receipt } : { op: o.op, path: o.path };
@@ -1134,6 +1215,7 @@ async function commitOne(
   await trace.span('commit.clear', () =>
     clearDrainedOps(batch.filter((o) => accepted.has(o.path))),
   );
+  return failed.map((f) => f.path);
 }
 
 // What one op's upload did (uploadOne). Four of the five are the ways an op can
@@ -1156,13 +1238,16 @@ async function commitOne(
 //    as the self-heal for queues already wedged by it, because a queue that can't
 //    drain is invisible to every other repair.
 //  - `failed` — the PUT itself threw (network blip, an expired signed URL on a
-//    chunk that outlived the TTL). TRANSIENT: the op stays queued and re-signs
-//    next drain; recorded on `failures` so the cycle still rejects after the
-//    phases instead of reporting a false 'idle'. Caught per op, so one bad blob
-//    never aborts its chunk before the chunk could commit anything — which on a
-//    chunk too big for one TTL window was a deterministic livelock.
-//  - `unsigned` — no URL came back for the path: also transient — leaving it
-//    queued IS the retry, and the commit's `no_object` is the honest report.
+//    chunk that outlived the TTL), carrying what it threw. The op stays queued,
+//    and the set's second pass signs it afresh when the error is one a retry can
+//    fix (pushPuts); what is still failed after that is recorded on `failures`,
+//    so the cycle rejects after the phases instead of reporting a false 'idle'.
+//    Caught per op, so one bad blob never aborts its chunk before the chunk could
+//    commit anything — which on a chunk too big for one TTL window was a
+//    deterministic livelock.
+//  - `unsigned` — no URL came back for the path: also transient — it goes into
+//    the commit, whose `no_object` is the honest report, and the second pass
+//    signs it again.
 //
 // A `sent` op carries the upload receipt its PUT answered with (sync/r2.ts
 // putBlob), which rides the chunk's commit (commitOne). Kept in memory only,
@@ -1171,7 +1256,8 @@ async function commitOne(
 // fresh one.
 type PutResult =
   | { kind: 'sent'; receipt: string | undefined }
-  | { kind: 'unsigned' | 'failed' | 'orphaned' | 'superseded' };
+  | { kind: 'failed'; error: unknown }
+  | { kind: 'unsigned' | 'orphaned' | 'superseded' };
 
 // Encrypt and PUT one op's local blob to its signed URL — THE WRITE THE OP STANDS
 // FOR, or nothing. An op carries no bytes; its record is read here, when its own
@@ -1202,7 +1288,7 @@ async function uploadOne(
   op: PendingOpRecord,
   signed: SignedUrl | undefined,
   largeGate: <T>(run: () => Promise<T>) => Promise<T>,
-  failures: UploadFailures,
+  pass: PassFailures,
 ): Promise<PutResult> {
   const data = await readForUpload(op);
   if (!(data instanceof Uint8Array)) return { kind: data };
@@ -1211,10 +1297,10 @@ async function uploadOne(
   if (isContentPath(op.path) && data.byteLength > LARGE_CONTENT_BYTES) {
     return largeGate(async () => {
       const held = await readForUpload(op);
-      return held instanceof Uint8Array ? send(deps, op, held, signed, failures) : { kind: held };
+      return held instanceof Uint8Array ? send(deps, op, held, signed, pass) : { kind: held };
     });
   }
-  return send(deps, op, data, signed, failures);
+  return send(deps, op, data, signed, pass);
 }
 
 // The op's bytes if its queue row is still this op, or which way it isn't.
@@ -1238,7 +1324,7 @@ async function send(
   op: PendingOpRecord,
   data: Uint8Array,
   signed: SignedUrl,
-  failures: UploadFailures,
+  pass: PassFailures,
 ): Promise<PutResult> {
   const ns = syncNamespace(op.path);
   try {
@@ -1259,20 +1345,36 @@ async function send(
     );
     return { kind: 'sent', receipt };
   } catch (err) {
-    failures.count += 1;
-    failures.firstError ??= err;
-    return { kind: 'failed' };
+    // The outage stop: thrown, this stops the pass (pushPutPass).
+    pass.count += 1;
+    if (pass.count >= SET_OUTAGE_FAILURES) throw err;
+    return { kind: 'failed', error: err };
   }
 }
 
 // A transfer the host refused for now, not on its merits, or one the connection
-// under it dropped — what `send` and every download try again (@stxapps/shared
-// sync/blob-transfer.ts). A browser's fetch rejects with a TypeError only when the
-// transport failed: an abort is a DOMException, and these transfers have no abort
-// but their deadline, which rejects first as a BlobTimeoutError (sync/r2.ts).
+// under it dropped — what `send` and every download try again in place
+// (@stxapps/shared sync/blob-transfer.ts). A browser's fetch rejects with a
+// TypeError only when the transport failed: an abort is a DOMException, and these
+// transfers have no abort but their deadline, which rejects first as a
+// BlobTimeoutError (sync/r2.ts). Never while the browser says it is offline: the
+// attempt could not land, and the set's outage stop should count it at once.
 function isTransientBlobError(err: unknown): boolean {
-  if (err instanceof TypeError) return true;
-  return err instanceof BlobRequestError && isTransientBlobStatus(err.status);
+  if (isOffline()) return false;
+  return err instanceof TypeError || isTransientBlobAnswer(err);
+}
+
+// What a set's second pass runs again (@stxapps/shared sync/retry.ts,
+// isSecondPassFailure), with a browser's TypeError read as the network error it
+// is. Not while offline, for the reason above; the timer takes it, and coming back
+// online starts it early (contexts/sync-provider.tsx).
+function isSecondPassBlobError(err: unknown): boolean {
+  if (isOffline()) return false;
+  return err instanceof TypeError || isSecondPassFailure(err);
+}
+
+function isOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
 }
 
 // One GET, tried again on a 5xx, a 429 or a dropped connection. The 404 a caller
@@ -1354,15 +1456,37 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
   };
   let downloadStart: number | undefined;
 
+  // THE SECOND PASS (L2 — docs/local-first-sync.md, _retrying a failure_). A GET
+  // that failed for a reason a fresh try can fix — one that outlived L1, a
+  // deadline, an expired token — or a path the sign did not answer is set aside
+  // rather than failing the pull, and `finish` runs the set-aside entries once
+  // more, freshly signed, after everything else has moved. What fails that pass
+  // fails the cycle, with the cursor where it was. Until the SET_OUTAGE_FAILURES-th
+  // failure: that one throws, which stops the fan-out (createSignedFanOut is
+  // fail-fast) and skips the second pass — an outage is the timer's.
+  const setAside: Entry[] = [];
+  let failedGets = 0;
+
   // `finally`, so the two skips below tick the counter too: an entry dropped
-  // for a missing URL or a mid-pull 404 still leaves the pull with one fewer
-  // thing to do, and a counter that ignored them would stop short of its
-  // total and read as a hang on the one screen the user is watching. The
-  // increment is safe unsynchronized — these callbacks interleave at await
-  // points, they don't run in parallel.
-  const pullOne = async (e: Entry, signed: SignedUrl | undefined): Promise<void> => {
+  // for a mid-pull 404 or a blob that will not open still leaves the pull with
+  // one fewer thing to do, and a counter that ignored them would stop short of
+  // its total and read as a hang on the one screen the user is watching. An
+  // entry set aside for the second pass ticks there instead, once. The increment
+  // is safe unsynchronized — these callbacks interleave at await points, they
+  // don't run in parallel.
+  const pullOne = async (
+    e: Entry,
+    signed: SignedUrl | undefined,
+    lastPass: boolean,
+  ): Promise<void> => {
+    let deferred = false;
     try {
-      if (!signed) return;
+      if (!signed) {
+        if (lastPass) throw new SyncIncompleteError(1);
+        setAside.push(e);
+        deferred = true;
+        return;
+      }
 
       // A 5xx, a 429 or a dropped connection is tried again, one span per
       // attempt, as an upload's is.
@@ -1395,9 +1519,17 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
       await trace.span('blob.store', () =>
         putPulled(deps.username, [toItemRecord(e.path, e.updatedAt, data)]),
       );
+    } catch (err) {
+      if (lastPass || !isSecondPassBlobError(err)) throw err;
+      failedGets += 1;
+      if (failedGets >= SET_OUTAGE_FAILURES) throw err;
+      setAside.push(e);
+      deferred = true;
     } finally {
-      done += 1;
-      report();
+      if (!deferred) {
+        done += 1;
+        report();
+      }
     }
   };
 
@@ -1407,12 +1539,14 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
   // 1-hour TTL. Each record is stored the moment it's decrypted, so an interrupted
   // run resumes via the staleness skip in `add` (fresh URLs for the shrinking
   // remainder) rather than restarting.
-  const fanOut = createSignedFanOut<Entry, SignedUrl>({
-    concurrency: INDEX_CONCURRENCY,
-    signBatch: SIGN_BATCH,
-    sign: (paths) => signPaths(deps.api, 'get', paths),
-    run: pullOne,
-  });
+  const fanOutFor = (lastPass: boolean) =>
+    createSignedFanOut<Entry, SignedUrl>({
+      concurrency: INDEX_CONCURRENCY,
+      signBatch: SIGN_BATCH,
+      sign: (paths) => signPaths(deps.api, 'get', paths),
+      run: (e, signed) => pullOne(e, signed, lastPass),
+    });
+  const fanOut = fanOutFor(false);
 
   return {
     async add(entries) {
@@ -1473,6 +1607,18 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
       let failed: string | undefined;
       try {
         await fanOut.close();
+        if (setAside.length > 0) {
+          const again = setAside.splice(0);
+          await trace.span(
+            'pull.again',
+            async () => {
+              const second = fanOutFor(true);
+              second.add(again);
+              await second.close();
+            },
+            { entries: again.length },
+          );
+        }
       } catch (err) {
         failed = err instanceof Error ? err.name : 'Error';
         throw err;

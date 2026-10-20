@@ -870,7 +870,8 @@ duplicate path.
 > Even at 100 a content chunk can outlive the TTL on a slow enough uplink, so the
 > expiry is absorbed **per blob**: an expired-URL PUT (R2 answers 403) fails only
 > its own op, the chunk still commits
-> the blobs that **did** land, and the rest re-sign next drain under fresh URLs.
+> the blobs that **did** land, and the rest re-sign in the set's second pass
+> (_retrying a failure_, L2) — or, if that one expires too, next drain.
 > Letting the failure escape and abort the whole chunk instead made a chunk too
 > big for one TTL window a **deterministic livelock** — every retry restarted the
 > same too-big chunk and re-expired at the same point, so the push never advanced.
@@ -881,27 +882,30 @@ duplicate path.
 > 1 s then 2 s apart (`retryTransientBlobTransfer`, `@stxapps/shared`
 > `sync/blob-transfer.ts`), before it counts as failed. That covers every PUT a
 > push makes and every GET a pull, `loadEntityContent` and `loadEntityContents`
-> make, on both engines. Without it, one refusal fails the cycle, and no timer
-> starts the next one; the next edit or a press of Retry does. It is not rare at
+> make, on both engines. Without it, one refusal fails the cycle, and before the
+> timer (_retrying a failure_, L3) nothing started the next one but the next edit
+> or a press of Retry. It is not rare at
 > scale: on staging, 2026-10-19, the R2 binding refused 7 of ~14,000 blob-route
 > PUTs in a 10,000-link first sync with `(10001) internal error`, and the retry
 > that recovered them started with a minute-long whole listing. A retry is safe:
 > an upload's bytes are sealed once and a PUT of the same bytes to the same key
-> leaves the same object, and a download changes nothing on the host. **Not**
-> retried: any other `4xx` (the expired `403` above wants a fresh URL, which only
-> the next cycle signs, and a GET `404` is an object deleted since it was listed,
-> which the engines skip), a `BlobTimeoutError` (the attempt already spent its
-> whole deadline), and, **on expo only**, a network error (its transfers fail with
-> an untyped error, so a dropped connection can't be told from a missing temp
-> file). **The web engine retries a network error too** — fetch's `TypeError`,
-> which an abort and the deadline never produce. That was the next stall at the
-> same scale: later the same day, the connection under a 10,000-link push dropped
-> mid-chunk (35 blob-route PUTs `canceled` within a second), and one PUT's
-> `TypeError` failed the cycle, parking the last op until Retry and its minute-long
-> listing. Each attempt is its own `blob.put` or `blob.get` span, so `measure:sync`
-> shows a retried transfer as a failed span before it. The share sheet's upload
+> leaves the same object, and a download changes nothing on the host. A `429`
+> waits out its `Retry-After` when it carries one. **Not** retried in place: any
+> other `4xx` (the expired `403` above wants a fresh URL, which the set's second
+> pass signs, and a GET `404` is an object deleted since it was listed, which the
+> engines skip) and a `BlobTimeoutError` (the attempt already spent its whole
+> deadline; the second pass takes it). **A dropped connection is retried too** —
+> on web fetch's `TypeError`, which an abort and the deadline never produce, and
+> on expo the `BlobNetworkError` its transport raises (_retrying a failure_,
+> expo's network errors). That was the next stall at the same scale: later the
+> same day, the connection under a 10,000-link push dropped mid-chunk (35
+> blob-route PUTs `canceled` within a second), and one PUT's `TypeError` failed the
+> cycle, parking the last op until Retry and its minute-long listing. Each attempt
+> is its own `blob.put` or `blob.get` span, so `measure:sync` shows a retried
+> transfer as a failed span before it. The share sheet's upload
 > (`share-upload.ts`) does not retry: its process outlives the ✓ by about a
-> second, and the outbox is its retry.
+> second, and the outbox is its retry. This is the first of four retry layers;
+> _retrying a failure_ has the other three.
 >
 > Three rules keep that from becoming a correctness hole:
 >
@@ -921,12 +925,15 @@ duplicate path.
 >   let the metadata through alone. The held ops count toward `blockedCount`.
 > - **The cycle still REJECTS**, after the phases rather than before them — so it
 >   keeps the progress it made, while the caller's error branch still fires:
->   `bgSyncStatus 'error'` and the error's message. It schedules **no** retry —
->   neither provider sets a timer (`contexts/sync-provider.tsx`, web and expo).
->   The next cycle is started by the next local write, a press of Sync now or
->   Retry, or the store coming up ready on the next launch; until then the failed
->   ops wait, queued. Reporting a clean `idle` over an unpushed edit would leave
->   the user nothing to notice and nothing to retry.
+>   `bgSyncStatus 'error'` and the error's message. When the failure is one that
+>   may clear by itself, the provider schedules the next cycle
+>   (`contexts/sync-provider.tsx`, web and expo; _retrying a failure_, L3);
+>   otherwise the next local write, a press of Sync now or Retry, or the next
+>   launch starts it. Until then the failed ops wait, queued. Reporting a clean
+>   `idle` over an unpushed edit would leave the user nothing to notice and
+>   nothing to retry — which is also why a path still unsigned, or refused at its
+>   commit as `no_object`, after the second pass now fails the cycle
+>   (`SyncIncompleteError`) where it used to resolve `idle`.
 >
 > This is also why the put set's fan-out is fail-fast on a throw (`runChunkedPush`
 > stops feeding work into a failing cycle): the upload catches **per op** so its
@@ -2069,6 +2076,180 @@ background sync engine → the same client via `SyncDeps.api`; R2 blobs → plai
 `fetch`.** All control-plane calls share the same `@stxapps/shared` contracts and
 the one injected client.
 
+### retrying a failure
+
+**Designed 2026-10-19, built 2026-10-20.** All four layers run; _where each
+piece lives_ at the end of the section maps them to code and specs.
+
+The question this answers is not whether a retry is safe: everything sync sends
+can be repeated. A PUT of the same sealed bytes leaves the same object, a GET
+and a listing change nothing, a sign mints tokens, and a commit is idempotent in
+effect (_the three flows: push_). The question is **when a retry can succeed**,
+and that decides the layer it belongs to. An R2 refusal clears in a second; an
+expired token needs a fresh sign; an outage needs minutes; a revoked session
+needs the person. Until this was built only the first of those was retried by
+the engine: anything that outlasted a request's own retries failed the cycle,
+and no timer started the next one — the next local write, a press of Sync now or
+Retry, or the next launch did. For an import that failed one op of 22,972, that
+was an open-ended stall the person had to notice.
+
+**Four rules:**
+
+1. **Retry at the lowest layer that can succeed** — the table below assigns
+   each case.
+2. **Never leave a recoverable failure waiting for the person.** Every
+   transient case ends in a scheduled cycle; only the cases no retry can fix
+   wait for a person.
+3. **Never retry what a retry cannot fix**: a session the server refused, a
+   quota, a request refused on its merits, a blob that will not open.
+4. **Do not amplify an outage**: backoff with jitter, `Retry-After` honoured,
+   and a set that stops starting transfers while its failures persist.
+
+**The four layers:**
+
+| layer                                | what it does                                                                                                                                                                                                                                                | lives in                                                                            |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **L1 — the request, in place**       | the same request again: a blob transfer three tries about 1 s then 2 s apart, or its `Retry-After` (`retryTransientBlobTransfer`), an api call four tries at 1, 2, 4 s or its `Retry-After` (`withRetry`)                                                   | `sync/blob-transfer.ts`, `api/retry.ts`                                             |
+| **L2 — a second pass, in the cycle** | once a put set (`pushPuts`) or a pull (`startPull`) has run, the ops it could not move for a reason a fresh try can fix are signed again and run once more, before the cycle decides it failed                                                              | both engines; the test is `isSecondPassFailure`                                     |
+| **L3 — a scheduled cycle**           | after a cycle that failed transiently, the provider starts the next one itself: 5 s, 30 s, 2 min, 10 min, then every 30 min, each ±25%, reset by a clean cycle. Coming back online, or to the tab or app, starts a pending one at once (at most every 30 s) | both providers, on `createSyncRetryScheduler`; the test is `isTransientSyncFailure` |
+| **L4 — the person**                  | Retry, Sync now, the first-sync gate's button                                                                                                                                                                                                               | the Data card, the ⋯ menu, the gate                                                 |
+
+**Each case, and the layers it gets:**
+
+| case                                                        | seen                                                       | L1                                                                                     | L2                      | L3                                                                                     |
+| ----------------------------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------- |
+| blob `5xx` or `429` (R2's `10001`)                          | 2–7 a 10,000-link push                                     | yes; **honour `Retry-After` on a `429`**                                               | yes                     | yes                                                                                    |
+| connection dropped mid-transfer                             | 35–63 PUTs `canceled` within a second, on two runs         | yes, expo's typed at its transport (below); web none while the browser reports offline | yes                     | yes, and on coming back online                                                         |
+| **blob deadline** (`BlobTimeoutError`)                      | 1 of 22,972 PUTs, inside a 21 s R2 stall                   | no                                                                                     | **yes, once**           | yes                                                                                    |
+| expired token (`403`; a PUT's lives 5 min, a GET's an hour) | not yet on staging; a large content chunk on a slow uplink | no — the same token fails again                                                        | **yes, freshly signed** | yes                                                                                    |
+| GET `404`                                                   | an object deleted since it was listed                      | no — skipped, as now                                                                   | —                       | —                                                                                      |
+| no URL from the sign; a commit's `no_object`                | rare                                                       | —                                                                                      | yes                     | yes                                                                                    |
+| api `429`                                                   | a shared rate-limit bucket                                 | yes, as now                                                                            | —                       | yes                                                                                    |
+| api `5xx` or network error                                  | the DO's free-tier rows-written limit: `500`s for hours    | yes, as now                                                                            | —                       | yes, up the backoff                                                                    |
+| api deadline (`ApiTimeoutError`)                            |                                                            | no, as now (`api/retry.ts` says why)                                                   | —                       | yes, first step 5 s                                                                    |
+| `401` — a session unknown, revoked or expired               |                                                            | **never**                                                                              | never                   | never — sync is paused ([sessions.md](./sessions.md))                                  |
+| `403 quota_exceeded` at a sign                              | an account over its ceilings                               | **never**                                                                              | never                   | no timer — a settled `blocked` state the next write, launch, purchase or delete clears |
+| any other `4xx` — a bug, or a contract one side lacks       |                                                            | **never**                                                                              | never                   | **no timer** — it would fail the same way; the error shows                             |
+| a blob that will not open; an unknown format version        |                                                            | skipped per path; an update asked for                                                  | —                       | no                                                                                     |
+| a local store error; the account signed out mid-cycle       |                                                            | never                                                                                  | never                   | no                                                                                     |
+
+**Why a deadline gets L2 and not L1.** `blob-transfer.ts` and `api/retry.ts`
+both refuse to retry a deadline in place: the attempt has spent its whole
+allowance, and another would multiply the wait. That holds for L1, where the
+retry fires straight back into whatever stalled the first attempt. L2 runs the
+op again only after the rest of its set has moved — a stall that is still on has
+had that long to clear — and once. The staging reading that met it (_measuring a
+sync_, the 10,000-link push with receipts) paid 60 s for the deadline, 61 s for
+the Retry press and 78 s for the retry's whole listing; at L2 the one PUT costs
+about a second, and the cycle does not fail. An api deadline stays at L3:
+export, import and sign-out wait on a sync, and their callers are why
+`api/retry.ts` keeps it out of L1.
+
+**Why an expired token needs L2.** A `403` from the blob route is a token past
+its expiry, and L1 would send the same token. L2 signs again, so the
+large-content chunk that outlives its 5-minute tokens on a slow uplink (_a push
+is chunked_) finishes in the same cycle instead of the next one.
+
+**L2's limits.** One extra pass, never a loop: what fails it fails the cycle,
+and L3 takes over. In the put phases it runs inside the set, so the content
+phase's second pass ends before the metadata phase is decided — the hold on a
+failed content upload still applies to what the second pass could not move. It
+is skipped when the quota gate refused the set, which would refuse it again. In
+a pull it sets aside the GETs that failed transiently instead of failing on the
+first (the fan-out is fail-fast), runs them once more, freshly signed, and fails
+the cycle only on what is left, with the cursor unmoved. A path still unsigned,
+or refused as `no_object`, after the second pass fails the cycle as a
+`SyncIncompleteError`, which the timer takes like any transient failure. Both
+passes show in a trace: the second is a `push.again` or `pull.again` span.
+
+**L3's rules.**
+
+- It schedules only after a **transient** failure — the cases above with a
+  timer. A permanent one would fail the same way, so it waits for a write, a
+  press or a launch, and its error stays on screen.
+- One timer, in the tab or app whose cycle failed. Other tabs' cycles take the
+  same Web Lock (_two tabs, one queue_), so a cycle any of them runs
+  meanwhile is the retry, and a clean one resets the backoff.
+- Coming back online (`online` on web; the network state on expo) and coming
+  back to the tab or app (`visibilitychange`, `AppState` `active`) start a
+  cycle at once, at most every 30 s. These are wake-ups, not the schedule:
+  they cover the device that was offline for the whole backoff.
+- Never while sync is paused (an expired session) or the store is not ready.
+- **The first sync** is blocking, so it gets its own short schedule: three
+  retries at 2 s, 10 s and 30 s behind a "Retrying…" line, then the gate's
+  button (`runInitialSyncWithRetries`; the provider's `initialSyncRetrying`). A
+  first sync resumes rather than restarts (the staleness skip in `startPull`),
+  so each retry costs only what is left, and the gate's counter restarts at
+  that remainder. A failure no retry can fix shows the button at once.
+- **One failure is counted once.** Every caller that joins a running cycle shares
+  its promise (the engine's single flight), so the scheduler watches a promise
+  once; counted per caller, a write landing during a failing cycle would climb
+  the backoff a step for nothing.
+- **Not the browser extension**, whose engine runs in its service worker and
+  reports through `browser.storage` (`ExternalSyncProvider`): a worker that
+  sleeps has no timer to keep, and its cycles already have a schedule — saves,
+  the popup, and an hourly `bracemark-sync` alarm
+  (`bracemark-extension/entrypoints/background.ts`). It gets L1 and L2, which
+  live in the engine.
+
+**Stop feeding an outage.** Once 20 ops of a set (`SET_OUTAGE_FAILURES`) have
+spent their L1 tries, the set starts no more transfers, skips L2 and fails the
+cycle into L3: the 20th failure throws rather than failing alone, which stops a
+put pass (`runChunkedPush`, keeping every chunk already committed) or a pull's
+fan-out.
+Without it an offline 10,000-link push would send every remaining PUT to fail on
+its own. A short burst — the dropped connections above, which their L1 retries
+recovered — never reaches that count, because a transfer counts only once its
+retries are spent.
+
+**Expo's network errors.** expo's transfers fail without a type to tell a
+dropped connection by — `expo/fetch` rejects with a `FetchError` it does not
+export, React Native's fetch with a `TypeError`, `uploadAsync` with a bare
+`Error` — so expo used to retry none. They are classified at the transport,
+where the kind is known (`expo-react/src/sync/r2.ts`): a rejection of the fetch
+call itself becomes a `BlobNetworkError` (`@stxapps/shared`, beside
+`BlobRequestError` and `BlobTimeoutError`, which both platforms now share), and
+so does an `uploadAsync` rejection while the file it was sending still exists —
+a missing file is not a network fault and is not retried. `getBlobToFile`
+(`File.downloadFileAsync`) is left as it was: it serves the lazy content loads,
+not a cycle. Unlike web, expo retries a network error in place even while the
+device is offline — it has no synchronous network state to ask — which costs
+the 3 s of L1 before the outage stop counts it.
+
+**On the server**, two retries that cost a client nothing and reach every
+client version, old ones included:
+
+- The blob route retries an R2 `10001` once, in the Worker, before answering
+  `5xx`, where the call can be made twice: a read, or a write whose body is in
+  memory (`r2/user-files.ts`, `get` and `putBytes`). A streamed body is spent
+  by the attempt that failed and is left to the client's L1 — and every
+  client's PUT declares its length, so in practice that is every PUT.
+- A Durable Object call that throws an error marked `.retryable` is retried
+  once, on a fresh stub; never one marked `.overloaded`, which a retry would
+  only add to (`callUserData`, `do/user-data.ts`, for every call the api
+  makes).
+
+**Not taken: a hedged PUT** — a second request for a slow one. Two PUTs of the
+same bytes land as the same object but at different `LastModified`s, so a
+receipt can name the earlier stamp while R2 holds the later, and every client
+that then lists it re-downloads it once. A hedged **GET** has no such cost, and
+pays only at the end of a pull, where one straggler sets the wall (_measuring a
+sync_, the `--no-sw` pull's 19.5 s GET): optional, after the rest.
+
+**Where each piece lives.** The vocabulary — which failure gets which layer,
+the schedules, the scheduler and the first sync's loop — is `@stxapps/shared`
+`sync/retry.ts`, pinned by `sync/retry.spec.ts`; L1's `Retry-After` by
+`sync/blob-transfer.spec.ts`. L2 and the outage stop are in both engines'
+`pushPuts`/`pushPutPass` and `startPull`: web's `engine.spec.ts` carries the
+cases (_the second pass_, _a set that meets an outage_, and the rewritten _a
+transfer the host refused for now_), expo's the drift guards, one per
+transport. L3, its wake-ups and the first sync's retries are in both
+`contexts/sync-provider.tsx`, with web's spec canonical and expo's a guard of
+its NetInfo wake-up; the gate's line is each app's `initial-sync-gate.tsx`.
+expo's typed network errors are pinned by `expo-react/src/sync/r2.spec.ts`; the
+server's two retries by bracemark-api's `r2/user-files.spec.ts` and
+`do/user-data.spec.ts`.
+
 ### measuring a sync
 
 A push of the `seed_plus_full` library (1,000 links, ~2,000 files) took about ten
@@ -2477,8 +2658,9 @@ and the 1,000-link run, against `21efb3a`'s:
   another, ~1.9 s each, 78 s — before a 3 s push of the one op. Take out the
   stalled chunk's minute and the push matches the `f5d6bad` reading. It is the
   third 10,000-link run to meet a transient that fails a cycle, after an R2
-  `10001` and a dropped connection, the two now retried in place. Left as it is
-  for now.
+  `10001` and a dropped connection, the two now retried in place. What it
+  should have cost is in _retrying a failure_: a second pass in the cycle, about
+  a second.
 - **The runner's "no Server-Timing" note was the service worker.** It fired on
   the bulk-delete pull of every full run since `2b19789`: that leg's one api
   call is an `ops/list` GET, and a response the worker answers shows the page no

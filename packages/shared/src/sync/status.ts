@@ -99,7 +99,10 @@ export type BgSyncStatus =
   // the library is fully usable — and not 'idle', which would claim edits
   // made now are reaching other devices. Clears on resume.
   | 'paused'
-  | 'error'; // the last cycle failed; requestSync retries (flips back to 'syncing')
+  // The last cycle failed; requestSync retries (flips back to 'syncing'), and for
+  // a failure that may clear by itself so does the provider's own timer
+  // (sync/retry.ts).
+  | 'error';
 
 // What a completed cycle learned beyond "it worked" — the engines' return value,
 // read by each platform's SyncProvider to pick its bgSyncStatus. Shared so the

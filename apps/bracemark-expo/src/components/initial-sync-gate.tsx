@@ -42,7 +42,8 @@ const StyledSafeAreaView = withUniwind(SafeAreaView);
 const MIN_SCREEN_MS = 500;
 
 export function InitialSyncGate({ children }: { children: ReactNode }) {
-  const { storeStatus, initialSyncProgress, retryInitialSync, lastError } = useSync();
+  const { storeStatus, initialSyncProgress, initialSyncRetrying, retryInitialSync, lastError } =
+    useSync();
   const { sessionState } = useAuth();
 
   // No-flash: 'checking' is a single SQLite read of the first-sync flag and
@@ -132,7 +133,7 @@ export function InitialSyncGate({ children }: { children: ReactNode }) {
   // first appeared so the minimum-visible floor can hold it.
   if (storeStatus === 'syncing-initial') {
     shownAtRef.current ??= performance.now();
-    return <DecryptingScreen progress={initialSyncProgress} />;
+    return <DecryptingScreen progress={initialSyncProgress} retrying={initialSyncRetrying} />;
   }
 
   // 'ready' — but if the first-sync screen showed and hasn't met its floor yet,
@@ -150,12 +151,31 @@ export function InitialSyncGate({ children }: { children: ReactNode }) {
 // no denominator yet — so the spinner covers that stretch and the bar replaces it
 // once the count exists. The alternative is a bar parked at 0%, which looks broken
 // for exactly as long as the listing takes.
-function DecryptingScreen({ progress }: { progress: InitialSyncProgress | null }) {
+//
+// `retrying` is the provider retrying a failed attempt on its own before the gate
+// offers its button — web's gate carries the same line.
+function DecryptingScreen({
+  progress,
+  retrying = false,
+}: {
+  progress: InitialSyncProgress | null;
+  retrying?: boolean;
+}) {
   return (
     <StyledSafeAreaView className="flex-1 bg-background">
       <View className="flex-1 items-center justify-center gap-3 px-6">
         <Text className="text-center">Decrypting your links…</Text>
         {progress ? <SyncProgressBar progress={progress} /> : <ActivityIndicator size="small" />}
+        {/*
+          A status, not ErrorText: it arrives on its own and asks nothing of the
+          user — the pull resumes by itself (docs/accessibility.md, "what must
+          NOT announce"). Web's twin is a `role="status"` line.
+        */}
+        {retrying ? (
+          <Text role="status" className="text-center text-xs text-muted-foreground">
+            Retrying…
+          </Text>
+        ) : null}
         {/*
           Standing prose, not an announcement (docs/accessibility.md, "what must
           NOT announce") — it is on screen from the first frame. This is the one

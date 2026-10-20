@@ -12,6 +12,7 @@
 import {
   ApiError,
   ApiTimeoutError,
+  BLOB_TRANSFER_TRIES,
   BlobUnreadableError,
   createApiClient,
   createSyncTraceRecorder,
@@ -20,7 +21,9 @@ import {
   filesSignEndpoint,
   opsCommitEndpoint,
   opsListEndpoint,
+  SET_OUTAGE_FAILURES,
   SETTINGS_GENERAL_PATH,
+  SyncIncompleteError,
   TRASH_ID,
   utf8,
 } from '@stxapps/shared';
@@ -797,9 +800,12 @@ describe('the push', () => {
     await seedQueued(LINK_PATH, 'the link');
 
     // A path the signer skipped is TRANSIENT — unlike a missing local record the bytes
-    // are still here, so the commit's `no_object` requeue IS the retry. This is the
-    // case the orphan drop above must not swallow.
-    await runIncrementalSync(deps({ filesSign: () => [] }));
+    // are still here, so it stays queued. This is the case the orphan drop above must
+    // not swallow. Nor may the cycle report a clean run over it: it used to resolve
+    // 'idle' with the edit unpushed, and nothing would ever retry it but the next edit.
+    await expect(runIncrementalSync(deps({ filesSign: () => [] }))).rejects.toBeInstanceOf(
+      SyncIncompleteError,
+    );
 
     expect(mockPutBlob).not.toHaveBeenCalled();
     expect(await pendingPaths()).toEqual([LINK_PATH]);
@@ -1147,13 +1153,14 @@ describe('a transfer the host refused for now', () => {
     expect(await pendingPaths()).toEqual([]);
   });
 
-  it('fails the cycle after three tries when it never lands, with the op still queued', async () => {
+  it('fails the cycle when neither pass lands it, with the op still queued', async () => {
     await seedQueued(LINK_PATH, 'the link');
     const unavailable = new BlobRequestError('PUT', 503);
     mockPutBlob.mockRejectedValue(unavailable);
 
     expect(await settleCycle()).toBe(unavailable);
-    expect(mockPutBlob).toHaveBeenCalledTimes(3);
+    // Its tries in place, then the same again in the set's second pass — and no more.
+    expect(mockPutBlob).toHaveBeenCalledTimes(2 * BLOB_TRANSFER_TRIES);
     expect(await pendingPaths()).toEqual([LINK_PATH]);
   });
 
@@ -1174,21 +1181,61 @@ describe('a transfer the host refused for now', () => {
     expect(await pendingPaths()).toEqual([]);
   });
 
-  it('is never tried again after its deadline — that attempt already spent it', async () => {
+  // A deadline is never retried in place — that attempt already spent it, and a
+  // retry straight after would fire into the same stall — but once, after the rest
+  // of its set. On staging one such PUT in 22,972 cost the cycle, a minute's Retry
+  // press and a minute's listing; the second pass costs it about a second.
+  it('is tried once more after its deadline, after the rest of its set, and not in place', async () => {
+    await seedQueued(LINK_PATH, 'the link');
+    await seedQueued(OTHER_LINK_PATH, 'the other link');
+    const stalled = new BlobTimeoutError('PUT', 15_000);
+    const order: string[] = [];
+    let stalls = 1;
+    mockPutBlob.mockImplementation(async (url: string) => {
+      const path = pathFor(url);
+      order.push(path);
+      if (path === LINK_PATH && stalls-- > 0) throw stalled;
+      return landed(path);
+    });
+
+    await runIncrementalSync(deps());
+
+    expect(order).toEqual([LINK_PATH, OTHER_LINK_PATH, LINK_PATH]);
+    expect(await pendingPaths()).toEqual([]);
+  });
+
+  it('fails the cycle when its second pass meets the deadline too', async () => {
     await seedQueued(LINK_PATH, 'the link');
     const stalled = new BlobTimeoutError('PUT', 15_000);
     mockPutBlob.mockRejectedValue(stalled);
 
     await expect(runIncrementalSync(deps())).rejects.toBe(stalled);
-    expect(mockPutBlob).toHaveBeenCalledTimes(1);
+    expect(mockPutBlob).toHaveBeenCalledTimes(2);
   });
 
-  it('is never tried again on an expired url — the next cycle signs a fresh one', async () => {
+  // An expired url fails the same way however often it is sent, so it is never tried
+  // in place; the second pass asks for a fresh one.
+  it('is tried once more on an expired url, under a freshly signed one', async () => {
     await seedQueued(LINK_PATH, 'the link');
-    failUploadsFor(LINK_PATH);
+    const signs: string[][] = [];
+    let expiries = 1;
+    mockPutBlob.mockImplementation(async (url: string) => {
+      if (expiries-- > 0) throw EXPIRED_URL;
+      return landed(pathFor(url));
+    });
 
-    await expect(runIncrementalSync(deps())).rejects.toBe(EXPIRED_URL);
-    expect(mockPutBlob).toHaveBeenCalledTimes(1);
+    await runIncrementalSync(
+      deps({
+        filesSign: (paths, op) => {
+          if (op === 'put') signs.push(paths);
+        },
+      }),
+    );
+
+    expect(signs).toEqual([[LINK_PATH], [LINK_PATH]]);
+    expect(mockPutBlob).toHaveBeenCalledTimes(2);
+    expect(committedPaths()).toEqual([LINK_PATH]);
+    expect(await pendingPaths()).toEqual([]);
   });
 
   // A pull reads as many objects through the same binding as a push writes.
@@ -2949,5 +2996,144 @@ describe('an op whose path was rewritten after the queue was read', () => {
     expect(mockGetBlob).not.toHaveBeenCalled();
     expect(await db.items.get(LINK_PATH)).toBeUndefined();
     expect(await db.pendingOps.toArray()).toMatchObject([{ path: LINK_PATH, op: 'delete' }]);
+  });
+});
+
+// L2 — the cycle's own second pass (docs/local-first-sync.md, _retrying a failure_).
+// What a set could not move for a reason a fresh try can fix is signed again and run
+// once, after the rest of the set, before the cycle decides it failed.
+describe('the second pass', () => {
+  const INCREMENTAL_PUT = (path: string): OpsListReply => ({
+    ops: [{ op: 'put', path, updatedAt: 2000 }],
+    oldestUpdatedAt: 500,
+    newestUpdatedAt: 2000,
+    hasMore: false,
+  });
+
+  // Inside the set, so the content phase's second pass ends before the metadata phase
+  // is decided: a content PUT that landed on its second try lets the metadata that
+  // names it go up in the same cycle, in phase order, instead of the next one.
+  it('lands content before the metadata phase is decided', async () => {
+    await seedQueued(FILE_PATH, 'image bytes');
+    await seedQueued(EXTRACTION_PATH, 'refers to the image');
+    let expiries = 1;
+    mockPutBlob.mockImplementation(async (url: string) => {
+      if (pathFor(url) === FILE_PATH && expiries-- > 0) throw EXPIRED_URL;
+      return landed(pathFor(url));
+    });
+
+    await runIncrementalSync(deps());
+
+    expect(commits.map((batch) => batch.map((o) => o.path))).toEqual([
+      [FILE_PATH],
+      [EXTRACTION_PATH],
+    ]);
+    expect(await pendingPaths()).toEqual([]);
+  });
+
+  // The commit's `no_object` is the server saying it holds no object for a put — the
+  // bytes never landed, whatever the PUT answered. The second pass sends them again.
+  it('sends again a put its commit refused as `no_object`', async () => {
+    await seedQueued(LINK_PATH, 'the link');
+    let lost = 1;
+    mockPutBlob.mockImplementation(async (url: string) => {
+      if (lost-- > 0) return undefined; // answered, never stored
+      return landed(pathFor(url));
+    });
+
+    await runIncrementalSync(deps());
+
+    expect(mockPutBlob).toHaveBeenCalledTimes(2);
+    expect(committedPaths()).toEqual([LINK_PATH, LINK_PATH]);
+    expect(await pendingPaths()).toEqual([]);
+  });
+
+  it('signs again a path its first sign did not answer', async () => {
+    await seedQueued(LINK_PATH, 'the link');
+    let skips = 1;
+
+    await runIncrementalSync(deps({ filesSign: (paths) => (skips-- > 0 ? [] : paths) }));
+
+    expect(mockPutBlob).toHaveBeenCalledTimes(1);
+    expect(await pendingPaths()).toEqual([]);
+  });
+
+  // A pull's fan-out was fail-fast: the first GET to outlive its tries failed the
+  // cycle, and every entry not yet stored waited for the next one.
+  it('pulls an entry whose GET outlived its tries, once the rest have moved', async () => {
+    let refusals = BLOB_TRANSFER_TRIES;
+    mockGetBlob.mockImplementation(async (url: string) => {
+      if (refusals-- > 0) throw new BlobRequestError('GET', 503);
+      return new Uint8Array([0xee, ...utf8(`server ${pathFor(url)}`)]);
+    });
+
+    const outcome = await settleSkippingBackoff(() =>
+      runIncrementalSync(deps({ opsList: () => INCREMENTAL_PUT(LINK_PATH) })),
+    );
+
+    expect(outcome).not.toBeInstanceOf(Error);
+    expect(mockGetBlob).toHaveBeenCalledTimes(BLOB_TRANSFER_TRIES + 1);
+    expect(await bodyAt(LINK_PATH)).toBe(`server ${LINK_PATH}`);
+    expect((await getSyncMeta(USER))?.syncCursorUpdatedAt).toBe(2000);
+  });
+
+  it('fails the pull on what its second pass could not move, with the cursor unmoved', async () => {
+    const expired = new BlobRequestError('GET', 403);
+    mockGetBlob.mockRejectedValue(expired);
+
+    await expect(
+      runIncrementalSync(deps({ opsList: () => INCREMENTAL_PUT(LINK_PATH) })),
+    ).rejects.toBe(expired);
+
+    // Once, then once more freshly signed: a 403 is never tried in place.
+    expect(mockGetBlob).toHaveBeenCalledTimes(2);
+    expect((await getSyncMeta(USER))?.syncCursorUpdatedAt).toBe(1000);
+  });
+});
+
+// STOP FEEDING AN OUTAGE. An offline 10,000-link push used to send every remaining
+// PUT to fail on its own, each after its own retries.
+describe('a set that meets an outage', () => {
+  // More ops than the fan-out, so some are still waiting when the stop comes.
+  const COUNT = 200;
+  const paths = Array.from(
+    { length: COUNT },
+    (_, i) => `links/l_${String(i).padStart(3, '0')}.enc`,
+  );
+
+  // An expired token, because L1 never retries one: every failure counts at once,
+  // and the spec needs no clock. A 5xx counts the same, after its tries in place.
+  it('stops starting transfers, skips its second pass, and fails the cycle', async () => {
+    for (const path of paths) await seedQueued(path, path);
+    mockPutBlob.mockRejectedValue(EXPIRED_URL);
+
+    await expect(runIncrementalSync(deps())).rejects.toBe(EXPIRED_URL);
+
+    const attempted = new Set(mockPutBlob.mock.calls.map(([url]) => pathFor(url)));
+    expect(attempted.size).toBeLessThan(COUNT);
+    // Each op it did send was sent once: no second pass.
+    expect(mockPutBlob).toHaveBeenCalledTimes(attempted.size);
+    expect(await pendingPaths()).toHaveLength(COUNT);
+  });
+
+  // The control: under the threshold a set's failures go to the second pass, as above.
+  it('still gives a second pass to fewer failures than the stop needs', async () => {
+    const failing = new Set(paths.slice(0, SET_OUTAGE_FAILURES - 1));
+    for (const path of failing) await seedQueued(path, path);
+    let firstPass = true;
+    mockPutBlob.mockImplementation(async (url: string) => {
+      if (firstPass) throw EXPIRED_URL;
+      return landed(pathFor(url));
+    });
+
+    await runIncrementalSync(
+      deps({
+        filesSign: (_paths, op) => {
+          if (op === 'put' && mockPutBlob.mock.calls.length > 0) firstPass = false;
+        },
+      }),
+    );
+
+    expect(await pendingPaths()).toEqual([]);
   });
 });

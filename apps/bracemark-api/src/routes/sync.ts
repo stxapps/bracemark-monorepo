@@ -12,7 +12,7 @@ import {
   type OpsListResponse,
 } from '@stxapps/shared';
 
-import { userDataStub } from '../do/user-data';
+import { callUserData } from '../do/user-data';
 import type { AppEnv } from '../lib/env';
 import { timerFor } from '../lib/server-timing';
 import { requireAuth } from '../middleware/auth';
@@ -77,7 +77,7 @@ export const syncRoutes = new Hono<AppEnv>()
     // The DO owns the keyset query + retained-range bounds; the client routes
     // incremental-vs-fallback on the bounds it returns.
     const body: OpsListResponse = await timerFor(c)('do-list', () =>
-      userDataStub(c.env, userId).listOps(since ?? null, sincePath ?? null, limit),
+      callUserData(c.env, userId, (stub) => stub.listOps(since ?? null, sincePath ?? null, limit)),
     );
     return c.json(body);
   })

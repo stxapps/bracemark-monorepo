@@ -22,30 +22,39 @@ import { fetch as expoFetch } from 'expo/fetch';
 import { File } from 'expo-file-system';
 import { FileSystemUploadType, uploadAsync } from 'expo-file-system/legacy';
 
-import { blobTransferTimeoutMs, receiptOf, withDeadline } from '@stxapps/shared';
+import {
+  BlobNetworkError,
+  BlobRequestError,
+  BlobTimeoutError,
+  blobTransferTimeoutMs,
+  parseRetryAfterSeconds,
+  receiptOf,
+  retryAfterSecondsOf,
+  withDeadline,
+} from '@stxapps/shared';
 
-// Carries the HTTP status so callers can branch on it — the one the sync engine
-// cares about is a GET 404 (the object was deleted between the op pull / listing
-// and the fetch), which it skips rather than failing the whole cycle.
-export class BlobRequestError extends Error {
-  constructor(
-    readonly method: 'PUT' | 'GET',
-    readonly status: number,
-  ) {
-    super(`R2 ${method} failed (${status})`);
-    this.name = 'BlobRequestError';
-  }
-}
+// What a transfer throws is shared with web's sibling (@stxapps/shared
+// sync/blob-transfer.ts), so the retry layers read one set of classes.
+export { BlobNetworkError, BlobRequestError, BlobTimeoutError };
 
-// A transfer that outlived its deadline — see web-react's sync/r2.ts.
-export class BlobTimeoutError extends Error {
-  constructor(
-    readonly method: 'PUT' | 'GET',
-    readonly timeoutMs: number,
-  ) {
-    super(`R2 ${method} timed out after ${timeoutMs} ms`);
-    this.name = 'BlobTimeoutError';
-  }
+// A DROPPED CONNECTION IS TYPED HERE, because nowhere else can tell one. Each
+// transport fails its own way, and none of them says "network": `expo/fetch`
+// rejects with a FetchError it does not export (named plain `Error`, its message
+// prefixed `fetch failed:`), React Native's fetch with a TypeError, and the
+// legacy `uploadAsync` with a bare Error carrying the native message. Above this
+// file a dropped connection and a missing temp file look the same, so the
+// engine could not retry one without retrying the other — and it retried
+// neither (docs/local-first-sync.md, _retrying a failure_, expo's network
+// errors). Here the kind is known by WHICH CALL threw:
+//
+//   - the fetch call itself — not the status check after it — failed before the
+//     host answered. Our only abort is the deadline, which rejects first as a
+//     BlobTimeoutError, so what is left is the request failing on the wire.
+//   - an upload whose file still exists failed in flight. One whose file is
+//     gone failed locally, and a retry would fail the same way, so that error
+//     goes up as it is.
+function asNetworkError(method: 'PUT' | 'GET', err: unknown): unknown {
+  return err instanceof BlobNetworkError ? err : new BlobNetworkError(method, err);
 }
 
 // The two JS-fetch transfers carry a deadline (`blobTransferTimeoutMs`,
@@ -72,8 +81,10 @@ export async function putBlob(
         body,
         headers: headersFor(authorization),
         signal,
+      }).catch((err: unknown) => {
+        throw asNetworkError('PUT', err);
       });
-      if (!res.ok) throw new BlobRequestError('PUT', res.status);
+      if (!res.ok) throw new BlobRequestError('PUT', res.status, parseRetryAfterSeconds(res));
       return receiptOf(await res.text().catch(() => ''));
     },
     blobTransferTimeoutMs(body.byteLength),
@@ -88,9 +99,19 @@ export async function putBlob(
 export async function getBlob(url: string, authorization?: string): Promise<Uint8Array> {
   return withDeadline(
     async (signal) => {
-      const res = await fetch(url, { method: 'GET', headers: headersFor(authorization), signal });
-      if (!res.ok) throw new BlobRequestError('GET', res.status);
-      return new Uint8Array(await res.arrayBuffer());
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: headersFor(authorization),
+        signal,
+      }).catch((err: unknown) => {
+        throw asNetworkError('GET', err);
+      });
+      if (!res.ok) throw new BlobRequestError('GET', res.status, parseRetryAfterSeconds(res));
+      // The body arrives after the headers, and a connection can drop between.
+      const body = await res.arrayBuffer().catch((err: unknown) => {
+        throw err instanceof TypeError ? asNetworkError('GET', err) : err;
+      });
+      return new Uint8Array(body);
     },
     blobTransferTimeoutMs(0),
     (ms) => new BlobTimeoutError('GET', ms),
@@ -110,9 +131,23 @@ export async function putBlobFromFile(
     httpMethod: 'PUT',
     uploadType: FileSystemUploadType.BINARY_CONTENT,
     headers: headersFor(authorization),
+  }).catch((err: unknown) => {
+    throw file.exists ? asNetworkError('PUT', err) : err;
   });
-  if (res.status < 200 || res.status >= 300) throw new BlobRequestError('PUT', res.status);
+  if (res.status < 200 || res.status >= 300) {
+    throw new BlobRequestError('PUT', res.status, retryAfterSecondsOf(headerOf(res.headers)));
+  }
   return receiptOf(res.body ?? '');
+}
+
+// `Retry-After` from the native upload's headers, which come back as a plain
+// record whose key case is the platform's.
+function headerOf(headers: Record<string, string> | undefined): string | undefined {
+  if (!headers) return undefined;
+  for (const [name, value] of Object.entries(headers)) {
+    if (name.toLowerCase() === 'retry-after') return value;
+  }
+  return undefined;
 }
 
 // Both native implementations reject a non-2xx download with only a MESSAGE —

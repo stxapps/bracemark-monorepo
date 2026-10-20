@@ -1775,3 +1775,64 @@ describe('the live-read hold', () => {
     expect(liveReadsHeld()).toBe(false);
   });
 });
+
+// L2, the cycle's own second pass — web engine's spec carries the full set; these
+// are the drift guards for this copy of it, one per transport.
+describe('the second pass', () => {
+  it('sends an entity again under a freshly signed url after its token expired', async () => {
+    await seedQueued(LINK_PATH, 'the link');
+    let expiries = 1;
+    mockPutBlob.mockImplementation(async (url: string) => {
+      if (expiries-- > 0) throw EXPIRED_URL;
+      uploaded.add(pathFor(url));
+      return receiptFor(pathFor(url));
+    });
+
+    await runIncrementalSync(deps());
+
+    expect(mockPutBlob).toHaveBeenCalledTimes(2);
+    expect(committedPaths()).toEqual([LINK_PATH]);
+    expect(await pendingPaths()).toEqual([]);
+  });
+
+  // A content op seals a fresh temp per attempt and deletes it either way; the
+  // second pass must not find the first pass's temp gone and call that an orphan.
+  it('sends content again from a freshly sealed file, and clears both temps', async () => {
+    await seedQueuedContent(FILE_ID, 'image bytes');
+    let expiries = 1;
+    mockPutBlobFromFile.mockImplementation(async (url: string, file: { uri: string }) => {
+      if (expiries-- > 0) throw EXPIRED_URL;
+      uploaded.add(pathFor(url));
+      uploadedFiles.set(pathFor(url), readFileText(file.uri));
+      return receiptFor(pathFor(url));
+    });
+
+    await runIncrementalSync(deps());
+
+    expect(uploadedFiles.get(FILE_PATH)).toBe('enc:image bytes');
+    expect(await pendingPaths()).toEqual([]);
+    expect(tempFiles()).toEqual([]);
+  });
+
+  it('pulls an entry once more after its GET token expired', async () => {
+    let expiries = 1;
+    mockGetBlob.mockImplementation(async (url: string) => {
+      if (expiries-- > 0) throw new BlobRequestError('GET', 403);
+      return new Uint8Array([0xee, ...utf8(`server ${pathFor(url)}`)]);
+    });
+
+    await runIncrementalSync(
+      deps({
+        opsList: () => ({
+          ops: [{ op: 'put', path: LINK_PATH, updatedAt: 2000 }],
+          oldestUpdatedAt: 500,
+          newestUpdatedAt: 2000,
+          hasMore: false,
+        }),
+      }),
+    );
+
+    expect(mockGetBlob).toHaveBeenCalledTimes(2);
+    expect(await bodyAt(LINK_PATH)).toBe(`server ${LINK_PATH}`);
+  });
+});

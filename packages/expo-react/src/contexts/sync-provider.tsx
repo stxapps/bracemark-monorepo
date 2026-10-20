@@ -8,13 +8,17 @@ import {
   useRef,
   useState,
 } from 'react';
+import { AppState } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
 
 import { SESSION_COPY, useApiClient } from '@stxapps/react';
 import {
   bgStatusForOutcome,
   type BgSyncStatus,
+  createSyncRetryScheduler,
   type InitialSyncProgress,
   type InitialSyncProgressFn,
+  runInitialSyncWithRetries,
   type StoreStatus,
 } from '@stxapps/shared';
 
@@ -87,6 +91,11 @@ interface SyncContextValue {
   // dropping back to a bare spinner; it's cleared when a run fails, and reset with
   // the rest of the state on retry.
   initialSyncProgress: InitialSyncProgress | null;
+  // The blocking first sync failed for a reason that may clear by itself, and is
+  // being retried on its own short schedule (@stxapps/shared sync/retry.ts,
+  // INITIAL_SYNC_RETRY_DELAYS_MS) — the gate's "Retrying…" line. Stays true until
+  // the pull lands or the schedule is spent, when the gate shows its button.
+  initialSyncRetrying: boolean;
   // Bumped each time requestSync() runs — i.e. on every local edit on THIS
   // device (pin/unpin/move today; any mutation kicks a cycle the same way). The
   // read edge (useLinks) keys on it to apply the user's own change immediately
@@ -101,7 +110,9 @@ interface SyncContextValue {
   // same operation, so there's no separate retryBgSync. Safe to call eagerly:
   // the engine single-flights per account (overlapping calls coalesce into one
   // trailing rerun). No-op until a session is usable, and until the first sync
-  // is done — the engine declines a cycle beside the pull (sync/engine.ts).
+  // is done — the engine declines a cycle beside the pull (sync/engine.ts). A
+  // failure a retry can fix doesn't wait for it: the provider schedules the next
+  // cycle itself.
   requestSync: () => void;
   // The same cycle, asked for by the USER rather than by a write: the ⋯ menu's
   // Sync and the Data card's Sync now / Retry. It does NOT bump
@@ -134,6 +145,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [lastError, setLastError] = useState<string | null>(null);
   const [blockedCount, setBlockedCount] = useState(0);
   const [initialSyncProgress, setInitialSyncProgress] = useState<InitialSyncProgress | null>(null);
+  const [initialSyncRetrying, setInitialSyncRetrying] = useState(false);
   // Bumped by retryInitialSync() to re-run the effect.
   const [attempt, setAttempt] = useState(0);
   // Bumped by requestSync() — the local-edit signal the read edge keys on.
@@ -180,6 +192,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       setBgSyncStatus('paused');
       setBlockedCount(0);
       setInitialSyncProgress(null);
+      setInitialSyncRetrying(false);
       void isFirstSyncDone(username).then(
         (done) => {
           if (!active) return;
@@ -216,6 +229,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     setLastError(null);
     setBlockedCount(0);
     setInitialSyncProgress(null);
+    setInitialSyncRetrying(false);
 
     // Trailing-edge coalescer for the first-sync counter (see PROGRESS_FLUSH_MS):
     // every tick overwrites the pending value, and at most one flush is scheduled
@@ -246,6 +260,22 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       pendingProgress = null;
     };
 
+    // L3 — a failed cycle that may clear by itself starts the next one on a
+    // backoff, and a clean one resets it. Web-react's SyncProvider carries the
+    // account (@stxapps/shared sync/retry.ts). One timer for the app; it dies
+    // with the effect, so nothing is scheduled while paused or signed out.
+    const retries = createSyncRetryScheduler({ run: () => void backgroundSync() });
+    // Wake-ups, not the schedule: the network coming back, or the app coming back
+    // to the foreground, starts a PENDING retry at once (at most every 30 s).
+    // NetInfo reports the current state on subscribing; with nothing pending
+    // that is a no-op.
+    const unsubscribeNetInfo = NetInfo.addEventListener((state) => {
+      if (state.isConnected !== false) retries.wake();
+    });
+    const appState = AppState.addEventListener('change', (status) => {
+      if (status === 'active') retries.wake();
+    });
+
     // Returning visit → render local data now, refresh in the background. The
     // outcome lands on the INDICATOR (bgSyncStatus), never the gate: a failed
     // background cycle coexists with a usable store, so storeStatus stays put.
@@ -253,9 +283,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       const deps = cycleDeps();
       if (!deps) return Promise.resolve();
       setBgSyncStatus('syncing');
+      const cycle = runIncrementalSync(deps);
+      retries.watch(cycle);
       // Returned for syncAndWait. Both branches below are handled, so it settles
       // with the cycle and never rejects.
-      return runIncrementalSync(deps).then(
+      return cycle.then(
         (outcome) => {
           if (!active) return;
           // A completed cycle is 'idle' UNLESS the plan/quota gate refused part
@@ -281,6 +313,20 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     };
     backgroundSyncRef.current = backgroundSync;
 
+    // The first sync's wait between retries, cut short — resolved, never left
+    // hanging — when the effect is torn down, so the loop sees it is unwanted.
+    let retryWait: { timer: ReturnType<typeof setTimeout>; resolve: () => void } | null = null;
+    const waitToRetry = (ms: number) =>
+      new Promise<void>((resolve) => {
+        retryWait = {
+          timer: setTimeout(() => {
+            retryWait = null;
+            resolve();
+          }, ms),
+          resolve,
+        };
+      });
+
     void (async () => {
       try {
         if (await isFirstSyncDone(username)) {
@@ -296,12 +342,33 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         // build may not have one yet.
         setStoreStatus('syncing-initial');
         await claimIfStillSignedIn(username);
-        const deps = cycleDeps();
-        if (!deps) return;
-        await runInitialSync(deps, reportProgress);
-        if (!active) return;
+        // A failure that may clear by itself is retried behind the gate's
+        // "Retrying…" line, three times, before the gate offers its button —
+        // web-react's SyncProvider, same branch.
+        let ran = true;
+        await runInitialSyncWithRetries(
+          () => {
+            const deps = cycleDeps();
+            if (!deps) {
+              ran = false;
+              return Promise.resolve();
+            }
+            return runInitialSync(deps, reportProgress);
+          },
+          {
+            onRetry: () => {
+              if (!active) return;
+              settleProgress(false);
+              setInitialSyncRetrying(true);
+            },
+            sleep: waitToRetry,
+            stillWanted: () => active,
+          },
+        );
+        if (!active || !ran) return;
 
         settleProgress(true);
+        setInitialSyncRetrying(false);
         setStoreStatus('ready');
         // Not a second download: a cycle right after the initial pull is usually
         // one empty opsList call (storeDownloads skips current records). It closes
@@ -313,6 +380,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         if (!active) return;
         settleProgress(false);
+        setInitialSyncRetrying(false);
         setStoreStatus('error');
         setLastSyncAt(Date.now());
         setLastError(err instanceof Error ? err.message : String(err));
@@ -323,6 +391,13 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       active = false;
       backgroundSyncRef.current = () => Promise.resolve();
       if (progressTimer !== null) clearTimeout(progressTimer);
+      retries.dispose();
+      unsubscribeNetInfo();
+      appState.remove();
+      if (retryWait) {
+        clearTimeout(retryWait.timer);
+        retryWait.resolve();
+      }
     };
   }, [username, authStatus, sessionState, attempt, api]);
 
@@ -334,6 +409,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       lastError,
       blockedCount,
       initialSyncProgress,
+      initialSyncRetrying,
       localWriteNonce,
       retryInitialSync,
       requestSync,
@@ -347,6 +423,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       lastError,
       blockedCount,
       initialSyncProgress,
+      initialSyncRetrying,
       localWriteNonce,
       retryInitialSync,
       requestSync,

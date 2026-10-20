@@ -16,36 +16,19 @@
 import {
   BLOB_BASE_TIMEOUT_MS,
   BLOB_IDLE_TIMEOUT_MS,
+  BlobRequestError,
+  BlobTimeoutError,
   blobTransferTimeoutMs,
+  parseRetryAfterSeconds,
   receiptOf,
   withDeadline,
 } from '@stxapps/shared';
 
-// Carries the HTTP status so callers can branch on it — the one the sync engine
-// cares about is a GET 404 (the object was deleted between the op pull / listing
-// and the fetch), which it skips rather than failing the whole cycle.
-export class BlobRequestError extends Error {
-  constructor(
-    readonly method: 'PUT' | 'GET',
-    readonly status: number,
-  ) {
-    super(`R2 ${method} failed (${status})`);
-    this.name = 'BlobRequestError';
-  }
-}
-
-// A transfer that outlived its deadline (`blobTransferTimeoutMs`, @stxapps/shared
-// sync/blob-transfer.ts). No status — R2 never answered — so its own class rather
-// than a BlobRequestError the engine could mistake for a 404.
-export class BlobTimeoutError extends Error {
-  constructor(
-    readonly method: 'PUT' | 'GET',
-    readonly timeoutMs: number,
-  ) {
-    super(`R2 ${method} timed out after ${timeoutMs} ms`);
-    this.name = 'BlobTimeoutError';
-  }
-}
+// What a transfer throws is shared with expo's sibling (@stxapps/shared
+// sync/blob-transfer.ts), so the retry layers read one set of classes. A browser's
+// fetch reports a dropped connection as a TypeError, and these let it through as
+// one: the engine reads it as a network error (sync/engine.ts).
+export { BlobRequestError, BlobTimeoutError };
 
 function headersFor(authorization: string | undefined): HeadersInit | undefined {
   return authorization ? { authorization } : undefined;
@@ -73,7 +56,7 @@ export async function putBlob(
         headers: headersFor(authorization),
         signal,
       });
-      if (!res.ok) throw new BlobRequestError('PUT', res.status);
+      if (!res.ok) throw new BlobRequestError('PUT', res.status, parseRetryAfterSeconds(res));
       return receiptOf(await res.text().catch(() => ''));
     },
     blobTransferTimeoutMs(body.byteLength),
@@ -106,7 +89,7 @@ export async function getBlob(url: string, authorization?: string): Promise<Uint
         url,
         authorization ? { method: 'POST', body: authorization, signal } : { method: 'GET', signal },
       );
-      if (!res.ok) throw new BlobRequestError('GET', res.status);
+      if (!res.ok) throw new BlobRequestError('GET', res.status, parseRetryAfterSeconds(res));
       return readBody(res, () => rearm(BLOB_IDLE_TIMEOUT_MS));
     },
     BLOB_BASE_TIMEOUT_MS,

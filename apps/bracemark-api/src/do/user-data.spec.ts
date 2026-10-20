@@ -1,7 +1,8 @@
 import { env } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
 
-import { userDataStub } from './user-data';
+import type { Bindings } from '../lib/env';
+import { callUserData, userDataStub } from './user-data';
 
 // The Durable Object is the other thing a Node runner can't test: its schema is
 // migrated IN CODE on construction, its op log keysets off a real (updated_at,
@@ -266,5 +267,64 @@ describe('UserDataDO receipt fence', () => {
 
     expect(stale).toEqual(['links/a.enc']);
     expect(results).toEqual([]);
+  });
+});
+
+// The api's one retry of a DO call (callUserData): once, on a fresh stub, when the
+// runtime marks the failure `.retryable` — and never `.overloaded`, which a retry
+// would only add to.
+describe('callUserData', () => {
+  function namespace(failures: unknown[]) {
+    let stubs = 0;
+    const fakeEnv = {
+      USER_DATA: {
+        idFromName: (name: string) => name,
+        get: () => {
+          stubs += 1;
+          return {
+            listOps: async () => {
+              const failure = failures.shift();
+              if (failure) throw failure;
+              return 'listed';
+            },
+          };
+        },
+      },
+    } as unknown as Bindings;
+    return { fakeEnv, stubs: () => stubs };
+  }
+  const marked = (flags: { retryable?: boolean; overloaded?: boolean }) =>
+    Object.assign(new Error('Durable Object reset'), flags);
+  const list = (fakeEnv: Bindings) =>
+    callUserData(fakeEnv, 'user-retry', (stub) => stub.listOps(null, null, 1));
+
+  it('asks a fresh stub once more after a retryable failure', async () => {
+    const { fakeEnv, stubs } = namespace([marked({ retryable: true })]);
+
+    await expect(list(fakeEnv)).resolves.toBe('listed');
+    expect(stubs()).toBe(2);
+  });
+
+  it('never retries an overloaded object, retryable or not', async () => {
+    const overloaded = marked({ retryable: true, overloaded: true });
+    const { fakeEnv, stubs } = namespace([overloaded]);
+
+    await expect(list(fakeEnv)).rejects.toBe(overloaded);
+    expect(stubs()).toBe(1);
+  });
+
+  it('never retries a failure the runtime did not mark', async () => {
+    const thrown = new Error('constraint failed');
+    const { fakeEnv } = namespace([thrown]);
+
+    await expect(list(fakeEnv)).rejects.toBe(thrown);
+  });
+
+  it('asks only once more', async () => {
+    const second = marked({ retryable: true });
+    const { fakeEnv, stubs } = namespace([marked({ retryable: true }), second]);
+
+    await expect(list(fakeEnv)).rejects.toBe(second);
+    expect(stubs()).toBe(2);
   });
 });

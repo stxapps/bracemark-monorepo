@@ -9,7 +9,7 @@ import type {
 } from '@stxapps/shared';
 
 import type { CommitEntry, LogFence } from '../do/user-data';
-import { userDataStub } from '../do/user-data';
+import { callUserData } from '../do/user-data';
 import type { Bindings } from '../lib/env';
 import { checkPutQuota } from '../lib/quota';
 import { type Timer, untimed } from '../lib/server-timing';
@@ -91,7 +91,7 @@ export async function signUserFileUrls(
     // can land, which is what makes it a fence: every delete the commit has to
     // know about is appended after it.
     const [gate, ceilings] = await Promise.all([
-      time('do-usage', () => userDataStub(env, userId).putGate()),
+      time('do-usage', () => callUserData(env, userId, (stub) => stub.putGate())),
       time('d1-ceilings', () => getQuotaCeilings(env, userId)),
     ]);
     checkPutQuota(ceilings, gate.usage);
@@ -165,10 +165,11 @@ export async function commitOps(
   const unreceipted = ops.filter((o) => o.op === 'put' && !receipts.has(o.path)).map((o) => o.path);
   const objects = await time('r2-stat', () => repo.statMany(userId, unreceipted, { time }));
 
-  const stub = userDataStub(env, userId);
   const first = resolveOps(ops, now, objects, receipts);
   if (first.entries.length === 0) return { results: [], failed: first.failed };
-  const { results, stale } = await time('do-commit', () => stub.commitOps(first.entries));
+  const { results, stale } = await time('do-commit', () =>
+    callUserData(env, userId, (stub) => stub.commitOps(first.entries)),
+  );
   if (stale.length === 0) return { results, failed: first.failed };
 
   // The fence turned at least one receipt down — a delete of its path, or a wipe,
@@ -181,7 +182,9 @@ export async function commitOps(
   for (const [path, stat] of rechecked) objects.set(path, stat);
   const second = resolveOps(ops, now, objects, new Map());
   if (second.entries.length === 0) return { results: [], failed: second.failed };
-  const retried = await time('do-commit', () => stub.commitOps(second.entries));
+  const retried = await time('do-commit', () =>
+    callUserData(env, userId, (stub) => stub.commitOps(second.entries)),
+  );
   return { results: retried.results, failed: second.failed };
 }
 
@@ -259,7 +262,7 @@ export async function deleteAllUserData(
   env: Bindings,
   userId: string,
 ): Promise<{ deletedCount: number }> {
-  await userDataStub(env, userId).wipeAll();
+  await callUserData(env, userId, (stub) => stub.wipeAll());
   const deletedCount = await userFilesRepo(env).deleteAllForUser(userId);
   return { deletedCount };
 }

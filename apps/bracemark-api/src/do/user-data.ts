@@ -321,3 +321,32 @@ function staleReceipts(ops: ReturnType<typeof opLogsRepo>, entries: CommitEntry[
 export function userDataStub(env: Bindings, userId: string): DurableObjectStub<UserDataDO> {
   return env.USER_DATA.get(env.USER_DATA.idFromName(userId));
 }
+
+// One call to the caller's DO, asked again ONCE when the runtime marks its failure
+// `.retryable` and not `.overloaded` (docs/local-first-sync.md, _retrying a
+// failure_, on the server). Retryable is the runtime saying the failure was the
+// object's, not the call's — it was reset, moved, or lost the connection — so a
+// second attempt reaches a fresh instance; overloaded is it saying the object is
+// already behind, which a retry only adds to. On a fresh stub, because Cloudflare
+// documents a stub that threw as possibly broken. Every call the api makes is
+// safe to repeat: the reads change nothing, a commit is idempotent in effect (a
+// replayed op is one redundant row, stamped the same), and a wipe of an empty log
+// is a no-op.
+export async function callUserData<T>(
+  env: Bindings,
+  userId: string,
+  call: (stub: DurableObjectStub<UserDataDO>) => Promise<T>,
+): Promise<T> {
+  try {
+    return await call(userDataStub(env, userId));
+  } catch (err) {
+    if (!isRetryableDurableObjectError(err)) throw err;
+    return call(userDataStub(env, userId));
+  }
+}
+
+export function isRetryableDurableObjectError(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  const { retryable, overloaded } = err as { retryable?: unknown; overloaded?: unknown };
+  return retryable === true && overloaded !== true;
+}

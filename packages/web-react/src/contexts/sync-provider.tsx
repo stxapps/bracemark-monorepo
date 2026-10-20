@@ -15,8 +15,10 @@ import { SESSION_COPY, useApiClient } from '@stxapps/react';
 import {
   bgStatusForOutcome,
   type BgSyncStatus,
+  createSyncRetryScheduler,
   type InitialSyncProgress,
   type InitialSyncProgressFn,
+  runInitialSyncWithRetries,
   type StoreStatus,
 } from '@stxapps/shared';
 
@@ -90,6 +92,11 @@ interface SyncContextValue {
   // dropping back to a bare spinner; it's cleared when a run fails, and reset with
   // the rest of the state on retry.
   initialSyncProgress: InitialSyncProgress | null;
+  // The blocking first sync failed for a reason that may clear by itself, and is
+  // being retried on its own short schedule (@stxapps/shared sync/retry.ts,
+  // INITIAL_SYNC_RETRY_DELAYS_MS) — the gate's "Retrying…" line. Stays true until
+  // the pull lands or the schedule is spent, when the gate shows its button.
+  initialSyncRetrying: boolean;
   // Bumped each time requestSync() runs — i.e. on every local edit on THIS
   // device (pin/unpin/move today; any mutation kicks a cycle the same way). The
   // read edge (useLinks) keys on it to apply the user's own change immediately
@@ -103,7 +110,8 @@ interface SyncContextValue {
   // (bgSyncStatus 'error'): retrying a failed cycle and running a fresh one are the
   // same operation, so there's no separate retryBgSync. Safe to call eagerly:
   // the engine single-flights per account (overlapping calls coalesce into one
-  // trailing rerun). No-op until a session is usable.
+  // trailing rerun). No-op until a session is usable. A failure a retry can fix
+  // doesn't wait for it: the provider schedules the next cycle itself.
   requestSync: () => void;
   // The same cycle, asked for by the USER rather than by a write: the ⋯ menu's
   // Sync and the Data card's Sync now / Retry. It does NOT bump
@@ -136,6 +144,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [lastError, setLastError] = useState<string | null>(null);
   const [blockedCount, setBlockedCount] = useState(0);
   const [initialSyncProgress, setInitialSyncProgress] = useState<InitialSyncProgress | null>(null);
+  const [initialSyncRetrying, setInitialSyncRetrying] = useState(false);
   // Bumped by retryInitialSync() to re-run the effect.
   const [attempt, setAttempt] = useState(0);
   // Bumped by requestSync() — the local-edit signal the read edge keys on.
@@ -186,6 +195,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       setBgSyncStatus('paused');
       setBlockedCount(0);
       setInitialSyncProgress(null);
+      setInitialSyncRetrying(false);
       void isFirstSyncDone(username).then(
         (done) => {
           if (!active) return;
@@ -224,6 +234,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     setLastError(null);
     setBlockedCount(0);
     setInitialSyncProgress(null);
+    setInitialSyncRetrying(false);
 
     // Trailing-edge coalescer for the first-sync counter (see PROGRESS_FLUSH_MS):
     // every tick overwrites the pending value, and at most one flush is scheduled
@@ -254,6 +265,22 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       pendingProgress = null;
     };
 
+    // L3 — a failed cycle that may clear by itself starts the next one on a
+    // backoff (5 s, 30 s, 2 min, 10 min, then every 30 min), and a clean one
+    // resets it (@stxapps/shared sync/retry.ts, docs/local-first-sync.md
+    // _retrying a failure_). One timer for this tab; it dies with the effect, so
+    // nothing is scheduled while paused, halted or signed out.
+    const retries = createSyncRetryScheduler({ run: () => void backgroundSync() });
+    // Wake-ups, not the schedule: coming back online or back to the tab starts a
+    // PENDING retry at once (at most every 30 s), so a device that was offline
+    // for a 30-minute step does not sit out the rest of it.
+    const wake = () => retries.wake();
+    const wakeIfVisible = () => {
+      if (document.visibilityState === 'visible') retries.wake();
+    };
+    window.addEventListener('online', wake);
+    document.addEventListener('visibilitychange', wakeIfVisible);
+
     // Returning visit → render local data now, refresh in the background. The
     // outcome lands on the INDICATOR (bgSyncStatus), never the gate: a failed
     // background cycle coexists with a usable store, so storeStatus stays put.
@@ -261,9 +288,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       const deps = cycleDeps();
       if (!deps) return Promise.resolve();
       setBgSyncStatus('syncing');
+      const cycle = runIncrementalSync(deps);
+      retries.watch(cycle);
       // Returned for syncAndWait. Both branches below are handled, so it settles
       // with the cycle and never rejects.
-      return runIncrementalSync(deps).then(
+      return cycle.then(
         (outcome) => {
           if (!active) return;
           // A completed cycle is 'idle' UNLESS the plan/quota gate refused part
@@ -289,6 +318,20 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     };
     backgroundSyncRef.current = backgroundSync;
 
+    // The first sync's wait between retries, cut short — resolved, never left
+    // hanging — when the effect is torn down, so the loop sees it is unwanted.
+    let retryWait: { timer: ReturnType<typeof setTimeout>; resolve: () => void } | null = null;
+    const waitToRetry = (ms: number) =>
+      new Promise<void>((resolve) => {
+        retryWait = {
+          timer: setTimeout(() => {
+            retryWait = null;
+            resolve();
+          }, ms),
+          resolve,
+        };
+      });
+
     void (async () => {
       try {
         if (await isFirstSyncDone(username)) {
@@ -304,12 +347,35 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         // build may not have one yet.
         setStoreStatus('syncing-initial');
         await claimIfStillSignedIn(username);
-        const deps = cycleDeps();
-        if (!deps) return;
-        await runInitialSync(deps, reportProgress);
-        if (!active) return;
+        // A failure that may clear by itself is retried behind the gate's
+        // "Retrying…" line, three times, before the gate offers its button
+        // (@stxapps/shared runInitialSyncWithRetries). Each attempt reads its
+        // own session record, like a cycle; one that is no longer this
+        // account's runs nothing, and the effect re-runs for its replacement.
+        let ran = true;
+        await runInitialSyncWithRetries(
+          () => {
+            const deps = cycleDeps();
+            if (!deps) {
+              ran = false;
+              return Promise.resolve();
+            }
+            return runInitialSync(deps, reportProgress);
+          },
+          {
+            onRetry: () => {
+              if (!active) return;
+              settleProgress(false);
+              setInitialSyncRetrying(true);
+            },
+            sleep: waitToRetry,
+            stillWanted: () => active,
+          },
+        );
+        if (!active || !ran) return;
 
         settleProgress(true);
+        setInitialSyncRetrying(false);
         setStoreStatus('ready');
         // Not a second download: a cycle right after the initial pull is usually
         // one empty opsList call (storeDownloads skips current records). It closes
@@ -321,6 +387,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         if (!active) return;
         settleProgress(false);
+        setInitialSyncRetrying(false);
         setStoreStatus('error');
         setLastSyncAt(Date.now());
         setLastError(err instanceof Error ? err.message : String(err));
@@ -331,6 +398,13 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       active = false;
       backgroundSyncRef.current = () => Promise.resolve();
       if (progressTimer !== null) clearTimeout(progressTimer);
+      retries.dispose();
+      window.removeEventListener('online', wake);
+      document.removeEventListener('visibilitychange', wakeIfVisible);
+      if (retryWait) {
+        clearTimeout(retryWait.timer);
+        retryWait.resolve();
+      }
     };
   }, [username, authStatus, sessionState, halted, attempt, api]);
 
@@ -342,6 +416,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       lastError,
       blockedCount,
       initialSyncProgress,
+      initialSyncRetrying,
       localWriteNonce,
       retryInitialSync,
       requestSync,
@@ -355,6 +430,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       lastError,
       blockedCount,
       initialSyncProgress,
+      initialSyncRetrying,
       localWriteNonce,
       retryInitialSync,
       requestSync,
@@ -426,6 +502,9 @@ export function ExternalSyncProvider({
       // renders one (the extension popup shows the phase as a pill). A consumer
       // reads null exactly as it reads the listing phase: indeterminate.
       initialSyncProgress: null,
+      // Same reason: the engine's own context retries its first sync, and no
+      // external-engine client renders a gate to show it on.
+      initialSyncRetrying: false,
       localWriteNonce,
       retryInitialSync: () => undefined,
       requestSync: requestSyncWithNonce,

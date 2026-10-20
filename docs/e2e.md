@@ -3118,11 +3118,13 @@ trace: open it in ui.perfetto.dev.
   and drops its spans with the document. A queue that sits still for a minute
   gets the Data card's action pressed, and the press is reported: the engine
   should never need one. That action is "Sync now" after a clean cycle and
-  "Retry" after a failed one, and a failed background cycle schedules no retry of
-  its own. So a run that pressed only "Sync now" sat at "6 waiting to sync"
-  forever after one R2 timeout (specimen, 2026-10-19, `--no-sw` on staging). A
-  failed cycle is reported too, and so is a failed `initial` cycle, whose pull
-  leg is then a partial pull.
+  "Retry" after a failed one, because a failed background cycle used to schedule
+  no retry of its own. So a run that pressed only "Sync now" sat at "6 waiting to
+  sync" forever after one R2 timeout (specimen, 2026-10-19, `--no-sw` on
+  staging). A transient failure now starts its own next cycle 5 s later, well
+  inside that minute (local-first-sync.md, _retrying a failure_), so a press
+  still means the engine needed a person. A failed cycle is reported too, and so
+  is a failed `initial` cycle, whose pull leg is then a partial pull.
 - **A request answered and then aborted is not a failure.** The R2 helpers abort
   their deadline's signal once a transfer settles, so Chrome reports most blob
   requests as canceled after a 200. They are counted as `aborted after the

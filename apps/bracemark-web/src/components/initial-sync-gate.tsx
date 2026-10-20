@@ -40,7 +40,8 @@ import { SyncPausedActions } from './sync-paused-notice';
 const MIN_SCREEN_MS = 500;
 
 export function InitialSyncGate({ children }: { children: ReactNode }) {
-  const { storeStatus, initialSyncProgress, retryInitialSync, lastError } = useSync();
+  const { storeStatus, initialSyncProgress, initialSyncRetrying, retryInitialSync, lastError } =
+    useSync();
   const { sessionState } = useAuth();
 
   // No-flash: 'checking' is a single IndexedDB read of the first-sync flag and
@@ -125,7 +126,7 @@ export function InitialSyncGate({ children }: { children: ReactNode }) {
   // first appeared so the minimum-visible floor can hold it.
   if (storeStatus === 'syncing-initial') {
     shownAtRef.current ??= performance.now();
-    return <DecryptingScreen progress={initialSyncProgress} />;
+    return <DecryptingScreen progress={initialSyncProgress} retrying={initialSyncRetrying} />;
   }
 
   // 'ready' — but if the first-sync screen showed and hasn't met its floor yet,
@@ -144,7 +145,17 @@ export function InitialSyncGate({ children }: { children: ReactNode }) {
 // underneath once the count exists. That is a deliberate two-phase screen, not a
 // loading state that forgot its spinner: the alternative is a bar parked at 0%,
 // which looks broken for exactly as long as the listing takes.
-function DecryptingScreen({ progress }: { progress: InitialSyncProgress | null }) {
+//
+// `retrying` is the provider retrying a failed attempt on its own (three times, a
+// few seconds apart — @stxapps/shared runInitialSyncWithRetries) before the gate
+// offers its button. The count restarts with each attempt, at what is left.
+function DecryptingScreen({
+  progress,
+  retrying = false,
+}: {
+  progress: InitialSyncProgress | null;
+  retrying?: boolean;
+}) {
   return (
     // `safe-area` on the same element as the height, like every other
     // full-screen surface here — bracemark-web has no blanket wrapper to inherit
@@ -153,6 +164,17 @@ function DecryptingScreen({ progress }: { progress: InitialSyncProgress | null }
     <div className="flex min-h-dvh flex-col items-center justify-center gap-3 safe-area">
       <p>Decrypting your links…</p>
       {progress ? <SyncProgressBar progress={progress} /> : null}
+      {/*
+        A polite status, not an alert (docs/accessibility.md, "what must NOT
+        announce"): it arrives without the user doing anything, and nothing is
+        wrong that they need to act on — the pull resumes by itself. So it waits
+        for a pause, the way the username verdict does.
+      */}
+      {retrying ? (
+        <p role="status" className="text-xs text-muted-foreground">
+          Retrying…
+        </p>
+      ) : null}
       {/*
         Standing prose, not an announcement (docs/accessibility.md, "what must NOT
         announce") — it is on screen from the first paint. This is the one wait in

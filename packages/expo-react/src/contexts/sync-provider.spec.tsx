@@ -9,7 +9,30 @@
 import type { ReactNode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
+import {
+  ApiError,
+  INITIAL_SYNC_RETRY_DELAYS_MS,
+  SYNC_RETRY_DELAYS_MS,
+  SYNC_RETRY_JITTER,
+} from '@stxapps/shared';
+
 import { SyncProvider, useSync } from './sync-provider';
+
+// The provider's network wake-up. The real module needs the native one; this keeps
+// the latest listener so a spec can bring the network back.
+type NetInfoListener = (state: { isConnected: boolean | null }) => void;
+let mockNetInfoListener: NetInfoListener | undefined;
+jest.mock('@react-native-community/netinfo', () => ({
+  __esModule: true,
+  default: {
+    addEventListener: (listener: NetInfoListener) => {
+      mockNetInfoListener = listener;
+      return () => {
+        if (mockNetInfoListener === listener) mockNetInfoListener = undefined;
+      };
+    },
+  },
+}));
 
 const mockRunIncrementalSync = jest.fn((_deps: unknown) =>
   Promise.resolve({ blocked: false, blockedCount: 0 }),
@@ -264,5 +287,57 @@ describe('one record per cycle', () => {
     await act(() => result.current.syncAndWait());
 
     expect(mockRunIncrementalSync).not.toHaveBeenCalled();
+  });
+});
+
+// L3 and the first sync's own schedule — web-react's sync-provider.spec carries the
+// full set; these are the drift guards for expo's copy of the wiring, and its own
+// wake-up, which is NetInfo rather than the browser's `online`.
+describe('retrying a failed cycle', () => {
+  const past = (ms: number) => ms * (1 + SYNC_RETRY_JITTER) + 1;
+
+  afterEach(() => jest.useRealTimers());
+
+  it('starts the next cycle itself after a failure that may clear', async () => {
+    const { result } = await readySync();
+    jest.useFakeTimers();
+    mockRunIncrementalSync.mockImplementationOnce(() => Promise.reject(new ApiError(503, '')));
+    await act(() => result.current.syncAndWait());
+    expect(result.current.bgSyncStatus).toBe('error');
+
+    await act(() => jest.advanceTimersByTimeAsync(past(SYNC_RETRY_DELAYS_MS[0])));
+    expect(mockRunIncrementalSync).toHaveBeenCalledTimes(2);
+    expect(result.current.bgSyncStatus).toBe('idle');
+  });
+
+  it('starts a pending retry as soon as the network is back', async () => {
+    const { result } = await readySync();
+    jest.useFakeTimers();
+    mockRunIncrementalSync.mockImplementationOnce(() => Promise.reject(new ApiError(503, '')));
+    await act(() => result.current.syncAndWait());
+
+    await act(async () => {
+      mockNetInfoListener?.({ isConnected: true });
+    });
+    expect(mockRunIncrementalSync).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('a first sync that failed', () => {
+  afterEach(() => jest.useRealTimers());
+
+  it('retries on its own behind a "Retrying…" flag, and opens the gate once one lands', async () => {
+    jest.useFakeTimers();
+    mockFirstSyncDone = false;
+    mockRunInitialSync.mockImplementationOnce(() => Promise.reject(new ApiError(503, '')));
+    const { result } = renderHook(() => useSync(), { wrapper });
+
+    await waitFor(() => expect(result.current.initialSyncRetrying).toBe(true));
+    await act(() =>
+      jest.advanceTimersByTimeAsync(INITIAL_SYNC_RETRY_DELAYS_MS[0] * (1 + SYNC_RETRY_JITTER)),
+    );
+    await waitFor(() => expect(result.current.storeStatus).toBe('ready'));
+    expect(result.current.initialSyncRetrying).toBe(false);
+    expect(mockRunInitialSync).toHaveBeenCalledTimes(2);
   });
 });

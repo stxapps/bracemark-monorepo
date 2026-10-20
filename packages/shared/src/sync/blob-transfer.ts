@@ -1,4 +1,4 @@
-import { jitteredDelayMs } from '../api/retry';
+import { DEFAULT_RETRY_MAX_DELAY_MS, jitteredDelayMs } from '../api/retry';
 
 // The deadline for one R2 blob transfer over a presigned URL (sync/r2.ts on both
 // platforms). Those transfers bypass the contract client, so they don't get its
@@ -42,7 +42,7 @@ export const BLOB_IDLE_TIMEOUT_MS = 60_000;
 // Set low on purpose, because the two ways to be wrong don't cost the same. Too
 // high fails a slow-but-healthy upload on every cycle, so that blob never syncs;
 // too low only holds a cycle longer behind a PUT that has truly stalled, and
-// the next cycle retries it. An entity blob stays at about the base allowance
+// the set's second pass retries it (sync/retry.ts). An entity blob stays at about the base allowance
 // either way — only a `files/` blob's deadline grows (5 MB ≈ 12 min).
 export const BLOB_MIN_BYTES_PER_SEC = 8 * 1024;
 
@@ -50,14 +50,65 @@ export function blobTransferTimeoutMs(bytes: number): number {
   return BLOB_BASE_TIMEOUT_MS + Math.ceil((bytes / BLOB_MIN_BYTES_PER_SEC) * 1000);
 }
 
+// --- what a transfer throws ---------------------------------------------------
+//
+// One set of classes for both platforms' transports (web-react and expo-react
+// sync/r2.ts re-export them), so what a failure MEANS — retry it here, in a
+// second pass, on a timer, or never (sync/retry.ts) — is decided once.
+
+// The host answered, with a status that is not a success. Carries the status so
+// callers can branch on it — a GET 404 (the object was deleted between the op
+// pull / listing and the fetch) is skipped rather than failing the cycle — and a
+// 429's Retry-After, which the retry below waits out.
+export class BlobRequestError extends Error {
+  constructor(
+    readonly method: 'PUT' | 'GET',
+    readonly status: number,
+    readonly retryAfterSeconds?: number,
+  ) {
+    super(`R2 ${method} failed (${status})`);
+    this.name = 'BlobRequestError';
+  }
+}
+
+// A transfer that outlived its deadline (`blobTransferTimeoutMs` above). No
+// status — the host never answered — so its own class rather than a
+// BlobRequestError a caller could mistake for a 404.
+export class BlobTimeoutError extends Error {
+  constructor(
+    readonly method: 'PUT' | 'GET',
+    readonly timeoutMs: number,
+  ) {
+    super(`R2 ${method} timed out after ${timeoutMs} ms`);
+    this.name = 'BlobTimeoutError';
+  }
+}
+
+// The connection failed under a transfer: no answer, and no deadline spent. The
+// transport raises it where it can tell — expo's, whose fetch and native file
+// upload fail without a type to tell one by anywhere else (expo-react
+// sync/r2.ts). A browser's fetch already says so with a TypeError, which the web
+// engine reads as this.
+export class BlobNetworkError extends Error {
+  constructor(
+    readonly method: 'PUT' | 'GET',
+    cause: unknown,
+  ) {
+    super(`R2 ${method} failed: ${cause instanceof Error ? cause.message : String(cause)}`, {
+      cause,
+    });
+    this.name = 'BlobNetworkError';
+  }
+}
+
 // --- a transfer the host answered with "try again" --------------------------
 //
 // The engines retry one blob transfer IN PLACE — an upload or a download — when
 // the host answered with a status that means "not this time": a 5xx or a 429.
 // Without it, one such answer fails the whole cycle. The cycle keeps what it
-// committed, but the failed op (or the entry it was pulling) waits for the next
-// cycle, and no timer starts one: the next edit or a press of Retry does
-// (docs/local-first-sync.md, _the three flows: push_). On staging, 2026-10-19,
+// committed, and the failed op (or the entry it was pulling) waits for the
+// cycle's second pass or a later cycle (docs/local-first-sync.md, _retrying a
+// failure_: this is L1, the first of four layers). On staging, 2026-10-19,
 // the R2 binding refused 7 of ~14,000 blob-route PUTs in a 10,000-link push with
 // `put: We encountered an internal error. Please try again. (10001)`. A push that
 // size is all but certain to meet one, and a first sync's retry starts with a
@@ -70,27 +121,31 @@ export function blobTransferTimeoutMs(bytes: number): number {
 // commit. A download changes nothing on the host, and expo's to-file download
 // overwrites the temp file a failed attempt left (sync/r2.ts, `idempotent`).
 //
-// What it does NOT retry, deliberately:
-//   - any other 4xx. A 403 is an expired or bad token, and the next cycle's fresh
-//     one is the fix. A GET 404 is an object deleted since it was listed, which
-//     the engines skip; a second try would only 404 again.
+// What it does NOT retry, deliberately — each of these is the second pass's
+// (sync/retry.ts, `isSecondPassFailure`), not this one's:
+//   - any other 4xx. A 403 is an expired or bad token, and the same token fails
+//     the same way: the second pass signs a fresh one. A GET 404 is an object
+//     deleted since it was listed, which the engines skip; a second try would
+//     only 404 again.
 //   - a BlobTimeoutError. That attempt already spent its whole deadline, and
-//     another would multiply the wait (the same reasoning as an ApiTimeoutError's,
-//     api/retry.ts).
-//   - on expo, a network error. Its transfers fail with no type to tell one by —
-//     expo's fetch reports a FetchError, the native file transfers a bare Error
-//     with a message — so a predicate there could not separate a dropped
-//     connection from a missing temp file.
+//     another straight after it would fire back into whatever stalled it (the
+//     same reasoning as an ApiTimeoutError's, api/retry.ts).
 //
-// The web engine DOES retry a network error: a browser's fetch reports every
-// transport failure as a TypeError, and its other ways out are typed apart (an
-// abort is a DOMException; the deadline rejects as a BlobTimeoutError before it
-// aborts). On staging, 2026-10-19, the
-// connection under a 10,000-link push dropped mid-chunk — 35 blob-route PUTs
-// canceled within a second — and one of them failed its cycle with that
-// TypeError, which then waited a minute for Retry and another for its listing.
-// A device that really went offline pays the two waits below before failing,
-// as it would anyway.
+// It DOES retry a dropped connection, a BlobNetworkError: on web a browser's
+// fetch reports every transport failure as a TypeError, and its other ways out
+// are typed apart (an abort is a DOMException; the deadline rejects as a
+// BlobTimeoutError before it aborts); on expo the transport types it
+// (expo-react sync/r2.ts). On staging, 2026-10-19, the connection under a
+// 10,000-link push dropped mid-chunk — 35 blob-route PUTs canceled within a
+// second — and one of them failed its cycle with that TypeError, which then
+// waited a minute for Retry and another for its listing. Not while the device
+// says it is offline (the web engine asks `navigator.onLine`): an attempt then
+// cannot land, and the set's outage stop counts it at once.
+//
+// A 429 waits out its Retry-After when it carries one, capped like an api
+// call's (api/retry.ts, DEFAULT_RETRY_MAX_DELAY_MS) — the blob route's `blob`
+// limiter sends the window's length, and a retry inside it only spends the
+// bucket again.
 //
 // Three tries, about 1 s then 2 s apart: a few seconds, set against a PUT token
 // that lives five minutes from its chunk's sign and a GET token that lives an
@@ -114,9 +169,17 @@ export interface BlobRetryOptions {
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+// A transfer the host refused for now, or one the connection under it dropped —
+// the platform-free half of what L1 retries. The web engine adds a browser
+// fetch's TypeError; neither retries while the device reports itself offline.
+export function isTransientBlobError(err: unknown): boolean {
+  if (err instanceof BlobNetworkError) return true;
+  return err instanceof BlobRequestError && isTransientBlobStatus(err.status);
+}
+
 // Run `transfer`, and run it again while it throws something `isTransient`
-// accepts — each platform's BlobRequestError class is its own, so the caller
-// says which. The last attempt's error propagates unchanged.
+// accepts — the caller says which, since a browser's TypeError is a network
+// error only on web. The last attempt's error propagates unchanged.
 export async function retryTransientBlobTransfer<T>(
   transfer: () => Promise<T>,
   isTransient: (err: unknown) => boolean,
@@ -132,7 +195,15 @@ export async function retryTransientBlobTransfer<T>(
       return await transfer();
     } catch (err) {
       if (attempt >= tries - 1 || !isTransient(err)) throw err;
-      await sleep(jitteredDelayMs(baseDelayMs * 2 ** attempt));
+      const hinted =
+        err instanceof BlobRequestError && err.retryAfterSeconds !== undefined
+          ? err.retryAfterSeconds * 1000
+          : undefined;
+      await sleep(
+        hinted !== undefined
+          ? Math.min(jitteredDelayMs(hinted), DEFAULT_RETRY_MAX_DELAY_MS)
+          : jitteredDelayMs(baseDelayMs * 2 ** attempt),
+      );
     }
   }
 }

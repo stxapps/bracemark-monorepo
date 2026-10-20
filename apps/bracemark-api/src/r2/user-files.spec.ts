@@ -192,3 +192,67 @@ describe('userFilesRepo.statMany', () => {
     expect(found.size).toBe(0);
   });
 });
+
+// R2 refusing a call for now — `(10001)`, 7 of ~14,000 blob-route PUTs in a
+// 10,000-link push on staging. Asked again once in the Worker, the client never
+// sees it; but only where the call can be made twice.
+describe('userFilesRepo on an R2 internal error', () => {
+  const INTERNAL = 'We encountered an internal error. Please try again. (10001)';
+
+  // The real miniflare bucket behind a binding that refuses the first `n` calls of
+  // one method the way the deployed binding does.
+  function flaky(method: 'get' | 'put', n: number) {
+    let refusals = n;
+    let calls = 0;
+    const bucket = {
+      get: (key: string) => env.USER_FILES.get(key),
+      put: (key: string, value: ArrayBuffer | ReadableStream) => env.USER_FILES.put(key, value),
+      [method]: async (...args: unknown[]) => {
+        calls += 1;
+        if (refusals-- > 0) throw new Error(`${method}: ${INTERNAL}`);
+        return method === 'get'
+          ? env.USER_FILES.get(args[0] as string)
+          : env.USER_FILES.put(args[0] as string, args[1] as ArrayBuffer);
+      },
+    };
+    return {
+      repo: userFilesRepo({ ...env, USER_FILES: bucket as unknown as R2Bucket } as Bindings),
+      calls: () => calls,
+    };
+  }
+
+  it('writes a body held in memory on the second try', async () => {
+    const { repo, calls } = flaky('put', 1);
+
+    await expect(
+      repo.putBytes('flaky-u1', 'links/a.enc', new TextEncoder().encode('sealed').buffer),
+    ).resolves.toMatchObject({ size: 6 });
+    expect(calls()).toBe(2);
+  });
+
+  it('reads on the second try', async () => {
+    await env.USER_FILES.put(userFileKey('flaky-u1', 'links/b.enc'), 'sealed');
+    const { repo, calls } = flaky('get', 1);
+
+    const object = await repo.get('flaky-u1', 'links/b.enc');
+    expect(await object?.text()).toBe('sealed');
+    expect(calls()).toBe(2);
+  });
+
+  it('asks only once more, and answers the second refusal', async () => {
+    const { repo, calls } = flaky('get', 2);
+
+    await expect(repo.get('flaky-u1', 'links/b.enc')).rejects.toThrow('(10001)');
+    expect(calls()).toBe(2);
+  });
+
+  // A stream is spent by the attempt that failed: a second put would send nothing.
+  // The client still holds the sealed bytes, and retries it (its L1).
+  it('leaves a streamed body’s refusal to the client', async () => {
+    const { repo, calls } = flaky('put', 1);
+    const body = new Blob(['sealed']).stream();
+
+    await expect(repo.put('flaky-u1', 'links/c.enc', body)).rejects.toThrow('(10001)');
+    expect(calls()).toBe(1);
+  });
+});

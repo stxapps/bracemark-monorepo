@@ -1,4 +1,12 @@
-import { isTransientBlobStatus, retryTransientBlobTransfer } from './blob-transfer';
+import { DEFAULT_RETRY_MAX_DELAY_MS } from '../api/retry';
+import {
+  BlobNetworkError,
+  BlobRequestError,
+  BlobTimeoutError,
+  isTransientBlobError,
+  isTransientBlobStatus,
+  retryTransientBlobTransfer,
+} from './blob-transfer';
 
 // A stand-in for either platform's BlobRequestError: the helper never sees the
 // class, only the caller's verdict on it.
@@ -85,5 +93,46 @@ describe('retryTransientBlobTransfer', () => {
     expect(sleeps[0]).toBeLessThan(1_250);
     expect(sleeps[1]).toBeGreaterThanOrEqual(2_000);
     expect(sleeps[1]).toBeLessThan(2_500);
+  });
+});
+
+describe('isTransientBlobError', () => {
+  it('is a refusal for now, or a connection that dropped', () => {
+    expect(isTransientBlobError(new BlobRequestError('PUT', 503))).toBe(true);
+    expect(isTransientBlobError(new BlobNetworkError('PUT', new Error('lost')))).toBe(true);
+  });
+
+  // Each of these is the second pass's (sync/retry.ts), not this one's.
+  it('is never an expired token or a spent deadline', () => {
+    expect(isTransientBlobError(new BlobRequestError('PUT', 403))).toBe(false);
+    expect(isTransientBlobError(new BlobTimeoutError('PUT', 60_000))).toBe(false);
+  });
+});
+
+// The blob route's `blob` limiter answers a 429 with the window's length; a retry
+// inside it only spends the bucket again.
+describe('a 429 with a Retry-After', () => {
+  it('waits out the hint instead of the backoff', async () => {
+    const sleeps: number[] = [];
+    const { transfer } = scripted(new BlobRequestError('PUT', 429, 7));
+
+    await retryTransientBlobTransfer(transfer, isTransientBlobError, {
+      baseDelayMs: 1_000,
+      sleep: async (ms) => void sleeps.push(ms),
+    });
+
+    expect(sleeps[0]).toBeGreaterThanOrEqual(7_000);
+    expect(sleeps[0]).toBeLessThan(7_000 * 1.25);
+  });
+
+  it('never waits past the api retry’s ceiling, whatever the hint says', async () => {
+    const sleeps: number[] = [];
+    const { transfer } = scripted(new BlobRequestError('PUT', 429, 3_600));
+
+    await retryTransientBlobTransfer(transfer, isTransientBlobError, {
+      sleep: async (ms) => void sleeps.push(ms),
+    });
+
+    expect(sleeps).toEqual([DEFAULT_RETRY_MAX_DELAY_MS]);
   });
 });

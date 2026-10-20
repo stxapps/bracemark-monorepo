@@ -67,9 +67,15 @@ export class ApiTimeoutError extends Error {
 }
 
 // `Retry-After` from an error response, in seconds. Handles both header forms
-// (delta-seconds and HTTP-date); undefined when absent or unparseable.
-export function parseRetryAfterSeconds(res: Response): number | undefined {
-  const header = res.headers.get('retry-after');
+// (delta-seconds and HTTP-date); undefined when absent or unparseable. Takes
+// anything with a `headers.get`, so expo's fetch response reads the same way.
+export function parseRetryAfterSeconds(res: { headers: Pick<Headers, 'get'> }): number | undefined {
+  return retryAfterSecondsOf(res.headers.get('retry-after'));
+}
+
+// The same, from the header's value — for a transport that hands headers back as
+// a plain record (expo's native file upload).
+export function retryAfterSecondsOf(header: string | null | undefined): number | undefined {
   if (!header) return undefined;
 
   const seconds = Number(header);

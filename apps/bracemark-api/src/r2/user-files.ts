@@ -136,6 +136,31 @@ function entriesOf(userId: string, objects: readonly R2Object[]): FileEntry[] {
   return out;
 }
 
+// R2 refusing a call for now: `We encountered an internal error. Please try
+// again. (10001)`. On staging, 2026-10-19, the binding answered 7 of ~14,000
+// blob-route PUTs in a 10,000-link push that way. Matched on the code in the
+// message, which is all the binding's error carries.
+const R2_INTERNAL_ERROR = /\(10001\)/;
+
+export function isR2InternalError(err: unknown): boolean {
+  return err instanceof Error && R2_INTERNAL_ERROR.test(err.message);
+}
+
+// Run `call` again, once, when R2 refused it with a 10001 — in the Worker, before
+// the route answers 5xx, so the retry costs the client nothing and reaches every
+// client version, old ones included (docs/local-first-sync.md, _retrying a
+// failure_, on the server). Only for a call that can be made twice: a read, or a
+// write whose body is in memory. A streamed body is spent by the first attempt,
+// and is the client's to retry (its L1).
+async function onceMoreOnInternalError<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (err) {
+    if (!isR2InternalError(err)) throw err;
+    return call();
+  }
+}
+
 export function userFilesRepo(env: Bindings) {
   const bucket = env.USER_FILES;
 
@@ -419,9 +444,10 @@ export function userFilesRepo(env: Bindings) {
 
     // The blob route's two transfers (routes/blob.ts), by the grant a verified
     // token carries. The bytes are ciphertext either way: the route moves them,
-    // never reads them. `get` answers null for an absent object.
+    // never reads them. `get` answers null for an absent object, and is asked
+    // twice when R2 refuses it with a 10001.
     get(userId: string, path: string): Promise<R2ObjectBody | null> {
-      return bucket.get(userFileKey(userId, path));
+      return onceMoreOnInternalError(() => bucket.get(userFileKey(userId, path)));
     },
 
     // `body` must have a known length — R2 refuses a stream that doesn't — which
@@ -432,12 +458,18 @@ export function userFilesRepo(env: Bindings) {
     // (the same `uploaded` and `size` a HEAD or a listing reads back) — the
     // route's upload receipt (upload-receipt.ts). Null only where R2 wrote
     // nothing, which an unconditional put never answers.
+    //
+    // Only `putBytes` is asked twice on a 10001: its body is in memory. A stream
+    // is consumed by the attempt that failed, so `put` leaves the retry to the
+    // client, which still holds the sealed bytes.
     async put(userId: string, path: string, body: ReadableStream): Promise<ObjectStat | null> {
       return statOf(await bucket.put(userFileKey(userId, path), body));
     },
 
     async putBytes(userId: string, path: string, body: ArrayBuffer): Promise<ObjectStat | null> {
-      return statOf(await bucket.put(userFileKey(userId, path), body));
+      return statOf(
+        await onceMoreOnInternalError(() => bucket.put(userFileKey(userId, path), body)),
+      );
     },
 
     // Mint presigned URLs for the given wire-relative paths, each namespaced under

@@ -12,6 +12,13 @@
 import type { ReactNode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 
+import {
+  ApiError,
+  INITIAL_SYNC_RETRY_DELAYS_MS,
+  SYNC_RETRY_DELAYS_MS,
+  SYNC_RETRY_JITTER,
+} from '@stxapps/shared';
+
 import { SyncProvider, useSync } from './sync-provider';
 
 const mockRunIncrementalSync = jest.fn((_deps: unknown) =>
@@ -267,5 +274,130 @@ describe('one record per cycle', () => {
     await act(() => result.current.syncAndWait());
 
     expect(mockRunIncrementalSync).not.toHaveBeenCalled();
+  });
+});
+
+// L3 and the first sync's own schedule (docs/local-first-sync.md, _retrying a
+// failure_). Before them a cycle that failed waited for the next edit, a press or a
+// launch: an import that failed one op of 22,972 stalled until someone noticed.
+// What fires a retry is shared (@stxapps/shared sync/retry.ts, which pins the
+// schedule); these pin that the provider hands it every cycle and every wake-up.
+describe('retrying a failed cycle', () => {
+  // The longest a step's wait can be, jitter included.
+  const past = (ms: number) => ms * (1 + SYNC_RETRY_JITTER) + 1;
+  const LONG_AFTER = past(SYNC_RETRY_DELAYS_MS[SYNC_RETRY_DELAYS_MS.length - 1]) * 2;
+
+  afterEach(() => jest.useRealTimers());
+
+  async function failOnce(result: { current: ReturnType<typeof useSync> }, err: unknown) {
+    mockRunIncrementalSync.mockImplementationOnce(() => Promise.reject(err));
+    await act(() => result.current.syncAndWait());
+    expect(result.current.bgSyncStatus).toBe('error');
+  }
+
+  it('starts the next cycle itself after a failure that may clear, and stops at a clean one', async () => {
+    const { result } = await readySync();
+    jest.useFakeTimers();
+    await failOnce(result, new ApiError(503, ''));
+    expect(mockRunIncrementalSync).toHaveBeenCalledTimes(1);
+
+    await act(() => jest.advanceTimersByTimeAsync(past(SYNC_RETRY_DELAYS_MS[0])));
+    expect(mockRunIncrementalSync).toHaveBeenCalledTimes(2);
+    expect(result.current.bgSyncStatus).toBe('idle');
+
+    await act(() => jest.advanceTimersByTimeAsync(LONG_AFTER));
+    expect(mockRunIncrementalSync).toHaveBeenCalledTimes(2);
+  });
+
+  // A 400 fails the same way every time: a timer would only repeat it, and its
+  // error stays on screen for the person.
+  it('waits for a person after a failure no retry can fix', async () => {
+    const { result } = await readySync();
+    jest.useFakeTimers();
+    await failOnce(result, new ApiError(400, ''));
+
+    await act(() => jest.advanceTimersByTimeAsync(LONG_AFTER));
+    expect(mockRunIncrementalSync).toHaveBeenCalledTimes(1);
+    expect(result.current.bgSyncStatus).toBe('error');
+  });
+
+  // The device that was offline for a whole step of the backoff — up to 30 min —
+  // should not sit out the rest of it once the network is back.
+  it('starts a pending retry as soon as the browser is back online', async () => {
+    const { result } = await readySync();
+    jest.useFakeTimers();
+    await failOnce(result, new TypeError('Failed to fetch'));
+
+    await act(async () => {
+      window.dispatchEvent(new Event('online'));
+    });
+    expect(mockRunIncrementalSync).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(result.current.bgSyncStatus).toBe('idle'));
+  });
+
+  it('starts nothing on coming back online with no retry pending', async () => {
+    await readySync();
+    await act(async () => {
+      window.dispatchEvent(new Event('online'));
+    });
+    expect(mockRunIncrementalSync).not.toHaveBeenCalled();
+  });
+
+  it('leaves no retry behind once the provider is gone', async () => {
+    const { result, unmount } = await readySync();
+    jest.useFakeTimers();
+    await failOnce(result, new ApiError(503, ''));
+    unmount();
+
+    await act(() => jest.advanceTimersByTimeAsync(LONG_AFTER));
+    expect(mockRunIncrementalSync).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('a first sync that failed', () => {
+  afterEach(() => jest.useRealTimers());
+
+  it('retries on its own behind a "Retrying…" flag, and opens the gate once one lands', async () => {
+    jest.useFakeTimers();
+    mockFirstSyncDone = false;
+    mockRunInitialSync.mockImplementationOnce(() => Promise.reject(new ApiError(503, '')));
+    const { result } = renderHook(() => useSync(), { wrapper });
+
+    await waitFor(() => expect(result.current.initialSyncRetrying).toBe(true));
+    expect(result.current.storeStatus).toBe('syncing-initial');
+
+    await act(() =>
+      jest.advanceTimersByTimeAsync(INITIAL_SYNC_RETRY_DELAYS_MS[0] * (1 + SYNC_RETRY_JITTER)),
+    );
+    await waitFor(() => expect(result.current.storeStatus).toBe('ready'));
+    expect(result.current.initialSyncRetrying).toBe(false);
+    expect(mockRunInitialSync).toHaveBeenCalledTimes(2);
+  });
+
+  it('offers the gate’s button once its retries are spent', async () => {
+    jest.useFakeTimers();
+    mockFirstSyncDone = false;
+    mockRunInitialSync.mockImplementation(() => Promise.reject(new ApiError(503, '')));
+    try {
+      const { result } = renderHook(() => useSync(), { wrapper });
+      const total = INITIAL_SYNC_RETRY_DELAYS_MS.reduce((a, b) => a + b, 0);
+
+      await act(() => jest.advanceTimersByTimeAsync(total * (1 + SYNC_RETRY_JITTER) + 1));
+      await waitFor(() => expect(result.current.storeStatus).toBe('error'));
+      expect(result.current.initialSyncRetrying).toBe(false);
+      expect(mockRunInitialSync).toHaveBeenCalledTimes(INITIAL_SYNC_RETRY_DELAYS_MS.length + 1);
+    } finally {
+      mockRunInitialSync.mockImplementation(() => Promise.resolve());
+    }
+  });
+
+  it('offers the button at once for a failure no retry can fix', async () => {
+    mockFirstSyncDone = false;
+    mockRunInitialSync.mockImplementationOnce(() => Promise.reject(new ApiError(400, '')));
+    const { result } = renderHook(() => useSync(), { wrapper });
+
+    await waitFor(() => expect(result.current.storeStatus).toBe('error'));
+    expect(result.current.initialSyncRetrying).toBe(false);
+    expect(mockRunInitialSync).toHaveBeenCalledTimes(1);
   });
 });
