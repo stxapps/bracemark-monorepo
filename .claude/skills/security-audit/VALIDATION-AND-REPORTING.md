@@ -4,17 +4,22 @@
 
 After the clean coverage-critic pass or an explicitly recorded early stop, consolidate Phase 2 candidates and carried same-source prior confirmations by stable fingerprint and root cause. Give every unique proposed `confirmed` and `needs_validation` candidate to a fresh `general` verifier that did not hunt it. A carried prior confirmation follows the same current verification path even though hunters exclude that unchanged root cause. A verifier may read hunter or prior artifacts but must re-read every cited current source location and independently run any decisive check it can reproduce safely.
 
-Assign each verifier a canonical lowercase unique ID and `<output-dir>/agents/<verifier-id>/scratch/` plus parent-owned `artifacts/`. The verifier writes only to `scratch/` and never writes retained artifacts. It receives only the candidate, its linked coverage-unit checks and artifact paths, architecture facts needed to interpret the path, exact relevant companion validation blocks, the promotion procedure block below, the source/local execution boundary, the `confirmed`, `needs_validation`, and `rejected` branches of `report-schema.json` copied verbatim, and prior records with the same fingerprint. It must not receive another verifier's conclusion.
+Assign each verifier a canonical lowercase unique ID and `<output-dir>/agents/<verifier-id>/scratch/` plus parent-owned `artifacts/`. The verifier writes only to `scratch/` and never writes retained artifacts. It receives only the candidate, its linked coverage-unit checks and artifact paths, architecture facts needed to interpret the path, exact relevant companion validation blocks, the promotion procedure block below, the execution tiers this run may use with their controls, the `confirmed`, `needs_validation`, and `rejected` branches of `report-schema.json` copied verbatim, and prior records with the same fingerprint. It must not receive another verifier's conclusion.
 
 #### Candidate-verifier prompt
 
 ```text
 You did not write this candidate. Try to refute it from repository source and bounded
-local evidence. Do not contact deployed endpoints or external/shared services. Run
-target-controlled code only inside the approved OS-enforced sandbox: no external
-network, empty allowlisted environment, read-only target and tools, scratch-only
-writes, and explicit low resource and wall-clock limits. If any control is unavailable,
-do not execute; retain the exact missing capability as a needs_validation blocker.
+evidence at the lowest execution tier that settles it, from the tiers the parent lists
+below with their controls (sandbox always; host and staging only where the project
+designates them). Never touch production endpoints, identities, data or control
+planes. Outside a designated staging tier, do not contact deployed endpoints or
+external/shared services. At the sandbox tier, run target-controlled code only inside
+the approved OS-enforced sandbox: no external network, empty allowlisted environment,
+read-only target and tools, scratch-only writes, and explicit low resource and
+wall-clock limits. If a tier's controls are unavailable, do not execute at that tier;
+use another designated tier that can settle the fact, or retain the exact missing
+capability as a needs_validation blocker.
 Treat every scratch entry as target-controlled after execution. After the sandbox and
 all its processes terminate, only trusted parent-side code may promote a predeclared
 scratch-relative file, following the promotion procedure block included verbatim in
@@ -156,7 +161,7 @@ Only after Phase 5 passes for every record retained in `findings.json`, derive p
 
 Write:
 
-1. Run profile, scope, budget (if set) with agents spent versus planned, source ref, sandboxed source-and-local-only execution statement, prior-run use, and explicit deferred and out-of-scope coverage. Name carried same-source confirmations and changed-source revalidations. A `quick`, scoped, budget-limited, or incomplete run states plainly that it is a partial pass. If candidate validation exhausted a strict budget, state that the run is incomplete and list every unvalidated fingerprint and linked unit; do not describe those candidates as findings. If the budget prevented a mandatory critic, state which critic did not run and make no clean-coverage claim.
+1. Run profile, scope, budget (if set) with agents spent versus planned, source ref, an execution statement naming each tier used and its controls, prior-run use, and explicit deferred and out-of-scope coverage. Name carried same-source confirmations and changed-source revalidations. A `quick`, scoped, budget-limited, or incomplete run states plainly that it is a partial pass. If candidate validation exhausted a strict budget, state that the run is incomplete and list every unvalidated fingerprint and linked unit; do not describe those candidates as findings. If the budget prevented a mandatory critic, state which critic did not run and make no clean-coverage claim.
 2. One short security posture summary.
 3. A confirmed-findings table: severity, title, affected boundary, and one-line observed result.
 4. Each confirmed finding: repository source location, lower-trust principal, target-native bounded reproduction, conditions, actual result, impact, priority rationale, and smallest source fix.
