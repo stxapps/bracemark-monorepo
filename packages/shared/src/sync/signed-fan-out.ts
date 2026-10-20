@@ -19,7 +19,8 @@
 // them was fetched.
 //
 // FAILURE: the first rejection — from `run` or from `sign` — stops the feed.
-// No entry starts after it; the ones in flight settle; `close` rejects with it.
+// No entry starts after it; the ones in flight settle; `close` rejects with it,
+// and neither `close` nor `abandon` settles before they have.
 // That is mapLimit's policy (async/pool.ts), and the engines keep the same
 // per-entry tolerance on top of it: `run` catches what it means to skip.
 
@@ -32,8 +33,12 @@ export interface SignedFanOut<E> {
   // rejects with the first failure once the transfers in flight have settled.
   close(): Promise<void>;
   // Stop feeding work, for a failure outside the fan-out (the listing that was
-  // adding to it threw). The transfers in flight settle on their own.
-  abandon(reason: unknown): void;
+  // adding to it threw). Resolves once the transfers in flight have settled, so
+  // a caller that awaits it never returns while one is still storing: a first
+  // sync that rejected with its GETs still running let its retry pull beside
+  // them, and a straggler could land an older version over the retry's newer
+  // one, under a cursor that then claimed both. Never rejects.
+  abandon(reason: unknown): Promise<void>;
 }
 
 export interface SignedFanOutOptions<E, S> {
@@ -129,8 +134,9 @@ export function createSignedFanOut<E extends { path: string }, S>(
       await Promise.all(workers);
       if (failure) throw failure.error;
     },
-    abandon(reason) {
+    async abandon(reason) {
       fail(reason);
+      await Promise.all(workers);
     },
   };
 }

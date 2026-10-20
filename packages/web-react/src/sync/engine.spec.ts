@@ -821,16 +821,16 @@ describe('the push', () => {
 // commit runs beside the next chunk, and a first sync's GETs start on its first
 // listed page.
 describe('the fan-out', () => {
-  // Hold every PUT open until the test lets them go, counting how many of each size
-  // are in flight at once.
-  function holdPuts(isLarge: (bytes: number) => boolean) {
+  // Hold every PUT open for `holdMs`, counting how many of each size are in flight
+  // at once.
+  function holdPuts(isLarge: (bytes: number) => boolean, holdMs = 5) {
     const maxInFlight = { large: 0, small: 0 };
     const inFlight = { large: 0, small: 0 };
     mockPutBlob.mockImplementation(async (url: string, body: Uint8Array) => {
       const kind = isLarge(body.byteLength) ? 'large' : 'small';
       inFlight[kind] += 1;
       maxInFlight[kind] = Math.max(maxInFlight[kind], inFlight[kind]);
-      await new Promise((resolve) => setTimeout(resolve, 5));
+      await new Promise((resolve) => setTimeout(resolve, holdMs));
       inFlight[kind] -= 1;
       return landed(pathFor(url));
     });
@@ -841,7 +841,10 @@ describe('the fan-out', () => {
     const LARGE = 'x'.repeat(70 * 1024);
     for (let i = 0; i < 12; i++) await seedQueued(`files/big_${i}.enc`, LARGE);
     for (let i = 0; i < 12; i++) await seedQueued(`files/small_${i}.enc`, 'tiny');
-    const maxInFlight = holdPuts((bytes) => bytes > 32 * 1024);
+    // Long enough for every record's first read to land while the first PUTs are
+    // still out — those reads go FILE_CONCURRENCY at a time (uploadOne), as a real
+    // PUT's second outlasts a few rounds of local reads.
+    const maxInFlight = holdPuts((bytes) => bytes > 32 * 1024, 100);
 
     await runIncrementalSync(deps());
 
@@ -849,6 +852,40 @@ describe('the fan-out', () => {
     expect(maxInFlight.large).toBe(8);
     // Every small one at once: the pass is wider than the twelve of them.
     expect(maxInFlight.small).toBe(12);
+    expect(await pendingPaths()).toEqual([]);
+  });
+
+  it('reads no more content records at once than the narrow gates allow', async () => {
+    // A content record's size is known only once its bytes are read, so the read is
+    // where a pass of large blobs would put the whole fan-out of them in the heap:
+    // 96 workers reading 96 page copies at once, before any of them reached the
+    // large gate. Two gates of FILE_CONCURRENCY bound it — the first read, and the
+    // re-read a large blob takes once it has a slot to send from.
+    const LARGE = 'x'.repeat(70 * 1024);
+    const paths = Array.from({ length: 40 }, (_, i) => `files/big_${i}.enc`);
+    for (const path of paths) await seedQueued(path, LARGE);
+    holdPuts((bytes) => bytes > 32 * 1024);
+    const content = new Set(paths);
+    let reading = 0;
+    let maxReading = 0;
+    const get = db.items.get.bind(db.items);
+    const spy = jest.spyOn(db.items, 'get').mockImplementation(((key: string) => {
+      if (!content.has(key)) return get(key);
+      reading += 1;
+      maxReading = Math.max(maxReading, reading);
+      return get(key).finally(() => {
+        reading -= 1;
+      });
+    }) as typeof db.items.get);
+
+    try {
+      await runIncrementalSync(deps());
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(maxReading).toBeGreaterThan(0);
+    expect(maxReading).toBeLessThanOrEqual(2 * 8);
     expect(await pendingPaths()).toEqual([]);
   });
 
@@ -955,6 +992,47 @@ describe('the fan-out', () => {
       // One total, the whole listing's, from the first tick to the last.
       expect(ticks.every(([, total]) => total === 3)).toBe(true);
       expect(ticks.at(-1)).toEqual([3, 3]);
+    });
+
+    it('does not reject while a GET it started is still storing', async () => {
+      // The outage stop fails the fan-out while the listing is still paging; the
+      // next page's add throws, and the pull rejects. Rejecting with GETs still in
+      // flight released the cycle lock to the provider's retry, which pulled beside
+      // them — and a straggler could land a path's older version over the retry's.
+      const expired = new BlobRequestError('GET', 403);
+      const failing = Array.from(
+        { length: SET_OUTAGE_FAILURES },
+        (_, i) => `links/fail_${String(i).padStart(2, '0')}.enc`,
+      );
+      const slow = ['links/slow_a.enc', 'links/slow_b.enc'];
+      mockGetBlob.mockImplementation(async (url: string) => {
+        const path = pathFor(url);
+        if (failing.includes(path)) throw expired;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return new Uint8Array([0xee, ...utf8(path)]);
+      });
+
+      await expect(
+        runInitialSync(
+          deps({
+            filesListPage: async (pageToken) => {
+              if (pageToken === undefined) {
+                return {
+                  files: [...slow, ...failing].map((path) => ({ path, updatedAt: 100 })),
+                  nextPageToken: 'page-2',
+                };
+              }
+              // The second page answers after the stop and before the slow GETs.
+              await new Promise((resolve) => setTimeout(resolve, 10));
+              return { files: [{ path: EXTRACTION_PATH, updatedAt: 101 }], nextPageToken: null };
+            },
+          }),
+        ),
+      ).rejects.toBe(expired);
+
+      // Both slow GETs had stored by the time the pull gave up.
+      for (const path of slow) expect(await bodyAt(path)).toBe(path);
+      expect((await getSyncMeta(USER))?.firstSyncDoneAt).toBe(0);
     });
 
     it('stops fetching when the listing fails partway', async () => {

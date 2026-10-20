@@ -752,8 +752,10 @@ path — 14.5 s of a 1,058-edit push's 41.9 s.
 
 **A receipt proves the object landed, not that it is still there — so the log
 fences it.** The invariant below needs the object present when its op is logged.
-Nothing removes a user's object but a committed `delete` of its path (R2 first,
-then its op) or a wipe (the log first, then R2; `deleteAllUserData`). So:
+Nothing removes a user's object but a `delete` commit of its path (R2 first,
+then its op) or a wipe (the log first, then R2; `deleteAllUserData`). So (and
+for the one gap, a delete commit that dies between the two, see _what it leaves
+where it was_ below):
 
 - `files/sign` reads the **log fence** — the DO's `generation`, bumped by every
   wipe, and its `position`, the newest `seq` — in the same DO call as the quota
@@ -791,8 +793,12 @@ path's (`syncPathSchema` puts no bound on an id's length): ~200 characters at it
 extremes, under the contract's `MAX_RECEIPT_LENGTH` of 512. A genuine receipt
 over that cap would 400 the whole batch on every retry, so
 `r2/upload-receipt.spec.ts` pins the extremes against the contract. The size is
-under the MAC, so the quota map records what R2 reported, never what a client
-chose. The key is HKDF from `R2_SECRET_ACCESS_KEY` under its own label
+under the MAC, so the quota map records a size R2 reported, never a number a
+client wrote. Not necessarily the current object's, though: a receipt is bound to
+its path, not to one PUT, so a client that PUT a path twice within the TTL can
+commit the earlier receipt and leave the earlier size recorded. That opens
+nothing new — an object never committed is never counted at all, which is why
+the quota is a cost backstop and not a meter (`lib/quota.ts`). The key is HKDF from `R2_SECRET_ACCESS_KEY` under its own label
 (`r2/hmac-key.ts`), so a blob token never verifies as a receipt.
 
 **What it leaves where it was:**
@@ -2473,12 +2479,25 @@ it:
 - `INDEX_CONCURRENCY` 48, and content sized rather than counted: a `files/` blob
   up to 64 KiB goes at the full fan-out, a larger one waits for one of
   `FILE_CONCURRENCY` (8) slots inside it (`uploadOne`; the threshold's
-  arithmetic is at `LARGE_CONTENT_BYTES`).
+  arithmetic is at `LARGE_CONTENT_BYTES`). A blob's size is in its record, so on
+  web every content record's **first read** goes through a gate of its own,
+  also `FILE_CONCURRENCY` wide: a Dexie read is the whole record, and ungated
+  the content pass read the full fan-out of records at once — 96 page copies in
+  the heap before any of them reached the large gate. The read is a local get,
+  so a small blob waits milliseconds on it and is sent at the full fan-out. Expo
+  needs no read gate: its content sits on disk, and the size is the file's,
+  read without its bytes.
 - A chunk's commit runs beside the next chunk's sign and upload (_a push is
   chunked_).
 - A pull is one fan-out that signs a batch ahead (`createSignedFanOut`,
   `@stxapps/shared`), and a first sync's GETs start on its first listed page; its
-  counter still waits for the whole listing before it shows a total.
+  counter still waits for the whole listing before it shows a total. A pull that
+  fails while its listing is still paging — the fan-out stopped for an outage,
+  and the next page's `add` throws — waits out the GETs in flight before it
+  rejects (`feedPull`, the fan-out's `abandon`). Rejecting at once returned the
+  cycle lock, or expo's pull slot, with GETs still storing; the provider's retry
+  then pulled beside them, and a straggler could land a path's older version over
+  the one the retry had stored, under a cursor the retry then claimed above both.
 
 Not taken: a bucket nearer its users (above), and holding small records outside
 R2 — in the user's Durable Object, or packed — which would make a push or pull of

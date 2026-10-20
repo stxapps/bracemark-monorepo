@@ -23,7 +23,11 @@
 // path, or under another key reads as no receipt at all (readUploadReceipt
 // answers null) and the put is checked against R2. Forging one gains nothing a
 // client could not get by PUTting the object, and the MAC means the size the
-// quota map records is the one R2 reported, not one a client chose.
+// quota map records is one R2 reported, never a number a client wrote. It is not
+// bound to one PUT, though: a client that PUT the same path twice inside the TTL
+// can commit either receipt, and the quota map then holds the earlier object's
+// size. That opens nothing new — an object that is never committed is never
+// counted at all, and the quota is a cost backstop, not a meter (lib/quota.ts).
 //
 // Format: `v1.<payload>.<mac>`, both base64url; the payload is JSON of five
 // integers. The MAC covers the version and the payload as sent AND the user id
