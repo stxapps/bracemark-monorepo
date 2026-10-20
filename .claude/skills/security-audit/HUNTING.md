@@ -30,9 +30,11 @@ A prompt may select several companion blocks when the same path crosses several 
 ## Defensive vulnerability-finding method
 
 Your goal is to find source-grounded security invariant failures and the smallest fix,
-not to expand harm beyond the boundary result. Stay within source review and bounded local execution.
-Do not contact deployed endpoints, provider APIs, registries, identity systems,
-message brokers, shared services, or other users. Use local dummy data only.
+not to expand harm beyond the boundary result. Use source review and the execution
+tiers the parent lists below, each under its controls. Never touch production
+endpoints, identities, data or control planes, or other users. Outside a designated
+staging tier, do not contact deployed endpoints, provider APIs, registries, identity
+systems, message brokers or shared services. Use dummy data only.
 
 READ THE CODE AT DEPTH. Follow each assigned input through parsing, identity,
 authorization, normalization, state, derived copies, and the final sink. Read sibling,
@@ -68,14 +70,19 @@ Consolidate the same root cause, but establish each variant's conditions and imp
 independently. Do not investigate peer-owned units. Return a variant with no current
 coverage unit as `uncovered`.
 
-USE THE NARROWEST LOCAL CHECK THAT SETTLES THE CLAIM. Target-controlled builds,
-tests, processes, browsers, emulators, fuzzers, and fixture processing may run only
-inside the parent-approved OS-enforced sandbox. It must disable external networking,
+USE THE NARROWEST CHECK THAT SETTLES THE CLAIM, AT THE LOWEST TIER THAT CAN. The
+parent lists the tiers this run may use (sandbox; host and staging only where the
+project designates them) and each one's controls; climb only when a lower tier cannot
+reach the decisive fact. Third-party or downloaded code always stays in the sandbox.
+At the sandbox tier, target-controlled builds, tests, processes, browsers, emulators,
+fuzzers, and fixture processing run only inside the parent-approved OS-enforced
+sandbox. It must disable external networking,
 start from an empty allowlisted environment, expose target and tools read-only, permit
 writes only to your scratch directory, and apply low CPU, memory, process, file-size,
 disk, and wall-clock limits. Isolated loopback is allowed only for a local fixture.
-If any control is unavailable, do not execute: return needs_validation with that exact
-blocker. Prefer an existing unit test, minimal function harness, dummy-tenant service
+If any control is unavailable, do not execute at that tier: use a designated host
+tier if the code qualifies, or return needs_validation with that exact blocker. Prefer
+an existing unit test, minimal function harness, dummy-tenant service
 call, small malformed fixture, deterministic race schedule, or locally rendered policy.
 Do not install or fetch tools.
 
@@ -156,14 +163,18 @@ file separately:
 7. Return an empty candidate array when nothing survives these gates.
 ```
 
-## Local validation boundaries
+## Execution boundaries
 
-Local execution is for confirmation, not impact expansion:
+Execution is for confirmation, not impact expansion. Pick the tier with `SKILL.md`,
+_Choosing the evidence_; the lists below are the sandbox tier's. A designated host
+tier allows the same kinds of check on the project's own code without the sandbox,
+under the controls the project states; a designated staging tier allows dummy-account
+requests to that deployment only.
 
-- **Allowed only in the required OS sandbox:** offline builds with present dependencies; isolated-loopback processes using dummy state; unit and integration tests; small fixture processing; sanitizers; bounded fuzz/regression tests; deterministic concurrency checks; local browser/emulator tests with dummy accounts; rendered manifests and policy evaluation with dummy identities; mocked external or paid calls.
-- **Disallowed:** live or deployed traffic; requests to services not started for this isolated check; network dependency installation; real accounts or credentials; production data; shared queues, cloud resources, runners, registries, signing or release services; publishing; stress, saturation, or cost generation; any work after the minimum dummy-data boundary result.
+- **Allowed in the sandbox tier:** offline builds with present dependencies; isolated-loopback processes using dummy state; unit and integration tests; small fixture processing; sanitizers; bounded fuzz/regression tests; deterministic concurrency checks; local browser/emulator tests with dummy accounts; rendered manifests and policy evaluation with dummy identities; mocked external or paid calls.
+- **Disallowed at every tier:** production traffic, identities, data or credentials; deployed traffic other than to a designated staging tier; requests to services not started for this check outside that tier; network dependency installation; real accounts or credentials; production data; shared queues, cloud resources, runners, registries, signing or release services; publishing; stress, saturation, or cost generation; any work after the minimum dummy-data boundary result.
 
-The sandbox starts with an empty environment, gives target code no external network or host writable path, and enforces explicit low resource and time limits for every check, not only checks expected to be expensive. Scratch output remains target-controlled after exit. Promote it only with the no-follow, path-confined, regular-file, bounded-size host procedure in `SKILL.md`. Missing any sandbox or promotion capability does not erase a source-grounded candidate; represent the exact blocker in `needs_validation`.
+The sandbox starts with an empty environment, gives target code no external network or host writable path, and enforces explicit low resource and time limits for every check, not only checks expected to be expensive. Scratch output remains target-controlled after exit. Promote it only with the no-follow, path-confined, regular-file, bounded-size host procedure in `SKILL.md`. Missing any sandbox or promotion capability does not erase a source-grounded candidate; use a designated tier that can settle it, or represent the exact blocker in `needs_validation`.
 
 ## Structured hunter result
 

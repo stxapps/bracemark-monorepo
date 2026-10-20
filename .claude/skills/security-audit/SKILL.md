@@ -28,18 +28,35 @@ This skill is agent-neutral:
 
 Use equivalent platform capabilities while preserving role, write-isolation, prompt, and independence boundaries.
 
-## Universal execution safety
+## Choosing the evidence
 
-These rules apply in both operating modes. Source inspection is read-only. Run target-controlled builds, tests, processes, browsers, emulators, fuzzers, and fixture processing only inside an OS-enforced sandbox that provides all of these controls:
+These rules apply in both operating modes. For each decisive question, pick the strongest evidence that can settle it, at the lowest tier that settles it, under that tier's controls. A higher tier is not better evidence for a fact a lower one already establishes. It is a larger effect, so climb only when the lower tier cannot reach the fact.
+
+| Tier        | What it is                                                                                                                                                                                                                  | When it applies                                                                                                                                                                           |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Source**  | Read-only inspection of source, configuration, installed dependency source and design records                                                                                                                               | Always                                                                                                                                                                                    |
+| **Sandbox** | Target-controlled code inside the OS-enforced sandbox below                                                                                                                                                                 | Always available as a rule. Required for third-party, downloaded or otherwise untrusted code and inputs, and for any first-party execution the project has not designated a host tier for |
+| **Host**    | The project's own first-party code run on the developer host: its builds, test suites, scripts, local dev servers, dev clients on a fresh simulator, emulator or browser profile, and dummy accounts against local services | Only where the project's instructions designate it and state its controls                                                                                                                 |
+| **Staging** | A deployed non-production environment, isolated from production data by an account or project boundary, driven with dummy accounts                                                                                          | Only where the project's instructions designate it and state its controls                                                                                                                 |
+
+A designated tier is standing permission: pick it when it is the right evidence, without a per-check request. When a tier is not designated, or one of its controls cannot be met for this check, use the highest designated tier whose controls hold, and record what the missing tier would have settled as a `needs_validation` blocker. No tier reaches production: production endpoints, identities, data, credentials and control planes, and other people's accounts, stay out of every check.
+
+Every execution tier keeps these controls whatever the project adds: a recorded source revision; dependencies already installed from the lockfile and none installed, upgraded or fetched; dummy principals, fixtures and secrets; no credential that reaches production in the target's environment; no publishing, release, signing or store action; no stress, saturation or paid-quota spend; evidence kept outside the target worktree; and a stop at the minimum effect that establishes the result. Record the tier, revision, host and tool versions, and for staging what was deployed and what the run created and removed.
+
+### The sandbox tier
+
+Run target-controlled builds, tests, processes, browsers, emulators, fuzzers, and fixture processing at this tier only inside an OS-enforced sandbox that provides all of these controls:
 
 - no external network; use only an isolated loopback namespace when the check needs local client/server traffic;
 - an empty environment populated from an explicit allowlist with safe values, with scratch-local `HOME`, temporary directories, and caches;
 - a read-only target and toolchain, with the target-controlled process able to write only inside its assigned `scratch/` directory; and
 - explicit low CPU, memory, process, file-size, disk, and wall-clock limits.
 
-The agent, outside the target-controlled process, may make a disposable source copy in an assigned `scratch/` directory when a build must write beside source. In guidance mode, do not retain target-controlled files. In full audit mode, only trusted parent-side code may promote the minimum non-secret result to retained `artifacts/` using the procedure under Write isolation. Never expose a retained output directory (other than the agent's own assigned `scratch/`), another agent's directory, the host home directory, credentials, sockets, or shared services to target code. Do not install dependencies or let builds fetch them. Use only tools and dependencies already available locally. If every control cannot be enforced, do not execute target code: report the missing sandbox capability as a needs-validation blocker and give a safe validation plan.
+The agent, outside the target-controlled process, may make a disposable source copy in an assigned `scratch/` directory when a build must write beside source. In guidance mode, do not retain target-controlled files. In full audit mode, only trusted parent-side code may promote the minimum non-secret result to retained `artifacts/` using the procedure under Write isolation. Never expose a retained output directory (other than the agent's own assigned `scratch/`), another agent's directory, the host home directory, credentials, sockets, or shared services to target code. Do not install dependencies or let builds fetch them. Use only tools and dependencies already available locally. If every control cannot be enforced, do not execute target code at this tier: use a designated host tier if the code qualifies for it, or report the missing sandbox capability as a needs-validation blocker and give a safe validation plan.
 
-Use dummy principals, fixtures, and secrets. Do not probe deployed endpoints, external services, shared infrastructure, production identities, other users' data, or live control planes. Do not test availability against a live or shared process, publish artifacts, alter releases, spend paid API quota, or continue beyond the minimum local effect needed to establish a defect. If the decisive fact is outside source or the sandboxed fixture, report it as needing validation.
+### Outside every tier
+
+Use dummy principals, fixtures, and secrets. Do not probe production endpoints, production identities, other users' data, or production control planes, and do not touch external services, shared infrastructure or deployed environments other than a designated staging tier. Do not test availability against a live or shared process, publish artifacts, alter releases, spend paid API quota, or continue beyond the minimum effect needed to establish a defect. If the decisive fact is outside every designated tier, report it as needing validation.
 
 ## Full audit setup
 
@@ -83,7 +100,7 @@ Before execution, the parent opens and retains trusted, non-inheritable director
 
 For a reproduced check, record the command, exact test input, sandbox limits, and only the allowlisted environment variable names plus safe non-secret values needed to reproduce it. Never capture or copy the ambient environment, inherited variables, credential values, authentication state, or unrelated host paths. Launch from an empty environment rather than trying to redact one after execution.
 
-Before delegation, the parent writes `run-metadata.json` with at least `run_id`, `repo`, `target`, `source_ref`, `profile`, `scope_paths`, `budget` (null if unset), `execution_policy: "sandboxed-source-and-local-only"`, selected companion files, prior-run paths, shared-file owners, and `run_status: "in_progress"`. Update metadata only when those facts change; candidate state belongs in the coverage ledger and `findings.json`.
+Before delegation, the parent writes `run-metadata.json` with at least `run_id`, `repo`, `target`, `source_ref`, `profile`, `scope_paths`, `budget` (null if unset), `execution_policy` (the tiers this run may use, e.g. `"source+sandbox"`, the default, or `"source+sandbox+host+staging"` where the project designates both), selected companion files, prior-run paths, shared-file owners, and `run_status: "in_progress"`. Update metadata only when those facts change; candidate state belongs in the coverage ledger and `findings.json`.
 
 ## Full audit planning
 
@@ -114,7 +131,7 @@ During full audit setup, pick a profile from the user's request or propose one f
 
 A **scoped run** audits a subset: named paths, one subsystem, one companion domain, or the diff between two source refs. Seed ledger units only for in-scope surfaces and record everything else as `out_of_scope` — never as `covered`. A scoped or `quick` run must present itself as partial coverage.
 
-Profiles change breadth and redundancy, never the evidence bar. Do not scale away the candidate gate, the source/local execution boundary, `needs_validation` discipline, schema validation, or independent verification of `confirmed` records.
+Profiles change breadth and redundancy, never the evidence bar. Do not scale away the candidate gate, the execution tiers and their controls, `needs_validation` discipline, schema validation, or independent verification of `confirmed` records.
 
 #### Cost budget
 
@@ -139,13 +156,13 @@ A strict total-agent budget can still be exceeded by an unexpectedly large candi
 
 For every candidate, name the lower-trust principal, accepted input or action, intended control, crossed boundary, affected principal or resource, and concrete observed or owner-observable result. Do not elevate a missing best practice, guessed deployment behavior, generic parser crash, or self-impact into a security finding.
 
-### Use bounded local evidence
+### Use bounded evidence at the right tier
 
-Static analysis establishes the source path. Sandboxed local tests resolve behavior when all execution controls are available: a minimal function harness, existing unit test, small parser fixture, dummy-tenant integration test, locally rendered configuration, or bounded isolated-loopback client. Stop at a wrong return value, unauthorized dummy record, sanitizer finding, policy difference, or other minimum effect. Do not extend the local check beyond the minimum boundary result or produce persistence, post-fault, or concealment material.
+Static analysis establishes the source path. Execution resolves behavior at the lowest tier that can show it (_Choosing the evidence_): a minimal function harness, existing unit test, small parser fixture, dummy-tenant integration test, locally rendered configuration, or bounded isolated-loopback client in the sandbox; a local dev server or dev client on the host; or a dummy-account request against a designated staging deployment for an edge, header, routing or provider-sandbox fact no local run reproduces. Stop at a wrong return value, unauthorized dummy record, sanitizer finding, policy difference, or other minimum effect. Do not extend any check beyond the minimum boundary result or produce persistence, post-fault, or concealment material.
 
 ### Respect source visibility
 
-Deployment controls, proxy behavior, provider settings, browser headers, identity policy, broker ACLs, packaging, and topology are real controls. If they are required and absent from the repository, do not assume either presence or absence. Use `needs_validation` with the exact missing fact and a safe owner-observed or local plan.
+Deployment controls, proxy behavior, provider settings, browser headers, identity policy, broker ACLs, packaging, and topology are real controls. If they are required and absent from the repository, do not assume either presence or absence. Observe them at a designated staging tier when it deploys the same configuration; otherwise use `needs_validation` with the exact missing fact and a safe owner-observed or local plan.
 
 ### Separate priority from certainty
 
@@ -182,7 +199,7 @@ Do not end the run before one of exactly two terminal states: (a) all Phase 6 ar
 
 1. Checklist deviations presented as vulnerabilities.
 2. Defense-in-depth advice with no reachable boundary violation.
-3. Live or shared-environment testing where bounded local evidence is insufficient.
+3. Testing in a deployed or shared environment when a lower tier settles the question, or in production at all.
 4. Guessing provider, proxy, browser, identity, or deployment behavior not present in source.
 5. Treating intended same-principal authority or self-impact as a cross-boundary result.
 6. Reporting a parser or runtime effect stronger than the observed effect.
