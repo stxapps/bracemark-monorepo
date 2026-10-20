@@ -573,9 +573,15 @@ last compatible build, still talking to an api that moves on.
   iPhones by June 2026 (Apple's figure).
 - **Android stays at 33** because API 36 was on only ~25% of devices in September
   2026, so the same move would turn away three in four. The untested-versions
-  risk is carried instead by the Play **pre-launch report**, which runs every
-  testing-track upload on real devices across Android versions — read it before
-  promoting to production. API 35 (Android 15, where edge-to-edge is enforced) is
+  risk is carried instead by the Play **pre-launch report**, which tests an
+  uploaded bundle on real devices across Android versions — read it before
+  promoting to production. It is **not guaranteed per upload**: Google runs it
+  only "where capacity permits", there is no API for it (so `gplay` can't see
+  it) and no documented setting that forces a run, so a build can reach production
+  untested with nothing reporting the gap. Check that the build being promoted
+  actually has a report (_Test and release → Testing → Pre-launch report_); if
+  none came, the risk is still open — re-upload, or test those versions another
+  way. API 35 (Android 15, where edge-to-edge is enforced) is
   the fallback floor if that report shows breakage there is no time to fix.
 
 #### ios share extension build settings ⚠
