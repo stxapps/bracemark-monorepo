@@ -162,3 +162,17 @@ test('the field stays editable while a password is being verified, and after it 
   expect(screen.getByTestId('lock-pane-error')).toBeTruthy();
   expect(field().props.editable).not.toBe(false);
 });
+
+// A lock password is not this app's login, and the `off` default did not tell
+// iOS so: `textContentType="none"` leaves Password AutoFill to read the secure
+// field as a password, and after an unlock it offered to replace the saved
+// sign-in password with the lock password. No simulator spec sees that sheet;
+// what is pinned is the type that keeps it away — and that Android keeps `off`,
+// which `one-time-code` would have turned into an SMS-code hint there.
+test('the field tells the OS it is not the login', async () => {
+  await mount();
+
+  expect(field().props.textContentType).toBe('oneTimeCode');
+  expect(field().props.autoComplete).toBe('off');
+  expect(field().props.secureTextEntry).toBe(true);
+});

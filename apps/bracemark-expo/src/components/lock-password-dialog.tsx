@@ -104,6 +104,10 @@ export function LockPasswordDialog({
               autoFocus
               placeholder="Password"
               aria-label="Password"
+              // Not this app's login — see lock-pane.tsx. Here it was the save
+              // prompt: setting a lock had iOS offer to replace the saved
+              // sign-in password with the lock's.
+              textContentType="oneTimeCode"
               value={password}
               // Non-editable ONLY while frozen: on native that also drops the
               // keyboard, which a refused password being verified must keep for
