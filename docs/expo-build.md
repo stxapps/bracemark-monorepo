@@ -484,9 +484,23 @@ tier, for when it arrives:
   half get the phone layout; the inner display held landscape docks the rail,
   and with the fold down the middle of the long edge the fold then crosses the
   links list. Lying flat the fold takes no width; folded like a book, the list's
-  titles run through the curve. Avoiding it means a native module over iOS
-  27.1's reserved-region API, which is not built — worth it only if book-folded
-  reading proves to matter.
+  titles run through the curve. Avoiding it means reading the fold's frame from
+  iOS 27.1's reserved-region API — worth it only if book-folded reading proves
+  to matter. That native module need not be ours: **react-native-reserved-regions**
+  (App & Flow, the safe-area-context authors; 0.2.0, first published
+  2026-09-20 — weighed 2026-10-20, not adopted) reports the fold as a `division`
+  frame and cutouts as `occlusion` frames, provider-relative, from iOS 27.1's
+  API and from Jetpack WindowManager's `FoldingFeature` on Android, so the same
+  hook would cover an Android foldable half-opened. It **adds to
+  safe-area-context, it does not replace it** — insets stay where they are,
+  since a fold down the middle is not an edge inset — and it repositions
+  nothing: the links pane would have to lay out around the frame itself. Three
+  things gate it. Its iOS code compiles out below the 27.1 SDK and returns an
+  empty list, so it is inert until the Xcode move above. It asks for RN ≥ 0.80 on
+  the New Architecture, which RN 0.81 with `newArchEnabled` meets on paper, but
+  it is developed against 0.88 release candidates, so prove it on 0.81 first.
+  And its same-frame iOS delivery rests on an upstream RN change that 0.81 lacks,
+  so the first measurement can trail the first frame by one.
 - **The insets are asymmetric at phone width** — the outer display reserves a
   strip down its trailing edge — which is why every overlay pads per edge
   ([safe-area.md](./safe-area.md), _wide windows on native_).
