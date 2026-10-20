@@ -208,6 +208,36 @@ describe('createSignedFanOut', () => {
     expect(ran).toHaveLength(1);
   });
 
+  it('settles abandon only once the transfer in flight has', async () => {
+    // A caller that rethrows after abandoning must not return with a transfer still
+    // writing behind it (the engines' feedPull, for a first sync's retry).
+    const { sign } = recordingSign();
+    const gate = deferred();
+    let settled = false;
+    const fanOut = createSignedFanOut({
+      concurrency: 1,
+      signBatch: 10,
+      sign,
+      run: async () => {
+        await gate.promise;
+        settled = true;
+      },
+    });
+
+    fanOut.add(entries(3));
+    await flush();
+    let abandoned = false;
+    const abandoning = fanOut.abandon(new Error('listing failed')).then(() => {
+      abandoned = true;
+    });
+    await flush();
+    expect(abandoned).toBe(false);
+
+    gate.resolve();
+    await abandoning;
+    expect(settled).toBe(true);
+  });
+
   it('resolves close at once when nothing was added', async () => {
     const sign = jest.fn(async () => new Map<string, string>());
     const fanOut = createSignedFanOut({ concurrency: 4, signBatch: 10, sign, run: jest.fn() });

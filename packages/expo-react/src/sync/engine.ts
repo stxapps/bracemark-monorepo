@@ -233,9 +233,11 @@ export function installSyncTrace(next: SyncTrace | undefined): void {
 // Not every cycle, because a hold delays the user's own edits too. Each edit
 // kicks a cycle, so an edit made during an ordinary one would stay unrendered
 // until the cycle ended or the next flush, up to HELD_FLUSH_MS. A cycle of a few paths costs a re-run or two, and
-// holding it would buy nothing. 100 paths is around four rounds of
-// INDEX_CONCURRENCY at 24, where a pull starts to outlast a re-run or two (two
-// rounds at today's 48). It is a starting point, not a measured cut.
+// holding it would buy nothing. 100 paths was about four rounds of a 24-wide
+// fan-out, where a pull starts to outlast a re-run or two; at today's
+// INDEX_CONCURRENCY of 96 it is about one round, so the cut may now sit lower than
+// it needs to. It is a starting point, set before the fan-out widened, not a
+// measured cut.
 const BULK_CYCLE_PATHS = 100;
 
 async function withBulkHold<T>(paths: number, run: () => Promise<T>): Promise<T> {
@@ -1492,17 +1494,19 @@ interface PullRun {
   add(entries: Entry[]): Promise<void>;
   // Nothing more is coming: resolves once every queued GET has been stored.
   finish(): Promise<void>;
-  // The feed failed: stop starting GETs.
-  abandon(reason: unknown): void;
+  // The feed failed: stop starting GETs. Resolves once the GETs in flight have
+  // stored or failed, so the pull never rejects with one still writing.
+  abandon(reason: unknown): Promise<void>;
 }
 
 // Run `feed` against a pull and finish it — or, when the feed throws, abandon the
-// fan-out so it starts nothing more, and rethrow.
+// fan-out so it starts nothing more, wait out the GETs already in flight, and
+// rethrow — web engine's feedPull, which says what returning early cost.
 async function feedPull(pull: PullRun, feed: (pull: PullRun) => Promise<void>): Promise<void> {
   try {
     await feed(pull);
   } catch (err) {
-    pull.abandon(err);
+    await pull.abandon(err);
     throw err;
   }
   await pull.finish();
@@ -1693,7 +1697,7 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
       }
     },
     abandon(reason) {
-      fanOut.abandon(reason);
+      return fanOut.abandon(reason);
     },
   };
 }

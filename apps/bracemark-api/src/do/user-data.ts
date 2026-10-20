@@ -204,13 +204,21 @@ export class UserDataDO extends DurableObject<Bindings> {
   // THE FENCE: an entry carrying a `fence` came from an upload receipt, which
   // proves its object LANDED and not that it is still there — and the log must
   // never point at an object that is not (above). Nothing removes a user's object
-  // but a committed delete of its path (R2 first, then its op here) or a wipe
+  // but a delete commit of its path (R2 first, then its op here) or a wipe
   // (wipeAll here first, then R2). So the receipted put is recorded only if the
   // log is in the receipt's generation AND holds no delete of its path appended
   // after the receipt's position. Any later delete, whichever side of the PUT its
   // R2 call fell on, was appended after the token was signed and so sits above
   // the position; a delete still between its R2 call and its op here will append
   // after this entry and leave the path's last op a delete, as the object is.
+  //
+  // The one gap is that "will append": a delete commit that DIES between its R2
+  // call and its op appends nothing until its device retries the delete, which
+  // stays queued there. A receipted put of the same path landing in between is
+  // recorded over a missing object — the op-without-object state, until that
+  // retry appends the delete above it. Without a receipt the window is the put's
+  // own check-to-append; with one it is PUT-to-commit (docs/local-first-sync.md,
+  // _upload receipts_, "one crash window grows").
   //
   // A stale entry is NOT refused. The batch is recorded ATOMICALLY OR NOT AT ALL —
   // nothing is written, and the stale paths come back in `stale` — and the

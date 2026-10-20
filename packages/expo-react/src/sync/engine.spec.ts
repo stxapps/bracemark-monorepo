@@ -49,6 +49,7 @@ import {
   opsCommitEndpoint,
   opsListEndpoint,
   pathFromId,
+  SET_OUTAGE_FAILURES,
   utf8,
 } from '@stxapps/shared';
 
@@ -529,6 +530,45 @@ describe('the fan-out', () => {
     expect(await bodyAt(EXTRACTION_PATH)).toBe(EXTRACTION_PATH);
     expect(ticks.every(([, total]) => total === 3)).toBe(true);
     expect(ticks.at(-1)).toEqual([3, 3]);
+  });
+
+  it('does not reject a first sync while a GET it started is still storing', async () => {
+    // Drift guard for feedPull (web engine's spec, _a first sync_, has the case):
+    // the outage stop fails the fan-out mid-listing, and the pull waits out the
+    // GETs in flight before it rejects.
+    getDb().delete(syncMeta).run();
+    await beginInitialSync(USER);
+    const expired = new BlobRequestError('GET', 403);
+    const failing = Array.from(
+      { length: SET_OUTAGE_FAILURES },
+      (_, i) => `links/fail_${String(i).padStart(2, '0')}.enc`,
+    );
+    const slow = 'links/slow_a.enc';
+    mockGetBlob.mockImplementation(async (url: string) => {
+      const path = pathFor(url);
+      if (failing.includes(path)) throw expired;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return new Uint8Array([0xee, ...utf8(path)]);
+    });
+
+    await expect(
+      runInitialSync(
+        deps({
+          filesListPage: async (pageToken) => {
+            if (pageToken === undefined) {
+              return {
+                files: [slow, ...failing].map((path) => ({ path, updatedAt: 100 })),
+                nextPageToken: 'page-2',
+              };
+            }
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            return { files: [{ path: EXTRACTION_PATH, updatedAt: 101 }], nextPageToken: null };
+          },
+        }),
+      ),
+    ).rejects.toBe(expired);
+
+    expect(await bodyAt(slow)).toBe(slow);
   });
 });
 

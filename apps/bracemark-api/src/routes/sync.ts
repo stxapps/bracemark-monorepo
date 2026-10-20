@@ -89,14 +89,17 @@ export const syncRoutes = new Hono<AppEnv>()
     async (c) => {
       const { ops } = c.req.valid('json');
       const { userId } = c.get('session');
-      // For each put the service HEADs the object (existence check + R2's
-      // LastModified + its size for the quota map); for a delete it removes the
-      // R2 object itself (the client can't — files/sign mints only PUT/GET URLs),
-      // stamps the commit clock, and frees the size. A put with no R2 object is dropped from
-      // the batch — never log an op the log can't back (op-without-object 404s
-      // every puller), so `results` omits it and the client retries. The contract
-      // caps `ops` at MAX_COMMIT_OPS, sized so the HEADs fit the invocation's
-      // subrequest budget; over the cap zValidator 400s before any work runs.
+      // Each put is resolved to R2's LastModified + its size for the quota map —
+      // from its upload receipt where it carries one the api can trust
+      // (r2/upload-receipt.ts), else from R2 itself, which is also the existence
+      // check (a listing or HEADs, r2/user-files.ts statMany). For a delete the
+      // service removes the R2 object itself (the client can't — files/sign mints
+      // only PUT/GET URLs), stamps the commit clock, and frees the size. A put with
+      // no R2 object is dropped from the batch — never log an op the log can't
+      // back (op-without-object 404s every puller) — and named in `failed`, so the
+      // client re-PUTs. The contract caps `ops` at MAX_COMMIT_OPS, sized so those
+      // R2 calls fit the invocation's subrequest budget even with no receipts;
+      // over the cap zValidator 400s before any work runs.
       const body: OpsCommitResponse = await commitOps(c.env, userId, ops, timerFor(c));
       return c.json(body);
     },

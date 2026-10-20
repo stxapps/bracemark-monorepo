@@ -127,9 +127,10 @@ const FILES_PAGE = MAX_LIST_LIMIT;
 //
 // A large `files/` blob is bound by bandwidth and memory — each transfer holds
 // its blob in the JS heap, so peak ≈ concurrency × blob size — so it keeps the
-// narrow fan-out, whether it is uploaded (uploadOne, through a gate inside the
-// wide pass) or fetched (loadEntityContents, where the size is unknown until it
-// arrives, so every content GET counts as large).
+// narrow fan-out, whether it is uploaded (uploadOne, through gates inside the
+// wide pass — its first read among them, since the size is in the record) or
+// fetched (loadEntityContents, where the size is unknown until it arrives, so
+// every content GET counts as large).
 const INDEX_CONCURRENCY = 96;
 const FILE_CONCURRENCY = 8;
 
@@ -1085,8 +1086,10 @@ async function pushPutPass(
 ): Promise<{ refused: number; left: LeftOp[] }> {
   // Homogeneous by contract (the caller splits the kinds), so the first op names it.
   const kind = puts.length > 0 && isContentPath(puts[0].path) ? 'content' : 'index';
-  // Per set, not per chunk: chunks overlap, and the cap is on the set's heap.
-  const largeGate = createLimiter(FILE_CONCURRENCY);
+  const gates: ContentGates = {
+    read: createLimiter(FILE_CONCURRENCY),
+    large: createLimiter(FILE_CONCURRENCY),
+  };
   const pass: PassFailures = { count: 0 };
   const left: LeftOp[] = [];
 
@@ -1101,8 +1104,7 @@ async function pushPutPass(
     lead: kind === 'content' ? 2 * FILE_CONCURRENCY : 2 * concurrency,
     sign: (batch) => signPushable(deps, batch),
     // Ticked as the transfer settles, not as its chunk commits (pushPending).
-    upload: (op, signed) =>
-      uploadOne(deps, op, signed, largeGate, pass).finally(() => tick(op.path)),
+    upload: (op, signed) => uploadOne(deps, op, signed, gates, pass).finally(() => tick(op.path)),
     commit: commitChunk,
     now: trace.now,
   });
@@ -1334,28 +1336,48 @@ type PutResult =
 //
 // A `files/` blob past LARGE_CONTENT_BYTES waits for one of FILE_CONCURRENCY
 // slots inside the pass's own fan-out, and lets go of its bytes while it waits:
-// its size is known only once its record is read, and a pass of large blobs each
-// holding its bytes in a queue would put the full fan-out of them in the heap.
-// It reads its record again once it has a slot — the same paired read, so the
-// writeId test is taken again on the bytes it actually sends.
+// a pass of large blobs each holding its bytes in a queue would put the full
+// fan-out of them in the heap. It reads its record again once it has a slot —
+// the same paired read, so the writeId test is taken again on the bytes it
+// actually sends.
+//
+// Its size is known only once its record is read, and a Dexie read is the whole
+// record, bytes and all — so the FIRST read of a content record is gated too
+// (`ContentGates.read`, FILE_CONCURRENCY wide). Ungated, the pass's fan-out read
+// that many records at once before any of them reached the large gate: 96 page
+// copies in the heap at the start of every content pass. The read is a local
+// IndexedDB get, so the narrow gate costs a small blob milliseconds, and it is
+// released before the blob is sent. An index record is read ungated: every one
+// is small.
 async function uploadOne(
   deps: SyncDeps,
   op: PendingOpRecord,
   signed: SignedUrl | undefined,
-  largeGate: <T>(run: () => Promise<T>) => Promise<T>,
+  gates: ContentGates,
   pass: PassFailures,
 ): Promise<PutResult> {
-  const data = await readForUpload(op);
+  const content = isContentPath(op.path);
+  const data = await (content ? gates.read(() => readForUpload(op)) : readForUpload(op));
   if (!(data instanceof Uint8Array)) return { kind: data };
   if (!signed) return { kind: 'unsigned' };
 
-  if (isContentPath(op.path) && data.byteLength > LARGE_CONTENT_BYTES) {
-    return largeGate(async () => {
+  if (content && data.byteLength > LARGE_CONTENT_BYTES) {
+    return gates.large(async () => {
       const held = await readForUpload(op);
       return held instanceof Uint8Array ? send(deps, op, held, signed, pass) : { kind: held };
     });
   }
   return send(deps, op, data, signed, pass);
+}
+
+// The two FILE_CONCURRENCY-wide limits a put set's content runs through inside its
+// wide fan-out (uploadOne): `read` for a record's first read, whose size is not yet
+// known, and `large` for a blob past LARGE_CONTENT_BYTES from its re-read to the end
+// of its send. Per set, not per chunk: chunks overlap, and the cap is on the set's
+// heap. At most 2 × FILE_CONCURRENCY large blobs are held at once.
+interface ContentGates {
+  read: <T>(run: () => Promise<T>) => Promise<T>;
+  large: <T>(run: () => Promise<T>) => Promise<T>;
 }
 
 // The op's bytes if its queue row is still this op, or which way it isn't.
@@ -1475,17 +1497,25 @@ interface PullRun {
   add(entries: Entry[]): Promise<void>;
   // Nothing more is coming: resolves once every queued GET has been stored.
   finish(): Promise<void>;
-  // The feed failed: stop starting GETs.
-  abandon(reason: unknown): void;
+  // The feed failed: stop starting GETs. Resolves once the GETs in flight have
+  // stored or failed, so the pull never rejects with one still writing.
+  abandon(reason: unknown): Promise<void>;
 }
 
 // Run `feed` against a pull and finish it — or, when the feed throws, abandon the
-// fan-out so it starts nothing more, and rethrow.
+// fan-out so it starts nothing more, wait out the GETs already in flight, and
+// rethrow. The wait is what keeps a failed first sync from returning with GETs
+// still storing: its retry starts a second pull a few seconds later, and a
+// straggler from the first could land a path's older version over the newer one
+// the retry had stored — under a cursor the retry then claims above both, so the
+// path stays stale until it is next written. The feed throws on its next page
+// once the fan-out has failed (the outage stop), so this is the path a first
+// sync's ordinary failure takes, not a rare one.
 async function feedPull(pull: PullRun, feed: (pull: PullRun) => Promise<void>): Promise<void> {
   try {
     await feed(pull);
   } catch (err) {
-    pull.abandon(err);
+    await pull.abandon(err);
     throw err;
   }
   await pull.finish();
@@ -1690,7 +1720,7 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
       }
     },
     abandon(reason) {
-      fanOut.abandon(reason);
+      return fanOut.abandon(reason);
     },
   };
 }

@@ -38,12 +38,15 @@ export const RATE_LIMIT_TIERS = {
   // transfers within seconds. Keyed by the user the blob token names
   // (blobRateLimitKey), not the IP. Wide on purpose (configured 10,000 req /
   // 10s): it bounds replaying a token — a GET token is good for an hour — and
-  // must never bound a sync, because a 429 here FAILS that transfer, and a pull
-  // fails whole on one (the engines retry a cycle, not a transfer). The bucket is
-  // the account's, so every device of it shares it, and a fast path is fast:
-  // locally one account's two browsers went past 2,000 in 10 s (a floor leg's
-  // 1,920 GETs, then a push), and 99 PUTs were refused. A 24-wide fan-out reaches
-  // 10,000 only below a 24 ms round trip.
+  // must never bound a sync. A 429 here costs the transfer its Retry-After, the
+  // whole window: the engines wait it out and try again in place, then once more
+  // in the set's second pass, and only past those does it fail the cycle
+  // (docs/local-first-sync.md, _retrying a failure_). The bucket is the account's,
+  // so every device of it shares it, and a fast path is fast: locally one
+  // account's two browsers went past 2,000 in 10 s (a floor leg's 1,920 GETs, then
+  // a push), and 99 PUTs were refused. The engines' 96-wide fan-out reaches 10,000
+  // only below a 96 ms round trip, where staging's blob-route transfers took
+  // ~0.6 s a GET and ~1.1 s a PUT.
   blob: 'API_RATE_LIMIT_BLOB',
 } as const satisfies Record<string, keyof Bindings>;
 
