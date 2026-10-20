@@ -2230,7 +2230,12 @@ passes show in a trace: the second is a `push.again` or `pull.again` span.
   sleeps has no timer to keep, and its cycles already have a schedule — saves,
   the popup, and an hourly `bracemark-sync` alarm
   (`bracemark-extension/entrypoints/background.ts`). It gets L1 and L2, which
-  live in the engine.
+  live in the engine. What it does keep is a run's own lifetime: the browser
+  kills an idle worker mid-cycle, so the runner holds it up for the run and
+  leaves a one-minute resume alarm behind — a dead-man's switch, cleared by a
+  run that ends, failed ones included, so it is never a retry
+  ([browser-extension.md](./browser-extension.md), _a cycle outlives the idle
+  timeout_).
 
 **Stop feeding an outage.** Once 20 ops of a set (`SET_OUTAGE_FAILURES`) have
 spent their L1 tries, the set starts no more transfers, skips L2 and fails the

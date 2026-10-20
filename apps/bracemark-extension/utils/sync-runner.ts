@@ -104,6 +104,55 @@ async function setState(patch: Partial<MirroredSyncState>): Promise<void> {
   await writeMirroredSyncState(state);
 }
 
+// KEEP THE WORKER UP FOR THE RUN, AND BRING IT BACK IF IT GOES ANYWAY.
+// Both browsers tear the background down after 30 s without extension-API
+// activity — Firefox's event page and Chrome's service worker alike — and
+// neither counts a `fetch` or an IndexedDB write as activity. A run is mostly
+// those: a big library's first pull lists and downloads for minutes and makes no
+// `browser.*` call until the listing ends and its progress count starts
+// (`startPull`, web-react engine.ts). With the popup open the page is held up
+// by the view; with it closed the run was killed ~30 s in, and resumed only on
+// the next wake — the popup reopened, or the hourly alarm — so a large library
+// crawled forward an hour at a time while the mirror still read "syncing".
+//
+// One call does both jobs: re-arming a one-shot alarm is an extension-API call,
+// which resets the idle timer in both browsers (Firefox: every background call
+// reaching the parent, `"parentapicall"`; Chrome ≥110: any API call), and the
+// alarm it pushes forward is a dead-man's switch. A healthy run moves it out of
+// reach every tick and clears it in its `finally`; a run the browser killed
+// anyway (Chrome's 30 s cap on one fetch response, its 5 min cap on one event, a
+// crash) leaves it standing, and it wakes a fresh worker a minute later, whose
+// spin-up kick (background.ts) resumes the pull where it stopped. The alarm
+// itself carries no work. A run that FAILED clears it too: retrying an error is
+// a fresh kick's job, not this switch's (the trailing-rerun rule below).
+//
+// The tick sits under the 30 s timeout with room for a busy event loop; the
+// delay is 1 min because Chrome below 120 floors an alarm there (120 dropped
+// it to 30 s), and our floor is 111.
+//
+// This is NOT a keepalive for an idle worker — Mozilla calls that an
+// anti-pattern, and Chrome's docs say the same. It lives exactly as long as
+// `inflight`.
+export const SYNC_RESUME_ALARM = 'bracemark-sync-resume';
+const KEEPALIVE_TICK_MS = 20_000;
+const RESUME_DELAY_MINUTES = 1;
+
+function keepAliveForRun(): () => Promise<void> {
+  const arm = (): void => {
+    // Awaited inside an async fn rather than `.catch`ed: Firefox's
+    // `alarms.create` returns undefined, not the promise the types declare.
+    void (async () => {
+      await browser.alarms.create(SYNC_RESUME_ALARM, { delayInMinutes: RESUME_DELAY_MINUTES });
+    })().catch(() => undefined);
+  };
+  arm();
+  const tick = setInterval(arm, KEEPALIVE_TICK_MS);
+  return async () => {
+    clearInterval(tick);
+    await browser.alarms.clear(SYNC_RESUME_ALARM).catch(() => false);
+  };
+}
+
 export function runSync(): Promise<void> {
   if (inflight) {
     rerunRequested = true;
@@ -117,6 +166,7 @@ export function runSync(): Promise<void> {
   const progress = createProgressCoalescer<MirroredSyncProgress>((p) => {
     void writeMirroredSyncProgress(p).catch(() => undefined);
   });
+  const stopKeepAlive = keepAliveForRun();
 
   inflight = (async () => {
     try {
@@ -205,6 +255,7 @@ export function runSync(): Promise<void> {
     } finally {
       progress.cancel();
       await clearMirroredSyncProgress().catch(() => undefined);
+      await stopKeepAlive();
       inflight = null;
       rerunRequested = false;
     }

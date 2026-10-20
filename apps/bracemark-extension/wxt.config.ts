@@ -203,7 +203,9 @@ export default defineConfig({
         'storage',
         // The background service worker is ephemeral in MV3 — it can't hold a
         // long-running loop — so the sync + extraction cycles are driven by a
-        // periodic browser.alarms tick (see entrypoints/background.ts).
+        // periodic browser.alarms tick (see entrypoints/background.ts), and a
+        // long cycle leaves a one-shot alarm behind to resume it if the browser
+        // kills the worker mid-run (utils/sync-runner.ts).
         'alarms',
         // activeTab grants temporary host access to the current tab on click,
         // covering url/title reads + captureVisibleTab on it

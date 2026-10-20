@@ -262,6 +262,59 @@ context that has to reach the data:
   popup-driven today; keep it that way, or mirror the clear through a message to
   the popup/offscreen context.
 
+### a cycle outlives the idle timeout
+
+**Both browsers kill the background 30 s after its last extension-API call** —
+Firefox's event page (`extensions.background.idle.timeout`) and Chrome's MV3
+service worker alike — and neither counts a `fetch` or an IndexedDB write as
+activity. While the popup is open, the view holds the page up; once it closes,
+the clock runs. A sync cycle is almost nothing but fetches and IndexedDB
+writes, and a large library's **first pull is silent for minutes**: it reports
+no progress until its listing ends (`startPull`, web-react `engine.ts` — a total
+that grew under the bar would be fake progress), so it makes no `browser.*`
+call at all, and the progress mirror's `storage.session` writes that would have
+counted start too late. The specimen: signing in on Firefox with a big library,
+the pull ran while the popup was open and stopped ~30 s after it closed. It
+resumed (a first pull resumes where it stopped) only on the next wake — the
+popup reopened, or the hourly alarm — so it crawled forward an hour at a time,
+while the mirror, last written by the dead worker, still read "syncing".
+
+`utils/sync-runner.ts` fixes it with **one call doing two jobs**, for exactly
+as long as `inflight`:
+
+- **The keepalive.** Every 20 s the run re-creates a one-shot alarm,
+  `bracemark-sync-resume`. That is an extension-API call, which resets the idle
+  timer in both browsers (Firefox resets it on every background call that
+  reaches the parent — `"parentapicall"` in `ext-backgroundPage.js`; Chrome on
+  any API call since 110).
+- **The dead-man's switch.** Each re-create pushes the alarm a minute out, so a
+  healthy run never lets it fire, and the run's `finally` clears it. A worker
+  killed anyway — Chrome's caps on one fetch response (30 s) and on one event
+  (5 min), a crash — leaves it standing; it wakes a fresh worker a minute later,
+  and that worker's spin-up kick is the resume. `background.ts` deliberately
+  gives the alarm no branch: running a cycle there too would only queue a
+  trailing rerun behind the one the spin-up already started.
+
+Three things are easy to get wrong here:
+
+- **It is not a keepalive for an idle worker.** Mozilla calls that an
+  anti-pattern and Chrome's docs agree; this lives and dies with the run.
+- **A FAILED run clears the alarm too.** Left standing, it would retry an
+  error every minute with no backoff — the loop the runner's "a failed cycle
+  drops the rerun" rule exists to prevent. Retrying an error stays a fresh
+  kick's job.
+- **Firefox's `alarms.create` returns `undefined`**, not the `Promise<void>`
+  WXT's types declare, so a `.catch` chained straight onto it throws. The
+  runner awaits it inside an async function instead.
+
+Asking the user to hold the popup open was the alternative, and the wrong one:
+Firefox closes the popup on any click outside it, and it would cover only the
+cycles the popup started — not the alarm's, nor a save's.
+
+**Debugging it hides it.** Firefox never suspends an event page while a DevTools
+toolbox is attached to the extension, so reproduce with the toolbox closed (and
+`extensions.background.idle.timeout` lowered in `about:config` to see it sooner).
+
 ### the extension runs its own sign-in — it does not inherit the web session
 
 The non-extractable `encryptionKey` (AES-256-GCM `CryptoKey`) can't cross the

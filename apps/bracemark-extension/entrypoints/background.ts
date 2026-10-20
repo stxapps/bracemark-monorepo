@@ -9,6 +9,9 @@
  *     host grant), so it never bg-fetches saved URLs; the bg-fetch residual is owned
  *     by `bracemark-extractor` or Expo's `all` mode (docs/link-extraction.md "the extension is
  *     active-context only").
+ *     A cycle can outlast the worker's 30 s idle timeout (a big library's first
+ *     pull), so the runner holds the worker up for the run and leaves a one-shot
+ *     alarm behind to wake it if it dies anyway (utils/sync-runner.ts).
  *   - it answers the typed popup → background message protocol, owning ALL
  *     privileged / CORS-exempt work: KICK_SYNC (run a cycle now) and EXTRACT (capture
  *     a facet from the active tab + write back). Reading sync status is NOT a message —
@@ -41,6 +44,10 @@ export default defineBackground(() => {
   browser.alarms.create(SYNC_ALARM, { periodInMinutes: SYNC_PERIOD_MINUTES });
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === SYNC_ALARM) void withSession(runSync);
+    // The runner's SYNC_RESUME_ALARM gets no branch on purpose: it only fires
+    // when the browser killed this worker mid-run, and the wake IS the resume —
+    // the spin-up kick below has already restarted the cycle. Running it here
+    // too would queue a trailing rerun for nothing (utils/sync-runner.ts).
   });
 
   // Kick one cycle as the worker spins up (on install / browser start / wake).

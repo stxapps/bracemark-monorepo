@@ -91,7 +91,7 @@ that reading comes _before_ the edit; nothing downstream will tell you.
 | safe-area insets, viewport sizing, popup positioning; the links rail's width   | `safe-area.md` ⚠                |
 | **an expo screen on a wide window** — tablets, foldables, rotation, the rails  | `safe-area.md` ⚠                |
 | **the soft keyboard** — avoidance, dismissal, why a field is stuck             | `soft-keyboard.md` ⚠            |
-| `bracemark-extension` auth flow                                                | `browser-extension.md`          |
+| `bracemark-extension` auth flow; **how long its background worker lives**      | `browser-extension.md` ⚠        |
 | the iOS **share extension** — its process, its imports, its sheet              | `share-sheet.md` ⚠              |
 | an expo dependency — router, uniwind, expo-image, fonts, IAP                   | `expo-dependencies.md`          |
 | prebuild, `app.config.ts`, the npm scripts, R8, signing, any native change     | `expo-build.md` ⚠               |

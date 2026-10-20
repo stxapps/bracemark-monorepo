@@ -118,6 +118,19 @@ describe('the recurring work', () => {
     expect(mockRunSync).toHaveBeenCalledTimes(1);
   });
 
+  // The runner's resume alarm only fires on a worker the browser killed
+  // mid-run, and that wake's spin-up kick is already the resume — a second
+  // runSync here would queue a trailing rerun for nothing.
+  it('does nothing on the runner’s resume alarm — the spin-up kick is the resume', async () => {
+    await boot();
+    mockRunSync.mockClear();
+
+    fake.alarms.onAlarm.dispatch('bracemark-sync-resume');
+    await flush();
+
+    expect(mockRunSync).not.toHaveBeenCalled();
+  });
+
   it('runs NO background extraction sweep — the extension is active-context only', async () => {
     // No `<all_urls>` grant, so it can never bg-fetch a saved URL; that residual
     // belongs to bracemark-extractor (docs/link-extraction.md).

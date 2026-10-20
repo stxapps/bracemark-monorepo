@@ -59,6 +59,7 @@ export interface FakeBrowser {
   };
   alarms: {
     create: jest.Mock;
+    clear: jest.Mock<Promise<boolean>, [string]>;
     onAlarm: {
       addListener: jest.Mock<void, [AlarmListener]>;
       /** Fire every registered alarm listener, as the browser would. */
@@ -160,6 +161,7 @@ export function createFakeBrowser(): FakeBrowser {
     },
     alarms: {
       create: jest.fn(),
+      clear: jest.fn(async (_name: string) => true),
       onAlarm: {
         addListener: jest.fn((l: AlarmListener) => {
           alarmListeners.add(l);

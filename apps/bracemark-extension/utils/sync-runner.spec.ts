@@ -18,6 +18,11 @@ import { MIRRORED_SYNC_STATE_KEY, type MirroredSyncState } from './mirrored-sync
 //     arrives mid-cycle may have enqueued ops the running cycle already collected
 //     past — so exactly one extra cycle has to follow. Without it those ops sit
 //     locally until the next wake, worst case an hour.
+//   - THE RUN OUTLIVES THE IDLE TIMEOUT. Both browsers kill the background after
+//     30 s without an extension-API call, and a pull's fetches and IndexedDB
+//     writes aren't one. Lose the keepalive and nothing fails here or in the popup
+//     — a big first sync just stops ~30 s after the popup closes, and with no
+//     resume alarm left behind it waits for the next wake, worst case an hour.
 //   - THE MIRROR IS THE ONLY OUTPUT. The popup and options page never call this;
 //     they read browser.storage.local. A cycle that ran perfectly and mirrored
 //     nothing is indistinguishable from one that never ran.
@@ -314,6 +319,64 @@ describe('runSync — the progress mirror', () => {
     await freshRunner().runSync();
 
     expect(seenAtStart).toBeUndefined();
+  });
+});
+
+describe('runSync — outliving the idle timeout', () => {
+  const RESUME = { delayInMinutes: 1 };
+  const resumeArms = () =>
+    fake.alarms.create.mock.calls.filter(([name]) => name === 'bracemark-sync-resume');
+
+  it('arms the resume alarm before the cycle, re-arms it under the idle timeout, and clears it after', async () => {
+    jest.useFakeTimers();
+    try {
+      mockIsFirstSyncDone.mockResolvedValue(false);
+      const pull = deferred<void>();
+      mockRunInitialSync.mockReturnValue(pull.promise);
+
+      const run = freshRunner().runSync();
+      // Armed synchronously, before anything awaits: a worker killed in the
+      // first seconds still has its switch.
+      expect(resumeArms()).toEqual([['bracemark-sync-resume', RESUME]]);
+
+      // A silent pull — no progress, so no other extension-API call at all.
+      // Every tick is one, and each lands inside the 30 s the browser allows.
+      await jest.advanceTimersByTimeAsync(20_000);
+      expect(resumeArms()).toHaveLength(2);
+      await jest.advanceTimersByTimeAsync(40_000);
+      expect(resumeArms()).toHaveLength(4);
+      expect(fake.alarms.clear).not.toHaveBeenCalled();
+
+      pull.resolve();
+      await run;
+      expect(fake.alarms.clear).toHaveBeenCalledWith('bracemark-sync-resume');
+
+      // And the ticking stops with it — this is no keepalive for an idle worker.
+      await jest.advanceTimersByTimeAsync(60_000);
+      expect(resumeArms()).toHaveLength(4);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  // An error left the alarm standing would retry it a minute later, every
+  // minute — the backoff-free loop the trailing-rerun rule exists to prevent.
+  it('clears the alarm when the run FAILS — retrying an error is a fresh kick’s job', async () => {
+    mockRunIncrementalSync.mockRejectedValue(new Error('offline'));
+
+    await freshRunner().runSync();
+
+    expect(fake.alarms.clear).toHaveBeenCalledWith('bracemark-sync-resume');
+  });
+
+  // Firefox's `alarms.create` returns undefined rather than a promise; a
+  // `.catch` chained straight onto it would throw out of the run.
+  it('copes with an alarms.create that returns no promise', async () => {
+    fake.alarms.create.mockReturnValue(undefined);
+
+    await freshRunner().runSync();
+
+    expect(mirror()).toMatchObject({ bgSyncStatus: 'idle', lastError: null });
   });
 });
 
