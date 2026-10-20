@@ -1213,7 +1213,12 @@ through one shared surface, and this entry changes with it.
 ### bulk edit
 
 Bulk edit is a **mode**, not a separate editor: the topbar toggles `bulkEditing`
-in `view-state-provider`, items grow a `LinkRowSelect` checkbox
+in `view-state-provider` — a button, or, when the bar's content is narrower
+than `COMPACT_BAR_REM` (16rem, `topbar.tsx`), the first item in More options,
+which only enters; the toolbar's ✕ is then the exit. In rem because text size
+squeezes the bar as much as width does: at a 320px viewport and a 24px default
+font the button row left the list name 8px. (Web only; expo's topbar was not
+part of that change.) In the mode, items grow a `LinkRowSelect` checkbox
 (`_layouts/shared/link-row-widgets.tsx`) and hide their options menu, and the
 `BulkEditToolbar` acts on the hoisted `selectedLinks` map (keyed by the stable
 `link.path`).

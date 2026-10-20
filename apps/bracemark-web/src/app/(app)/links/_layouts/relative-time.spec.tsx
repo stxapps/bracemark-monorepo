@@ -37,6 +37,29 @@ describe('RelativeTime', () => {
     expect(cell.getAttribute('aria-label')).not.toBe('Added date unknown');
   });
 
+  it('names the month past a year, either way, and counts within one', () => {
+    const now = Date.UTC(2026, 9, 20, 12);
+    jest.spyOn(Date, 'now').mockReturnValue(now);
+    const day = 24 * 60 * 60 * 1000;
+    const months = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short' });
+    try {
+      const { container } = render(
+        <>
+          <RelativeTime epochMs={Date.UTC(2009, 2, 14)} verb="Added" />
+          <RelativeTime epochMs={now + 400 * day} verb="Added" />
+          <RelativeTime epochMs={now + 3 * day} verb="Added" />
+        </>,
+      );
+      const cells = [...container.querySelectorAll('time')].map((cell) => cell.textContent);
+      // A count of years rounded 17.6 up to "18 yr. ago"; the month is exact.
+      expect(cells[0]).toBe(months.format(Date.UTC(2009, 2, 14)));
+      expect(cells[1]).toBe(months.format(now + 400 * day));
+      expect(cells[2]).not.toBe(months.format(now + 3 * day));
+    } finally {
+      jest.restoreAllMocks();
+    }
+  });
+
   it('still names the last instant on either side', () => {
     const { container } = render(
       <>

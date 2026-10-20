@@ -59,8 +59,15 @@ import { useEngagedOpen } from './hooks';
 //
 // Which is also why nothing in this file reads the selection: one fill answers
 // all three surfaces, so a chip never has to know what its item is doing.
-const TAG_CHIP_CLASS =
-  'max-w-32 shrink-0 truncate rounded-full bg-foreground/6 px-2 py-1 text-xs leading-4 text-foreground/80 hover:bg-foreground/12';
+const TAG_CHIP_BASE =
+  'max-w-32 truncate rounded-full bg-foreground/6 px-2 py-1 text-xs leading-4 text-foreground/80 hover:bg-foreground/12';
+const TAG_CHIP_CLASS = `${TAG_CHIP_BASE} shrink-0`;
+// The FIRST chip may shrink below its width. The measure keeps it even when no
+// whole chip fits beside "+N" — a narrow pane at a large default font size, where
+// `max-w-32` is wider than the line — and a strip of "+3" alone said a link had
+// tags without naming one. Every other kept chip fits by construction, so this
+// only ever moves when the first one doesn't.
+const FIRST_TAG_CHIP_CLASS = `${TAG_CHIP_BASE} min-w-0 shrink`;
 
 // Whether the strip renders anything for this link — EXACTLY the test the
 // component applies below, hoisted so a layout can ask it before rendering. Both
@@ -166,7 +173,8 @@ export function LinkTagChips({
           kept -= 1;
         }
       }
-      setVisibleCount(kept);
+      // At least one: see FIRST_TAG_CHIP_CLASS.
+      setVisibleCount(Math.max(kept, 1));
     };
 
     measure();
@@ -196,16 +204,19 @@ export function LinkTagChips({
     // through would still hold a dead frame around them.
     <div className={`${className} ${bulkEditing ? 'pointer-events-none' : ''}`}>
       <div className={`relative flex gap-1 overflow-hidden ${wrapClass}`}>
-        {visible.map(({ id, name }) =>
+        {/* `dir="auto"` on every chip: a tag name is the user's text, in any
+            script, and an Arabic one truncates from its own end. */}
+        {visible.map(({ id, name }, i) =>
           bulkEditing ? (
-            <span key={id} className={TAG_CHIP_CLASS}>
+            <span key={id} dir="auto" className={i === 0 ? FIRST_TAG_CHIP_CLASS : TAG_CHIP_CLASS}>
               {name}
             </span>
           ) : (
             <button
               key={id}
               type="button"
-              className={TAG_CHIP_CLASS}
+              dir="auto"
+              className={i === 0 ? FIRST_TAG_CHIP_CLASS : TAG_CHIP_CLASS}
               onClick={() => onTagClick(id)}
             >
               {name}
@@ -238,6 +249,7 @@ export function LinkTagChips({
                     <button
                       key={id}
                       type="button"
+                      dir="auto"
                       className={TAG_CHIP_CLASS}
                       onClick={() => {
                         setOverflowOpen(false);

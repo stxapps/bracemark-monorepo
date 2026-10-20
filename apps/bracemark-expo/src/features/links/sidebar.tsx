@@ -52,6 +52,7 @@ import {
   flattenTree,
   MY_LIST_ID,
   TRASH_ID,
+  TREE_INDENT_MAX_LEVELS,
   type TreeItem,
   type TreeNode,
   withoutSubtrees,
@@ -203,7 +204,9 @@ function NavItem({
   return (
     <View
       className="w-full flex-row items-center"
-      style={depth > 0 ? { paddingLeft: depth * 16 } : undefined}
+      // Capped at TREE_INDENT_MAX_LEVELS (@stxapps/shared sync/tree.ts): past it
+      // a deep chain's labels had no width left.
+      style={depth > 0 ? { paddingLeft: Math.min(depth, TREE_INDENT_MAX_LEVELS) * 16 } : undefined}
     >
       {onToggle ? (
         <Button

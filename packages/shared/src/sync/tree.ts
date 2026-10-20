@@ -250,6 +250,16 @@ export function treeNameMap<T extends TreeItem & { name: string }>(
 // label — and its indent stays at 32 guide lines, 768px of it.
 export const TREE_ROW_MAX_LEVELS = 32;
 
+// The most levels a sidebar row INDENTS — the links rail on both platforms,
+// 16px a level. A display bound, like TREE_ROW_MAX_LEVELS above and for the
+// same reason never a bound on the tree: past it a row keeps the indent of the
+// level at it. Without it the rail had nothing left for the label from about
+// level 5 at its narrowest (192px on web) and ran rows off its edge from level
+// 9, so a 100-deep chain scrolled the rail sideways by 1,600px; real bookmark
+// folders reach 6–10. Eight levels is 128px, which leaves a 192px rail room for
+// the chevron, the icon and a few characters of name.
+export const TREE_INDENT_MAX_LEVELS = 8;
+
 // Stands in for the names a path row leaves out past TREE_ROW_MAX_LEVELS, so a
 // cut path reads "Work / … / Recipes" rather than naming the wrong parent.
 export const TREE_PATH_CUT = '…';

@@ -15,9 +15,32 @@ import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
 
 const MINUTE = 60 * 1000;
+// Past a year either way the column names the month instead ("Mar 2009"), as
+// web does: a count of years rounds a long way (17.6 years read "18y"). Spelled
+// out by hand for the same Hermes reason as the units — and English, like the
+// rest of this app's copy.
+const YEAR_MS = 365 * 24 * 60 * MINUTE;
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+function monthOf(epochMs: number, spoken: boolean): string {
+  const date = new Date(epochMs);
+  const month = MONTHS[date.getMonth()];
+  return `${spoken ? month : month.slice(0, 3)} ${date.getFullYear()}`;
+}
 // [visible suffix, spoken unit, length]
 const RELATIVE_UNITS: [string, string, number][] = [
-  ['y', 'year', 365 * 24 * 60 * MINUTE],
   ['mo', 'month', 30 * 24 * 60 * MINUTE],
   ['w', 'week', 7 * 24 * 60 * MINUTE],
   ['d', 'day', 24 * 60 * MINUTE],
@@ -25,11 +48,18 @@ const RELATIVE_UNITS: [string, string, number][] = [
   ['m', 'minute', MINUTE],
 ];
 
-// Compact "3d" / "2mo" for the date column: the largest unit that fits.
+// Compact "3d" / "2mo" for the date column: the largest unit that fits. A
+// date in the FUTURE — another device's clock running fast — reads "in 3d"; it
+// used to fall through every unit to "now".
 function formatRelativeTime(epochMs: number): string {
   const diff = Date.now() - epochMs;
+  const abs = Math.abs(diff);
+  if (abs >= YEAR_MS) return monthOf(epochMs, false);
   for (const [unit, , ms] of RELATIVE_UNITS) {
-    if (diff >= ms) return `${Math.round(diff / ms)}${unit}`;
+    if (abs >= ms) {
+      const count = `${Math.round(abs / ms)}${unit}`;
+      return diff < 0 ? `in ${count}` : count;
+    }
   }
   return 'now';
 }
@@ -41,10 +71,13 @@ function formatRelativeTime(epochMs: number): string {
 // disagree.
 function spokenRelativeTime(epochMs: number): string {
   const diff = Date.now() - epochMs;
+  const abs = Math.abs(diff);
+  if (abs >= YEAR_MS) return monthOf(epochMs, true);
   for (const [, unit, ms] of RELATIVE_UNITS) {
-    if (diff >= ms) {
-      const count = Math.round(diff / ms);
-      return `${count} ${unit}${count === 1 ? '' : 's'} ago`;
+    if (abs >= ms) {
+      const count = Math.round(abs / ms);
+      const units = `${count} ${unit}${count === 1 ? '' : 's'}`;
+      return diff < 0 ? `in ${units}` : `${units} ago`;
     }
   }
   return 'just now';

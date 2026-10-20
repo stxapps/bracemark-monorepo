@@ -258,7 +258,10 @@ export function LinkPreviewImage({
         contentFit="cover"
         cachePolicy="memory"
         recyclingKey={uri}
-        className={className}
+        // The plate behind a real image too, as on web: a logo on a
+        // transparent background otherwise loses its edge, and a dark one
+        // disappears into a dark row. Opaque images cover it.
+        className={`${PLATE_CLASS} ${className}`}
       />
     );
   }

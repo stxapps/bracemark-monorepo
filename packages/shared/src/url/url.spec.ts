@@ -1,4 +1,11 @@
-import { canonicalUrlKey, displayUrl, hostFromText, hostFromUrl, normalizeUrl } from './url';
+import {
+  canonicalUrlKey,
+  displayUrl,
+  hostFromText,
+  hostFromUrl,
+  normalizeUrl,
+  openableUrl,
+} from './url';
 
 describe('normalizeUrl', () => {
   it('prepends https:// to a bare domain', () => {
@@ -155,6 +162,33 @@ describe('hostFromUrl / hostFromText', () => {
     // is not a URL by design. A slightly-off label beats a crashed list row.
     expect(hostFromText('note to self')).toBe('note to self');
     expect(hostFromText('')).toBe('');
+  });
+
+  it('falls back to the raw string when the text parses with no host', () => {
+    // A confirm-saved `host:port` parses — as the scheme `nas.home.invalid:` —
+    // with an empty hostname, which left the row's host line blank.
+    expect(hostFromText('nas.home.invalid:5000/photo')).toBe('nas.home.invalid:5000/photo');
+    expect(hostFromText('mailto:someone@example.com')).toBe('mailto:someone@example.com');
+  });
+});
+
+describe('openableUrl', () => {
+  it('opens an http(s) url as stored', () => {
+    expect(openableUrl('https://example.com/a?b=1')).toBe('https://example.com/a?b=1');
+    expect(openableUrl('HTTP://example.com')).toBe('HTTP://example.com');
+  });
+
+  it('opens a confirm-saved host:port over http', () => {
+    expect(openableUrl('nas.home.invalid:5000/photo')).toBe('http://nas.home.invalid:5000/photo');
+    expect(openableUrl('localhost:3000')).toBe('http://localhost:3000');
+  });
+
+  it('opens nothing for prose, other schemes, or a userinfo trick', () => {
+    expect(openableUrl('note to self')).toBeUndefined();
+    expect(openableUrl('draft')).toBeUndefined();
+    expect(openableUrl('mailto:someone@example.com')).toBeUndefined();
+    expect(openableUrl('javascript:alert(1)')).toBeUndefined();
+    expect(openableUrl('ftp://files.example.com/a')).toBeUndefined();
   });
 });
 

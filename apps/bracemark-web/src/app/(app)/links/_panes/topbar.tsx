@@ -37,12 +37,13 @@
 // toggles view-state-provider's `bulkEditing` — rows become selectable and the
 // main pane shows the BulkEditToolbar).
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { PanelLeftOpen, Search, SquarePen } from 'lucide-react';
 
 import { ALL_LABEL, flattenTree } from '@stxapps/shared';
 import { useLists, useTags } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
+import { useElementWidth } from '@stxapps/web-ui/hooks/use-element-size';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { LinkAddSurface } from '../_components/link-add-surface';
@@ -117,8 +118,25 @@ function ShowRailButton() {
   );
 }
 
+// The bar's content width, in rem, below which Bulk edit moves from a button into
+// More options. The actions take 10.25rem (four 2.25rem squares and their gaps),
+// the header's gap 0.75, and the title needs about 5 to show a short list name
+// beside the drawer chevron. In rem, not px, because what squeezes the bar is
+// TEXT SIZE as much as width: at a 320px viewport the title kept 85px at the
+// default 16px and 8px — nothing — at 24px, while every button grew to 54.
+// So a phone at the default size keeps its button (and every flow that clicks
+// it), and the menu takes it only where the title would otherwise vanish.
+const COMPACT_BAR_REM = 16;
+
 export function Topbar() {
   const label = useSelectionLabel();
+  const [header, setHeader] = useState<HTMLElement | null>(null);
+  const headerWidth = useElementWidth(header);
+  // 0 until measured (SSR, first paint): full bar until then. The root size is
+  // read here rather than cached — it is the user's setting and can change.
+  const compact =
+    headerWidth > 0 &&
+    headerWidth < COMPACT_BAR_REM * parseFloat(getComputedStyle(document.documentElement).fontSize);
   const { collapsed: railCollapsed } = useSidebarRail();
   const {
     bulkEditing,
@@ -157,7 +175,10 @@ export function Topbar() {
 
   return (
     <>
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
+      <header
+        ref={setHeader}
+        className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4"
+      >
         {railCollapsed && <ShowRailButton />}
 
         {/* One `h1` at every width — what changes is whether its content is a
@@ -234,16 +255,21 @@ export function Topbar() {
             >
               <Search className="size-4" />
             </Button>
-            <Button
-              variant={bulkEditing ? 'secondary' : 'ghost'}
-              size="icon"
-              aria-label="Bulk edit"
-              aria-pressed={bulkEditing}
-              onClick={() => (bulkEditing ? exitBulkEdit() : enterBulkEdit())}
-            >
-              <SquarePen className="size-4" />
-            </Button>
-            <MoreOptionsMenu />
+            {/* Compact (COMPACT_BAR_REM), the toggle is a menu item instead,
+                and only for ENTERING: once in the mode, the bulk-edit toolbar's
+                own ✕ is the exit. */}
+            {!compact && (
+              <Button
+                variant={bulkEditing ? 'secondary' : 'ghost'}
+                size="icon"
+                aria-label="Bulk edit"
+                aria-pressed={bulkEditing}
+                onClick={() => (bulkEditing ? exitBulkEdit() : enterBulkEdit())}
+              >
+                <SquarePen className="size-4" />
+              </Button>
+            )}
+            <MoreOptionsMenu onBulkEdit={compact && !bulkEditing ? enterBulkEdit : undefined} />
           </div>
         </div>
       </header>

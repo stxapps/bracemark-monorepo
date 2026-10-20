@@ -1,4 +1,4 @@
-import { type Facet, LINK_TITLE_MAX } from './entities';
+import { cutToLength, type Facet, LINK_TITLE_MAX } from './entities';
 
 // The shared extraction OUTCOME rules — title normalization, quality ranking, retry pacing,
 // and (re)extraction eligibility — that every client must agree on. They operate on the
@@ -67,7 +67,7 @@ export function cleanTitle(raw: string | undefined): string | undefined {
   if (raw === undefined) return undefined;
   const collapsed = raw.replace(/\s+/g, ' ').trim();
   if (collapsed === '') return undefined;
-  return collapsed.length > LINK_TITLE_MAX ? collapsed.slice(0, LINK_TITLE_MAX) : collapsed;
+  return cutToLength(collapsed, LINK_TITLE_MAX);
 }
 
 // Build a facet-state write — the single constructor every extraction WRITER uses to

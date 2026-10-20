@@ -5,7 +5,7 @@
 // link-tag-chips.tsx, link-row-menu.tsx, link-media.tsx).
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Linking, Pressable, ScrollView, View } from 'react-native';
 import {
   Archive,
   Folder,
@@ -26,6 +26,7 @@ import {
   DEFAULT_LIST_ID,
   hasPositiveNoteClause,
   type LinkSortOn,
+  openableUrl,
   TRASH_ID,
   treeNameMap,
 } from '@stxapps/shared';
@@ -75,6 +76,15 @@ export type LinkItemProps = {
   // render (see the memo note above); the item supplies its own link.
   onToggle: (link: LinkView) => void;
 };
+
+// What a row or card's press opens: `openableUrl` (@stxapps/shared url/url.ts),
+// so a confirm-saved `host:port` opens over http instead of asking the OS for a
+// scheme no app handles — a rejected promise and a press that did nothing. A url
+// nothing can open stays a no-op, as on web, where its anchor has no href.
+export function openLink(url: string): void {
+  const href = openableUrl(url);
+  if (href) void Linking.openURL(href).catch(() => undefined);
+}
 
 // Both badges are labelled with `accessibilityLabel`, NOT web's `aria-label`: an
 // `Icon` is react-native-svg's `Svg`, which hands its props to the native view

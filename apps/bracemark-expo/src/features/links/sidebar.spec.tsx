@@ -9,7 +9,13 @@ import {
   useTags,
   writeSidebarCollapsedIds,
 } from '@stxapps/expo-react';
-import { buildTree, LIST_NO_CHILDREN_IDS, type ListItem, type TagItem } from '@stxapps/shared';
+import {
+  buildTree,
+  LIST_NO_CHILDREN_IDS,
+  type ListItem,
+  type TagItem,
+  TREE_INDENT_MAX_LEVELS,
+} from '@stxapps/shared';
 
 import type { Selection } from './page-provider';
 import { Sidebar } from './sidebar';
@@ -287,7 +293,7 @@ describe('Sidebar — a tree that changes under it', () => {
 // under jest; the list tree itself is built without recursion and is not what
 // is being tested (@stxapps/shared sync/tree.spec.ts goes far deeper).
 describe('Sidebar — a chain deeper than React can nest', () => {
-  it('renders every row, the last one at its own depth', () => {
+  it('renders every row, indented by its depth up to the cap', () => {
     const DEPTH = 3000;
     setLists(
       Array.from({ length: DEPTH }, (_, i) => list(`l${i}`, `L${i}`, i === 0 ? null : `l${i - 1}`)),
@@ -303,6 +309,11 @@ describe('Sidebar — a chain deeper than React can nest', () => {
     expect(all).toHaveLength(DEPTH);
     const last = all[DEPTH - 1];
     expect(last.props.testID).toBe(`links-nav-list-l${DEPTH - 1}`);
-    expect(StyleSheet.flatten(rowBox(last).props.style)?.paddingLeft).toBe((DEPTH - 1) * 16);
+    // Each row is indented by its own depth, 16 a level — then no further than
+    // TREE_INDENT_MAX_LEVELS, or a deep chain's labels have no width left.
+    const indent = (row: Rendered) => StyleSheet.flatten(rowBox(row).props.style)?.paddingLeft;
+    expect(indent(all[3])).toBe(48);
+    expect(indent(all[TREE_INDENT_MAX_LEVELS])).toBe(TREE_INDENT_MAX_LEVELS * 16);
+    expect(indent(last)).toBe(TREE_INDENT_MAX_LEVELS * 16);
   });
 });

@@ -8,7 +8,7 @@
 import { useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
-import { displayUrl, hostFromText } from '@stxapps/shared';
+import { displayUrl, hostFromText, openableUrl } from '@stxapps/shared';
 
 import { useLinksViewState } from '../_contexts/view-state-provider';
 import { RelativeTime } from './relative-time';
@@ -195,6 +195,10 @@ export function ListLayout({
             const pinned = row.index < pinnedCount;
             // Needed twice below — as the row's text and as its `title` tooltip.
             const title = link.title || displayUrl(link.url);
+            // Undefined for a url nothing can open (url/url.ts) — both anchors
+            // then render without an href, so the row shows the link but no
+            // longer offers a click that does nothing.
+            const href = openableUrl(link.url);
             const selected = bulkEditing && selectedLinks.has(link.path);
             // In bulk-edit mode a click toggles selection instead of opening the
             // link; shift-click extends a range over `links` (the displayed
@@ -292,7 +296,7 @@ export function ListLayout({
                     one, so keyboard/AT skip it. */}
                 <div className="flex min-w-0 flex-1 items-start gap-3">
                   <a
-                    href={link.url}
+                    href={href}
                     target="_blank"
                     rel="noreferrer"
                     tabIndex={-1}
@@ -320,7 +324,7 @@ export function ListLayout({
                   </a>
                   <span className="min-w-0 flex-1">
                     <a
-                      href={link.url}
+                      href={href}
                       target="_blank"
                       rel="noreferrer"
                       className="block min-w-0"
@@ -347,8 +351,22 @@ export function ListLayout({
                           touch the row menu's editor is the path. (bracemark-expo
                           has no equivalent and needs none: RN has no tooltip, and
                           `numberOfLines` truncates the PAINT, not the accessible
-                          text.) */}
-                      <span className="line-clamp-2 text-sm font-medium" title={title}>
+                          text.)
+
+                          `dir="auto"`: the title is the page's text, in whatever
+                          script it was written, inside an LTR app. Without it an
+                          Arabic title is laid out as an LTR paragraph, so its
+                          opening words land at the far left — the END for its
+                          reader. `wrap-anywhere`: a title that is the url fallback,
+                          or one unbroken word, has no break opportunity, and the
+                          clamp's overflow-hidden would clip the first line mid-
+                          segment with no ellipsis. It breaks only where nothing
+                          else can. */}
+                      <span
+                        dir="auto"
+                        className="line-clamp-2 text-sm font-medium wrap-anywhere"
+                        title={title}
+                      >
                         {title}
                       </span>
                       {/* text-sm, matching the title's size — the host is the second

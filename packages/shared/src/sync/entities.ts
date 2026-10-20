@@ -70,9 +70,24 @@ export const TAG_NAME_MAX = 200;
 // names aren't.
 export const LINK_TAGS_MAX = 100;
 
+// Cut `text` to at most `max` UTF-16 code units — the unit every cap above
+// counts in — without splitting a surrogate pair. A bare `.slice(0, max)` that
+// lands between the two halves of an emoji (or any character outside the BMP)
+// keeps the first half alone, and that lone surrogate is stored and synced as
+// part of the value, rendering as `�` on every device. Dropping it keeps the
+// result under the cap, so nothing a schema checks moves. A grapheme (👩🏽‍💻 is
+// seven units) can still be cut between its code points into a shorter valid
+// sequence; cutting by grapheme needs `Intl.Segmenter`, which Hermes lacks.
+export function cutToLength(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const last = text.charCodeAt(max - 1);
+  const splitsPair = last >= 0xd800 && last <= 0xdbff;
+  return text.slice(0, splitsPair ? max - 1 : max);
+}
+
 // A list or tag name as a writer stores it: trimmed, then cut to `max`.
 export function cleanName(raw: string, max: number): string {
-  return raw.trim().slice(0, max).trimEnd();
+  return cutToLength(raw.trim(), max).trimEnd();
 }
 
 export const linkSchema = z.looseObject({

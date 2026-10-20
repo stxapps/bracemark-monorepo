@@ -15,17 +15,25 @@ const relativeTimeFormat = new Intl.RelativeTimeFormat(undefined, {
   numeric: 'auto',
   style: 'short',
 });
+// Past a year either way the column names the month instead ("Mar 2009"). A
+// count of years rounds a long way — 17.6 years read "18 yr. ago" — and at that
+// distance the month is what a reader places a bookmark by. The tooltip still
+// carries the exact instant. Long months for the accessible name, which a
+// screen reader would otherwise spell out.
+const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+const monthFormat = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short' });
+const spokenMonthFormat = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'long' });
 const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
-  ['year', 365 * 24 * 60 * 60 * 1000],
   ['month', 30 * 24 * 60 * 60 * 1000],
   ['week', 7 * 24 * 60 * 60 * 1000],
   ['day', 24 * 60 * 60 * 1000],
   ['hour', 60 * 60 * 1000],
   ['minute', 60 * 1000],
 ];
-function formatRelativeTime(epochMs: number): string {
+function formatRelativeTime(epochMs: number, spoken = false): string {
   const diff = epochMs - Date.now(); // < 0 for the past
   const abs = Math.abs(diff);
+  if (abs >= YEAR_MS) return (spoken ? spokenMonthFormat : monthFormat).format(epochMs);
   for (const [unit, ms] of RELATIVE_UNITS) {
     if (abs >= ms) return relativeTimeFormat.format(Math.round(diff / ms), unit);
   }
@@ -63,7 +71,7 @@ export function RelativeTime({
     <time
       dateTime={new Date(epochMs).toISOString()}
       title={`${verb} ${new Date(epochMs).toLocaleString()}`}
-      aria-label={`${verb} ${formatRelativeTime(epochMs)}`}
+      aria-label={`${verb} ${formatRelativeTime(epochMs, true)}`}
       className={className}
     >
       {formatRelativeTime(epochMs)}

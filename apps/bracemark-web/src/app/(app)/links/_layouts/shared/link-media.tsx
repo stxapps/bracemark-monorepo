@@ -187,8 +187,11 @@ export function LinkPreviewImage({
 }) {
   const url = useImageFileUrl(link.imageId);
 
+  // The plate goes behind a REAL image too: a preview can be a logo on a
+  // transparent background, and with nothing behind it the slot loses its edge
+  // and a dark logo disappears into a dark row. Opaque images cover it.
   if (url) {
-    return <img src={url} alt="" className={`object-cover ${className}`} />;
+    return <img src={url} alt="" className={`object-cover ${PLATE_CLASS} ${className}`} />;
   }
 
   const host = hostFromText(link.url);

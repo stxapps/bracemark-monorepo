@@ -61,7 +61,21 @@ those don't, and would add a limit sync then has to carry. `maxLinks` is the one
 count, a plan lever rather than a safety bound, and it is client-side.
 
 **The url is uncapped on purpose.** It is the link's identity: a cut url is a
-different link. The byte quota is its only backstop (`entities.ts`).
+different link. The byte quota is its only backstop (`entities.ts`). What a row
+OPENS is a separate question: a url saved raw past `normalizeUrl`'s warning
+opens through `openableUrl` (`url/url.ts`) — a schemeless `host:port` over
+`http://`, anything nothing can open as a row with no link — and the stored
+value is never touched.
+
+**Every cut keeps whole characters.** The caps count UTF-16 code units, and an
+emoji is two of them, so a bare `.slice(0, max)` landing between the halves
+stored the first half alone: `�` on every device the value synced to. Every
+writer cuts through `cutToLength` (`entities.ts`) — `cleanTitle`, `cleanName`,
+the import's note — which drops a pair the cut would split, so the result stays
+under the cap and nothing a schema checks moves. A multi-code-point grapheme
+(👩🏽‍💻) can still be cut into a shorter valid one; cutting by grapheme needs
+`Intl.Segmenter`, which Hermes lacks. The editors' `maxLength` stops typing at
+the cap and is the platform's, not ours.
 
 **A list or tag name** is cut at 200 by every writer — `cleanName` in the
 mutation hooks (both platforms' `use-list-mutations` / `use-tag-mutations`),
@@ -148,7 +162,10 @@ as two folders with one path in a CSV.
 - **Screens — bounded in what a row shows, never in the tree.**
   `TREE_ROW_MAX_LEVELS` (32) caps a picker row's path label and guide lines
   ([data-lifecycle.md](./data-lifecycle.md), _a row describes at most_); the
-  sidebars render flat rows; and the lock provider reads the real forest, which
+  sidebars render flat rows, indented 16px a level up to `TREE_INDENT_MAX_LEVELS`
+  (8) and no further — uncapped, a 100-deep chain ran the links rail 1,600px
+  sideways and left no width for a label from about level 5 at its narrowest;
+  and the lock provider reads the real forest, which
   [locks.md](./locks.md) requires. The web Lists table used to work out
   `forbiddenParentIds` for every row on every render — a forest walk per row,
   so the square of the list count on every drag frame — and now asks it only of

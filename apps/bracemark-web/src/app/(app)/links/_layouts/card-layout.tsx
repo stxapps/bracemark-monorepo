@@ -54,7 +54,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
-import { displayUrl, hostFromText } from '@stxapps/shared';
+import { displayUrl, hostFromText, openableUrl } from '@stxapps/shared';
 import { useElementWidth } from '@stxapps/web-ui/hooks/use-element-size';
 
 import { useLinksViewState } from '../_contexts/view-state-provider';
@@ -416,7 +416,10 @@ export function CardLayout({
                             for the whole card now, since the overlay is what the
                             pointer is over. */}
                         <a
-                          href={link.url}
+                          // Undefined for a url nothing can open (url/url.ts):
+                          // the overlay stays for bulk edit, without a click
+                          // that does nothing.
+                          href={openableUrl(link.url)}
                           target="_blank"
                           rel="noreferrer"
                           title={title}
@@ -445,7 +448,14 @@ export function CardLayout({
                               : undefined
                           }
                         >
-                          <span className="line-clamp-2 text-base font-medium">{title}</span>
+                          {/* `dir="auto"` and `wrap-anywhere` for the reasons on
+                              list-layout.tsx's title. */}
+                          <span
+                            dir="auto"
+                            className="line-clamp-2 text-base font-medium wrap-anywhere"
+                          >
+                            {title}
+                          </span>
                         </a>
                       </div>
                       {/* The chips are buttons, so they sit outside the anchor as

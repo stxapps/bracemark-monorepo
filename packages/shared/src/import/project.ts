@@ -34,6 +34,7 @@
 
 import { isCalendarTime } from '../sync/calendar-time';
 import {
+  cutToLength,
   type Extraction,
   extractionSchema,
   type Link,
@@ -192,7 +193,7 @@ function* projectSteps(options: ProjectImportOptions): Generator<void, Projected
       createdAt,
       updatedAt,
     };
-    if (row.note !== undefined) link.note = row.note.slice(0, LINK_NOTE_MAX);
+    if (row.note !== undefined) link.note = cutToLength(row.note, LINK_NOTE_MAX);
     // The title the user saw in the source app — possibly one they typed, so it
     // outranks the provisional extraction title below, exactly like one typed
     // here would (see ImportedLink.customTitle). Except when it is only the

@@ -11,9 +11,11 @@
 // object as a settings blob.
 
 import {
+  cleanName,
   coerceDeviceExtractionMode,
   coerceLinkSortOn,
   coerceLinkSortOrder,
+  cutToLength,
   DEFAULT_DEVICE_EXTRACTION_MODE,
   DEVICE_EXTRACTION_MODES,
   extractionSchema,
@@ -216,4 +218,30 @@ describe('coerceLinkSortOn / coerceLinkSortOrder', () => {
       expect(coerceLinkSortOrder(value)).toBe('desc');
     },
   );
+});
+
+describe('cutToLength', () => {
+  // Every cap counts UTF-16 code units, and an emoji is two of them. A cut that
+  // lands between the halves used to store the first half alone — a lone
+  // surrogate, `�` on every device the value synced to.
+  it('leaves a value at or under the cap alone', () => {
+    expect(cutToLength('abc', 3)).toBe('abc');
+    expect(cutToLength('', 3)).toBe('');
+  });
+
+  it('cuts at the cap when the cut falls between characters', () => {
+    expect(cutToLength('abcdef', 4)).toBe('abcd');
+    expect(cutToLength('ab😀cd', 4)).toBe('ab😀');
+  });
+
+  it('drops a surrogate pair the cut would split, staying under the cap', () => {
+    // 'ab' + 😀 is 4 units; a cap of 3 lands between 😀's halves.
+    const cut = cutToLength('ab😀cd', 3);
+    expect(cut).toBe('ab');
+    expect(cut).not.toMatch(/[\uD800-\uDBFF]$/);
+  });
+
+  it('is what cleanName cuts with', () => {
+    expect(cleanName('  ab😀cd  ', 3)).toBe('ab');
+  });
 });

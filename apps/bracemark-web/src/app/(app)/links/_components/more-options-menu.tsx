@@ -36,6 +36,7 @@ import {
   MoreHorizontal,
   RefreshCw,
   Settings,
+  SquarePen,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -54,7 +55,10 @@ import { useSignOutFlow } from '@stxapps/web-ui/contexts/sign-out-provider';
 import { SUPPORT_URL } from '../../../../lib/site';
 import { DEFAULT_SECTION_ID } from '../../settings/sections';
 
-export function MoreOptionsMenu() {
+// `onBulkEdit`: the topbar hands its Bulk edit toggle in here when the bar is too
+// narrow to hold it as a button (topbar.tsx, COMPACT_BAR_REM) — present, the menu
+// leads with it; absent, the item doesn't exist.
+export function MoreOptionsMenu({ onBulkEdit }: { onBulkEdit?: () => void } = {}) {
   const { storeStatus, bgSyncStatus, syncNow } = useSync();
   const { appLock, lockApp } = useLocks();
   const { requestSignOut, signingOut } = useSignOutFlow();
@@ -121,6 +125,15 @@ export function MoreOptionsMenu() {
           time. `w-auto` drops the kit's trigger-width default and `min-w-36`
           lowers its `min-w-48` floor, which alone left ~70px dead. */}
       <DropdownMenuContent align="end" className="w-auto min-w-36">
+        {onBulkEdit && (
+          <>
+            <DropdownMenuItem onSelect={onBulkEdit}>
+              <SquarePen className="size-4" />
+              Bulk edit
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuItem
           disabled={paused}
           onSelect={(e) => {

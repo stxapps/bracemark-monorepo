@@ -852,6 +852,34 @@ for `Textarea`, and explicit prose overrides for Title. The field-purpose table
 and exceptions live in [editors.md](./editors.md#typing-assistance). A revealed
 password keeps its exact-entry hints even after web switches to `type="text"`.
 
+### user text takes its own direction
+
+The app's layout is left-to-right only: web sets `<html lang="en">` and no
+`dir`, and expo turns RTL mirroring off on purpose
+([expo-build.md](./expo-build.md), _android manifest policy_). The **text** is not:
+a title is the page's own, in whatever script it was written, and list and
+tag names are the user's. An Arabic title rendered as an LTR paragraph keeps
+each Arabic run readable but lays the runs out left to right, so its opening
+words land at the far left — the END for its reader — with the Latin words
+and numbers inside it scattered between. A screen reader reads the DOM order
+and is unaffected, but a sighted reader cannot read the title.
+
+So on web, every element that renders user text carries `dir="auto"`: the
+link title in both layouts (`list-layout.tsx`, `card-layout.tsx`), the tag
+chips (`link-tag-chips.tsx`), and the links rail's labels (`sidebar.tsx`).
+`auto` takes the direction from the first strong character, so an Arabic
+title is an RTL paragraph, right-aligned within its own box, and a Latin one
+is unchanged. Put it on any new element that renders a title, a name or a
+note. The `worst-link-rtl` link in the `plus-worst` seed account
+([e2e.md](./e2e.md), _the worst-case account_) is the specimen to look at, and
+the visual library's Arabic row (`web/fixtures/visual-library.ts`) puts it in
+the list and card checkpoints.
+
+**Expo is unverified.** RN has no `dir`. iOS's natural writing direction and
+Android's default text direction both pick the direction from the first strong
+character, which would make this automatic there, but nobody has checked it
+on a device.
+
 ### web / expo parity
 
 The two platforms do **not** share component shapes here — web composes the Field

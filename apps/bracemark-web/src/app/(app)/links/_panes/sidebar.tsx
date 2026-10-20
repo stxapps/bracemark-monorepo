@@ -83,6 +83,7 @@ import {
   flattenTree,
   MY_LIST_ID,
   TRASH_ID,
+  TREE_INDENT_MAX_LEVELS,
   type TreeItem,
   type TreeNode,
   withoutSubtrees,
@@ -232,8 +233,9 @@ function NavItem({
   // selection). The list rows' hover-revealed "Lock now".
   action?: React.ReactNode;
   // Tree nesting level — indents the row one step per level (16px, matching
-  // the list pickers' indent). Applied to the whole row so the chevron indents
-  // with the label.
+  // the list pickers' indent), up to TREE_INDENT_MAX_LEVELS (@stxapps/shared
+  // sync/tree.ts). Applied to the whole row so the chevron indents with the
+  // label.
   depth?: number;
   // Present only on rows with children: whether the subtree is shown, and the
   // chevron's toggle. The chevron is a sibling button on the LEFT, never nested
@@ -260,7 +262,9 @@ function NavItem({
   return (
     <div
       className="group/navitem flex w-full items-center"
-      style={depth > 0 ? { paddingLeft: `${depth * 16}px` } : undefined}
+      style={
+        depth > 0 ? { paddingLeft: `${Math.min(depth, TREE_INDENT_MAX_LEVELS) * 16}px` } : undefined
+      }
     >
       {onToggle ? (
         <button
@@ -296,7 +300,13 @@ function NavItem({
         )}
       >
         <span className="flex size-4 shrink-0 items-center justify-center">{icon}</span>
-        <span className="truncate">{label}</span>
+        {/* `title`: the label truncates at the rail's width, and a list name can
+            run to LIST_NAME_MAX — this is the one place on the links screen the
+            rest of it can be read. `dir="auto"`: a list or tag name is the user's
+            text, in any script. */}
+        <span dir="auto" className="truncate" title={label}>
+          {label}
+        </span>
         {badge && (
           <span className="ml-auto flex shrink-0 items-center text-muted-foreground">{badge}</span>
         )}

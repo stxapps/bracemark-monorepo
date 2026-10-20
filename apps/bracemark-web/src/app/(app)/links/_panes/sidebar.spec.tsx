@@ -1,6 +1,11 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 
-import { buildTree, LIST_NO_CHILDREN_IDS, type TagItem } from '@stxapps/shared';
+import {
+  buildTree,
+  LIST_NO_CHILDREN_IDS,
+  type TagItem,
+  TREE_INDENT_MAX_LEVELS,
+} from '@stxapps/shared';
 import {
   type ListItem,
   readSidebarCollapsedIds,
@@ -284,7 +289,7 @@ describe('Sidebar — a tree that changes under it', () => {
 // under jest; the list tree itself is built without recursion and is not what
 // is being tested (@stxapps/shared sync/tree.spec.ts goes far deeper).
 describe('Sidebar — a chain deeper than React can nest', () => {
-  it('renders every row, the last one at its own depth', () => {
+  it('renders every row, indented by its depth up to the cap', () => {
     const DEPTH = 6000;
     setLists(
       Array.from({ length: DEPTH }, (_, i) => list(`l${i}`, `L${i}`, i === 0 ? null : `l${i - 1}`)),
@@ -300,8 +305,12 @@ describe('Sidebar — a chain deeper than React can nest', () => {
     );
     expect(all).toHaveLength(DEPTH);
     expect(all[DEPTH - 1].textContent).toBe(`L${DEPTH - 1}`);
-    expect((all[DEPTH - 1].parentElement as HTMLElement).style.paddingLeft).toBe(
-      `${(DEPTH - 1) * 16}px`,
-    );
+    // Each row is indented by its own depth, 16px a level — then no further
+    // than TREE_INDENT_MAX_LEVELS, or the rail runs sideways (a 100-deep chain
+    // was 1,600px of it) and the label has no width left.
+    const indent = (i: number) => (all[i].parentElement as HTMLElement).style.paddingLeft;
+    expect(indent(3)).toBe('48px');
+    expect(indent(TREE_INDENT_MAX_LEVELS)).toBe(`${TREE_INDENT_MAX_LEVELS * 16}px`);
+    expect(indent(DEPTH - 1)).toBe(`${TREE_INDENT_MAX_LEVELS * 16}px`);
   });
 });

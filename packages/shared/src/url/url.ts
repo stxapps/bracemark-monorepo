@@ -68,11 +68,43 @@ export function hostFromUrl(url: URL): string {
 // from user input, so when it won't parse we fall back to the raw string rather
 // than throw (better a slightly-off label than a crash). The www-stripping rule
 // itself lives only in `hostFromUrl`; this just adds the parse + fallback.
+//
+// "Parses" is not "has a host". A url the user confirm-saved raw (normalizeUrl's
+// soft null) can parse with an EMPTY hostname: `nas.home.invalid:5000/photo`
+// reads as the scheme `nas.home.invalid:`, and `mailto:` and `file:` urls have no
+// host either. The raw string is the label for those too — an empty one left a
+// blank secondary line under the title.
 export function hostFromText(text: string): string {
   try {
-    return hostFromUrl(new URL(text));
+    return hostFromUrl(new URL(text)) || text;
   } catch {
     return text;
+  }
+}
+
+// What a link's anchor opens — the stored url when it is http(s), the same with
+// `http://` in front when that makes it one, and undefined when nothing does.
+//
+// The stored url is what the user saved, and normalizeUrl's soft null lets them
+// save text it refused (url/url.ts, above). The case worth rescuing is a
+// schemeless `host:port`, which normalizeUrl refuses because a parser reads the
+// host as a scheme: as an href it names a protocol no browser has, so a click did
+// nothing. Prefixed, it opens. `http`, not `https`: a bare host:port is a device
+// on the user's own network far more often than a public site.
+//
+// The prefixed form must be a URL a person would call one — a dotted host (or
+// `localhost`) and no userinfo — so prose and other schemes stay unopenable:
+// `http://` + `mailto:a@b` would parse with `mailto` as a username.
+export function openableUrl(url: string): string | undefined {
+  if (/^https?:\/\//i.test(url)) return url;
+  try {
+    const candidate = `http://${url}`;
+    const u = new URL(candidate);
+    if (u.username || u.password) return undefined;
+    if (!u.hostname.includes('.') && u.hostname !== 'localhost') return undefined;
+    return candidate;
+  } catch {
+    return undefined;
   }
 }
 

@@ -22,7 +22,7 @@
 // here) is gone. What's left as a number is the banner, and it isn't a budget:
 // it's the card's own width times a ratio.
 import { memo } from 'react';
-import { Linking, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { displayUrl, hostFromText } from '@stxapps/shared';
 
@@ -31,7 +31,7 @@ import { Text } from '../../components/ui/text';
 import { Favicon, LinkPreviewImage } from './link-media';
 import { LinkRowMenu } from './link-row-menu';
 import { LinkTagChips } from './link-tag-chips';
-import { type LinkItemProps, NoteBadge, PinnedBadge } from './shared';
+import { type LinkItemProps, NoteBadge, openLink, PinnedBadge } from './shared';
 import { useLinksViewActions } from './view-state-provider';
 
 // The banner is 12:7 — its height is 58.33% of the card's width — so it scales
@@ -83,7 +83,7 @@ export const LinkCard = memo(function LinkCard({
       <Pressable
         role={selectMode ? 'checkbox' : 'link'}
         aria-checked={selectMode ? selected : undefined}
-        onPress={() => (selectMode ? onToggle(link) : void Linking.openURL(link.url))}
+        onPress={() => (selectMode ? onToggle(link) : openLink(link.url))}
         // Set even while selecting — link-row.tsx's TRAP: without it the
         // release that ends the entering long-press unpicks the card.
         onLongPress={() => {

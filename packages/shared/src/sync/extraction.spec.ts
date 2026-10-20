@@ -157,6 +157,15 @@ describe('cleanTitle', () => {
     expect(cleanTitle('   \n\t  ')).toBeUndefined();
   });
 
+  it('never leaves half an emoji at the cap', () => {
+    // An og:title is cut at LINK_TITLE_MAX UTF-16 units; one whose 300th unit is
+    // the first half of an emoji used to be stored ending in a lone surrogate.
+    const title = 'a'.repeat(LINK_TITLE_MAX - 1) + '😀 and more';
+    const cleaned = cleanTitle(title);
+    expect(cleaned).toBe('a'.repeat(LINK_TITLE_MAX - 1));
+    expect(cleaned).not.toMatch(/[\uD800-\uDBFF]$/);
+  });
+
   it('caps an over-long title to something the schema accepts', () => {
     // The cap is not cosmetic: `extractionSchema.title` is `.max(LINK_TITLE_MAX)`,
     // so an uncapped title fails the parse — and because zod fails the OBJECT,

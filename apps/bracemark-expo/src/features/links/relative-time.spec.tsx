@@ -38,6 +38,27 @@ it('says a single unit in the singular, and under a minute as just now', () => {
   expect(screen.getByLabelText('Updated just now')).toHaveTextContent('now');
 });
 
+it('names the month past a year, either way', () => {
+  render(
+    <>
+      <RelativeTime epochMs={Date.UTC(2009, 2, 14, 12)} verb="Added" />
+      <RelativeTime epochMs={NOW + 400 * DAY} verb="Added" />
+    </>,
+  );
+
+  // A count of years rounded 17.6 up to "18y"; the month is exact.
+  expect(screen.getByLabelText('Added March 2009')).toHaveTextContent('Mar 2009');
+  expect(screen.getByLabelText('Added November 2027')).toHaveTextContent('Nov 2027');
+});
+
+it('counts forward for a date in the future instead of saying now', () => {
+  // Another device's clock ran fast. Every unit used to test `diff >= ms`
+  // against a negative diff and fall through to "now".
+  render(<RelativeTime epochMs={NOW + 3 * DAY} verb="Added" />);
+
+  expect(screen.getByLabelText('Added in 3 days')).toHaveTextContent('in 3d');
+});
+
 // A date the calendar cannot name doesn't throw here as it did on web — the
 // arithmetic just turns it into a figure ("285193y", or "now" from the far
 // future) that reads as a real date.

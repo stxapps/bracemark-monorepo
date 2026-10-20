@@ -133,6 +133,18 @@ const LINKS: VisualLinkSpec[] = [
     tags: [],
     image: 35,
   },
+  // An Arabic title with a Latin name and a number inside it — the row that
+  // photographs `dir="auto"` (docs/accessibility.md, _user text takes its own
+  // direction_). Laid out LTR, its opening words land at the far left, the END
+  // for its reader, and nothing but a picture shows it. Oldest, so it sits
+  // below every row a case reads and moves none of them.
+  {
+    slug: 'rtl',
+    url: 'https://field-notes.invalid/ar/night-trains',
+    title: 'دليل القطارات الليلية عبر Alps في 7 أيام',
+    tags: [],
+    image: 43,
+  },
 ];
 
 export interface VisualLibrary {

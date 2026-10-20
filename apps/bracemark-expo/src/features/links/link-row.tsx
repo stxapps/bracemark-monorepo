@@ -9,7 +9,7 @@
 // relative-time.tsx carries the format and the accessible name.
 
 import { memo } from 'react';
-import { Linking, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { type LinkView } from '@stxapps/expo-react';
 import { displayUrl, hostFromText } from '@stxapps/shared';
@@ -20,7 +20,7 @@ import { Favicon, LinkPreviewImage } from './link-media';
 import { LinkRowMenu } from './link-row-menu';
 import { LinkTagChips } from './link-tag-chips';
 import { RelativeTime } from './relative-time';
-import { type LinkItemProps, NoteBadge, PinnedBadge } from './shared';
+import { type LinkItemProps, NoteBadge, openLink, PinnedBadge } from './shared';
 import { useLinksViewActions } from './view-state-provider';
 
 // Web reveals its sorted-field date at the pane's `@xl` container query: 36rem,
@@ -89,7 +89,7 @@ export const LinkRow = memo(function LinkRow({
     <Pressable
       role={selectMode ? 'checkbox' : 'link'}
       aria-checked={selectMode ? selected : undefined}
-      onPress={() => (selectMode ? onToggle(link) : void Linking.openURL(link.url))}
+      onPress={() => (selectMode ? onToggle(link) : openLink(link.url))}
       onLongPress={() => {
         enterBulkEdit();
         onToggle(link);
