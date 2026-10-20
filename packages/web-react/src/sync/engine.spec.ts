@@ -852,14 +852,60 @@ describe('the fan-out', () => {
     return maxInFlight;
   }
 
+  // Hold each PUT until as many of its size are in flight as `wide` says the pass
+  // lets through at once, or until every one of its size (`total`) has started —
+  // so the peak is reached however slowly the local reads ahead of it run. Once
+  // full, the held ones still wait `settleMs`, so a gate WIDER than `wide` lets
+  // its extra PUTs in and the peak shows it; one NARROWER never fills, so its PUTs
+  // go after `giveUpMs` and the assertion reports the peak it did reach rather
+  // than the test timing out.
+  //
+  // Not a fixed hold: the reads go FILE_CONCURRENCY at a time (uploadOne), so the
+  // small PUTs start in waves, and under a loaded `npm run test` the waves landed
+  // further apart than a 100 ms hold — the first ones had let go before the last
+  // began, and an engine with nothing wrong measured 10 of 12.
+  function holdPutsUntilFull(
+    isLarge: (bytes: number) => boolean,
+    wide: { large: number; small: number },
+    total: { large: number; small: number },
+    { settleMs = 50, giveUpMs = 3000 } = {},
+  ) {
+    const maxInFlight = { large: 0, small: 0 };
+    const inFlight = { large: 0, small: 0 };
+    const started = { large: 0, small: 0 };
+    const held: { large: (() => void)[]; small: (() => void)[] } = { large: [], small: [] };
+    mockPutBlob.mockImplementation(async (url: string, body: Uint8Array) => {
+      const kind = isLarge(body.byteLength) ? 'large' : 'small';
+      inFlight[kind] += 1;
+      started[kind] += 1;
+      maxInFlight[kind] = Math.max(maxInFlight[kind], inFlight[kind]);
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, giveUpMs);
+        held[kind].push(() => {
+          clearTimeout(timer);
+          resolve();
+        });
+        if (inFlight[kind] >= wide[kind] || started[kind] === total[kind]) {
+          setTimeout(() => {
+            for (const release of held[kind].splice(0)) release();
+          }, settleMs);
+        }
+      });
+      inFlight[kind] -= 1;
+      return landed(pathFor(url));
+    });
+    return maxInFlight;
+  }
+
   it('sends small content wide, and holds large content to the narrow gate', async () => {
     const LARGE = 'x'.repeat(70 * 1024);
     for (let i = 0; i < 12; i++) await seedQueued(`files/big_${i}.enc`, LARGE);
     for (let i = 0; i < 12; i++) await seedQueued(`files/small_${i}.enc`, 'tiny');
-    // Long enough for every record's first read to land while the first PUTs are
-    // still out — those reads go FILE_CONCURRENCY at a time (uploadOne), as a real
-    // PUT's second outlasts a few rounds of local reads.
-    const maxInFlight = holdPuts((bytes) => bytes > 32 * 1024, 100);
+    const maxInFlight = holdPutsUntilFull(
+      (bytes) => bytes > 32 * 1024,
+      { large: 8, small: 12 },
+      { large: 12, small: 12 },
+    );
 
     await runIncrementalSync(deps());
 
