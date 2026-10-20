@@ -973,6 +973,13 @@ staging's remote D1 for that run's disposable account
   are in [hosting.md](./hosting.md#security-headers--where-the-csp-has-to-live).
   `IAP-WEB-001` runs against staging for this reason: local runs open the same
   overlay under no policy at all ([e2e.md](./e2e.md), _subscriptions_).
+  **One violation is expected, and it is on production only.** Live Paddle.js
+  injects Paddle Retain's `public.profitwell.com/js/profitwell.js`, the
+  sandbox never does, and our `script-src` blocks it. Leave it blocked:
+  allowing it would make Paddle's no longer the only third-party script in
+  Bracemark, and we don't use Retain. Reasoning and specimen are in
+  [hosting.md](./hosting.md#security-headers--where-the-csp-has-to-live), the
+  ProfitWell bullet.
 - **Apple Pay** needs each checkout domain verified with Apple: a file downloaded
   from the Paddle dashboard, served at
   `/.well-known/apple-developer-merchantid-domain-association` on bracemark-web.

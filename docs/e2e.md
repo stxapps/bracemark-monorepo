@@ -2048,6 +2048,12 @@ converter, whose `blob:`-started worker is the one allowance that policy makes
 beyond `'self'`. And `IAP-WEB-001` is admitted to staging, where
 the real Paddle overlay opens under the deployed policy — `script-src`,
 `frame-src`, `style-src`, `img-src` and `connect-src` in one journey.
+That journey runs against Paddle's sandbox, so one live-only behaviour is out of
+its reach: on a live account, Paddle.js also injects Paddle Retain's
+`public.profitwell.com` script, which production's `script-src` blocks on
+purpose. A clean staging run does not mean a clean production console
+([hosting.md](./hosting.md#security-headers--where-the-csp-has-to-live), the
+ProfitWell bullet).
 `EXTRACT-WEB-001` and `EXTRACT-WEB-ALL-001` are admitted for the extractor's
 sake: with the plan granted as above, they send a real extraction from the
 shipped bundle to the deployed Worker under the policy. The pinned header and

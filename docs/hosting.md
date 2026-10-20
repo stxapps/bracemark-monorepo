@@ -292,6 +292,37 @@ The constraints baked in:
   is the one that widens the exfiltration block above; that is the price of
   overlay checkout. Re-check this against Paddle's own CSP guidance at
   integration time.
+- **The ProfitWell violation on production is expected — never allowlist it.**
+  On the live tier, Paddle.js injects a second script by itself:
+  `https://public.profitwell.com/js/profitwell.js?auth=<the client token>`,
+  which is Paddle Retain (formerly ProfitWell: churn analytics, cancellation
+  flows, in-app messages). We don't ask for it. `lib/paddle.ts` passes no
+  `pwCustomer`, and Paddle documents Retain as built into Paddle.js, so there is
+  no separate snippet to leave out. Our `script-src` blocks it, and Chrome logs
+  `Loading the script 'https://public.profitwell.com/…' violates … "script-src …"`
+  from Paddle's `profitwell.gateway.ts` whenever Settings → Subscription loads
+  Paddle.js. **Keep it that way.** `public.profitwell.com` is not under
+  `*.paddle.com`, so it is a second third-party script from a second origin, and
+  admitting it falsifies the sentence /privacy and the FAQ's _trackers_ answer
+  both print: one screen loads Paddle's script, and that script is the only
+  third-party code in Bracemark. It would also put analytics on that screen,
+  next to "we run no analytics". The block costs nothing we use: we don't run
+  Retain, and price preview and the overlay checkout come from `*.paddle.com`
+  alone. Three things keep the line from being noticed:
+  - **It only happens in production.** Paddle's own wording is "Paddle.js
+    doesn't load Retain on sandbox accounts". Development and staging run
+    against the sandbox, so `IAP-WEB-001` on staging and the staging CSP guard
+    that fails on any violation ([e2e.md](./e2e.md)) can never see it. A
+    production console is the only place it shows up.
+  - **There is no opt-out in the integration.** Paddle documents none for
+    Paddle.js (Retain is listed as "optional", and that means passing
+    `pwCustomer`, not a switch for the injection). If a Retain toggle on the
+    live account's dashboard turns out to stop the injection, prefer that over
+    living with the line. It is account config, not code, so check it when the
+    live account is set up again.
+  - **The console line is the cost, and it is accepted.** A policy edit is the
+    only way to silence it, and that edit is the one this bullet exists to
+    prevent. If someone reports it as a bug, point them here.
 
 **The other security headers are not the CSP and are not free of choices.** HSTS,
 `nosniff` and a `strict-origin-when-cross-origin` referrer policy are the
