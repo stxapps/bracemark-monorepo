@@ -15,10 +15,10 @@ import { crc32, deflateSync } from 'node:zlib';
 // and a binary blob in a repo whose whole seed is a generator would be the one
 // piece nobody can regenerate.
 //
-// This is a deliberately minimal encoder — 8-bit truecolor, one IDAT, filter 0 on
-// every scanline. It is not a general PNG library and should never grow into one:
-// if a seed ever needs real photographic previews, that is a fixture-file
-// decision, not more code here.
+// This is a deliberately minimal encoder — 8-bit truecolor (with or without
+// alpha), one IDAT, filter 0 on every scanline. It is not a general PNG library
+// and should never grow into one: if a seed ever needs real photographic
+// previews, that is a fixture-file decision, not more code here.
 
 const SIGNATURE = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -35,34 +35,49 @@ function chunk(type: string, data: Uint8Array): Uint8Array {
   return out;
 }
 
+// The shape of an image the everyday seed never makes — what the worst-case
+// library (./worst.ts) asks for: a panorama or a tall strip where the layout
+// expects a 64×40 slot, and a logo that is mostly transparent, which is
+// invisible on whichever theme its one colour matches.
+export interface PreviewShape {
+  width?: number;
+  height?: number;
+  // RGBA, with everything outside the band fully transparent.
+  transparent?: boolean;
+}
+
 // A flat-ish two-tone tile: a band of one colour over a wash of another, angled so
 // the two are never confusable at thumbnail size. `index` picks the hue pair, so
 // consecutive links in a card grid read as distinct swatches rather than one
 // repeated square.
-export function previewPng(index: number): Uint8Array {
+export function previewPng(index: number, shape: PreviewShape = {}): Uint8Array {
+  const { width = SIZE, height = SIZE, transparent = false } = shape;
+  const channels = transparent ? 4 : 3;
   const hue = (index * 47) % 360;
   const [r1, g1, b1] = hsvToRgb(hue, 0.55, 0.86);
   const [r2, g2, b2] = hsvToRgb((hue + 28) % 360, 0.7, 0.42);
 
-  // Raw scanlines: a leading filter byte (0 = None) then RGB triples.
-  const raw = Buffer.alloc(SIZE * (1 + SIZE * 3));
-  for (let y = 0; y < SIZE; y++) {
-    const row = y * (1 + SIZE * 3);
+  // Raw scanlines: a leading filter byte (0 = None) then RGB(A) pixels.
+  const stride = 1 + width * channels;
+  const raw = Buffer.alloc(height * stride);
+  for (let y = 0; y < height; y++) {
+    const row = y * stride;
     raw[row] = 0;
-    for (let x = 0; x < SIZE; x++) {
+    for (let x = 0; x < width; x++) {
       const band = (x + y * 2) % 96 < 34;
-      const at = row + 1 + x * 3;
+      const at = row + 1 + x * channels;
       raw[at] = band ? r2 : r1;
       raw[at + 1] = band ? g2 : g1;
       raw[at + 2] = band ? b2 : b1;
+      if (transparent) raw[at + 3] = band ? 255 : 0;
     }
   }
 
   const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(SIZE, 0);
-  ihdr.writeUInt32BE(SIZE, 4);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
   ihdr[8] = 8; // bit depth
-  ihdr[9] = 2; // colour type: truecolour (RGB)
+  ihdr[9] = transparent ? 6 : 2; // colour type: truecolour with alpha (RGBA) or without (RGB)
   ihdr[10] = 0; // compression: deflate
   ihdr[11] = 0; // filter method: adaptive (we only ever use 0/None per row)
   ihdr[12] = 0; // interlace: none

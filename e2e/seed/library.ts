@@ -1,6 +1,7 @@
 import {
   ARCHIVE_ID,
   type BackupCounts,
+  type BackupOmitted,
   type Extraction,
   EXTRACTIONS_PREFIX,
   type Link,
@@ -121,7 +122,7 @@ const SHAPES = [
 // one takes the roots — the eight real categories. A flat slice forces every
 // `parentId` to null, because a free account cannot create nesting
 // (`nestedLists`) and must not be handed some.
-interface TreeSpec {
+export interface TreeSpec {
   name: string;
   children?: TreeSpec[];
 }
@@ -211,6 +212,9 @@ export interface SeedLibrary {
   // The `files/{id}` blobs the extractions above reference.
   files: { id: string; bytes: Uint8Array }[];
   counts: BackupCounts;
+  // Referenced blobs the archive does not carry — the manifest's own record of a
+  // partial export. Only the worst-case library (./worst.ts) sets it.
+  omitted?: BackupOmitted;
 }
 
 export interface BuildOptions {
@@ -367,8 +371,12 @@ type TreeNode = List & Tag;
 // have put them: every create lands at the head of the root group
 // (docs/editors.md).
 function buildLists(user: SeedUser, now: number): List[] {
-  const firstSystemRank = SYSTEM_LIST_DEFAULTS.map((list) => list.rank).sort()[0];
-  return buildTree(LIST_TREE, 'seed-list', user.lists, user.nested, now, firstSystemRank);
+  return buildTree(LIST_TREE, 'seed-list', user.lists, user.nested, now, rootListCeiling());
+}
+
+// The rank the root list group must stay below — the first system list's.
+export function rootListCeiling(): string {
+  return SYSTEM_LIST_DEFAULTS.map((list) => list.rank).sort()[0];
 }
 
 // `nested: false` whatever the account — see TAG_NAMES. No system tags, so the
@@ -392,7 +400,7 @@ function buildTags(user: SeedUser, now: number): Tag[] {
 // between two of these rather than tripping over an invented format. The ROOT
 // group's keys stay below `rootCeiling` when the caller has entities of its own
 // in that group; null opens it.
-function buildTree(
+export function buildTree(
   spec: TreeSpec[],
   idPrefix: string,
   count: number,
@@ -479,7 +487,7 @@ function cap(text: string): string {
   return text[0].toUpperCase() + text.slice(1);
 }
 
-function pad(n: number, width: number): string {
+export function pad(n: number, width: number): string {
   return String(n).padStart(width, '0');
 }
 

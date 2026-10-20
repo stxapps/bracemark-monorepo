@@ -6,6 +6,7 @@ import { SEED_ARCHIVES } from '../paths';
 import { buildBackupArchive } from './archive';
 import { SEED_USERS, type SeedUser } from './catalog';
 import { buildLibrary } from './library';
+import { buildWorstLibrary } from './worst';
 
 // THE ARCHIVES — the backup zips both seeds import, written from `./library.ts`
 // and `./archive.ts`, touching neither a browser nor the api.
@@ -39,7 +40,8 @@ export async function generateArchives(
   for (const user of users) {
     if (user.links === 0) continue;
 
-    const library = buildLibrary(user, { now });
+    const library =
+      user.library === 'worst' ? buildWorstLibrary({ now }) : buildLibrary(user, { now });
     const archive = buildBackupArchive(library);
     const path = join(SEED_ARCHIVES, `${user.key}.zip`);
     await writeFile(path, archive);

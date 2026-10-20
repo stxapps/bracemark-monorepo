@@ -90,12 +90,13 @@ see `docs/e2e.md`, _running_.
 
 ## seeding a dev account
 
-Not a test — `init` for looking at the app by hand. Four accounts on the local
-stack, two with a full library, so paging, the list/tag tree, filtering,
-drag-and-drop and the search editor have something to work on.
+Not a test — `init` for looking at the app by hand. Five accounts on the local
+stack: two with a full library, so paging, the list/tag tree, filtering,
+drag-and-drop and the search editor have something to work on, and one with the
+worst a real library renders, for finding what a screen does with it.
 
 ```sh
-npm run seed:accounts              # all four (needs `npm run dev` up)
+npm run seed:accounts              # all five (needs `npm run dev` up)
 npm run seed:accounts -- free-full # or just one
 npm run seed:fixtures              # the backup archives only — no browser, no api
 ```
@@ -110,6 +111,7 @@ at one, or importing it by hand, not for feeding the other. There is no bare
 | `plus-empty` | `seed_plus_empty` | Plus | nothing                                    |
 | `free-full`  | `seed_free_full`  | Free | 190 links, 8 flat lists, 14 flat tags      |
 | `plus-full`  | `seed_plus_full`  | Plus | 1,000 links, 24 nested lists, 40 flat tags |
+| `plus-worst` | `seed_plus_worst` | Plus | the worst case — `seed/worst.ts`           |
 
 Passwords land in `credentials/accounts.json` (gitignored). The whole design —
 why the library is imported through the app while the plan is written straight to
@@ -161,7 +163,7 @@ terminal.
 | `mobile/shots/`       | Maestro flows for native store-listing captures                       |
 | `mobile/contract/`    | Maestro legs of a contract run — driven by a `runner/`, never by hand |
 | `runner/`             | web/native orchestrators, filters, preflights, manifests              |
-| `seed/`               | the four dev accounts and their archives — not a test (above)         |
+| `seed/`               | the five dev accounts and their archives — not a test (above)         |
 | `shot/`               | the published screenshots: the fixture, the producer, the four legs   |
 | `.artifacts/`         | gitignored — traces, reports, run manifests, browser profiles         |
 | `credentials/`        | gitignored — the accounts `npm run seed:accounts` created             |

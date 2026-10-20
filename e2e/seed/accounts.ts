@@ -14,7 +14,7 @@ import { generateArchives } from './fixtures';
 import { findUserId, grantPlan, readGrantedPlan } from './plan';
 import { importArchive, waitForSync } from './steps';
 
-// The account seed — four dev accounts, filled, on the local stack.
+// The account seed — the dev accounts (seed/catalog.ts), filled, on the local stack.
 //
 // It is `init`/`prepare` for a session of looking at the app by hand, and it does
 // exactly what you would do yourself, in the order you would do it: create the
@@ -30,7 +30,7 @@ import { importArchive, waitForSync } from './steps';
 // (see seed/plan.ts). Read docs/e2e.md, _seeding a dev account_, before changing
 // the shape of this.
 //
-//   npm run seed:accounts              # all four
+//   npm run seed:accounts              # all of them
 //   npm run seed:accounts -- free-full # just one
 //   npm run seed:fixtures              # the archives only, no browser
 
@@ -187,7 +187,7 @@ async function readAccounts(): Promise<SeededAccount[]> {
 // imports this file today — the steps the shot run shares with it live in
 // `seed/steps.ts` precisely so that nothing has to — and the guard stays as the
 // backstop for the day something does: an unguarded top-level `await main()` runs
-// on IMPORT, and this one re-seeds four accounts, idempotently and silently, for
+// on IMPORT, and this one re-seeds every account, idempotently and silently, for
 // ten minutes. `seed/steps.ts` carries the specimen.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   await main();

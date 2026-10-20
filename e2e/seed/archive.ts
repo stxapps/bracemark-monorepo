@@ -34,7 +34,9 @@ export function buildBackupArchive(library: SeedLibrary): Uint8Array {
   const encoder = new TextEncoder();
 
   const entries: Record<string, Uint8Array> = {
-    [BACKUP_MANIFEST_ENTRY]: encoder.encode(serializeBackupManifest(library.counts)),
+    [BACKUP_MANIFEST_ENTRY]: encoder.encode(
+      serializeBackupManifest(library.counts, library.omitted),
+    ),
     [BACKUP_ITEMS_ENTRY]: encoder.encode(
       serializeBackupItems(library.items.map((item) => jsonlLine(item.path, item.data))),
     ),
