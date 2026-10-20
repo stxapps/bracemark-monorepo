@@ -54,6 +54,7 @@ export * from './stores/listing-copy';
 export * from './stores/listings';
 export * from './sync/blob-transfer';
 export * from './sync/calendar-time';
+export * from './sync/chunked-push';
 export * from './sync/decode-cache';
 export * from './sync/endpoints';
 export * from './sync/entities';

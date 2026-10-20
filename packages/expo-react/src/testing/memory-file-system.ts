@@ -100,7 +100,7 @@ export class File extends FileSystemNode {
   }
 
   // Bytes, and 0 for a file that does not exist — the native API's answer. The
-  // sync engine reads it to choose a content upload's fan-out (uploadBlobs).
+  // sync engine reads it to choose a content upload's fan-out (uploadOne).
   get size(): number {
     return files.get(this.uri)?.byteLength ?? 0;
   }

@@ -332,6 +332,106 @@ describe('sync control plane', () => {
       const all = [...page1.files, ...page2.files].map((f) => f.path).sort();
       expect(all).toEqual(['links/a.enc', 'links/b.enc', 'links/c.enc']);
     });
+
+    // Page through a listing to its end, returning every page's paths.
+    async function listAll(auth: Record<string, string>, limit: number): Promise<string[][]> {
+      const pages: string[][] = [];
+      let token: string | null = null;
+      do {
+        const query = `limit=${limit}${token ? `&pageToken=${encodeURIComponent(token)}` : ''}`;
+        const res = await app.request(`${filesListEndpoint.path}?${query}`, { headers: auth }, env);
+        expect(res.status).toBe(200);
+        const page = (await res.json()) as {
+          files: { path: string }[];
+          nextPageToken: string | null;
+        };
+        pages.push(page.files.map((f) => f.path));
+        token = page.nextPageToken;
+      } while (token);
+      return pages;
+    }
+
+    it('lists every namespace at once, a page of each per call', async () => {
+      // The split (r2/user-files.ts listPage): a page holds up to `limit` keys of
+      // EACH unfinished namespace, so the calls are as many as the largest
+      // namespace needs, not as many as the whole prefix does.
+      const { userId, auth } = await authFor('sync-list-split-1');
+      const objects = [
+        'links/a.enc',
+        'links/b.enc',
+        'links/c.enc',
+        'tags/t1.enc',
+        'tags/t2.enc',
+        'tags/t3.enc',
+        'files/f.enc',
+        'settings/general.enc',
+      ];
+      for (const path of objects) await env.USER_FILES.put(userFileKey(userId, path), 'x');
+
+      const pages = await listAll(auth, 2);
+
+      expect(pages).toHaveLength(2);
+      expect(pages[0]).toHaveLength(6);
+      expect(pages.flat().sort()).toEqual([...objects].sort());
+    });
+
+    it('lists a namespace this server does not know, and a key outside any namespace', async () => {
+      // The listing is download-authoritative: a path it leaves out is one every
+      // client that takes a fallback drops locally. So which namespaces exist is
+      // read from the bucket, never from the list this server was built with.
+      const { userId, auth } = await authFor('sync-list-split-2');
+      const objects = ['links/a.enc', 'notes/n1.enc', 'notes/n2.enc', 'notes/n3.enc', 'stray.enc'];
+      for (const path of objects) await env.USER_FILES.put(userFileKey(userId, path), 'x');
+
+      const pages = await listAll(auth, 2);
+
+      expect(pages.flat().sort()).toEqual([...objects].sort());
+    });
+
+    it('lists the old way a prefix holding a namespace no token may name', async () => {
+      const { userId, auth } = await authFor('sync-list-split-5');
+      const objects = ['links/a.enc', 'links/b.enc', 'odd.ns/x.enc'];
+      for (const path of objects) await env.USER_FILES.put(userFileKey(userId, path), 'x');
+
+      const pages = await listAll(auth, 1);
+
+      // One key a page: the whole prefix in key order, R2's own cursor between.
+      expect(pages).toEqual([['links/a.enc'], ['links/b.enc'], ['odd.ns/x.enc']]);
+    });
+
+    it('finishes a listing whose token is from before the split', async () => {
+      // A client paging across the deploy holds R2's own cursor over the whole
+      // prefix; it is resumed the old way rather than refused.
+      const { userId, auth } = await authFor('sync-list-split-3');
+      const objects = ['links/a.enc', 'links/b.enc', 'tags/t.enc'];
+      for (const path of objects) await env.USER_FILES.put(userFileKey(userId, path), 'x');
+      const first = await env.USER_FILES.list({ prefix: `users/${userId}/`, limit: 1 });
+      expect(first.truncated).toBe(true);
+      const cursor = first.truncated ? first.cursor : '';
+
+      const res = await app.request(
+        `${filesListEndpoint.path}?limit=1000&pageToken=${encodeURIComponent(cursor)}`,
+        { headers: auth },
+        env,
+      );
+      const page = (await res.json()) as { files: { path: string }[]; nextPageToken: unknown };
+
+      expect(page.files.map((f) => f.path).sort()).toEqual(['links/b.enc', 'tags/t.enc']);
+      expect(page.nextPageToken).toBeNull();
+    });
+
+    it('refuses a split token it cannot read', async () => {
+      const { auth } = await authFor('sync-list-split-4');
+      const bad = encodeURIComponent(`~ns1~${btoa(JSON.stringify([['../', null]]))}`);
+
+      const res = await app.request(
+        `${filesListEndpoint.path}?pageToken=${bad}`,
+        { headers: auth },
+        env,
+      );
+
+      expect(res.status).toBe(400);
+    });
   });
 
   describe(`POST ${filesSignEndpoint.path}`, () => {

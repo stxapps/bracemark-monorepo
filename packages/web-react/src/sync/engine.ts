@@ -45,8 +45,10 @@ import {
   opsListEndpoint,
   type OpsListResponse,
   type ProgressFn,
+  type PushedChunk,
   recordBlocked,
   retryTransientBlobTransfer,
+  runChunkedPush,
   sessionVerdictFromResponse,
   type SignedUrl,
   type SignOp,
@@ -120,7 +122,7 @@ const FILES_PAGE = MAX_LIST_LIMIT;
 //
 // A large `files/` blob is bound by bandwidth and memory — each transfer holds
 // its blob in the JS heap, so peak ≈ concurrency × blob size — so it keeps the
-// narrow fan-out, whether it is uploaded (uploadBlobs, through a gate inside the
+// narrow fan-out, whether it is uploaded (uploadOne, through a gate inside the
 // wide pass) or fetched (loadEntityContents, where the size is unknown until it
 // arrives, so every content GET counts as large).
 const INDEX_CONCURRENCY = 96;
@@ -136,12 +138,12 @@ const FILE_CONCURRENCY = 8;
 // fit the deadline, so a wider fan-out halves this (64 KiB at 48 was the same 3 MiB).
 const LARGE_CONTENT_BYTES = 32 * 1024;
 
-// One put-pipeline pass (pushPuts) signs, uploads, and commits a single chunk, so
-// a chunk must fit BOTH the sign cap and the commit cap in one call each, and it
-// keeps each signed PUT URL's mint-to-PUT latency inside its own chunk's upload
-// window. The chunk is also the step the pending count moves in: its ops leave the
-// queue only when it commits (commitBatched). So the size is per blob kind, the
-// same split as the fan-out above.
+// A chunk is one sign and one commit (pushPuts, @stxapps/shared runChunkedPush),
+// so it must fit BOTH the sign cap and the commit cap in one call each, and it
+// bounds each signed PUT URL's mint-to-PUT latency to its own chunk's upload
+// window and the tail of the one before. The chunk is also the step the pending
+// count moves in: its ops leave the queue only when it commits (commitBatched). So
+// the size is per blob kind, the same split as the fan-out above.
 //
 // Index: the full cap — the commit cap (500) is the smaller today. KB-sized blobs
 // at INDEX_CONCURRENCY drain it in seconds, well under the 5-min TTL, and a smaller
@@ -151,7 +153,7 @@ const LARGE_CONTENT_BYTES = 32 * 1024;
 //
 // Content: 100. At the full cap a `files/` chunk of MB-sized blobs ran for minutes
 // on an ordinary uplink: minutes with the pending count frozen, and long enough for
-// its tail to outlive the TTL. That expiry is absorbed per blob (uploadBlobs fails
+// its tail to outlive the TTL. That expiry is absorbed per blob (uploadOne fails
 // only its own op, the chunk commits what landed), but any failed content PUT holds
 // the whole metadata phase until the next cycle. 100 is ~a minute at 1 MB a blob
 // over 10 Mbps, gated FILE_CONCURRENCY wide. Small blobs go through at the full
@@ -690,7 +692,7 @@ async function incrementalCycle(
   // 3. Push, 4. Pull — disjoint sets, so order is a sensible default, not a
   // requirement (local changes durable first).
   const orphanedPaths = await pushPending(deps, pending, outcome);
-  // Complete the self-heal: a wedged op the push dropped (uploadBlobs) had its path
+  // Complete the self-heal: a wedged op the push dropped (uploadOne) had its path
   // reserved for the push by the reconcile above, keeping the server's copy OUT of
   // the download set — re-add whatever this window shows for it, so the heal
   // restores the entity instead of leaving the path locally absent. (A path with no
@@ -804,7 +806,7 @@ async function fallbackCycle(
 
 // --- push (the 3-round-trip commit protocol) --------------------------------
 
-// Transient upload failures collected across the put phases (uploadBlobs) — the
+// Transient upload failures collected across the put phases (uploadOne) — the
 // count decides whether the metadata phase may run and whether the cycle must
 // reject; the first error is what it rejects with (the real transport failure,
 // not a summary). An accumulator for the same reason SyncOutcome is one.
@@ -814,7 +816,7 @@ interface UploadFailures {
 }
 
 // Drain a set of pending ops: sign → PUT → commit (docs flow #3). Returns the paths
-// of ops the self-heal dropped (uploadBlobs) so the caller can re-add their server
+// of ops the self-heal dropped (uploadOne) so the caller can re-add their server
 // copies to its download set — and nothing about what it committed: each commit's
 // stamp belongs on the record it names (commitBatched), never on the cursor, which
 // moves only over ops a cycle listed. Removes each committed op from the queue; a
@@ -834,7 +836,9 @@ interface UploadFailures {
 // THROWS after the phases when any upload transiently failed — not before them, so
 // the cycle keeps its progress (committed chunks stay committed; failed ops stay
 // queued for fresh URLs next drain), and not silently, because a rejection is the
-// contract every caller schedules a retry and shows an error status through.
+// contract every caller shows an error status through. No caller schedules a
+// retry: the next local write, Sync now / Retry, or the next launch runs the
+// next cycle (docs/local-first-sync.md, _a push is chunked_).
 async function pushPending(
   deps: SyncDeps,
   ops: PendingOpRecord[],
@@ -874,7 +878,7 @@ async function pushPhases(
   // Phase 3 then 4: drain ALL content puts (every chunk, every commit) before ANY
   // metadata put, so the content-before-metadata invariant holds across chunk
   // boundaries too. Each phase uploads at its own blob kind's chunk size; both at
-  // the full fan-out, with large content gated narrower inside it (uploadBlobs).
+  // the full fan-out, with large content gated narrower inside it (uploadOne).
   const metadataPuts = puts.filter((o) => !isContentPath(o.path));
   const contentRefused = await pushPuts(
     deps,
@@ -916,34 +920,34 @@ async function pushPhases(
 }
 
 // Drive a homogeneous put set (all content OR all metadata — the caller splits and
-// orders them) through the sign → PUT → commit pipeline one chunk at a time, so each
-// chunk's PUT URLs are minted immediately before that chunk's upload. `batchSize`
-// (≤ both caps) keeps the sign and the commit a single round trip each; it and
-// `concurrency` are the set's kind's. Resolves true when the quota gate refused the
-// set — the caller holds the metadata phase on it, as it does on a failed upload.
+// orders them) through sign → PUT → commit, chunk by chunk, as ONE fan-out across
+// the chunks (@stxapps/shared sync/chunked-push.ts, runChunkedPush). `batchSize`
+// (≤ both caps) keeps a chunk's sign and its commit a single round trip each; it
+// and `concurrency` are the set's kind's. Resolves true when the quota gate refused
+// the set — the caller holds the metadata phase on it, as it does on a failed
+// upload.
 //
-// A CHUNK'S COMMIT OVERLAPS THE NEXT CHUNK'S SIGN AND UPLOAD. The commit is a
-// round trip of its own (~1.6 s on staging, most of it R2 answering the existence
-// check), and run in line it left the fan-out idle for that long eight times in a
-// 1,000-link push. It runs behind the next chunk instead, and what made the line
-// safe still holds:
+// THE CHUNKS OVERLAP, AND THEIR COMMITS DO NOT. A chunk is signed while the one
+// before is still uploading, and its PUTs take the slots the earlier chunk's free,
+// so the fan-out no longer narrows to each chunk's slowest PUT, and no PUT waits on
+// a sign. What made the line of chunks safe still holds (runChunkedPush has the
+// rules):
 //
-//  - Commits stay in order. One is in flight at most, each starting once the one
-//    before has landed, so the op log takes them in input order and a failed one
-//    stops the set.
-//  - The pending count still steps down per chunk, at most one chunk behind.
-//  - The next chunk's tokens are minted after this chunk's upload ended, so the
-//    mint-to-PUT latency the chunking bounds grows by nothing.
+//  - Commits stay in order, one in flight, and a failed one stops the set.
+//  - The next chunk is signed only once the chunk two before it has committed: the
+//    pending count steps down per chunk at most one chunk behind the signs, and
+//    the quota gate (which reads usage the commits record) still misses at most
+//    the one chunk it missed when a commit ran beside the next chunk's sign — the
+//    overshoot it allows stays at two chunks (api lib/quota.ts, a cost backstop).
+//  - A PUT token's mint-to-PUT latency grows by the tail of the chunk before. For
+//    the index that is two rounds of the fan-out (`lead`'s default), a few seconds.
+//    Content is signed ahead only once FILE_CONCURRENCY × 2 of the earlier chunks'
+//    ops are left: a large blob on a slow uplink is what can outlive a token, and
+//    signed further ahead, a chunk would wait behind the whole of the one before.
 //  - Nothing leaves while a commit is in flight. The set resolves only once its
-//    last commit has — which is the phase barrier pushPhases relies on — and a
-//    throw waits for the one in flight before it rejects, so a failed cycle never
-//    lets the next one read a queue a commit is still clearing.
-//
-// What it does loosen is the quota gate's view: `files/sign` reads usage the
-// commits record, and a chunk signed beside the previous one's commit is checked
-// without it. The gate already charges each batch's growth to the next one (api
-// lib/quota.ts — a cost backstop), so the overshoot it allows grows from one
-// chunk to two.
+//    last commit has — the phase barrier pushPhases relies on — and a throw waits
+//    for what is in flight, so a failed cycle never lets the next one read a queue
+//    a commit is still clearing.
 async function pushPuts(
   deps: SyncDeps,
   puts: PendingOpRecord[],
@@ -953,108 +957,75 @@ async function pushPuts(
   orphanedPaths: string[],
   failures: UploadFailures,
 ): Promise<boolean> {
-  let committing: Promise<void> = Promise.resolve();
-  try {
-    return await pushChunks();
-  } catch (err) {
-    await committing.catch(() => undefined);
-    throw err;
-  }
+  // Homogeneous by contract (the caller splits the kinds), so the first op names it.
+  const kind = puts.length > 0 && isContentPath(puts[0].path) ? 'content' : 'index';
+  // Per set, not per chunk: chunks overlap, and the cap is on the set's heap.
+  const largeGate = createLimiter(FILE_CONCURRENCY);
 
-  async function pushChunks(): Promise<boolean> {
-    let unsigned = puts.length;
-    // Homogeneous by contract (the caller splits the kinds), so the first op names it.
-    const kind = puts.length > 0 && isContentPath(puts[0].path) ? 'content' : 'index';
-    for (const batch of chunk(puts, batchSize)) {
-      const chunkStart = trace.now();
-      const signed = await signPushable(deps, batch, outcome);
-      unsigned -= batch.length;
-      // The quota gate refuses on the account's usage, never on which paths a chunk
-      // holds, so every later chunk of this set would be refused too: record them
-      // without asking. One refused sign call per put phase, not per chunk — which
-      // CONTENT_PUT_BATCH would otherwise multiply against the rate limit.
-      if (signed === null) {
-        await committing;
-        recordBlocked(outcome, unsigned);
-        return true;
-      }
-      const uploaded = await uploadChunk(signed);
-      // One commit in flight at most: this chunk's starts once the last one's has
-      // landed, so the queue is never more than one chunk behind the uploads, and a
-      // failed commit stops the set once the chunk already uploading is done.
-      await committing;
-      committing = commitChunk(uploaded, { kind, ops: batch.length }, chunkStart);
-      // Observed here so a failure is never unhandled while the next chunk signs
-      // and uploads; the next `await committing` still sees the rejection.
-      void committing.catch(() => undefined);
+  const { refused } = await runChunkedPush<PendingOpRecord, SignedUrl, PutResult>({
+    ops: puts,
+    chunkSize: batchSize,
+    concurrency,
+    lead: kind === 'content' ? 2 * FILE_CONCURRENCY : 2 * concurrency,
+    sign: (batch) => signPushable(deps, batch),
+    upload: (op, signed) => uploadOne(deps, op, signed, largeGate, failures),
+    commit: commitChunk,
+    now: trace.now,
+  });
+  // The quota gate refuses on the account's usage, never on which paths a chunk
+  // holds, so every later chunk of this set would be refused too: they are counted
+  // without asking. One refused sign call per put phase, not per chunk — which
+  // CONTENT_PUT_BATCH would otherwise multiply against the rate limit.
+  if (refused > 0) recordBlocked(outcome, refused);
+  return refused > 0;
+
+  // Commit one uploaded chunk: the ops its PUTs sent, with the upload receipts
+  // they answered with.
+  async function commitChunk(pushed: PushedChunk<PendingOpRecord, PutResult>): Promise<void> {
+    if (trace.enabled) {
+      trace.record({
+        name: 'upload',
+        start: pushed.uploadStart,
+        end: pushed.uploadEnd,
+        attrs: { ops: pushed.ops.length, concurrency },
+      });
     }
-    await committing;
-    return false;
-  }
-
-  // Commit one uploaded chunk, and time the chunk from its sign to its commit.
-  async function commitChunk(
-    uploaded: UploadedChunk,
-    attrs: { kind: string; ops: number },
-    start: number,
-  ): Promise<void> {
-    await commitBatched(deps, uploaded.ops, uploaded.receipts);
-    if (trace.enabled) trace.record({ name: 'push.chunk', start, end: trace.now(), attrs });
-  }
-
-  // Upload one signed chunk and return the ops its commit should carry, with the
-  // upload receipts their PUTs answered with.
-  async function uploadChunk(signed: {
-    ops: PendingOpRecord[];
-    urls: Map<string, SignedUrl>;
-  }): Promise<UploadedChunk> {
-    const { orphaned, failed, superseded, receipts } = await trace.span(
-      'upload',
-      () => uploadBlobs(deps, signed.ops, signed.urls, concurrency, failures),
-      { ops: signed.ops.length, concurrency },
-    );
-    // A put with no local bytes left (see uploadBlobs) can never be satisfied, so it is
+    // A put with no local bytes left (see uploadOne) can never be satisfied, so it is
     // dropped from the queue rather than committed into a guaranteed `no_object` that
     // requeues it forever. Dropped BEFORE the commit, so the op log never records an op
     // for an object we didn't upload (the "no op without its object" invariant) — and
     // by compare-and-delete, so a re-create that landed mid-cycle keeps its own op.
-    let uploaded = signed.ops;
+    const orphaned = pushed.ops.filter((_, i) => pushed.results[i].kind === 'orphaned');
     if (orphaned.length > 0) {
       await clearDrainedOps(orphaned);
       orphanedPaths.push(...orphaned.map((o) => o.path));
-      const dropped = new Set(orphaned.map((o) => o.path));
-      uploaded = uploaded.filter((o) => !dropped.has(o.path));
     }
     // A transiently-failed PUT stays queued but is excluded from the commit: unlike an
     // unsigned path there is nothing gained by asking the server to HEAD an object we
     // know we didn't send — on a big failed chunk that's up to a chunk's worth (100 or
     // 500) of doomed entries per cycle — and the failure is already surfaced through
-    // `failures`.
-    if (failed.length > 0) {
-      const skipped = new Set(failed.map((o) => o.path));
-      uploaded = uploaded.filter((o) => !skipped.has(o.path));
+    // `failures`. A superseded op sent nothing either, and is no failure: the write
+    // that replaced it sits queued under its own `writeId` and asked for the cycle
+    // that will carry it. Kept out for the reason a failed one is — the server would
+    // HEAD an object this cycle did not send, and where an earlier version exists it
+    // would log an op for bytes that are not these. An unsigned path goes in: leaving
+    // it queued IS the retry, and the commit's `no_object` is the honest report.
+    const receipts = new Map<string, string>();
+    const committed = pushed.ops.filter((op, i) => {
+      const result = pushed.results[i];
+      if (result.kind === 'sent' && result.receipt) receipts.set(op.path, result.receipt);
+      return result.kind === 'sent' || result.kind === 'unsigned';
+    });
+    await commitBatched(deps, committed, receipts);
+    if (trace.enabled) {
+      trace.record({
+        name: 'push.chunk',
+        start: pushed.signStart,
+        end: trace.now(),
+        attrs: { kind, ops: pushed.ops.length },
+      });
     }
-    // A superseded op sent nothing either (uploadBlobs), and is no failure: the
-    // write that replaced it sits queued under its own `writeId` and asked for the
-    // cycle that will carry it. Kept out of the commit for the reason a failed one
-    // is — the server would HEAD an object this cycle did not send, and where an
-    // earlier version exists it would log an op for bytes that are not these.
-    if (superseded.length > 0) {
-      const skipped = new Set(superseded.map((o) => o.path));
-      uploaded = uploaded.filter((o) => !skipped.has(o.path));
-    }
-    return { ops: uploaded, receipts };
   }
-}
-
-// One chunk's uploaded ops and, by path, the upload receipt each PUT answered
-// with (sync/r2.ts putBlob) — the receipts ride the chunk's commit (commitOne).
-// Kept in memory only, never in the queue: a receipt is good for the commit
-// that follows its upload, and an op whose commit never happens is re-PUT next
-// drain, which answers with a fresh one.
-interface UploadedChunk {
-  ops: PendingOpRecord[];
-  receipts: ReadonlyMap<string, string>;
 }
 
 // Sign one put chunk, surviving the server's quota gate instead of failing the
@@ -1068,10 +1039,10 @@ interface UploadedChunk {
 // puts, which were all stuck behind it. docs/iap.md promises an over-quota
 // account "read-only-plus-delete, never data loss"; a wedged queue is not that.
 //
-// So a refusal is recorded on the outcome — with how many ops it cost, for the
-// "12 changes aren't syncing" line (shared sync/status.ts) — and the cycle
-// completes. There is no partial retry: being out of bytes or objects is not
-// something a subset of the chunk fixes.
+// So a refusal answers `null`, and pushPuts records it on the outcome — with how
+// many ops it cost, for the "12 changes aren't syncing" line (shared
+// sync/status.ts) — and the cycle completes. There is no partial retry: being out
+// of bytes or objects is not something a subset of the chunk fixes.
 //
 // This used to also handle `upgrade_required`, the free tier's link cap, which
 // DID get a partial retry (drop the `links/` paths, push the rest). That whole
@@ -1089,22 +1060,17 @@ interface UploadedChunk {
 // a network failure. Those are real cycle failures.
 async function signPushable(
   deps: SyncDeps,
-  batch: PendingOpRecord[],
-  outcome: SyncOutcome,
-): Promise<{ ops: PendingOpRecord[]; urls: Map<string, SignedUrl> } | null> {
+  batch: readonly PendingOpRecord[],
+): Promise<Map<string, SignedUrl> | null> {
   try {
-    return {
-      ops: batch,
-      urls: await signPaths(
-        deps.api,
-        'put',
-        batch.map((o) => o.path),
-      ),
-    };
+    return await signPaths(
+      deps.api,
+      'put',
+      batch.map((o) => o.path),
+    );
   } catch (e) {
     if (apiErrorCode(e) !== 'quota_exceeded') throw e;
-    // Out of bytes/objects: the WHOLE chunk is refused, so that's the count.
-    recordBlocked(outcome, batch.length);
+    // Out of bytes/objects: the WHOLE chunk is refused.
     return null;
   }
 }
@@ -1170,7 +1136,44 @@ async function commitOne(
   );
 }
 
-// Encrypt and PUT each op's local blob to its signed URL — THE WRITE THE OP STANDS
+// What one op's upload did (uploadOne). Four of the five are the ways an op can
+// fail to move, and they look alike and are not:
+//
+//  - `superseded` — the queue row at this path is no longer this op: a later write
+//    replaced it (a re-edit, or a delete), or it is gone. NOT a failure and nothing
+//    to retry here — the later write is queued under its own `writeId`, and the
+//    cycle that reads THAT op pushes it, with the content it names, in phase order.
+//    Checked first, because a path deleted since the queue was read has no record
+//    either, and it is a newer intent, not an orphan: healing it would fetch the
+//    server's copy of something this device just deleted.
+//  - `orphaned` — the row IS still this op, and there is no local record, or one
+//    stripped of its bytes. TERMINAL: a write puts the record and enqueues its op
+//    in one transaction, so an op without bytes is never a write that hasn't
+//    landed yet — it is a record that went missing underneath a queued op, and
+//    nothing will ever put those bytes back. Retrying is a permanent wedge (the
+//    pending count sticks above zero forever), so the commit step drops it. Since
+//    applyDeletes stopped producing that state it should be unreachable; it stays
+//    as the self-heal for queues already wedged by it, because a queue that can't
+//    drain is invisible to every other repair.
+//  - `failed` — the PUT itself threw (network blip, an expired signed URL on a
+//    chunk that outlived the TTL). TRANSIENT: the op stays queued and re-signs
+//    next drain; recorded on `failures` so the cycle still rejects after the
+//    phases instead of reporting a false 'idle'. Caught per op, so one bad blob
+//    never aborts its chunk before the chunk could commit anything — which on a
+//    chunk too big for one TTL window was a deterministic livelock.
+//  - `unsigned` — no URL came back for the path: also transient — leaving it
+//    queued IS the retry, and the commit's `no_object` is the honest report.
+//
+// A `sent` op carries the upload receipt its PUT answered with (sync/r2.ts
+// putBlob), which rides the chunk's commit (commitOne). Kept in memory only,
+// never in the queue: a receipt is good for the commit that follows its upload,
+// and an op whose commit never happens is re-PUT next drain, which answers with a
+// fresh one.
+type PutResult =
+  | { kind: 'sent'; receipt: string | undefined }
+  | { kind: 'unsigned' | 'failed' | 'orphaned' | 'superseded' };
+
+// Encrypt and PUT one op's local blob to its signed URL — THE WRITE THE OP STANDS
 // FOR, or nothing. An op carries no bytes; its record is read here, when its own
 // upload starts, which can be many round trips after the cycle read the queue. So
 // the record is read TOGETHER WITH the queue row at its path, in one transaction,
@@ -1188,124 +1191,77 @@ async function commitOne(
 // to rule out, and another device pulling in that window got a preview it could
 // not load.
 //
-// Sorts the ops it could not move into three buckets the caller treats
-// differently, because the four skip shapes look alike and are not:
-//
-//  - `superseded` — the queue row at this path is no longer this op: a later write
-//    replaced it (a re-edit, or a delete), or it is gone. NOT a failure and nothing
-//    to retry here — the later write is queued under its own `writeId`, and the
-//    cycle that reads THAT op pushes it, with the content it names, in phase order.
-//    Checked first, because a path deleted since the queue was read has no record
-//    either, and it is a newer intent, not an orphan: healing it would fetch the
-//    server's copy of something this device just deleted.
-//  - `orphaned` — the row IS still this op, and there is no local record, or one
-//    stripped of its bytes. TERMINAL: a write puts the record and enqueues its op
-//    in one transaction, so an op without bytes is never a write that hasn't
-//    landed yet — it is a record that went missing underneath a queued op, and
-//    nothing will ever put those bytes back. Retrying is a permanent wedge (the
-//    pending count sticks above zero forever), so the caller drops it. Since
-//    applyDeletes stopped producing that state it should be unreachable; it stays
-//    as the self-heal for queues already wedged by it, because a queue that can't
-//    drain is invisible to every other repair.
-//  - `failed` — the PUT itself threw (network blip, an expired signed URL on a
-//    chunk that outlived the TTL). TRANSIENT: the op stays queued and re-signs
-//    next drain; recorded on `failures` so the cycle still rejects after the
-//    phases instead of reporting a false 'idle'. Caught per op, so one bad blob
-//    no longer aborts its whole chunk before the chunk could commit anything —
-//    which on a chunk too big for one TTL window was a deterministic livelock.
-//  - an unsigned path (no URL came back): also transient — leaving it queued IS
-//    the retry, and the commit's `no_object` is the honest report.
-//
 // A `files/` blob past LARGE_CONTENT_BYTES waits for one of FILE_CONCURRENCY
 // slots inside the pass's own fan-out, and lets go of its bytes while it waits:
 // its size is known only once its record is read, and a pass of large blobs each
 // holding its bytes in a queue would put the full fan-out of them in the heap.
 // It reads its record again once it has a slot — the same paired read, so the
 // writeId test is taken again on the bytes it actually sends.
-async function uploadBlobs(
+async function uploadOne(
   deps: SyncDeps,
-  ops: PendingOpRecord[],
-  urls: Map<string, SignedUrl>,
-  concurrency: number,
+  op: PendingOpRecord,
+  signed: SignedUrl | undefined,
+  largeGate: <T>(run: () => Promise<T>) => Promise<T>,
   failures: UploadFailures,
-): Promise<{
-  orphaned: PendingOpRecord[];
-  failed: PendingOpRecord[];
-  superseded: PendingOpRecord[];
-  receipts: Map<string, string>;
-}> {
-  const orphaned: PendingOpRecord[] = [];
-  const failed: PendingOpRecord[] = [];
-  const superseded: PendingOpRecord[] = [];
-  // Each landed PUT's upload receipt, by path, for the commit (commitBatched).
-  const receipts = new Map<string, string>();
-  const largeGate = createLimiter(FILE_CONCURRENCY);
+): Promise<PutResult> {
+  const data = await readForUpload(op);
+  if (!(data instanceof Uint8Array)) return { kind: data };
+  if (!signed) return { kind: 'unsigned' };
 
-  // The op's bytes if its queue row is still this op, sorted into its bucket if not.
-  const readForUpload = async (op: PendingOpRecord): Promise<Uint8Array | undefined> => {
-    // One read transaction for the pair, so no local write can land between the
-    // row and the record it describes — IndexedDB orders this against the write
-    // edge's rw transactions on the same two stores.
-    const { rec, queued } = await trace.span('blob.read', () =>
-      db.transaction('r', db.items, db.pendingOps, async () => ({
-        rec: await db.items.get(op.path),
-        queued: await db.pendingOps.get([op.username, op.path]),
-      })),
+  if (isContentPath(op.path) && data.byteLength > LARGE_CONTENT_BYTES) {
+    return largeGate(async () => {
+      const held = await readForUpload(op);
+      return held instanceof Uint8Array ? send(deps, op, held, signed, failures) : { kind: held };
+    });
+  }
+  return send(deps, op, data, signed, failures);
+}
+
+// The op's bytes if its queue row is still this op, or which way it isn't.
+async function readForUpload(op: PendingOpRecord): Promise<Uint8Array | 'superseded' | 'orphaned'> {
+  // One read transaction for the pair, so no local write can land between the
+  // row and the record it describes — IndexedDB orders this against the write
+  // edge's rw transactions on the same two stores.
+  const { rec, queued } = await trace.span('blob.read', () =>
+    db.transaction('r', db.items, db.pendingOps, async () => ({
+      rec: await db.items.get(op.path),
+      queued: await db.pendingOps.get([op.username, op.path]),
+    })),
+  );
+  if (queued?.writeId !== op.writeId) return 'superseded';
+  if (!rec?.data) return 'orphaned';
+  return rec.data;
+}
+
+async function send(
+  deps: SyncDeps,
+  op: PendingOpRecord,
+  data: Uint8Array,
+  signed: SignedUrl,
+  failures: UploadFailures,
+): Promise<PutResult> {
+  const ns = syncNamespace(op.path);
+  try {
+    const sealed = await trace.span('blob.encrypt', () =>
+      encryptEntity(deps.encryptionKey, data, op.path),
     );
-    if (queued?.writeId !== op.writeId) {
-      superseded.push(op);
-      return undefined;
-    }
-    if (!rec?.data) {
-      orphaned.push(op);
-      return undefined;
-    }
-    return rec.data;
-  };
-
-  await mapLimit(ops, concurrency, async (op) => {
-    let data = await readForUpload(op);
-    if (!data) return;
-
-    const signed = urls.get(op.path);
-    if (!signed) return;
-
-    if (isContentPath(op.path) && data.byteLength > LARGE_CONTENT_BYTES) {
-      data = undefined;
-      await largeGate(async () => {
-        const held = await readForUpload(op);
-        if (held) await send(op, held, signed);
-      });
-      return;
-    }
-    await send(op, data, signed);
-  });
-  return { orphaned, failed, superseded, receipts };
-
-  async function send(op: PendingOpRecord, data: Uint8Array, signed: SignedUrl): Promise<void> {
-    const ns = syncNamespace(op.path);
-    try {
-      const sealed = await trace.span('blob.encrypt', () =>
-        encryptEntity(deps.encryptionKey, data, op.path),
-      );
-      // A 5xx, a 429 or a dropped connection is tried again here rather than
-      // failing the cycle — one span per attempt, so a retried PUT shows in the
-      // trace as a failed one before it (@stxapps/shared sync/blob-transfer.ts,
-      // retryTransientBlobTransfer).
-      const receipt = await retryTransientBlobTransfer(
-        () =>
-          trace.span('blob.put', () => putBlob(signed.url, sealed, signed.authorization), {
-            bytes: sealed.byteLength,
-            ns,
-          }),
-        isTransientBlobError,
-      );
-      if (receipt) receipts.set(op.path, receipt);
-    } catch (err) {
-      failed.push(op);
-      failures.count += 1;
-      failures.firstError ??= err;
-    }
+    // A 5xx, a 429 or a dropped connection is tried again here rather than
+    // failing the cycle — one span per attempt, so a retried PUT shows in the
+    // trace as a failed one before it (@stxapps/shared sync/blob-transfer.ts,
+    // retryTransientBlobTransfer).
+    const receipt = await retryTransientBlobTransfer(
+      () =>
+        trace.span('blob.put', () => putBlob(signed.url, sealed, signed.authorization), {
+          bytes: sealed.byteLength,
+          ns,
+        }),
+      isTransientBlobError,
+    );
+    return { kind: 'sent', receipt };
+  } catch (err) {
+    failures.count += 1;
+    failures.firstError ??= err;
+    return { kind: 'failed' };
   }
 }
 
@@ -1627,7 +1583,7 @@ async function putPulled(username: string, records: ItemRecord[]): Promise<void>
 // and absent from that snapshot, so the fallback's "local only, not in pending-ops" row
 // (docs/local-first-sync.md — fallback full sync) matched a brand-new create and deleted
 // it — while its pending op, written in the same transaction, survived. That op is then
-// UNPUSHABLE FOREVER: uploadBlobs finds no bytes, the commit answers `no_object`, and
+// UNPUSHABLE FOREVER: uploadOne finds no bytes, the commit answers `no_object`, and
 // `no_object` deliberately leaves the path queued to retry. The queue wedges at a
 // permanent non-zero count that no amount of syncing drains, and the entity (an
 // extraction, so a link silently missing its title/image) is gone with it.

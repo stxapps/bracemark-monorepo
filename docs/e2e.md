@@ -3095,7 +3095,9 @@ trace: open it in ui.perfetto.dev.
 - **⚠ Staging must be running this checkout.** The spans and the header ship in
   the deployed app and api, and an older deploy has neither. The run refuses on
   the first leg when the page has no trace recorder, and notes a leg whose api
-  responses carried no Server-Timing.
+  responses carried no Server-Timing. Only responses that went on the wire
+  count: one the service worker answered shows the page no Server-Timing, so a
+  leg whose every api call was a GET (a deletes-only pull) is not noted.
 - **The local stack can't answer the network question.** Blob bytes go through
   the api's blob route on every tier now ([local-first-sync.md](./local-first-sync.md),
   _the blob route_), but locally that api is `wrangler dev` on loopback over

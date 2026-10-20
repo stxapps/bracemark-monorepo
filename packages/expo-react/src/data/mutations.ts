@@ -504,7 +504,7 @@ export async function deleteExtraction(username: string, linkId: string): Promis
 // crash at any point reads as "not materialized". The copy runs INSIDE the
 // transaction, after its ownership check: a file copied first would land for an
 // account already signed out, where clearData's wipe can no longer reach it.
-// The sync engine's uploadBlobs already handles the queued put (native encrypt
+// The sync engine's uploadOne already handles the queued put (native encrypt
 // to a temp .enc, stream upload) with no further wiring.
 export async function writeFile(username: string, fileId: string, source: File): Promise<void> {
   const path = pathFromId(fileId, FILES_PREFIX);

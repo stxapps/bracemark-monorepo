@@ -113,8 +113,8 @@ describe('mapLimit', () => {
     // And that straggler is not cancelled — nothing here can interrupt an
     // already-started `fn`, so it settles on its own AFTER the caller has moved on.
     // Anything a caller does on rejection has to tolerate that late completion; the
-    // engines' upload loops do, by catching per op so a failure never reaches the
-    // pool at all (sync/engine.ts uploadBlobs).
+    // engines' uploads do, by catching per op so a failure never reaches their
+    // fan-out at all (sync/engine.ts uploadOne).
     slow.resolve();
     await flush();
     expect(slowFinished).toBe(true);
@@ -215,8 +215,8 @@ describe('mapLimit', () => {
   });
 });
 
-// The gate the engines hold large `files/` uploads to inside a wider mapLimit
-// (sync/engine.ts uploadBlobs). Its contracts: the cap, the order a freed slot
+// The gate the engines hold large `files/` uploads to inside a wider fan-out
+// (sync/engine.ts uploadOne). Its contracts: the cap, the order a freed slot
 // is handed on in, and that one caller's rejection is that caller's alone.
 describe('createLimiter', () => {
   it('runs at most `limit` at once, and hands a freed slot to the longest waiter', async () => {

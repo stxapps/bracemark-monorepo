@@ -972,7 +972,7 @@ describe('the fan-out', () => {
 
 // --- a PUT that fails mid-chunk ----------------------------------------------
 
-// The third skip shape (uploadBlobs): not a missing record and not an unsigned path,
+// The third skip shape (uploadOne): not a missing record and not an unsigned path,
 // but a PUT that THREW — a network blip, or a presigned URL that expired because its
 // chunk of `files/` content took longer than the 5-min TTL to upload. It used to
 // escape the pool and abort the whole chunk before the chunk could commit ANYTHING,
@@ -1574,6 +1574,45 @@ describe('the put chunk', () => {
       expect(signs[i].pendingBefore).toBeLessThanOrEqual(2 * COUNT - allButLast);
       expect(signs[i].pendingBefore).toBeGreaterThanOrEqual(2 * COUNT - signedBefore);
     }
+    expect(await pendingPaths()).toEqual([]);
+  });
+
+  slowIt('starts the next chunk’s PUTs while the last chunk’s slowest is still out', async () => {
+    // The seam runChunkedPush took out (@stxapps/shared sync/chunked-push.ts): a
+    // chunk's upload used to narrow to its slowest PUT before the next chunk
+    // signed. Here one PUT of the first chunk is held until a PUT of the second
+    // goes out — and released by a timer instead, which fails the case, if none
+    // ever does.
+    const batches: string[][] = [];
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let releasedBy: 'next chunk' | 'timer' | undefined;
+    mockPutBlob.mockImplementation(async (url: string) => {
+      const path = pathFor(url);
+      if (path === batches[0][0]) {
+        const timer = setTimeout(() => {
+          releasedBy ??= 'timer';
+          release();
+        }, 2_000);
+        await held;
+        clearTimeout(timer);
+      } else if (batches[1]?.includes(path)) {
+        releasedBy ??= 'next chunk';
+        release();
+      }
+      return landed(path);
+    });
+
+    await runIncrementalSync(
+      deps({
+        opsList: quietLog,
+        filesSign: (paths, op) => {
+          if (op === 'put') batches.push(paths);
+        },
+      }),
+    );
+
+    expect(releasedBy).toBe('next chunk');
     expect(await pendingPaths()).toEqual([]);
   });
 

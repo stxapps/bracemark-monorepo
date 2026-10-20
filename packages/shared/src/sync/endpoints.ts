@@ -222,9 +222,12 @@ export const opsCommitEndpoint = defineEndpoint({
 
 // Paginated: the whole namespace can be thousands of objects, and each R2
 // `list()` is one subrequest capped at 1000 keys, so the server can't safely
-// stream it all in one Worker invocation. `pageToken` is OPAQUE — it's R2's own
-// list cursor passed straight back; never parse it or treat it as a path. Absent
-// on the first page. `limit` caps the page at R2's 1000-key ceiling.
+// stream it all in one Worker invocation. `pageToken` is OPAQUE — the server's
+// cursor (R2's own, or one per namespace) passed straight back; never parse it or
+// treat it as a path. Absent on the first page. `limit` caps each R2 call at its
+// 1000-key ceiling, and the server lists every unfinished namespace in a page at
+// once, so a page holds up to `limit` keys per namespace — a client takes what
+// it is given.
 export const filesListRequestSchema = z.object({
   pageToken: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(MAX_LIST_LIMIT).default(MAX_LIST_LIMIT),
@@ -241,8 +244,8 @@ export const fileEntrySchema = z.object({
 });
 export type FileEntry = z.infer<typeof fileEntrySchema>;
 
-// One page of the download-authoritative listing. `nextPageToken` is R2's cursor
-// when the listing is truncated, else null. The client pages until it's null. The
+// One page of the download-authoritative listing. `nextPageToken` is the cursor
+// while any namespace is unfinished, else null. The client pages until it's null. The
 // listing is NOT a snapshot (pages span concurrent writes, and an object written
 // into a key range already listed is simply absent), which is safe for what gets
 // downloaded — fallback is download-authoritative and `updatedAt`-compared — and

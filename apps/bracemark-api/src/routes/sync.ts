@@ -41,8 +41,9 @@ export const syncRoutes = new Hono<AppEnv>()
   .get(filesListEndpoint.path, zValidator('query', filesListEndpoint.request), async (c) => {
     const { pageToken, limit } = c.req.valid('query');
     const { userId } = c.get('session');
-    // One R2 page per call; the client pages via nextPageToken (R2's opaque list
-    // cursor) until it's null. See docs/local-first-sync.md "fallback full sync".
+    // One page per call — a page of each namespace still unfinished, listed
+    // together (r2/user-files.ts listPage); the client pages via nextPageToken
+    // (opaque) until it's null. See docs/local-first-sync.md "fallback full sync".
     const body: FilesListResponse = await timerFor(c)('r2-list', () =>
       listUserFiles(c.env, userId, pageToken, limit),
     );

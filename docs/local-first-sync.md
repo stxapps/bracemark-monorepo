@@ -712,7 +712,7 @@ the `r2-list` and `r2-head` sums) is what to tune them against.
 blob route already holds R2's answer to each PUT — the object's `LastModified`
 and size, the two facts the commit records — so it signs them into a **receipt**
 (`r2/upload-receipt.ts`) and answers the PUT with `{ "receipt": … }`. The engine
-keeps it in memory beside the chunk (`UploadedChunk`), the commit carries it back
+keeps it in memory with the chunk's results (`PutResult`), the commit carries it back
 on the op (`commitOpSchema.receipt`), and the Worker checks its HMAC — local
 crypto, no subrequest — instead of the listing or `HEAD`s above. The 10,000-link
 reading (_measuring a sync_, 2026-10-19) is why: a 500-op commit scattered over
@@ -820,9 +820,9 @@ coalescing (see _deferred_) trims the extra rows later. Never fail a commit on a
 duplicate path.
 
 > **A push is chunked, and a failed upload costs its own op — never its chunk.**
-> One pipeline pass signs, uploads, and commits a **single chunk** rather than
-> signing everything up front: that keeps each presigned PUT's mint-to-PUT
-> latency inside its **own** chunk's upload window. The chunk size is per blob
+> Each chunk is signed, uploaded and committed as a unit rather than signing
+> everything up front: that keeps each signed PUT's mint-to-PUT latency inside
+> its **own** chunk's upload window and the tail of the one before. The chunk size is per blob
 > kind. An **index** chunk is the smaller of the `files/sign` and `ops/commit`
 > caps (500): KB-sized blobs drain it in seconds, far under the 5-minute TTL, and
 > a smaller chunk would only spend more of the `tight` rate limit (10 calls per
@@ -836,18 +836,36 @@ duplicate path.
 > chunk still spends one sign and one commit, and only a chunk under a second long
 > would reach either bucket's limit.
 >
-> **A chunk's commit runs beside the next chunk's sign and upload**, one commit
-> in flight at most. The commit is a round trip of its own (~1.6 s on staging,
-> mostly R2 answering the existence check — 14 s for a sparse chunk on a
-> 10,000-link library, which is what _upload receipts_ took out of it), and run in line it left the fan-out
-> idle between every pair of chunks. Overlapped, the order still holds: each
-> commit starts once the one before has landed, a failed one stops the set, the
-> pending count steps down per chunk at most one chunk behind, and a set — so a
-> phase — ends only when its last commit has. The next chunk's URLs are minted
-> after this chunk's upload ended, so the mint-to-PUT window grows by nothing.
-> What it loosens is the quota gate's view: `files/sign` reads usage the commits
-> record, and the gate already charges a batch's growth to the next one (a cost
-> backstop, `lib/quota.ts`), so the overshoot it allows grows from one chunk to two.
+> **A set's chunks overlap; their commits do not.** A put set runs as one
+> fan-out across its chunks (`runChunkedPush`, `@stxapps/shared`
+> `sync/chunked-push.ts`): a chunk is signed while the one before is still
+> uploading, and its PUTs take the slots the earlier chunk's free. Run one
+> chunk at a time, each upload narrowed to its slowest PUT — a p95 of ~2 s
+> against a p50 of ~1.1 s — and each next chunk then waited a whole sign: a
+> 10,000-link push kept 63 of 96 PUTs in flight and spent 51 s in signs nothing
+> ran beside (_measuring a sync_). The commit had already moved off that line
+> (~1.6 s each then, mostly R2 answering the existence check that _upload
+> receipts_ took out). What holds across the overlap:
+>
+> - **Commits stay in order, one in flight.** A chunk commits once its own
+>   uploads have settled and the chunk before it has committed; a failed commit
+>   stops the set — no later commit and no later PUT — and a set, so a phase,
+>   ends only when its last commit has.
+> - **A chunk is signed only once the chunk two before it has committed.** So
+>   the pending count steps down per chunk at most one chunk behind the signs,
+>   and the quota gate — `files/sign` reads usage the commits record — misses at
+>   most the one uncommitted chunk it missed when the commit first ran beside the
+>   next sign. The gate already charges a batch's growth to the next one (a cost
+>   backstop, `lib/quota.ts`), so the overshoot it allows stays at two chunks.
+> - **The sign-ahead is sized per blob kind** (`lead`: the next chunk is signed
+>   once fewer than that many signed ops are unsettled). Index: two rounds of the
+>   fan-out, a few seconds added to a token's mint-to-PUT. Content: two rounds of
+>   `FILE_CONCURRENCY`, because a large blob on a slow uplink is what can outlive
+>   a 5-minute token, and signed further ahead a content chunk would wait behind
+>   the whole of the one before it.
+> - **A long straggler still stalls the set, one chunk later.** The chunk after
+>   it uploads; the one after that waits for the straggler's chunk to commit. A
+>   PUT's deadline bounds the wait.
 >
 > Even at 100 a content chunk can outlive the TTL on a slow enough uplink, so the
 > expiry is absorbed **per blob**: an expired-URL PUT (R2 answers 403) fails only
@@ -902,14 +920,18 @@ duplicate path.
 >   a purchase that raised the ceiling can land between the two sign calls and
 >   let the metadata through alone. The held ops count toward `blockedCount`.
 > - **The cycle still REJECTS**, after the phases rather than before them — so it
->   keeps the progress it made, while the caller's error branch (`bgSyncStatus
-'error'`, a scheduled retry) still fires. Reporting a clean `idle` over an
->   unpushed edit would leave the user nothing to notice and nothing to retry.
+>   keeps the progress it made, while the caller's error branch still fires:
+>   `bgSyncStatus 'error'` and the error's message. It schedules **no** retry —
+>   neither provider sets a timer (`contexts/sync-provider.tsx`, web and expo).
+>   The next cycle is started by the next local write, a press of Sync now or
+>   Retry, or the store coming up ready on the next launch; until then the failed
+>   ops wait, queued. Reporting a clean `idle` over an unpushed edit would leave
+>   the user nothing to notice and nothing to retry.
 >
-> This is also why `mapLimit`'s own failure policy is fail-fast (stop feeding work
-> into a failing cycle): the upload loop catches **per op** so its transient
-> failures never reach the pool at all. Coverage:
-> `packages/shared/src/async/pool.spec.ts`,
+> This is also why the put set's fan-out is fail-fast on a throw (`runChunkedPush`
+> stops feeding work into a failing cycle): the upload catches **per op** so its
+> transient failures never reach the fan-out at all. Coverage:
+> `packages/shared/src/sync/chunked-push.spec.ts`,
 > `packages/web-react/src/sync/engine.spec.ts`.
 
 The store records the **R2 `LastModified` returned by commit** as the file's
@@ -1343,24 +1365,56 @@ When routing lands on fallback (`since` older than `oldestUpdatedAt`, or ahead o
 `newestUpdatedAt`), the op log can't reconstruct what changed, so the client
 reconciles directly against R2. The fallback endpoint lists paths with their
 `updatedAt` — which is **R2's own `LastModified`** (the timestamp R2 stamps on
-every PUT, and the same value the client stores locally on each sync) — **one R2
-page per call**:
+every PUT, and the same value the client stores locally on each sync) — **a page
+of each namespace per call**:
 
 ```
 GET /v1/files/list?limit=1000
 → {
     files: [ { path: "links/l_abc.enc", updatedAt: 1744538400000 }, ... ],
-    nextPageToken: "…" | null,   // R2's opaque list cursor; null when complete
+    nextPageToken: "…" | null,   // opaque; null when every namespace is listed
   }
 ```
 
 The whole namespace can be thousands of objects, and each R2 `list()` is one
 subrequest capped at 1000 keys, so the listing is paged: the client passes
 `nextPageToken` back as `pageToken` and **loops until it comes back null**.
-`pageToken` is **opaque** — it's R2's own list cursor relayed straight through, not
+`pageToken` is **opaque** — the server's own cursor relayed straight through, not
 a path or a keyset on `(updatedAt, path)` like `ops/list` (that endpoint queries
-the DO's SQLite, where we own the ordering; this one rides R2's native cursor over
-a listing we don't control — R2 lists in key order, not time order). Two
+the DO's SQLite, where we own the ordering; this one rides R2's native cursors over
+a listing we don't control — R2 lists in key order, not time order).
+
+**Each namespace is listed on its own, all of them in one call**
+(`r2/user-files.ts`, `listPage`). R2 walks one prefix a page at a time, so the
+whole of `users/{uid}/` as one listing was a page per call, one after another:
+40 calls and 78 s for a 10,000-link account on staging (_measuring a sync_). A
+page is now one R2 call per unfinished namespace, run together, and the token
+carries each namespace's R2 cursor — so a page holds up to `limit` keys **per
+namespace**, and a listing is about as many calls as its largest namespace needs.
+Nothing changed for a client: it pages until the token is null and takes what it
+is given.
+
+- **⚠ Which namespaces is read from the bucket, never from the server's own
+  list.** The listing is download-authoritative (below): a client drops a local
+  path the listing lacks. A namespace the server did not ask for — one a newer
+  client writes before the api that knows its name is deployed — would be deleted
+  from every device that took a fallback, with no error anywhere. So the first
+  page asks R2 which prefixes exist (`delimiter: '/'`) beside the known
+  namespaces' first pages, and lists what it finds on the pages after; a key
+  directly under the user's prefix comes back with it. A prefix holding more
+  than a page of namespaces, or one outside the path charset a token may name,
+  is listed the old way, whole.
+- **A token from before the split is still honoured.** It is R2's own cursor
+  over the whole prefix, which a client paging across the deploy holds; the split
+  token is marked so the two are told apart, and the old one is finished the old
+  way. An api rolled back mid-listing hands R2 a split token it cannot read: that
+  cycle fails, and the next one lists again.
+- **What it costs**: the first page is one R2 call per known namespace plus the
+  discovery call — eight Class A operations where a small account's listing was
+  one. At R2's $4.50 per million that is about three cents per thousand
+  fallbacks, and a fallback is rare (_the cursor is a claim_).
+
+Two
 consequences: the client **can't stop early** (R2 lists in key order, not time
 order, so every page has to be read), and the listing is **not a snapshot**
 (pages span concurrent writes, and an object written into a key range already
@@ -1532,7 +1586,7 @@ it (`engine.spec.ts`, _two tabs, one queue_).
 > **B holds over the bytes, not only over the ops.** A cycle reads the pending
 > queue once, at the top, and orders the ops it read. But an op carries no bytes:
 > each `put` reads its record from the store when its own upload starts
-> (`uploadBlobs`), which can be many round trips later. So the phase order used
+> (`uploadOne`), which can be many round trips later. So the phase order used
 > to hold over the ops and break over what was actually uploaded. A metadata op
 > that was already queued uploaded whatever its record held THEN. A content file
 > and the reference to it are two local writes, content first — `writeFile`, then
@@ -1554,7 +1608,7 @@ it (`engine.spec.ts`, _two tabs, one queue_).
 > again). The content-failure hold above did not cover it: a content op the
 > cycle never read cannot fail in it.
 >
-> **So an upload sends the write its op stands for, or nothing.** `uploadBlobs`
+> **So an upload sends the write its op stands for, or nothing.** `uploadOne`
 > reads the record TOGETHER WITH the queue row at its path, in one transaction,
 > and uploads only if that row still carries the `writeId` the cycle read. A
 > write replaces the `writeId` in the same transaction that stores its bytes, so
@@ -2208,7 +2262,7 @@ it:
 
 - `INDEX_CONCURRENCY` 48, and content sized rather than counted: a `files/` blob
   up to 64 KiB goes at the full fan-out, a larger one waits for one of
-  `FILE_CONCURRENCY` (8) slots inside it (`uploadBlobs`; the threshold's
+  `FILE_CONCURRENCY` (8) slots inside it (`uploadOne`; the threshold's
   arithmetic is at `LARGE_CONTENT_BYTES`).
 - A chunk's commit runs beside the next chunk's sign and upload (_a push is
   chunked_).
@@ -2361,7 +2415,89 @@ and the push of the library itself, 22,972 files:
 It justified upload receipts (_the three flows: push_, _upload receipts_). By
 arithmetic, not yet by reading: the 158-edit push from 18.4 s to ~9 s, the
 1,058-edit push from 41.9 s to ~28 s, the 10-edit one by ~0.4 s, an import by
-under 1%. The next staging reading prices it.
+under 1%. The reading below prices it.
+
+**Reading, 2026-10-19 — staging, with upload receipts** (`ff6d121`, service
+worker allowed, Chrome 155 on an Apple M1 Mac): the default run on 1,000 links,
+then `--links 10000 --legs bulk-edit --bulk 10,100,1000`. Every wall is the
+leg's. Bulk edits onto 10,000 links, against the `f5d6bad` reading above:
+
+|                           | 10                | 158               | 1,058                          |
+| ------------------------- | ----------------- | ----------------- | ------------------------------ |
+| push wall, `f5d6bad`      | 5.4 s             | 19.0 s            | 42.7 s                         |
+| push wall, `ff6d121`      | 4.1 s             | 7.6 s             | 24.1 s                         |
+| sign / upload / commit    | 0.6 / 2.4 / 0.4 s | 0.7 / 5.5 / 0.6 s | 2.2 / 20.5 / 3.0 s (3 commits) |
+| commit's `r2-stat`        | 0                 | 0                 | 0 + 0 + 0                      |
+| pull on the second device | 2.7 s             | 4.1 s             | 11.1 s                         |
+
+and the 1,000-link run, against `21efb3a`'s:
+
+|                                          | `21efb3a`           | `ff6d121`           |
+| ---------------------------------------- | ------------------- | ------------------- |
+| push wall                                | 51.8 s              | 70.9 s              |
+| upload (8 chunks) / signs (8)            | 41.5 s / 4.7 s      | 57.2 s / 6.8 s      |
+| PUTs in flight; `r2-put` p50 / p99       | 72.7; 1.02 / 2.68 s | 60.6; 1.06 / 3.31 s |
+| pull wall                                | 24.2 s              | 21.9 s              |
+| incremental (100 links onto 1,000)       | 4.3 s               | 4.9 s               |
+| bulk edit of 10 / 158 / 1,058: push      | 4.5 / 8.0 / 21.8 s  | 3.8 / 6.1 / 23.9 s  |
+| bulk delete of 158: commit (`r2-delete`) | 2.6 s (2.2 s)       | 4.8 s (4.1 s)       |
+
+- **Receipts took the existence check out.** All 92 commit calls of the two runs
+  read `r2-stat` 0 with no `r2-list` or `r2-head` beside it. Every put carried
+  its receipt — 24,198 of 24,198 at 10,000 links; the 1,000-link run's 492 ops
+  without one are the bulk delete's, which upload nothing — and the fence sent
+  no batch back to R2.
+- **A bulk edit no longer grows with the library.** 1,058 edits pushed in
+  24.1 s onto 10,000 links and 23.9 s onto 1,000. The three commits (0.7–0.8 s
+  each) ran beside the uploads, and the push waited 0.5 s on the last. The push
+  spans beat the arithmetic: 158 edits from 18.4 s to 6.9 s (~9 s predicted),
+  1,058 from 41.9 s to 23.3 s (~28 s).
+- **An import's commits shrank; its push did not.** The 10,000-link push's 71
+  commits took 45.7 s against 125.1 s, what is left being `auth` (20.0 s) and
+  `do-commit` (9.9 s). They already ran beside the uploads, so an import is
+  still its uploads and its signs (51.4 s; `auth` 20.1 s, `d1-ceilings` 19.6 s).
+- **The 1,000-link push's extra 19 s reads as R2, on one run.** The blob
+  route's server time is all `r2-put`, which a receipt does not touch. Its
+  median moved 4% and its tail more, and each 500-op chunk's upload narrows to
+  its slowest PUT: 9.0–10.7 s against 7.2–7.6 s. The bulk delete's `r2-delete`
+  nearly doubled in the same session. Read again before believing either.
+- **The slow small-edit PUTs are R2's.** 10 and 158 edits onto 10,000 links
+  again ran their PUTs slower than the full fan-out does (p50 1.7 s and 2.3 s,
+  against ~1.1 s), and Server-Timing now says where: `r2-put` p50 1.67 s and
+  2.21 s. The 1,058-edit leg after them read 1.10 s. Why only the legs right
+  after a 10,000-link push is still unexplained.
+- **The 10,000-link push failed one cycle on a deadline**: 680.2 s, against
+  474.2 s. About 213 s in, R2 stalled. Four PUTs failed with a
+  `BlobRequestError` and were tried again in place, and ~15 spent 21.2–21.5 s
+  in `r2-put`. One never answered, and its deadline cancelled it at 60 s — a
+  `BlobTimeoutError`, which is not retried in place (`blob-transfer.ts`). The
+  push carried the other 22,971 ops on and failed the cycle at 537 s with that
+  one left. The runner pressed Retry 60 s later, and the retry, still a
+  fallback cycle, listed the whole account — 40 `files/list` pages one after
+  another, ~1.9 s each, 78 s — before a 3 s push of the one op. Take out the
+  stalled chunk's minute and the push matches the `f5d6bad` reading. It is the
+  third 10,000-link run to meet a transient that fails a cycle, after an R2
+  `10001` and a dropped connection, the two now retried in place. Left as it is
+  for now.
+- **The runner's "no Server-Timing" note was the service worker.** It fired on
+  the bulk-delete pull of every full run since `2b19789`: that leg's one api
+  call is an `ops/list` GET, and a response the worker answers shows the page no
+  Server-Timing. The note now counts only responses that went on the wire
+  ([e2e.md](./e2e.md), _the sync leg_).
+
+It justified two changes, in both engines and the api. By arithmetic, not yet
+by reading:
+
+- **A put set as one fan-out across its chunks** (_a push is chunked_). At the
+  pull's 92 of 96 in flight instead of 63, with the signs off the critical path:
+  a 10,000-link import's push from ~470 s to ~300 s, and a 1,058-edit push from
+  ~23 s to ~16 s. A content phase gains less: its sign-ahead is held to two
+  rounds of `FILE_CONCURRENCY`.
+- **The listing split by namespace** (_fallback full sync_). The retry's 40
+  pages one after another (78 s) become about ten calls, as many as `links/` or
+  `extractions/` needs on its own: ~20 s.
+
+The next staging reading prices both.
 
 ### deferred
 

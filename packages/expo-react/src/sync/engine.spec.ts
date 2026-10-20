@@ -13,7 +13,7 @@
 //    deleting it strands the user's content with no error, no pending count and
 //    no retry;
 //  - the same asymmetry on the delete side (applyDeletes);
-//  - `uploadBlobs`' content branch, where "no payload" is a TWO-part test
+//  - `uploadOne`'s content branch, where "no payload" is a TWO-part test
 //    (`!rec.hasDataFile || !plain.exists`) that web spells as one;
 //  - `loadEntityContent`, which DIVERGES in behaviour, not just mechanism: web
 //    still returns the bytes when it loses the restamp race, this returns
@@ -787,6 +787,42 @@ describe('a content push', () => {
       expect(commits.filter((b) => !isContent(b))).toHaveLength(1);
       expect(commits.filter(isContent).length).toBeGreaterThan(1);
       expect(commits.at(-1)?.every((o) => !o.path.startsWith(FILES_PREFIX))).toBe(true);
+      expect(await pendingPaths()).toEqual([]);
+    });
+
+    it('starts the next chunk’s PUTs while the last chunk’s slowest is still out', async () => {
+      // Held until a PUT of the second chunk goes out, or by a timer that fails
+      // the case if none ever does.
+      const batches: string[][] = [];
+      let release = (): void => undefined;
+      const held = new Promise<void>((resolve) => (release = resolve));
+      let releasedBy: 'next chunk' | 'timer' | undefined;
+      mockPutBlobFromFile.mockImplementation(async (url: string) => {
+        const path = pathFor(url);
+        if (path === batches[0][0]) {
+          const timer = setTimeout(() => {
+            releasedBy ??= 'timer';
+            release();
+          }, 2_000);
+          await held;
+          clearTimeout(timer);
+        } else if (batches[1]?.includes(path)) {
+          releasedBy ??= 'next chunk';
+          release();
+        }
+        uploaded.add(path);
+        return receiptFor(path);
+      });
+
+      await runIncrementalSync(
+        deps({
+          filesSign: (paths, op) => {
+            if (op === 'put') batches.push(paths);
+          },
+        }),
+      );
+
+      expect(releasedBy).toBe('next chunk');
       expect(await pendingPaths()).toEqual([]);
     });
 

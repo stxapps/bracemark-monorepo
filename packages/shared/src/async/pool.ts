@@ -54,8 +54,8 @@ export async function mapLimit<T>(
 
 // A gate that lets at most `limit` calls run at once, for work that is not one
 // list: the sync engines' uploads hold their large `files/` blobs to a narrower
-// fan-out than the pass around them (sync/engine.ts uploadBlobs), and those
-// blobs arrive one at a time from inside a mapLimit. Waiters are served in the
+// fan-out than the pass around them (sync/engine.ts uploadOne), and those
+// blobs arrive one at a time from inside a put set's fan-out (runChunkedPush). Waiters are served in the
 // order they arrived. A rejection belongs to its own caller and frees the slot;
 // it never closes the gate, unlike mapLimit's failure policy, because the gate
 // has no queue of its own to abandon.

@@ -857,7 +857,16 @@ async function readLeg(
 
   const notes: string[] = [];
   if (dropped > 0) notes.push(`${dropped} span(s) dropped past the recorder’s bound`);
-  if (IS_STAGING && !network.some((n) => Object.keys(n.serverTiming).length > 0)) {
+  // A response the service worker answered carries no Server-Timing the page
+  // can read (network.ts, the ⚠ on hidden wires), so a leg whose every api call
+  // was a GET — a deletes-only pull, its one `ops/list` — has nothing to check,
+  // and an old deploy has to show itself on a request that went on the wire.
+  const onTheWire = network.filter((n) => n.viaWorker < n.n);
+  if (
+    IS_STAGING &&
+    onTheWire.length > 0 &&
+    !onTheWire.some((n) => Object.keys(n.serverTiming).length > 0)
+  ) {
     notes.push('no Server-Timing on any api response — is staging running this checkout?');
   }
   return {

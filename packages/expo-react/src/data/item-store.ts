@@ -71,7 +71,7 @@ export async function getItem(path: string): Promise<ItemRow | undefined> {
 // the two. An op carries no bytes, and the engine reads each record only when its
 // own upload starts; without this pairing an op read at the top of a cycle uploads
 // whatever the row holds by then, which can be a later write naming a `files/`
-// blob the cycle holds no op for (sync/engine.ts uploadBlobs, and web's twin).
+// blob the cycle holds no op for (sync/engine.ts uploadOne, and web's twin).
 // `stillQueued` is false when a later write replaced the op, or it is gone.
 //
 // For a content path this pins the ROW and its `hasDataFile` claim; the plaintext

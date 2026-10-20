@@ -1,4 +1,11 @@
-import { BLOB_PATH, type FilesListResponse, type SignedUrl } from '@stxapps/shared';
+import {
+  BLOB_PATH,
+  type FileEntry,
+  type FilesListResponse,
+  ID_KEYED_PREFIXES,
+  SETTINGS_PREFIX,
+  type SignedUrl,
+} from '@stxapps/shared';
 
 import type { LogFence } from '../do/user-data';
 import type { Bindings } from '../lib/env';
@@ -63,37 +70,167 @@ function r2Credentials(env: Bindings): R2Credentials {
   };
 }
 
+// The namespaces a first listing page asks for outright, beside the bucket's own
+// answer to which exist (listPage).
+const LISTED_NAMESPACES: readonly string[] = [...ID_KEYED_PREFIXES, SETTINGS_PREFIX];
+
+// One namespace still to list, and R2's cursor into it (null: not started).
+type SplitCursor = [ns: string, cursor: string | null];
+
+// A split listing's page token: its unfinished namespaces and their cursors,
+// marked so it is told apart from R2's own cursor — which is what a token from
+// before the split is, and what wholePrefixPage resumes. R2's cursor is opaque;
+// the mark is one no cursor has been seen to start with, and the cost of a
+// collision would be one 400 and a listing started again.
+const SPLIT_TOKEN_MARK = '~ns1~';
+// A namespace as a token may name it: one segment of the path charset and its
+// slash. Checked on the way back in, so a token names nothing but a namespace
+// under the caller's own prefix; a bucket prefix outside it is never put in one
+// (listPage lists such an account the old way instead).
+const NAMESPACE_RE = /^[A-Za-z0-9_-]+\/$/;
+
+function isSplitToken(token: string): boolean {
+  return token.startsWith(SPLIT_TOKEN_MARK);
+}
+
+function encodeSplitToken(pending: readonly SplitCursor[]): string {
+  const json = JSON.stringify(pending);
+  const base64 = btoa(json).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+  return SPLIT_TOKEN_MARK + base64;
+}
+
+function decodeSplitToken(token: string): SplitCursor[] {
+  const invalid = () =>
+    new HttpError(400, 'invalid_page_token', 'Unreadable files/list page token');
+  let parsed: unknown;
+  try {
+    const base64 = token.slice(SPLIT_TOKEN_MARK.length).replaceAll('-', '+').replaceAll('_', '/');
+    parsed = JSON.parse(atob(base64));
+  } catch {
+    throw invalid();
+  }
+  const valid =
+    Array.isArray(parsed) &&
+    parsed.length > 0 &&
+    parsed.every(
+      (entry: unknown) =>
+        Array.isArray(entry) &&
+        entry.length === 2 &&
+        typeof entry[0] === 'string' &&
+        NAMESPACE_RE.test(entry[0]) &&
+        (entry[1] === null || typeof entry[1] === 'string'),
+    );
+  if (!valid) throw invalid();
+  return parsed as SplitCursor[];
+}
+
+// A listing's objects as wire entries. Defensive: list({ prefix }) only returns
+// keys under the user's prefix, so a non-match shouldn't occur — it is skipped
+// rather than served as a malformed path.
+function entriesOf(userId: string, objects: readonly R2Object[]): FileEntry[] {
+  const out: FileEntry[] = [];
+  for (const object of objects) {
+    const path = stripUserPrefix(userId, object.key);
+    if (path !== null) out.push({ path, updatedAt: object.uploaded.getTime() });
+  }
+  return out;
+}
+
 export function userFilesRepo(env: Bindings) {
   const bucket = env.USER_FILES;
 
   const head = async (userId: string, path: string): Promise<ObjectStat | null> =>
     statOf(await bucket.head(userFileKey(userId, path)));
 
+  // The listing as it was before the split: one page of the whole prefix in key
+  // order, with R2's own cursor as the token. For a token minted that way, and
+  // for a prefix holding more than a page of namespaces (listPage).
+  const wholePrefixPage = async (
+    userId: string,
+    cursor: string | undefined,
+    limit: number,
+  ): Promise<FilesListResponse> => {
+    const page = await bucket.list({ prefix: userPrefix(userId), cursor, limit });
+    return {
+      files: entriesOf(userId, page.objects),
+      nextPageToken: page.truncated ? page.cursor : null,
+    };
+  };
+
   return {
     // ONE page of the per-user prefix as wire-relative paths with R2's own
     // LastModified — the fallback full sync (GET /v1/files/list) the client
-    // reconciles against. The client drives the paging: `pageToken` is R2's own
-    // list cursor passed straight through (opaque), and `nextPageToken` is R2's
-    // cursor when the page is truncated, else null. R2 caps a list at 1000 keys,
-    // so the caller's `limit` rides that same ceiling.
+    // reconciles against. The client drives the paging with an opaque
+    // `pageToken`; `nextPageToken` is null once every namespace is listed.
+    //
+    // EACH NAMESPACE IS LISTED ON ITS OWN, ALL OF THEM AT ONCE. R2 caps a list
+    // call at 1000 keys and walks one prefix in key order, so the whole prefix
+    // as one listing was a page per call, one after another: 40 pages, 78 s, for
+    // a 10,000-link account on staging (docs/local-first-sync.md, _measuring a
+    // sync_). A page here is a call per namespace still unfinished, run
+    // together, and the token carries each one's cursor (encodeSplitToken) — so a
+    // page can hold up to `limit` keys PER NAMESPACE, and an account is about as
+    // many pages as its largest namespace needs.
+    //
+    // ⚠ WHICH NAMESPACES IS READ FROM THE BUCKET, not from the list this
+    // server was built with. The listing is download-AUTHORITATIVE: a client
+    // drops a local path the listing lacks. A namespace missing from it — one a
+    // newer client writes before this server knows its name — would be deleted
+    // from every device that took a fallback, silently. So the first page also
+    // asks R2 for the prefixes that exist (`delimiter`), beside the known
+    // namespaces' first pages, and anything it finds that is not known is listed
+    // on the pages after. A key directly under the user's prefix comes back
+    // with it, as it did in the whole-prefix listing. Should the user's prefix
+    // ever hold more than a page of prefixes, or one a token may not name
+    // (NAMESPACE_RE), the listing is taken the old way.
+    //
+    // A token minted before the split is R2's own cursor over the whole prefix,
+    // and a client paging across the deploy still holds one: it is finished the
+    // old way (`wholePrefixPage`), and the next listing starts split.
     async listPage(
       userId: string,
       pageToken: string | undefined,
       limit: number,
     ): Promise<FilesListResponse> {
-      const prefix = userPrefix(userId);
-      const page = await bucket.list({ prefix, cursor: pageToken, limit });
-      const files = [];
-
-      for (const object of page.objects) {
-        const path = stripUserPrefix(userId, object.key);
-        // Defensive: list({ prefix }) only returns keys under the prefix, so a
-        // non-match shouldn't occur — skip rather than serve a malformed path.
-        if (path === null) continue;
-        files.push({ path, updatedAt: object.uploaded.getTime() });
+      if (pageToken !== undefined && !isSplitToken(pageToken)) {
+        return wholePrefixPage(userId, pageToken, limit);
       }
 
-      return { files, nextPageToken: page.truncated ? page.cursor : null };
+      const root = userPrefix(userId);
+      const files: FileEntry[] = [];
+      const pending: SplitCursor[] = [];
+      const listInto = async (namespaces: readonly SplitCursor[]) => {
+        const pages = await Promise.all(
+          namespaces.map(([ns, cursor]) =>
+            bucket.list({ prefix: root + ns, cursor: cursor ?? undefined, limit }),
+          ),
+        );
+        pages.forEach((page, i) => {
+          files.push(...entriesOf(userId, page.objects));
+          if (page.truncated) pending.push([namespaces[i][0], page.cursor]);
+        });
+      };
+
+      if (pageToken === undefined) {
+        const known = LISTED_NAMESPACES.map((ns): SplitCursor => [ns, null]);
+        const [top] = await Promise.all([
+          bucket.list({ prefix: root, delimiter: '/' }),
+          listInto(known),
+        ]);
+        if (top.truncated) return wholePrefixPage(userId, undefined, limit);
+        files.push(...entriesOf(userId, top.objects));
+        const found = top.delimitedPrefixes.map((prefix) => prefix.slice(root.length));
+        if (!found.every((ns) => NAMESPACE_RE.test(ns))) {
+          return wholePrefixPage(userId, undefined, limit);
+        }
+        for (const ns of found) {
+          if (!LISTED_NAMESPACES.includes(ns)) pending.push([ns, null]);
+        }
+      } else {
+        await listInto(decodeSplitToken(pageToken));
+      }
+
+      return { files, nextPageToken: pending.length > 0 ? encodeSplitToken(pending) : null };
     },
 
     // HEAD a user's object: R2's LastModified (as `updatedAt`) + `size`, or null if

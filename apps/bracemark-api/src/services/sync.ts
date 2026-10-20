@@ -33,8 +33,8 @@ const GET_URL_TTL_SECONDS = 60 * 60; // 1 hour
 
 // Fallback full sync (GET /v1/files/list): ONE page of objects under the user's
 // prefix with R2's own `LastModified` — the download-authoritative truth the
-// client reconciles against. The client drives the paging via `pageToken` (R2's
-// opaque list cursor); the R2 call lives in the bucket gateway.
+// client reconciles against. The client drives the paging via `pageToken`
+// (opaque); the R2 calls, one per namespace per page, live in the bucket gateway.
 export async function listUserFiles(
   env: Bindings,
   userId: string,

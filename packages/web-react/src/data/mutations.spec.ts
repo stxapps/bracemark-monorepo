@@ -2,7 +2,7 @@
 // the record and enqueues its pending op in ONE transaction, so the local store and
 // the durable queue can never disagree about whether an edit happened. Everything
 // downstream leans on it — the sync engine treats a queued op as proof that bytes
-// exist for it (engine.ts uploadBlobs), so a half-write would produce an op nothing
+// exist for it (engine.ts uploadOne), so a half-write would produce an op nothing
 // can ever satisfy.
 //
 // The read-merge writers (writeExtraction, writeSettingsGeneral) get the rest of the
