@@ -127,19 +127,30 @@ export function opLogsRepo(sql: SqlStorage) {
       return row.seq ?? 0;
     },
 
-    // Every `delete` appended after `seq`: what the receipt fence asks, for the
-    // paths a commit's receipted puts name (../user-data.ts commitOps). A range
-    // over the primary key, so it reads only the rows appended since the oldest
-    // receipt's token was signed — a commit's worth or two, not the user's
-    // history — and needs no index on `path` (the MIGRATIONS note on why there
-    // is none still holds).
-    deletesAfter(seq: number): { path: string; seq: number }[] {
-      return sql
+    // The newest `delete` of each of `paths` appended after `seq`, keyed by path:
+    // what the receipt fence asks, for the paths a commit's receipted puts name
+    // (../user-data.ts staleReceiptPaths). A range over the primary key, so it
+    // reads only the rows appended since the oldest receipt's token was signed,
+    // and needs no index on `path` (the MIGRATIONS note on why there is none
+    // still holds). That range is bounded by the receipt's TTL, not by the
+    // batch: another device's bulk delete inside it is tens of thousands of
+    // rows. So the path filter and the MAX run here, and what comes back is one
+    // row per path at most — never the range. The paths go in as ONE JSON
+    // parameter unpacked by `json_each`, not a placeholder each, which a
+    // MAX_COMMIT_OPS batch would put over SQLite's bound-parameter limit.
+    lastDeletesAfter(seq: number, paths: string[]): Map<string, number> {
+      const rows = sql
         .exec<{ path: string; seq: number }>(
-          `SELECT path, seq FROM op_logs WHERE seq > ? AND op = 'delete'`,
+          `SELECT path, MAX(seq) AS seq
+             FROM op_logs
+            WHERE seq > ? AND op = 'delete'
+              AND path IN (SELECT value FROM json_each(?))
+            GROUP BY path`,
           seq,
+          JSON.stringify(paths),
         )
         .toArray();
+      return new Map(rows.map((r) => [r.path, r.seq]));
     },
 
     // The log's generation: 0 until the first wipe, then one more per wipe

@@ -1,7 +1,9 @@
+import { runInDurableObject } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
 
 import type { Bindings } from '../lib/env';
+import { opLogsRepo } from './repositories/op-logs';
 import { callUserData, userDataStub } from './user-data';
 
 // The Durable Object is the other thing a Node runner can't test: its schema is
@@ -267,6 +269,43 @@ describe('UserDataDO receipt fence', () => {
 
     expect(stale).toEqual(['links/a.enc']);
     expect(results).toEqual([]);
+  });
+
+  // The range the fence reads is bounded by the receipt's TTL, not by the batch,
+  // so another device's bulk delete can fill it with thousands of deletes of
+  // paths this commit never names. Handing that range back to the isolate — to
+  // be thrown away there, in the DO's single thread — is the cost the query's
+  // path filter exists to avoid; nothing else would notice it was gone.
+  it('hands back one row per fenced path, never the range it reads', async () => {
+    const stub = userDataStub(env, 'fence-bulk');
+    await stub.commitOps([put('links/a.enc'), put('links/b.enc')]);
+    const { fence } = await stub.putGate();
+    for (let batch = 0; batch < 3; batch++) {
+      await stub.commitOps(
+        Array.from({ length: 500 }, (_, i) => ({
+          op: 'delete' as const,
+          path: `links/bulk-${batch}-${i}.enc`,
+          updatedAt: 2000,
+          size: 0,
+        })),
+      );
+    }
+    // Two deletes of a fenced path, and a put — not a delete — of another.
+    await stub.commitOps([{ op: 'delete', path: 'links/a.enc', updatedAt: 3000, size: 0 }]);
+    await stub.commitOps([put('links/a.enc')]);
+    await stub.commitOps([{ op: 'delete', path: 'links/a.enc', updatedAt: 4000, size: 0 }]);
+    const newest = (await stub.putGate()).fence.position;
+    await stub.commitOps([put('links/b.enc')]);
+
+    const lastDelete = await runInDurableObject(stub, (_, state) =>
+      opLogsRepo(state.storage.sql).lastDeletesAfter(fence.position, [
+        'links/a.enc',
+        'links/b.enc',
+        'links/never.enc',
+      ]),
+    );
+
+    expect([...lastDelete]).toEqual([['links/a.enc', newest]]);
   });
 });
 

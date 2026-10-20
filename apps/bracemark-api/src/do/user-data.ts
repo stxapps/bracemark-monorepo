@@ -73,7 +73,7 @@ const MIGRATIONS: string[][] = [
   // hottest write in the system, once per committed put and delete. Compaction
   // (dedupe-by-path, not built yet) is the one plausible reader; add it in a new
   // MIGRATIONS entry then, alongside the code that uses it. (The receipt fence's
-  // `deletesAfter` reads by seq, a primary-key range, and needs no such index.)
+  // `lastDeletesAfter` reads by seq, a primary-key range, and needs no such index.)
   [
     `CREATE TABLE IF NOT EXISTS op_logs (
        seq        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -308,13 +308,13 @@ function staleReceiptPaths(ops: ReturnType<typeof opLogsRepo>, entries: CommitEn
 
   const generation = ops.generation();
   const current = fenced.filter((e) => e.fence.generation === generation);
-  const lastDelete = new Map<string, number>();
-  if (current.length > 0) {
-    const from = current.reduce((min, e) => Math.min(min, e.fence.position), Infinity);
-    for (const { path, seq } of ops.deletesAfter(from)) {
-      lastDelete.set(path, Math.max(lastDelete.get(path) ?? 0, seq));
-    }
-  }
+  const lastDelete =
+    current.length === 0
+      ? new Map<string, number>()
+      : ops.lastDeletesAfter(
+          Math.min(...current.map((e) => e.fence.position)),
+          current.map((e) => e.path),
+        );
   return fenced
     .filter(
       (e) => e.fence.generation !== generation || (lastDelete.get(e.path) ?? 0) > e.fence.position,
