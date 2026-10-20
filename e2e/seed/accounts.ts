@@ -34,6 +34,8 @@ import { importArchive, waitForSync } from './steps';
 //   npm run seed:accounts -- free-full # just one
 //   npm run seed:fixtures              # the archives only, no browser
 
+const ACCOUNTS_PATH = join(SEED_CREDENTIALS, 'accounts.json');
+
 interface SeededAccount {
   key: string;
   username: string;
@@ -73,13 +75,11 @@ async function main(): Promise<void> {
     await recordAccount(account);
   }
 
-  console.log(`\nCredentials: ${join(SEED_CREDENTIALS, 'accounts.json')}`);
+  console.log(`\nCredentials: ${ACCOUNTS_PATH}`);
   console.log(`Sign in at ${WEB_URL}/sign-in`);
 }
 
 async function seedOne(user: SeedUser, archivePath: string | undefined): Promise<SeededAccount> {
-  const credentials = { username: user.username, password: seedPassword(user.key) };
-
   // Re-running the seed must be safe, and it is safe in two different ways: the
   // account is signed into rather than re-created, and a Bracemark backup merges
   // SKIP-EXISTING BY PATH (docs/data-lifecycle.md), so re-importing the same
@@ -87,6 +87,19 @@ async function seedOne(user: SeedUser, archivePath: string | undefined): Promise
   // died halfway instead of duplicating it.
   const existingId = await findUserId(user.username);
   console.log(existingId ? 'account exists — signing in' : 'creating account (Argon2id, ~seconds)');
+
+  // An existing account signs in with the password accounts.json holds for it,
+  // not the derived one. The derived password is only what the account was
+  // CREATED with. Change it by hand in Settings → Account and write the new one
+  // down, and a re-seed typing the derived one is refused. A fresh account always gets the derived
+  // password, so a record left over from a reset api state cannot leak in.
+  const recorded = existingId
+    ? (await readAccounts()).find((a) => a.key === user.key && a.username === user.username)
+    : undefined;
+  const credentials = {
+    username: user.username,
+    password: recorded?.password ?? seedPassword(user.key),
+  };
 
   const app = await launchApp(profileDir(`seed-${user.key}`), {
     ...(existingId ? { existing: credentials } : { create: credentials }),
@@ -152,20 +165,22 @@ async function seedOne(user: SeedUser, archivePath: string | undefined): Promise
 // leaves working credentials for the first three.
 async function recordAccount(account: SeededAccount): Promise<void> {
   await mkdir(SEED_CREDENTIALS, { recursive: true });
-  const path = join(SEED_CREDENTIALS, 'accounts.json');
-
-  let accounts: SeededAccount[] = [];
-  try {
-    accounts = JSON.parse(await readFile(path, 'utf8')) as SeededAccount[];
-  } catch {
-    // No file yet, or one left unreadable by an interrupted write — either way
-    // the accounts we are about to write are the current truth.
-  }
-
+  const accounts = await readAccounts();
   const next = [...accounts.filter((a) => a.key !== account.key), account].sort((a, b) =>
     a.key < b.key ? -1 : 1,
   );
-  await writeFile(path, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+  await writeFile(ACCOUNTS_PATH, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+}
+
+async function readAccounts(): Promise<SeededAccount[]> {
+  try {
+    return JSON.parse(await readFile(ACCOUNTS_PATH, 'utf8')) as SeededAccount[];
+  } catch {
+    // No file yet, or one left unreadable by an interrupted write — either way
+    // nothing in it can be trusted: sign-in falls back to the derived password,
+    // and the account about to be recorded is the current truth.
+    return [];
+  }
 }
 
 // Guarded on being the entry module, exactly as seed/fixtures.ts is. Nothing

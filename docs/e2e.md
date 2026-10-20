@@ -2431,7 +2431,7 @@ there should not be one — holds here too. The only thing the seed adds is
 `launchApp`'s `create` option, which chooses the credentials instead of minting
 throwaway ones, because these accounts are meant to be signed back into tomorrow.
 
-#### five things that will surprise you
+#### six things that will surprise you
 
 - **Re-seeding does not update an account that already exists.** A backup merge
   is skip-existing **by path**, so an account seeded before you edited
@@ -2452,6 +2452,14 @@ throwaway ones, because these accounts are meant to be signed back into tomorrow
   `npm run d1:migrate`, start it again, sign any device or browser profile out
   of the old accounts, then re-run `seed:accounts`. The reset also drops every
   throwaway e2e account, which is fine — nothing reuses them.
+- **`accounts.json` is what an existing account signs in with.** A fresh
+  account gets the derived password (`seedPassword`, `seed/catalog.ts`); a
+  re-seed of one that already exists types whatever the file holds for it,
+  falling back to the derived one. So a password changed by hand in Settings →
+  Account keeps working for the seed **only if you write it into the file** —
+  forget, and the re-seed stops at sign-in with "Incorrect username or
+  password" (it fails at once, not after the sign-in wait). Lost the
+  password altogether? Reset the local api's state, as in the surprise above.
 - **The seed waits for sync, and must.** An import lands in Dexie and pushes in
   the background, and the browser profile is deleted when the run ends. Close
   early and the account exists, the plan is granted, and the library is nowhere —

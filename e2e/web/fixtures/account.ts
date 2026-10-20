@@ -114,7 +114,8 @@ export async function fillCredentialSteps(page: Page, credentials: Credentials):
 
 // Sign in an already-created account. Used by the contract runner's reverse leg,
 // where the account was made on the phone, and by the seed re-running against an
-// account it made earlier.
+// account it made earlier. A wrong password throws at once, with the form's
+// message.
 //
 // Targeted by id, like the create-account steps above, and NOT by label: the
 // password field ships a "Show password" toggle inside its wrapper
@@ -126,5 +127,20 @@ export async function signIn(page: Page, credentials: Credentials): Promise<void
   await page.locator('#username').fill(credentials.username);
   await page.locator('#password').fill(credentials.password);
   await page.getByRole('button', { name: /sign in/i }).click();
-  await expect(page).toHaveURL(/\/links/, { timeout: 60_000 });
+
+  // Wait for EITHER outcome. A refusal leaves the page on /sign-in, so a bare
+  // URL wait sat out its whole minute before failing as "expected /links", which
+  // reads as a hang and says nothing about the cause. The cause is the form's
+  // own root error (sign-in-form.tsx), so it fails the moment that renders.
+  // The specimen: a seed account whose password had been changed by hand, with
+  // the seed still typing the derived one (seed/accounts.ts).
+  const refused = page
+    .getByRole('alert')
+    .filter({ hasText: /^(Incorrect username or password|Could not sign in)/ });
+  await expect
+    .poll(async () => ((await refused.isVisible()) ? 'refused' : page.url()), { timeout: 60_000 })
+    .toMatch(/\/links|^refused$/);
+  if (await refused.isVisible()) {
+    throw new Error(`sign-in as ${credentials.username} refused: ${await refused.innerText()}`);
+  }
 }
