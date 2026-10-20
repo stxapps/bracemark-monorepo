@@ -236,7 +236,7 @@ export class UserDataDO extends DurableObject<Bindings> {
   commitOps(entries: CommitEntry[]): { results: CommitResult[]; stale: string[] } {
     const sizes = fileSizesRepo(this.sql);
     const ops = opLogsRepo(this.sql);
-    const stale = staleReceipts(ops, entries);
+    const stale = staleReceiptPaths(ops, entries);
     if (stale.length > 0) return { results: [], stale };
 
     const { newestUpdatedAt } = ops.bounds();
@@ -302,7 +302,7 @@ export class UserDataDO extends DurableObject<Bindings> {
 // The paths of the receipted entries the log cannot vouch for — commitOps' fence.
 // Empty when no entry carries a fence, which is every commit from a client
 // without receipts, at the cost of nothing.
-function staleReceipts(ops: ReturnType<typeof opLogsRepo>, entries: CommitEntry[]): string[] {
+function staleReceiptPaths(ops: ReturnType<typeof opLogsRepo>, entries: CommitEntry[]): string[] {
   const fenced = entries.filter((e): e is CommitEntry & { fence: LogFence } => !!e.fence);
   if (fenced.length === 0) return [];
 
