@@ -962,6 +962,62 @@ requirement; skip the naive KEK-signature half-measure.
 > /extractor's hand-written caps can ([hosting.md](./hosting.md), `/security`);
 > the prose around them can.
 
+### post-quantum posture — one primitive is not, and it only signs
+
+Every primitive in the derivation is current, but **not every one is
+post-quantum**. A cryptographically relevant quantum computer breaks the
+**asymmetric** pieces (Shor) and only dents the **symmetric** ones (Grover,
+roughly halving the security bits):
+
+| primitive   | job                                    | against a quantum attacker                               |
+| ----------- | -------------------------------------- | -------------------------------------------------------- |
+| AES-256-GCM | encrypts the library; wraps the DEK    | ✅ ~128-bit effective — the reason it's 256              |
+| HKDF-SHA256 | derives KEKs, the auth seed, the key   | ✅ safe                                                  |
+| Argon2id    | password → KEK                         | ✅ safe — the bound is still password entropy            |
+| **Ed25519** | signs the create-account/sign-in proof | ❌ **broken** — private key recoverable from `publicKey` |
+
+**What breaking Ed25519 buys an attacker: authentication, not confidentiality.**
+There is no public-key _encryption_ anywhere in the model — the keypair only
+signs. Recovering the Ed25519 private key from the (stored, not secret)
+`publicKey` lets an attacker forge [the sign-in proof](#the-two-identifiers) and
+mint a session, and with it fetch, overwrite or delete the user's R2 objects. It
+does **not** lead to the DEK or the AES key: those sit behind HKDF under a
+different label, and HKDF is one-way. So the library stays unreadable, and a
+forged write still fails the GCM tag on every device; the residual is
+**vandalism of the server copy**, which each device's local store
+([local-first-sync.md](./local-first-sync.md)) survives. Likewise "harvest now,
+decrypt later" does not reach the library — what is stored is already
+AES-256-GCM ciphertext; recorded TLS traffic yields only what the server holds in
+the clear anyway, plus session tokens long expired by the time it could be read.
+
+**Why the Bitcoin-style size argument does not apply.** A post-quantum
+signature is ~38× an Ed25519 one (ML-DSA-44: 2,420 bytes against 64; public key
+1,312 against 32). That is decisive for a chain that stores every signature
+forever; here a signature is sent once per sign-in, verified, and discarded, and
+the public key is one column per user. Size is not the obstacle.
+
+**The upgrade path — additive, like every rotation here.** ML-DSA key generation
+is deterministic from a 32-byte seed (FIPS 204), so a post-quantum keypair
+derives from the DEK exactly as the Ed25519 one does: a new HKDF label minted
+**beside** `bracemark-auth-seed`, never an edit of it (the frozen-contract rule
+under [the derivation pipeline](#the-derivation-pipeline)). The data, the AES
+key and every door's wrapped blob are untouched — no re-encryption. What changes
+is the sign-in proof (a hybrid Ed25519 + ML-DSA signature, both verified), a
+second public-key column, and a new golden vector. **The ordering is the
+tripwire:** an existing account registers its new public key by signing in with
+the old Ed25519 proof, and that bootstrap is only trustworthy while Ed25519 still
+holds. Migrate while that is true; an account that never signs in during the
+window keeps a forgeable credential, bounded by the vandalism residual above.
+
+**Decision:** no migration yet — no such computer exists, and the exposure is
+integrity, not secrecy. Revisit when a hybrid becomes the platform default (the
+way TLS adopted hybrid ML-KEM key exchange) or an audited ML-DSA implementation
+is available to both clients (`@noble/post-quantum` is the candidate, from the
+same family as the `@noble/ed25519` they already share). **Never describe
+Bracemark as "quantum-safe" or "post-quantum" in user-facing copy** until the
+sign-in proof is; "the library is encrypted with AES-256" is true today, "quantum-safe" is not
+([brand-assets.md](./brand-assets.md), the claim boundary).
+
 ### storage durability — the most critical state in the system
 
 The DEK model introduces a hard new dependency that direct derivation did not
