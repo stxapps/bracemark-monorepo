@@ -50,6 +50,7 @@ import {
   opsListEndpoint,
   pathFromId,
   SET_OUTAGE_FAILURES,
+  SyncIncompleteError,
   utf8,
 } from '@stxapps/shared';
 
@@ -888,6 +889,23 @@ describe('a content push', () => {
       expect(outcome.blockedCount).toBe(2 * COUNT);
       expect(await pendingPaths()).toHaveLength(2 * COUNT);
     });
+  });
+});
+
+// Drift guard for web's 'does not commit an unsigned edit over the earlier
+// version still in R2': the commit checks a put with no receipt against R2 alone,
+// so an earlier version there would pass for an edit that was never sent.
+describe('a path the sign did not answer', () => {
+  it('stays queued and out of the commit, over an earlier version in R2', async () => {
+    uploaded.add(LINK_PATH);
+    seedQueued(LINK_PATH, 'the edit');
+
+    await expect(runIncrementalSync(deps({ filesSign: () => [] }))).rejects.toBeInstanceOf(
+      SyncIncompleteError,
+    );
+
+    expect(committedPaths()).not.toContain(LINK_PATH);
+    expect(await pendingPaths()).toEqual([LINK_PATH]);
   });
 });
 

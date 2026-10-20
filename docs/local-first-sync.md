@@ -944,10 +944,15 @@ duplicate path.
 >
 > Three rules keep that from becoming a correctness hole:
 >
-> - **A failed op is left queued but kept OUT of the commit.** Unlike an unsigned
->   path there is nothing to gain from asking the server to `HEAD` an object we
->   know we never sent — on a large failed chunk that is up to a chunk's worth
->   (100 or 500) of guaranteed `no_object` entries per cycle.
+> - **A failed op is left queued but kept OUT of the commit**, and so is a path
+>   the sign did not answer: only a put this cycle sent is committed. A put
+>   committed without its upload is checked against R2 alone, which proves _an_
+>   object is at the path, not that it is this write's. On an edit the earlier
+>   version is still there, so the server would log an op for bytes that are not
+>   these and the queue would let the edit go, never sent. Both are left for
+>   the second pass instead. Keeping them out also spares the server a `HEAD`
+>   per doomed entry — on a large failed chunk that is up to a chunk's worth
+>   (100 or 500) per cycle.
 > - **The metadata phase is HELD for the rest of the cycle if any content upload
 >   failed** — otherwise a puller could land metadata whose content `404`s, the
 >   exact breach the content-before-metadata order exists to prevent. Held

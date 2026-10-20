@@ -1131,22 +1131,24 @@ async function pushPutPass(
       await clearDrainedOps(orphaned);
       orphanedPaths.push(...orphaned.map((o) => o.path));
     }
-    // A transiently-failed PUT stays queued but is excluded from the commit: unlike an
-    // unsigned path there is nothing gained by asking the server to HEAD an object we
-    // know we didn't send — on a big failed chunk that's up to a chunk's worth (100 or
-    // 500) of doomed entries per cycle — and it is left for the second pass. A
-    // superseded op sent nothing either, and is no failure: the write that replaced it
-    // sits queued under its own `writeId` and asked for the cycle that will carry it.
-    // Kept out for the reason a failed one is — the server would HEAD an object this
-    // cycle did not send, and where an earlier version exists it would log an op for
-    // bytes that are not these. An unsigned path goes in: the commit's `no_object` is
-    // the honest report, and leaves it for the second pass too.
+    // Only a `sent` op is committed. Every other op sent nothing this cycle, and a put
+    // committed without its upload is checked against R2 alone — which proves AN
+    // object is at the path, not that it is this write's. On an edit the earlier
+    // version is still there, so the server would log an op for bytes that are not
+    // these and the queue would let the edit go, never sent. A transiently-failed PUT
+    // stays queued with what it threw, and an unsigned path with nothing thrown; both
+    // are left for the second pass (pushPuts). A superseded op is no failure: the
+    // write that replaced it sits queued under its own `writeId` and asked for the
+    // cycle that will carry it. Keeping the failed ones out also spares the server a
+    // HEAD per doomed entry — on a big failed chunk, up to a chunk's worth (100 or
+    // 500) per cycle.
     const receipts = new Map<string, string>();
     const committed = pushed.ops.filter((op, i) => {
       const result = pushed.results[i];
       if (result.kind === 'failed') left.push({ op, error: result.error });
+      if (result.kind === 'unsigned') left.push({ op });
       if (result.kind === 'sent' && result.receipt) receipts.set(op.path, result.receipt);
-      return result.kind === 'sent' || result.kind === 'unsigned';
+      return result.kind === 'sent';
     });
     const notRecorded = new Set(await commitBatched(deps, committed, receipts));
     for (const op of committed) if (notRecorded.has(op.path)) left.push({ op });
@@ -1302,9 +1304,9 @@ async function commitOne(
 //    Caught per op, so one bad blob never aborts its chunk before the chunk could
 //    commit anything — which on a chunk too big for one TTL window was a
 //    deterministic livelock.
-//  - `unsigned` — no URL came back for the path: also transient — it goes into
-//    the commit, whose `no_object` is the honest report, and the second pass
-//    signs it again.
+//  - `unsigned` — no URL came back for the path: also transient. It stays queued
+//    and out of the commit — where an earlier version is in R2 the commit would
+//    take that for this write (commitChunk) — and the second pass signs it again.
 //
 // A `sent` op carries the upload receipt its PUT answered with (sync/r2.ts
 // putBlob), which rides the chunk's commit (commitOne). Kept in memory only,

@@ -1161,15 +1161,17 @@ async function pushPutPass(
       await clearDrainedOps(orphaned);
       orphanedPaths.push(...orphaned.map((o) => o.path));
     }
-    // A failed or superseded op sent nothing and stays out of the commit — a
-    // failed one is left for the second pass; an unsigned one goes in, and its
-    // `no_object` leaves it for the second pass too.
+    // Only a `sent` op is committed: a put committed without its upload is
+    // checked against R2 alone, and on an edit the earlier version there would
+    // pass for this write's (web engine's commitChunk says why). A failed or an
+    // unsigned op is left for the second pass; a superseded one is no failure.
     const receipts = new Map<string, string>();
     const committed = pushed.ops.filter((op, i) => {
       const result = pushed.results[i];
       if (result.kind === 'failed') left.push({ op, error: result.error });
+      if (result.kind === 'unsigned') left.push({ op });
       if (result.kind === 'sent' && result.receipt) receipts.set(op.path, result.receipt);
-      return result.kind === 'sent' || result.kind === 'unsigned';
+      return result.kind === 'sent';
     });
     const notRecorded = new Set(await commitBatched(deps, committed, receipts));
     for (const op of committed) if (notRecorded.has(op.path)) left.push({ op });
@@ -1318,8 +1320,8 @@ async function commitOne(
 //    rejects instead of reporting a false 'idle'. Caught per op, so one bad blob
 //    never aborts its chunk before the chunk could commit anything — which on a
 //    chunk too big for one TTL window was a deterministic livelock.
-//  - `unsigned` — no URL came back: also transient — it goes into the commit,
-//    whose `no_object` is the honest report, and the second pass signs it again.
+//  - `unsigned` — no URL came back: also transient. It stays queued and out of
+//    the commit, and the second pass signs it again.
 //
 // A `sent` op carries its PUT's upload receipt for the chunk's commit — memory
 // only, never the queue (web engine's PutResult says why).

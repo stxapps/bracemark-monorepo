@@ -811,6 +811,21 @@ describe('the push', () => {
     expect(await pendingPaths()).toEqual([LINK_PATH]);
     expect(await db.items.get(LINK_PATH)).toBeDefined();
   });
+
+  it('does not commit an unsigned edit over the earlier version still in R2', async () => {
+    // The commit checks a put with no receipt against R2 alone. An earlier version
+    // at the path passes that check, so committing the unsigned edit would log an
+    // op for those bytes and let the queue drop an edit that was never sent.
+    uploaded.add(LINK_PATH);
+    await seedQueued(LINK_PATH, 'the edit');
+
+    await expect(runIncrementalSync(deps({ filesSign: () => [] }))).rejects.toBeInstanceOf(
+      SyncIncompleteError,
+    );
+
+    expect(committedPaths()).not.toContain(LINK_PATH);
+    expect(await pendingPaths()).toEqual([LINK_PATH]);
+  });
 });
 
 // --- the fan-out --------------------------------------------------------------
