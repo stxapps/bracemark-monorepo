@@ -544,29 +544,32 @@ async function runCycle(deps: SyncDeps, report: SyncCycleProgressFn): Promise<Sy
   const sincePath = meta.syncCursorPath;
   const pending = await trace.span('queue.read', () => listPendingOps(deps.username));
 
-  // Peek the first page: its retained-range bounds decide incremental vs.
-  // fallback before we commit to paging the op log.
-  const first = await deps.api.call(opsListEndpoint, {
-    since,
-    sincePath: sincePath || undefined,
-    limit: OPS_PAGE,
-  });
+  // The span opens before the peek and notes its kind after: the peek is the
+  // cycle's first round trip, and a span opened on its answer read every
+  // incremental cycle ~0.3 s short (a delete-only pull as 0.0 s of its 0.5 s).
+  await trace.span(
+    'cycle',
+    async (note) => {
+      // Peek the first page: its retained-range bounds decide incremental vs.
+      // fallback before we commit to paging the op log.
+      const first = await deps.api.call(opsListEndpoint, {
+        since,
+        sincePath: sincePath || undefined,
+        limit: OPS_PAGE,
+      });
 
-  if (needsFallback(since, first)) {
-    // `first` was answered before the listing the fallback is about to take, so
-    // its newest stamp is the high-water mark that listing will reflect.
-    await trace.span(
-      'cycle',
-      () => fallbackCycle(deps, pending, outcome, first.newestUpdatedAt ?? 0, report),
-      { kind: 'fallback', pending: pending.length },
-    );
-  } else {
-    await trace.span(
-      'cycle',
-      () => incrementalCycle(deps, since, sincePath, first, pending, outcome, report),
-      { kind: 'incremental', pending: pending.length },
-    );
-  }
+      if (needsFallback(since, first)) {
+        note({ kind: 'fallback' });
+        // `first` was answered before the listing the fallback is about to take,
+        // so its newest stamp is the high-water mark that listing will reflect.
+        await fallbackCycle(deps, pending, outcome, first.newestUpdatedAt ?? 0, report);
+      } else {
+        note({ kind: 'incremental' });
+        await incrementalCycle(deps, since, sincePath, first, pending, outcome, report);
+      }
+    },
+    { pending: pending.length },
+  );
   return outcome;
 }
 

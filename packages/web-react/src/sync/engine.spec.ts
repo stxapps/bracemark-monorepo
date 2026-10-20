@@ -1162,10 +1162,11 @@ describe('the timing trace', () => {
       expect(names).toContain(name);
     }
     // The stub's op log is empty, which routes the cycle to the fallback.
-    expect(trace.spans.find((s) => s.name === 'cycle')?.attrs).toEqual({
-      kind: 'fallback',
-      pending: 2,
-    });
+    const cycle = trace.spans.find((s) => s.name === 'cycle');
+    expect(cycle?.attrs).toEqual({ kind: 'fallback', pending: 2 });
+    // The peek that picks the kind is the cycle's first call, and inside its span.
+    const peek = trace.spans.find((s) => s.name === 'api /v1/ops/list');
+    expect(peek?.start).toBeGreaterThanOrEqual(cycle?.start ?? Infinity);
     expect(trace.spans.filter((s) => s.name === 'push.chunk').map((s) => s.attrs?.kind)).toEqual([
       'content',
       'index',

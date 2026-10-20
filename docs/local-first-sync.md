@@ -2739,6 +2739,69 @@ by reading:
 
 The next staging reading prices both.
 
+**Reading, 2026-10-20 — staging, a put set as one fan-out** (`7cdcd07`, service
+worker allowed, Chrome 155 on an Apple M1 Mac): the default run on 1,000 links,
+then `--links 10000 --legs bulk-edit --bulk 10,100,1000`. Every wall is the
+leg's. The 10,000-link push:
+
+|                            | `f5d6bad`           | `ff6d121`                | `7cdcd07`             |
+| -------------------------- | ------------------- | ------------------------ | --------------------- |
+| push wall                  | 474.2 s             | 680.2 s (a failed cycle) | 369.2 s, no failure   |
+| PUTs in flight, rate       | 71.4, 56.8 per s    | 62.8, 49.0 per s         | 87.2, 65.4 per s      |
+| `r2-put` mean              | —                   | 1.18 s                   | 1.31 s                |
+| upload / `push` span       | 405.3 s / —         | 474.4 / 527.9 s          | 351.2 / 357.0 s       |
+| signs (70) / commits (70)  | 53.0 / 125.1 s      | 51.4 / 45.7 s            | 44.9 / 39.9 s, beside |
+| bulk edit 10 / 158 / 1,058 | 5.4 / 19.0 / 42.7 s | 4.1 / 7.6 / 24.1 s       | 4.2 / 7.6 / 21.3 s    |
+
+and the 1,000-link run:
+
+|                                          | `21efb3a`          | `ff6d121`          | `7cdcd07`          |
+| ---------------------------------------- | ------------------ | ------------------ | ------------------ |
+| push wall                                | 51.8 s             | 70.9 s             | 41.9 s             |
+| PUTs in flight, rate; `r2-put` mean      | 72.7, 57.1 per s   | 60.6, 41.5; 1.34 s | 80.9, 69.1; 1.15 s |
+| pull wall; GETs per s against the floor  | 24.2 s; 93 / 119   | 21.9 s; 109 / 111  | 20.2 s; 131 / 128  |
+| incremental (100 links onto 1,000)       | 4.3 s              | 4.9 s              | 4.6 s              |
+| bulk edit of 10 / 158 / 1,058: push      | 4.5 / 8.0 / 21.8 s | 3.8 / 6.1 / 23.9 s | 3.1 / 4.8 / 15.7 s |
+| … and its pull on the second device      | 2.8 / 4.4 / 11.0 s | 3.0 / 4.2 / 12.8 s | 2.2 / 3.4 / 9.7 s  |
+| bulk delete of 158: commit (`r2-delete`) | 2.6 s (2.2 s)      | 4.8 s (4.1 s)      | 2.5 s (2.15 s)     |
+
+- **The one fan-out ran full and took the signs off the critical path.** 87 of
+  96 PUTs in flight at 10,000 links, against 63, and the `push` span is its
+  upload plus 6 s: the 70 signs and 70 commits ran beside the transfers. The
+  1,058-edit push onto 1,000 links landed on the ~16 s predicted.
+- **The rest of the gap to the ~300 s predicted is R2.** 87.2 in flight over a
+  1.31 s `r2-put` is ~66 a second, ~348 s for 22,972 PUTs; at the `ff6d121`
+  reading's 1.18 s it would have been ~310 s. The client's factor is spent: what
+  is left is objects × R2 latency ÷ 96.
+- **The `ff6d121` reading's two outliers were R2, and passed.** The 1,000-link
+  push's extra 19 s and the bulk delete's doubled `r2-delete` both came back to
+  the `21efb3a` figures.
+- **No transient failed a cycle**, so neither _retrying a failure_ nor the
+  namespace-split listing was exercised: `files/list` ran once per cycle on an
+  empty account. One clean run is not a reading of either; the listing needs a
+  fallback on a 10,000-link account.
+- **The pull is at its floor.** Before its first GET, a 1,000-link first sync
+  spends the `ops/list` peek (0.86 s, `do-list` 0.55 s against ~35 ms on later
+  calls) and the first listing page (3.4 s; the four after it ~1.6 s each),
+  ~20% of its wall.
+- **Every api call spends ~270 ms in `auth`**, the session read, and a sign
+  another ~250–310 ms in `d1-ceilings`. Off the critical path for an import now,
+  but a small edit is one sign, its uploads and one commit in a row: ~0.8 s of
+  a 10-edit push's ~3 s is session reads. Any change there is a revocation
+  question first ([sessions.md](./sessions.md)).
+- **The slow small-edit PUTs held for a third run.** `r2-put` mean for 10 / 158
+  / 1,058 edits onto 10,000 links read 2.20 / 2.40 / 1.56 s, against 1.10 / 1.33
+  / 1.12 s onto 1,000 links in the run before it. Whether it is the 22,972-PUT
+  burst just before or the account's key count is not separated: a run that
+  waits out a pause between the push and the bulk legs would.
+- **The incremental and fallback `cycle` spans opened after their `ops/list`
+  peek**, the round trip that picks the kind, so every such cycle read
+  ~0.3–0.45 s short of its work — the bulk-delete pull as 0.0 s of a 0.5 s
+  cycle that applied 492 deletes in 47 ms. The `initial` span included its own.
+  Both engines now open the span before the peek and note the kind after it, so
+  a failed peek reads as a failed cycle without a kind. Read the cycle walls
+  above, and in every reading before, as short by one `ops/list`.
+
 ### deferred
 
 - **R2 conditional writes** for same-file concurrent-edit detection (see
