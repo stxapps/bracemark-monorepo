@@ -2,8 +2,11 @@ import type { SyncOutcome } from '@stxapps/shared';
 import type { SyncDeps } from '@stxapps/web-react';
 
 import { type FakeBrowser, installFakeBrowser } from '../testing/fake-browser';
-import { MIRRORED_SYNC_PROGRESS_KEY } from './mirrored-sync-progress';
-import { MIRRORED_SYNC_STATE_KEY, type MirroredSyncState } from './mirrored-sync-state';
+import {
+  MIRRORED_SYNC_PROGRESS_KEY,
+  MIRRORED_SYNC_STATE_KEY,
+  type MirroredSyncState,
+} from './mirrored-sync';
 
 // The background's sync runner. The engine itself is pinned in web-react's
 // `engine.spec.ts` (docs/testing.md, _the ported pair_); what is only true HERE is
@@ -249,7 +252,7 @@ describe('runSync — what it mirrors', () => {
   });
 });
 
-// The progress mirror (mirrored-sync-progress.ts): storage.SESSION, coalesced to
+// The progress mirror (mirrored-sync.ts): storage.SESSION, coalesced to
 // the apps' repaint rate, and gone once the run is — a number left behind would
 // draw a bar over a sync that has ended.
 describe('runSync — the progress mirror', () => {

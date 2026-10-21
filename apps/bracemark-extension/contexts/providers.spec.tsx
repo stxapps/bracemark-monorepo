@@ -1,7 +1,6 @@
 import { render } from '@testing-library/react';
 
-import type { MirroredSyncProgress } from '../utils/mirrored-sync-progress';
-import type { MirroredSyncState } from '../utils/mirrored-sync-state';
+import type { MirroredSyncProgress, MirroredSyncState } from '../utils/mirrored-sync';
 import { Providers } from './providers';
 
 // The popup's provider tree. The one thing here that is neither wiring nor
@@ -38,12 +37,10 @@ jest.mock('@stxapps/web-react', () => ({
   },
 }));
 jest.mock('@/utils/api-client', () => ({ apiClient: { baseUrl: 'https://api.test' } }));
-jest.mock('@/hooks/use-mirrored-sync-state', () => ({
+jest.mock('@/hooks/use-mirrored-sync', () => ({
   get useMirroredSyncState() {
     return mockUseMirroredSyncState;
   },
-}));
-jest.mock('@/hooks/use-mirrored-sync-progress', () => ({
   get useMirroredSyncProgress() {
     return mockUseMirroredSyncProgress;
   },

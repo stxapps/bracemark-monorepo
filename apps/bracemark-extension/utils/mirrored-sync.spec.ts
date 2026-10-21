@@ -5,7 +5,7 @@ import {
   type MirroredSyncState,
   readMirroredSyncState,
   writeMirroredSyncState,
-} from './mirrored-sync-state';
+} from './mirrored-sync';
 
 // The mirror is a BROADCAST between two JS contexts that share nothing else: the
 // background worker writes it once per cycle, the popup and the options page read
@@ -19,7 +19,7 @@ import {
 //     `undefined`, which is what lets the popup render a sync pill on a cold
 //     profile instead of crashing on a missing field;
 //   - the write lands in the `local` area, since that is the only area the popup's
-//     subscription listens to (use-mirrored-sync-state.ts).
+//     subscription listens to (hooks/use-mirrored-sync.ts).
 
 const READY: MirroredSyncState = {
   storeStatus: 'ready',

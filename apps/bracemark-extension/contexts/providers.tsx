@@ -5,8 +5,7 @@ import { ApiClientProvider } from '@stxapps/react';
 import { AuthProvider, ExternalSyncProvider } from '@stxapps/web-react';
 import { ThemeProvider } from '@stxapps/web-ui/contexts/theme-provider';
 
-import { useMirroredSyncProgress } from '@/hooks/use-mirrored-sync-progress';
-import { useMirroredSyncState } from '@/hooks/use-mirrored-sync-state';
+import { useMirroredSyncProgress, useMirroredSyncState } from '@/hooks/use-mirrored-sync';
 import { apiClient } from '@/utils/api-client';
 import { sendMessage } from '@/utils/messages';
 

@@ -207,14 +207,18 @@ context that has to reach the data:
   in memory dies with it) and the **MV3 background service worker has no DOM and
   no `localStorage`** at all. `.session` is memory-backed and cleared on browser
   restart — the right home for ephemeral unlocked state.
-  The sync mirror uses both, split by how often it changes: the status
-  (`utils/mirrored-sync-state.ts`) is `.local`, written a few times a cycle and
-  read on every popup open; the **progress** (`utils/mirrored-sync-progress.ts` —
-  the count behind the pill's percent and the detail view's bar) is `.session`,
-  written up to ten times a second through `@stxapps/shared`'s
-  `createProgressCoalescer` and removed when the run ends. Folding the progress
-  into the status record would rewrite a persisted value per tick and re-render
-  every `useSync()` consumer with it.
+  The sync mirror (`utils/mirrored-sync.ts`, read through
+  `hooks/use-mirrored-sync.ts`) uses both, split by how often it changes: the
+  status is `.local`, written a few times a cycle and read on every popup open;
+  the **progress** (the count behind the pill's percent and the detail view's
+  bar) is `.session`, written up to ten times a second through
+  `@stxapps/shared`'s `createProgressCoalescer` and removed when the run ends.
+  Folding the progress into the status record would rewrite a persisted value
+  per tick and re-render every `useSync()` consumer with it. Both hooks read the
+  key once and then follow `storage.onChanged`. A change that arrives before
+  that first read resolves wins over the read. Otherwise the older value from
+  the read would overwrite it, and for the status that stale value would stay
+  up until the next cycle's write.
 - **The worker's copy of the status mirror is seeded from storage, never from
   the initial state.** An MV3 worker is torn down idle and spun up cold for the
   next trigger, and a copy seeded with `INITIAL_MIRRORED_SYNC_STATE` made each

@@ -15,7 +15,7 @@
  *   - it answers the typed popup → background message protocol, owning ALL
  *     privileged / CORS-exempt work: KICK_SYNC (run a cycle now) and EXTRACT (capture
  *     a facet from the active tab + write back). Reading sync status is NOT a message —
- *     the popup/options read the browser.storage.local mirror (mirrored-sync-state.ts) directly.
+ *     the popup/options read the browser.storage.local mirror (mirrored-sync.ts) directly.
  *
  * The popup never fetches bracemark-api or touches a tab directly — it sends a message
  * and renders the result.

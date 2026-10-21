@@ -6,7 +6,7 @@ import type { ExtractionFacet } from '@stxapps/web-react';
 // directly; it sends one of these and renders the result.
 //
 // Reading sync status is NOT a message: it's the browser.storage.local mirror in
-// mirrored-sync-state.ts (read directly / via storage.onChanged), so it never wakes the
+// mirrored-sync.ts (read directly / via storage.onChanged), so it never wakes the
 // worker just to read state the caller can read itself.
 export type ExtensionMessage =
   | { type: 'KICK_SYNC' } // run a sync cycle now (e.g. right after a local edit)

@@ -21,13 +21,11 @@ import { apiClient } from './api-client';
 import {
   clearMirroredSyncProgress,
   type MirroredSyncProgress,
-  writeMirroredSyncProgress,
-} from './mirrored-sync-progress';
-import {
   type MirroredSyncState,
   readMirroredSyncState,
+  writeMirroredSyncProgress,
   writeMirroredSyncState,
-} from './mirrored-sync-state';
+} from './mirrored-sync';
 
 // The background's sync runner. Builds the engine's SyncDeps from the persisted
 // session (hydrated from IndexedDB — available in the worker) and the mode-bound api
@@ -159,7 +157,7 @@ export function runSync(): Promise<void> {
     return inflight;
   }
 
-  // The run's progress feed into storage.session (mirrored-sync-progress.ts),
+  // The run's progress feed into storage.session (mirrored-sync.ts),
   // coalesced to PROGRESS_FLUSH_MS like the apps' renders — a write per decrypted
   // record would be hundreds a second. A write that fails costs one tick of a
   // readout, never the cycle.

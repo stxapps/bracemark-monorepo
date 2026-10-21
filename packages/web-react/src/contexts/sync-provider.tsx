@@ -500,7 +500,7 @@ export function SyncProvider({
 // The two progress readouts are passed in the same way, and default to null (no
 // number yet) for a caller whose engine reports none. The extension's background
 // mirrors them through `browser.storage.session` rather than the status mirror's
-// `.local` (bracemark-extension utils/mirrored-sync-progress.ts) — memory-backed,
+// `.local` (bracemark-extension utils/mirrored-sync.ts) — memory-backed,
 // so ten writes a second cost an IPC each and no disk.
 //
 // `syncAndWait` is delegated the same way and is REQUIRED, with no default: it has
