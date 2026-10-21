@@ -29,6 +29,14 @@ export type OpLogBounds = {
   newestUpdatedAt: number | null;
 };
 
+// Where the op log stood at one moment: its `generation` (bumped by every wipe)
+// and its `position` (the newest seq it held). `files/sign` reads one for a
+// batch of PUT tokens (../user-data.ts putGate), each token carries it into the
+// upload receipt its PUT answers with (r2/upload-receipt.ts), and the commit asks
+// the log whether the object could have been removed since (../user-data.ts
+// commitOps, THE FENCE).
+export type LogFence = { generation: number; position: number };
+
 // Raw row as it sits in SQLite (snake_case columns). Internal to this repo.
 type OpLogRow = {
   seq: number;
@@ -44,11 +52,24 @@ function toEntity(r: OpLogRow): OpLogEntity {
 // Bound to a SqlStorage handle (the DO's `ctx.storage.sql`). SqlStorage is
 // SYNCHRONOUS — no awaits here, unlike the D1-backed master repos (users/sessions).
 export function opLogsRepo(sql: SqlStorage) {
+  // The log's generation: 0 until the first wipe, then one more per wipe. A wipe
+  // empties the log without appending a delete, so a receipt minted before it
+  // could not otherwise tell that its object was removed. One row in
+  // `log_generation`, absent until the first wipe.
   const generation = (): number => {
     const row = sql
       .exec<{ generation: number }>(`SELECT generation FROM log_generation LIMIT 1`)
       .toArray()[0];
     return row ? Number(row.generation) : 0;
+  };
+
+  // The log's position: the newest seq it holds, 0 on an empty log. A primary-
+  // key seek. Monotonic within a generation, because seqs only grow
+  // (AUTOINCREMENT, see wipe) and compaction, when it lands, trims oldest-first
+  // and keeps the newest row.
+  const newestSeq = (): number => {
+    const row = sql.exec<{ seq: number | null }>(`SELECT MAX(seq) AS seq FROM op_logs`).one();
+    return row.seq ?? 0;
   };
 
   return {
@@ -107,24 +128,28 @@ export function opLogsRepo(sql: SqlStorage) {
       return { oldestUpdatedAt: row.oldest, newestUpdatedAt: row.newest };
     },
 
-    // Delete-all-data: drop every retained row. Safe BECAUSE the log is a
-    // disposable accelerator — a returning client's cursor against the now-null
-    // bounds routes it into the R2-listing fallback (the wiped-log row of the
-    // routing table), which is exactly how other devices learn of the wipe. The
-    // AUTOINCREMENT high-water mark survives (sqlite_sequence isn't reset), so
-    // post-wipe seqs stay strictly increasing — which compaction relies on.
-    clear(): void {
+    // Delete-all-data: drop every retained row AND start a new generation, in
+    // one call so neither can happen without the other. Dropping the rows is safe
+    // BECAUSE the log is a disposable accelerator — a returning client's cursor
+    // against the now-null bounds routes it into the R2-listing fallback (the
+    // wiped-log row of the routing table), which is exactly how other devices
+    // learn of the wipe. The AUTOINCREMENT high-water mark survives
+    // (sqlite_sequence isn't reset), so post-wipe seqs stay strictly increasing —
+    // which compaction relies on. The generation bump is what the fence needs: a
+    // wipe appends no delete, so without it a receipt minted before the wipe
+    // would find nothing in the emptied log to stop it.
+    wipe(): void {
+      const next = generation() + 1;
       sql.exec(`DELETE FROM op_logs`);
+      sql.exec(`DELETE FROM log_generation`);
+      sql.exec(`INSERT INTO log_generation (generation) VALUES (?)`, next);
     },
 
-    // The log's position: the newest seq it holds, 0 on an empty log. With the
-    // generation below it is the LogFence a PUT token carries into its upload
-    // receipt (../user-data.ts putGate, commitOps). A primary-key seek. Monotonic
-    // within a generation, because seqs only grow (AUTOINCREMENT, above) and
-    // compaction, when it lands, trims oldest-first and keeps the newest row.
-    newestSeq(): number {
-      const row = sql.exec<{ seq: number | null }>(`SELECT MAX(seq) AS seq FROM op_logs`).one();
-      return row.seq ?? 0;
+    // The log's fence right now — what a PUT token carries into its upload
+    // receipt (../user-data.ts putGate) and what a receipted commit is checked
+    // against (../user-data.ts staleReceiptPaths).
+    fence(): LogFence {
+      return { generation: generation(), position: newestSeq() };
     },
 
     // The newest `delete` of each of `paths` appended after `seq`, keyed by path:
@@ -151,18 +176,6 @@ export function opLogsRepo(sql: SqlStorage) {
         )
         .toArray();
       return new Map(rows.map((r) => [r.path, r.seq]));
-    },
-
-    // The log's generation: 0 until the first wipe, then one more per wipe
-    // (bumpGeneration). A wipe empties the log without appending a delete, so a
-    // receipt minted before it could not otherwise tell that its object was
-    // removed. One row in `log_generation`, absent until the first bump.
-    generation,
-
-    bumpGeneration(): void {
-      const next = generation() + 1;
-      sql.exec(`DELETE FROM log_generation`);
-      sql.exec(`INSERT INTO log_generation (generation) VALUES (?)`, next);
     },
 
     // Push: record a committed mutation AFTER its blob is in R2 (R2-first, log-

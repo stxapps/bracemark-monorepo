@@ -9,7 +9,7 @@ import {
 
 import type { Bindings } from '../lib/env';
 import { fileSizesRepo, type FileUsage } from './repositories/file-sizes';
-import { type OpKind, opLogsRepo } from './repositories/op-logs';
+import { type LogFence, type OpKind, opLogsRepo } from './repositories/op-logs';
 
 // `FileUsage` is the DO's public usage contract — re-exported here so consumers
 // (lib/quota.ts) depend on the DO boundary, not its private repository layer. It
@@ -18,12 +18,10 @@ import { type OpKind, opLogsRepo } from './repositories/op-logs';
 // `seq`), split it into a distinct type here at that point.
 export type { FileUsage };
 
-// Where the op log stood at one moment: its `generation` (bumped by every wipe)
-// and its `position` (the newest seq it held). `files/sign` reads one for a
-// batch of PUT tokens (putGate), each token carries it into the upload receipt
-// its PUT answers with (r2/upload-receipt.ts), and the commit asks the log
-// whether the object could have been removed since (commitOps, THE FENCE).
-export type LogFence = { generation: number; position: number };
+// `LogFence` likewise (repositories/op-logs.ts has what it means): r2/ and
+// services/ carry it through a PUT token and its upload receipt, and depend on
+// the DO boundary for it, not the repository.
+export type { LogFence };
 
 // One mutation ready to record — what the service hands the DO after resolving
 // each op against R2. `updatedAt`/`size` are sourced per kind in services/sync.ts:
@@ -68,8 +66,8 @@ const MIGRATIONS: string[][] = [
   // separate from the compactable op log so it never undercounts.
   //
   // `idx_op_logs_cursor` is the ONLY index op_logs carries, deliberately. There is
-  // no index on `path` alone: nothing reads the log by path (op-logs.ts has only
-  // listSince/bounds/append/clear), and an index here is paid on `append` — the
+  // no index on `path` alone: nothing reads the log by path (op-logs.ts reads it
+  // only by cursor, by seq, or whole), and an index here is paid on `append` — the
   // hottest write in the system, once per committed put and delete. Compaction
   // (dedupe-by-path, not built yet) is the one plausible reader; add it in a new
   // MIGRATIONS entry then, alongside the code that uses it. (The receipt fence's
@@ -264,10 +262,9 @@ export class UserDataDO extends DurableObject<Bindings> {
   // DO: the only DO call on the sign path (the companion existence lookup went
   // away with the link cap, lib/quota.ts).
   putGate(): { usage: FileUsage; fence: LogFence } {
-    const ops = opLogsRepo(this.sql);
     return {
       usage: fileSizesRepo(this.sql).usage(),
-      fence: { generation: ops.generation(), position: ops.newestSeq() },
+      fence: opLogsRepo(this.sql).fence(),
     };
   }
 
@@ -292,9 +289,7 @@ export class UserDataDO extends DurableObject<Bindings> {
   // emptied log to stop it, and its put would be recorded over an object the R2
   // half is about to remove (commitOps, THE FENCE).
   wipeAll(): void {
-    const ops = opLogsRepo(this.sql);
-    ops.clear();
-    ops.bumpGeneration();
+    opLogsRepo(this.sql).wipe();
     fileSizesRepo(this.sql).clear();
   }
 }
@@ -306,7 +301,7 @@ function staleReceiptPaths(ops: ReturnType<typeof opLogsRepo>, entries: CommitEn
   const fenced = entries.filter((e): e is CommitEntry & { fence: LogFence } => !!e.fence);
   if (fenced.length === 0) return [];
 
-  const generation = ops.generation();
+  const { generation } = ops.fence();
   const current = fenced.filter((e) => e.fence.generation === generation);
   const lastDelete =
     current.length === 0
@@ -338,8 +333,9 @@ export function userDataStub(env: Bindings, userId: string): DurableObjectStub<U
 // already behind, which a retry only adds to. On a fresh stub, because Cloudflare
 // documents a stub that threw as possibly broken. Every call the api makes is
 // safe to repeat: the reads change nothing, a commit is idempotent in effect (a
-// replayed op is one redundant row, stamped the same), and a wipe of an empty log
-// is a no-op.
+// replayed op is one redundant row, stamped the same), and a repeated wipe finds
+// the log already empty and only bumps its generation again — which at worst
+// sends a receipted put back to R2 for a re-check (commitOps, THE FENCE).
 export async function callUserData<T>(
   env: Bindings,
   userId: string,
