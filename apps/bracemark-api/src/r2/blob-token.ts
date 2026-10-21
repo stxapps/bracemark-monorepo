@@ -29,7 +29,14 @@
 // before it is checked. The payload is readable — a user id and a path, both ids
 // the server minted — and is not the secret part; the MAC is.
 
-import { base64UrlToBytes, bytesToBase64Url, syncPathSchema, utf8 } from '@stxapps/shared';
+import {
+  base64UrlToBytes,
+  BLOB_PATH,
+  bytesToBase64Url,
+  type SignedUrl,
+  syncPathSchema,
+  utf8,
+} from '@stxapps/shared';
 
 import type { OpLogFence } from '../do/user-data';
 import { derivedHmacKey } from './hmac-key';
@@ -93,6 +100,51 @@ export async function mintBlobToken(
   const payload = bytesToBase64Url(utf8(JSON.stringify(body)));
   const mac = await crypto.subtle.sign('HMAC', await tokenKey(secret), signedPart(payload));
   return `${VERSION}.${payload}.${bytesToBase64Url(new Uint8Array(mac))}`;
+}
+
+// Mint blob-route URLs for the given wire-relative paths: the api's own
+// `BLOB_PATH` on the origin the caller reached it at, and a token per path for
+// the request's `Authorization` header — what `files/sign` answers with
+// `via: 'api'` (services/sync.ts signUserFileUrls). The URL is the same for
+// every path — the token names the object — so a browser asks one CORS
+// preflight for the route rather than one per blob.
+//
+// The origin is ECHOED from the request, for the reason localBlobUrl's is
+// (r2/local.ts): one `wrangler dev` answers on localhost and on the Mac's LAN
+// address at once. Off `wrangler dev` it is safe for a narrower reason — a
+// request only reaches this Worker on a hostname routed to it
+// (wrangler.jsonc `routes`), so the echo can only ever name this api.
+//
+// Local dev mints these too, signed with the placeholder secret: the blob
+// route works against miniflare's bucket exactly as against R2's, so a local
+// run exercises the path a deployed client takes.
+//
+// `fence` is the op log as the put gate read it (do/user-data.ts OpLogFence),
+// carried by every PUT token into the receipt its PUT answers with
+// (upload-receipt.ts); a GET token has none.
+export async function signBlobUrls(
+  secret: string,
+  userId: string,
+  paths: string[],
+  method: BlobMethod,
+  expiresIn: number,
+  requestUrl: string,
+  fence?: OpLogFence,
+): Promise<SignedUrl[]> {
+  const url = `${new URL(requestUrl).origin}${BLOB_PATH}`;
+  return Promise.all(
+    paths.map(async (path) => ({
+      path,
+      url,
+      authorization: `${BLOB_AUTH_SCHEME} ${await mintBlobToken(secret, {
+        userId,
+        path,
+        method,
+        expiresIn,
+        fence,
+      })}`,
+    })),
+  );
 }
 
 // The grant a token carries, or a BlobTokenError. `method` is the request's:

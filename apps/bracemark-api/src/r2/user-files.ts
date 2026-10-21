@@ -1,5 +1,4 @@
 import {
-  BLOB_PATH,
   type FileEntry,
   type FilesListResponse,
   ID_KEYED_PREFIXES,
@@ -7,27 +6,29 @@ import {
   type SignedUrl,
 } from '@stxapps/shared';
 
-import type { OpLogFence } from '../do/user-data';
 import type { Bindings } from '../lib/env';
 import { HttpError } from '../lib/errors';
 import { type Timer, untimed } from '../lib/server-timing';
-import { BLOB_AUTH_SCHEME, type BlobMethod, mintBlobToken } from './blob-token';
 import { stripUserPrefix, userFileKey, userPrefix } from './keys';
 import { isLocalR2, localBlobUrl } from './local';
 import { presignR2Url, type R2Credentials } from './presign';
 
 // The access layer for the USER_FILES R2 bucket — the R2 analogue of db/'s
-// repositories and the DO's repositories. Every read of the bucket and every
-// signed URL goes through here, so key-namespacing (keys.ts), the S3 presigner
-// (presign.ts) and the blob route's tokens (blob-token.ts) are applied in ONE
-// place, never re-inlined in a service, route, or the DO. See
-// docs/local-first-sync.md.
+// repositories and the DO's repositories. Every call on the bucket and every R2
+// presign goes through here, so key-namespacing (keys.ts) and the S3 presigner
+// (presign.ts) are applied in ONE place, never re-inlined in a service, route,
+// or the DO. See docs/local-first-sync.md.
+//
+// What belongs here is what needs the bucket or an object's KEY. The api's own
+// credentials — the blob route's tokens (blob-token.ts) and upload receipts
+// (upload-receipt.ts) — need neither: they bind a user id and a wire path under
+// an HMAC, so they are pure functions of the secret, minted and read by the
+// sync service (services/sync.ts) and checked by the blob route.
 //
 // Unlike the D1/DO repos (which each take a single storage handle), this takes
 // the whole `env`: R2's surface spans TWO bindings — the native bucket binding
 // (USER_FILES, for list/head and the blob route's bytes) AND the S3 credential
-// vars (R2_*, for presigning, and the root the blob tokens' key is derived from).
-// The factory holds both together.
+// vars (R2_*, for presigning). The factory holds both together.
 
 // The object facts a commit records for a put: R2's `LastModified` as the op's
 // stamp, and its size for the quota map.
@@ -395,69 +396,23 @@ export function userFilesRepo(env: Bindings) {
       }
     },
 
-    // Mint blob-route URLs for the given wire-relative paths: the api's own
-    // `BLOB_PATH` on the origin the caller reached it at, and a token per path
-    // (blob-token.ts) for the request's `Authorization` header. The URL is the
-    // same for every path — the token names the object — so a browser asks one
-    // CORS preflight for the route rather than one per blob.
-    //
-    // The origin is ECHOED from the request, for the reason localBlobUrl's is
-    // (r2/local.ts): one `wrangler dev` answers on localhost and on the Mac's LAN
-    // address at once. Off `wrangler dev` it is safe for a narrower reason — a
-    // request only reaches this Worker on a hostname routed to it
-    // (wrangler.jsonc `routes`), so the echo can only ever name this api.
-    //
-    // Local dev mints these too, signed with the placeholder secret: the blob
-    // route works against miniflare's bucket exactly as against R2's, so a local
-    // run exercises the path a deployed client takes.
-    //
-    // `fence` is the op log as the put gate read it (do/user-data.ts OpLogFence),
-    // carried by every PUT token into the receipt its PUT answers with
-    // (upload-receipt.ts); a GET token has none.
-    async blobUrls(
-      userId: string,
-      paths: string[],
-      method: BlobMethod,
-      expiresIn: number,
-      requestUrl: string,
-      fence?: OpLogFence,
-    ): Promise<SignedUrl[]> {
-      const secret = env.R2_SECRET_ACCESS_KEY;
-      if (!secret) {
-        throw new HttpError(500, 'r2_unconfigured', 'R2 signing credentials are not configured');
-      }
-      const url = `${new URL(requestUrl).origin}${BLOB_PATH}`;
-      return Promise.all(
-        paths.map(async (path) => ({
-          path,
-          url,
-          authorization: `${BLOB_AUTH_SCHEME} ${await mintBlobToken(secret, {
-            userId,
-            path,
-            method,
-            expiresIn,
-            fence,
-          })}`,
-        })),
-      );
-    },
-
-    // The blob route's two transfers (routes/blob.ts), by the grant a verified
-    // token carries. The bytes are ciphertext either way: the route moves them,
-    // never reads them. `get` answers null for an absent object, and is asked
-    // twice when R2 refuses it with a 10001.
+    // The blob route's two transfers (routes/blob.ts; a PUT by way of
+    // services/sync.ts putBlob), by the grant a verified token carries. The
+    // bytes are ciphertext either way: the route moves them, never reads them.
+    // `get` answers null for an absent object, and is asked twice when R2
+    // refuses it with a 10001.
     get(userId: string, path: string): Promise<R2ObjectBody | null> {
       return onceMoreOnInternalError(() => bucket.get(userFileKey(userId, path)));
     },
 
     // `body` must have a known length — R2 refuses a stream that doesn't — which
-    // a request body declaring a Content-Length has. The route reads a body that
-    // declares none whole and writes it with putBytes (routes/blob.ts).
+    // a request body declaring a Content-Length has. A body that declares none
+    // is read whole and written with putBytes (services/sync.ts putBlob).
     //
     // Both answer the object R2 just wrote, as the facts a commit records for it
-    // (the same `uploaded` and `size` a HEAD or a listing reads back) — the
-    // route's upload receipt (upload-receipt.ts). Null only where R2 wrote
-    // nothing, which an unconditional put never answers.
+    // (the same `uploaded` and `size` a HEAD or a listing reads back) — what
+    // putBlob signs into the PUT's upload receipt (upload-receipt.ts). Null only
+    // where R2 wrote nothing, which an unconditional put never answers.
     //
     // Only `putBytes` is asked twice on a 10001: its body is in memory. A stream
     // is consumed by the attempt that failed, so `put` leaves the retry to the

@@ -740,7 +740,7 @@ the `r2-list` and `r2-head` sums) is what to tune them against.
 **A put that carries its upload receipt is recorded without asking R2.** The
 blob route already holds R2's answer to each PUT — the object's `LastModified`
 and size, the two facts the commit records — so it signs them into a **receipt**
-(`r2/upload-receipt.ts`) and answers the PUT with `{ "receipt": … }`. The engine
+(`r2/upload-receipt.ts`, minted in `services/sync.ts` `putBlob`) and answers the PUT with `{ "receipt": … }`. The engine
 keeps it in memory with the chunk's results (`PutResult`), the commit carries it back
 on the op (`commitOpSchema.receipt`), and the Worker checks its HMAC — local
 crypto, no subrequest — instead of the listing or `HEAD`s above. The 10,000-link

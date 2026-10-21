@@ -141,7 +141,7 @@ once** — `http://localhost:8787` for the Mac's browser and for Android via
 `adb reverse`, `http://<lan-ip>:8787` for the iPhone. So a URL the api _mints_ for
 a client can't name a fixed origin: it has to echo whichever one that client just
 used. There are two such URLs, and both point back at the Worker itself: the
-blob route's (`apps/bracemark-api/src/r2/user-files.ts`, `blobUrls` — every
+blob route's (`apps/bracemark-api/src/r2/blob-token.ts`, `signBlobUrls` — every
 current client's transfers, local or deployed) and the local blob proxy that
 stands in for R2 in dev for a request that names no transport
 (`apps/bracemark-api/src/r2/local.ts` — miniflare's emulated bucket has no

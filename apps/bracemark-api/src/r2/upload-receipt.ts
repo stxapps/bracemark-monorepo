@@ -1,6 +1,8 @@
-// The upload receipt — what the blob route answers a PUT with (routes/blob.ts),
-// and what the commit takes back in place of asking R2 whether the object
-// landed (services/sync.ts commitOps). The route has R2's answer to the PUT in
+// The upload receipt — what the blob route answers a PUT with (routes/blob.ts,
+// minted in services/sync.ts putBlob), and what the commit takes back in place of
+// asking R2 whether the object landed (services/sync.ts commitOps). Pure: no
+// bucket, no env, only the secret it is handed (hmac-key.ts hmacSecret), which is
+// why it sits beside the gateway rather than in it. The route has R2's answer to the PUT in
 // hand — the object's `LastModified` and size, the two facts a commit records
 // for a put — and before receipts it threw them away, so the commit re-read
 // them: a HEAD per put, or a listing walked page by page through the user's
@@ -76,10 +78,14 @@ function signedPart(payload: string, userId: string, path: string): Uint8Array<A
 // `now` is injectable so tests are deterministic; defaults to the real clock.
 export async function mintUploadReceipt(
   secret: string,
-  receipt: { userId: string; path: string; stat: ObjectStat; fence: OpLogFence },
+  {
+    userId,
+    path,
+    stat,
+    fence,
+  }: { userId: string; path: string; stat: ObjectStat; fence: OpLogFence },
   now: number = Date.now(),
 ): Promise<string> {
-  const { userId, path, stat, fence } = receipt;
   const body: Payload = {
     t: stat.updatedAt,
     s: stat.size,

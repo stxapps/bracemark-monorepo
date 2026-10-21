@@ -7,6 +7,23 @@
 
 import { utf8 } from '@stxapps/shared';
 
+import type { Bindings } from '../lib/env';
+import { HttpError } from '../lib/errors';
+
+// The root both keys are derived from, failing loudly if a deploy is missing it —
+// a signer without it must not hand out credentials nothing can verify. The one
+// check for every place that signs or verifies with it: the blob token's mint
+// (services/sync.ts signUserFileUrls, by blob-token.ts signBlobUrls) and its check
+// (routes/blob.ts), the receipt's mint and its read (services/sync.ts putBlob,
+// commitOps).
+export function hmacSecret(env: Bindings): string {
+  const secret = env.R2_SECRET_ACCESS_KEY;
+  if (!secret) {
+    throw new HttpError(500, 'r2_unconfigured', 'R2 signing credentials are not configured');
+  }
+  return secret;
+}
+
 // One derived key per isolate per (secret, label): an isolate serves thousands of
 // transfers, and HKDF + importKey per request would be the only CPU a transfer
 // spends. Keyed on the secret so a test env, or a rotated secret on a warm

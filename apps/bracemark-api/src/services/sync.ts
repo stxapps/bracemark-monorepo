@@ -1,4 +1,5 @@
 import type {
+  BlobPutResponse,
   BlobTransport,
   CommitFailure,
   CommitOp,
@@ -13,16 +14,20 @@ import { callUserData } from '../do/user-data';
 import type { Bindings } from '../lib/env';
 import { checkPutQuota } from '../lib/quota';
 import { type Timer, untimed } from '../lib/server-timing';
-import { readUploadReceipt, type UploadReceipt } from '../r2/upload-receipt';
+import { type BlobGrant, signBlobUrls } from '../r2/blob-token';
+import { hmacSecret } from '../r2/hmac-key';
+import { mintUploadReceipt, readUploadReceipt, type UploadReceipt } from '../r2/upload-receipt';
 import { type ObjectStat, userFilesRepo } from '../r2/user-files';
 import { getQuotaCeilings } from './iap';
 
 // Service layer for the sync endpoints. It holds the POLICY and the cross-store
-// orchestration — TTLs, the quota gate, the op→method mapping, and the R2-then-DO
-// commit handshake — delegating all R2 access to r2/user-files (the bucket
-// gateway) and all op-log/size access to the per-user DO. ops/list is the one
-// genuinely single-store endpoint (a pure DO keyset query), so it stays a direct
-// DO passthrough in the route. See docs/local-first-sync.md.
+// orchestration — TTLs, the quota gate, the op→method mapping, the blob token's
+// and upload receipt's mint (and the receipt's read), and the R2-then-DO commit
+// handshake — delegating all R2 access to r2/user-files (the bucket gateway) and
+// all op-log/size access to the per-user DO. ops/list is the one genuinely
+// single-store endpoint (a pure DO keyset query), so it stays a direct DO
+// passthrough in the route, as does the blob route's read (one gateway call).
+// See docs/local-first-sync.md.
 
 // Signed-URL lifetimes, the same for a presign and a blob-route token. PUT URLs
 // are short-lived (a commit follows immediately, so a few minutes covers
@@ -59,7 +64,7 @@ export async function listUserFiles(
 //
 // `requestUrl` is the caller's own request URL: the blob route's URL and the
 // local-dev blob proxy's both name the origin the caller reached the api on
-// (r2/user-files.ts blobUrls; r2/local.ts for why it can't be a constant). A
+// (r2/blob-token.ts signBlobUrls; r2/local.ts for why it can't be a constant). A
 // presign names R2's S3 endpoint and ignores it.
 export async function signUserFileUrls(
   env: Bindings,
@@ -101,12 +106,39 @@ export async function signUserFileUrls(
   const method = op === 'put' ? 'PUT' : 'GET';
   const expiresIn = op === 'put' ? PUT_URL_TTL_SECONDS : GET_URL_TTL_SECONDS;
 
-  const repo = userFilesRepo(env);
   return time('presign', () =>
     via === 'api'
-      ? repo.blobUrls(userId, paths, method, expiresIn, requestUrl, fence)
-      : repo.presignUrls(userId, paths, method, expiresIn, requestUrl),
+      ? signBlobUrls(hmacSecret(env), userId, paths, method, expiresIn, requestUrl, fence)
+      : userFilesRepo(env).presignUrls(userId, paths, method, expiresIn, requestUrl),
   );
+}
+
+// Write one object through the blob route (PUT /v1/files/blob), under the grant
+// its verified token carries, and answer with the upload receipt the commit can
+// take instead of asking R2 again whether the object landed
+// (r2/upload-receipt.ts): R2's answer to this PUT, signed, under the fence the
+// token carries. The commit, not this, is where the object is recorded
+// (commitOps), exactly as after a presigned PUT. A token minted before receipts
+// carries no fence, and its PUT answers with none.
+//
+// `body` is the request's stream when it declares its length, which R2 requires
+// of a stream, and otherwise a read of the whole body (routes/blob.ts) — run
+// inside `r2-put`, so the metric times the same wait either way.
+export async function putBlob(
+  env: Bindings,
+  { userId, path, fence }: BlobGrant,
+  body: ReadableStream | (() => Promise<ArrayBuffer>),
+  time: Timer = untimed,
+): Promise<BlobPutResponse> {
+  const secret = hmacSecret(env);
+  const repo = userFilesRepo(env);
+  const stat = await time('r2-put', async () =>
+    typeof body === 'function'
+      ? repo.putBytes(userId, path, await body())
+      : repo.put(userId, path, body),
+  );
+  if (!stat || !fence) return {};
+  return { receipt: await mintUploadReceipt(secret, { userId, path, stat, fence }) };
 }
 
 // Record committed mutations (POST /v1/ops/commit) — the R2-first, log-last
@@ -191,6 +223,8 @@ export async function commitOps(
 // The upload receipts in a commit that this api can trust, by path. One the api
 // cannot read is left out, and its put is checked against R2 like any other: a
 // receipt is a shortcut and never the reason a commit fails (r2/upload-receipt.ts).
+// The one failure is a deploy missing the key's root (hmacSecret), and only for
+// a commit that carries a receipt — the same deploy fails every files/sign.
 async function readReceipts(
   env: Bindings,
   userId: string,
@@ -198,12 +232,12 @@ async function readReceipts(
   now: number,
 ): Promise<Map<string, UploadReceipt>> {
   const receipts = new Map<string, UploadReceipt>();
-  const secret = env.R2_SECRET_ACCESS_KEY;
-  if (!secret) return receipts;
+  const receipted = ops.filter((o) => o.op === 'put' && o.receipt);
+  if (receipted.length === 0) return receipts;
+  const secret = hmacSecret(env);
   await Promise.all(
-    ops.map(async ({ op, path, receipt }) => {
-      if (op !== 'put' || !receipt) return;
-      const read = await readUploadReceipt(secret, receipt, { userId, path }, now);
+    receipted.map(async ({ path, receipt }) => {
+      const read = await readUploadReceipt(secret, receipt as string, { userId, path }, now);
       if (read) receipts.set(path, read);
     }),
   );
