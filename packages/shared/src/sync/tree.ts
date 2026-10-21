@@ -251,8 +251,14 @@ export function treeNameMap<T extends TreeItem & { name: string }>(
 // label — and its indent stays at 32 guide lines, 768px of it.
 export const TREE_ROW_MAX_LEVELS = 32;
 
+// The px a sidebar row indents per level — the links rail on both platforms.
+// The sidebar's own step: the pickers step by their guide lines' width
+// (guide-lines.tsx) and the Lists settings tables by the INDENT_WIDTH their
+// drag math reads (dnd-helpers.ts), each a constant of its surface.
+export const TREE_INDENT_WIDTH = 16;
+
 // The most levels a sidebar row INDENTS — the links rail on both platforms,
-// 16px a level. A display bound, like TREE_ROW_MAX_LEVELS above and for the
+// TREE_INDENT_WIDTH a level. A display bound, like TREE_ROW_MAX_LEVELS above and for the
 // same reason never a bound on the tree: past it a row keeps the indent of the
 // level at it. Without it the rail had nothing left for the label from about
 // level 5 at its narrowest (192px on web) and ran rows off its edge from level

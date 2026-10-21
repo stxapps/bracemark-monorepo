@@ -651,11 +651,11 @@ export function ListsSection() {
     // nested to. All of those are fixed widths and the rename field is the only
     // flexible one, so every px of gutter comes out of the field the section
     // exists to let you type in — silently, since nothing ever overflows. The 8px
-    // the narrow inset gives back is half an indent step (INDENT_WIDTH is 20 here,
-    // 16 on expo), so it buys most of a nesting level: on a 375px screen a locked
-    // row at depth 3 leaves ~83px of text at 16 and ~67px at 24, about nine
-    // characters. The only cap on depth is TREE_MAX_DEPTH (100, far past any
-    // width), so the field degrades eventually either way; the inset decides how
+    // the narrow inset gives back is about half an indent step (INDENT_WIDTH,
+    // dnd-helpers.ts), so it buys most of a nesting level: on a 375px screen a
+    // locked row at depth 3 leaves ~83px of text at 16 and ~67px at 24, about nine
+    // characters. The only cap on depth is TREE_MAX_DEPTH, far past any
+    // width, so the field degrades eventually either way; the inset decides how
     // soon.
     //
     // Above `md` the argument stops applying — the column caps at 672, so `px-6`

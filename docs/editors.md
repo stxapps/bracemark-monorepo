@@ -282,10 +282,11 @@ draft; each keystroke commits or reverts in place):
   tables on native, drag included. **The projection math is literally the same
   code**: `excludeActiveDescendants` / `getProjection` / `getMovePlan` live in
   `@stxapps/shared` (`sync/tree-dnd.ts`), and each platform keeps only a px
-  calibration beside its section (`dnd-helpers.ts` — web 20px per indent at a
-  half-indent threshold, expo 16px at three quarters, because a finger dragging
-  vertically jitters horizontally and would reparent rows by accident at web's
-  rounding). What differs is the _surface_, not the rules: dnd-kit's pointer
+  calibration beside its section (`dnd-helpers.ts` — web's `INDENT_WIDTH` at a
+  half-indent threshold, expo's narrower one at three quarters, because a finger
+  dragging vertically jitters horizontally and would reparent rows by accident
+  at web's rounding; `getProjection` takes `indentWidth` with no default, so
+  neither falls back to a third copy). What differs is the _surface_, not the rules: dnd-kit's pointer
   sensor vs. a long-press on a grip handle driving gesture-handler + reanimated
   (`drag-sort.tsx`, with `scroll-host.tsx` handling the fact that native rows
   drag _inside_ a page ScrollView — scroll-delta compensation, edge auto-scroll,
@@ -294,7 +295,7 @@ draft; each keystroke commits or reverts in place):
   `nestedLists` paywall rather than clamping the projection.
 
   **The depth limit IS clamped, and refused at the drop.** No move may put a
-  list's subtree past `TREE_MAX_DEPTH` (100) levels: `getMovePlan` works out the
+  list's subtree past `TREE_MAX_DEPTH` levels: `getMovePlan` works out the
   deepest the row may land (`deepestDepthFor`, `sync/tree.ts`) from the forest
   and returns no plan past it, so the row eases home; both sections pass the
   same number to `getProjection` as `maxDepth`, so the live indent stops there
@@ -305,7 +306,7 @@ draft; each keystroke commits or reverts in place):
   out of a `parentId` loop reattaches (Move up on a loop's root row writes its
   effective parent) — [data-limits.md](./data-limits.md), _editors_. Unlike the paywall, it is
   a rule about the data rather than the plan, so it stops the gesture instead of
-  explaining it — and at 100 levels no one meets it by hand. Why the limit lives
+  explaining it — and the limit is far past where anyone nests by hand. Why the limit lives
   at the editors and nowhere that only carries data:
   [data-limits.md](./data-limits.md). The web table asks `forbiddenParentIds` of
   a row only while that row's menu is open (`excludeIdsFor`): each answer walks

@@ -573,9 +573,9 @@ The policy, decided once:
   restore writes `parentId` verbatim, so without a bound the file would decide
   how deep this library's tree is. `flattenBackupTree` (`data/backup.ts`) runs
   right after the classify pass and before anything is looked up or written: a
-  line deeper than `TREE_MAX_DEPTH` (100) gets its level-99 ancestor as
-  `parentId`, so it sits beside that ancestor's other children with its own
-  name and links, and nothing else on it changes. The receipt counts the moved
+  line deeper than `TREE_MAX_DEPTH` gets its ancestor one level short of the
+  limit as `parentId`, so it sits beside that ancestor's other children with
+  its own name and links, and nothing else on it changes. The receipt counts the moved
   lines that were written. It used to refuse the **whole file** — the user's
   own library, whose editors had no depth limit then — and the reasoning for
   the change, the shape, and the bound being **per file, not per library** are
@@ -609,14 +609,14 @@ null`. Written as it was, the loop's edges reached the library and one Move up
   cleanup: deleting on refusal would take the image from an accepted row that
   shares it. A reference is claimed by the first _accepted_ row, so a refused row
   ahead of it in the file does not cost the later one its image.
-- **A folder past 100 levels is placed at level 100.** `TREE_MAX_DEPTH`
+- **A folder past the depth limit is placed at it.** `TREE_MAX_DEPTH`
   (`sync/tree.ts`). Every segment of a folder path becomes a list, and each
   format lets the file choose the depth — nested `<DL>`s, separators in one CSV
   cell, a `parentId` chain — so without a bound the file decides how deep this
   library's tree is. `ListResolver` (`import/resolve.ts`) files a row's own
-  folder past the limit under the level-99 list, beside its other children, with
-  its own name and links, and counts the lists it placed
-  (`flattenedListCount`); a folder between level 100 and the row's own that
+  folder past the limit under the list one level short of it, beside its other
+  children, with its own name and links, and counts the lists it placed
+  (`flattenedListCount`); a folder between the limit and the row's own that
   holds no link of its own is not minted. A system-list row is not counted: its
   path is never resolved. The import used to refuse the whole file instead; the
   shape, and why it changed, are in [data-limits.md](./data-limits.md). It
@@ -745,48 +745,49 @@ Removing the recursion left work per ROW that still grew with depth, and paid
 once per row it is the square of a long chain: every list picker handed each row
 a copy of its whole ancestor chain and drew a guide line per level, in a list
 that mounts every row. A 10,000-deep chain held 600 MB of ancestor names before
-anything was drawn — so the app launched, and the bill came when a picker opened.
-`flattenToPathRows` now names the first 32 ancestors and then `TREE_PATH_CUT`
-(the rows past the cut share one array), the share sheet's picker rebuilds its
-paths under the same bound, and both platforms' guide lines stop at 32. It is a
-bound on what a row **shows** — the row keeps its true `depth`, and the forest
-is untouched, which is where [locks.md](./locks.md) says a display limit has to
-live. A row with 32 ancestors or fewer looks as it did; 32 guide lines are
-already 768px of indent. A deeper row does read differently. Its path label — a
-filtered row in a picker (the share sheet's included), `ListSelect`'s trigger,
-and on expo the accessibility label on that trigger — names the first 32
-ancestors and then the cut, so the names left out are the ones NEAREST the row,
-its parent's among them, and two lists with one name under the same deep
-ancestor carry one label. Where a picker draws guide lines its indent stops at
-32 of them, so it sits level there with every other row that deep. Display is
-all the bound reaches: a row is keyed and picked by its id, and the picker's
-filter matches a list's own name, never the label.
+anything was drawn — so the app launched, and the bill came when a picker
+opened. `flattenToPathRows` now names the first `TREE_ROW_MAX_LEVELS` ancestors
+and then `TREE_PATH_CUT` (the rows past the cut share one array), the share
+sheet's picker rebuilds its paths under the same bound, and both platforms'
+guide lines stop at it. It is a bound on what a row **shows** — the row keeps
+its true `depth`, and the forest is untouched, which is where
+[locks.md](./locks.md) says a display limit has to live. A row within the bound
+looks as it did, and the bound's worth of guide lines is already 768px of
+indent. A deeper row does read differently. Its path label — a filtered row in a
+picker (the share sheet's included), `ListSelect`'s trigger, and on expo the
+accessibility label on that trigger — names the ancestors up to the bound and
+then the cut, so the names left out are the ones NEAREST the row, its parent's
+among them, and two lists with one name under the same deep ancestor carry one
+label. Where a picker draws guide lines its indent stops at the bound, so it
+sits level there with every other row that deep. Display is all the bound
+reaches: a row is keyed and picked by its id, and the picker's filter matches a
+list's own name, never the label.
 
-**The interop exports write at most `TREE_MAX_DEPTH` levels** (100,
-`sync/tree.ts`, the one depth limit — [data-limits.md](./data-limits.md)). They
-used to grow with the square of a long chain, since the CSV writes a folder's
-whole path on every link row and a Netscape file indents every line by its
-folder's depth. Measured on 2026-10-16: 5,000 nested lists made ~200 M
-characters of HTML, and 10,000 failed both formats with
-`RangeError: Invalid string length`, so nothing was saved. A list deeper than
-100 is written AT level 100, beside its level-99 ancestor's other children:
-under its own name, holding its own links, with its descendants following it at
-the same level — the shape every edge that meets the limit uses
-([data-limits.md](./data-limits.md), _one shape everywhere_). Two deep lists with
-one name under the same level-99 ancestor end up with one path, which a CSV
-importer merges. Both formats flatten identically (`foldersWithPaths` for the
-CSV, `pushFolders` for the Netscape nesting), and this app's import nests the
-file exactly as written. The receipt counts the lists it flattened
-(`flattenedListCount`). The backup is the exception: a copy of the library, it
-keeps every `parentId`, and its receipt says what a restore will place at the
-limit (`pastMaxDepthListCount` / `pastMaxDepthTagCount`).
+**The interop exports write at most `TREE_MAX_DEPTH` levels** (`sync/tree.ts`,
+the one depth limit — [data-limits.md](./data-limits.md)). They used to grow
+with the square of a long chain, since the CSV writes a folder's whole path on
+every link row and a Netscape file indents every line by its folder's depth.
+Measured on 2026-10-16: 5,000 nested lists made ~200 M characters of HTML, and
+10,000 failed both formats with `RangeError: Invalid string length`, so nothing
+was saved. A list deeper than the limit is written AT it, beside the other
+children of its ancestor one level short of the limit: under its own name,
+holding its own links, with its descendants following it at the same level — the
+shape every edge that meets the limit uses ([data-limits.md](./data-limits.md),
+_one shape everywhere_). Two deep lists with one name under that same ancestor
+end up with one path, which a CSV importer merges. Both formats flatten
+identically (`foldersWithPaths` for the CSV, `pushFolders` for the Netscape
+nesting), and this app's import nests the file exactly as written. The receipt
+counts the lists it flattened (`flattenedListCount`). The backup is the
+exception: a copy of the library, it keeps every `parentId`, and its receipt
+says what a restore will place at the limit (`pastMaxDepthListCount` /
+`pastMaxDepthTagCount`).
 
 What still grows with depth: the marketing site's converter copies a path per
-folder of a backup's list tree, now at most 101 names each. The web Lists
-settings table used to work out `forbiddenParentIds` for every row on every
-render — a forest walk per row — and now asks it only of the row whose menu is
-open. The editors refuse a move past the limit, an import and a restore place
-what is deeper at it, and nothing bounds a chain that arrives by sync, was
+folder of a backup's list tree, now at most `TREE_MAX_DEPTH` + 1 names each. The
+web Lists settings table used to work out `forbiddenParentIds` for every row on
+every render — a forest walk per row — and now asks it only of the row whose
+menu is open. The editors refuse a move past the limit, an import and a restore
+place what is deeper at it, and nothing bounds a chain that arrives by sync, was
 stored before the editor rule, or forms where a restored chain meets lists the
 library already holds.
 

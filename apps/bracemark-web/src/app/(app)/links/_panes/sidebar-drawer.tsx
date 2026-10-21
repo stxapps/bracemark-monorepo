@@ -63,8 +63,8 @@ export function SidebarDrawer({ label }: { label: string }) {
         </button>
       </SheetTrigger>
       {/* `w-72` over the sheet's default `w-3/4`: the trees want a predictable
-          measure (they indent 16px per level), and three quarters of a 320px
-          phone is narrower than the 15rem rail this stands in for.
+          measure (they indent TREE_INDENT_WIDTH per level), and three quarters
+          of a 320px phone is narrower than the 15rem rail this stands in for.
           `aria-describedby={undefined}` because there is no description to point
           at — a nav needs a name, not a paragraph. */}
       <SheetContent

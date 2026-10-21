@@ -53,6 +53,7 @@ import {
   MY_LIST_ID,
   TRASH_ID,
   TREE_INDENT_MAX_LEVELS,
+  TREE_INDENT_WIDTH,
   type TreeItem,
   type TreeNode,
   withoutSubtrees,
@@ -171,9 +172,9 @@ function NavItem({
   selection: Selection;
   // Fired after the row commits its selection — the drawer closes on it.
   onSelected: () => void;
-  // Tree nesting level — indents the row one step per level (16px, matching
-  // the share picker's indent). Applied to the whole row so the chevron
-  // indents with the label.
+  // Tree nesting level — indents the row TREE_INDENT_WIDTH per level, up to
+  // TREE_INDENT_MAX_LEVELS (@stxapps/shared sync/tree.ts). Applied to the whole
+  // row so the chevron indents with the label.
   depth?: number;
   // Present only on rows with children: whether the subtree is shown, and the
   // chevron's toggle — a SEPARATE sibling Pressable on the LEFT (row press =
@@ -206,7 +207,11 @@ function NavItem({
       className="w-full flex-row items-center"
       // Capped at TREE_INDENT_MAX_LEVELS (@stxapps/shared sync/tree.ts): past it
       // a deep chain's labels had no width left.
-      style={depth > 0 ? { paddingLeft: Math.min(depth, TREE_INDENT_MAX_LEVELS) * 16 } : undefined}
+      style={
+        depth > 0
+          ? { paddingLeft: Math.min(depth, TREE_INDENT_MAX_LEVELS) * TREE_INDENT_WIDTH }
+          : undefined
+      }
     >
       {onToggle ? (
         <Button

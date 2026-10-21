@@ -581,7 +581,7 @@ export function ListsSection() {
     // trade legible: at 24 a row reads one nesting level deeper than it is. On a
     // 375pt screen a locked row at depth 3 leaves ~83px of text at 16 and ~67px at
     // 24 — about nine characters, on a field whose whole job is editing a name.
-    // The only cap on depth is TREE_MAX_DEPTH (100, far past any width), so the
+    // The only cap on depth is TREE_MAX_DEPTH, far past any width, so the
     // field degrades to unusable eventually either way; the inset decides how soon.
     //
     // This section used to spell `px-4` itself, as web's twin did. Both moved into

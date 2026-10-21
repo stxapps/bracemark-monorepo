@@ -42,11 +42,12 @@ export interface MovePlan<T extends TreeItem> {
 }
 
 export interface ProjectionOptions {
-  // Px per indent level. Each platform owns its own constant and renders its rows
-  // from the same one, so the visible indent and the drag math can't drift
-  // (web: 20, expo: 16). The drag offset arrives in px, so the projection thinks
-  // in px too.
-  indentWidth?: number;
+  // Px per indent level. Each platform owns its own constant (INDENT_WIDTH in its
+  // dnd-helpers.ts) and renders its rows from the same one, so the visible indent
+  // and the drag math can't drift. Required, with no default here: a default
+  // would be a third copy of a platform's number, free to drift from both. The
+  // drag offset arrives in px, so the projection thinks in px too.
+  indentWidth: number;
   // Ids that may not be a PARENT — they can sit above the dragged row without
   // granting it the usual +1 level. Defaults to the list containers (Trash); a
   // tag tree can pass an empty set, or just accept the harmless default since no
@@ -66,8 +67,6 @@ export interface ProjectionOptions {
   // leaves it out.
   maxDepth?: number;
 }
-
-const DEFAULT_INDENT_WIDTH = 20;
 
 // Move one element within an array, returning a new one. Tiny, but every drag
 // surface needs it (it's dnd-kit's `arrayMove`, which we no longer import) — and
@@ -117,11 +116,11 @@ export function getProjection<T extends TreeItem>(
   activeId: string,
   overId: string,
   offsetX: number,
-  options?: ProjectionOptions,
+  options: ProjectionOptions,
 ): Projection {
-  const indentWidth = options?.indentWidth ?? DEFAULT_INDENT_WIDTH;
-  const noChildrenIds = options?.noChildrenIds ?? LIST_NO_CHILDREN_IDS;
-  const stepThreshold = options?.stepThreshold ?? 0.5;
+  const { indentWidth } = options;
+  const noChildrenIds = options.noChildrenIds ?? LIST_NO_CHILDREN_IDS;
+  const stepThreshold = options.stepThreshold ?? 0.5;
 
   const overIndex = rows.findIndex((row) => row.item.id === overId);
   const activeIndex = rows.findIndex((row) => row.item.id === activeId);
@@ -141,7 +140,7 @@ export function getProjection<T extends TreeItem>(
   // and the drop is past the limit, which getMovePlan refuses.
   const maxDepth = Math.min(
     prev ? (noChildrenIds.has(prev.item.id) ? prev.depth : prev.depth + 1) : 0,
-    options?.maxDepth ?? Infinity,
+    options.maxDepth ?? Infinity,
   );
   const minDepth = next ? next.depth : 0;
 
@@ -181,7 +180,7 @@ export function getMovePlan<T extends TreeItem>(
   activeId: string,
   overId: string,
   offsetX: number,
-  options?: ProjectionOptions,
+  options: ProjectionOptions,
 ): MovePlan<T> | null {
   const activeIndex = rows.findIndex((row) => row.item.id === activeId);
   const overIndex = rows.findIndex((row) => row.item.id === overId);

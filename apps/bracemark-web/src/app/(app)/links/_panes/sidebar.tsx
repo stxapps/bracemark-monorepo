@@ -84,6 +84,7 @@ import {
   MY_LIST_ID,
   TRASH_ID,
   TREE_INDENT_MAX_LEVELS,
+  TREE_INDENT_WIDTH,
   type TreeItem,
   type TreeNode,
   withoutSubtrees,
@@ -232,10 +233,9 @@ function NavItem({
   // (never nested inside it — a button in a button is invalid and would fire the
   // selection). The list rows' hover-revealed "Lock now".
   action?: React.ReactNode;
-  // Tree nesting level — indents the row one step per level (16px, matching
-  // the list pickers' indent), up to TREE_INDENT_MAX_LEVELS (@stxapps/shared
-  // sync/tree.ts). Applied to the whole row so the chevron indents with the
-  // label.
+  // Tree nesting level — indents the row TREE_INDENT_WIDTH per level, up to
+  // TREE_INDENT_MAX_LEVELS (@stxapps/shared sync/tree.ts). Applied to the whole
+  // row so the chevron indents with the label.
   depth?: number;
   // Present only on rows with children: whether the subtree is shown, and the
   // chevron's toggle. The chevron is a sibling button on the LEFT, never nested
@@ -263,7 +263,9 @@ function NavItem({
     <div
       className="group/navitem flex w-full items-center"
       style={
-        depth > 0 ? { paddingLeft: `${Math.min(depth, TREE_INDENT_MAX_LEVELS) * 16}px` } : undefined
+        depth > 0
+          ? { paddingLeft: `${Math.min(depth, TREE_INDENT_MAX_LEVELS) * TREE_INDENT_WIDTH}px` }
+          : undefined
       }
     >
       {onToggle ? (

@@ -105,17 +105,17 @@ levels — which is the point: the bound should never be met by a real one, and
 exists because the file, the other device or a long-lived library can choose
 depth, and several readers still pay per level.
 
-**One shape everywhere a tree is placed at the limit.** A list deeper than 100
-goes AT level 100: beside its level-99 ancestor's other children, under its own
-name and holding its own links, and its own descendants follow it there. So no
-link lands in a list that isn't its own, and only the nesting below the limit
-is lost. The interop exports write that shape, an interop import builds it and
-a restore stores it, so a deep library exported and imported again comes back as
-the same lists. The alternative — cut each path at 100 names — merges every
-deeper list into its level-100 ancestor, which moves links into a list that was
-never theirs. What the shape does lose: two deep lists with one name under the
-same level-99 ancestor end up as one list in an import (it finds by name), and
-as two folders with one path in a CSV.
+**One shape everywhere a tree is placed at the limit.** A list deeper than the
+limit goes AT it: beside the other children of its ancestor one level short of
+the limit, under its own name and holding its own links, and its own
+descendants follow it there. So no link lands in a list that isn't its own, and
+only the nesting below the limit is lost. The interop exports write that shape,
+an interop import builds it and a restore stores it, so a deep library exported
+and imported again comes back as the same lists. The alternative — cut each
+path at `TREE_MAX_DEPTH` names — merges every deeper list into its ancestor at
+the limit, which moves links into a list that was never theirs. What the shape
+does lose: two deep lists with one name under that same ancestor end up as one
+list in an import (it finds by name), and as two folders with one path in a CSV.
 
 - **Editors — refused.** `deepestDepthFor(nodes, id)` (`sync/tree.ts`) is the
   deepest a list may be placed with its whole subtree still inside the limit.
@@ -143,14 +143,15 @@ as two folders with one path in a CSV.
   A refused move throws its sentence, which the section's notice shows; a drag
   eases home.
 - **Interop import — placed at the limit.** It used to refuse the whole file.
-  `capFolderPath` (`import/resolve.ts`) holds a path to the first 100 names
-  plus the row's own folder; Netscape, CSV, LinkWarden and Brace.to paths are
-  capped as they are parsed, so a long chain no longer costs a path copy per
-  level per row. (Brace.to's `listNameMap` walk used to stop at depth 20
-  instead, which was no cap: a list below it lost its name and imported as a
-  top-level folder named for its raw id.) `ListResolver` files the row's own folder under the level-99 list and
+  `capFolderPath` (`import/resolve.ts`) holds a path to the first
+  `TREE_MAX_DEPTH` names plus the row's own folder; Netscape, CSV, LinkWarden
+  and Brace.to paths are capped as they are parsed, so a long chain no longer
+  costs a path copy per level per row. (Brace.to's `listNameMap` walk used to
+  stop at depth 20 instead, which was no cap: a list below it lost its name and
+  imported as a top-level folder named for its raw id.) `ListResolver` files the
+  row's own folder under the list one level short of the limit and
   counts the lists it placed (`flattenedListCount` on `ProjectedImport` and
-  `ImportOutcome`). A folder between level 100 and the row's own that holds no
+  `ImportOutcome`). A folder between the limit and the row's own that holds no
   link of its own is not minted — the interop import only ever mints what a
   link is filed under. A system-list row's path is never resolved, so never
   counted.
@@ -162,8 +163,8 @@ as two folders with one path in a CSV.
   trees with the read edge's own `buildTree` (so a `parentId` loop is cut where
   every device cuts it), with the system lists' defaults standing in for any
   the file leaves out, and moves the `parentId` of every line past the limit to
-  its level-99 ancestor (`parentsPastMaxDepth`). Nothing else on the line
-  changes. The loop's cut is **stored**: a line the cut made a root is written
+  its ancestor one level short of the limit (`parentsPastMaxDepth`). Nothing
+  else on the line changes. The loop's cut is **stored**: a line the cut made a root is written
   with `parentId: null`, where every device already shows it, and is not
   counted as placed. Measured as cut but written as it was, a loop with chains
   hanging off it was restored at 99 levels with nothing placed, and one Move up
@@ -177,18 +178,18 @@ as two folders with one path in a CSV.
 - **Sync — nothing.** See _the rule_. A chain past the limit arrives, is stored
   and is shown.
 - **Screens — bounded in what a row shows, never in the tree.**
-  `TREE_ROW_MAX_LEVELS` (32) caps a picker row's path label and guide lines
+  `TREE_ROW_MAX_LEVELS` caps a picker row's path label and guide lines
   ([data-lifecycle.md](./data-lifecycle.md), _a row describes at most_); the
-  sidebars render flat rows, indented 16px a level up to `TREE_INDENT_MAX_LEVELS`
-  (8) and no further — uncapped, a 100-deep chain ran the links rail 1,600px
-  sideways and left no width for a label from about level 5 at its narrowest;
-  and the lock provider reads the real forest, which
+  sidebars render flat rows, indented `TREE_INDENT_WIDTH` a level up to
+  `TREE_INDENT_MAX_LEVELS` and no further — uncapped, a 100-deep chain ran
+  the links rail 1,600px sideways and left no width for a label from about
+  level 5 at its narrowest; and the lock provider reads the real forest, which
   [locks.md](./locks.md) requires. The web Lists table used to work out
   `forbiddenParentIds` for every row on every render — a forest walk per row,
   so the square of the list count on every drag frame — and now asks it only of
   the row whose menu is open.
 - **Interop export — placed at the limit.** `foldersWithPaths` and the Netscape
-  writer place a deeper list at level 100, so the file is one this app's import
+  writer place a deeper list at the limit, so the file is one this app's import
   nests exactly as written; `ExportOutcome.flattenedListCount` says how many.
 - **Backup export — written as it is, and said.** A backup is a copy of the
   library, so it keeps every `parentId`. The receipt counts what a restore
@@ -205,7 +206,7 @@ as two folders with one path in a CSV.
 
 **Why place rather than refuse, when the import used to refuse on purpose.** The
 old reasoning was that shortening a path files links where the file never put
-them. That is true of the cut-at-100-names shape, and not of the one above: every
+them. That is true of the cut-at-the-limit shape, and not of the one above: every
 link still lands in a list named for its own folder. Against it stood what
 refusal cost — a file nobody could import without editing it by hand, and for a
 backup, the one copy of a library refused at the moment it was needed. An import
@@ -215,9 +216,9 @@ refusal changes nothing, but leaves them nothing either.
 ### what is still unbounded
 
 - **A tree's depth in the store.** Sync, a restore under a deep library list,
-  and a library from before the editor rule can all hold a chain past 100. Every
-  reader copes (nothing recurses, rows are capped), and the editors let the user
-  lift it.
+  and a library from before the editor rule can all hold a chain past the
+  limit. Every reader copes (nothing recurses, rows are capped), and the
+  editors let the user lift it.
 - **The marketing site's converter's path copies** stay bounded by the limit
   rather than removed: it copies a path per folder, at most 101 names each.
 - **Tags on one link by hand**, as above.

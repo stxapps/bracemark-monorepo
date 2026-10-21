@@ -29,8 +29,9 @@ import { MD_QUERY } from '@stxapps/web-ui/hooks/use-media-query';
 
 // The rail's measure, in px. `default` is the 15rem it was fixed at before it
 // could move. `min` keeps a two-level row's label readable (60px of chevron,
-// icon and indent before the text, plus 16px per level); `max` is where a wider
-// rail stops buying label and starts costing the link list its date column.
+// icon and indent before the text, plus TREE_INDENT_WIDTH per level); `max` is
+// where a wider rail stops buying label and starts costing the link list its
+// date column.
 // The rail also caps itself at 40vw in CSS, so a width dragged on a wide window
 // can't eat a narrow one's pane.
 export const RAIL_WIDTH = { min: 192, default: 240, max: 400 } as const;

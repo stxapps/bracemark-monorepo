@@ -61,7 +61,7 @@ export interface ExportBundle {
 // TREE_MAX_DEPTH (sync/tree.ts), so every file this app exports places its
 // folders where its own import would. A folder deeper than this is written at
 // this level, beside its parent's other children rather than inside them: under
-// its own name, holding its own links, so only the nesting below level 100 is
+// its own name, holding its own links, so only the nesting below that level is
 // flattened. Its descendants follow it at the same level.
 //
 // Nesting is not just memory here, it is the file's size. Every CSV row repeats
