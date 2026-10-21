@@ -35,7 +35,7 @@ export type OpLogBounds = {
 // upload receipt its PUT answers with (r2/upload-receipt.ts), and the commit asks
 // the log whether the object could have been removed since (../user-data.ts
 // commitOps, THE FENCE).
-export type LogFence = { generation: number; position: number };
+export type OpLogFence = { generation: number; position: number };
 
 // Raw row as it sits in SQLite (snake_case columns). Internal to this repo.
 type OpLogRow = {
@@ -148,7 +148,7 @@ export function opLogsRepo(sql: SqlStorage) {
     // The log's fence right now — what a PUT token carries into its upload
     // receipt (../user-data.ts putGate) and what a receipted commit is checked
     // against (../user-data.ts staleReceiptPaths).
-    fence(): LogFence {
+    fence(): OpLogFence {
       return { generation: generation(), position: newestSeq() };
     },
 

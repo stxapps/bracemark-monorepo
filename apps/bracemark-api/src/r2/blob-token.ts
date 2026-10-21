@@ -31,7 +31,7 @@
 
 import { base64UrlToBytes, bytesToBase64Url, syncPathSchema, utf8 } from '@stxapps/shared';
 
-import type { LogFence } from '../do/user-data';
+import type { OpLogFence } from '../do/user-data';
 import { derivedHmacKey } from './hmac-key';
 
 export type BlobMethod = 'PUT' | 'GET';
@@ -52,7 +52,7 @@ type Payload = {
   // expiry, unix seconds
   e: number;
   // A PUT token's log fence, `[generation, position]` — the op log as it stood
-  // when `files/sign` minted it (do/user-data.ts LogFence). The blob route copies
+  // when `files/sign` minted it (do/user-data.ts OpLogFence). The blob route copies
   // it into the upload receipt it answers with, and the commit asks the log
   // whether anything since could have removed the object (upload-receipt.ts).
   // Absent on a GET token, and on a PUT token minted before receipts, whose PUT
@@ -60,7 +60,7 @@ type Payload = {
   f?: [number, number];
 };
 
-export type BlobGrant = { userId: string; path: string; fence?: LogFence };
+export type BlobGrant = { userId: string; path: string; fence?: OpLogFence };
 
 export class BlobTokenError extends Error {
   constructor(readonly code: 'blob_token_invalid' | 'blob_token_expired') {

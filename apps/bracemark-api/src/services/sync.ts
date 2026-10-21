@@ -8,7 +8,7 @@ import type {
   SignOp,
 } from '@stxapps/shared';
 
-import type { CommitEntry, LogFence } from '../do/user-data';
+import type { CommitEntry, OpLogFence } from '../do/user-data';
 import { callUserData } from '../do/user-data';
 import type { Bindings } from '../lib/env';
 import { checkPutQuota } from '../lib/quota';
@@ -70,7 +70,7 @@ export async function signUserFileUrls(
   time: Timer = untimed,
   via: BlobTransport = 'r2',
 ): Promise<SignedUrl[]> {
-  let fence: LogFence | undefined;
+  let fence: OpLogFence | undefined;
   if (op === 'put') {
     // The put gate is a plan-aware COST BACKSTOP — byte and object ceilings from
     // the shared entitlements table, applied by checkPutQuota (lib/quota.ts). It

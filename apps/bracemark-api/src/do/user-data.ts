@@ -9,7 +9,7 @@ import {
 
 import type { Bindings } from '../lib/env';
 import { fileSizesRepo, type FileUsage } from './repositories/file-sizes';
-import { type LogFence, type OpKind, opLogsRepo } from './repositories/op-logs';
+import { type OpKind, type OpLogFence, opLogsRepo } from './repositories/op-logs';
 
 // `FileUsage` is the DO's public usage contract — re-exported here so consumers
 // (lib/quota.ts) depend on the DO boundary, not its private repository layer. It
@@ -18,10 +18,10 @@ import { type LogFence, type OpKind, opLogsRepo } from './repositories/op-logs';
 // `seq`), split it into a distinct type here at that point.
 export type { FileUsage };
 
-// `LogFence` likewise (repositories/op-logs.ts has what it means): r2/ and
+// `OpLogFence` likewise (repositories/op-logs.ts has what it means): r2/ and
 // services/ carry it through a PUT token and its upload receipt, and depend on
 // the DO boundary for it, not the repository.
-export type { LogFence };
+export type { OpLogFence };
 
 // One mutation ready to record — what the service hands the DO after resolving
 // each op against R2. `updatedAt`/`size` are sourced per kind in services/sync.ts:
@@ -34,7 +34,7 @@ export type CommitEntry = {
   path: string;
   updatedAt: number;
   size: number;
-  fence?: LogFence;
+  fence?: OpLogFence;
 };
 
 // Per-user data store. One Durable Object instance per user (addressed by
@@ -261,7 +261,7 @@ export class UserDataDO extends DurableObject<Bindings> {
   // (r2/blob-token.ts). One RPC for both, so a sign still makes ONE call to this
   // DO: the only DO call on the sign path (the companion existence lookup went
   // away with the link cap, lib/quota.ts).
-  putGate(): { usage: FileUsage; fence: LogFence } {
+  putGate(): { usage: FileUsage; fence: OpLogFence } {
     return {
       usage: fileSizesRepo(this.sql).usage(),
       fence: opLogsRepo(this.sql).fence(),
@@ -298,7 +298,7 @@ export class UserDataDO extends DurableObject<Bindings> {
 // Empty when no entry carries a fence, which is every commit from a client
 // without receipts, at the cost of nothing.
 function staleReceiptPaths(ops: ReturnType<typeof opLogsRepo>, entries: CommitEntry[]): string[] {
-  const fenced = entries.filter((e): e is CommitEntry & { fence: LogFence } => !!e.fence);
+  const fenced = entries.filter((e): e is CommitEntry & { fence: OpLogFence } => !!e.fence);
   if (fenced.length === 0) return [];
 
   const { generation } = ops.fence();

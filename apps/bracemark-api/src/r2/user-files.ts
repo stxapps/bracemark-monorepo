@@ -7,7 +7,7 @@ import {
   type SignedUrl,
 } from '@stxapps/shared';
 
-import type { LogFence } from '../do/user-data';
+import type { OpLogFence } from '../do/user-data';
 import type { Bindings } from '../lib/env';
 import { HttpError } from '../lib/errors';
 import { type Timer, untimed } from '../lib/server-timing';
@@ -411,7 +411,7 @@ export function userFilesRepo(env: Bindings) {
     // route works against miniflare's bucket exactly as against R2's, so a local
     // run exercises the path a deployed client takes.
     //
-    // `fence` is the op log as the put gate read it (do/user-data.ts LogFence),
+    // `fence` is the op log as the put gate read it (do/user-data.ts OpLogFence),
     // carried by every PUT token into the receipt its PUT answers with
     // (upload-receipt.ts); a GET token has none.
     async blobUrls(
@@ -420,7 +420,7 @@ export function userFilesRepo(env: Bindings) {
       method: BlobMethod,
       expiresIn: number,
       requestUrl: string,
-      fence?: LogFence,
+      fence?: OpLogFence,
     ): Promise<SignedUrl[]> {
       const secret = env.R2_SECRET_ACCESS_KEY;
       if (!secret) {

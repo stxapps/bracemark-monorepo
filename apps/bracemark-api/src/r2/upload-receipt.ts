@@ -39,7 +39,7 @@
 
 import { base64UrlToBytes, bytesToBase64Url, utf8 } from '@stxapps/shared';
 
-import type { LogFence } from '../do/user-data';
+import type { OpLogFence } from '../do/user-data';
 import { derivedHmacKey } from './hmac-key';
 import type { ObjectStat } from './user-files';
 
@@ -59,14 +59,14 @@ type Payload = {
   t: number;
   // R2's size for the object, bytes — its quota entry
   s: number;
-  // the PUT token's log fence: generation, position (do/user-data.ts LogFence)
+  // the PUT token's log fence: generation, position (do/user-data.ts OpLogFence)
   g: number;
   q: number;
   // expiry, unix seconds
   e: number;
 };
 
-export type UploadReceipt = ObjectStat & { fence: LogFence };
+export type UploadReceipt = ObjectStat & { fence: OpLogFence };
 
 function signedPart(payload: string, userId: string, path: string): Uint8Array<ArrayBuffer> {
   // JSON, so no user id or path can be read as another split of the same bytes.
@@ -76,7 +76,7 @@ function signedPart(payload: string, userId: string, path: string): Uint8Array<A
 // `now` is injectable so tests are deterministic; defaults to the real clock.
 export async function mintUploadReceipt(
   secret: string,
-  receipt: { userId: string; path: string; stat: ObjectStat; fence: LogFence },
+  receipt: { userId: string; path: string; stat: ObjectStat; fence: OpLogFence },
   now: number = Date.now(),
 ): Promise<string> {
   const { userId, path, stat, fence } = receipt;
