@@ -24,7 +24,7 @@
 // That is mapLimit's policy (async/pool.ts), and the engines keep the same
 // per-entry tolerance on top of it: `run` catches what it means to skip.
 
-export interface SignedFanOut<E> {
+export interface PullFanOut<E> {
   // Queue more entries. Starts their signing if the fan-out is short of work;
   // never waits on the network itself. Throws the failure once there is one, so
   // a feed still listing stops instead of queueing work nothing will run.
@@ -41,7 +41,7 @@ export interface SignedFanOut<E> {
   abandon(reason: unknown): Promise<void>;
 }
 
-export interface SignedFanOutOptions<E, S> {
+export interface PullFanOutOptions<E, S> {
   concurrency: number;
   // Paths per `sign` call — the contract's cap.
   signBatch: number;
@@ -51,16 +51,16 @@ export interface SignedFanOutOptions<E, S> {
   run: (entry: E, signed: S | undefined) => Promise<void>;
 }
 
-export function createSignedFanOut<E extends { path: string }, S>(
-  options: SignedFanOutOptions<E, S>,
-): SignedFanOut<E> {
+export function createPullFanOut<E extends { path: string }, S>(
+  options: PullFanOutOptions<E, S>,
+): PullFanOut<E> {
   const { concurrency, signBatch, sign, run } = options;
   for (const [name, value] of [
     ['concurrency', concurrency],
     ['signBatch', signBatch],
   ] as const) {
     if (!Number.isInteger(value) || value < 1) {
-      throw new RangeError(`createSignedFanOut: ${name} must be a positive integer, got ${value}`);
+      throw new RangeError(`createPullFanOut: ${name} must be a positive integer, got ${value}`);
     }
   }
 
@@ -120,7 +120,7 @@ export function createSignedFanOut<E extends { path: string }, S>(
 
   return {
     add(entries) {
-      if (closed) throw new Error('createSignedFanOut: add after close');
+      if (closed) throw new Error('createPullFanOut: add after close');
       if (failure) throw failure.error;
       // A loop, not push(...entries): a spread past the engine's argument limit
       // throws, and a listing can be any size.

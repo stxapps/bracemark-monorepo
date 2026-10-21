@@ -11,7 +11,7 @@ import { chunk } from '../array/chunk';
 // whole `files/sign` round trip before its first PUT. A 10,000-link push kept 63
 // of 96 PUTs in flight and spent 51 s in signs that nothing ran beside. Here a
 // chunk is signed while the one before is still moving, and its PUTs start as
-// the earlier chunk's free their slots — the pull's shape (signed-fan-out.ts),
+// the earlier chunk's free their slots — the pull's shape (pull-fan-out.ts),
 // with the commit that a pull does not have.
 //
 // What a chunk still is, and what each rule keeps:

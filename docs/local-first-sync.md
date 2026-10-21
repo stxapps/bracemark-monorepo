@@ -2517,7 +2517,7 @@ it:
   read without its bytes.
 - A chunk's commit runs beside the next chunk's sign and upload (_a push is
   chunked_).
-- A pull is one fan-out that signs a batch ahead (`createSignedFanOut`,
+- A pull is one fan-out that signs a batch ahead (`createPullFanOut`,
   `@stxapps/shared`), and a first sync's GETs start on its first listed page; its
   counter still waits for the whole listing before it shows a total. A pull that
   fails while its listing is still paging — the fan-out stopped for an outage,

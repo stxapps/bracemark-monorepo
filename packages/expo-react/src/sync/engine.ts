@@ -46,7 +46,7 @@ import {
   BlobUnreadableError,
   chunk,
   createLimiter,
-  createSignedFanOut,
+  createPullFanOut,
   createUnitCounter,
   emptySyncOutcome,
   FILES_PREFIX,
@@ -1616,7 +1616,7 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
   // the moment it's decrypted, so an interrupted run resumes via the staleness
   // skip in `add` (fresh URLs for the shrinking remainder) rather than restarting.
   const fanOutFor = (lastPass: boolean) =>
-    createSignedFanOut<Entry, SignedUrl>({
+    createPullFanOut<Entry, SignedUrl>({
       concurrency: INDEX_CONCURRENCY,
       signBatch: SIGN_BATCH,
       sign: (paths) => signPaths(deps.api, 'get', paths),

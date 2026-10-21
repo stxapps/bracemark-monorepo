@@ -1,9 +1,9 @@
-// Specs for the pull's fan-out (signed-fan-out.ts): the cap, signing one batch
+// Specs for the pull's fan-out (pull-fan-out.ts): the cap, signing one batch
 // ahead and never more, a feed that arrives in pieces, and the failure policy.
 // Driven by deferreds rather than timers, as async/pool.spec.ts is: the
 // interleavings are what is under test.
 
-import { createSignedFanOut } from './signed-fan-out';
+import { createPullFanOut } from './pull-fan-out';
 
 interface Deferred<T = void> {
   promise: Promise<T>;
@@ -36,13 +36,13 @@ function recordingSign() {
   return { calls, sign };
 }
 
-describe('createSignedFanOut', () => {
+describe('createPullFanOut', () => {
   it('runs every entry with its own signed value, never past `concurrency` at once', async () => {
     const { sign } = recordingSign();
     const ran: [string, string | undefined][] = [];
     let inFlight = 0;
     let maxInFlight = 0;
-    const fanOut = createSignedFanOut({
+    const fanOut = createPullFanOut({
       concurrency: 3,
       signBatch: 4,
       sign,
@@ -70,7 +70,7 @@ describe('createSignedFanOut', () => {
   it('signs in batches of `signBatch`, one ahead of the transfers and never more', async () => {
     const { calls, sign } = recordingSign();
     const gates = new Map<string, Deferred>();
-    const fanOut = createSignedFanOut({
+    const fanOut = createPullFanOut({
       concurrency: 2,
       signBatch: 6,
       sign,
@@ -110,7 +110,7 @@ describe('createSignedFanOut', () => {
   it('starts on the first entries while more are still being added', async () => {
     const { sign } = recordingSign();
     const ran: string[] = [];
-    const fanOut = createSignedFanOut({
+    const fanOut = createPullFanOut({
       concurrency: 4,
       signBatch: 10,
       sign,
@@ -131,7 +131,7 @@ describe('createSignedFanOut', () => {
 
   it('passes undefined for a path the sign call did not answer', async () => {
     const seen: (string | undefined)[] = [];
-    const fanOut = createSignedFanOut({
+    const fanOut = createPullFanOut({
       concurrency: 2,
       signBatch: 10,
       sign: async (paths) => new Map(paths.slice(1).map((p) => [p, 'url'])),
@@ -149,7 +149,7 @@ describe('createSignedFanOut', () => {
     const { sign } = recordingSign();
     const boom = new Error('GET failed');
     const ran: string[] = [];
-    const fanOut = createSignedFanOut({
+    const fanOut = createPullFanOut({
       concurrency: 1,
       signBatch: 10,
       sign,
@@ -167,7 +167,7 @@ describe('createSignedFanOut', () => {
   it('fails on a sign that rejects, and refuses further entries with it', async () => {
     const boom = new Error('sign failed');
     const run = jest.fn(async () => undefined);
-    const fanOut = createSignedFanOut({
+    const fanOut = createPullFanOut({
       concurrency: 2,
       signBatch: 10,
       sign: async () => {
@@ -188,7 +188,7 @@ describe('createSignedFanOut', () => {
     const { sign } = recordingSign();
     const gate = deferred();
     const ran: string[] = [];
-    const fanOut = createSignedFanOut({
+    const fanOut = createPullFanOut({
       concurrency: 1,
       signBatch: 10,
       sign,
@@ -214,7 +214,7 @@ describe('createSignedFanOut', () => {
     const { sign } = recordingSign();
     const gate = deferred();
     let settled = false;
-    const fanOut = createSignedFanOut({
+    const fanOut = createPullFanOut({
       concurrency: 1,
       signBatch: 10,
       sign,
@@ -240,7 +240,7 @@ describe('createSignedFanOut', () => {
 
   it('resolves close at once when nothing was added', async () => {
     const sign = jest.fn(async () => new Map<string, string>());
-    const fanOut = createSignedFanOut({ concurrency: 4, signBatch: 10, sign, run: jest.fn() });
+    const fanOut = createPullFanOut({ concurrency: 4, signBatch: 10, sign, run: jest.fn() });
 
     await expect(fanOut.close()).resolves.toBeUndefined();
     expect(sign).not.toHaveBeenCalled();
@@ -251,7 +251,7 @@ describe('createSignedFanOut', () => {
     ['signBatch', { concurrency: 1, signBatch: 0 }],
   ])('refuses a %s that is not a positive integer', (_name, sizes) => {
     expect(() =>
-      createSignedFanOut({ ...sizes, sign: async () => new Map(), run: async () => undefined }),
+      createPullFanOut({ ...sizes, sign: async () => new Map(), run: async () => undefined }),
     ).toThrow(RangeError);
   });
 });

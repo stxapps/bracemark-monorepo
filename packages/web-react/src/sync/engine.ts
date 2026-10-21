@@ -28,7 +28,7 @@ import {
   BlobUnreadableError,
   chunk,
   createLimiter,
-  createSignedFanOut,
+  createPullFanOut,
   createUnitCounter,
   emptySyncOutcome,
   FILES_PREFIX,
@@ -1530,7 +1530,7 @@ async function storeDownloads(
 
 // A pull in progress. Entries go in as they are known — a cycle's whole set at once,
 // or a first sync's listing a page at a time (initialPull) — and every index GET
-// rides one fan-out (@stxapps/shared createSignedFanOut), so a page's downloads
+// rides one fan-out (@stxapps/shared createPullFanOut), so a page's downloads
 // start while the next page is still being listed, and no batch waits for the last
 // one's slowest GET.
 interface PullRun {
@@ -1589,7 +1589,7 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
   // rather than failing the pull, and `finish` runs the set-aside entries once
   // more, freshly signed, after everything else has moved. What fails that pass
   // fails the cycle, with the cursor where it was. Until the SET_OUTAGE_FAILURES-th
-  // failure: that one throws, which stops the fan-out (createSignedFanOut is
+  // failure: that one throws, which stops the fan-out (createPullFanOut is
   // fail-fast) and skips the second pass — an outage is the timer's.
   const setAside: Entry[] = [];
   let failedGets = 0;
@@ -1678,7 +1678,7 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
   // run resumes via the staleness skip in `add` (fresh URLs for the shrinking
   // remainder) rather than restarting.
   const fanOutFor = (lastPass: boolean) =>
-    createSignedFanOut<Entry, SignedUrl>({
+    createPullFanOut<Entry, SignedUrl>({
       concurrency: INDEX_CONCURRENCY,
       signBatch: SIGN_BATCH,
       sign: (paths) => signPaths(deps.api, 'get', paths),

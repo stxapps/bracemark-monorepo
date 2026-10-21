@@ -1,7 +1,7 @@
 // Specs for a put set's pipeline (chunked-push.ts): PUTs that cross chunk
 // boundaries, a sign ahead bounded by `lead` and by the commit two chunks back,
 // commits in order, and the failure policy. Driven by deferreds rather than
-// timers, as signed-fan-out.spec.ts is: the interleavings are what is under test.
+// timers, as pull-fan-out.spec.ts is: the interleavings are what is under test.
 
 import { type PushedChunk, runChunkedPush } from './chunked-push';
 
