@@ -4,7 +4,7 @@ import {
   type SyncTraceRecorder,
 } from '@stxapps/shared';
 
-import { installSyncTrace } from '../sync/engine';
+import { installSyncTrace } from './engine';
 
 // The sync engine's timing spans on bracemark-expo (@stxapps/shared
 // sync/trace.ts; docs/local-first-sync.md, _measuring a sync_). Web's are read off

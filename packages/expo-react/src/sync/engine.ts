@@ -214,7 +214,7 @@ function withRetryDeps(deps: SyncDeps): SyncDeps {
 
 // The timing spans `measure:sync` reads (@stxapps/shared sync/trace.ts) — web
 // engine's `trace`, which carries why it is module state. NO_TRACE unless
-// installed; lib/sync-trace.ts installs a recorder in a bundle built with
+// installed; sync/trace.ts here installs a recorder in a bundle built with
 // EXPO_PUBLIC_SYNC_TRACE=1.
 let trace: SyncTrace = NO_TRACE;
 

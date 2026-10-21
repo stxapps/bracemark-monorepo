@@ -510,7 +510,7 @@ Current public vars:
   environment of the Metro it starts, so a shipped build compiles the check to
   nothing ([e2e.md](./e2e.md), _the native leg_).
 - `EXPO_PUBLIC_SYNC_TRACE` → `1` installs the sync engine's timing recorder
-  (`lib/sync-trace.ts`, started in `src/app/_layout.tsx`), which prints each
+  (expo-react `sync/trace.ts`, started in `src/app/_layout.tsx`), which prints each
   cycle's phase table to the log as `[sync-trace]`. Same arrangement as the stall
   probe: it is in no env file, and you set it in Metro's environment for a
   measuring run ([local-first-sync.md](./local-first-sync.md), _measuring a

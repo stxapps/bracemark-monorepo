@@ -2357,7 +2357,7 @@ measurement they were waiting for.
 recorder is installed: on web behind the `bracemark.syncTrace` localStorage flag
 (`packages/web-react/src/sync/trace.ts`, read once per page load); on expo only in
 a bundle built with `EXPO_PUBLIC_SYNC_TRACE=1`, which prints each cycle's table as
-`[sync-trace]` to the log (`packages/expo-react/src/lib/sync-trace.ts`). With
+`[sync-trace]` to the log (`packages/expo-react/src/sync/trace.ts`). With
 `NO_TRACE`, `span` runs its body and `traceApi` returns the client it was given. The
 header is on where `SERVER_TIMING` is `"1"`, which is development and staging
 (`wrangler.jsonc`), not production: it would tell any client which stores a

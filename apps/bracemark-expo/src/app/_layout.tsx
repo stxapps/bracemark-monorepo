@@ -29,7 +29,7 @@ import '../../global.css';
 // (e2e/measure/data-mobile.ts) — so every other build compiles this to nothing.
 if (process.env.EXPO_PUBLIC_MEASURE_STALLS === '1') startStallProbe();
 
-// The sync engine's timing spans (expo-react lib/sync-trace.ts), printed per
+// The sync engine's timing spans (expo-react sync/trace.ts), printed per
 // cycle as `[sync-trace]` tables. Same arrangement as the probe above: inlined
 // at build time, set only in Metro's environment for a measuring run.
 if (process.env.EXPO_PUBLIC_SYNC_TRACE === '1') startSyncTrace();
