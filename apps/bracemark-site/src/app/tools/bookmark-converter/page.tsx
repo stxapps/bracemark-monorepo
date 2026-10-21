@@ -18,7 +18,7 @@ const INPUTS = [
   ['Bookmarks HTML', 'Browser exports, Raindrop.io, Karakeep, and other Netscape bookmark files.'],
   [
     'CSV',
-    'Raindrop.io, Pocket, Bracemark, or a CSV with a url column. Recognized fields: folder, title, note, tags, created, time_added, status, highlights, and favorite.',
+    'Raindrop.io, Pocket, Bracemark, or a CSV with a url column. Recognised fields: folder, title, note, tags, created, time_added, status, highlights, and favorite.',
   ],
   [
     'JSON / Brace.to TXT',

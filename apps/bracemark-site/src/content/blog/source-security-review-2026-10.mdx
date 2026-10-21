@@ -10,7 +10,7 @@ We adapted [Cloudflare’s security-audit skill](https://github.com/cloudflare/s
 
 Our recorded plan requested GPT-6.1 Sol with high reasoning for substantive review and verification. The history also includes Astra/high, Claude Opus 5.5, and sessions recorded only as the active Codex runtime. We can’t verify the exact model and reasoning setting for every session, so attributing the whole review to one model would be inaccurate. Our fixes, the rechecks of them, and every review since 12 October used Claude Opus 5.5.
 
-For a surviving security claim, a separate agent worked from a fresh context. Its job was to test the claim against the source and the controls that might defeat it. We use the same arrangement on our own fixes: an agent that had not written them is given the original finding and the changed source, and isn’t told what answer to expect. That helps expose assumptions, but it remains an AI-assisted process we direct. We haven’t commissioned an external professional audit through this work.
+For a surviving security claim, a separate agent worked from a fresh context. Its job was to test the claim against the source and the controls that might defeat it. We use the same arrangement on our own fixes: an agent that had not written them is given the original finding and the changed source, and isn’t told what answer to expect. That helps expose assumptions, but it remains an AI-assisted process we direct. No third party has audited Bracemark, and we haven’t commissioned one.
 
 We have recorded more than 300 completed bounded tasks. Some map a boundary, some verify a claim, and some reconcile changed source or prepare an engineering handoff. A task can finish with its decisive question still unresolved. The number records work done; it doesn’t tell you how much of the product is secure.
 
@@ -18,18 +18,18 @@ We have recorded more than 300 completed bounded tasks. Some map a boundary, som
 
 The saved decisions contain four historically confirmed findings, each with an overall severity of low. They concern backup file references, associated files left by refused import rows, imported dates, and deeply nested list structure. Their recorded consequences concern storage, sync, or access to the importing account’s links.
 
-All four have source fixes, with tests that fail without them, and all four are in the build now in production.
+All four have source fixes, with tests that fail without them, and all four are in the production build as of 21 October.
 
 - A file reference in a backup is checked against the format of a storage path before anything is written.
 - A file attached to an imported row is chosen only after the row’s link is accepted, so a refused row no longer leaves a file behind.
-- A date the calendar cannot represent is dropped from a row imported from another app, and refuses the line in a backup. The link list and the CSV export no longer fail on one that is already stored.
+- A date the calendar can’t represent is dropped from a row imported from another app, and a backup line that carries one is refused. The link list and the CSV export no longer fail on one that is already stored.
 - An import from another app no longer creates lists nested past 100 levels, and the code that reads the list tree no longer needs a level of the call stack for each level of the tree.
 
 Separate agents rechecked those fixes against the source and found our first attempts wrong in places: a timestamp checked on the wrong object, a sidebar that still nested once per level, a depth check that ran after a prompt it should have come before. We corrected each and had the corrections checked again.
 
 Each fix covers what arrives from now on. None repairs a record that was stored earlier. Refusing a bad date in a backup also has a cost: a backup exported from an account that already holds one loses that link on restore. None of the four has a runtime retest.
 
-No medium, high, or critical overall severity was assigned in the saved decisions. There are also 19 unresolved records without severity and five rejected claims, and six further hypotheses that our reviews raised and have not decided. Those could change the picture when the missing evidence is available. We therefore cannot describe the outcome as no vulnerabilities found. Low severity is still a finding. Missing evidence is still missing evidence.
+No medium, high, or critical overall severity was assigned in the saved decisions. There are also 19 unresolved records without severity and five rejected claims, and six further hypotheses that our reviews raised and haven’t decided. Those could change the picture when the missing evidence is available. We therefore can’t describe the outcome as “no vulnerabilities found”. Low severity is still a finding. Missing evidence is still missing evidence.
 
 ## What we changed before launch
 
@@ -37,19 +37,19 @@ Three of the unresolved records gained a source fix before the first release. Ea
 
 - **Each synced file is bound to its storage path.** The account’s key proves a file is the account’s, but nothing tied it to the path it is stored under, so whoever answered a request could hand back one of your own files in place of another, and it would open. Every file is now sealed with its path, on web, on mobile, and in the native iOS and Android code. We made that change before the release because changing the file format afterwards needs a migration of every account. It doesn’t stop a server from serving an older version of a file or withholding one.
 - **A link shared from the iOS share sheet is saved only under the account it was shared from.** Before, a draft could be saved under the next account if the account changed before the app took it in.
-- **A backup cannot make one list appear many times.** A backup could give several lists the same identifier, and the tree built from it gave every copy its own copy of everything beneath it. A restore now refuses such a line, and the tree holds one entry per identifier.
+- **A backup can’t make one list appear many times.** A backup could give several lists the same identifier, and the tree built from it gave every copy its own copy of everything beneath it. A restore now refuses such a line, and the tree holds one entry per identifier.
 
 ## What we found after launch
 
 The release also carried two changes we made in the week before it, and the reviews afterwards found that each had a cost we had not described. Both concern your own library, and both are low in severity.
 
-**A file that fails to open is now skipped.** Before, a synced file that failed its integrity check stopped sync with an error. Now the app logs it and moves on. A review found that the binding to the storage path still holds, and that a server gains nothing it could not already do by withholding a file. But in the web app, a once-per-session cleanup deletes a link’s saved preview, everywhere, when the link is missing from the device. A link that was skipped was missing, so its preview could be deleted. We observed that by running the web sync code and the cleanup together in a test harness. Our fix records what was skipped and runs the cleanup only after a sync that succeeded. A separate agent reviewed it and found it closes those routes, and that a few older ways a link can be missing on one device remain, which the cleanup still cannot tell apart.
+**A file that fails to open is now skipped.** Before, a synced file that failed its integrity check stopped sync with an error. Now the app logs it and moves on. A review found that the binding to the storage path still holds, and that a server gains nothing it couldn’t already do by withholding a file. But in the web app, a once-per-session cleanup deletes a link’s saved preview, everywhere, when the link is missing from the device. A link that was skipped was missing, so its preview could be deleted. We observed that by running the web sync code and the cleanup together in a test harness. Our fix records what was skipped and runs the cleanup only after a sync that succeeded. A separate agent reviewed it and found it closes those routes, and that a few older ways a link can be missing on one device remain, which the cleanup still can’t tell apart.
 
 **Restoring a backup now places deep lists instead of refusing.** A line past 100 levels is placed at the 100th, so a restore keeps every list. The review found this holds the tree a restore stores to 100 levels, but that a loop of parents in the file hid long chains the restore didn’t measure, and one ordinary move afterwards could join them into a single chain as deep as the file. A probe of the restore’s shared code produced 19,802 levels from a file of that many lines. Our fix stores the loop as the screens already show it, cut, and has every move measure the tree after it, not before. A separate agent rechecked the fix on 21 October and found that it holds for that route: after a restore, none of the moves it tried — about 31,000 each for lists and for tags, and thousands more at random — took a tree past 100 levels. It also found that a loop can still be built across several restores, which the restore doesn’t see, and that the check on every move is what keeps it from being released.
 
-Both fixes are committed and not yet deployed. When they are, they cover what happens from then on; a preview already deleted is not restored.
+Both fixes are committed and not yet deployed. When they are, they cover what happens from then on; a preview already deleted isn’t restored.
 
-## What reading the source cannot settle
+## What reading the source can’t settle
 
 The work examined selected account and session paths, encrypted sync and storage, the preview service, import and restore, browser lifecycle work, native account transitions, and one payment event. It hasn’t established complete coverage of those areas or a comprehensive cryptographic assessment.
 
@@ -59,10 +59,10 @@ Some hypotheses remain unresolved for exactly that reason. We haven’t assigned
 
 ## What the next evidence has to be
 
-Most of the open facts can be reached without touching production: our own code run against a local copy of our API — the service behind sign-in, sync, and billing — with test accounts, or a separate staging deployment with its own storage and its own test accounts. What neither reaches is production itself, a signed build on a physical device, and a provider’s own policy, and those stay named as gaps. More source tasks alone will not answer those questions.
+Most of the open facts can be reached without touching production: our own code run against a local copy of our API — the service behind sign-in, sync, and billing — with test accounts, or a separate staging deployment with its own storage and its own test accounts. What neither reaches is production itself, a signed build on a physical device, and a provider’s own policy, and those stay named as gaps. More source tasks alone won’t answer those questions.
 
-As the evidence changes, the report needs to change with it: the source revision, the observed behavior, the fix status, and the checks still missing.
+This report isn’t revised: a change in the evidence goes into a new one, with its own source revision, the observed behaviour, the fix status, and the checks still missing.
 
-The [source security review report](https://github.com/stxapps/bracemark-monorepo/blob/main/docs/security-source-review.md) records the historical decisions, what each fix does and leaves, how each was checked, and the remaining gaps. It keeps source fixes separate from runtime retests.
+The [October 2026 source security review report](https://github.com/stxapps/bracemark-monorepo/blob/main/security-reviews/2026-10-21-source-review.md) records the historical decisions, what each fix does and leaves, how each was checked, and the remaining gaps. It keeps source fixes separate from runtime retests.
 
 You can read the [public source](https://github.com/stxapps/bracemark-monorepo) and our [security page](/security). Neither source availability nor this review proves which build you are running. If you find a problem, please send the details privately through our [security reporting policy](https://github.com/stxapps/bracemark-monorepo/blob/main/SECURITY.md).

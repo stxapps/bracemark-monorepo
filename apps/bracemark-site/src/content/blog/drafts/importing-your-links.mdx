@@ -24,7 +24,7 @@ These are the main routes in:
 | Bracemark           | The ZIP from Export all data                     |
 | A list of addresses | A plain text file, with one link per line        |
 
-Those file extensions don’t mean every HTML, CSV, or JSON file is supported. We read bookmark exports and recognized fields, rather than arbitrary documents. Plain text carries addresses; it can’t tell us which folders or tags they used to have.
+Those file extensions don’t mean every HTML, CSV, or JSON file is supported. We read bookmark exports and recognised fields, rather than arbitrary documents. Plain text carries addresses; it can’t tell us which folders or tags they used to have.
 
 The file is read on your device. Imported links enter the same local store as links you save by hand, then sync as encrypted files. We don’t upload the original export. Preview fetching is separate: if you enable server previews in the web app, pending imported links can send their addresses to our preview service as they come into view. Mobile previews are fetched on the device.
 
@@ -42,9 +42,9 @@ There are also losses to check. Most ordinary bookmark exports don’t bring ima
 
 ## Real exports teach us what small examples miss
 
-We use fixtures — saved input files with expected results — to keep import behavior under test. Small examples let us isolate a rule, such as a quoted CSV field containing a comma or a newline. Files produced by actual apps test the assumptions behind those rules.
+We use fixtures — saved input files with expected results — to keep import behaviour under test. Small examples let us isolate a rule, such as a quoted CSV field containing a comma or a newline. Files produced by actual apps test the assumptions behind those rules.
 
-Our HTML specimens include exports from Chromium, Firefox, Safari, and older bookmark services. We keep those files as their producers wrote them, including unusual indentation, missing closing tags, and attributes without values. Tidying them first would remove some of the behavior we need to handle.
+Our HTML specimens include exports from Chromium, Firefox, Safari, and older bookmark services. We keep those files as their producers wrote them, including unusual indentation, missing closing tags, and attributes without values. Tidying them first would remove some of the behaviour we need to handle.
 
 That has caught details a neatly written example wouldn’t suggest:
 
@@ -113,4 +113,4 @@ The free plan gives you a place to try that. Every plan can export again. Those 
 
 Choosing Bracemark also means accepting its tradeoffs: search runs on each device’s synced copy, there are no shared lists, and your password and recovery code are the two ways into your account. If you lose both, we can’t restore access.
 
-The import work gives you a starting point you recognize. You can then decide whether saving and finding your next link here fits the way you work.
+The import work gives you a starting point you recognise. You can then decide whether saving and finding your next link here fits the way you work.

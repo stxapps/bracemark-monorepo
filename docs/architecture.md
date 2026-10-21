@@ -246,6 +246,16 @@ sidebar. The post source imports nothing. `content/blog/blog.spec.ts` checks its
 file/manifest parity, mapped components, date format, and internal links, since
 MDX is outside the TypeScript and ESLint passes described above.
 
+A post that reports a point-in-time result is one of a series, not a page kept
+current. Each source security review gets its own post, its slug carrying the
+month (`source-security-review-2026-10`), and links to its own dated report in
+the repository's `security-reviews/`, which is not revised after publication
+either. A later review adds a new post and report beside them; the earlier post
+changes at most by a line pointing to its successor, with `updatedAt` set. The
+report stays in the repository rather than in the marketing site's `public/`:
+the site is a static export, so a markdown file there would be served raw, and
+the report's links pin the source revision it describes.
+
 The launch post opens on `<DemoClip />`, the one moving picture on the site: a
 plain `<video>` over two files in `public/video/`, served from the apex itself
 and started by the reader. Why it is a file here rather than a hosted player is

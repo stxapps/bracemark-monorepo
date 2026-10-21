@@ -61,6 +61,13 @@ you need.
 
 The whole product is public here under the AGPL-3.0, which means you can read
 exactly what the code does. It doesn't, on its own, prove which build was served to
-a given client — we don't publish reproducible builds yet. If you find a
+a given client — we don't publish reproducible builds. If you find a
 discrepancy between what a shipped bundle does and what this repository says it
 does, that is very much a report we want.
+
+## Our own reviews
+
+Reports of our own source reviews, done with AI agents and each dated, are in
+[`security-reviews/`](security-reviews/README.md). No third party has audited this
+code; each report says what it examined, what it found, and what it couldn't
+establish.

@@ -31,7 +31,7 @@ The iOS share extension therefore has a separate bundle. It loads the save scree
 
 The sheet also leaves page fetching to the main app. It takes the address and any title supplied by the sharing app; it doesn’t visit the page or download an image before you can save.
 
-Memory changed a native design choice too. An early version used an Expo native view to control swipe dismissal while a picker was open. It worked in the simulator, but opening a picker could terminate the iOS share extension on a phone in a development build. We replaced that view with a native module function and a hook in the share extension’s controller, avoiding the extra view initialization.
+Memory changed a native design choice too. An early version used an Expo native view to control swipe dismissal while a picker was open. It worked in the simulator, but opening a picker could terminate the iOS share extension on a phone in a development build. We replaced that view with a native module function and a hook in the share extension’s controller, avoiding the extra view initialisation.
 
 That experience is why we distinguish simulator checks, development builds, and release builds. A screen working in the simulator doesn’t establish its memory headroom on a phone. We’ve measured a smaller release footprint in the simulator; release memory headroom on hardware still needs its own measurement.
 
@@ -77,7 +77,7 @@ The confirmation names the list you chose. The link stays in place on screen, an
 
 The iOS list and tag snapshot reflects the last refresh from the app. Changes made elsewhere may need an app open and sync before they appear in the sheet. A successful local save also isn’t a promise of immediate delivery to another device; pending work may need you to reopen the app with a connection.
 
-There’s an accessibility cost on iOS too. React Native’s font scaling resolves incorrectly in the share extension process, so we currently disable it there to keep text visible. Dynamic Type doesn’t reach the iOS share sheet. Text in the main app still scales, and Android keeps the app’s font scaling behavior.
+There’s an accessibility cost on iOS too. React Native’s font scaling resolves incorrectly in the share extension process, so we currently disable it there to keep text visible. Dynamic Type doesn’t reach the iOS share sheet. Text in the main app still scales, and Android keeps the app’s font scaling behaviour.
 
 The wider product tradeoffs apply as well: search runs on each device’s synced copy, there are no shared lists, and we can’t reset your password. Your recovery code is the second way into your account. [How encryption and search work](/docs/how-encryption-and-search-work) explains those choices.
 

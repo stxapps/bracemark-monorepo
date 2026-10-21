@@ -89,6 +89,10 @@ you're in — [`local-first-sync.md`](docs/local-first-sync.md) for the data pat
 [`account.md`](docs/account.md) for key derivation,
 [`api-contracts.md`](docs/api-contracts.md) for the endpoints.
 
+Dated reports of our own source security reviews sit apart from the design
+record, in [`security-reviews/`](security-reviews/README.md): each describes the
+source as it stood on its date and isn't revised afterwards.
+
 ## Contributing
 
 Issues and small, focused pull requests are welcome. For anything larger, open an

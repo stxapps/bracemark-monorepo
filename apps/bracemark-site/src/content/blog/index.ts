@@ -19,8 +19,8 @@ export const BLOG_POSTS: BlogPost[] = [
     publishedAt: '2026-10-13T00:00:00Z',
   },
   {
-    slug: 'source-security-review',
-    title: 'What our source security review has established so far',
+    slug: 'source-security-review-2026-10',
+    title: 'Source security review, October 2026',
     description:
       'Our AI-assisted source review recorded low-severity findings and open questions. We explain the method, what launch changed, and what still needs evidence.',
     publishedAt: '2026-10-23T00:00:00Z',

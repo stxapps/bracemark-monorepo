@@ -540,9 +540,9 @@ export default function Page() {
                 Being precise about what that buys you: you can read exactly what we do, and you can
                 check that the encryption happens where we say it does. You cannot, from the source
                 alone, prove that the code your browser just ran was built from it — that would take
-                reproducible builds, which we don’t yet publish. Anyone who tells you otherwise
-                about their own app is overselling it. What open source removes here is our ability
-                to describe the design as one thing while shipping another.
+                reproducible builds, which we don’t publish. Anyone who tells you otherwise about
+                their own app is overselling it. What open source removes here is our ability to
+                describe the design as one thing while shipping another.
               </p>
               {/* The same move as the paragraph above it, applied to the other
                   thing a careful reader goes looking for and does not find.
@@ -554,13 +554,28 @@ export default function Page() {
                   is the paragraph that has already proved the move works.
                   What this must NOT become is a roadmap promise: no date, no
                   "coming soon". If an audit is ever commissioned, this is where
-                  it gets named, and only once it exists. */}
+                  it gets named, and only once it exists.
+                  Our own source reviews are listed here and are NOT that: they
+                  are AI-assisted work we direct, so they sit in the "instead"
+                  sentence, never beside the word audit, and the audit sentence
+                  says "audit report" so a reader holding one of our reports
+                  does not find it contradicted. */}
               <p>
                 One more absence, since you would find it anyway: no third party has audited this
-                code. There is no report to link, no security firm on retainer, and no transparency
-                report, because none of those exist yet rather than because they say something we
-                would rather you missed. What is here instead is the repository, this page, and a
-                policy that inventories every field we hold.
+                code. There is no audit report to link, no security firm on retainer, and no
+                transparency report, because none of those exist, rather than because they say
+                something we would rather you missed. What is here instead is the repository, this
+                page, a policy that inventories every field we hold, and{' '}
+                <a
+                  className={cn(
+                    'text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
+                  )}
+                  href={`${SOURCE.url}/tree/main/security-reviews`}
+                  rel="noreferrer"
+                >
+                  our own AI-assisted source reviews
+                </a>
+                , each of which says what it couldn’t establish.
               </p>
             </div>
           </section>

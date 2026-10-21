@@ -538,15 +538,16 @@ limits_, has the measurement.
 Written down because they are already kept, not because they are being decided
 here — the point is that the next string matches the last two hundred.
 
-| rule                      | this                                                                               | not this                                         |
-| ------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------ |
-| headings, buttons, labels | sentence case — "What it costs to build it this way", "Create account"             | Title Case                                       |
-| em dash                   | spaced — "…when you are done with it — it leaves My List but stays saved"          | unspaced, or a hyphen standing in                |
-| exclamation marks         | none, on any user-facing surface                                                   | one "!" anywhere                                 |
-| serial comma              | yes — "links, lists, tags, pins, files, and settings"                              | dropping it before the final "and"               |
-| contractions              | the default — "won't be shown again", "doesn't look like a valid URL"              | uncontracted-by-habit, which reads legal         |
-| the platform verb         | **click** on web, **tap** on expo — the ported string differs in exactly this word | "select", "press", or one string serving both    |
-| plan names and numbers    | read `PLAN_LABELS` and `iap/plans`; store copy carries **no** numbers at all       | typing "Plus", a price, a cap, or a trial length |
+| rule                      | this                                                                                                      | not this                                                             |
+| ------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| headings, buttons, labels | sentence case — "What it costs to build it this way", "Create account"                                    | Title Case                                                           |
+| em dash                   | spaced — "…when you are done with it — it leaves My List but stays saved"                                 | unspaced, or a hyphen standing in                                    |
+| exclamation marks         | none, on any user-facing surface                                                                          | one "!" anywhere                                                     |
+| serial comma              | yes — "links, lists, tags, pins, files, and settings"                                                     | dropping it before the final "and"                                   |
+| contractions              | the default — "won't be shown again", "doesn't look like a valid URL"                                     | uncontracted-by-habit, which reads legal                             |
+| spelling                  | British, with **-ise** — behaviour, colour, organise, recognise, authorise, cancelled, licence (the noun) | American — behavior, color, organize, recognize, authorize, canceled |
+| the platform verb         | **click** on web, **tap** on expo — the ported string differs in exactly this word                        | "select", "press", or one string serving both                        |
+| plan names and numbers    | read `PLAN_LABELS` and `iap/plans`; store copy carries **no** numbers at all                              | typing "Plus", a price, a cap, or a trial length                     |
 
 **The serial comma was the one row not already kept when this table was
 written.** The rule stood and the copy did not: the marketing site dropped it
@@ -572,6 +573,27 @@ period, and we don’t bring a deleted account back from a backup." One sweep
 already added the stray kind to /privacy, and this rule is harder to hold than
 the one above it, because a two-item comma looks like diligence rather than an
 error.
+
+**The spelling is British, and was kept by habit for long enough to look like a
+rule before it was one.** /about, /terms, /privacy, /security, and the landing
+page wrote _behaviour_, _organised_, _recognised_, and _authorised_; the blog
+and the converter's input row did not, and the first security-review post
+spelled _cancelled_ in its first section and _behavior_ in its last — the same
+drift as the apostrophe, by the same route: each author spelled the way they
+spell, and nothing reads the page as a whole. The variant is **-ise**, not the
+Oxford -ize, because that is what the existing pages already used. The scope is
+every string a user reads, the same as the rest of this section, and it reaches
+the repository's own public prose — `SECURITY.md`, the root `README`, and the
+reports in `security-reviews/`. Four things stay as they are, because they are
+names or data rather than our prose: **another app's words** (Raindrop's
+_Favorites_, LinkWarden's _Unorganized_ collection, a CSV column called
+`favorite`), which the import help pages describe in their own spelling;
+**identifiers** — CSS `color`, schema.org's `Organization`, an API field; **a
+platform's string quoted verbatim**, such as a browser's permission warning; and
+**_dialog_ and _program_** in their computing sense, which British usage spells
+that way too. Nothing enforces it — a spelling is a word, not a character a
+selector can find — so this row is the check. Code comments and `docs/` are not
+held to it.
 
 **The one place contractions are dropped is a decision, not an oversight.** The
 tagline says _can't_ and `FULL_DESCRIPTION` opens with _cannot_ — "Bracemark is a

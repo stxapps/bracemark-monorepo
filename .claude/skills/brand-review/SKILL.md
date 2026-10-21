@@ -92,7 +92,8 @@ Run the two tables in _the voice_ and the table in _the two nouns_ literally:
 - link vs. bookmark, per surface — the most common real error
 - bare "extension" — always a finding; qualify browser or share
 - "vault" / "library" as a label; the collection gets no noun
-- sentence case, spaced em dash, serial comma, contractions, the `’` apostrophe
+- sentence case, spaced em dash, serial comma, contractions, the `’` apostrophe,
+  British spelling with -ise (another app's words and identifiers excepted)
 - typed plan names, prices, caps or trial lengths — these are read from
   `PLAN_LABELS` / `iap/plans`, and store copy carries no numbers at all
 
