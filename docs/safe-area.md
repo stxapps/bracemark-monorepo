@@ -514,7 +514,7 @@ Uniwind's `md` — and at nothing else.**
   through `BrandLockup`'s `action` slot. The flag is device-local
   (`sidebar_view.railCollapsed`, expo-react `sidebar-view-store.ts`, wiped by the
   sign-out teardown with the collapse ids) and is read on the **mounting render**
-  in `features/links/rail.tsx` for web's reason. Each toggle unmounts the
+  in `features/links/sidebar-rail.tsx` for web's reason. Each toggle unmounts the
   button that was pressed, so accessibility focus is handed to its counterpart as
   it mounts.
 - **No resize, no shortcut.** Web's splitter is found by hover and dragged by a

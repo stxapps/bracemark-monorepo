@@ -28,7 +28,7 @@ import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
 import { MoreOptionsMenu } from './more-options-menu';
 import { useLinksPage } from './page-provider';
-import { ShowRailButton, useLinksRail } from './rail';
+import { ShowRailButton, useSidebarRail } from './sidebar-rail';
 import { useLinksViewState } from './view-state-provider';
 
 function useSelectionLabel(): string {
@@ -62,7 +62,7 @@ function useSelectionLabel(): string {
 export function Topbar() {
   const label = useSelectionLabel();
   const navigation = useNavigation();
-  const { wide, docked } = useLinksRail();
+  const { wide, docked } = useSidebarRail();
   const { searchVisible, setSearchOpen, restorePreSearch } = useLinksViewState();
 
   // Closing DISMISSES the search: with the bar gone, a committed search
@@ -128,7 +128,7 @@ export function Topbar() {
           (the later sibling wins) and the loser's own visible box is what gets
           eaten. Nothing pressable sits beside this one — the title is a Text —
           so it takes the full 6. */}
-      {/* The leading slot follows the rail (features/links/rail.tsx): the drawer
+      {/* The leading slot follows the rail (features/links/sidebar-rail.tsx): the drawer
           toggle on a phone-width window; nothing while the rail is docked beside
           the bar, since the rail IS the navigation it would open; and the
           rail's Show while it is put away on a wide one. */}

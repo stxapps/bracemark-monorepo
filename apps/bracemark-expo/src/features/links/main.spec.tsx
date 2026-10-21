@@ -60,7 +60,7 @@ jest.mock('./page-provider', () => ({
   useLinksPage: () => ({ selection: mockSelection, query: { sortOn: 'createdAt' } }),
 }));
 // A phone-width window: the rail is a drawer, so the pane keeps the window.
-jest.mock('./rail', () => ({ useLinksRail: () => ({ docked: false }) }));
+jest.mock('./sidebar-rail', () => ({ useSidebarRail: () => ({ docked: false }) }));
 jest.mock('./view-state-provider', () => ({
   useLinksViewState: () => ({ bulkEditing: false, selectedLinks: new Map() }),
   useLinksViewActions: () => ({ setScrolled: jest.fn(), toggleSelected: jest.fn() }),

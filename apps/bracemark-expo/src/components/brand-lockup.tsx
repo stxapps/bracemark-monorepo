@@ -77,7 +77,7 @@ export function BrandLockup({
   // sidebar.tsx carries the argument, which is also web's). Two callers: the
   // share sheet's close, since a sheet floating over another app has no topbar
   // to hold it, and on iOS no swipe out either (docs/share-sheet.md); and the
-  // DOCKED links rail's Hide (features/links/rail.tsx), which puts the rail
+  // DOCKED links rail's Hide (features/links/sidebar-rail.tsx), which puts the rail
   // away rather than leaving anything — web's HideRailButton, same slot.
   //
   // IT IS PLACED WITH `ml-auto`, so it is only rightmost if this component's own

@@ -3,8 +3,12 @@ import { Drawer } from 'expo-router/drawer';
 import { LiveReadPause } from '@stxapps/expo-react';
 
 import { LinksPageProvider } from '../../../features/links/page-provider';
-import { HideRailButton, LinksRailProvider, useLinksRail } from '../../../features/links/rail';
 import { Sidebar } from '../../../features/links/sidebar';
+import {
+  HideRailButton,
+  SidebarRailProvider,
+  useSidebarRail,
+} from '../../../features/links/sidebar-rail';
 import { usePausedWhileCovered } from '../../../features/links/use-paused-while-covered';
 import { RAIL_WIDTH } from '../../../lib/window-class';
 
@@ -21,7 +25,7 @@ import { RAIL_WIDTH } from '../../../lib/window-class';
 //
 // On a WIDE window the same Drawer is `permanent` — docked beside the list,
 // the expo form of web's two-pane frame — unless the user put it away
-// (features/links/rail.tsx owns that state, and the provider wraps the
+// (features/links/sidebar-rail.tsx owns that state, and the provider wraps the
 // navigator for the reason LinksPageProvider does: the drawer content and the
 // screen both read it). `drawerStyle` for the docked rail sets its width and
 // takes back the hairline react-navigation draws on a permanent drawer in the
@@ -41,16 +45,16 @@ export default function LinksLayout() {
   return (
     <LiveReadPause paused={paused}>
       <LinksPageProvider>
-        <LinksRailProvider>
+        <SidebarRailProvider>
           <LinksDrawer />
-        </LinksRailProvider>
+        </SidebarRailProvider>
       </LinksPageProvider>
     </LiveReadPause>
   );
 }
 
 function LinksDrawer() {
-  const { docked } = useLinksRail();
+  const { docked } = useSidebarRail();
   return (
     <Drawer
       drawerContent={(props) => (

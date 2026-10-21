@@ -6,7 +6,7 @@
 // final utility band with the Show All reset and the Manage lists/tags links
 // out to settings). On a phone-width window the rail is a Drawer
 // ((app)/links/_layout.tsx), so selecting an entry also closes it; on a wide one
-// the same component is docked beside the list (features/links/rail.tsx), where
+// the same component is docked beside the list (features/links/sidebar-rail.tsx), where
 // that close is a no-op.
 //
 // Collapse state persists device-locally (the `sidebar_view` table via
@@ -420,7 +420,7 @@ export function Sidebar({
   headerAction,
 }: {
   closeDrawer: () => void;
-  // The brand row's trailing control — the docked rail's Hide (rail.tsx), and
+  // The brand row's trailing control — the docked rail's Hide (sidebar-rail.tsx), and
   // nothing in the overlay drawer, which is dismissed the usual three ways.
   headerAction?: ReactNode;
 }) {

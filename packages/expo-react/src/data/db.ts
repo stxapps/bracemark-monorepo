@@ -295,7 +295,7 @@ export interface SidebarViewValue {
   // (`section:lists` / `section:tags`). Present in the array == collapsed.
   collapsedIds: string[];
   // Whether the user put the DOCKED links rail away — the wide-window rail
-  // (bracemark-expo `features/links/rail.tsx`; web's `SidebarRail.collapsed`).
+  // (bracemark-expo `features/links/sidebar-rail.tsx`; web's `SidebarRail.collapsed`).
   // Optional because rows written before it existed lack it: absent == shown.
   railCollapsed?: boolean;
 }

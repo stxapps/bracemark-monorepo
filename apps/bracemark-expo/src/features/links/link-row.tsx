@@ -29,7 +29,7 @@ import { useLinksViewActions } from './view-state-provider';
 // date competes with, and the two breakpoint scales do not mean the same width.
 // So the date never shows on a phone held upright, and does on a phone on its
 // side, a tablet and an unfolded foldable — wherever the ROW reaches 576, which
-// with the docked rail (features/links/rail.tsx) is narrower than the window.
+// with the docked rail (features/links/sidebar-rail.tsx) is narrower than the window.
 const RELATIVE_TIME_MIN_ROW_WIDTH = 576;
 
 // Whether this row renders a chip strip, and so which of its two shapes it

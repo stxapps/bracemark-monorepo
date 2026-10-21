@@ -51,7 +51,7 @@ import { useWideWindow } from '../../lib/window-class';
 
 type FocusTarget = 'show' | 'hide';
 
-type LinksRail = {
+type SidebarRail = {
   // The window is wide enough to dock (lib/window-class.ts).
   wide: boolean;
   // The rail is docked right now — wide AND not put away. The width the list
@@ -62,9 +62,9 @@ type LinksRail = {
   takeFocus: (target: FocusTarget) => boolean;
 };
 
-const LinksRailContext = createContext<LinksRail | null>(null);
+const SidebarRailContext = createContext<SidebarRail | null>(null);
 
-export function LinksRailProvider({ children }: { children: ReactNode }) {
+export function SidebarRailProvider({ children }: { children: ReactNode }) {
   const wide = useWideWindow();
   // The lazy initializer IS the mounting-render read the header asks for:
   // drizzle's expo driver is synchronous, and it is one row.
@@ -92,12 +92,12 @@ export function LinksRailProvider({ children }: { children: ReactNode }) {
     () => ({ wide, docked: wide && !collapsed, setCollapsed, takeFocus }),
     [wide, collapsed, setCollapsed, takeFocus],
   );
-  return <LinksRailContext.Provider value={value}>{children}</LinksRailContext.Provider>;
+  return <SidebarRailContext.Provider value={value}>{children}</SidebarRailContext.Provider>;
 }
 
-export function useLinksRail(): LinksRail {
-  const rail = useContext(LinksRailContext);
-  if (!rail) throw new Error('useLinksRail must be used within LinksRailProvider');
+export function useSidebarRail(): SidebarRail {
+  const rail = useContext(SidebarRailContext);
+  if (!rail) throw new Error('useSidebarRail must be used within SidebarRailProvider');
   return rail;
 }
 
@@ -106,7 +106,7 @@ export function useLinksRail(): LinksRail {
 // a View ref and a ref to Pressable's component type (ui/button.tsx), which no
 // object ref satisfies, and the host it receives is the Pressable's View.
 function useFocusOnMount(target: FocusTarget) {
-  const { takeFocus } = useLinksRail();
+  const { takeFocus } = useSidebarRail();
   const host = useRef<View | null>(null);
   useEffect(() => {
     if (takeFocus(target) && host.current) {
@@ -121,14 +121,14 @@ function useFocusOnMount(target: FocusTarget) {
 // The rail's dismiss, in the brand row's trailing slot — web's placement. Only
 // rendered while docked (the overlay drawer is dismissed the usual three ways).
 export function HideRailButton() {
-  const { setCollapsed } = useLinksRail();
+  const { setCollapsed } = useSidebarRail();
   const ref = useFocusOnMount('hide');
   return (
     <Button
       ref={ref}
       variant="ghost"
       size="icon-sm"
-      testID="links-hide-rail"
+      testID="sidebar-rail-hide"
       aria-label="Hide sidebar"
       onPress={() => setCollapsed(true)}
       // The lockup beside it takes no touches, and the row's `px-4` is free on
@@ -144,14 +144,14 @@ export function HideRailButton() {
 // The topbar's leading slot while the rail is put away on a wide window — where
 // the drawer button sits on a phone, so the bar's title holds its place.
 export function ShowRailButton() {
-  const { setCollapsed } = useLinksRail();
+  const { setCollapsed } = useSidebarRail();
   const ref = useFocusOnMount('show');
   return (
     <Button
       ref={ref}
       variant="ghost"
       size="icon-sm"
-      testID="links-show-rail"
+      testID="sidebar-rail-show"
       aria-label="Show sidebar"
       onPress={() => setCollapsed(false)}
       hitSlop={6}

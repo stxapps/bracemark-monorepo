@@ -48,8 +48,8 @@ import { BulkEditBar } from './bulk-edit-bar';
 import { CARD_H_CHROME, LinkCard } from './link-card';
 import { hasKnownTags, LinkRow } from './link-row';
 import { useLinksPage } from './page-provider';
-import { useLinksRail } from './rail';
 import { EmptyState, type LinkItemProps, RefreshPill, useTagMap } from './shared';
+import { useSidebarRail } from './sidebar-rail';
 import { useLinks } from './use-links';
 import { useLinksViewActions, useLinksViewState } from './view-state-provider';
 
@@ -295,7 +295,7 @@ function UnlockedMain() {
   // while docked would take the notch off a pane that never touches it.
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const { docked } = useLinksRail();
+  const { docked } = useSidebarRail();
   const paneWidth = width - (docked ? RAIL_WIDTH : insets.left) - insets.right - contentPadding * 2;
   const numColumns = columns(paneWidth);
   // One cell's width, for the item's own internal budgets — today just the tag

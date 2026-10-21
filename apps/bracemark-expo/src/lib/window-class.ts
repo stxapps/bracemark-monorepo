@@ -25,7 +25,7 @@ import { useWindowDimensions } from 'react-native';
 // glued to it.
 export const WIDE_MIN_WIDTH = 768;
 
-// The docked rails' one width — links (features/links/rail.tsx) and settings
+// The docked rails' one width — links (features/links/sidebar-rail.tsx) and settings
 // ((app)/settings/_layout.tsx) alike, so crossing between the two moves nothing.
 // Wider than web's 240 default because the rows are touch rows: the same
 // `text-sm` labels, but each list row also carries a 32pt "Lock list" button
