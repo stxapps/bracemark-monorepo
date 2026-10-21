@@ -16,6 +16,11 @@
 //
 // Every operation is best-effort — the collapse toggle must never throw over a
 // storage hiccup; a failed read just starts everything expanded.
+//
+// "sidebar" in both keys below means the LINKS sidebar, unscoped on purpose: the
+// settings rail is a flat menu with nothing to collapse or resize, and is meant
+// to stay that way. `bracemark:sidebar-collapsed` has also shipped, so renaming
+// it would strand the old key, and its account-keyed ids, past the sign-out wipe.
 
 const STORAGE_KEY = 'bracemark:sidebar-collapsed';
 

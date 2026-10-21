@@ -80,8 +80,11 @@ export function useSidebarRail(): { collapsed: boolean; width: number } {
 // while typing in the search box must not yank focus out of it.
 let pendingFocus: 'show' | 'hide' | null = null;
 
-export const RAIL_ATTR = 'data-links-rail';
-export const SHOW_RAIL_ATTR = 'data-show-links-rail';
+// The rail's DOM hooks: its id, for the resize handle's `aria-controls`, and the
+// two attributes the handoff finds focus by.
+export const RAIL_ID = 'sidebar-rail';
+export const RAIL_ATTR = 'data-sidebar-rail';
+export const SHOW_RAIL_ATTR = 'data-sidebar-rail-show';
 
 export function setRailCollapsed(collapsed: boolean): void {
   const active = typeof document === 'undefined' ? null : document.activeElement;

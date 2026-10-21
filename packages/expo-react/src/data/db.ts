@@ -299,6 +299,9 @@ export interface SidebarViewValue {
   // Optional because rows written before it existed lack it: absent == shown.
   railCollapsed?: boolean;
 }
+// `sidebar_view` is the LINKS sidebar's, unscoped on purpose (the settings rail
+// keeps no view state; web-react sidebar-view-store has the same note), and a
+// shipped name: renaming it is a migration, not an edit.
 export const sidebarView = sqliteTable('sidebar_view', {
   // Single-row table — one view bag per device, keyed by a constant.
   id: text('id', { enum: ['singleton'] }).primaryKey(),

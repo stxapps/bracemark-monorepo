@@ -107,6 +107,7 @@ import {
   isRailShortcut,
   RAIL_ATTR,
   RAIL_COLLAPSE_BELOW,
+  RAIL_ID,
   RAIL_SHORTCUT_ARIA,
   RAIL_WIDTH,
   railShortcutApplies,
@@ -765,8 +766,6 @@ export function Sidebar() {
     </aside>
   );
 }
-
-const RAIL_ID = 'links-rail';
 
 // The shortcut's listener, on the rail component rather than on what it renders,
 // so it stays bound while the rail is collapsed — which is when it's needed to
