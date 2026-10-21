@@ -1193,7 +1193,7 @@ All of them are in the app:
 | `settings-close`              | ” — returns to the links route                                                                  |
 | `settings-nav-<section>`      | `src/features/settings/sidebar.tsx`                                                             |
 | `settings-back`               | `src/features/settings/settings-kit.tsx` — a sub-view's back link (its label repeats the title) |
-| `measure-stall-reading`       | `src/features/settings/data-section.tsx` — measurement bundles only (`measure:native`)          |
+| `measure-stall-reading`       | `src/features/settings/data-section.tsx` — measurement bundles only (`measure:data:<platform>`) |
 | `export-data-format-<format>` | ” — `bracemark` `netscape` `csv` `text` export radio rows                                       |
 | `extraction-mode-<mode>`      | `src/features/settings/extraction-section.tsx` — `off` `saves` `all` radio rows                 |
 | `extraction-count-<bucket>`   | ” — the number in `done` `pending` `will-retry` `wont-retry`                                    |
@@ -3026,9 +3026,9 @@ means no compositor has to rewrite product chrome.
 
 ### measuring the data path
 
-`e2e/measure/data.ts` (`npm run measure:data`) reports how long import and
-export hold bracemark-web's main thread, at library sizes you pick. It is the
-measurement behind [data-lifecycle.md](./data-lifecycle.md), _main-thread
+`e2e/measure/data-web.ts` (`npm run measure:data:web`) reports how long import
+and export hold bracemark-web's main thread, at library sizes you pick. It is
+the measurement behind [data-lifecycle.md](./data-lifecycle.md), _main-thread
 cost_, and it lives here because it needs everything a whole-flow case needs: a
 real account, the plan grant, the Settings → Data controls, and Chrome.
 
@@ -3040,11 +3040,11 @@ longest task against the bands in the doc and records the reading there.
 
 ```sh
 npm run dev                                         # the api; the web origin is its own
-npm run measure:data                                # 10,000 links, CPU 4x slower
-npm run measure:data -- --links 10000,50000 --cpu 6
-npm run measure:data -- --trace                     # + a DevTools trace per leg
-npm run measure:data -- --dev                       # the dev server on :3000 instead
-npm run measure:data -- --skip-build                # stage the existing out/
+npm run measure:data:web                            # 10,000 links, CPU 4x slower
+npm run measure:data:web -- --links 10000,50000 --cpu 6
+npm run measure:data:web -- --trace                 # + a DevTools trace per leg
+npm run measure:data:web -- --dev                   # the dev server on :3000 instead
+npm run measure:data:web -- --skip-build            # stage the existing out/
 ```
 
 Per size it runs six legs on two fresh Plus accounts: an **HTML bookmarks
@@ -3205,19 +3205,25 @@ answer`, because an abort before the body drains can cost the socket. Watch the
   ([env-files.md](./env-files.md), _bracemark-expo_). Import through the app and
   read the push's cycles there.
 
-#### the native leg — `measure:native`
+#### the native leg — `measure:data:ios`, `measure:data:android`
 
-`e2e/measure/native.ts` measures the same flows on bracemark-expo through Maestro:
-two fresh Plus accounts per size, the HTML import and the backup restore through
-the real document picker, the sync wait (polled off the Data card, three settled
-readings in a row, like `waitForSync`), then the four exports in the restore's
-session. The flows are `e2e/measure/flows/`, outside the case registry.
+`e2e/measure/data-mobile.ts` measures the same flows on bracemark-expo through
+Maestro: two fresh Plus accounts per size, the HTML import and the backup
+restore through the real document picker, the sync wait (polled off the Data
+card, three settled readings in a row, like `waitForSync`), then the four
+exports in the restore's session. The flows are `e2e/measure/flows/`, outside
+the case registry.
 
 ```sh
 npm run dev                                         # api + web; accounts are made on web
-npm run measure:native -- --platform ios --device <udid>
-npm run measure:native -- --platform android --device <serial> --links 1000,10000
+npm run measure:data:ios                            # the one booted simulator
+npm run measure:data:android -- --links 1000,10000
+npm run measure:data:ios -- --device <udid>         # one of several booted
 ```
+
+The root scripts carry `--platform`. Without `--device` the run takes the one
+device that platform has up, as the e2e runners do (`runner/device.ts`), and
+refuses rather than choose between two.
 
 - **The instrument is a stall probe in the app**, because React Native has no
   Long Tasks API. `expo-react` `lib/stall-probe.ts` is a 16 ms timer whose

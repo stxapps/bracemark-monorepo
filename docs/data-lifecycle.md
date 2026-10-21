@@ -1751,7 +1751,7 @@ keys and queue, the interactive `onQuotaPrompt`, and export's
 So the question is never "is it fast". It is **how long does the longest single
 task hold the page**: a thirty-second import whose progress line keeps moving
 is fine, and a three-second freeze is not. Measure it with `npm run
-measure:data` ([e2e.md](./e2e.md), _measuring the data path_), which reports
+measure:data:web` ([e2e.md](./e2e.md), _measuring the data path_), which reports
 the longest task per leg at a CPU slowdown. Then find what **owns** that task
 before choosing a fix (`--trace`, then the DevTools Bottom-Up tab over the long
 task), and decide by the band:
@@ -1871,7 +1871,7 @@ Neither of the last two has been changed.
 #### readings — expo
 
 **2026-09-25** — the iPhone 17 simulator (iOS 26.5) on the same M1, measured
-with `npm run measure:native` ([e2e.md](./e2e.md), _measuring the data path_).
+with `npm run measure:data:ios` ([e2e.md](./e2e.md), _measuring the data path_).
 The JS is a production bundle (`--no-dev --minify`, Hermes) on the development
 client, against the local stack. Checkout `88721c3` plus uncommitted work.
 The instrument is expo-react's stall probe (a 16 ms timer's lateness), not the
@@ -2006,9 +2006,9 @@ to the engine ([local-first-sync.md](./local-first-sync.md)). Since changed:
 **2026-09-26, the parse** — the Hermes CLI (the `hermes-engine` pod's build,
 `hermesc -O`) on the same M1, timing the shared parsers directly at 10,000
 records per format, with expo's `URL` (`whatwg-url-without-unicode`) installed
-as the app has it. Not a `measure:native` run: the stall the probe would see now
-is the largest of the decode, one parse chunk and the first dedupe chunk, and
-that reading was taken later, in **2026-09-26, after the hold**.
+as the app has it. Not a `measure:data:ios` run: the stall the probe would see
+now is the largest of the decode, one parse chunk and the first dedupe chunk,
+and that reading was taken later, in **2026-09-26, after the hold**.
 
 The whole parse took 0.5–0.8 s in **every** format, not only HTML (HTML 768 ms,
 CSV 711, LinkWarden 546, plain text 536, Brace 638). The token regex was not
@@ -2081,10 +2081,10 @@ new profile. The reading that follows them is below.
   Ordinary cycles are not held. Each edit kicks a cycle, and a hold there would
   delay the edit's own re-render by up to a flush for nothing.
 
-**2026-09-26, after the hold** — `npm run measure:native`, the same iPhone 17
+**2026-09-26, after the hold** — `npm run measure:data:ios`, the same iPhone 17
 simulator (iOS 26.5), Mac and production bundle as **2026-09-26, after**, from
 `2f27d0c` plus the uncommitted changes above; calibration 768–781 ms. It is
-also the first `measure:native` reading of **2026-09-26, the parse**. Longest
+also the first `measure:data:ios` reading of **2026-09-26, the parse**. Longest
 single JS-thread stall per leg:
 
 | leg                   | 300 links | 1,000 links | 10,000 links |
@@ -2156,7 +2156,7 @@ Where the fix belongs, in order of what it removes:
    floor. Not made. Only worth it once nothing longer than the chunk is left.
 
 **2026-09-26, the pause** — the hidden links screen's live reads now pause while
-Settings covers it, and the same `measure:native` run was taken again (same
+Settings covers it, and the same `measure:data:ios` run was taken again (same
 simulator, Mac and bundle; `2f27d0c` plus the uncommitted changes; calibration
 767–778 ms).
 
@@ -2203,9 +2203,9 @@ whole-file yields**, below; the streaming is not.
 **2026-09-26, the whole-file yields** — `import-all-data.ts` now yields after
 `unzipSync` and after each whole-file `decodeUtf8` (`WHOLE_FILE_STEPS` there),
 so the inflate, the decode and the first slice of the classify or parse loop
-each run as a task of their own. `measure:native --links 10000 --no-exports`,
-same simulator, Mac and bundle, `2f27d0c` plus the uncommitted changes;
-calibration 771–775 ms:
+each run as a task of their own.
+`measure:data:ios -- --links 10000 --no-exports`, same simulator, Mac and
+bundle, `2f27d0c` plus the uncommitted changes; calibration 771–775 ms:
 
 | leg (10,000 links) | before the yields                | after the yields                 |
 | ------------------ | -------------------------------- | -------------------------------- |

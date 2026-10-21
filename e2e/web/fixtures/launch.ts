@@ -75,7 +75,7 @@ export interface LaunchOptions {
   // Splitting the two lets the shot pick 1000 CSS and still hand the script 3000.
   deviceScaleFactor?: number;
   // The web origin, when it is not WEB_URL's. Only the data-path measurement
-  // (measure/data.ts) passes one: it serves a production export it built itself,
+  // (measure/data-web.ts) passes one: it serves a production export it built itself,
   // and WEB_URL is fixed when env.ts loads, before a script could point it there.
   baseURL?: string;
   // Runs on the fresh context BEFORE the account ceremony. For a case that has to

@@ -31,10 +31,10 @@ import {
 // Worker.
 //
 //   npm run dev                                   # the api (only it is borrowed)
-//   npm run measure:data                          # 10,000 links, 4x CPU slowdown
-//   npm run measure:data -- --links 10000,50000 --cpu 6
-//   npm run measure:data -- --trace               # + a DevTools trace per leg
-//   npm run measure:data -- --dev                 # the dev server on :3000 instead
+//   npm run measure:data:web                      # 10,000 links, 4x CPU slowdown
+//   npm run measure:data:web -- --links 10000,50000 --cpu 6
+//   npm run measure:data:web -- --trace           # + a DevTools trace per leg
+//   npm run measure:data:web -- --dev             # the dev server on :3000 instead
 //
 // NOT A TEST, and deliberately not in any suite. A pass/fail threshold on timing
 // from a dev machine running the whole local stack either flaps or is set so
@@ -133,7 +133,7 @@ async function main(): Promise<void> {
   await waitForApi();
   await assertOriginOwnedByRepo(API_URL, 'bracemark-api', { required: true });
 
-  const runId = createRunId('measure-data');
+  const runId = createRunId('measure-data-web');
   const runDir = join(MEASURE_OUTPUT, runId);
   await mkdir(runDir, { recursive: true });
 

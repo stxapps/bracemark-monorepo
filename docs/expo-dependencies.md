@@ -179,8 +179,8 @@ Four things that aren't in its README:
   **release** build on the simulator (`npx expo run:ios --configuration Release`)
   and save ten links. On Android nothing shows outside a Play
   install; Play's internal-app-sharing or an internal-testing track is the way to
-  see it there. The gate is the **bundle's**, not the binary's: `measure:native`
-  serves a `--no-dev` bundle to the development client
+  see it there. The gate is the **bundle's**, not the binary's:
+  `measure:data:ios` serves a `--no-dev` bundle to the development client
   ([e2e.md](./e2e.md), _the native leg_), so the prompt is live there, on a
   simulator that shows every ask. Its flows import and export, which neither
   count nor ask; one that saved ten links through the add panel would meet the

@@ -60,7 +60,7 @@ import {
 //                        read off those same responses: the session read, the
 //                        Durable Object, R2's HEADs, presigning.
 //
-// Plus the main-thread instrument data.ts uses, because a sync whose callbacks
+// Plus the main-thread instrument data-web.ts uses, because a sync whose callbacks
 // queue behind a busy main thread is slow for a reason no network reading shows.
 //
 // STAGING IS THE TARGET. Locally, blob bytes go through the api (bracemark-api
@@ -74,7 +74,7 @@ import {
 // at the first leg rather than report a breakdown of nothing. Deploy both
 // first (docs/hosting.md).
 //
-// NOT A TEST, in no suite, for the reason data.ts gives: timing over the public
+// NOT A TEST, in no suite, for the reason data-web.ts gives: timing over the public
 // internet is noisy. Run a size more than once before believing a difference.
 //
 // THE LEGS, per size:

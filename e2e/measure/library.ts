@@ -78,7 +78,7 @@ export async function writeBookmarksHtml(path: string, count: number): Promise<v
 // statMany), so with sequential ids the newest N links — what a bulk edit
 // selects — are one run of adjacent keys, a page answers all of them, and the
 // reading shows a cost no real library has. The sync measurement asks for it;
-// data.ts, which reads an import's local cost, keeps the seed's own ids.
+// data-web.ts, which reads an import's local cost, keeps the seed's own ids.
 export async function writeBackupLibrary(
   path: string,
   count: number,

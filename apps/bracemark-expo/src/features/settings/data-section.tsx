@@ -334,8 +334,8 @@ function ImportStatus({ state }: { state: ImportState }) {
 
 // Measurement bundles only: the stall probe's latest reading and its
 // calibration, as text the measurement runner reads off the accessibility tree
-// (e2e/measure/native.ts). Renders nothing in any other build, where the probe
-// was never started.
+// (e2e/measure/data-mobile.ts). Renders nothing in any other build, where the
+// probe was never started.
 function StallReadout() {
   const probe = useStallProbe();
   if (probe === null) return null;

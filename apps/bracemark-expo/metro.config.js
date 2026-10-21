@@ -24,7 +24,7 @@ const { withUniwindConfig } = require('uniwind/metro');
 //
 // The one way past it is BRACEMARK_NONPROD_RELEASE=1 in the SHELL, for a
 // deliberate non-production release bundle (e2e/runner/release-build.ts,
-// e2e/measure/native.ts). Shell-only, and enforced: a shell var lasts one
+// e2e/measure/data-mobile.ts). Shell-only, and enforced: a shell var lasts one
 // command, so it can't be left on the way a file line can, and a build started
 // from Xcode's UI never sees it — an Archive is production or a failed build.
 // → docs/env-files.md, "bracemark-expo".

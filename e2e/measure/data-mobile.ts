@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 
 import { E2E_ROOT, MEASURE_OUTPUT } from '../paths';
 import { type NativePlatform } from '../runner/cli';
+import { resolveDevice } from '../runner/device';
 import { stageDocumentPickerFile } from '../runner/device-files';
 import { findNodes, parseHierarchy } from '../runner/hierarchy';
 import { createRunId, maestro, maestroHierarchy, provisionAccount, writeJson } from '../runner/lib';
@@ -18,13 +19,14 @@ import { band } from './main-thread';
 
 // How long import and export block bracemark-expo's JS thread, at library sizes
 // you pick — the native half of docs/data-lifecycle.md, _main-thread cost_,
-// beside measure/data.ts for web.
+// beside measure/data-web.ts for web.
 //
 //   npm run dev                                   # api + web (accounts are made there)
-//   npm run measure:native -- --platform ios --device <udid>
-//   npm run measure:native -- --platform android --device <serial> --links 1000,10000
+//   npm run measure:data:ios                      # the one booted simulator
+//   npm run measure:data:android -- --links 1000,10000
+//   npm run measure:data:ios -- --device <udid>   # one of several booted
 //
-// NOT A TEST, for measure/data.ts's reason. Numbers for a person to read and
+// NOT A TEST, for measure/data-web.ts's reason. Numbers for a person to read and
 // record in the doc.
 //
 // THE INSTRUMENT is expo-react's stall probe (lib/stall-probe.ts): a 16 ms timer
@@ -81,6 +83,9 @@ interface Options {
   exports: boolean;
 }
 
+// What the command line says; `--device` is optional, as in the e2e runners.
+type ParsedOptions = Omit<Options, 'deviceId'> & { deviceId?: string };
+
 interface StallReading {
   label: string;
   wallMs: number;
@@ -101,7 +106,7 @@ interface NativeLeg {
   calibration: StallCalibration;
 }
 
-function parseOptions(argv: string[]): Options {
+function parseOptions(argv: string[]): ParsedOptions {
   let platform: NativePlatform | undefined;
   let deviceId: string | undefined;
   let links = [1_000, 10_000];
@@ -128,22 +133,29 @@ function parseOptions(argv: string[]): Options {
     } else if (arg === '--no-exports') exports = false;
     else throw new Error(`unknown option ${arg}`);
   }
-  if (!platform || !deviceId) {
+  if (!platform) {
     throw new Error(
-      '--platform and --device are required (`xcrun simctl list devices booted` or `adb devices`)',
+      '--platform is required: ios or android. The root scripts carry it — ' +
+        '`npm run measure:data:ios`, `measure:data:android`.',
     );
   }
   return { platform, deviceId, links, exports };
 }
 
 async function main(): Promise<void> {
-  const options = parseOptions(process.argv.slice(2));
+  const parsed = parseOptions(process.argv.slice(2));
+  // Without `--device`, the one booted simulator or attached Android device
+  // (runner/device.ts), and never a choice between two.
+  const options: Options = {
+    ...parsed,
+    deviceId: await resolveDevice(parsed.platform, parsed.deviceId),
+  };
   await assertOriginOwnedByRepo(API_URL, 'bracemark-api', { required: true });
   await assertOriginOwnedByRepo(WEB_URL, 'bracemark-web', { required: true });
   await assertInstalled(options);
   if (options.platform === 'android') await reversePorts(options.deviceId);
 
-  const runId = createRunId('measure-native');
+  const runId = createRunId('measure-data-mobile');
   const runDir = join(MEASURE_OUTPUT, runId);
   await mkdir(runDir, { recursive: true });
 
@@ -213,7 +225,7 @@ async function importLeg(
   options: Options,
 ): Promise<NativeLeg> {
   console.log(`\n${leg}`);
-  const credentials = await provisionAccount(`measure-native-${account}`);
+  const credentials = await provisionAccount(`measure-data-mobile-${account}`);
   // Plus: free caps a library at 200 links. Granted before the device signs in,
   // so its first entitlement read already carries it (web/fixtures/plan.ts).
   await grantPlus(credentials.username);

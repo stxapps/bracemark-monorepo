@@ -261,18 +261,19 @@ builds and serves on :3001. It needs the api up (`npm run dev`). Design:
 `docs/data-lifecycle.md`, _main-thread cost_.
 
 ```sh
-npm run measure:data                                # 10,000 links, CPU 4x slower
-npm run measure:data -- --links 10000,50000 --cpu 6
-npm run measure:data -- --trace                     # + a DevTools trace per leg
+npm run measure:data:web                            # 10,000 links, CPU 4x slower
+npm run measure:data:web -- --links 10000,50000 --cpu 6
+npm run measure:data:web -- --trace                 # + a DevTools trace per leg
 ```
 
-The native leg (`e2e/measure/native.ts`) measures bracemark-expo through Maestro
-on a booted simulator or emulator, with a production bundle it serves from its
-own Metro (so :8081 must be free):
+The native leg (`e2e/measure/data-mobile.ts`) measures bracemark-expo through
+Maestro on a booted simulator or emulator, with a production bundle it serves
+from its own Metro (so :8081 must be free):
 
 ```sh
-npm run measure:native -- --platform ios --device <udid>
-npm run measure:native -- --platform android --device <serial> --links 1000,10000
+npm run measure:data:ios                            # the one booted simulator
+npm run measure:data:android -- --links 1000,10000
+npm run measure:data:ios -- --device <udid>         # one of several booted
 ```
 
 ## measuring the password manager

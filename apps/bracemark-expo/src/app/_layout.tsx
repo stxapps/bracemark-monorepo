@@ -26,7 +26,7 @@ import '../../global.css';
 // The JS-thread stall probe (expo-react lib/stall-probe.ts), in measurement
 // bundles only. Metro inlines the flag at build time, and only the measurement
 // tool sets it — in Metro's environment, never in an env file
-// (e2e/measure/native.ts) — so every other build compiles this to nothing.
+// (e2e/measure/data-mobile.ts) — so every other build compiles this to nothing.
 if (process.env.EXPO_PUBLIC_MEASURE_STALLS === '1') startStallProbe();
 
 // The sync engine's timing spans (expo-react lib/sync-trace.ts), printed per

@@ -45,7 +45,7 @@
 // a development build, which would land in the middle of the Maestro flows that
 // save more than a handful of links. To see it, run a release build
 // (docs/expo-dependencies.md, _expo-store-review_). The gate is the BUNDLE's, not
-// the binary's: `measure:native` serves a `--no-dev` bundle to the development
+// the binary's: `measure:data:ios` serves a `--no-dev` bundle to the development
 // client, so there the prompt is live on a simulator that shows every ask
 // (docs/e2e.md, _the native leg_).
 

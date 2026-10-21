@@ -9,7 +9,7 @@ import { inherit } from './process';
 // into a run directory. Two callers need the bytes a deployed tier would serve
 // rather than the dev server's: the PWA runner (runner/pwa.ts), for the service
 // worker that development never registers, and the data-path measurement
-// (measure/data.ts), because React's development build does several times the
+// (measure/data-web.ts), because React's development build does several times the
 // main-thread work of the production one and would overstate every number.
 //
 // A module of its own because runner/pwa.ts runs its `main()` on import: a second

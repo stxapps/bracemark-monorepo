@@ -1,8 +1,9 @@
-# One import leg of `npm run measure:native` (e2e/measure/native.ts): sign in,
-# import the one staged file through the real document picker, and stop on the
-# stall probe's reading. The runner reads that reading off the accessibility
-# tree after this flow exits. The navigation and the picker walk are
-# mobile/flows/import-data.yaml's, which carries the reasoning for each step.
+# One import leg of `npm run measure:data:ios` / `measure:data:android`
+# (e2e/measure/data-mobile.ts): sign in, import the one staged file through the
+# real document picker, and stop on the stall probe's reading. The runner reads
+# that reading off the accessibility tree after this flow exits. The navigation
+# and the picker walk are mobile/flows/import-data.yaml's, which carries the
+# reasoning for each step.
 #
 # Parameters: USERNAME, PASSWORD, IMPORT_FILE_STEM (the file name without its
 # extension), EXPO_DEV_CLIENT_LINK.

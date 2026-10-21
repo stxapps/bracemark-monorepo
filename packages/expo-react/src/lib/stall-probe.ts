@@ -11,8 +11,9 @@ import { useSyncExternalStore } from 'react';
 //
 // OFF unless the app starts it, and the app starts it only when the bundle was
 // built with EXPO_PUBLIC_MEASURE_STALLS=1 — which only the measurement tool
-// sets, in Metro's environment (e2e/measure/native.ts). A shipped build never
-// runs the timer, and every export below is a no-op until `startStallProbe`.
+// sets, in Metro's environment (e2e/measure/data-mobile.ts). A shipped build
+// never runs the timer, and every export below is a no-op until
+// `startStallProbe`.
 //
 // The window is the import or export run itself: its hook calls
 // `beginStallWindow` when the run starts and `endStallWindow` when it settles

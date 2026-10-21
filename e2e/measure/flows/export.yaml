@@ -1,7 +1,7 @@
-# One export leg of `npm run measure:native`: from the Data overview, export in
-# FORMAT_LABEL's format and stop on the stall probe's reading. Runs in the same
-# app session as the restore before it — no cold launch — so the library is the
-# one that just synced.
+# One export leg of `npm run measure:data:ios` / `measure:data:android`: from
+# the Data overview, export in FORMAT_LABEL's format and stop on the stall
+# probe's reading. Runs in the same app session as the restore before it — no
+# cold launch — so the library is the one that just synced.
 #
 # The share sheet this platform presents when a run finishes (data-section.tsx,
 # ExportView) is dismissed rather than used: the measured work is the run, and

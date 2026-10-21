@@ -439,13 +439,14 @@ failure lands in the build log naming both values and the fix.
 The one way past it is **`BRACEMARK_NONPROD_RELEASE=1` in the shell**, for a
 release build that is meant to talk to staging. The two `:release:staging`
 scripts set it, as do `npm run e2e:build:<platform>:staging`
-([e2e.md](./e2e.md)) and `npm run measure:native`, whose `expo start --no-dev` is
-production mode aimed at localhost. **Shell-only, and enforced** — the guard
-also fails if the name appears in any `.env*` file in the app. A shell var lasts
-one command, so it cannot be left on the way a file line can; and since a build
-started from Xcode's UI does not inherit the shell, **an Archive is production
-or a failed build**, with no exception to remember. The cost is that a staging
-_Release_ build does not come from Xcode's UI — use `ios:release:staging`.
+([e2e.md](./e2e.md)) and `npm run measure:data:<ios|android>`, whose
+`expo start --no-dev` is production mode aimed at localhost. **Shell-only, and
+enforced** — the guard also fails if the name appears in any `.env*` file in
+the app. A shell var lasts one command, so it cannot be left on the way a file
+line can; and since a build started from Xcode's UI does not inherit the shell,
+**an Archive is production or a failed build**, with no exception to remember.
+The cost is that a staging _Release_ build does not come from Xcode's UI — use
+`ios:release:staging`.
 
 ⚠ **Still check the bundle before uploading a store build** — the guard reads
 the env, this reads the file that ships. The store scripts do it themselves:
@@ -505,9 +506,9 @@ Current public vars:
 - `EXPO_PUBLIC_MEASURE_STALLS` → `1` turns on expo-react's JS-thread stall
   probe (`lib/stall-probe.ts`, started in `src/app/_layout.tsx`) and its
   `measure-stall-reading` readout in the Data view. **It is in no env file, on
-  purpose.** Only `npm run measure:native` sets it, in the environment of the
-  Metro it starts, so a shipped build compiles the check to nothing
-  ([e2e.md](./e2e.md), _the native leg_).
+  purpose.** Only `npm run measure:data:<ios|android>` sets it, in the
+  environment of the Metro it starts, so a shipped build compiles the check to
+  nothing ([e2e.md](./e2e.md), _the native leg_).
 - `EXPO_PUBLIC_SYNC_TRACE` → `1` installs the sync engine's timing recorder
   (`lib/sync-trace.ts`, started in `src/app/_layout.tsx`), which prints each
   cycle's phase table to the log as `[sync-trace]`. Same arrangement as the stall
