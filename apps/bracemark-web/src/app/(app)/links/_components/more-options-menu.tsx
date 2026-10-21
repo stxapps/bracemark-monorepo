@@ -58,7 +58,11 @@ import { DEFAULT_SECTION_ID } from '../../settings/sections';
 // `onBulkEdit`: the topbar hands its Bulk edit toggle in here when the bar is too
 // narrow to hold it as a button (topbar.tsx, COMPACT_BAR_REM) — present, the menu
 // leads with it; absent, the item doesn't exist.
-export function MoreOptionsMenu({ onBulkEdit }: { onBulkEdit?: () => void } = {}) {
+interface MoreOptionsMenuProps {
+  onBulkEdit?: () => void;
+}
+
+export function MoreOptionsMenu({ onBulkEdit }: MoreOptionsMenuProps = {}) {
   const { storeStatus, bgSyncStatus, syncNow } = useSync();
   const { appLock, lockApp } = useLocks();
   const { requestSignOut, signingOut } = useSignOutFlow();
