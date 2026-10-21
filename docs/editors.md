@@ -299,7 +299,11 @@ draft; each keystroke commits or reverts in place):
   and returns no plan past it, so the row eases home; both sections pass the
   same number to `getProjection` as `maxDepth`, so the live indent stops there
   too; and `forbiddenParentIds` leaves every too-deep parent out of "Move to". A
-  subtree already past the limit may still be lifted. Unlike the paywall, it is
+  subtree already past the limit may still be lifted. Those decide what is
+  offered; the move mutations refuse, asking `moveDeepensPastMaxDepth` of the
+  stored tree after the move, because the forest drawn cannot show what a move
+  out of a `parentId` loop reattaches (Move up on a loop's root row writes its
+  effective parent) — [data-limits.md](./data-limits.md), _editors_. Unlike the paywall, it is
   a rule about the data rather than the plan, so it stops the gesture instead of
   explaining it — and at 100 levels no one meets it by hand. Why the limit lives
   at the editors and nowhere that only carries data:

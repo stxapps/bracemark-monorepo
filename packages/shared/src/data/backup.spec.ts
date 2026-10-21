@@ -2,8 +2,8 @@ import { syncPathSchema } from '../sync/endpoints';
 import { APP_LOCK_ID } from '../sync/lock-coverage';
 import { FILES_PREFIX, LISTS_PREFIX, pathFromId, TAGS_PREFIX } from '../sync/paths';
 import { ranksBetween } from '../sync/rank';
-import { ALL_ID, MY_LIST_ID, RESERVED_LIST_IDS } from '../sync/system-lists';
-import { TREE_MAX_DEPTH } from '../sync/tree';
+import { ALL_ID, MY_LIST_ID, RESERVED_LIST_IDS, TRASH_ID } from '../sync/system-lists';
+import { buildTree, flattenToRows, flattenTree, TREE_MAX_DEPTH } from '../sync/tree';
 import {
   BACKUP_ITEMS_ENTRY,
   BACKUP_MANIFEST_ENTRY,
@@ -545,9 +545,70 @@ describe('flattenBackupTree', () => {
     expect(moved(loop(LIMIT + 1))).toHaveLength(1);
   });
 
-  it('leaves the self-parented list alone', () => {
-    expect(moved([node('list', 'self', 'self')])).toEqual([]);
+  // ...and the cut is stored: a line the loop cut made a root is restored at
+  // the top level, where every device already shows it, and nothing else on it
+  // or on the rest of the loop changes. Not counted as placed.
+  it('stores the cut a loop makes', () => {
+    const loop = [node('list', 'l0', 'l1'), node('list', 'l1', 'l2'), node('list', 'l2', 'l0')];
+    const result = flattenBackupTree(loop);
+    expect(result.flattenedPaths.size).toBe(0);
+    expect(result.entries).toEqual([
+      { ...loop[0], data: { ...loop[0].data, parentId: null } },
+      loop[1],
+      loop[2],
+    ]);
+    expect(parentOf(flattenBackupTree([node('list', 'self', 'self')]).entries, 'self')).toBeNull();
   });
+
+  // A root for any other reason keeps its line: a parent the file doesn't hold
+  // may be one the library does, and Trash never takes a child.
+  it('keeps a missing or a no-children parent as written', () => {
+    const entries = [node('list', 'p', 'not-in-file'), node('list', 't', TRASH_ID)];
+    expect(flattenBackupTree(entries).entries).toEqual(entries);
+  });
+
+  // A loop with tails, in the form that beat placement: a loop m1 ⇄ m2,
+  // and chains of 99 whose tops the cut detaches (each top's id is below every
+  // id after it on its walk), chain k+1 hanging off chain k's bottom. Measured
+  // as cut, every chain is 99 levels and nothing is placed; stored as written,
+  // one Move up on m1's row — which writes its effective parent, null — joined
+  // them into one chain three hundred deep.
+  it.each(['list', 'tag'] as const)(
+    'restores a %s loop with tails as a tree no edit can release',
+    (kind) => {
+      const tails = 3;
+      const entries = [node(kind, 'm1', 'm2'), node(kind, 'm2', 'm1')];
+      let below = 'm2';
+      for (let k = 1; k <= tails; k++) {
+        const top = `a${tails - k + 1}`;
+        entries.push(node(kind, top, below), ...chain(kind, LIMIT - 2, `z${k}-`, top));
+        below = `z${k}-${LIMIT - 3}`;
+      }
+      const result = flattenBackupTree(entries);
+      expect(result.flattenedPaths.size).toBe(0);
+      for (const id of ['m1', 'a1', 'a2', 'a3']) expect(parentOf(result.entries, id)).toBeNull();
+
+      const prefix = kind === 'list' ? LISTS_PREFIX : TAGS_PREFIX;
+      const items = (lines: BundleEntry[]) =>
+        lines.map((entry) => ({
+          ...(entry.data as { parentId: string | null; rank: string }),
+          id: entry.path.slice(prefix.length, -'.enc'.length),
+        }));
+      const levels = (lines: BundleEntry[]) =>
+        flattenTree(buildTree(items(lines))).reduce((most, n) => Math.max(most, n.depth + 1), 0);
+      // No stored edge the read edge ignores: every row sits under the parent
+      // its line names, so the editors' own rule measures every later move.
+      for (const row of flattenToRows(buildTree(items(result.entries)), new Set())) {
+        expect(row.parentId).toBe(row.item.parentId);
+      }
+      const m1 = pathFromId('m1', prefix);
+      const release = result.entries.map((entry) =>
+        entry.path === m1 ? { ...entry, data: { ...entry.data, parentId: null } } : entry,
+      );
+      expect(levels(result.entries)).toBe(LIMIT - 1);
+      expect(levels(release)).toBe(LIMIT - 1);
+    },
+  );
 
   // The file chooses the depth, so the walk must not take a call frame per
   // level: a hundred thousand chained lines would overflow the stack of one

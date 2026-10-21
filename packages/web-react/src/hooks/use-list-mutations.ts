@@ -14,7 +14,9 @@
 // equal keys, so the tied siblings on one side are re-keyed too (sync/rank.ts).
 // Trash can't be a parent and a list can't be its own parent — both rejected
 // here, and buildTree is the read-time safety net for any cross-device cycle
-// that slips through.
+// that slips through. A move that would take any list past TREE_MAX_DEPTH,
+// measured on the stored tree after it, is rejected here too
+// (docs/data-limits.md).
 
 import { useCallback, useMemo } from 'react';
 
@@ -25,11 +27,13 @@ import {
   LIST_NAME_MAX,
   LIST_NO_CHILDREN_IDS,
   LISTS_PREFIX,
+  moveDeepensPastMaxDepth,
   pathFromId,
   placeAtIndex,
   rankForIndex,
   rerankToOrder,
   TRASH_ID,
+  TREE_MAX_DEPTH,
 } from '@stxapps/shared';
 import { newId } from '@stxapps/web-crypto';
 
@@ -166,6 +170,15 @@ export function useListMutations(): ListMutations {
       if (!username) throw new Error('useListMutations: no active account');
       if (parentId === TRASH_ID) throw new Error('Trash cannot contain lists');
       if (parentId === list.id) throw new Error('A list cannot be its own parent');
+      // Asked of the store, not of the tree the caller drew: the picker and the
+      // drag offer by that forest, which sync can change before the pick, and
+      // which cannot show what a move reattaches (moveDeepensPastMaxDepth).
+      const lists = await readLists();
+      if (
+        moveDeepensPastMaxDepth(lists, list.id, parentId, { noChildrenIds: LIST_NO_CHILDREN_IDS })
+      ) {
+        throw new Error(tooDeep(list.name));
+      }
 
       // One write, unless the slot falls between two tied ranks — then the tied
       // siblings on one side are re-keyed first to open it (placeAtIndex).
@@ -235,6 +248,11 @@ export function useListMutations(): ListMutations {
     () => ({ create, createTopLevel, rename, move, destroy, destroyBlocker, reorder }),
     [create, createTopLevel, rename, move, destroy, destroyBlocker, reorder],
   );
+}
+
+// The move refusal, in the same shape: what is wrong, then the act.
+function tooDeep(name: string): string {
+  return `Moving “${name}” there would nest lists more than ${TREE_MAX_DEPTH} levels deep. Choose a place higher up.`;
 }
 
 // "“Reading” still has 3 links. Move or delete them first." — what is wrong,

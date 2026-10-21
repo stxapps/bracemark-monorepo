@@ -14,7 +14,7 @@
 
 import { act, renderHook } from '@testing-library/react';
 
-import { buildTree, LIST_NO_CHILDREN_IDS } from '@stxapps/shared';
+import { buildTree, LIST_NO_CHILDREN_IDS, TREE_MAX_DEPTH } from '@stxapps/shared';
 
 import type { ListItem } from '../data/queries';
 import { useListMutations } from './use-list-mutations';
@@ -108,4 +108,28 @@ it('creates nothing from a blank name', async () => {
 
   expect(created).toBeNull();
   expect(mockWriteList).not.toHaveBeenCalled();
+});
+
+// `move` asks the depth rule of the store, after the move (shared sync/tree.ts,
+// moveDeepensPastMaxDepth), not only through the surfaces, which offer by the
+// tree they drew. The specimen is one a `parentId` loop hides: m1 ⇄ m2, with a
+// chain hanging off m2 whose top the cut detaches, so it reads as a root of its
+// own. Move up on m1's root row writes its effective parent, null — which would
+// take the loop out and hang the chain under m2, past the limit.
+it('refuses a move that would take a list past the depth limit, and writes nothing', async () => {
+  const chain = Array.from({ length: TREE_MAX_DEPTH - 2 }, (_, i) =>
+    list(`z${i}`, 'a0', i === 0 ? 'a' : `z${i - 1}`),
+  );
+  mockLists = [list('m1', 'a0', 'm2'), list('m2', 'a0', 'm1'), list('a', 'a1', 'm2'), ...chain];
+  const { result } = renderHook(() => useListMutations());
+
+  await expect(
+    act(() => result.current.move(mockLists[0], null, [mockLists[2]], 1)),
+  ).rejects.toThrow(`Moving “m1” there would nest lists more than ${TREE_MAX_DEPTH} levels deep.`);
+  expect(mockWriteList).not.toHaveBeenCalled();
+
+  // One list shorter, and the same move goes through.
+  mockLists = mockLists.filter((l) => l.id !== `z${TREE_MAX_DEPTH - 3}`);
+  await act(() => result.current.move(mockLists[0], null, [mockLists[2]], 1));
+  expect(mockWriteList).toHaveBeenCalledTimes(1);
 });

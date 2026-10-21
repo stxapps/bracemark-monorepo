@@ -9,6 +9,7 @@ import {
   flattenToRows,
   flattenTree,
   forbiddenParentIds,
+  moveDeepensPastMaxDepth,
   parentsPastMaxDepth,
   TREE_MAX_DEPTH,
   TREE_PATH_CUT,
@@ -475,6 +476,66 @@ describe('deepestDepthFor', () => {
     const forest = buildTree(deepChain(TREE_MAX_DEPTH + 10));
     expect(deepestDepthFor(forest, 'c5')).toBe(5);
     expect(deepestDepthFor(forest, 'c0')).toBe(0);
+  });
+});
+
+// A `parentId` loop m1 ⇄ m2 with `tails` chains of `length` hanging off it:
+// chain 1's top names m2, chain k+1's top names chain k's bottom. The tops'
+// ids are below everything after them on their walks, so breakCycles detaches
+// each one and every chain reads as a root of its own, `length` levels deep —
+// while the stored edges still run the whole stack into the loop.
+function loopWithTails(tails: number, length: number): Node[] {
+  const items = [n('m1', 'm2', 'a'), n('m2', 'm1', 'a')];
+  let below = 'm2';
+  for (let k = 1; k <= tails; k++) {
+    const top = `a${String(tails - k + 1).padStart(4, '0')}`;
+    items.push(n(top, below, 'a'));
+    below = top;
+    for (let j = 1; j < length; j++) {
+      items.push(n(`z${k}-${j}`, below, 'a'));
+      below = `z${k}-${j}`;
+    }
+  }
+  return items;
+}
+
+const levels = (items: Node[]) =>
+  flattenTree(buildTree(items)).reduce((most, node) => Math.max(most, node.depth + 1), 0);
+
+describe('moveDeepensPastMaxDepth', () => {
+  it('agrees with deepestDepthFor on an ordinary move', () => {
+    const items = [...deepChain(TREE_MAX_DEPTH - 1), n('x', null, 'a'), n('y', 'x', 'a')];
+    // x and y need two levels; c97 is level 98, so x fits under it, not under c98.
+    expect(deepestDepthFor(buildTree(items), 'x')).toBe(TREE_MAX_DEPTH - 2);
+    expect(moveDeepensPastMaxDepth(items, 'x', `c${TREE_MAX_DEPTH - 3}`)).toBe(false);
+    expect(moveDeepensPastMaxDepth(items, 'x', `c${TREE_MAX_DEPTH - 2}`)).toBe(true);
+    expect(moveDeepensPastMaxDepth(items, 'y', `c${TREE_MAX_DEPTH - 2}`)).toBe(false);
+  });
+
+  it('never refuses a lift, or a move in place, of a chain already past the limit', () => {
+    const items = [...deepChain(TREE_MAX_DEPTH + 10), n('x', null, 'a')];
+    expect(moveDeepensPastMaxDepth(items, 'c50', 'c10')).toBe(false);
+    expect(moveDeepensPastMaxDepth(items, 'c50', 'c49')).toBe(false);
+    expect(moveDeepensPastMaxDepth(items, 'c0', 'x')).toBe(true);
+  });
+
+  // The move deepestDepthFor cannot see: Move up on the loop's root row writes
+  // its effective parent, null, which takes the loop out and hangs every tail in
+  // one chain. Measured in the cut forest, m1's subtree is two lists deep.
+  it('refuses a move that reattaches what a loop cut detached', () => {
+    const items = loopWithTails(3, TREE_MAX_DEPTH - 1);
+    expect(levels(items)).toBe(TREE_MAX_DEPTH - 1);
+    expect(deepestDepthFor(buildTree(items), 'm1')).toBe(TREE_MAX_DEPTH - 2);
+    expect(moveDeepensPastMaxDepth(items, 'm1', null)).toBe(true);
+    expect(levels(items.map((i) => (i.id === 'm1' ? { ...i, parentId: null } : i)))).toBe(
+      2 + 3 * (TREE_MAX_DEPTH - 1),
+    );
+    // Or the first tail's top, moved anywhere outside the loop.
+    expect(moveDeepensPastMaxDepth(items, 'a0003', null)).toBe(true);
+  });
+
+  it('lets a loop go once nothing hanging off it would pass the limit', () => {
+    expect(moveDeepensPastMaxDepth(loopWithTails(1, TREE_MAX_DEPTH - 2), 'm1', null)).toBe(false);
   });
 });
 

@@ -585,8 +585,12 @@ The policy, decided once:
   the last line for a path while the writer kept the first wherever the repeat
   fell in a later write chunk — so a deep chain repeated further down as roots
   passed it and was stored. The tree is built by the read edge's `buildTree`,
-  so a `parentId` loop is cut where every device cuts it and measured as cut;
-  no backup this app writes holds a loop. Tags are held to it too: their tree
+  so a `parentId` loop is cut where every device cuts it, measured as cut, and
+  **stored** as cut: a line the cut made a root is written with `parentId:
+null`. Written as it was, the loop's edges reached the library and one Move up
+  on its root row joined every chain hanging off it into one, as deep as the
+  file. A backup this app writes can hold a loop — the export is verbatim, and
+  two devices' moves can meet in one. Tags are held to it too: their tree
   is built by the same `buildTree`.
 - **An interop date the calendar cannot name is dropped; the row is kept.** The
   same value reaches the projection legitimately — the epoch parser's unit

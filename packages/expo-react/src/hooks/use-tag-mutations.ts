@@ -10,12 +10,14 @@ import { newId } from '@stxapps/expo-crypto';
 import {
   cleanName,
   compareRank,
+  moveDeepensPastMaxDepth,
   pathFromId,
   placeAtIndex,
   rankForIndex,
   rerankToOrder,
   TAG_NAME_MAX,
   TAGS_PREFIX,
+  TREE_MAX_DEPTH,
 } from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
@@ -136,6 +138,14 @@ export function useTagMutations(): TagMutations {
     async (tag: TagItem, parentId: string | null, siblings: TagItem[], index: number) => {
       if (!username) throw new Error('useTagMutations: no active account');
       if (parentId === tag.id) throw new Error('A tag cannot be its own parent');
+      // Asked of the store, as useListMutations.move does and for its reason: the
+      // flat table's Move up/down writes `parentId: null`, which on a tag a
+      // `parentId` loop left at the root reattaches what hangs off the loop.
+      if (moveDeepensPastMaxDepth(await readTags(), tag.id, parentId)) {
+        throw new Error(
+          `Moving “${tag.name}” there would nest tags more than ${TREE_MAX_DEPTH} levels deep. Choose a place higher up.`,
+        );
+      }
 
       // One write, unless the slot falls between two tied ranks — then the tied
       // siblings on one side are re-keyed first to open it (placeAtIndex).

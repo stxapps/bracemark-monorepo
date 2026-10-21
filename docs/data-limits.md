@@ -130,7 +130,18 @@ as two folders with one path in a CSV.
   refuses. A subtree **already** past the limit may still move anywhere no
   deeper than it sits: lifting it is never refused. New lists are created at
   the top level only, and the tags table is flat, so a move is the only gesture
-  that deepens a tree.
+  that deepens a tree. Those are what the surfaces **offer**; the refusal itself
+  is in the move mutations (`useListMutations.move` / `useTagMutations.move`,
+  both platforms), which read the store and ask `moveDeepensPastMaxDepth` of
+  the tree **after** the move: no list or tag may end up past the limit, or
+  further past it than it sits. The surfaces measure the moved row's subtree in
+  the forest as drawn, and a `parentId` loop hides what a move can reattach: the
+  read edge cuts the loop, the chains hanging off it read as roots of their own,
+  and a Move up on the loop's root row — which writes its effective parent,
+  `null` — took the loop out and hung them all in one chain, as deep as the
+  library was long. The forest drawn can also be stale by the time a pick lands.
+  A refused move throws its sentence, which the section's notice shows; a drag
+  eases home.
 - **Interop import — placed at the limit.** It used to refuse the whole file.
   `capFolderPath` (`import/resolve.ts`) holds a path to the first 100 names
   plus the row's own folder; Netscape, CSV, LinkWarden and Brace.to paths are
@@ -152,7 +163,13 @@ as two folders with one path in a CSV.
   every device cuts it), with the system lists' defaults standing in for any
   the file leaves out, and moves the `parentId` of every line past the limit to
   its level-99 ancestor (`parentsPastMaxDepth`). Nothing else on the line
-  changes. `ImportOutcome.flattenedListCount` / `flattenedTagCount` count the
+  changes. The loop's cut is **stored**: a line the cut made a root is written
+  with `parentId: null`, where every device already shows it, and is not
+  counted as placed. Measured as cut but written as it was, a loop with chains
+  hanging off it was restored at 99 levels with nothing placed, and one Move up
+  on the loop's root row then joined the chains into one as deep as the file —
+  the editors' refusal above is the second guard on the same move. A parent the
+  file doesn't hold, or Trash, is written as it is. `ImportOutcome.flattenedListCount` / `flattenedTagCount` count the
   moved lines that were written. **The bound is per file, not per library**: a
   parent the file doesn't hold ends a chain, so a restore can hang a chain under
   a deep list the library already holds, and a list the library already holds

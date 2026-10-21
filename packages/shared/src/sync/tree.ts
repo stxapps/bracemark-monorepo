@@ -67,7 +67,8 @@ const EMPTY_SET: ReadonlySet<string> = new Set();
 
 // The deepest a list or tag tree may be made: TREE_MAX_DEPTH levels, a root
 // (`depth` 0) being level 1. A rule for the doors that MAKE a tree — the
-// editors refuse a move past it, an import and a restore place what is deeper
+// editors refuse a move past it (moveDeepensPastMaxDepth), an import and a
+// restore place what is deeper
 // at it, an interop export writes it no deeper — and never for the ones that
 // read one: nothing here refuses or trims a deeper stored chain, which sync can
 // always deliver (two devices' moves can each be legal and meet past it).
@@ -437,11 +438,13 @@ export function forbiddenParentIds<T extends TreeItem>(
 
 // The deepest `depth` (0 at the root) `id` may be placed at by a move: deep
 // enough that its whole subtree still ends within TREE_MAX_DEPTH levels — or,
-// for a subtree that is already past the limit (a backup from before the
-// limit, or two devices' moves meeting in sync), no deeper than it sits now, so
-// a move that only lifts it is never refused. The editors' one depth rule: the
-// "move to" picker reads it through forbiddenParentIds, the drag projection
-// through getMovePlan (tree-dnd.ts).
+// for a subtree that is already past the limit (two devices' moves meeting in
+// sync, or a restore hanging a file's chain under a deep list the library
+// holds), no deeper than it sits now, so a move that only lifts it is never
+// refused. The rule the editors OFFER by: the "move to" picker reads it through
+// forbiddenParentIds, the drag projection through getMovePlan (tree-dnd.ts).
+// It measures the subtree in the forest as it is, so the move mutations ask
+// moveDeepensPastMaxDepth below of the forest after the move as well.
 export function deepestDepthFor<T extends TreeItem>(nodes: TreeNode<T>[], id: string): number {
   const node = findNode(nodes, id);
   if (node === undefined) return TREE_MAX_DEPTH - 1;
@@ -450,6 +453,38 @@ export function deepestDepthFor<T extends TreeItem>(nodes: TreeNode<T>[], id: st
     height = Math.max(height, each.depth - node.depth + 1);
   });
   return Math.max(TREE_MAX_DEPTH - height, node.depth);
+}
+
+// Whether giving `id` the stored parent `parentId` would put any entity past
+// TREE_MAX_DEPTH levels, or further past it than it sits now — measured on the
+// forest AFTER the move, which deepestDepthFor cannot be. The two agree on every
+// ordinary move. They part where the move rewrites an edge the read edge was
+// ignoring: a `parentId` loop is cut (breakCycles), and the lists hanging off it
+// read as roots of their own; give a loop member a parent outside the loop — a
+// Move up on its row writes its EFFECTIVE parent — and the loop is gone, every
+// walk reaches a root again, and those lists all hang in one chain, as deep as
+// the store is long. deepestDepthFor measured the moved row's subtree in the cut
+// forest, which does not hold them. So the move mutations ask this, of the store
+// as it is, and the surfaces' own rule (the picker, the drag) stays the one that
+// decides what is offered. Two builds of the whole set, once per move.
+export function moveDeepensPastMaxDepth<T extends TreeItem>(
+  items: readonly T[],
+  id: string,
+  parentId: string | null,
+  options?: BuildTreeOptions,
+): boolean {
+  const before = new Map<string, number>();
+  visit(buildTree(items.slice(), options), (node) => {
+    before.set(node.item.id, node.depth);
+  });
+  const moved = items.map((item) => (item.id === id ? { ...item, parentId } : item));
+  let deepens = false;
+  visit(buildTree(moved, options), (node) => {
+    if (node.depth < TREE_MAX_DEPTH) return false;
+    deepens = node.depth > (before.get(node.item.id) ?? -1);
+    return deepens;
+  });
+  return deepens;
 }
 
 // Every node deeper than TREE_MAX_DEPTH levels, mapped to the parent that puts

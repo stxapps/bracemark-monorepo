@@ -313,8 +313,8 @@ export function classifyBundleLine(line: string): BundleEntry | undefined {
 // `parentId` becomes its ancestor on the level above, so it sits beside that
 // ancestor's other children, under its own name and with its own links, and
 // its descendants follow it there (parentsPastMaxDepth). Only the nesting below
-// the limit is lost. Every other line, and every other field of a moved one,
-// is restored as written. The paths of the lines it moved come back so the
+// the limit is lost. Every other line but a loop's cut (below), and every
+// other field of a moved one, is restored as written. The paths of the lines it moved come back so the
 // restore can count the ones it wrote.
 //
 // It used to refuse the whole file. But a backup is the user's own library —
@@ -329,15 +329,26 @@ export function classifyBundleLine(line: string): BundleEntry | undefined {
 // library holds) ends a chain, so the bound is per file, not per library. A
 // restore can hang a chain under a deep list the library already holds, and a
 // list the library already holds keeps its stored parent whatever the file's
-// line says. The tree is built by buildTree, the read edge's own, so a
-// `parentId` loop is cut where every device will cut it and measured as cut;
-// no backup this app writes holds one. Tags are held to it too — a tag tree is
-// built by the same buildTree.
+// line says. Tags are held to it too — a tag tree is built by the same
+// buildTree.
+//
+// The tree is built by buildTree, the read edge's own, so a `parentId` loop is
+// cut where every device will cut it — and the cut is STORED: each line the cut
+// detached is restored with `parentId: null`, which is where every device
+// already shows it. Measured as cut but stored as written, the loop's edges
+// stayed in the library, and the lists hanging off it with them: one edit that
+// gave a loop member a parent outside the loop (a Move up on its row writes its
+// effective parent) joined every one of those chains into one, as deep as the
+// file was long, past a rule that had placed nothing. A backup this app writes
+// can hold a loop — the export is verbatim, and two devices' moves can meet in
+// one — so this is not only a hand-made file's case. A cut line is not counted
+// as placed: nothing about where it shows has changed.
 export function flattenBackupTree(entries: readonly BundleEntry[]): {
   entries: BundleEntry[];
   flattenedPaths: Set<string>;
 } {
-  const parentByPath = new Map<string, string>();
+  const parentByPath = new Map<string, string | null>();
+  const flattenedPaths = new Set<string>();
   for (const { kind, prefix, noChildrenIds } of [
     { kind: 'list', prefix: LISTS_PREFIX, noChildrenIds: LIST_NO_CHILDREN_IDS },
     { kind: 'tag', prefix: TAGS_PREFIX, noChildrenIds: NO_IDS },
@@ -356,19 +367,32 @@ export function flattenBackupTree(entries: readonly BundleEntry[]): {
         if (!ids.has(id)) items.push({ id, parentId, rank });
       }
     }
-    const parents = parentsPastMaxDepth(buildTree(items, { noChildrenIds }));
+    const tree = buildTree(items, { noChildrenIds });
+    // A root whose parent is held and may hold children is one the loop cut
+    // made a root: a missing or a no-children parent is the only other way.
+    const held = new Set(items.map((item) => item.id));
+    for (const { item } of tree) {
+      const { parentId, path } = item;
+      if (parentId === null || path === undefined) continue;
+      if (held.has(parentId) && !noChildrenIds.has(parentId)) parentByPath.set(path, null);
+    }
+    const parents = parentsPastMaxDepth(tree);
     if (parents.size === 0) continue;
     for (const item of items) {
       const parentId = parents.get(item.id);
-      if (parentId !== undefined && item.path !== undefined) parentByPath.set(item.path, parentId);
+      if (parentId !== undefined && item.path !== undefined) {
+        parentByPath.set(item.path, parentId);
+        flattenedPaths.add(item.path);
+      }
     }
   }
   return {
     entries: entries.map((entry) => {
-      const parentId = parentByPath.get(entry.path);
-      return parentId === undefined ? entry : { ...entry, data: { ...entry.data, parentId } };
+      if (!parentByPath.has(entry.path)) return entry;
+      const parentId = parentByPath.get(entry.path) ?? null;
+      return { ...entry, data: { ...entry.data, parentId } };
     }),
-    flattenedPaths: new Set(parentByPath.keys()),
+    flattenedPaths,
   };
 }
 
