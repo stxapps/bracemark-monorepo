@@ -4,13 +4,16 @@
 // malformed/duplicate/trashed warnings that relabel Save → Confirm; why the
 // trashed ground alone offers Restore; why the quota banner REPLACES the form;
 // the optionalDirty close guard). Web anchors that form to a popover only at
-// `md` and up; below it the form fills a bottom sheet, which is the shape this
-// file draws — a phone-height surface with the keyboard up has no room to hang
-// a form off a topbar corner.
+// `md` and up, and fills a bottom sheet below it. This file draws the same
+// split on the same width (lib/window-class.ts): the bottom sheet on a narrow
+// window, and on a wide one a CENTRED CARD rather than an anchored popover —
+// the summoning control is a FAB, which is no anchor, and a surface with the
+// keyboard up has no room to hang a form off a corner. Why the wide window
+// needs a different shape at all is in the panel's JSX, below.
 //
-// IT IS NOT A ROUTE, and that is the load-bearing decision here. The links
-// screen renders it (`(app)/links/index.tsx`, beside the hoisted dialogs) while
-// its own `adding` state is true; the FAB flips that state. Three measured
+// IT IS NOT A ROUTE, and that is the load-bearing decision here. LinkAddHost
+// renders it (link-add-host.tsx, which `(app)/links/_layout.tsx` wraps around
+// the links Drawer) while its `adding` state is true; the FAB flips that state. Three measured
 // facts pushed it out of expo-router, all of them in react-native-screens 4.16
 // and all of them silent — the derivations live in docs/soft-keyboard.md,
 // _the add panel_:
@@ -42,14 +45,14 @@
 // there is nothing to measure the height, nothing to seize the scroller and no
 // modal container to lose. What the route WAS providing has to be provided
 // here, and each piece is one line:
-//   • a fresh draft per open — the links screen mounts this only while `adding`,
+//   • a fresh draft per open — the host mounts this only while `adding`,
 //     so closing unmounts it (the ephemeral-action rule from web's header: the
 //     draft is component state, never the URL);
 //   • Android's hardware back — a BackHandler that swallows the press while the
 //     optional section holds work and closes otherwise, which is exactly what
 //     `usePreventRemove` was doing;
 //   • modality for a screen reader — `accessibilityViewIsModal` on iOS, and the
-//     links screen hides its own subtree behind us on Android
+//     host hides the subtree behind us on Android
 //     (`importantForAccessibility`), which a presented route got for free.
 // The pre-selected list is no longer a route param either: this sits INSIDE
 // LinksPageProvider now, so it reads the viewing list itself (web's
@@ -59,7 +62,8 @@
 // three `ui/dialog.tsx` uses — that file's comments are the canonical
 // derivation:
 //   avoidance — keyboard-controller's `KeyboardAvoidingView` owns the full
-//     height and parks the panel on the keyboard's top edge (`justify-end`).
+//     height and parks the sheet on the keyboard's top edge (`justify-end`),
+//     or centres the card in what the keyboard leaves (`justify-center`).
 //     `behavior="padding"`, so `max-h-full` on the panel resolves against "the
 //     window minus the keyboard" without measuring anything.
 //   the squeeze — `max-h-full` needs `shrink` on the one scroller the body
@@ -120,11 +124,15 @@ import { TagsField } from '../../components/links/tags-field';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
-import { NativeOnlyAnimatedView } from '../../components/ui/native-only-animated-view';
+import {
+  NativeOnlyAnimatedView,
+  POPUP_FADE_MS,
+} from '../../components/ui/native-only-animated-view';
 import { Text } from '../../components/ui/text';
 import { Textarea } from '../../components/ui/textarea';
 import { noteReviewMoment } from '../../lib/review-prompt';
 import { cn } from '../../lib/utils';
+import { useWideWindow } from '../../lib/window-class';
 import { useLinksPage } from './page-provider';
 
 // Composite components need the wrapper to accept `className` (the note in
@@ -133,13 +141,17 @@ const StyledKeyboardAvoidingView = withUniwind(KeyboardAvoidingView);
 const StyledAnimatedView = withUniwind(NativeOnlyAnimatedView);
 const StyledAnimatedScrollView = withUniwind(Animated.ScrollView);
 
-// The panel's arrival: it slides from the edge it is anchored to, which is also
-// the edge the FAB that summoned it sits on — spatial consistency, the one
-// purpose that earns motion on a surface opened a few times a day. `translateY`
-// as a percentage moves the panel by its OWN height whatever the form's, and a
-// transform costs no layout pass; the curve is iOS's own sheet bezier rather
-// than an approximation, and the dim fades on its own (a dim that slides with
-// the panel reads as a moving wall — `ui/dialog.tsx` pairs them the same way).
+// The panel's arrival, per shape (the two shapes: the panel's JSX below). The
+// SHEET slides from the edge it is anchored to, which is also the edge the FAB
+// that summoned it sits on — spatial consistency, the one purpose that earns
+// motion on a surface opened a few times a day. `translateY` as a percentage
+// moves the panel by its OWN height whatever the form's, and a transform costs
+// no layout pass; the curve is iOS's own sheet bezier rather than an
+// approximation, and the dim fades on its own (a dim that slides with the panel
+// reads as a moving wall — `ui/dialog.tsx` pairs them the same way). The CARD is
+// anchored to no edge, so it has no direction to arrive from: it fades in with
+// its dim on the dialog kit's POPUP_FADE_MS, which is what every other centred
+// surface on this side does, the pickers it opens included.
 //
 // SHARED VALUES, NOT `entering`/`exiting`. This is the one place in the app that
 // does not use the layout-animation descriptors, and the reason is measured: with
@@ -171,25 +183,47 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
   // onLayout, below) — and it re-fires as the multiline Textarea grows.
   const noteBottom = useSharedValue(0);
   const { selection } = useLinksPage();
-  // 1 = parked below the bottom edge, 0 = home. Driven once on mount; the panel
-  // is only mounted while it is open (links/index.tsx), so there is no "closed"
-  // state to animate back to.
+  // The shape: a bottom sheet below the docking width, a centred card at and
+  // above it (the panel's JSX carries why). Live, so a rotation or a Split View
+  // drag across 768 re-shapes an open panel; the tree is the same in both, so
+  // the draft, the focus and the scroll survive the switch.
+  const wide = useWideWindow();
+  // 1 = home; 0 = parked below the bottom edge (sheet) or transparent (card).
+  // Driven once on mount; the panel is only mounted while it is open
+  // (link-add-host.tsx), so there is no "closed" state to animate back to. The
+  // timing is read at mount — a re-run on a later `wide` flip finds the value
+  // already at 1 and moves nothing.
   const enter = useSharedValue(0);
   useEffect(() => {
     enter.set(
-      withTiming(1, { duration: SHEET_MS, easing: SHEET_CURVE, reduceMotion: ReduceMotion.System }),
+      withTiming(
+        1,
+        wide
+          ? { duration: POPUP_FADE_MS, reduceMotion: ReduceMotion.System }
+          : { duration: SHEET_MS, easing: SHEET_CURVE, reduceMotion: ReduceMotion.System },
+      ),
     );
-  }, [enter]);
-  const panelStyle = useAnimatedStyle(() => ({
-    // `height` is 0 → negative keyboard height. Keeping this arithmetic on the
-    // UI runtime makes the inset disappear with the avoider's lift instead of
-    // one React render after `keyboardDidShow`.
-    paddingBottom: Math.max(insets.bottom + keyboardHeight.get(), 0),
-    transform: [{ translateY: `${(1 - enter.get()) * 100}%` }],
+  }, [enter, wide]);
+  // `height` is 0 → negative keyboard height. Keeping this arithmetic on the UI
+  // runtime makes the inset disappear with the avoider's lift instead of one
+  // React render after `keyboardDidShow`. The SAME number serves both shapes:
+  // it is "the bottom inset while the keyboard is down, nothing while it is up"
+  // (the panel's bottom padding note, below), which the sheet pays inside its
+  // own fill and the card pays as the gutter beneath it.
+  const panelStyle = useAnimatedStyle(() =>
+    wide
+      ? { opacity: enter.get() }
+      : {
+          paddingBottom: Math.max(insets.bottom + keyboardHeight.get(), 0),
+          transform: [{ translateY: `${(1 - enter.get()) * 100}%` }],
+        },
+  );
+  const gutterStyle = useAnimatedStyle(() => ({
+    paddingBottom: wide ? Math.max(insets.bottom + keyboardHeight.get(), 0) + 8 : 0,
   }));
   const dimStyle = useAnimatedStyle(() => ({
     opacity: withTiming(enter.get() > 0 ? 1 : 0, {
-      duration: DIM_MS,
+      duration: wide ? POPUP_FADE_MS : DIM_MS,
       reduceMotion: ReduceMotion.System,
     }),
   }));
@@ -407,15 +441,16 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    // The panel COVERS the links screen rather than replacing it: an absolute
-    // layer over the screen's own container (`links/index.tsx` renders this as a
-    // sibling of the screen body, so `inset-0` resolves against the unpadded
-    // screen box and reaches under the status bar).
+    // The panel COVERS the links section rather than replacing it: an absolute
+    // layer over LinkAddHost's box, which wraps the whole links Drawer
+    // (link-add-host.tsx) — the docked rail on a wide window as well as the
+    // screen — so `inset-0` reaches under the status bar and across the rail.
+    // Drawn inside the screen it stopped at the rail's edge.
     //
     // `accessibilityViewIsModal` is what a presented route used to give for
     // free: VoiceOver ignores the sibling subtrees while this is up, so a swipe
     // can't walk out of the form into the list behind it. iOS reads this prop;
-    // Android has no equivalent, so the links screen hides its own body with
+    // Android has no equivalent, so the host hides the subtree it covers with
     // `importantForAccessibility` while `adding` is true (docs/accessibility.md).
     <View accessibilityViewIsModal className="absolute inset-0">
       {/* The backdrop, which is web's outside-click and is guarded like it: a
@@ -424,9 +459,11 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
           one web's onOpenChange applies. ✕ and Cancel stay the deliberate doors.
           `bg-black/50` is web's SheetOverlay, not the dialogs' `/80`
           (docs/theme.md, _the two kits_): the twin of this surface is
-          `SheetContent side="bottom"`, not DialogContent. `accessible={false}`
-          for share-kit.tsx's reason — as a focus stop it would announce as one
-          enormous unlabelled control over the whole screen.
+          `SheetContent side="bottom"`, not DialogContent — and the card keeps
+          the sheet's scrim, so a rotation across 768 changes the surface and not
+          the room behind it. `accessible={false}` for share-kit.tsx's reason —
+          as a focus stop it would announce as one enormous unlabelled control
+          over the whole screen.
 
           It is a SIBLING of the avoider, not a child, and that is the whole
           reason it is spelled `absolute` here rather than wrapping: `absolute
@@ -449,90 +486,149 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
           avoider spans the window so the panel can be parked on the keyboard,
           but it must not be the touch target for the empty space above the
           panel — box-none lets those taps reach the backdrop while its children
-          keep their own. */}
+          keep their own. The gutter box inside it says the same, for the same
+          reason. */}
       <StyledKeyboardAvoidingView
         pointerEvents="box-none"
         behavior="padding"
-        className="flex-1 justify-end"
+        className="flex-1"
         // The gutter above a maxed-out panel, DialogOverlay's `inset + 8`
         // verbatim: `max-h-full` resolves against THIS box, so padding the top
         // is what stops a tall form from running under the notch — measured, an
         // expanded form with the keyboard up reaches the status bar without it.
         // Padding rather than a margin on the panel so the cap sees it.
         //
-        // The SIDES take the bare insets, no gutter: the sheet is edge-attached,
-        // so where a side inset is 0 it should still meet the screen's edge.
-        // They used to be absent, which held only while every side inset was
-        // a landscape notch the `max-w-xl` cap happened to clear. It isn't: the
-        // iPhone Duo's outer display reserves a strip down its trailing edge
-        // for the status bar and camera, at phone width, where the panel spans
-        // the window and its ✕ (`right-3`) would sit inside that strip
-        // (docs/expo-build.md, _devices_). Same per-edge rule as DialogOverlay:
-        // each side its own inset, never one mirrored onto the other.
-        style={{ paddingTop: insets.top + 8, paddingLeft: insets.left, paddingRight: insets.right }}
+        // The sheet's SIDES take the bare insets, no gutter: it is
+        // edge-attached, so where a side inset is 0 it should still meet the
+        // screen's edge. They used to be absent, which held only while every
+        // side inset was a landscape notch the width cap happened to clear. It
+        // isn't: the iPhone Duo's outer display reserves a strip down its
+        // trailing edge for the status bar and camera, at phone width, where the
+        // panel spans the window and its ✕ (`right-3`) would sit inside that
+        // strip (docs/expo-build.md, _devices_). Same per-edge rule as
+        // DialogOverlay: each side its own inset, never one mirrored onto the
+        // other. The card is detached on every side, so it takes DialogOverlay's
+        // whole rule, inset + 8.
+        style={{
+          paddingTop: insets.top + 8,
+          paddingLeft: insets.left + (wide ? 8 : 0),
+          paddingRight: insets.right + (wide ? 8 : 0),
+        }}
       >
-        {/* The panel. `max-h-full` resolves against the avoider — "the window
-          minus the keyboard" — and `rounded-t-2xl` is the edge-attached sheet
-          radius (docs/theme.md, _the radius scale_), matching both web quick-add
-          and the native share sheet. `rounded-4xl` belongs to detached dialog
-          surfaces; using it here made an attached sheet read like a clipped
-          dialog.
-
-          `bg-popover`, not the page's `bg-background` it used to wear, and in
-          dark that is the whole of what separates this panel from the screen it
-          covers (docs/theme.md, _elevation_). The scrim cannot: `bg-black/50`
-          takes a white page to mid-grey, but has nothing to subtract from a
-          0.145 one — measured on the Pixel 8 AVD, the panel was grey 10 over a
-          page at grey 5, APCA Lc 0.7 against light's 75. Nor can the `border-t`
-          alone: it is `border-border`, the token the link rows behind are
-          divided with, so over a list the panel's one edge read as one more row
-          divider. The lifted fill makes it a region rather than a line — the
-          corners show — and it is the fill every other floating surface here
-          already has (ui/dialog.tsx, ui/dropdown-menu.tsx) and the one web
-          quick-add wears in both its containers. Light is untouched: the two
-          tokens are the same white there.
-
-          The bottom padding is the share sheet's formula (share-kit.tsx,
-          docs/share-sheet.md): the inset while the keyboard is down, and NOTHING
-          while it is up. A keyboard's frame runs to the bottom of the screen —
-          it contains the home indicator — and the avoider has already padded by
-          its full height, so adding the inset on top of that is not clearance
-          but ~34pt of empty background between Save and the keys, at the moment
-          the panel has the least room to spend. Nothing catches it; it reads as
-          a gap, not as a bug.
-
-          It is a PRESSABLE, and not for the press: a plain View is not a touch
-          target, so a tap on the panel's own chrome — the header's empty middle,
-          a `gap-4` seam — would fall through to the backdrop behind it and
-          discard the draft. Claiming those taps is the job; `Keyboard.dismiss`
-          is what to do with them, and it is share-kit.tsx's layer arriving by a
-          different route (the scroller already covers the body, so this only
-          ever sees the chrome).
-
-          `max-w-xl self-center` is the wide-window answer, and it is a WIDTH
-          answer only. Web turns quick-add into an anchored popover at `md`;
-          here the sheet stays a bottom sheet at every width, because every
-          number above — the avoider's padding, the inset that the keyboard
-          cancels — is about the bottom edge, and none of it cares how wide the
-          panel is. What a tablet needed was not a different surface but a form
-          that doesn't run 1,000pt from its label to its Save: at 576 (the
-          widest phone's panel is ~440) the fields keep close to a phone's
-          measure and the sheet centres over the list, the way iPadOS centres
-          its own sheets. `sm:border-x` gives the detached sides the edge the
-          top already has, and so does any side inset, which detaches the
-          panel from that edge at any width; otherwise, below `sm`, the sides
-          are the screen's. */}
+        {/* The BOTTOM gutter, and the one box the two shapes disagree on. The
+            avoider cannot carry it: under `behavior="padding"` it writes its own
+            `paddingBottom` (the keyboard's overlap, 0 while closed) over any the
+            style sets. The sheet needs none — it meets the bottom edge and pays
+            the home indicator inside its own fill. The card floats, so the
+            space under it is `inset + 8` with the keyboard down and 8 with it up
+            (the keyboard's frame already holds the indicator — the panel's
+            bottom-padding note, below), on the UI runtime with the avoider's
+            lift (`gutterStyle`). Here rather than as the card's margin because
+            `max-h-full` resolves against this box's padded height: a margin
+            would let a maxed-out card overflow it by the margin, and centring
+            would push half of that past the top gutter. */}
         <StyledAnimatedView
-          as="Pressable"
-          accessible={false}
-          onPress={Keyboard.dismiss}
-          className={cn(
-            'max-h-full w-full max-w-xl self-center rounded-t-2xl border-t border-border bg-popover sm:border-x',
-            (insets.left > 0 || insets.right > 0) && 'border-x',
-          )}
-          style={panelStyle}
+          pointerEvents="box-none"
+          className={cn('flex-1', wide ? 'justify-center' : 'justify-end')}
+          style={gutterStyle}
         >
-          {/* A sheet header rather than an app bar: the top padding aligns the
+          {/* The panel, in one of TWO SHAPES on the docking width
+              (lib/window-class.ts, the rail's 768): a BOTTOM SHEET on a narrow
+              window, a centred CARD on a wide one — web's own split, which turns
+              quick-add from a bottom sheet into a popover at `md`.
+
+              It used to be a bottom sheet at every width, capped at `max-w-xl`
+              on the reasoning that every number here is about the bottom edge
+              and none of it cares how wide the panel is. The iPad (A16)
+              simulator disproved the first half. An edge-attached sheet is only
+              right while the avoider's idea of the keyboard's top edge is the
+              keyboard's real one, and on an iPad it often is not: the iPad's
+              keyboard can float, undock or split, and a hardware keyboard
+              replaces it with the shortcuts bar. keyboard-controller lifts by
+              the keyboard frame's HEIGHT whatever that frame's origin (its
+              `KeyboardMovementObserver`), and follows only the show and hide
+              notifications, so a keyboard that is not docked at the bottom
+              still lifts the sheet by its full height. The sheet then hangs
+              that far off the bottom edge with nothing under it, or its footer
+              stops short of the keys, and either reads as broken because the
+              whole promise of the shape is contact with that edge. A card
+              promises no contact. The same error moves its centre by half the
+              error and leaves it whole, inside "the window minus the keyboard"
+              as before. It is also the iPadOS idiom (a form sheet is a centred
+              card) and what this app's dialogs already are.
+
+              What the two share is everything that is not the frame: the
+              avoider, the cap, the shrinking scroller, the pinned footer and
+              every dismissal path. So the card's footer is still pinned below
+              the scroller, because Save must stay in view while the fields
+              scroll. It is just not ON the keyboard, since nothing here is.
+
+              `max-h-full` resolves against the gutter box — "the window minus
+              the keyboard, minus the gutters" — and the radius is the
+              floating-surface `2xl` both ways (docs/theme.md, _the radius
+              scale_): `rounded-t-2xl` on the sheet, whose bottom corners belong
+              to the screen, all four on the card, matching web quick-add's
+              popover and sheet and the native share sheet. `rounded-4xl` belongs
+              to detached dialog surfaces; on the sheet it read like a clipped
+              dialog, and on the card it would make this the twin of the pickers
+              it opens.
+
+              Widths: the sheet caps at `max-w-xl` and centres, which binds only
+              between `sm` and the docking width (an iPad in Slide Over or a
+              narrow Split View, a phone on its side); `sm:border-x` gives its
+              detached sides the edge the top already has, and so does any side
+              inset. The card is `max-w-lg`, one step past the dialog kit's
+              `max-w-md`, so a picker opened from it reads as a child over its
+              parent rather than as a replacement for it. It gets
+              DialogContent's border and shadow.
+
+              `bg-popover`, not the page's `bg-background` it used to wear, and in
+              dark that is the whole of what separates this panel from the screen it
+              covers (docs/theme.md, _elevation_). The scrim cannot: `bg-black/50`
+              takes a white page to mid-grey, but has nothing to subtract from a
+              0.145 one — measured on the Pixel 8 AVD, the panel was grey 10 over a
+              page at grey 5, APCA Lc 0.7 against light's 75. Nor can the `border-t`
+              alone: it is `border-border`, the token the link rows behind are
+              divided with, so over a list the panel's one edge read as one more row
+              divider. The lifted fill makes it a region rather than a line — the
+              corners show — and it is the fill every other floating surface here
+              already has (ui/dialog.tsx, ui/dropdown-menu.tsx) and the one web
+              quick-add wears in both its containers. Light is untouched: the two
+              tokens are the same white there.
+
+              The sheet's bottom padding is the share sheet's formula
+              (share-kit.tsx, docs/share-sheet.md): the inset while the keyboard
+              is down, and NOTHING while it is up. A keyboard's frame runs to the
+              bottom of the screen — it contains the home indicator — and the
+              avoider has already padded by its full height, so adding the inset
+              on top of that is not clearance but ~34pt of empty background
+              between Save and the keys, at the moment the panel has the least
+              room to spend. Nothing catches it; it reads as a gap, not as a bug.
+              The card pays the same number outside itself (the gutter box).
+
+              It is a PRESSABLE, and not for the press: a plain View is not a touch
+              target, so a tap on the panel's own chrome — the header's empty middle,
+              a `gap-4` seam — would fall through to the backdrop behind it and
+              discard the draft. Claiming those taps is the job; `Keyboard.dismiss`
+              is what to do with them, and it is share-kit.tsx's layer arriving by a
+              different route (the scroller already covers the body, so this only
+              ever sees the chrome). */}
+          <StyledAnimatedView
+            as="Pressable"
+            accessible={false}
+            onPress={Keyboard.dismiss}
+            className={cn(
+              'max-h-full w-full self-center border-border bg-popover',
+              wide
+                ? 'max-w-lg rounded-2xl border shadow-lg shadow-black/5'
+                : cn(
+                    'max-w-xl rounded-t-2xl border-t sm:border-x',
+                    (insets.left > 0 || insets.right > 0) && 'border-x',
+                  ),
+            )}
+            style={panelStyle}
+          >
+            {/* A sheet header rather than an app bar: the top padding aligns the
               title with the 36pt close control (`top-3.5` puts both centres at
               32pt), and `pb-6` is the complete title-to-form gap. The scroller
               therefore has no top padding. The divider went with the app-bar
@@ -543,8 +639,8 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
               marked, the line to add is one that appears on `scrollOffset > 0`,
               not a static one: a static divider would pull this panel into the
               app-bar tier it deliberately left. */}
-          <View className="relative shrink-0 pt-5 pr-14 pb-6 pl-4">
-            {/* The title's width must be DEFINITE. Sized to its own content,
+            <View className="relative shrink-0 pt-5 pr-14 pb-6 pl-4">
+              {/* The title's width must be DEFINITE. Sized to its own content,
                 Android/Fabric can retain a stale paint clip when the avoider's
                 keyboard padding relays out this transformed panel: the
                 native/a11y bounds stay correct, but the paint came up short
@@ -553,8 +649,8 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                 absolute, so there is no row to share), which is what makes it
                 definite here — NOT `flex-1`, which in a column acts on height.
                 Put the title back in a row and it needs `flex-1` again. */}
-            <Text className="text-base font-medium">Add link</Text>
-            {/* The floating-surface close, spelled like ui/dialog.tsx's and like
+              <Text className="text-base font-medium">Add link</Text>
+              {/* The floating-surface close, spelled like ui/dialog.tsx's and like
                 the web twin this panel ports — web-ui `sheet.tsx`'s
                 SheetCloseButton is `variant="ghost" size="icon-sm"` with a
                 `size-4` glyph, pinned to the surface's own top-right corner. The
@@ -573,90 +669,90 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                 52x52 effective. Nothing pressable is near it — the title is a
                 Text and the header reserves `pr-14` — and 8 of slop still lands
                 inside the header's own box. */}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onPress={close}
-              aria-label="Close add link"
-              hitSlop={8}
-              className="absolute top-3.5 right-3"
-            >
-              <Icon as={X} className="size-4" />
-            </Button>
-          </View>
-          {/* `shrink` is what lets the cap above reach this scroller instead of
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onPress={close}
+                aria-label="Close add link"
+                hitSlop={8}
+                className="absolute top-3.5 right-3"
+              >
+                <Icon as={X} className="size-4" />
+              </Button>
+            </View>
+            {/* `shrink` is what lets the cap above reach this scroller instead of
             pushing the header off the top (bulk-tags-dialog.tsx says the same).
             `handled` preserves taps on controls while panel chrome still drops
             the keyboard. This scroller deliberately uses `interactive`, not the
             app's usual `on-drag`: the expanded form can put Note below the fold,
             so an upward drag must scroll it clear without dismissing the keyboard
             and expanding the panel again (docs/soft-keyboard.md). */}
-          <StyledAnimatedScrollView
-            ref={scrollRef}
-            className="shrink"
-            // No end padding while the form shows: the space above Save is the
-            // footer's `pt-4`, which has to stay visible when the fields are
-            // clipped. The quota banner has no footer, so it keeps its own.
-            contentContainerClassName={cn('gap-4 px-4', atLimit && max !== null && 'pb-4')}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="interactive"
-          >
-            {atLimit && max !== null ? (
-              <LinkQuotaBanner
-                count={count}
-                max={max}
-                action={
-                  <Button
-                    size="sm"
-                    className="self-end"
-                    onPress={() => {
-                      // Close BEFORE routing — the Subscription screen must not be
-                      // pushed under an open panel (the LockedBanner precedent; as a
-                      // route this said `router.back()`, and it means the same thing
-                      // now that closing is a state flip rather than a pop).
-                      close();
-                      router.push('/settings/subscription');
-                    }}
-                  >
-                    <Text>Upgrade to {PLAN_LABELS.plus}</Text>
-                  </Button>
-                }
-              />
-            ) : (
-              <>
-                <LabeledField label="URL">
-                  <Input
-                    testID="add-link-url"
-                    value={url}
-                    onChangeText={(v) => {
-                      setUrl(v);
-                      // Editing re-opens the question: clear the error and disarm the
-                      // warning so the button reverts to Save and re-validates.
-                      setUrlError(null);
-                      setUrlWarning(null);
-                      setTrashedMatch(null);
-                    }}
-                    onSubmitEditing={() => void onSubmit()}
-                    placeholder="https://example.com"
-                    aria-label="URL"
-                    aria-invalid={urlError !== null}
-                    autoFocus
-                    inputMode="url"
-                  />
-                  {urlError !== null ? (
-                    <ErrorText className="text-xs">{urlError}</ErrorText>
-                  ) : urlWarning !== null ? (
-                    <ErrorText tone="warning" className="text-xs">
-                      {urlWarning === 'malformed'
-                        ? 'This doesn’t look like a valid URL. Tap Confirm to save it anyway.'
-                        : urlWarning === 'trashed'
-                          ? 'This link is in your Trash. Restore it, or tap Confirm to save a new copy.'
-                          : 'You’ve already saved this link. Tap Confirm to save it again.'}
-                    </ErrorText>
-                  ) : null}
-                </LabeledField>
+            <StyledAnimatedScrollView
+              ref={scrollRef}
+              className="shrink"
+              // No end padding while the form shows: the space above Save is the
+              // footer's `pt-4`, which has to stay visible when the fields are
+              // clipped. The quota banner has no footer, so it keeps its own.
+              contentContainerClassName={cn('gap-4 px-4', atLimit && max !== null && 'pb-4')}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+            >
+              {atLimit && max !== null ? (
+                <LinkQuotaBanner
+                  count={count}
+                  max={max}
+                  action={
+                    <Button
+                      size="sm"
+                      className="self-end"
+                      onPress={() => {
+                        // Close BEFORE routing — the Subscription screen must not be
+                        // pushed under an open panel (the LockedBanner precedent; as a
+                        // route this said `router.back()`, and it means the same thing
+                        // now that closing is a state flip rather than a pop).
+                        close();
+                        router.push('/settings/subscription');
+                      }}
+                    >
+                      <Text>Upgrade to {PLAN_LABELS.plus}</Text>
+                    </Button>
+                  }
+                />
+              ) : (
+                <>
+                  <LabeledField label="URL">
+                    <Input
+                      testID="add-link-url"
+                      value={url}
+                      onChangeText={(v) => {
+                        setUrl(v);
+                        // Editing re-opens the question: clear the error and disarm the
+                        // warning so the button reverts to Save and re-validates.
+                        setUrlError(null);
+                        setUrlWarning(null);
+                        setTrashedMatch(null);
+                      }}
+                      onSubmitEditing={() => void onSubmit()}
+                      placeholder="https://example.com"
+                      aria-label="URL"
+                      aria-invalid={urlError !== null}
+                      autoFocus
+                      inputMode="url"
+                    />
+                    {urlError !== null ? (
+                      <ErrorText className="text-xs">{urlError}</ErrorText>
+                    ) : urlWarning !== null ? (
+                      <ErrorText tone="warning" className="text-xs">
+                        {urlWarning === 'malformed'
+                          ? 'This doesn’t look like a valid URL. Tap Confirm to save it anyway.'
+                          : urlWarning === 'trashed'
+                            ? 'This link is in your Trash. Restore it, or tap Confirm to save a new copy.'
+                            : 'You’ve already saved this link. Tap Confirm to save it again.'}
+                      </ErrorText>
+                    ) : null}
+                  </LabeledField>
 
-                {/* Web's disclosure, ported (link-add-surface.tsx carries the full
+                  {/* Web's disclosure, ported (link-add-surface.tsx carries the full
                 reasoning): quiet by WEIGHT rather than size or colour, so the
                 label drops to normal weight at full contrast; the chevron sits
                 WITH the label rather than pinned to the far edge of a mostly empty
@@ -707,82 +803,82 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                 already the links screen's overflow button. Web's header carries
                 that reasoning; docs/brand-assets.md is the record for user-facing
                 wording. */}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  testID="add-link-optional"
-                  onPress={() => setOpenOptional((v) => !v)}
-                  aria-expanded={openOptional}
-                  aria-label={
-                    !openOptional && optionalDirty
-                      ? `List, tags & note, ${optionalSet.join(', ')} set`
-                      : 'List, tags & note'
-                  }
-                  className="-ml-3 self-start"
-                >
-                  <Text className="font-normal text-foreground/80">List, tags & note</Text>
-                  <Icon
-                    as={openOptional ? ChevronUp : ChevronDown}
-                    className="size-4 text-foreground/80"
-                  />
-                  {!openOptional && optionalDirty && (
-                    <View aria-hidden className="size-1.5 rounded-full bg-foreground/70" />
-                  )}
-                </Button>
-
-                {openOptional && (
-                  <View
-                    className="gap-4"
-                    // Note is the last child, so this bottom is Note's (revealNote).
-                    onLayout={(e) => {
-                      const { y, height } = e.nativeEvent.layout;
-                      noteBottom.set(y + height);
-                    }}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    testID="add-link-optional"
+                    onPress={() => setOpenOptional((v) => !v)}
+                    aria-expanded={openOptional}
+                    aria-label={
+                      !openOptional && optionalDirty
+                        ? `List, tags & note, ${optionalSet.join(', ')} set`
+                        : 'List, tags & note'
+                    }
+                    className="-ml-3 self-start"
                   >
-                    {/* No Trash target: it's the deletion staging area, never a place
+                    <Text className="font-normal text-foreground/80">List, tags & note</Text>
+                    <Icon
+                      as={openOptional ? ChevronUp : ChevronDown}
+                      className="size-4 text-foreground/80"
+                    />
+                    {!openOptional && optionalDirty && (
+                      <View aria-hidden className="size-1.5 rounded-full bg-foreground/70" />
+                    )}
+                  </Button>
+
+                  {openOptional && (
+                    <View
+                      className="gap-4"
+                      // Note is the last child, so this bottom is Note's (revealNote).
+                      onLayout={(e) => {
+                        const { y, height } = e.nativeEvent.layout;
+                        noteBottom.set(y + height);
+                      }}
+                    >
+                      {/* No Trash target: it's the deletion staging area, never a place
                     to add new links (same rule as the default-list fallback).
                     Locked/hidden lists stay pickable — hiding only declutters the
                     drawer, it never blocks filing into a list you know exists. */}
-                    {/* The three field ids exist because each control's
+                      {/* The three field ids exist because each control's
                         accessible name is also its LabeledField label's text
                         (docs/e2e.md, _the testID contract_). */}
-                    <LabeledField label="List">
-                      <ListSelect
-                        testID="add-link-list"
-                        value={listId}
-                        onValueChange={setListId}
-                        excludeIds={[TRASH_ID]}
-                        allowCreate
-                      />
-                    </LabeledField>
+                      <LabeledField label="List">
+                        <ListSelect
+                          testID="add-link-list"
+                          value={listId}
+                          onValueChange={setListId}
+                          excludeIds={[TRASH_ID]}
+                          allowCreate
+                        />
+                      </LabeledField>
 
-                    <LabeledField label="Tags">
-                      <TagsField testID="add-link-tags" value={tagIds} onChange={setTagIds} />
-                    </LabeledField>
+                      <LabeledField label="Tags">
+                        <TagsField testID="add-link-tags" value={tagIds} onChange={setTagIds} />
+                      </LabeledField>
 
-                    <LabeledField label="Note">
-                      <Textarea
-                        testID="add-link-note"
-                        value={note}
-                        onChangeText={setNote}
-                        onFocus={(e) => {
-                          noteTag.set(e.nativeEvent.target);
-                          noteFocused.set(true);
-                        }}
-                        onBlur={() => {
-                          noteFocused.set(false);
-                        }}
-                        maxLength={LINK_NOTE_MAX}
-                        placeholder="Optional note"
-                        aria-label="Note"
-                      />
-                    </LabeledField>
-                  </View>
-                )}
-              </>
-            )}
-          </StyledAnimatedScrollView>
-          {/* The footer is PINNED below the scroller rather than being its last
+                      <LabeledField label="Note">
+                        <Textarea
+                          testID="add-link-note"
+                          value={note}
+                          onChangeText={setNote}
+                          onFocus={(e) => {
+                            noteTag.set(e.nativeEvent.target);
+                            noteFocused.set(true);
+                          }}
+                          onBlur={() => {
+                            noteFocused.set(false);
+                          }}
+                          maxLength={LINK_NOTE_MAX}
+                          placeholder="Optional note"
+                          aria-label="Note"
+                        />
+                      </LabeledField>
+                    </View>
+                  )}
+                </>
+              )}
+            </StyledAnimatedScrollView>
+            {/* The footer is PINNED below the scroller rather than being its last
               child — web quick-add's footer is the same. With the optional
               section open and the keyboard up the form outgrows the panel, and
               Note's reveal (above) scrolls Note into view, which put Save
@@ -800,37 +896,38 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
               KeyboardStickyView like the full-screen editors'
               (components/sticky-footer.tsx): the whole panel already rides the
               keyboard. Gone with the quota banner, which replaces the form. */}
-          {!(atLimit && max !== null) && (
-            <View className="flex-row justify-end gap-2 px-4 pt-4 pb-4">
-              <Button variant="ghost" size="sm" testID="add-link-cancel" onPress={close}>
-                <Text>Cancel</Text>
-              </Button>
-              {/* Only on the trashed ground — the one already-saved case where the
-                  match is unreachable, so a second door is worth the width. */}
-              {urlWarning === 'trashed' && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={saving}
-                  onPress={() => void onRestore()}
-                >
-                  <Text>Restore</Text>
+            {!(atLimit && max !== null) && (
+              <View className="flex-row justify-end gap-2 px-4 pt-4 pb-4">
+                <Button variant="ghost" size="sm" testID="add-link-cancel" onPress={close}>
+                  <Text>Cancel</Text>
                 </Button>
-              )}
-              {/* `add-link-save` rides the button, not its label: the label flips
+                {/* Only on the trashed ground — the one already-saved case where the
+                  match is unreachable, so a second door is worth the width. */}
+                {urlWarning === 'trashed' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={saving}
+                    onPress={() => void onRestore()}
+                  >
+                    <Text>Restore</Text>
+                  </Button>
+                )}
+                {/* `add-link-save` rides the button, not its label: the label flips
                   Save → Confirm on a warning, so it is the one control on this
                   screen a Maestro flow could not have bound to by text even if
                   the rule allowed it (docs/e2e.md, _the testID contract_). */}
-              <Button
-                testID="add-link-save"
-                size="sm"
-                disabled={saving}
-                onPress={() => void onSubmit()}
-              >
-                <Text>{urlWarning !== null ? 'Confirm' : 'Save'}</Text>
-              </Button>
-            </View>
-          )}
+                <Button
+                  testID="add-link-save"
+                  size="sm"
+                  disabled={saving}
+                  onPress={() => void onSubmit()}
+                >
+                  <Text>{urlWarning !== null ? 'Confirm' : 'Save'}</Text>
+                </Button>
+              </View>
+            )}
+          </StyledAnimatedView>
         </StyledAnimatedView>
       </StyledKeyboardAvoidingView>
     </View>

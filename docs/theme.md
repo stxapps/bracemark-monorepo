@@ -638,8 +638,8 @@ This is why **expo needs no counterpart change**: React Native has no `ring`, so
 popover included — with `border-border`, and inherits the fix from the token.
 
 **A bottom sheet is the case where the edge is not enough, and there the fill has
-to be the lifted one.** Quick-add below `md` on web, and always on expo
-(`features/links/link-add-panel.tsx`), is a form on a `bg-black/50` scrim over the
+to be the lifted one.** Quick-add below `md` on both clients
+(`features/links/link-add-panel.tsx` on expo), is a form on a `bg-black/50` scrim over the
 links page, and it used to wear the page's own `bg-background`. In light the scrim
 does all the work — it takes the white page to `#7f7f7f`, and the panel reads
 Lc 75.3 against it. In dark it does none: there is nothing to subtract from a
@@ -764,7 +764,9 @@ and must keep 32px against a 400pt box.
 **An edge-attached sheet takes the floating-surface radius on only its free
 corners: `rounded-t-2xl` for a bottom sheet.** Web quick-add is the same form as
 its wide popover, so changing containers must not change its shape; the native
-quick-add panel and share sheet follow that role too. `rounded-4xl` remains for a
+quick-add panel and share sheet follow that role too, and the native quick-add's
+wide shape — a centred card from `md` — takes the same `rounded-2xl` on all four
+corners, as web's popover does. `rounded-4xl` remains for a
 detached dialog with four visible corners. A system-presented modal is the other
 case: the navigator or native `Modal` owns the outer corners, so the app does not
 redraw them. Its inner spacing may still follow that presentation — the edit-link

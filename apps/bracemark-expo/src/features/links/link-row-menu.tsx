@@ -69,6 +69,8 @@ import {
 } from '../../components/ui/dropdown-menu';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
+import { useWideWindow } from '../../lib/window-class';
+import { useLinkEdit } from './link-edit-host';
 import { MoveToDialog } from './move-to-dialog';
 import { useEngagedOpen } from './shared';
 import { useLinksViewActions } from './view-state-provider';
@@ -94,11 +96,19 @@ export function LinkRowMenu({
   const inTrash = link.listId === TRASH_ID;
   const inArchive = link.listId === ARCHIVE_ID;
 
+  // The editor's shell follows the docking width: the `/edit-link` route (a
+  // page sheet) below it, LinkEditHost's centred Dialog at and above it —
+  // link-edit-screen.tsx's LinkEditDialog carries why an iPad cannot keep the
+  // sheet.
+  const wide = useWideWindow();
+  const { openEdit } = useLinkEdit();
   const openEditor = (focus?: 'tags' | 'note') => {
-    router.push({
-      pathname: '/edit-link',
-      params: { linkId: linkIdOf(link), ...(focus ? { focus } : {}) },
-    });
+    const linkId = linkIdOf(link);
+    if (wide) {
+      openEdit({ linkId, focus });
+      return;
+    }
+    router.push({ pathname: '/edit-link', params: { linkId, ...(focus ? { focus } : {}) } });
   };
 
   const copyLink = (

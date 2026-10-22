@@ -4,13 +4,14 @@
 // custom image, list, tags, note; one Save = one writeLink, one LWW unit, pins
 // deliberately elsewhere; the override-wins title/image model where CLEARING
 // falls back to the extracted value; the minimal-patch Save; the dirty close
-// guard). Presented like the add editor: a modal router screen summoned by the
-// row menu (link-row-menu.tsx), not a hoisted page-level dialog — web hoists
-// because virtualized rows repaint under the open dialog, but a pushed screen
-// isn't anchored to a row and its draft is a snapshot, so no `editing` state
-// (and no engagement signal) is needed in view-state-provider at all. Same
-// router-screen-over-RN-Modal reasons link-add-panel.tsx records (keyboard-
-// controller, portals, guardable close).
+// guard). TWO SHELLS on the docking width (lib/window-class.ts), over one draft
+// (`useLinkEditDraft`) and one set of fields: below it, a modal router screen
+// the row menu (link-row-menu.tsx) pushes — not a hoisted page-level dialog,
+// because a pushed screen isn't anchored to a row and its draft is a snapshot,
+// and for the router-screen-over-RN-Modal reasons link-add-panel.tsx records
+// (keyboard-controller, portals, guardable close); at and above it,
+// LinkEditDialog (below), which IS hoisted — LinkEditHost, for web's reason —
+// because an iPad's page sheet left the sticky footer off the keys.
 //
 // Divergences from web:
 //
@@ -37,6 +38,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Image, type LayoutChangeEvent, Pressable, type ScrollView, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import Animated from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { usePreventRemove } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
@@ -63,13 +65,24 @@ import { ListSelect } from '../../components/links/list-select';
 import { TagsField } from '../../components/links/tags-field';
 import { StickyFooter } from '../../components/sticky-footer';
 import { Button } from '../../components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
+import { APP_PORTAL_HOST } from '../../components/ui/portal-host';
 import { Text } from '../../components/ui/text';
 import { Textarea } from '../../components/ui/textarea';
+import { type FieldFocusHandler, useFocusedFieldReveal } from '../../lib/use-focused-field-reveal';
 
 const StyledSafeAreaView = withUniwind(SafeAreaView);
 const StyledKeyboardAwareScrollView = withUniwind(KeyboardAwareScrollView);
+const StyledAnimatedScrollView = withUniwind(Animated.ScrollView);
 
 type EditFocus = 'tags' | 'note';
 
@@ -127,8 +140,11 @@ export function LinkEditScreen() {
   );
 }
 
-function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
-  const router = useRouter();
+// The editor's draft and its one Save — everything both shells share (the route
+// below the docking width, the Dialog at and above it; LinkEditDialog carries
+// why there are two). Mounted per open, so the draft is a snapshot of `link`.
+// `onDone` is how the shell closes once a Save lands.
+function useLinkEditDraft(link: LinkItem, onDone: () => void) {
   const { update, saveCustomImage, deleteCustomImage } = useLinkMutations();
 
   // The extraction supplies the fallbacks the overrides sit above: the
@@ -188,31 +204,6 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
     note.trim() !== (link.note ?? '') ||
     imageDirty;
 
-  // Guard only the ACCIDENTAL close vectors (swipe-down, Android back) while
-  // dirty — the add screen's guard, same wiring: `closing` is the deliberate
-  // door (Cancel/X/save), dropping the guard before the effect pops.
-  const [closing, setClosing] = useState(false);
-  usePreventRemove(isDirty && !closing, () => {
-    // Swallowed silently — web's guard eats the backdrop-click/Escape the same
-    // way; the Cancel button is the deliberate discard door.
-  });
-  useEffect(() => {
-    if (closing) router.back();
-  }, [closing, router]);
-  const close = () => setClosing(true);
-
-  // `focus` scrolls its field into view once, off that field's first layout
-  // (fields are direct children of the scroll content, so layout.y is
-  // content-relative). No programmatic focus — see the header.
-  const scrollRef = useRef<ScrollView>(null);
-  const [footerHeight, setFooterHeight] = useState(0);
-  const scrolledToFocus = useRef(false);
-  const onFocusFieldLayout = (e: LayoutChangeEvent) => {
-    if (scrolledToFocus.current) return;
-    scrolledToFocus.current = true;
-    scrollRef.current?.scrollTo({ y: e.nativeEvent.layout.y, animated: false });
-  };
-
   const onSubmit = async () => {
     if (saving) return;
     setSaving(true);
@@ -249,10 +240,240 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
           await deleteCustomImage(replacedImageId);
         }
       }
-      close();
+      onDone();
     } finally {
       setSaving(false);
     }
+  };
+
+  return {
+    extractedTitle,
+    title,
+    setTitle,
+    listId,
+    setListId,
+    tagIds,
+    setTagIds,
+    note,
+    setNote,
+    image,
+    setImage,
+    previewUri,
+    onPickImage,
+    isDirty,
+    saving,
+    onSubmit,
+  };
+}
+type LinkEditDraft = ReturnType<typeof useLinkEditDraft>;
+
+// The form's fields, in both shells. `onFocusFieldLayout` lands the `focus`
+// param's field (the shell owns the scroller); `onFieldFocus` is the Dialog
+// shell's reveal (lib/use-focused-field-reveal.ts) — the route's aware scroller
+// tracks focus itself.
+function LinkEditFields({
+  link,
+  draft,
+  focus,
+  onFocusFieldLayout,
+  onFieldFocus,
+}: {
+  link: LinkItem;
+  draft: LinkEditDraft;
+  focus?: EditFocus;
+  onFocusFieldLayout: (e: LayoutChangeEvent) => void;
+  onFieldFocus?: FieldFocusHandler;
+}) {
+  const {
+    extractedTitle,
+    title,
+    setTitle,
+    listId,
+    setListId,
+    tagIds,
+    setTagIds,
+    note,
+    setNote,
+    image,
+    setImage,
+    previewUri,
+    onPickImage,
+  } = draft;
+  return (
+    <>
+      <LabeledField label="Title">
+        {/* The field ids here are the add panel's, for its reason: every
+            control's accessible name repeats its LabeledField label
+            (docs/e2e.md, _the testID contract_). */}
+        <Input
+          testID="edit-link-title"
+          autoCapitalize="sentences"
+          autoCorrect
+          spellCheck
+          smartInsertDelete
+          value={title}
+          onChangeText={setTitle}
+          onFocus={onFieldFocus}
+          maxLength={LINK_TITLE_MAX}
+          placeholder={extractedTitle ?? hostFromText(link.url)}
+          aria-label="Title"
+        />
+        {/* The placeholder isn't selectable, so someone who wants to tweak
+            just part of the extracted title has no seed to edit. Offer one
+            ONLY while the field is blank (no override yet) and a real
+            extracted title exists — web's "Edit it instead", verbatim. */}
+        <View className="flex-row items-baseline justify-between gap-2">
+          <Text className="min-w-0 flex-1 text-xs text-muted-foreground">
+            Leave blank to use the page’s own title.
+          </Text>
+          {title.trim() === '' && extractedTitle && (
+            <Pressable role="button" onPress={() => setTitle(extractedTitle)} className="shrink-0">
+              <Text className="text-xs text-primary">Edit it instead</Text>
+            </Pressable>
+          )}
+        </View>
+      </LabeledField>
+
+      {/* No Trash target: trashing is the menu's Remove, never a "move".
+          Locked/hidden lists stay pickable — hiding only declutters the
+          drawer, it never blocks filing into a list you know exists. */}
+      <LabeledField label="List">
+        <ListSelect
+          testID="edit-link-list"
+          value={listId}
+          onValueChange={setListId}
+          excludeIds={[TRASH_ID]}
+          allowCreate
+        />
+      </LabeledField>
+
+      <LabeledField label="Tags" onLayout={focus === 'tags' ? onFocusFieldLayout : undefined}>
+        <TagsField testID="edit-link-tags" value={tagIds} onChange={setTagIds} />
+      </LabeledField>
+
+      {/* The row menu's "Edit note" lands here (focus === 'note'): the note
+          has no read-only surface — the layouts are fixed-height, so a row
+          can only badge it — and at LINK_NOTE_MAX this input reads as well as
+          any viewer would, with the edit already in hand. */}
+      <LabeledField label="Note" onLayout={focus === 'note' ? onFocusFieldLayout : undefined}>
+        <Textarea
+          testID="edit-link-note"
+          value={note}
+          onChangeText={setNote}
+          onFocus={onFieldFocus}
+          maxLength={LINK_NOTE_MAX}
+          placeholder="Optional note"
+          aria-label="Note"
+        />
+      </LabeledField>
+
+      <LabeledField label="Image">
+        {/* The card banner's shape (`aspect-12/7` — link-card.tsx), web's
+            slot verbatim; the dialog carries the argument for why the preview
+            owes the user the CARD's crop, why the field is LAST and full width
+            (title → list → tags → note → image, the create surfaces' three
+            fields book-ended rather than split — docs/editors.md), why the
+            buttons stay BELOW at the same left edge, and why the slot holds
+            its size with no image (the buttons would otherwise move under the
+            finger — up on "Reset to extracted", down when a live `storedUri`
+            materializes mid-edit). `h-40 w-full` before it was a harder crop
+            than either surface (358×160 ≈ 2.24:1 on a 390pt phone), so the
+            preview cut off more than the card would. As a class, not
+            link-card's computed dp height: that number exists so FlashList
+            measures a cell right on its first frame, and nothing measures this
+            screen.
+
+            Being last also retired this screen's own reason for the fixed
+            slot: `focus` scrolls to its field's `layout.y` ONCE, off that
+            field's first layout, so while the image sat above Note an image
+            resolving afterwards grew the field and left "Edit note" scrolled
+            short. Nothing this field does can move Tags or Note now. */}
+        {previewUri ? (
+          <Image
+            source={{ uri: previewUri }}
+            accessibilityIgnoresInvertColors
+            resizeMode="cover"
+            className="aspect-12/7 w-full rounded-md border border-border"
+          />
+        ) : (
+          <View className="aspect-12/7 w-full items-center justify-center rounded-md border border-dashed border-border bg-muted/40 px-3">
+            <Text className="text-center text-xs text-muted-foreground">
+              No image — cards show a colored panel.
+            </Text>
+          </View>
+        )}
+        {/* `flex-wrap`, web's fix for web's reason — neither button can give
+            (Button is `shrink-0`) — but what triggers it here is the text
+            size rather than the screen: the pair is 316pt at 1×, which fits
+            the 328 a 360pt screen leaves inside `p-4`, and 377 at the 1.3
+            ceiling (docs/accessibility.md, _font scaling_), which fits
+            nothing narrower than 409. And native has no scrollbar to give the
+            overflow away: the row just runs past the padding and "Reset to
+            extracted" is cut off at the screen's edge. Wrapped, the two
+            leading icons sit behind the same `pl-2.5` and share an edge. */}
+        <View className="flex-row flex-wrap gap-1.5">
+          <Button variant="outline" size="sm" onPress={() => void onPickImage()}>
+            <Icon as={ImagePlus} className="size-4" />
+            <Text>Choose image</Text>
+          </Button>
+          {(image.kind === 'pick' || (image.kind === 'keep' && link.customImageId)) && (
+            <Button variant="ghost" size="sm" onPress={() => setImage({ kind: 'clear' })}>
+              <Icon as={ImageOff} className="size-4" />
+              <Text>Reset to extracted</Text>
+            </Button>
+          )}
+        </View>
+      </LabeledField>
+    </>
+  );
+}
+
+function LinkEditActions({ draft, onCancel }: { draft: LinkEditDraft; onCancel: () => void }) {
+  return (
+    <>
+      <Button variant="ghost" size="sm" testID="edit-link-cancel" onPress={onCancel}>
+        <Text>Cancel</Text>
+      </Button>
+      <Button
+        size="sm"
+        testID="edit-link-save"
+        disabled={draft.saving}
+        onPress={() => void draft.onSubmit()}
+      >
+        <Text>{draft.saving ? 'Saving…' : 'Save'}</Text>
+      </Button>
+    </>
+  );
+}
+
+function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
+  const router = useRouter();
+  const [closing, setClosing] = useState(false);
+  const close = () => setClosing(true);
+  const draft = useLinkEditDraft(link, close);
+  const { isDirty } = draft;
+
+  // Guard only the ACCIDENTAL close vectors (swipe-down, Android back) while
+  // dirty — the add screen's guard, same wiring: `closing` is the deliberate
+  // door (Cancel/X/save), dropping the guard before the effect pops.
+  usePreventRemove(isDirty && !closing, () => {
+    // Swallowed silently — web's guard eats the backdrop-click/Escape the same
+    // way; the Cancel button is the deliberate discard door.
+  });
+  useEffect(() => {
+    if (closing) router.back();
+  }, [closing, router]);
+
+  // `focus` scrolls its field into view once, off that field's first layout
+  // (fields are direct children of the scroll content, so layout.y is
+  // content-relative). No programmatic focus — see the header.
+  const scrollRef = useRef<ScrollView>(null);
+  const [footerHeight, setFooterHeight] = useState(0);
+  const scrolledToFocus = useRef(false);
+  const onFocusFieldLayout = (e: LayoutChangeEvent) => {
+    if (scrolledToFocus.current) return;
+    scrolledToFocus.current = true;
+    scrollRef.current?.scrollTo({ y: e.nativeEvent.layout.y, animated: false });
   };
 
   return (
@@ -329,140 +550,140 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
         keyboardDismissMode="on-drag"
         bottomOffset={16 + footerHeight}
       >
-        <LabeledField label="Title">
-          {/* The field ids here are the add panel's, for its reason: every
-              control's accessible name repeats its LabeledField label
-              (docs/e2e.md, _the testID contract_). */}
-          <Input
-            testID="edit-link-title"
-            autoCapitalize="sentences"
-            autoCorrect
-            spellCheck
-            smartInsertDelete
-            value={title}
-            onChangeText={setTitle}
-            maxLength={LINK_TITLE_MAX}
-            placeholder={extractedTitle ?? hostFromText(link.url)}
-            aria-label="Title"
-          />
-          {/* The placeholder isn't selectable, so someone who wants to tweak
-              just part of the extracted title has no seed to edit. Offer one
-              ONLY while the field is blank (no override yet) and a real
-              extracted title exists — web's "Edit it instead", verbatim. */}
-          <View className="flex-row items-baseline justify-between gap-2">
-            <Text className="min-w-0 flex-1 text-xs text-muted-foreground">
-              Leave blank to use the page’s own title.
-            </Text>
-            {title.trim() === '' && extractedTitle && (
-              <Pressable
-                role="button"
-                onPress={() => setTitle(extractedTitle)}
-                className="shrink-0"
-              >
-                <Text className="text-xs text-primary">Edit it instead</Text>
-              </Pressable>
-            )}
-          </View>
-        </LabeledField>
-
-        {/* No Trash target: trashing is the menu's Remove, never a "move".
-            Locked/hidden lists stay pickable — hiding only declutters the
-            drawer, it never blocks filing into a list you know exists. */}
-        <LabeledField label="List">
-          <ListSelect
-            testID="edit-link-list"
-            value={listId}
-            onValueChange={setListId}
-            excludeIds={[TRASH_ID]}
-            allowCreate
-          />
-        </LabeledField>
-
-        <LabeledField label="Tags" onLayout={focus === 'tags' ? onFocusFieldLayout : undefined}>
-          <TagsField testID="edit-link-tags" value={tagIds} onChange={setTagIds} />
-        </LabeledField>
-
-        {/* The row menu's "Edit note" lands here (focus === 'note'): the note
-            has no read-only surface — the layouts are fixed-height, so a row
-            can only badge it — and at LINK_NOTE_MAX this input reads as well as
-            any viewer would, with the edit already in hand. */}
-        <LabeledField label="Note" onLayout={focus === 'note' ? onFocusFieldLayout : undefined}>
-          <Textarea
-            testID="edit-link-note"
-            value={note}
-            onChangeText={setNote}
-            maxLength={LINK_NOTE_MAX}
-            placeholder="Optional note"
-            aria-label="Note"
-          />
-        </LabeledField>
-
-        <LabeledField label="Image">
-          {/* The card banner's shape (`aspect-12/7` — link-card.tsx), web's
-              slot verbatim; the dialog carries the argument for why the preview
-              owes the user the CARD's crop, why the field is LAST and full width
-              (title → list → tags → note → image, the create surfaces' three
-              fields book-ended rather than split — docs/editors.md), why the
-              buttons stay BELOW at the same left edge, and why the slot holds
-              its size with no image (the buttons would otherwise move under the
-              finger — up on "Reset to extracted", down when a live `storedUri`
-              materializes mid-edit). `h-40 w-full` before it was a harder crop
-              than either surface (358×160 ≈ 2.24:1 on a 390pt phone), so the
-              preview cut off more than the card would. As a class, not
-              link-card's computed dp height: that number exists so FlashList
-              measures a cell right on its first frame, and nothing measures this
-              screen.
-
-              Being last also retired this screen's own reason for the fixed
-              slot: `focus` scrolls to its field's `layout.y` ONCE, off that
-              field's first layout, so while the image sat above Note an image
-              resolving afterwards grew the field and left "Edit note" scrolled
-              short. Nothing this field does can move Tags or Note now. */}
-          {previewUri ? (
-            <Image
-              source={{ uri: previewUri }}
-              accessibilityIgnoresInvertColors
-              resizeMode="cover"
-              className="aspect-12/7 w-full rounded-md border border-border"
-            />
-          ) : (
-            <View className="aspect-12/7 w-full items-center justify-center rounded-md border border-dashed border-border bg-muted/40 px-3">
-              <Text className="text-center text-xs text-muted-foreground">
-                No image — cards show a colored panel.
-              </Text>
-            </View>
-          )}
-          {/* `flex-wrap`, web's fix for web's reason — neither button can give
-              (Button is `shrink-0`) — but what triggers it here is the text
-              size rather than the screen: the pair is 316pt at 1×, which fits
-              the 328 a 360pt screen leaves inside `p-4`, and 377 at the 1.3
-              ceiling (docs/accessibility.md, _font scaling_), which fits
-              nothing narrower than 409. And native has no scrollbar to give the
-              overflow away: the row just runs past the padding and "Reset to
-              extracted" is cut off at the screen's edge. Wrapped, the two
-              leading icons sit behind the same `pl-2.5` and share an edge. */}
-          <View className="flex-row flex-wrap gap-1.5">
-            <Button variant="outline" size="sm" onPress={() => void onPickImage()}>
-              <Icon as={ImagePlus} className="size-4" />
-              <Text>Choose image</Text>
-            </Button>
-            {(image.kind === 'pick' || (image.kind === 'keep' && link.customImageId)) && (
-              <Button variant="ghost" size="sm" onPress={() => setImage({ kind: 'clear' })}>
-                <Icon as={ImageOff} className="size-4" />
-                <Text>Reset to extracted</Text>
-              </Button>
-            )}
-          </View>
-        </LabeledField>
+        <LinkEditFields
+          link={link}
+          draft={draft}
+          focus={focus}
+          onFocusFieldLayout={onFocusFieldLayout}
+        />
       </StyledKeyboardAwareScrollView>
       <StickyFooter onHeight={setFooterHeight}>
-        <Button variant="ghost" size="sm" testID="edit-link-cancel" onPress={close}>
-          <Text>Cancel</Text>
-        </Button>
-        <Button size="sm" testID="edit-link-save" disabled={saving} onPress={() => void onSubmit()}>
-          <Text>{saving ? 'Saving…' : 'Save'}</Text>
-        </Button>
+        <LinkEditActions draft={draft} onCancel={close} />
       </StickyFooter>
     </>
+  );
+}
+
+// The link to edit and the field to land on — what the row menu hands the wide
+// editor, as the route's two params are for the narrow one.
+export type LinkEditTarget = { linkId: string; focus?: EditFocus };
+
+// The editor on a WIDE window: the kit's Dialog, a centred card at the add
+// card's and Advanced Search's `max-w-lg`. It was the `/edit-link` route at
+// every width, and a presented route is an iOS page sheet: on an iPad that is
+// 820pt wide upright and 936 on its side, and it floats above the screen's
+// bottom edge, so the sticky footer's lift (`keyboardHeight − insets.bottom`,
+// right only for a bar resting on that edge) left Cancel/Save hanging over a
+// gap above the keys. Nothing inside the sheet can measure where it floats
+// (docs/soft-keyboard.md, _the sticky footer_, has the four dead ends), so the
+// wide editor leaves the sheet rather than correcting it. In the Dialog every
+// number is the window's: the kit's avoider centres the card in what the
+// keyboard leaves, the footer is the card's last row, and the dim covers the
+// docked rail. Below the docking width the route is unchanged
+// (LinkEditScreen, above).
+//
+// It portals to APP_PORTAL_HOST, not the root host: the form needs the signed-in
+// providers (`useLinkMutations` reads `useSync()`), and the root host is above
+// them (components/ui/portal-host.tsx). It is opened through LinkEditHost
+// (link-edit-host.tsx), hoisted for web's reason — the row that asked for it is
+// virtualized and may repaint or recycle under an open editor.
+//
+// The close guard is the route's, mapped onto the Dialog: the ACCIDENTAL
+// vectors — the backdrop, Android's back (both arrive as `onOpenChange(false)`)
+// — are swallowed while dirty, and the ✕ (DialogContent's `onClose`) and
+// Cancel stay the deliberate doors, as `usePreventRemove` and `closing` split
+// them on the route.
+export function LinkEditDialog({
+  target,
+  onClose,
+}: {
+  target: LinkEditTarget | null;
+  onClose: () => void;
+}) {
+  // One-shot load per target, the route's rule: undefined = loading, null =
+  // missing (a link deleted since its menu opened), which closes.
+  const [link, setLink] = useState<LinkItem | null | undefined>(undefined);
+  const linkId = target?.linkId;
+  useEffect(() => {
+    let alive = true;
+    setLink(undefined);
+    if (linkId === undefined) return;
+    void readLinkById(linkId).then((loaded) => {
+      if (alive) setLink(loaded ?? null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [linkId]);
+  useEffect(() => {
+    if (link === null) onClose();
+  }, [link, onClose]);
+
+  if (!target || !link) return null;
+  return <LinkEditDialogBody key={link.path} link={link} focus={target.focus} onClose={onClose} />;
+}
+
+function LinkEditDialogBody({
+  link,
+  focus,
+  onClose,
+}: {
+  link: LinkItem;
+  focus?: EditFocus;
+  onClose: () => void;
+}) {
+  const draft = useLinkEditDraft(link, onClose);
+  const reveal = useFocusedFieldReveal();
+  // The route's `focus` landing, against this shell's scroller: the fields sit
+  // in the reveal's content View, which starts at the top of the content, so a
+  // field's `layout.y` is still content-relative.
+  const scrolledToFocus = useRef(false);
+  const onFocusFieldLayout = (e: LayoutChangeEvent) => {
+    if (scrolledToFocus.current) return;
+    scrolledToFocus.current = true;
+    reveal.scrollRef.current?.scrollTo({ y: e.nativeEvent.layout.y, animated: false });
+  };
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !draft.isDirty) onClose();
+      }}
+    >
+      <DialogContent portalHost={APP_PORTAL_HOST} onClose={onClose} className="max-w-lg">
+        {/* `pr-8` keeps the URL line clear of the corner ✕, which is absolute. */}
+        <DialogHeader className="pr-8">
+          <DialogTitle>Edit link</DialogTitle>
+          <DialogDescription numberOfLines={1}>{link.url}</DialogDescription>
+        </DialogHeader>
+        {/* Advanced Search's wide body, for its reasons: `shrink grow-0` under
+            the kit's `max-h-full` (docs/soft-keyboard.md, _the traps_), and
+            `handled` + `interactive`, so a tap on a control lands and an upward
+            drag scrolls a lower field clear without dropping the keyboard and
+            re-centring the card. */}
+        <StyledAnimatedScrollView
+          ref={reveal.scrollRef}
+          onScroll={reveal.onScroll}
+          scrollEventThrottle={16}
+          className="shrink grow-0"
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+        >
+          <View ref={reveal.content} className="gap-4">
+            <LinkEditFields
+              link={link}
+              draft={draft}
+              focus={focus}
+              onFocusFieldLayout={onFocusFieldLayout}
+              onFieldFocus={reveal.onFieldFocus}
+            />
+          </View>
+        </StyledAnimatedScrollView>
+        <DialogFooter>
+          <LinkEditActions draft={draft} onCancel={onClose} />
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

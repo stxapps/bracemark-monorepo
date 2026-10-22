@@ -522,7 +522,7 @@ Uniwind's `md` — and at nothing else.**
   column count, so a drag would re-compose it per frame. ⌘\ needs a hardware
   keyboard; both buttons are reachable by Full Keyboard Access instead.
 
-Seven things nothing would flag:
+Eight things nothing would flag:
 
 - **The card grid's width is computed, not measured, so the rail has to be
   subtracted by hand** (`features/links/main.tsx`). And it replaces the LEFT
@@ -556,13 +556,27 @@ Seven things nothing would flag:
   `plugins/with-android-manifest-policy.js` adds it to `MainActivity`'s
   `configChanges`; without it the window resize is not a `Dimensions` event but a
   remount, and the open screen and a half-typed link go with it.
-- **A full-window modal on an Android tablet is the full window.** The link
-  editor and Advanced Search present as an iOS `pageSheet` — already about 700
-  wide on an iPad — but full-screen on Android, so each caps its scroller's
-  content at the settings column (`w-full max-w-2xl self-center`), leaving the
-  bars to span. The add panel stays a bottom sheet at every width (its keyboard
-  arithmetic is all about the bottom edge) and caps at `max-w-xl`, centred, with
-  side borders from `sm` — or wherever a side inset detaches it from the edge.
+- **A full-window modal on an Android tablet is the full window — which is
+  why neither editor uses one there any more.** Below 768 the link editor and
+  Advanced Search present as an iOS `pageSheet` (full-screen on Android) and cap
+  their scrollers' content at the settings column (`w-full max-w-2xl
+self-center`), leaving the bars to span. From 768 both are centred `max-w-lg`
+  Dialogs on both platforms: an iPad page sheet is 820pt wide upright (the whole
+  screen on an iPad (A16)) and 936 on its side, too wide for these forms, and it
+  floats its sticky footer off the keys ([soft-keyboard.md](./soft-keyboard.md),
+  _the sticky footer_). The add panel is a bottom sheet below 768, capped at `max-w-xl`
+  and centred, with side borders from `sm` or wherever a side inset detaches it
+  from the edge. From 768 it is a centred `max-w-lg` card, because on an iPad
+  the keyboard's top edge the sheet would rest on is not reliably where the
+  keyboard is ([soft-keyboard.md](./soft-keyboard.md), _the add panel's two
+  shapes_).
+- **⚠ An overlay drawn in the links SCREEN stops at the docked rail.** On a wide
+  window the screen is the pane beside the permanent Drawer, so an
+  `absolute inset-0` layer inside it dims the list and leaves the rail bright
+  and tappable. On a phone the screen is the window, so it passes everywhere it
+  is tested. The add panel is hosted around the Drawer for this reason
+  (`features/links/link-add-host.tsx`). The portaled dialogs never had the
+  problem: they land in the root PortalHost.
 - **Insets are per edge, and a side inset is not always a landscape notch.**
   The iPhone Duo's outer display reserves a strip down its trailing edge for
   the status bar and camera, at PHONE width, upright
@@ -852,12 +866,15 @@ and both apps' surfaces are edge-to-edge by default (iOS always was; Android
 - **An overlay panel does its own inset arithmetic, and the hook is the right
   tool there.** The add panel (`links/link-add-panel.tsx`,
   [soft-keyboard.md](./soft-keyboard.md), _the add panel_) is an absolute layer
-  over the links screen, so it cannot inherit the screen's `SafeAreaView`: it
-  pads its avoider by `insets.top + 8` — DialogOverlay's gutter, which is what
+  over the links section (rail and screen, `links/link-add-host.tsx`), so it
+  cannot inherit the screen's `SafeAreaView`: it pads its avoider by
+  `insets.top + 8` — DialogOverlay's gutter, which is what
   keeps a maxed-out panel out of the notch — and by the bare `insets.left` /
   `insets.right` on the sides (no gutter: it is an edge-attached sheet, so a
-  side with no inset still meets the screen's edge), and its own bottom by
-  `max(insets.bottom + keyboardHeight, 0)`, where `keyboardHeight` is the
+  side with no inset still meets the screen's edge; the wide card is detached,
+  so it takes `inset + 8` there), and the bottom by
+  `max(insets.bottom + keyboardHeight, 0)` — inside the sheet's own fill, or
+  plus 8 as the gutter under the card — where `keyboardHeight` is the
   UI-thread shared value from `useReanimatedKeyboardAnimation` (0 while closed,
   negative while opening). That is the share sheet's formula, so the
   home-indicator clearance disappears in sync with the keyboard whose frame

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { withUniwind } from 'uniwind';
@@ -6,7 +5,7 @@ import { withUniwind } from 'uniwind';
 import { SyncPausedNotice } from '../../../components/sync-paused-notice';
 import { AddLinkFab } from '../../../features/links/add-link-fab';
 import { BulkTagsDialog } from '../../../features/links/bulk-tags-dialog';
-import { LinkAddPanel } from '../../../features/links/link-add-panel';
+import { useLinkAdd } from '../../../features/links/link-add-host';
 import { LinkDestroyConfirm } from '../../../features/links/link-destroy-confirm';
 import { Main } from '../../../features/links/main';
 import { PreviewsPrompt } from '../../../features/links/previews-prompt';
@@ -30,16 +29,15 @@ const StyledSafeAreaView = withUniwind(SafeAreaView);
 // LinksPageProvider also lives (the drawer content shares it). Thin by
 // convention — the UI is in src/features/links/.
 //
-// `adding` is the add panel's open state, and it lives HERE rather than in
-// LinksViewStateProvider for two reasons: this component has to read it (the
-// a11y hide below is on the body it renders, and a provider's own parent cannot
-// consume it), and — unlike `destroying`/`retagging` — it is not an engagement
-// signal. Web doesn't count its add surface in `engaged` either: nothing under
-// this panel is row-anchored, and a repaint below a full-screen dim disturbs
-// nothing. Mounting it only while open is also what keeps the draft ephemeral
-// (link-add-panel.tsx) and what lets its exit animation run.
+// The add panel is NOT rendered here: the FAB asks LinkAddHost
+// (features/links/link-add-host.tsx), which `_layout.tsx` wraps around the
+// Drawer so the panel's layer covers the docked rail as well as this screen.
+// Its open state is still not view state — unlike `destroying`/`retagging` it
+// is not an engagement signal; web doesn't count its add surface in `engaged`
+// either: nothing under the panel is row-anchored, and a repaint below a
+// full-screen dim disturbs nothing.
 export default function LinksScreen() {
-  const [adding, setAdding] = useState(false);
+  const { openAdd } = useLinkAdd();
 
   return (
     <LinksViewStateProvider>
@@ -48,24 +46,11 @@ export default function LinksScreen() {
           the screen root rather than on any of the panes below because those
           swap (LockPane, EmptyState) while this is what "signed in and home"
           means. */}
-      {/* The covered body opts out of the accessibility tree while the panel is
-          up, so a screen reader can't walk out of the form into the list behind
-          it. iOS is covered twice over — `accessibilityElementsHidden` here and
-          `accessibilityViewIsModal` on the panel — and MEASURED to work.
-          Android's half does NOT work: neither prop (nor `aria-hidden`, with or
-          without `collapsable={false}`) removes anything from the tree under RN
-          0.81/Fabric, verified against a hardcoded flag and read back through
-          both `maestro hierarchy` and `uiautomator dump`. It is kept because it
-          is the correct spelling and costs nothing, and because every portaled
-          Dialog in this app has the same gap today — docs/accessibility.md,
-          _modality_, carries the measurement. */}
       <StyledSafeAreaView testID="links-screen" className="flex-1 bg-background">
-        <View
-          importantForAccessibility={adding ? 'no-hide-descendants' : 'auto'}
-          accessibilityElementsHidden={adding}
-          collapsable={false}
-          className="min-h-0 flex-1"
-        >
+        {/* The body box the FAB is positioned in: `absolute` resolves against
+            the parent's padding box, so on the SafeAreaView itself `bottom-4`
+            would measure from inside the home-indicator inset. */}
+        <View className="min-h-0 flex-1">
           <Topbar />
           <SearchBar />
           {/* The first-run link-previews offer — renders null unless the opt-in
@@ -80,15 +65,11 @@ export default function LinksScreen() {
           <Main />
           {/* Screen-level, not in Main: the add affordance survives Main's
               LockPane/EmptyState swaps (web's topbar Add is always there). */}
-          <AddLinkFab onPress={() => setAdding(true)} />
+          <AddLinkFab onPress={openAdd} />
         </View>
       </StyledSafeAreaView>
       <BulkTagsDialog />
       <LinkDestroyConfirm />
-      {/* Last sibling, and outside the SafeAreaView: it is an absolute layer over
-          the whole screen box, so it must not inherit the body's insets — and
-          being last is what puts it above the FAB it was summoned from. */}
-      {adding && <LinkAddPanel onClose={() => setAdding(false)} />}
     </LinksViewStateProvider>
   );
 }

@@ -2,6 +2,8 @@ import { Drawer } from 'expo-router/drawer';
 
 import { LiveReadPause } from '@stxapps/expo-react';
 
+import { LinkAddHost } from '../../../features/links/link-add-host';
+import { LinkEditHost } from '../../../features/links/link-edit-host';
 import { LinksPageProvider } from '../../../features/links/page-provider';
 import { Sidebar } from '../../../features/links/sidebar';
 import {
@@ -40,13 +42,22 @@ import { RAIL_WIDTH } from '../../../lib/window-class';
 // them running. The hook is called here for the matching reason — outside the
 // Drawer, `useNavigation()` is the (app) stack's, whose events say when this
 // route is covered.
+//
+// LinkAddHost wraps the Drawer rather than living in the screen, so the add
+// panel's layer spans the docked rail too (features/links/link-add-host.tsx).
+// Inside LinksPageProvider because the panel reads the viewing list.
+// LinkEditHost owns the wide link editor's Dialog (features/links/link-edit-host.tsx).
 export default function LinksLayout() {
   const paused = usePausedWhileCovered();
   return (
     <LiveReadPause paused={paused}>
       <LinksPageProvider>
         <SidebarRailProvider>
-          <LinksDrawer />
+          <LinkAddHost>
+            <LinkEditHost>
+              <LinksDrawer />
+            </LinkEditHost>
+          </LinkAddHost>
         </SidebarRailProvider>
       </LinksPageProvider>
     </LiveReadPause>

@@ -118,28 +118,36 @@ validation, same quota banner on create, same dirty close guard) presented
 phone-shaped — but they are presented by **different mechanisms**, and only one
 of them is a route.
 
-The **edit** editor is a modal-presented expo-router screen: `/edit-link`,
-pushed by the row menu with a `linkId` + optional `focus` param
-(`presentation: 'modal'` — an iOS page sheet, an Android slide-up). A router
-screen, not an RN `Modal`, so it inherits the screens'
-`KeyboardAwareScrollView` path for free and portalled dialogs work inside it
-(docs/soft-keyboard.md — the presentation decides the keyboard mechanism), and
-its accidental close vectors (swipe-down, Android back) are swallowed while
-dirty by `usePreventRemove`.
+The **edit** editor has two shells on the docking width (768, `md`), over one
+draft (`useLinkEditDraft`) and one set of fields (`link-edit-screen.tsx`).
+Below it, a modal-presented expo-router screen: `/edit-link`, pushed by the row
+menu with a `linkId` + optional `focus` param (`presentation: 'modal'` — an iOS
+page sheet, an Android slide-up). A router screen, not an RN `Modal`, so it
+inherits the screens' `KeyboardAwareScrollView` path for free and portalled
+dialogs work inside it (docs/soft-keyboard.md — the presentation decides the
+keyboard mechanism), and its accidental close vectors (swipe-down, Android
+back) are swallowed while dirty by `usePreventRemove`. At and above it, the row
+menu hands the same two values to `LinkEditHost` (`link-edit-host.tsx`, hoisted
+around the links Drawer for web's reason: the row is virtualized), which opens
+`LinkEditDialog`, a centred `max-w-lg` card portaled to `APP_PORTAL_HOST`. Its
+guard maps the same split onto the Dialog: the backdrop and Android back arrive
+as `onOpenChange(false)` and are swallowed while dirty, and ✕/Cancel stay the
+deliberate doors.
 
 The **add** editor is **not a route at all**, and that is a load-bearing
 decision rather than an accident of history. `link-add-panel.tsx` is an absolute
-layer the links screen draws over itself while its own `adding` state is true
-(the FAB flips it); its header carries the three measured facts that pushed it
+layer that `link-add-host.tsx` draws over the whole links section — the docked
+rail as well as the screen — while its `adding` state is true (the FAB flips
+it); its header carries the three measured facts that pushed it
 out of expo-router, all of them silent — a `fitToContents` form sheet has no
 Android half once the keyboard is up, a fitted sheet may hold no scroller (which
 costs two of the three keyboard-dismissal paths), and presenting a transparent
 modal route a second time drops the WHOLE app's accessibility tree. What the
 route was providing it now provides itself, one line each: a fresh draft per open
-(the links screen mounts it only while `adding`), Android's hardware back via a
+(the host mounts it only while `adding`), Android's hardware back via a
 `BackHandler` that swallows the press while the optional section holds work, and
-modality for a screen reader (`accessibilityViewIsModal` on iOS, the links screen
-hiding its own subtree on Android). Its backdrop is web's outside-click and is
+modality for a screen reader (`accessibilityViewIsModal` on iOS, the host
+hiding the subtree it covers on Android). Its backdrop is web's outside-click and is
 guarded the same way. → docs/soft-keyboard.md, _the add panel_.
 
 Two structural consequences: the edit screen
@@ -1449,12 +1457,15 @@ decision ([architecture.md](./architecture.md), _dependency versions_) — and t
 one that looks free, a `formSheet` route presentation, is NOT the answer for a
 surface with a keyboard: it has no Android half and it forbids the scroller the
 keyboard rules are built on ([soft-keyboard.md](./soft-keyboard.md), _the add
-panel_, carries all three measurements). The quick-add is a bottom panel its own
-screen draws instead (`links/link-add-panel.tsx` over `links/index.tsx`), which
-is the shape web's narrow layout already uses — so the two clients agree on the
-container as well as the form. **The expo EDITOR stays a modal route**: it is a
-full-height form with nothing to reclaim, and a presented route is what gives it
-swipe-down, back and `usePreventRemove`. A growable picker that outgrows a dialog
+panel_, carries all three measurements). The quick-add is a panel the links
+section draws over itself instead (`links/link-add-panel.tsx`, hosted around the
+Drawer by `links/link-add-host.tsx`) — a bottom sheet below `md` and a centred
+card from it, which is web's own narrow/wide split — so the two clients agree on
+the container as well as the form. **The expo EDITOR stays a modal route below
+`md`**: it is a full-height form with nothing to reclaim, and a presented route
+is what gives it swipe-down, back and `usePreventRemove`. From `md` it is a
+centred Dialog, because an iPad page sheet floats its sticky footer off the
+keys ([soft-keyboard.md](./soft-keyboard.md), _the sticky footer_). A growable picker that outgrows a dialog
 still has no sheet primitive to reach for; the panel is a one-caller shape, not a
 component, until a second surface needs it.
 What a dialog does NOT get for free is the keyboard, or the room the keyboard

@@ -7,8 +7,8 @@
 // bulk-edit mode: the bottom edge belongs to BulkEditBar, and "add a link"
 // mid-selection is the wrong affordance.
 //
-// Pressing it asks the screen to open the add panel, and that is the whole job
-// now — the panel is a layer over this screen rather than a pushed route
+// Pressing it asks LinkAddHost to open the add panel, and that is the whole job
+// now — the panel is a layer over the links section rather than a pushed route
 // (link-add-panel.tsx carries the three measured reasons), so there is no
 // navigation here and no list to pre-compute: the panel reads the viewing list
 // straight from LinksPageProvider, which it now sits inside.
