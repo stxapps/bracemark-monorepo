@@ -24,8 +24,9 @@ import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Lock, Search, SlidersHorizontal, X } from 'lucide-react';
 import Link from 'next/link';
 
-import { flattenTree } from '@stxapps/shared';
+import { flattenTree, TREE_INDENT_MAX_LEVELS } from '@stxapps/shared';
 import { emptyQuery, type LinkQuery, useEntitlements, useLists, useTags } from '@stxapps/web-react';
+import { TreeLevelMarker } from '@stxapps/web-ui/components/links/tree-level';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
 import { Field, FieldLabel } from '@stxapps/web-ui/components/ui/field';
@@ -225,8 +226,20 @@ function TriCheckList({
             <label
               key={o.id}
               className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-muted"
-              style={o.depth > 0 ? { paddingLeft: `${o.depth * 12 + 6}px` } : undefined}
+              // 12px a level up to TREE_INDENT_MAX_LEVELS, then the level as a
+              // number (@stxapps/shared sync/tree.ts). Uncapped, a 100-deep
+              // chain pushed its checkbox 1,200px out of a 320px popover.
+              style={
+                o.depth > 0
+                  ? { paddingLeft: `${Math.min(o.depth, TREE_INDENT_MAX_LEVELS) * 12 + 6}px` }
+                  : undefined
+              }
             >
+              <TreeLevelMarker
+                depth={o.depth}
+                maxLevels={TREE_INDENT_MAX_LEVELS}
+                className="-mr-2"
+              />
               <Checkbox
                 checked={state === 'include' ? true : state === 'exclude' ? 'indeterminate' : false}
                 onCheckedChange={() => cycle(o.id)}

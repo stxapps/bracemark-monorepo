@@ -4,6 +4,7 @@ import {
   buildTree,
   LIST_NO_CHILDREN_IDS,
   type ListItem,
+  TREE_INDENT_MAX_LEVELS_NARROW,
   TREE_PATH_CUT,
   TREE_ROW_MAX_LEVELS,
 } from '@stxapps/shared';
@@ -422,25 +423,38 @@ describe('ListCommand — the Create row', () => {
 // row here is mounted, so anything a row pays PER LEVEL is paid depth² times
 // over. Two things did: the guide lines, and the ancestor names behind the path
 // label. A long chain did not overflow a stack; it cost hundreds of megabytes
-// the moment a picker opened. Both are bounded by TREE_ROW_MAX_LEVELS
-// (@stxapps/shared sync/tree.ts) — a bound on what a row draws, with every row
-// still present and still selectable.
+// the moment a picker opened. The names are bounded by TREE_ROW_MAX_LEVELS, the
+// lines by the far lower indent ceiling, TREE_INDENT_MAX_LEVELS_NARROW
+// (@stxapps/shared sync/tree.ts) — at 24px a level, more than four left a
+// submenu row's name no width. Bounds on what a row draws, with every row still
+// present and still selectable.
 describe('ListCommand — a row deeper than a row can show', () => {
   const DEPTH = TREE_ROW_MAX_LEVELS + 4;
+  const LEVELS = TREE_INDENT_MAX_LEVELS_NARROW;
   const chain = () =>
     Array.from({ length: DEPTH }, (_, i) => list(`l${i}`, `L${i}`, i === 0 ? null : `l${i - 1}`));
-  const guideLines = (row: HTMLElement) => row.querySelectorAll('[aria-hidden] > span').length;
+  // The group's untitled spans are the lines; the titled one is the level marker.
+  const guideLines = (row: HTMLElement) =>
+    row.querySelectorAll('[aria-hidden] > span:not([title])').length;
+  const level = (row: HTMLElement) =>
+    row.querySelector('[aria-hidden] > [title^="Level "]')?.textContent ?? null;
 
-  it('draws a guide line per level up to the bound, and no more below it', () => {
+  it('draws a guide line per level up to the ceiling, then numbers the level', () => {
     setLists(chain());
     render(<ListCommand onSelect={jest.fn()} />);
 
     const rows = screen.getAllByRole('option');
     expect(rows).toHaveLength(DEPTH);
-    // The control: under the bound a line per level is still the rule.
+    // The control: under the ceiling a line per level is still the rule, and
+    // no number — a row whose indent is true has nothing to add.
     expect(guideLines(rows[3])).toBe(3);
-    expect(guideLines(rows[TREE_ROW_MAX_LEVELS])).toBe(TREE_ROW_MAX_LEVELS);
-    expect(guideLines(rows[DEPTH - 1])).toBe(TREE_ROW_MAX_LEVELS);
+    expect(guideLines(rows[LEVELS])).toBe(LEVELS);
+    expect(level(rows[LEVELS])).toBeNull();
+    // Past it, the same lines and the row's level, counted from 1.
+    expect(guideLines(rows[LEVELS + 1])).toBe(LEVELS);
+    expect(level(rows[LEVELS + 1])).toBe(String(LEVELS + 2));
+    expect(guideLines(rows[DEPTH - 1])).toBe(LEVELS);
+    expect(level(rows[DEPTH - 1])).toBe(String(DEPTH));
   });
 
   it('labels a filtered match with a cut path, and still moves into it', () => {
@@ -458,5 +472,25 @@ describe('ListCommand — a row deeper than a row can show', () => {
     );
     fireEvent.click(row);
     expect(onSelect).toHaveBeenCalledWith(`l${DEPTH - 1}`);
+  });
+
+  // As one truncating line the path came first, so a path this long cut off the
+  // very name the user had typed. The name — with the " / " that ties it to the
+  // path — is its own box now, beside the ancestors' rather than after them in
+  // it, so it is the ancestors that truncate (ListPathLabel).
+  it('keeps the matched name out of the box the path truncates in', () => {
+    setLists(chain());
+    render(<ListCommand onSelect={jest.fn()} />);
+
+    type(`L${DEPTH - 1}`);
+
+    const [row] = screen.getAllByRole('option');
+    const name = screen.getByText(
+      (_, el) => el?.tagName === 'SPAN' && el.textContent === ` / L${DEPTH - 1}`,
+    );
+    const path = name.previousElementSibling as HTMLElement;
+    expect(path.textContent).toMatch(/^L0 \/ L1 \/ /);
+    expect(path.contains(name)).toBe(false);
+    expect(row.contains(path)).toBe(true);
   });
 });

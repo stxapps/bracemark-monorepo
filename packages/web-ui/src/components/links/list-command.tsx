@@ -66,6 +66,30 @@ export function useListRows(excludeIds?: readonly string[]): ListRow[] {
   return useMemo(() => flattenToPathRows(lists, excludeIds), [lists, excludeIds]);
 }
 
+// A row's path label — "Work / Cooking / Recipes", ancestors muted — on the
+// filtered rows below and on ListSelect's trigger. Two boxes, not one truncating
+// line: as one line the ancestors came first, so a long enough path cut the
+// list's OWN name off the end — the very word the user had typed to find it,
+// or the list a link is filed in, gone from the trigger. Here the name (and the
+// " / " that ties it to the path) takes its own width first and the ancestors
+// truncate in what is left: "Work / Cook… / Recipes" where it read "Work /
+// Cooking / Bak…", and a name too long for the row alone truncates like any
+// other.
+// `whitespace-pre` on the separator because `truncate`'s nowrap drops a space
+// that starts a box — and an nbsp in its place would change the label's text.
+export function ListPathLabel({ ancestors, name }: { ancestors: readonly string[]; name: string }) {
+  if (ancestors.length === 0) return <span className="truncate">{name}</span>;
+  return (
+    <span className="flex min-w-0">
+      <span className="min-w-0 truncate text-muted-foreground">{ancestors.join(' / ')}</span>
+      <span className="max-w-full shrink-0 truncate">
+        <span className="whitespace-pre text-muted-foreground">{' / '}</span>
+        {name}
+      </span>
+    </span>
+  );
+}
+
 export function ListCommand({
   value,
   onSelect,
@@ -206,15 +230,7 @@ export function ListCommand({
             {/* The depth is DRAWN, one guide line per level; guide-lines.tsx
                 carries the derivation of its numbers. */}
             {!filtering && depth > 0 && <GuideLines depth={depth} />}
-            <span className="truncate">
-              {filtering && ancestors.length > 0 && (
-                <span className="text-muted-foreground">
-                  {ancestors.join(' / ')}
-                  {' / '}
-                </span>
-              )}
-              {item.name}
-            </span>
+            <ListPathLabel ancestors={filtering ? ancestors : []} name={item.name} />
           </CommandItem>
         ))}
         {canCreate && (

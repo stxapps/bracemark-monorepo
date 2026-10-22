@@ -248,7 +248,8 @@ export function treeNameMap<T extends TreeItem & { name: string }>(
 // 32 ancestors or fewer is unchanged by it. A deeper row's label ends in the cut
 // marker in place of its nearest ancestors — one truncated line where it is
 // drawn, and read out whole where expo's ListSelect makes it an accessibility
-// label — and its indent stays at 32 guide lines, 768px of it.
+// label. What a row INDENTS is a separate, much lower bound: the
+// TREE_INDENT_MAX_LEVELS pair below.
 export const TREE_ROW_MAX_LEVELS = 32;
 
 // The px a sidebar row indents per level — the links rail on both platforms.
@@ -257,15 +258,35 @@ export const TREE_ROW_MAX_LEVELS = 32;
 // drag math reads (dnd-helpers.ts), each a constant of its surface.
 export const TREE_INDENT_WIDTH = 16;
 
-// The most levels a sidebar row INDENTS — the links rail on both platforms,
-// TREE_INDENT_WIDTH a level. A display bound, like TREE_ROW_MAX_LEVELS above and for the
-// same reason never a bound on the tree: past it a row keeps the indent of the
-// level at it. Without it the rail had nothing left for the label from about
-// level 5 at its narrowest (192px on web) and ran rows off its edge from level
-// 9, so a 100-deep chain scrolled the rail sideways by 1,600px; real bookmark
-// folders reach 6–10. Eight levels is 128px, which leaves a 192px rail room for
-// the chevron, the icon and a few characters of name.
+// The most levels a tree row INDENTS. A display bound, like TREE_ROW_MAX_LEVELS
+// above and for the same reason never a bound on the tree: past it a row keeps
+// the indent of the level at it, and says its level instead
+// (TreeLevelMarker, in web-ui and in expo — the number in the indent's last
+// step). Indent only carries meaning relative to the rows beside it, so after
+// a few steps it stops telling the reader anything while still costing the
+// label its width; the number keeps a chain past the ceiling from reading as
+// a column of siblings, and is what the Lists tables' drag shows moving once
+// the row's indent cannot.
+//
+// Every surface that draws a tree takes one of the pair, never a third value
+// and never uncapped:
+// - TREE_INDENT_MAX_LEVELS, where the step is small or the row has width to
+//   spare: both advanced-search checklists (12px a level, 96px of a 320px
+//   popover) and the Lists settings tables at the wide breakpoint.
+// - TREE_INDENT_MAX_LEVELS_NARROW everywhere else. Both sidebars: uncapped, a
+//   100-deep chain scrolled the web rail sideways by 1,600px, and even at
+//   eight levels a row at its default 240px kept ~12px for the name — one
+//   glyph — after the indent, the chevron, the icon and the padding (nothing
+//   at its 192px minimum; measured headless on the plus-worst seed). The
+//   pickers' guide lines (24px a level, in a "Move to" submenu as narrow as
+//   256px — eight levels left the name 8px). And the Lists settings tables
+//   below the wide breakpoint, whose rename field shares a phone's width with
+//   a grip, a toggle, an icon, lock chrome and a kebab (~67pt of text at four
+//   levels on a 375pt screen, ~3 at eight). Real bookmark folders reach 6–10
+//   levels, so a real library meets this ceiling; that is what the number is
+//   for.
 export const TREE_INDENT_MAX_LEVELS = 8;
+export const TREE_INDENT_MAX_LEVELS_NARROW = 4;
 
 // Stands in for the names a path row leaves out past TREE_ROW_MAX_LEVELS, so a
 // cut path reads "Work / … / Recipes" rather than naming the wrong parent.

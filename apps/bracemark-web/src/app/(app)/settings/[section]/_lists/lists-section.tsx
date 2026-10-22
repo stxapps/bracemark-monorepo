@@ -70,6 +70,8 @@ import {
   type SortDir,
   sortedByName,
   TRASH_ID,
+  TREE_INDENT_MAX_LEVELS,
+  TREE_INDENT_MAX_LEVELS_NARROW,
   type TreeNode,
 } from '@stxapps/shared';
 import {
@@ -83,6 +85,7 @@ import {
 } from '@stxapps/web-react';
 import { ListCommand } from '@stxapps/web-ui/components/links/list-command';
 import { MoveToSurface } from '@stxapps/web-ui/components/links/move-to-surface';
+import { TreeLevelMarker } from '@stxapps/web-ui/components/links/tree-level';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
   DropdownMenu,
@@ -336,12 +339,14 @@ const animateLayoutChanges: AnimateLayoutChanges = (args) =>
 // One sortable row. The drag handle is the grip on the left (after the indent);
 // listeners live only on it, so the rename input and kebab stay clickable. While
 // this row is the one being dragged, `renderDepth` is the projected depth, so the
-// row visibly slides to the indent it would land at. The buttons are the same
-// keyboard/mouse fallback that worked before drag existed.
+// row visibly slides to the indent it would land at — and past `indentLevels`,
+// where the indent stops, its level number counts the drag instead. The buttons
+// are the same keyboard/mouse fallback that worked before drag existed.
 function SortableRow({
   row,
   wide,
   renderDepth,
+  indentLevels,
   collapsedIds,
   excludeIdsFor,
   lock,
@@ -360,6 +365,7 @@ function SortableRow({
   row: ListRow;
   wide: boolean;
   renderDepth: number;
+  indentLevels: number;
   collapsedIds: ReadonlySet<string>;
   excludeIdsFor: () => readonly string[];
   lock: ListLockInfo | undefined;
@@ -395,9 +401,13 @@ function SortableRow({
         transition,
         // Indent step in px (not rem) so it matches the px the drag projection
         // works in — render and projection can't drift. Base stays a rem token.
-        paddingLeft: `calc(0.25rem + ${renderDepth * INDENT_WIDTH}px)`,
+        // Capped at `indentLevels` (@stxapps/shared sync/tree.ts): the rename
+        // field is the row's only flexible width, and every level past the cap
+        // came out of it.
+        paddingLeft: `calc(0.25rem + ${Math.min(renderDepth, indentLevels) * INDENT_WIDTH}px)`,
       }}
     >
+      <TreeLevelMarker depth={renderDepth} maxLevels={indentLevels} className="-mr-1" />
       <DragGrip {...attributes} {...listeners} />
 
       {row.hasChildren ? (
@@ -499,6 +509,12 @@ export function ListsSection() {
   // One matchMedia for the section, not one per row (and settled before any menu
   // opens, so the surface can't flash the wrong container — move-to-surface.tsx).
   const wide = useMediaQuery(MD_QUERY);
+  // The indent ceiling, by the same breakpoint: below `md` a row's rename field
+  // shares a phone's width with five fixed controls, so the narrow ceiling
+  // (@stxapps/shared sync/tree.ts, TREE_INDENT_MAX_LEVELS_NARROW says what it
+  // leaves). Display only — the drag projection and the depth rule read the
+  // real depth, so a row past the ceiling still nests and lifts by whole levels.
+  const indentLevels = wide ? TREE_INDENT_MAX_LEVELS : TREE_INDENT_MAX_LEVELS_NARROW;
 
   // Drag state: the row being dragged, the row it's over, and the horizontal
   // pointer offset that drives the projected depth. All null/0 when idle.
@@ -654,9 +670,9 @@ export function ListsSection() {
     // the narrow inset gives back is about half an indent step (INDENT_WIDTH,
     // dnd-helpers.ts), so it buys most of a nesting level: on a 375px screen a
     // locked row at depth 3 leaves ~83px of text at 16 and ~67px at 24, about nine
-    // characters. The only cap on depth is TREE_MAX_DEPTH, far past any
-    // width, so the field degrades eventually either way; the inset decides how
-    // soon.
+    // characters. Past four levels the indent stops (TREE_INDENT_MAX_LEVELS_NARROW
+    // — the rows number their level instead), so that is also about the least
+    // the field is ever left; the inset decides how much it is.
     //
     // Above `md` the argument stops applying — the column caps at 672, so `px-6`
     // still leaves 624px of measure — which is the whole reason the two values
@@ -721,6 +737,7 @@ export function ListsSection() {
                       row={row}
                       wide={wide}
                       renderDepth={renderDepth}
+                      indentLevels={indentLevels}
                       collapsedIds={collapsedIds}
                       excludeIdsFor={excludeIdsFor}
                       lock={listLocks.get(row.item.id)}

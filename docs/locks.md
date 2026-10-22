@@ -162,8 +162,9 @@ screen ([data-lifecycle.md](./data-lifecycle.md), _import_). It walks the **same
 forest the screens render** — never a flattened or depth-capped copy. Either
 would be the easy way to bound the work and would detach a deep list from the
 lock that covers it, showing its links; a display limit belongs in what a ROW
-draws, not in the tree coverage reads — which is where the one that exists
-lives (`TREE_ROW_MAX_LEVELS`: a picker row's ancestor path and guide lines).
+draws, not in the tree coverage reads — which is where the ones that exist
+live (`TREE_ROW_MAX_LEVELS`: a picker row's ancestor path; the
+`TREE_INDENT_MAX_LEVELS` pair: how far any tree row indents).
 
 ### unlocked state is in-memory only — the load-bearing invariant
 

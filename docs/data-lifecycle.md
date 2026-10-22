@@ -749,18 +749,21 @@ anything was drawn — so the app launched, and the bill came when a picker
 opened. `flattenToPathRows` now names the first `TREE_ROW_MAX_LEVELS` ancestors
 and then `TREE_PATH_CUT` (the rows past the cut share one array), the share
 sheet's picker rebuilds its paths under the same bound, and both platforms'
-guide lines stop at it. It is a bound on what a row **shows** — the row keeps
-its true `depth`, and the forest is untouched, which is where
-[locks.md](./locks.md) says a display limit has to live. A row within the bound
-looks as it did, and the bound's worth of guide lines is already 768px of
-indent. A deeper row does read differently. Its path label — a filtered row in a
+guide lines stop far sooner, at the indent ceiling
+(`TREE_INDENT_MAX_LEVELS_NARROW`, [data-limits.md](./data-limits.md),
+_screens_). It is a bound on what a row **shows** — the row keeps its true
+`depth`, and the forest is untouched, which is where [locks.md](./locks.md) says
+a display limit has to live. A row within the bound looks as it did. A deeper
+row does read differently. Its path label — a filtered row in a
 picker (the share sheet's included), `ListSelect`'s trigger, and on expo the
 accessibility label on that trigger — names the ancestors up to the bound and
 then the cut, so the names left out are the ones NEAREST the row, its parent's
 among them, and two lists with one name under the same deep ancestor carry one
-label. Where a picker draws guide lines its indent stops at the bound, so it
-sits level there with every other row that deep. Display is all the bound
-reaches: a row is keyed and picked by its id, and the picker's filter matches a
+label. What the cut never takes is the row's own name: the label is two boxes,
+the ancestors truncating beside the name rather than ahead of it (web-ui's
+`ListPathLabel`; expo's one Text ellipsizes in the `middle`), because as one
+line a long path pushed the very name the user had typed off the end — at a
+handful of levels, not only past the bound. Display is all the bound reaches: a row is keyed and picked by its id, and the picker's filter matches a
 list's own name, never the label.
 
 **The interop exports write at most `TREE_MAX_DEPTH` levels** (`sync/tree.ts`,

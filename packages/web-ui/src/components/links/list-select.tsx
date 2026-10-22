@@ -42,7 +42,7 @@ import { useListMutations } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@stxapps/web-ui/components/ui/popover';
 
-import { ListCommand, useListRows } from './list-command';
+import { ListCommand, ListPathLabel, useListRows } from './list-command';
 
 export function ListSelect({
   id,
@@ -95,15 +95,7 @@ export function ListSelect({
           className="w-full justify-between text-base font-normal md:text-sm"
         >
           {selected ? (
-            <span className="truncate">
-              {selected.ancestors.length > 0 && (
-                <span className="text-muted-foreground">
-                  {selected.ancestors.join(' / ')}
-                  {' / '}
-                </span>
-              )}
-              {selected.item.name}
-            </span>
+            <ListPathLabel ancestors={selected.ancestors} name={selected.item.name} />
           ) : (
             <span className="text-muted-foreground">Choose a list</span>
           )}

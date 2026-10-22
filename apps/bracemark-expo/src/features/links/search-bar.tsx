@@ -34,9 +34,10 @@ import { Check, Lock, Minus, Search, SlidersHorizontal, X } from 'lucide-react-n
 import { withUniwind } from 'uniwind';
 
 import { useEntitlements, useLists, useTags } from '@stxapps/expo-react';
-import { emptyQuery, flattenTree, type LinkQuery } from '@stxapps/shared';
+import { emptyQuery, flattenTree, type LinkQuery, TREE_INDENT_MAX_LEVELS } from '@stxapps/shared';
 
 import { FirstLineSlot } from '../../components/first-line-slot';
+import { TreeLevelMarker } from '../../components/links/tree-level';
 import { StickyFooter } from '../../components/sticky-footer';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
@@ -276,8 +277,20 @@ function TriCheckList({
                       : 'not selected'
                 }`}
                 className="flex-row items-center gap-2 rounded px-1.5 py-2 active:bg-muted"
-                style={o.depth > 0 ? { paddingLeft: o.depth * 12 + 6 } : undefined}
+                // 12 a level up to TREE_INDENT_MAX_LEVELS, then the level as a
+                // number (@stxapps/shared sync/tree.ts) — web's checklist, same
+                // numbers. Uncapped, a deep chain's box left the screen.
+                style={
+                  o.depth > 0
+                    ? { paddingLeft: Math.min(o.depth, TREE_INDENT_MAX_LEVELS) * 12 + 6 }
+                    : undefined
+                }
               >
+                <TreeLevelMarker
+                  depth={o.depth}
+                  maxLevels={TREE_INDENT_MAX_LEVELS}
+                  className="-mr-2"
+                />
                 {/* Every value here is ui/checkbox.tsx's, restated because this
                     box is hand-rolled rather than that component (the header's
                     third divergence: the primitive is boolean-only, and this row

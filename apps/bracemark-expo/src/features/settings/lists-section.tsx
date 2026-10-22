@@ -65,9 +65,12 @@ import {
   type SortDir,
   sortedByName,
   TRASH_ID,
+  TREE_INDENT_MAX_LEVELS,
+  TREE_INDENT_MAX_LEVELS_NARROW,
 } from '@stxapps/shared';
 
 import { ListCommand } from '../../components/links/list-command';
+import { TreeLevelMarker } from '../../components/links/tree-level';
 import { LockPasswordDialog } from '../../components/lock-password-dialog';
 import { Button } from '../../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
@@ -82,6 +85,7 @@ import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { usePaywall } from '../../contexts/paywall-provider';
 import { cn } from '../../lib/utils';
+import { useWideWindow } from '../../lib/window-class';
 import {
   excludeActiveDescendants,
   getMovePlan,
@@ -236,11 +240,14 @@ function RowActions({
   );
 }
 
-// One row. Indented by depth. Reorder/reparent by dragging the grip (the row
-// slides between indents as the projection changes) or by the kebab's up/down +
-// "Move to…".
+// One row. Indented by depth, up to `indentLevels`, and numbered past it.
+// Reorder/reparent by dragging the grip (the row slides between indents as the
+// projection changes, and past the ceiling its number counts instead) or by
+// the kebab's up/down + "Move to…".
 function Row({
   row,
+  levelDepth,
+  indentLevels,
   dragIndex,
   drag,
   lifted,
@@ -261,6 +268,10 @@ function Row({
   onDelete,
 }: {
   row: ListRow;
+  // The depth its level number shows: its own, or for the lifted row past the
+  // ceiling, the depth it would land at — the slide below stops at the ceiling.
+  levelDepth: number;
+  indentLevels: number;
   // The row's position in the flat, currently-rendered list — what the drag
   // layer counts in (NOT `row.index`, which is the position among siblings).
   dragIndex: number;
@@ -296,9 +307,17 @@ function Row({
       // The indent in px (not a class) so it matches the px the drag projection
       // works in — render and projection can't drift. The animated style rides on
       // top: while this row is the lifted one it slides horizontally by whole
-      // indents as the projected depth changes.
-      style={[row.depth > 0 ? { paddingLeft: 4 + row.depth * INDENT_WIDTH } : null, style]}
+      // indents as the projected depth changes. Capped at `indentLevels`
+      // (@stxapps/shared sync/tree.ts): the rename field is the row's only
+      // flexible width, and every level past the cap came out of it.
+      style={[
+        row.depth > 0
+          ? { paddingLeft: 4 + Math.min(row.depth, indentLevels) * INDENT_WIDTH }
+          : null,
+        style,
+      ]}
     >
+      <TreeLevelMarker depth={levelDepth} maxLevels={indentLevels} className="-mr-1" />
       <DragHandle pan={pan} />
 
       {row.hasChildren ? (
@@ -449,6 +468,16 @@ export function ListsSection() {
   // The row currently being dragged, by id. Only the exclusion below and the
   // lifted row's styling read it — the drag's own animation never re-renders.
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  // The depth the lifted row would land at, held ONLY while the drag is past
+  // the indent ceiling — there the slide has stopped and the row's level
+  // number is the one thing that shows the projection. Within the ceiling it
+  // stays null, so an ordinary drag still never re-renders the section.
+  const [liftedDepth, setLiftedDepth] = useState<number | null>(null);
+  // The indent ceiling (@stxapps/shared sync/tree.ts): the narrow one in a
+  // phone-width window, where the rename field shares the row with five fixed
+  // controls. Display only — the projection and the depth rule read the real
+  // depth, so a row past the ceiling still nests and lifts by whole levels.
+  const indentLevels = useWideWindow() ? TREE_INDENT_MAX_LEVELS : TREE_INDENT_MAX_LEVELS_NARROW;
 
   const rows = useMemo(() => flattenToRows(lists, collapsedIds), [lists, collapsedIds]);
   // While dragging, the lifted row's subtree travels with it, so drop it out of
@@ -512,7 +541,10 @@ export function ListsSection() {
     orderKey,
     indentWidth: INDENT_WIDTH,
     onPickUp: (index) => setDraggingId(displayRows[index]?.item.id ?? null),
-    onRelease: () => setDraggingId(null),
+    onRelease: () => {
+      setDraggingId(null);
+      setLiftedDepth(null);
+    },
     // Mid-drag: how far the lifted row should slide horizontally, i.e. the
     // difference between the depth it would land at and its own. Fires only when
     // the slot or the horizontal bucket changes, not per frame.
@@ -527,7 +559,10 @@ export function ListsSection() {
         ...PROJECTION_OPTIONS,
         maxDepth: deepestDepthFor(lists, active.item.id),
       });
-      return (depth - active.depth) * INDENT_WIDTH;
+      setLiftedDepth(depth > indentLevels || active.depth > indentLevels ? depth : null);
+      // The slide between the two CAPPED indents, so a row stops where the
+      // padding does and never travels past the ceiling it renders at.
+      return (Math.min(depth, indentLevels) - Math.min(active.depth, indentLevels)) * INDENT_WIDTH;
     },
     onDrop: (from, to, offsetX) => {
       // Every bare `return` below is a drop that changes nothing — the hook
@@ -581,8 +616,9 @@ export function ListsSection() {
     // trade legible: at 24 a row reads one nesting level deeper than it is. On a
     // 375pt screen a locked row at depth 3 leaves ~83px of text at 16 and ~67px at
     // 24 — about nine characters, on a field whose whole job is editing a name.
-    // The only cap on depth is TREE_MAX_DEPTH, far past any width, so the
-    // field degrades to unusable eventually either way; the inset decides how soon.
+    // Past four levels the indent stops (TREE_INDENT_MAX_LEVELS_NARROW — the rows
+    // number their level instead), so that is also about the least the field is
+    // ever left; the inset decides how much it is.
     //
     // This section used to spell `px-4` itself, as web's twin did. Both moved into
     // their kits when web's copy turned out to be pulling the two tables 8px inside
@@ -614,6 +650,8 @@ export function ListsSection() {
           <Row
             key={row.item.id}
             row={row}
+            levelDepth={row.item.id === draggingId ? (liftedDepth ?? row.depth) : row.depth}
+            indentLevels={indentLevels}
             dragIndex={index}
             drag={drag}
             lifted={row.item.id === draggingId}

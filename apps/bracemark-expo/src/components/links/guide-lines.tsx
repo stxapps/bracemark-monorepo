@@ -34,24 +34,29 @@
 // so depth 1 does not move and only depth 2+ changes. web-ui's
 // links/guide-lines.tsx carries the same pair and the same derivation.
 //
-// AT MOST `TREE_ROW_MAX_LEVELS` LINES, whatever `depth` says. Both pickers mount
-// every row in a ScrollView, so a view per level per row is the square of a deep
-// `parentId` chain's length in native views — and how deep a chain is gets
-// decided by a restored backup or another device, not here. Past the bound a row
-// keeps the indent of the level at it, which is already wider than the screen.
-// The bound and its reasoning are @stxapps/shared's (sync/tree.ts), which the
-// share bundle may import.
+// AT MOST `TREE_INDENT_MAX_LEVELS_NARROW` LINES, whatever `depth` says — the
+// four that leave a name room at 24 a level (@stxapps/shared sync/tree.ts).
+// Past that a row keeps the indent of the level at it and TreeLevelMarker
+// (tree-level.tsx, a leaf the share bundle may reach too) numbers its level
+// over the last slot, the full row height like the lines. The bound also caps
+// the views: both pickers mount every row in a ScrollView, so a view per level
+// per row is the square of a deep `parentId` chain's length — and how deep a
+// chain is gets decided by a restored backup or another device, not here.
+// web-ui's links/guide-lines.tsx carries the same bound.
 
 import { View } from 'react-native';
 
-import { TREE_ROW_MAX_LEVELS } from '@stxapps/shared';
+import { TREE_INDENT_MAX_LEVELS_NARROW } from '@stxapps/shared';
+
+import { TreeLevelMarker } from './tree-level';
 
 export function GuideLines({ depth }: { depth: number }) {
   return (
     <View aria-hidden className="-my-2.5 -mr-2 flex-row self-stretch">
-      {Array.from({ length: Math.min(depth, TREE_ROW_MAX_LEVELS) }, (_, i) => (
+      {Array.from({ length: Math.min(depth, TREE_INDENT_MAX_LEVELS_NARROW) }, (_, i) => (
         <View key={i} className="w-6 border-l border-border" />
       ))}
+      <TreeLevelMarker depth={depth} maxLevels={TREE_INDENT_MAX_LEVELS_NARROW} />
     </View>
   );
 }
