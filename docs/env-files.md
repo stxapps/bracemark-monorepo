@@ -379,6 +379,17 @@ things make that a non-issue:
   Metro's own environment rather than its transform cache (verified — a plain
   restart after a staging session served `localhost` again). Only a _reload_ of
   a still-running Metro replays its old value.
+  ⚠ **The preamble being right is not the bundle being right.** App code reads
+  `process.env.EXPO_PUBLIC_*` through `expo/virtual/env`, which
+  `@expo/metro-config` generates in dev as `{ ...process.env, ...dotEnvFiles }`
+  — the files spread _over_ the shell — so every `start:*` script and
+  `ios:lan` served the right preamble and `.env.development`'s `localhost` to
+  the app, and only an uncommented `.env.local` pair (later in that spread)
+  worked. `metro.config.js` drops `env`/`local`/`development` from
+  `watcher.additionalExts`, so Metro can't see those files and the module is
+  plain `process.env` again. Removing that drop breaks the scripts with no
+  error: check the URL in the served bundle, not just the preamble. It also
+  stops hot-applying a `.env` edit, which the restart above covers anyway.
 - **A release bundle refuses anything but production** (the guard, below), so
   the Archive that never sees a shell is exactly the production build it should
   be, and a staging release build is CLI-only by construction.

@@ -60,6 +60,21 @@ if (process.env.NODE_ENV === 'production') {
 const defaultConfig = getDefaultConfig(__dirname);
 const { assetExts, sourceExts } = defaultConfig.resolver;
 
+// THE SHELL OUTRANKS THE FILES IN A DEV BUNDLE TOO. A dev bundle reads every
+// EXPO_PUBLIC_* through `expo/virtual/env`, which @expo/metro-config generates as
+// `{ ...process.env, ...<the .env* files, bundled as modules> }` — the files
+// spread OVER the polyfilled process.env, so a shell value (`npm run start:lan`,
+// `start:staging`, `start:production`, `ios:lan`) lost to `.env.development` and
+// the phone got `localhost`, while the bundle's env preamble showed the right
+// value. Metro only sees those files because Expo adds their extensions here;
+// without them the context is empty and the module is plain `process.env`, which
+// Metro fills from its own environment, where @expo/env already ranked the shell
+// above `.env.local` above `.env.<mode>`. Lost with them: hot-applying a `.env`
+// edit, which a Metro restart covers. Release bundles are unaffected — babel
+// inlines from process.env. Still Expo's behaviour as of SDK 58.
+// → docs/env-files.md, "bracemark-expo".
+const DOTENV_EXTS = ['env', 'local', 'development'];
+
 /**
  * Metro configuration
  * https://reactnative.dev/docs/metro
@@ -68,6 +83,11 @@ const { assetExts, sourceExts } = defaultConfig.resolver;
  */
 const customConfig = {
   cacheVersion: '@stxapps/bracemark-expo',
+  watcher: {
+    additionalExts: defaultConfig.watcher.additionalExts.filter(
+      (ext) => !DOTENV_EXTS.includes(ext),
+    ),
+  },
   transformer: {
     babelTransformerPath: require.resolve('react-native-svg-transformer'),
   },
