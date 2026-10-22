@@ -14,7 +14,7 @@ import {
   LIST_NO_CHILDREN_IDS,
   type ListItem,
   type TagItem,
-  TREE_INDENT_MAX_LEVELS,
+  TREE_INDENT_MAX_LEVELS_NARROW,
 } from '@stxapps/shared';
 
 import type { Selection } from './page-provider';
@@ -310,10 +310,19 @@ describe('Sidebar — a chain deeper than React can nest', () => {
     const last = all[DEPTH - 1];
     expect(last.props.testID).toBe(`links-nav-list-l${DEPTH - 1}`);
     // Each row is indented by its own depth, 16 a level — then no further than
-    // TREE_INDENT_MAX_LEVELS, or a deep chain's labels have no width left.
+    // TREE_INDENT_MAX_LEVELS_NARROW, or a deep chain's labels have no width left.
     const indent = (row: Rendered) => StyleSheet.flatten(rowBox(row).props.style)?.paddingLeft;
     expect(indent(all[3])).toBe(48);
-    expect(indent(all[TREE_INDENT_MAX_LEVELS])).toBe(TREE_INDENT_MAX_LEVELS * 16);
-    expect(indent(last)).toBe(TREE_INDENT_MAX_LEVELS * 16);
+    expect(indent(all[TREE_INDENT_MAX_LEVELS_NARROW])).toBe(TREE_INDENT_MAX_LEVELS_NARROW * 16);
+    expect(indent(last)).toBe(TREE_INDENT_MAX_LEVELS_NARROW * 16);
+    // Past the cap the rows share one indent, so each says its level instead —
+    // counted from 1, and absent on the row the cap still indents truly.
+    const level = (row: Rendered, n: number) =>
+      within(rowBox(row)).queryByText(String(n), { includeHiddenElements: true });
+    expect(level(all[TREE_INDENT_MAX_LEVELS_NARROW], TREE_INDENT_MAX_LEVELS_NARROW + 1)).toBeNull();
+    expect(
+      level(all[TREE_INDENT_MAX_LEVELS_NARROW + 1], TREE_INDENT_MAX_LEVELS_NARROW + 2),
+    ).not.toBeNull();
+    expect(level(last, DEPTH)).not.toBeNull();
   });
 });

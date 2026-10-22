@@ -220,7 +220,15 @@ export function ListCommand({
               )}
             >
               {!filtering && depth > 0 && <GuideLines depth={depth} />}
-              <Text numberOfLines={1} className="min-w-0 flex-1">
+              {/* `middle` while a path leads the name: at the tail, a long path
+                  cut the list's own name off — the word just typed to find it.
+                  The middle cut keeps the root and the name, and loses the
+                  ancestors between (web-ui's ListPathLabel, the web form). */}
+              <Text
+                numberOfLines={1}
+                ellipsizeMode={filtering && ancestors.length > 0 ? 'middle' : 'tail'}
+                className="min-w-0 flex-1"
+              >
                 {filtering && ancestors.length > 0 && (
                   <Text className="text-muted-foreground">{`${ancestors.join(' / ')} / `}</Text>
                 )}

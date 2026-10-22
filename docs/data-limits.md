@@ -178,16 +178,51 @@ list in an import (it finds by name), and as two folders with one path in a CSV.
 - **Sync — nothing.** See _the rule_. A chain past the limit arrives, is stored
   and is shown.
 - **Screens — bounded in what a row shows, never in the tree.**
-  `TREE_ROW_MAX_LEVELS` caps a picker row's path label and guide lines
-  ([data-lifecycle.md](./data-lifecycle.md), _a row describes at most_); the
-  sidebars render flat rows, indented `TREE_INDENT_WIDTH` a level up to
-  `TREE_INDENT_MAX_LEVELS` and no further — uncapped, a 100-deep chain ran
-  the links rail 1,600px sideways and left no width for a label from about
-  level 5 at its narrowest; and the lock provider reads the real forest, which
-  [locks.md](./locks.md) requires. The web Lists table used to work out
-  `forbiddenParentIds` for every row on every render — a forest walk per row,
-  so the square of the list count on every drag frame — and now asks it only of
-  the row whose menu is open.
+  `TREE_ROW_MAX_LEVELS` caps a picker row's path label
+  ([data-lifecycle.md](./data-lifecycle.md), _a row describes at most_), and
+  the label never gives up the row's own name to the path. **Every surface that
+  draws a tree indents to a ceiling and then says the level**: past
+  `TREE_INDENT_MAX_LEVELS` (8) or its narrow twin `TREE_INDENT_MAX_LEVELS_NARROW`
+  (4), a row keeps the indent of the level at the ceiling, and
+  `TreeLevelMarker` (`links/tree-level.tsx`, web-ui and expo) prints its level —
+  `depth + 1`, the scale the import receipts count in — in the indent's last
+  step, so the content does not move when it appears. Each surface keeps its
+  own step and takes one of the pair by how much width its label has:
+
+  | surface                                           | step  | ceiling                         |
+  | ------------------------------------------------- | ----- | ------------------------------- |
+  | links sidebar, both platforms                     | 16    | `TREE_INDENT_MAX_LEVELS_NARROW` |
+  | advanced-search list/tag checklist, both          | 12    | `TREE_INDENT_MAX_LEVELS`        |
+  | Lists settings table, web at `md` / expo wide     | 20/16 | `TREE_INDENT_MAX_LEVELS`        |
+  | Lists settings table, below that                  | 20/16 | `TREE_INDENT_MAX_LEVELS_NARROW` |
+  | list pickers' guide lines (incl. the share sheet) | 24    | `TREE_INDENT_MAX_LEVELS_NARROW` |
+
+  Why a ceiling and a number, against the other shapes it could take. An
+  indent only means something next to the rows around it — the eye reads
+  "child of the row above", not "level 9" — so past a few steps it adds nothing
+  and goes on costing the label. Uncapped, a 100-deep chain ran the links rail
+  1,600px sideways, pushed a search checkbox 1,200px out of a 320px popover,
+  and left a phone's Lists table ~3pt of rename field at eight levels; even
+  capped at eight, a sidebar row at the rail's default 240px kept ~12px of name
+  — one glyph — which is why the sidebars take the narrow ceiling now that the
+  number carries the depth past it. A sideways scroll
+  instead puts a second scroll axis on a rail, a popover and a drag surface, and
+  the drag projection reads the pointer's x. Collapsing the levels into an `…`
+  bounds the width but makes a chain past the ceiling read as a column of
+  siblings, which the number does not, and in the Lists tables the number is
+  the drag's feedback past the ceiling, where the row has stopped sliding (web
+  numbers the projected level on every frame; expo re-renders for it only while
+  the drag is past the ceiling, so an ordinary drag still never does).
+  Zooming into a subtree behind a breadcrumb changes how every surface
+  navigates, and a picker's filter already shows a deep match with its path.
+  What none of this changes is a row's `depth`: the drag projection, the depth
+  rule and the lock provider all read the real forest, the last because
+  [locks.md](./locks.md) requires it.
+
+  The web Lists table used to work out `forbiddenParentIds` for every row on
+  every render — a forest walk per row, so the square of the list count on
+  every drag frame — and now asks it only of the row whose menu is open.
+
 - **Interop export — placed at the limit.** `foldersWithPaths` and the Netscape
   writer place a deeper list at the limit, so the file is one this app's import
   nests exactly as written; `ExportOutcome.flattenedListCount` says how many.

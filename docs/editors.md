@@ -313,6 +313,20 @@ draft; each keystroke commits or reverts in place):
   the forest, and asked of every row on every render it was the square of the
   list count on every drag frame.
 
+  **The indent stops before the depth does.** Both tables indent a row
+  `INDENT_WIDTH` a level up to `TREE_INDENT_MAX_LEVELS` at the wide breakpoint
+  (web's `md`, expo's `useWideWindow`) and `TREE_INDENT_MAX_LEVELS_NARROW`
+  below it, since on a phone the rename field is the row's one flexible width
+  beside five fixed controls; past the ceiling the row prints its level in the
+  indent instead ([data-limits.md](./data-limits.md), _screens_). Display only:
+  the projection, the plan and the depth rule read the real depth. The cost is
+  that a drag past the ceiling stops sliding — expo's `projectOffsetX` returns
+  the difference between the two **capped** depths — so the level number is
+  its feedback there: web's renders from the projected `renderDepth` every
+  frame, and expo's section holds the lifted row's projected depth in state
+  only while the drag is past the ceiling, so a drag inside it still never
+  re-renders the section.
+
   **A native drop is held until the new order renders — never for a fixed
   time.** Finishing a drop takes two changes on two threads: the drag transforms
   go back to identity (UI thread), and the rows re-lay-out in their new order (the

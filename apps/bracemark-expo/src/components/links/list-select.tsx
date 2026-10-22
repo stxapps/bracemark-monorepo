@@ -108,7 +108,13 @@ export function ListSelect({
         className="justify-between px-3"
       >
         {selected ? (
-          <Text numberOfLines={1} className="min-w-0 flex-1 text-base leading-5 font-normal">
+          // `middle`, so a deep path loses the ancestors between and never the
+          // list's own name (list-command.tsx's filtered rows, same reason).
+          <Text
+            numberOfLines={1}
+            ellipsizeMode={selected.ancestors.length > 0 ? 'middle' : 'tail'}
+            className="min-w-0 flex-1 text-base leading-5 font-normal"
+          >
             {selected.ancestors.length > 0 && (
               <Text className="text-muted-foreground">{`${selected.ancestors.join(' / ')} / `}</Text>
             )}

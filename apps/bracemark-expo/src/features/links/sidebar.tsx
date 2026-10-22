@@ -52,7 +52,7 @@ import {
   flattenTree,
   MY_LIST_ID,
   TRASH_ID,
-  TREE_INDENT_MAX_LEVELS,
+  TREE_INDENT_MAX_LEVELS_NARROW,
   TREE_INDENT_WIDTH,
   type TreeItem,
   type TreeNode,
@@ -60,6 +60,7 @@ import {
 } from '@stxapps/shared';
 
 import { BrandLockup } from '../../components/brand-lockup';
+import { TreeLevelMarker } from '../../components/links/tree-level';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
@@ -173,8 +174,8 @@ function NavItem({
   // Fired after the row commits its selection — the drawer closes on it.
   onSelected: () => void;
   // Tree nesting level — indents the row TREE_INDENT_WIDTH per level, up to
-  // TREE_INDENT_MAX_LEVELS (@stxapps/shared sync/tree.ts). Applied to the whole
-  // row so the chevron indents with the label.
+  // TREE_INDENT_MAX_LEVELS_NARROW (@stxapps/shared sync/tree.ts), and numbers it past
+  // that. Applied to the whole row so the chevron indents with the label.
   depth?: number;
   // Present only on rows with children: whether the subtree is shown, and the
   // chevron's toggle — a SEPARATE sibling Pressable on the LEFT (row press =
@@ -205,14 +206,15 @@ function NavItem({
   return (
     <View
       className="w-full flex-row items-center"
-      // Capped at TREE_INDENT_MAX_LEVELS (@stxapps/shared sync/tree.ts): past it
-      // a deep chain's labels had no width left.
+      // Capped at TREE_INDENT_MAX_LEVELS_NARROW (@stxapps/shared sync/tree.ts): past it
+      // a deep chain's labels had no width left, so the row numbers its level.
       style={
         depth > 0
-          ? { paddingLeft: Math.min(depth, TREE_INDENT_MAX_LEVELS) * TREE_INDENT_WIDTH }
+          ? { paddingLeft: Math.min(depth, TREE_INDENT_MAX_LEVELS_NARROW) * TREE_INDENT_WIDTH }
           : undefined
       }
     >
+      <TreeLevelMarker depth={depth} maxLevels={TREE_INDENT_MAX_LEVELS_NARROW} />
       {onToggle ? (
         <Button
           variant="ghost"

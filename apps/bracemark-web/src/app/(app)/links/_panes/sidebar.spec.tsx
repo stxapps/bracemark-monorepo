@@ -4,7 +4,7 @@ import {
   buildTree,
   LIST_NO_CHILDREN_IDS,
   type TagItem,
-  TREE_INDENT_MAX_LEVELS,
+  TREE_INDENT_MAX_LEVELS_NARROW,
 } from '@stxapps/shared';
 import {
   type ListItem,
@@ -306,11 +306,21 @@ describe('Sidebar — a chain deeper than React can nest', () => {
     expect(all).toHaveLength(DEPTH);
     expect(all[DEPTH - 1].textContent).toBe(`L${DEPTH - 1}`);
     // Each row is indented by its own depth, 16px a level — then no further
-    // than TREE_INDENT_MAX_LEVELS, or the rail runs sideways (a 100-deep chain
+    // than TREE_INDENT_MAX_LEVELS_NARROW, or the rail runs sideways (a 100-deep chain
     // was 1,600px of it) and the label has no width left.
     const indent = (i: number) => (all[i].parentElement as HTMLElement).style.paddingLeft;
     expect(indent(3)).toBe('48px');
-    expect(indent(TREE_INDENT_MAX_LEVELS)).toBe(`${TREE_INDENT_MAX_LEVELS * 16}px`);
-    expect(indent(DEPTH - 1)).toBe(`${TREE_INDENT_MAX_LEVELS * 16}px`);
+    expect(indent(TREE_INDENT_MAX_LEVELS_NARROW)).toBe(`${TREE_INDENT_MAX_LEVELS_NARROW * 16}px`);
+    expect(indent(DEPTH - 1)).toBe(`${TREE_INDENT_MAX_LEVELS_NARROW * 16}px`);
+    // Past the cap the rows share one indent, so each says its level instead —
+    // counted from 1, and absent on the row the cap still indents truly.
+    const level = (i: number) =>
+      (all[i].parentElement as HTMLElement).querySelector('[title^="Level "]')?.textContent ?? null;
+    expect(level(3)).toBeNull();
+    expect(level(TREE_INDENT_MAX_LEVELS_NARROW)).toBeNull();
+    expect(level(TREE_INDENT_MAX_LEVELS_NARROW + 1)).toBe(
+      String(TREE_INDENT_MAX_LEVELS_NARROW + 2),
+    );
+    expect(level(DEPTH - 1)).toBe(String(DEPTH));
   });
 });

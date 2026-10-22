@@ -249,7 +249,12 @@ function ListRow({
           takes. Both are list-command.tsx's ListCommand, line for line
           (docs/share-sheet.md). */}
       {indent > 0 && <GuideLines depth={indent} />}
-      <Text numberOfLines={1} className="min-w-0 flex-1">
+      {/* `middle` under a path, so the cut takes ancestors and not the name. */}
+      <Text
+        numberOfLines={1}
+        ellipsizeMode={path !== undefined ? 'middle' : 'tail'}
+        className="min-w-0 flex-1"
+      >
         {path !== undefined && <Text className="text-muted-foreground">{path}</Text>}
         {name}
       </Text>

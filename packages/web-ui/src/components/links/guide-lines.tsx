@@ -25,19 +25,25 @@
 // deeper, which used to step 16 while the first level stepped 24.
 // bracemark-expo's guide-lines.tsx is the same pair of numbers.
 //
-// At most TREE_ROW_MAX_LEVELS of them. Every ListCommand row is mounted
-// (nothing is virtualized), so a line per level per row is the square of a deep
-// chain's length in elements; past the bound a row keeps the indent of the level
-// at it, which is already wider than the list (@stxapps/shared sync/tree.ts).
+// At most TREE_INDENT_MAX_LEVELS_NARROW of them (@stxapps/shared sync/tree.ts):
+// at 24px a level, the four that fit beside a name in a 256px "Move to" submenu.
+// Past that a row keeps the indent of the level at it and TreeLevelMarker
+// (tree-level.tsx) numbers its level over the last slot — the group is
+// `self-stretch`, so the marker is the row's full height and centres its digits
+// on the name's line. The bound also caps the elements: every ListCommand row is
+// mounted (nothing is virtualized), so a line per level per row was the square
+// of a deep chain's length.
 
-import { TREE_ROW_MAX_LEVELS } from '@stxapps/shared';
+import { TREE_INDENT_MAX_LEVELS_NARROW } from '@stxapps/shared';
+import { TreeLevelMarker } from '@stxapps/web-ui/components/links/tree-level';
 
 export function GuideLines({ depth }: { depth: number }) {
   return (
     <span aria-hidden className="-my-2 -mr-2 flex self-stretch">
-      {Array.from({ length: Math.min(depth, TREE_ROW_MAX_LEVELS) }, (_, i) => (
+      {Array.from({ length: Math.min(depth, TREE_INDENT_MAX_LEVELS_NARROW) }, (_, i) => (
         <span key={i} className="w-6 border-l border-border" />
       ))}
+      <TreeLevelMarker depth={depth} maxLevels={TREE_INDENT_MAX_LEVELS_NARROW} />
     </span>
   );
 }
