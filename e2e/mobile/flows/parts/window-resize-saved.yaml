@@ -1,0 +1,14 @@
+# The URL that rode out both resizes saves like any other.
+# Parameter: LINK_URL.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'add-link-save'
+- extendedWaitUntil:
+    notVisible:
+      id: 'add-link-url'
+    timeout: 10000
+- extendedWaitUntil:
+    visible: ".*${LINK_URL.replace('https://', '')}.*"
+    timeout: 20000
+- takeScreenshot: saved-after-resize

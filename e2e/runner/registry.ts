@@ -6,6 +6,7 @@ import { E2E_ROOT } from '../paths';
 import { E2E_BROWSERS, type E2EBrowser } from './browser';
 import { type E2EEnvironment } from './environment';
 import { validateVisualCatalog } from './visual-catalog';
+import { E2E_WIDTHS, type E2EWidth } from './width';
 
 export type E2ESurface = 'web' | 'extension' | 'pwa' | 'native' | 'contract';
 export type E2ETier = 'smoke' | 'full' | 'release';
@@ -28,6 +29,15 @@ export interface E2ECase {
   // kept to the cases whose outcome rests on something Gecko does its own way
   // (docs/e2e.md, _firefox_).
   browsers?: E2EBrowser[];
+  // The window widths a NATIVE case runs at (runner/width.ts); omitted means
+  // narrow only — the phone every flow was first written on. A case is admitted
+  // to `wide` once it has been run on a tablet and an iPad, because a flow that
+  // passes on a phone can tap a drawer button a docked rail does not have, or a
+  // point measured on a phone's screen. Contract cases have no field: they run
+  // on the phone, since a round trip through the crypto never sees the window.
+  // Web has no field either: its runs are wide, and its narrow claims switch
+  // the viewport inside the case (docs/e2e.md, _narrow and wide_).
+  widths?: E2EWidth[];
   // Server state the runner writes for this case on STAGING, outside the app.
   // `plan` is the only one there is: the `manual` purchase row (seed/plan.ts),
   // written to staging's remote D1 with a Cloudflare credential. Declared here
@@ -59,6 +69,8 @@ export interface CaseFilters {
   baseline?: boolean;
   environment?: E2EEnvironment;
   browser?: E2EBrowser;
+  // Native only: select the cases admitted at this width.
+  width?: E2EWidth;
   // Start at this case: applied LAST, to what every other filter left, so the
   // id is one of the cases the run would have reached (runner/cli.ts, `from`).
   from?: string;
@@ -129,6 +141,15 @@ export function validateCaseRegistry(cases = readCaseRegistry()): void {
       throw new Error(`${testCase.id}: invalid browsers (an automated web case only)`);
     }
     if (
+      testCase.widths &&
+      (testCase.widths.length === 0 ||
+        new Set(testCase.widths).size !== testCase.widths.length ||
+        testCase.widths.some((value) => !E2E_WIDTHS.includes(value)) ||
+        testCase.surface !== 'native')
+    ) {
+      throw new Error(`${testCase.id}: invalid widths (a native case only)`);
+    }
+    if (
       testCase.stagingGrants &&
       (testCase.stagingGrants.length !== 1 ||
         testCase.stagingGrants[0] !== 'plan' ||
@@ -193,6 +214,9 @@ export function selectCases(surface: E2ESurface, filters: CaseFilters = {}): E2E
     if (!(requested.browsers ?? ['chrome']).includes(browser)) {
       throw new Error(`${id} does not run on ${browser}; its registry entry does not list it`);
     }
+    if (filters.width && !(requested.widths ?? ['narrow']).includes(filters.width)) {
+      throw new Error(`${id} does not run ${filters.width}; its registry entry does not list it`);
+    }
     if (requested.traits.includes('baseline') !== Boolean(filters.baseline)) {
       throw new Error(
         filters.baseline
@@ -206,6 +230,7 @@ export function selectCases(surface: E2ESurface, filters: CaseFilters = {}): E2E
     if (testCase.surface !== surface) return false;
     if (!(testCase.environments ?? ['local']).includes(environment)) return false;
     if (!(testCase.browsers ?? ['chrome']).includes(browser)) return false;
+    if (filters.width && !(testCase.widths ?? ['narrow']).includes(filters.width)) return false;
     if (testCase.tier === 'release') return false;
     if (testCase.traits.includes('baseline') !== Boolean(filters.baseline)) return false;
     if (requestedCases.size > 0 && !requestedCases.has(testCase.id)) return false;

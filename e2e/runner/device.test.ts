@@ -43,3 +43,30 @@ test('a device is defaulted only when there is exactly one, and never chosen bet
     /pass --device <id>[\s\S]*AAAA-2 {2}iPad Air/,
   );
 });
+
+test('a width picks the one device on its side of 768, and names what to boot when none is', () => {
+  const iphone = { id: 'AAAA-1', name: 'iPhone 17', width: 'narrow' as const };
+  const ipad = { id: 'AAAA-2', name: 'iPad (A16)', width: 'wide' as const };
+  const mini = { id: 'AAAA-3', name: 'iPad mini (A17 Pro)', width: 'narrow' as const };
+  // An iPhone and an iPad up together need no --device.
+  assert.equal(pickDevice('ios', undefined, [iphone, ipad], 'narrow'), 'AAAA-1');
+  assert.equal(pickDevice('ios', undefined, [iphone, ipad], 'wide'), 'AAAA-2');
+  assert.throws(
+    () => pickDevice('ios', undefined, [iphone, mini], 'wide'),
+    /no wide booted iOS simulator: boot an iPad 768pt[\s\S]*AAAA-3 {2}iPad mini \(A17 Pro\) {2}\(narrow\)/,
+  );
+  assert.throws(
+    () => pickDevice('ios', undefined, [iphone, mini], 'narrow'),
+    /2 narrow booted iOS simulators; pass --device/,
+  );
+  assert.throws(
+    () =>
+      pickDevice(
+        'android',
+        undefined,
+        [{ id: 'emulator-5554', name: 'p', width: 'narrow' }],
+        'wide',
+      ),
+    /boot the bracemark-tablet AVD/,
+  );
+});

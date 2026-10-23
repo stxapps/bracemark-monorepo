@@ -549,7 +549,7 @@ what `bracemark-web` can do from a phone — is
 **If you use the file, comment it back out when you are done — any pair, not
 just the iPhone one.** (The scripts need no undoing; that is their point.) The
 switch has no per-target scope, so one left in place takes the simulator, the
-emulator and `npm run e2e:ios` / `e2e:android` off loopback too, and a Metro
+emulator and `npm run e2e:ios:iphone` / `e2e:android:phone` off loopback too, and a Metro
 restart is what decides when the fix takes effect. The failure that produces, and why it is
 intermittent rather than reliable, is [device-testing.md](./device-testing.md),
 _one bundle, one set of origins_.

@@ -655,8 +655,9 @@ reviewable and prove the viewport claims semantic selectors cannot.
       both, and a dark capture no darker than its light twin fails the run.
 - [x] `VISUAL-003` Capture wide and narrow web layouts, plus the canonical iOS and
       Android phone profiles. Add tablet/large-screen coverage only when the
-      product supports it. The app is phone-only, so there is no tablet
-      profile.
+      product supports it. It does now: the iPad and tablet-AVD profiles are
+      `e2e:visual:ios:ipad` and `e2e:visual:android:tablet` (docs/e2e.md,
+      _narrow and wide_), not yet run on a device.
 - [x] `VISUAL-004` Add large-font checkpoints for the highest-risk native forms,
       dialogs, and share surfaces. Thirteen, in `VISUAL-FONT-001`: the first
       five, then advanced search and all seven settings sections with the

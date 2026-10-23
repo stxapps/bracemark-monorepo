@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { parseNativeCli, parseWebCli } from './cli';
-import { readCaseRegistry, selectCases, selectCasesForPlatform } from './registry';
+import { parseNativeCli, parseVisualCli, parseWebCli } from './cli';
+import {
+  readCaseRegistry,
+  selectCases,
+  selectCasesForPlatform,
+  validateCaseRegistry,
+} from './registry';
 
 const ids = (cases: { id: string }[]) => cases.map((testCase) => testCase.id);
 
@@ -64,4 +69,61 @@ test('--from is a native flag: the web wrappers hand it on to Playwright', () =>
     '--from',
     'WEB-LINK-001',
   ]);
+});
+
+test('a native case runs narrow unless its entry admits wide, and a wide run takes only those', () => {
+  const narrow = ids(selectCasesForPlatform('native', 'android', { width: 'narrow' }));
+  const wide = ids(selectCasesForPlatform('native', 'android', { width: 'wide' }));
+  const admitted = readCaseRegistry().filter(
+    (testCase) =>
+      testCase.surface === 'native' &&
+      testCase.tier !== 'release' &&
+      !testCase.traits.includes('baseline') &&
+      testCase.traits.includes('android') &&
+      testCase.widths?.includes('wide'),
+  );
+  assert.deepEqual(wide, ids(admitted));
+  assert.ok(wide.includes('RAIL-WIDE-001') && !narrow.includes('RAIL-WIDE-001'));
+  assert.ok(wide.includes('NATIVE-LINK-001') && narrow.includes('NATIVE-LINK-001'));
+  assert.throws(
+    () => selectCasesForPlatform('native', 'android', { width: 'wide', cases: ['FILTER-001'] }),
+    /FILTER-001 does not run wide/,
+  );
+  assert.throws(
+    () =>
+      selectCasesForPlatform('native', 'android', { width: 'narrow', cases: ['RAIL-WIDE-001'] }),
+    /RAIL-WIDE-001 does not run narrow/,
+  );
+});
+
+test('widths is a native field, and a non-empty set of the two', () => {
+  const entry = readCaseRegistry().find((testCase) => testCase.id === 'RAIL-WIDE-001');
+  assert.ok(entry);
+  const web = readCaseRegistry().find((testCase) => testCase.surface === 'web');
+  assert.ok(web);
+  for (const bad of [
+    { ...entry, widths: [] },
+    { ...entry, widths: ['wide', 'wide'] },
+    { ...entry, widths: ['tablet'] },
+    { ...web, widths: ['wide'] },
+  ]) {
+    assert.throws(
+      () => validateCaseRegistry([bad as typeof entry]),
+      /invalid widths \(a native case only\)/,
+    );
+  }
+});
+
+test('--width defaults to narrow, and is refused where it means nothing', () => {
+  assert.equal(parseNativeCli(['--platform', 'ios']).width, 'narrow');
+  assert.equal(parseNativeCli(['--platform', 'ios', '--width', 'wide']).width, 'wide');
+  assert.throws(
+    () => parseNativeCli(['--platform', 'ios', '--width', 'tablet']),
+    /--width must be "narrow" or "wide"/,
+  );
+  assert.equal(parseVisualCli(['--platform', 'android', '--width', 'wide']).width, 'wide');
+  assert.throws(
+    () => parseVisualCli(['--platform', 'web', '--width', 'wide']),
+    /--width is for ios and android only/,
+  );
 });

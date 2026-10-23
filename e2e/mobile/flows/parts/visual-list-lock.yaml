@@ -22,8 +22,13 @@ appId: com.bracemark.app
           optional: true
 - tapOn:
     id: 'settings-close'
-- tapOn:
-    id: 'links-open-navigation'
+# Docked on a wide window, the rail's rows are already on screen.
+- runFlow:
+    when:
+      true: ${E2E_WIDTH !== 'wide'}
+    commands:
+      - tapOn:
+          id: 'links-open-navigation'
 # A locked row's name folds its lock in: "Private, Locked".
 - tapOn:
     id: 'links-nav-list-.*'

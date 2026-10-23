@@ -20,8 +20,12 @@ import { runVisualNativeCase } from './visual-native';
 // compare them with this machine's accepted baseline and write a report.
 //
 //   npm run e2e:visual:web
-//   npm run e2e:visual:ios                       (the one booted simulator)
-//   npm run e2e:visual:android -- --device <serial> --accept
+//   npm run e2e:visual:ios:iphone                (the one booted iPhone)
+//   npm run e2e:visual:ios:ipad                  (the one booted iPad)
+//   npm run e2e:visual:android:tablet -- --device <serial> --accept
+//
+// A device's baseline is its own: the profile below names the model and OS, so
+// the iPad's checkpoints are compared with the iPad's, never the iPhone's.
 //
 // Review-only: a changed capture is reported, not failed, unless its checkpoint
 // is gated. `--accept` makes a passing run's captures the baseline.

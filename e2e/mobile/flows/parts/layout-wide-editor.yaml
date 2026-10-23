@@ -1,0 +1,28 @@
+# The runner's tap on the docked rail met the add panel's backdrop: the panel
+# closed — an untouched draft is not dirty, so the close guard lets it go — and
+# the rail did not take it. Then a link to open the editor on.
+# Parameter: LINK_URL.
+appId: com.bracemark.app
+---
+- extendedWaitUntil:
+    notVisible:
+      id: 'add-link-url'
+    timeout: 10000
+- assertVisible:
+    id: 'links-title'
+    text: 'My List'
+- runFlow:
+    file: ../subflows/add-link.yaml
+    env:
+      URL: ${LINK_URL}
+- tapOn:
+    id: 'link-options'
+    index: 0
+- tapOn:
+    id: 'link-menu-edit'
+- extendedWaitUntil:
+    visible:
+      id: 'edit-link-save'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000

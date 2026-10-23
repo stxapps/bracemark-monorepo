@@ -231,8 +231,8 @@ bracemark://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081%2F%3Fdisa
 that link turn off the two screens it otherwise puts in front of the app. `url`
 says which bundle to load, so it skips the launcher's "enter the dev server URL"
 home screen — which it shows whenever it has no bundle to remember, i.e. after
-anything clears app data (a Maestro `clearState`, so any `npm run e2e:ios` /
-`e2e:android`) or after its 3-day registry TTL. `disableOnboarding=1` sets the dev **menu**'s
+anything clears app data (a Maestro `clearState`, so any `npm run e2e:ios:iphone` /
+`e2e:android:phone`) or after its 3-day registry TTL. `disableOnboarding=1` sets the dev **menu**'s
 `isOnboardingFinished`, the flag behind the sheet that slides up over the loaded
 app. Both flags live in cleared-with-everything-else storage
 (`expo.modules.devlauncher.recentyopenedapps` and

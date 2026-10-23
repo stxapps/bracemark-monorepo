@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { E2E_ROOT, runArtifactDir } from '../paths';
 import { API_URL, EXTRACTOR_URL, SITE_URL, WEB_URL } from '../web/fixtures/env';
 import { type NativeCliOptions, type NativePlatform } from './cli';
-import { resolveDevice } from './device';
+import { deviceWidth, resolveDevice } from './device';
 import { E2E_ENVIRONMENT, IS_STAGING } from './environment';
 import {
   createRunId,
@@ -24,6 +24,7 @@ import {
   type ReleaseReceipt,
 } from './release-artifact';
 import { assertOriginOwnedByRepo, assertStackOwnedByRepo } from './stack';
+import { type E2EWidth, WIDTH_DEVICES } from './width';
 
 const APP_ID = 'com.bracemark.app';
 const REPO_ROOT = join(E2E_ROOT, '..');
@@ -63,6 +64,7 @@ interface RunManifest {
   startedAt: string;
   finishedAt?: string;
   platform: NativePlatform;
+  width: E2EWidth;
   device: DeviceIdentity;
   maestroVersion: string;
   app: AppIdentity;
@@ -119,6 +121,7 @@ export interface NativeRun {
   runId: string;
   runDir: string;
   platform: NativePlatform;
+  width: E2EWidth;
   deviceId: string;
   device: DeviceIdentity;
   devClientLink?: string;
@@ -339,7 +342,10 @@ async function androidDevice(
     if (!reversals.includes(`tcp:${port} tcp:${port}`)) {
       throw new Error(
         `Android device ${deviceId} is missing tcp:${port} reverse mapping. ` +
-          'Run `npm run expo:android:reverse` and retry.',
+          'Run `npm run expo:android:reverse` and retry' +
+          (port === 8081 || port === 8787 || port === 8788
+            ? '.'
+            : ` — it covers 8081; this Metro needs \`adb -s ${deviceId} reverse tcp:${port} tcp:${port}\`.`),
       );
     }
   }
@@ -421,8 +427,11 @@ export async function prepareNativeRun(
   if (receiptPath && !options.releaseReceipt) {
     console.log(`using the newest staging Release receipt: ${receiptPath}`);
   }
-  const deviceId = await resolveDevice(options.platform, options.deviceId);
-  const runId = createRunId(`${IS_STAGING ? 'staging-' : ''}${kind}-${options.platform}`);
+  const deviceId = await resolveDevice(options.platform, options.deviceId, options.width);
+  const runId = createRunId(
+    `${IS_STAGING ? 'staging-' : ''}${kind}-${options.platform}` +
+      (options.width === 'wide' ? '-wide' : ''),
+  );
   process.env.E2E_RUN_ID = runId;
   const runDir = runArtifactDir(runId);
   await mkdir(runDir, { recursive: true });
@@ -448,13 +457,26 @@ export async function prepareNativeRun(
     if (requiresOnlineStack) await assertBundleNamesApi(metro, options.platform);
   }
 
+  // Metro's port is the one in the dev-client link, 8081 unless
+  // EXPO_DEV_CLIENT_LINK names another.
+  const metroPort = metro ? Number(new URL(metro).port || 80) : 8081;
   const identity =
     options.platform === 'ios'
       ? await iosDevice(deviceId)
       : await androidDevice(
           deviceId,
-          IS_STAGING ? [] : requiresOnlineStack ? [8081, 8787, 8788] : [8081],
+          IS_STAGING ? [] : requiresOnlineStack ? [metroPort, 8787, 8788] : [metroPort],
         );
+  // A `--device` is taken as given until here; the width is what the flows were
+  // admitted for, so a device on the other side of 768 is refused, not run.
+  const width = await deviceWidth(options.platform, deviceId);
+  if (width !== options.width) {
+    throw new Error(
+      `${identity.device.name} (${deviceId}) is ${width}, and this is a ${options.width} run: ` +
+        `use ${WIDTH_DEVICES[options.platform][options.width]}, or the ${width} script ` +
+        '(docs/e2e.md, _narrow and wide_)',
+    );
+  }
   const release = IS_STAGING
     ? await assertInstalledRelease({
         receiptPath: receiptPath as string,
@@ -479,6 +501,7 @@ export async function prepareNativeRun(
     status: 'running',
     startedAt: new Date().toISOString(),
     platform: options.platform,
+    width: options.width,
     device: identity.device,
     maestroVersion,
     app: identity.app,
@@ -521,6 +544,7 @@ export async function prepareNativeRun(
     runId,
     runDir,
     platform: options.platform,
+    width: options.width,
     deviceId,
     device: identity.device,
     devClientLink,
@@ -551,6 +575,10 @@ export async function prepareNativeRun(
             ...env,
             ...stepEnv,
             E2E_BUILD_VARIANT: IS_STAGING ? 'release' : 'debug',
+            // What a flow branches on where the two widths differ — the
+            // drawer buttons a docked rail does not have. Unset in a hand-run
+            // `maestro test`, which every branch reads as narrow.
+            E2E_WIDTH: options.width,
             ...(devClientLink ? { EXPO_DEV_CLIENT_LINK: devClientLink } : {}),
           },
           reportPath: join(caseDir, `junit${suffix}.xml`),

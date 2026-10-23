@@ -224,18 +224,20 @@ Uninstall that test-device app before installing Release; this clears its data.
 Then run:
 
 ```sh
-npm run e2e:android:staging -- --suite smoke
+npm run e2e:android:phone:staging -- --suite smoke
 npm run e2e:contract:android:staging
-npm run e2e:ios:staging -- --suite smoke
+npm run e2e:ios:iphone:staging -- --suite smoke
 npm run e2e:contract:ios:staging
 ```
 
 With nothing more, a run uses the newest receipt of that platform under
-`.artifacts/releases/` and the one booted simulator (or attached Android
-device), and prints both. Name either to override:
+`.artifacts/releases/` and the one booted phone simulator (or attached Android
+phone), and prints both. Staging runs on a phone only — the deployed services
+never see the window, so a tablet would repeat the phone's run
+(`docs/e2e.md`, _narrow and wide_). Name either to override:
 
 ```sh
-npm run e2e:android:staging -- --device <serial> --release-receipt <release.json>
+npm run e2e:android:phone:staging -- --device <serial> --release-receipt <release.json>
 ```
 
 Pass the receipt as the absolute path the build printed: Nx runs the native

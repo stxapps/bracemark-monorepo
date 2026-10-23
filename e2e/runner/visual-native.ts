@@ -86,9 +86,31 @@ async function resolveMasks(
       for (const box of innermost(root, (text) => /^Last synced/.test(text))) {
         masks.push({ kind, box });
       }
+    } else if (kind === 'relative-time') {
+      // A phone-width row never prints its date (link-row.tsx,
+      // RELATIVE_TIME_MIN_ROW_WIDTH, 576); a tablet's does, and it moves with
+      // the wall clock — the library's dates are fixed, "now" is not. It has no
+      // node to find: the date folds into the row's composite name. So the mask
+      // is the strip it is drawn in, the row being `items-center` with the date
+      // then `gap-3` then the ⋯: level with each ⋯, and to its left by more than
+      // twice its width (36 + 36 + 8 covers the gap and "Mar 2009" in text-xs).
+      // Sized off the ⋯, it is the same strip in iOS points and Android pixels.
+      for (const node of findNodes(
+        root,
+        (attributes) => attributes['resource-id'] === 'link-options',
+      )) {
+        const options = boxOf(node);
+        const width = options.right - options.left;
+        masks.push({
+          kind,
+          box: {
+            ...options,
+            left: Math.max(0, options.left - Math.round(width * 2.2)),
+            right: options.left,
+          },
+        });
+      }
     }
-    // `relative-time`: a phone-width row never prints its date (link-row.tsx,
-    // RELATIVE_TIME_MIN_ROW_WIDTH), so there is nothing to cover on a device.
   }
   return masks;
 }

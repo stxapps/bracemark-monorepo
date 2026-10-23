@@ -207,10 +207,14 @@ It lives in userdata, so it survives cold boots and is lost to `-wipe-data` or
 re-creating the AVD. Check with `settings get secure show_ime_with_hard_keyboard`
 (should read `1`).
 
-**With both AVDs up, every `adb` call needs `-s <serial>`** (`adb devices`); the
-e2e runner refuses to guess and asks for `--device`. The visual run refuses the
-tablet outright: `e2e/shot/mobile.ts` accepts only the Pixel 8's 1080×2400, and
-the matrix has no tablet profile yet ([e2e.md](./e2e.md), _visual checkpoints_).
+**It is the `wide` device of every Android e2e run** — `e2e:android:tablet`,
+`e2e:visual:android:tablet` ([e2e.md](./e2e.md), _narrow and wide_). With both
+AVDs up the runner tells them apart by width, so neither needs a `--device`; a
+bare `adb` call still needs `-s <serial>` (`adb devices`), and
+`npm run expo:android:reverse` needs `ANDROID_SERIAL=<serial>` in front, once
+per AVD. The store screenshots are a different leg and stay on the Pixel 8:
+`e2e/shot/mobile.ts` accepts only its 1080×2400 ([e2e.md](./e2e.md), _the
+published screenshots_).
 
 #### ⚠ the software keyboard
 

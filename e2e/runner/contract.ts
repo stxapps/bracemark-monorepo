@@ -9,6 +9,11 @@ import { runWebToMobile } from './web-to-mobile';
 async function main(): Promise<void> {
   validateCaseRegistry();
   const options = parseNativeCli();
+  // A round trip through the crypto never sees the window, so the contract runs
+  // on the phone alone — and, with an iPad up beside it, takes the phone.
+  if (options.width !== 'narrow') {
+    throw new Error('the contract runs on a phone only (docs/e2e.md, _narrow and wide_)');
+  }
   const selected = selectCasesForPlatform('contract', options.platform, {
     ...options,
     environment: E2E_ENVIRONMENT,

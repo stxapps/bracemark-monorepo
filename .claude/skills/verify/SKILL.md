@@ -335,7 +335,7 @@ chromium` (~550 MB into `~/Library/Caches/ms-playwright/`) if it is absent.
 device when the change is native, visual, or layout/safe-area shaped, i.e. when
 you need to _look_ at it.
 
-For **suite** runs (`npm run e2e:ios` / `e2e:android`, `e2e:contract:ios` /
+For **suite** runs (`npm run e2e:ios:iphone` / `e2e:android:phone`, `e2e:contract:ios` /
 `e2e:contract:android`) stop here and read `e2e/README.md` — this section is the
 ad-hoc "show me my change" loop.
 
@@ -352,8 +352,8 @@ ad-hoc "show me my change" loop.
 - **Launch with `npm run expo:ios:open` / `expo:android:open`, not the app icon**
   (both platforms — same code path, not an Android quirk). The dev build only
   opens straight into the app while expo-dev-client's own prefs survive; anything
-  that clears app data (a Maestro `clearState`, so any `npm run e2e:ios` /
-  `e2e:android`, or a remembered-bundle entry older than 3 days) leaves it
+  that clears app data (a Maestro `clearState`, so any `npm run e2e:ios:iphone` /
+  `e2e:android:phone`, or a remembered-bundle entry older than 3 days) leaves it
   showing the dev-launcher
   home screen — "enter the dev server URL" — and then the dev-menu sheet on top
   of the loaded bundle, both of which have to be dismissed by hand before the app

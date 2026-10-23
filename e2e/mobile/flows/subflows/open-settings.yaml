@@ -7,13 +7,22 @@
 # The route is the one a person takes: the topbar's ⋯, Settings, then the
 # settings drawer. The links screen stays mounted under Settings, which is what
 # `settings-close` returns to (docs/search.md, _leaving the page and coming back_).
+#
+# On a wide window the settings menu is a docked rail with no button to open it
+# (docs/safe-area.md, _wide windows on native_), so the section is one tap away.
+# The branch is the runner's E2E_WIDTH, never a visibility check: Settings is
+# still sliding in when this step runs, and a check would race it.
 appId: com.bracemark.app
 ---
 - tapOn:
     id: 'links-more-options'
 - tapOn:
     id: 'links-open-settings'
-- tapOn:
-    id: 'settings-open-navigation'
+- runFlow:
+    when:
+      true: ${E2E_WIDTH !== 'wide'}
+    commands:
+      - tapOn:
+          id: 'settings-open-navigation'
 - tapOn:
     id: 'settings-nav-${SECTION}'

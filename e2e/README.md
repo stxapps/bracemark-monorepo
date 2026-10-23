@@ -72,7 +72,7 @@ release qualification). Narrow any
 runner with repeatable/comma-separated `--case`, `--include-trait`, and
 `--exclude-trait`. After a native run fails, `--from <case-id>` (`e2e-mobile`
 and `e2e-contract` only) restarts at that case and runs the rest:
-`npm run e2e:android -- --from TAXONOMY-DND-002`. The registry is [`cases.json`](./cases.json); its ids and tags
+`npm run e2e:android:phone -- --from TAXONOMY-DND-002`. The registry is [`cases.json`](./cases.json); its ids and tags
 are checked against the specs and flows by `npm run check:registry -w
 @stxapps/e2e`.
 
@@ -84,9 +84,11 @@ retry exits non-zero.
 
 The six run-it targets also have root scripts: `npm run e2e:web`,
 `e2e:extension`, `e2e:pwa`, and — carrying the platform the other three need —
-`e2e:ios` / `e2e:android` (the `e2e-mobile` target), `e2e:contract:ios` /
-`:android`, `e2e:visual:web` / `:ios` / `:android`. There is no bare `npm run e2e` —
-see `docs/e2e.md`, _running_.
+`e2e:ios:iphone` / `e2e:ios:ipad` / `e2e:android:phone` / `e2e:android:tablet`
+(the `e2e-mobile` target, at the device's width), `e2e:contract:ios` /
+`:android` (a phone, always), `e2e:visual:web` and the same four device names
+after `e2e:visual:`. There is no bare `npm run e2e` — see `docs/e2e.md`,
+_running it_ and _narrow and wide_.
 
 ## seeding a dev account
 
@@ -128,17 +130,21 @@ on a booted simulator or emulator**. Nothing here builds the app —
 `npx nx ios @stxapps/bracemark-expo` (or `android`) does, and it is a
 prerequisite, not an e2e step.
 
-The platform is mandatory and the device is passed to Maestro explicitly. Leave
-`--device` out and the run takes the one booted simulator (or attached Android
-device), refusing to choose between two; add `-- --device <id>` to name one. The
-preflight proves that exact device is booted, the dev build is installed, Metro
+The platform is mandatory and the device is passed to Maestro explicitly. Each
+native script names a width — `iphone`/`phone` narrow, `ipad`/`tablet` wide — and
+a wide run takes only the cases admitted wide (`docs/e2e.md`, _narrow and
+wide_). Leave `--device` out and the run takes the one booted simulator (or
+attached Android device) of that width, refusing to choose between two; add
+`-- --device <id>` to name one. The preflight proves that exact device is booted
+and on the run's side of 768, the dev build is installed, Metro
 belongs to this checkout and serves a bundle whose api is the local one, and
 Android has completed boot with all three reverse mappings. Web e2e is platform-independent — run it once.
 
 ```sh
 npm run expo:ios                    # or: npm run expo:android
 npm run expo:android:reverse        # Android only, once per emulator boot
-npm run e2e:ios                     # or e2e:android
+npm run e2e:ios:iphone              # or e2e:android:phone
+npm run e2e:ios:ipad                # or e2e:android:tablet — the cases admitted wide
 npm run e2e:contract:ios            # or e2e:contract:android
 ```
 

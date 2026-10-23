@@ -1,0 +1,11 @@
+# After a resize: the same panel, with the same URL in it.
+# Parameter: LINK_URL.
+appId: com.bracemark.app
+---
+- extendedWaitUntil:
+    visible:
+      id: 'add-link-url'
+      text: ".*${LINK_URL.replace('https://', '')}.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000

@@ -1,0 +1,108 @@
+# The links and settings rails, docked on a wide window (docs/safe-area.md,
+# _wide windows on native_): on screen with nothing opened, a row press that
+# navigates and leaves the rail where it is, the links rail put away and brought
+# back, and the put-away surviving a cold start — the flag is read on the
+# mounting render (features/links/sidebar-rail.tsx), so a relaunch is the test
+# of it. Settings docks its own rail, which has no button to open it and stays
+# beside each section it opens.
+#
+# A wide run only (`widths` in cases.json): on a phone these are drawers.
+#
+#   maestro test mobile/flows/rail-wide.yaml -e USERNAME=… -e PASSWORD=… -e E2E_WIDTH=wide
+appId: com.bracemark.app
+tags: [RAIL-WIDE-001, full, online, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+
+# Docked: the rows are on screen and the topbar has no drawer button.
+- assertVisible:
+    id: 'sidebar-rail-hide'
+- assertVisible:
+    id: 'links-nav-list-my-list'
+- assertNotVisible:
+    id: 'links-open-navigation'
+
+# A row press on a docked rail navigates, and the rail stays: its
+# `closeDrawer` is a no-op on a permanent drawer.
+- tapOn:
+    id: 'links-nav-list-trash'
+- extendedWaitUntil:
+    visible:
+      id: 'links-title'
+      text: 'Trash'
+    timeout: 10000
+- assertVisible:
+    id: 'links-nav-list-my-list'
+- tapOn:
+    id: 'links-nav-list-my-list'
+- extendedWaitUntil:
+    visible:
+      id: 'links-title'
+      text: 'My List'
+    timeout: 10000
+
+# Put away: Show takes the topbar's leading slot, and the rows go with the rail.
+- tapOn:
+    id: 'sidebar-rail-hide'
+- extendedWaitUntil:
+    visible:
+      id: 'sidebar-rail-show'
+    timeout: 10000
+- assertNotVisible:
+    id: 'sidebar-rail-hide'
+- assertNotVisible:
+    id: 'links-nav-list-trash'
+
+# …and still put away after a cold start. `stopApp` first, because `launchApp`
+# alone would resume.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 30000
+- extendedWaitUntil:
+    visible:
+      id: 'sidebar-rail-show'
+    timeout: 10000
+- assertNotVisible:
+    id: 'links-nav-list-trash'
+
+# Brought back.
+- tapOn:
+    id: 'sidebar-rail-show'
+- extendedWaitUntil:
+    visible:
+      id: 'links-nav-list-trash'
+    timeout: 10000
+- assertVisible:
+    id: 'sidebar-rail-hide'
+
+# Settings: its menu docked beside the pane, no button to open it, and still
+# there after a section is chosen from it.
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-open-settings'
+- extendedWaitUntil:
+    visible:
+      id: 'settings-nav-data'
+    timeout: 10000
+- assertNotVisible:
+    id: 'settings-open-navigation'
+- tapOn:
+    id: 'settings-nav-data'
+- extendedWaitUntil:
+    visible:
+      id: 'export-data-open'
+    timeout: 10000
+- assertVisible:
+    id: 'settings-nav-misc'
+- tapOn:
+    id: 'settings-close'
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 10000
+- takeScreenshot: rail-docked

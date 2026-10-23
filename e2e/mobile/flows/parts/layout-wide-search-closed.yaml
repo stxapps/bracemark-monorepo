@@ -1,0 +1,10 @@
+# Advanced search closes back onto the list.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'advanced-search-close'
+- extendedWaitUntil:
+    notVisible:
+      id: 'advanced-search-close'
+    timeout: 10000
+- takeScreenshot: wide-layout

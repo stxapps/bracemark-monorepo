@@ -1,0 +1,26 @@
+# The shapes a wide window draws (docs/safe-area.md, _wide windows on native_):
+# the add panel, the link editor and advanced search as centred `max-w-lg`
+# dialogs rather than the narrow window's sheets, and the add panel's backdrop
+# reaching over the docked rail. That last one is the ⚠ there — an overlay drawn
+# inside the links SCREEN stops at the rail and leaves it live, and on a phone,
+# where the screen is the window, nothing can show it.
+#
+# The flows drive; the runner measures between them (runner/mobile.ts,
+# LAYOUT-WIDE-001): each surface's full-width field against the window, and a
+# tap it places on the rail while the add panel is up.
+#
+# A wide run only (`widths` in cases.json).
+appId: com.bracemark.app
+tags: [LAYOUT-WIDE-001, full, online, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- runFlow:
+    file: subflows/dismiss-logbox.yaml
+- tapOn: 'Add link'
+- extendedWaitUntil:
+    visible:
+      id: 'add-link-url'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000

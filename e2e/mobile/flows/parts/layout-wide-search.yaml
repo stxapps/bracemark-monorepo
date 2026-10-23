@@ -1,0 +1,19 @@
+# Put the editor away and open advanced search.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'edit-link-cancel'
+- extendedWaitUntil:
+    notVisible:
+      id: 'edit-link-save'
+    timeout: 10000
+- tapOn:
+    id: 'links-search-toggle'
+- tapOn:
+    id: 'links-search-advanced'
+- extendedWaitUntil:
+    visible:
+      id: 'advanced-search-close'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000

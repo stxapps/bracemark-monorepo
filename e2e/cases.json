@@ -952,7 +952,8 @@
     "fixture": "empty",
     "path": "mobile/flows/sign-in.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
-    "environments": ["local", "staging"]
+    "environments": ["local", "staging"],
+    "widths": ["narrow", "wide"]
   },
   {
     "id": "NATIVE-ACCOUNT-002",
@@ -985,7 +986,8 @@
     "fixture": "empty",
     "path": "mobile/flows/add-link.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
-    "environments": ["local", "staging"]
+    "environments": ["local", "staging"],
+    "widths": ["narrow", "wide"]
   },
   {
     "id": "LINK-EDITOR-002",
@@ -1072,7 +1074,8 @@
     "fixture": "small",
     "path": "mobile/flows/search.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
-    "environments": ["local", "staging"]
+    "environments": ["local", "staging"],
+    "widths": ["narrow", "wide"]
   },
   {
     "id": "SEARCH-002",
@@ -1536,7 +1539,8 @@
     "fixture": "scale",
     "path": "mobile/flows/keyboard.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
-    "environments": ["local", "staging"]
+    "environments": ["local", "staging"],
+    "widths": ["narrow", "wide"]
   },
   {
     "id": "IAP-NATIVE-001",
@@ -1663,8 +1667,41 @@
     ]
   },
   {
+    "id": "RAIL-WIDE-001",
+    "title": "On a wide window the links and settings rails dock, a row press keeps the links rail, and putting it away survives a cold start",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/rail-wide.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "widths": ["wide"]
+  },
+  {
+    "id": "LAYOUT-WIDE-001",
+    "title": "On a wide window the add panel, the link editor and advanced search are centred max-w-lg dialogs, and the add panel's backdrop covers the docked rail",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/layout-wide.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "widths": ["wide"]
+  },
+  {
+    "id": "WINDOW-RESIZE-ANDROID-001",
+    "title": "A half-typed link survives the Android window crossing 768 and back, with no activity restart",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/window-resize.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "widths": ["wide"]
+  },
+  {
     "id": "VISUAL-APP-001",
-    "title": "The app's named visual checkpoints on a phone, light and dark",
+    "title": "The app's named visual checkpoints on a phone and a tablet, light and dark",
     "surface": "native",
     "tier": "full",
     "traits": ["online", "visual", "baseline", "destructive", "ios", "android"],
@@ -1676,11 +1713,12 @@
       "junit",
       "maestro-output",
       "hierarchy-on-failure"
-    ]
+    ],
+    "widths": ["narrow", "wide"]
   },
   {
     "id": "VISUAL-LOCK-001",
-    "title": "The lock surfaces' visual checkpoints on a phone, light and dark",
+    "title": "The lock surfaces' visual checkpoints on a phone and a tablet, light and dark",
     "surface": "native",
     "tier": "full",
     "traits": ["online", "visual", "baseline", "destructive", "ios", "android"],
@@ -1692,7 +1730,8 @@
       "junit",
       "maestro-output",
       "hierarchy-on-failure"
-    ]
+    ],
+    "widths": ["narrow", "wide"]
   },
   {
     "id": "VISUAL-SHARE-001",
@@ -1708,7 +1747,8 @@
       "junit",
       "maestro-output",
       "hierarchy-on-failure"
-    ]
+    ],
+    "widths": ["narrow", "wide"]
   },
   {
     "id": "VISUAL-FONT-001",
@@ -1724,7 +1764,8 @@
       "junit",
       "maestro-output",
       "hierarchy-on-failure"
-    ]
+    ],
+    "widths": ["narrow", "wide"]
   },
   {
     "id": "STAGING-HOSTING-001",

@@ -721,7 +721,8 @@ The repo-specific gotchas:
   `env:` defaults. A parameter a hand run may omit takes its default inside the
   expression instead, `${NAME || 'default'}`: an unset variable is `undefined`,
   not an error. `flows/subflows/cold-launch.yaml` does this for
-  `EXPO_DEV_CLIENT_LINK`; every other parameter is required.
+  `EXPO_DEV_CLIENT_LINK`, and `E2E_WIDTH` is read the same way — unset is
+  narrow (_narrow and wide_); every other parameter is required.
 - **…and an EMPTY `runFlow: env:` value arrives as `undefined`, not `''`.**
   `flows/subflows/add-link-filed.yaml` takes `LIST: ''` to mean "leave the default",
   and its first guard, `${LIST !== ''}`, was true for the empty value: the branch
@@ -1138,6 +1139,8 @@ All of them are in the app:
 | `sign-in-use-password`        | ” — the toggle back out                                                                         |
 | `links-screen`                | `src/app/(app)/links/index.tsx` (a root marker)                                                 |
 | `links-open-navigation`       | `src/features/links/topbar.tsx`                                                                 |
+| `sidebar-rail-hide`           | `src/features/links/sidebar-rail.tsx` — puts the docked rail away (wide windows only)           |
+| `sidebar-rail-show`           | ” — docks it again, in the topbar's leading slot                                                |
 | `links-nav-list-<id>`         | `src/features/links/sidebar.tsx` — a drawer row                                                 |
 | `links-nav-tag-<id>`          | ” — the tag rows                                                                                |
 | `links-nav-all`               | ” — Show All                                                                                    |
@@ -1819,6 +1822,105 @@ running client learns of a grant only by asking; the web case moves between
 Settings sections by the rail's links and the native one by the settings drawer,
 so the gate's answer is the Refresh's rather than a fresh document's.
 
+### narrow and wide
+
+bracemark-expo changes shape at one window width, 768, and asks nothing else
+about the device ([safe-area.md](./safe-area.md), _wide windows on native_). So
+a native run is made at a **width**, on a device wholly on one side of that line,
+and every case says which widths it has been written for.
+
+| run                                        | width    | on                                                      | selects                                 |
+| ------------------------------------------ | -------- | ------------------------------------------------------- | --------------------------------------- |
+| `e2e:ios:iphone`, `e2e:android:phone`      | `narrow` | the iPhone 17 Pro simulator, the `bracemark-pixel8` AVD | every native case — the full suite      |
+| `e2e:ios:ipad`, `e2e:android:tablet`       | `wide`   | an iPad (A16) simulator, the `bracemark-tablet` AVD     | the cases whose entry admits `wide`     |
+| `e2e:visual:<platform>:<device>`           | either   | the same four                                           | the four checkpoint cases, at both      |
+| `e2e:contract:ios`, `e2e:contract:android` | `narrow` | the phone                                               | the contract — it never sees the window |
+| every `…:staging` native script            | `narrow` | the phone                                               | staging admission, as before            |
+
+**The axes do not multiply, and that is the design.** Width matters only to
+layout; the environment matters only to the server path; the data path —
+crypto, sync, sessions, import and export — is the same at every width. So the
+full functional suite runs once per platform on the phone; a small set chosen
+per case runs on the tablet; the visual matrix, the cheapest coverage layout
+has, takes all four devices; and neither the contract nor staging is split by
+width, since a round trip through the crypto and a deployed api never see the
+window. Web is already split the other way: its functional run is wide
+(1280×900, desktop browsers), its narrow claims switch the viewport inside the
+case (`link-move.e2e.ts`, `locks.e2e.ts`), and its visual run takes both layouts
+as Playwright projects.
+
+**A device's width is its upright width, read off the screen**
+(`runner/width.ts`): the short side against 768 — `wm size` over `wm density`
+on Android, the device type's `profile.plist` on iOS. A phone is narrow (Pixel 8
+411dp, iPhone 17 Pro 402pt), a tablet wide in both orientations (the tablet AVD
+800dp, the iPad (A16) 820pt). The **iPad mini is narrow** (744pt upright), which
+is why the class is not the product family: an "iPad" run on one would
+photograph drawers and call them rails. Run on the wrong side, the preflight
+refuses before an account exists. The 768 is bracemark-expo's `WIDE_MIN_WIDTH`
+(`src/lib/window-class.ts`), repeated rather than imported, since e2e never
+imports an app — keep the two in step.
+
+**`widths` in `cases.json`, missing means narrow.** It is a native field only
+(`npm run check:registry` refuses it elsewhere), and a case is admitted to
+`wide` once its flows hold on a tablet and an iPad. A flow written on a phone
+can tap `links-open-navigation` or `settings-open-navigation`, which a docked
+rail does not have, or a `point:` measured on a phone's screen, and either
+fails on a tablet as a timeout naming neither cause. Admitted wide today:
+
+- `NATIVE-ACCOUNT-001`, `NATIVE-LINK-001` — the smoke pair, so `--suite smoke`
+  means something on a tablet;
+- `SEARCH-001`, `VIEWPORT-KEYBOARD-001` — the topbar's search row, and the
+  keyboard against the dialogs, all read from the hierarchy rather than from
+  phone geometry;
+- `RAIL-WIDE-001` (wide only) — both rails docked, a row press that keeps the
+  links rail, put away and brought back, put away across a cold start;
+- `LAYOUT-WIDE-001` (wide only) — the add panel, the link editor and advanced
+  search as centred `max-w-lg` dialogs, and the add panel's backdrop taking a tap
+  on the docked rail (safe-area.md's ⚠ _an overlay drawn in the links SCREEN
+  stops at the docked rail_). Each surface is read off a full-width field: no
+  wider than 512pt and centred in the WINDOW is the dialog, wider is a sheet
+  (`surfaceShape`, `runner/mobile.ts`);
+- `WINDOW-RESIZE-ANDROID-001` (wide only) — the add panel open with a URL in it
+  while the runner shrinks the display to 600dp with `wm size` and restores it:
+  the panel switches shape both ways and keeps the URL, which an activity
+  recreated for an undeclared `smallestScreenSize` would lose. Its cleanup resets
+  the display whatever happens. iOS has no scriptable resize; an iPad's Split
+  View is release qualification ([expo-build.md](./expo-build.md), _devices_);
+- the four checkpoint cases.
+
+**⚠ A flow branches on `E2E_WIDTH`, never on what is visible.** The runner
+passes the run's width to every Maestro invocation (`runner/native-run.ts`), the
+way it passes `E2E_BUILD_VARIANT`, and a flow that differs by width says
+`when: true: ${E2E_WIDTH !== 'wide'}` — `subflows/open-settings.yaml`,
+`parts/visual-settings.yaml`, `parts/visual-delete-all.yaml`,
+`parts/visual-list-lock.yaml`. A `when: visible` on the drawer button instead
+would race the screen it is on: right after Settings is opened the button is
+still sliding in, the check reads false on a phone, the drawer is never opened,
+and the next tap times out — sometimes. Unset, as in a hand-run `maestro test`,
+it reads as narrow, so every phone path is the one it always was.
+
+**What is not yet known — this shape was written without a device run.** The
+selection, the preflight and the registry are covered by `npm run check:runner`;
+no wide flow has completed on a device yet. The first wide runs should expect
+these, in rough order of risk:
+
+- **The iOS share crossings on an iPad.** `subflows/open-system-share.yaml` and
+  `parts/visual-share-no-url.yaml` tap points measured on the iPhone's share
+  sheet (`61%,74%`, `40%,75%`); an iPad's sheet is a popover elsewhere on the
+  screen. That is `VISUAL-SHARE-001` and the last step of `VISUAL-FONT-001` on
+  `e2e:visual:ios:ipad` — measure the iPad's points and branch on `E2E_WIDTH`.
+- **The `relative-time` strip's size** — twice-and-a-bit the ⋯'s width, an
+  estimate of "Mar 2009" in `text-xs` plus the gap; widen it if a baseline shows
+  a date's edge.
+- **`assertNotVisible` on a put-away rail** (`RAIL-WIDE-001`): a closed `front`
+  drawer keeps its rows mounted off screen, and whether Maestro counts them as
+  visible decides two asserts.
+- **A fresh AVD's first Maestro run.** Measured on the tablet AVD the day it was
+  made: `DeviceServerDiedException … during 'deviceInfo'` through the runner,
+  while a bare `maestro hierarchy` on the same device worked. Another checkout's
+  session was driving Maestro on this Mac at the same time, so the cause is not
+  settled — run the wide legs with nothing else driving a device.
+
 ### visual checkpoints
 
 Functional cases stay authoritative. A visual checkpoint is a **named
@@ -1830,9 +1932,10 @@ pass:
 
 ```sh
 npm run e2e:visual:web
-npm run e2e:visual:ios                           # the one booted simulator
-npm run e2e:visual:android -- --device <serial>  # or name the device
-npm run e2e:visual:web -- --accept               # this run becomes the baseline
+npm run e2e:visual:ios:iphone                         # the one booted iPhone
+npm run e2e:visual:ios:ipad                           # the one booted iPad
+npm run e2e:visual:android:tablet -- --device <serial> # or name the device
+npm run e2e:visual:web -- --accept                    # this run becomes the baseline
 ```
 
 **The catalog is [`e2e/visual.json`](../e2e/visual.json)**, the visual twin of
@@ -1855,13 +1958,19 @@ the accepted baseline.
 at two layouts — `wide` (1280×900) and `narrow` (390×844) — and they are two
 Playwright **projects**, not a resize: the add surface is a popover wide and a
 sheet narrow, so resizing with it open would photograph something nobody sees.
-Each project drives its own account from scratch. The devices are the canonical
-phones, the iPhone 17 Pro simulator and the Pixel 8 AVD, upright. The app now
-runs on tablets and in every orientation ([expo-build.md](./expo-build.md),
-_devices_), and **the matrix has no tablet or landscape profile yet** — the docked
-rails ([safe-area.md](./safe-area.md), _wide windows on native_) are photographed
-nowhere. The natural pair is web's: an iPad simulator and a tablet AVD as the
-native `wide`. The large-text case sets iOS's content size to
+Each project drives its own account from scratch. The devices are web's pair
+in native form (_narrow and wide_, above): narrow on the canonical phones, the
+iPhone 17 Pro simulator and the Pixel 8 AVD, and wide on an iPad (A16) simulator
+and the `bracemark-tablet` AVD, each held the way it boots — the phones upright,
+the iPad upright at 820pt, the tablet on its side at 1280dp — so the docked rails
+([safe-area.md](./safe-area.md), _wide windows on native_) are photographed on
+both platforms. All four native checkpoint cases run at both widths. A device's
+baseline is its own: the comparison profile is `<platform>-<model>-<os>`
+(`runner/visual.ts`), so the iPad is never compared with the iPhone. A wide row
+prints its relative date, which a phone's never does, so the native
+`relative-time` mask is real there: the strip left of each row's ⋯, since the
+date folds into the row's accessible name and has no node of its own
+(`runner/visual-native.ts`). There is still no landscape-phone profile. The large-text case sets iOS's content size to
 `extra-extra-extra-large` and Android's `font_scale` to 1.3 — both at or past the
 app's 1.3 cap ([accessibility.md](./accessibility.md), _font scaling_), so the
 capture is the largest text the app will ever lay out. The iOS share sheet is in
@@ -2088,7 +2197,7 @@ build. With no `--release-receipt` it uses the newest receipt of that platform
 under `.artifacts/releases/` and prints its path; with no `--device`, the one
 device that platform has up. A stale receipt or the wrong device cannot pass on
 a default: the installed app is still hashed against whichever receipt was
-chosen before an account exists. So `npm run e2e:ios:staging` and its
+chosen before an account exists. So `npm run e2e:ios:iphone:staging` and its
 three siblings run with nothing after them, once `e2e:build:<platform>:staging`
 has built and the artifact it printed is installed.
 
@@ -2157,40 +2266,52 @@ npx nx e2e-web:report @stxapps/e2e
 npx nx e2e-extension @stxapps/e2e
 npx nx e2e-pwa @stxapps/e2e   # builds the production export itself; needs :3001 free
 
-# The one booted simulator, or the one attached Android device.
-npm run e2e:ios
-npm run e2e:contract:ios
-npm run e2e:android
+# The one booted device of that platform and width (_narrow and wide_, above).
+npm run e2e:ios:iphone          # the full suite, on a phone
+npm run e2e:ios:ipad            # the cases admitted wide, on an iPad
+npm run e2e:android:phone
+npm run e2e:android:tablet
+npm run e2e:contract:ios        # a phone, always
 npm run e2e:contract:android
 
-# With two up, name one: ids come from `xcrun simctl list devices booted` or `adb devices`.
-npm run e2e:ios -- --device <udid> --suite full
+# With two of one width up, name one: ids come from `xcrun simctl list devices booted` or `adb devices`.
+npm run e2e:ios:iphone -- --device <udid> --suite full
 npx nx e2e-contract @stxapps/e2e -- --platform android --device <serial>
 ```
 
 The platform is mandatory and the device is passed to every Maestro invocation.
 `--device` may be left out locally: the run then takes the **one** device that
-platform has up and says which (`runner/device.ts`), and refuses — listing them —
-rather than choose between two, so having both platforms booted is not
-ambiguous and neither are two simulators. The manifest records the device either
-way. The full legs should still be run
+platform has up **at the run's width** and says which (`runner/device.ts`), and
+refuses — listing them — rather than choose between two, so having both
+platforms booted is not ambiguous, nor an iPhone beside an iPad, nor two
+simulators of one width once `--device` names one. A `--device` on the other
+side of 768 is refused by the preflight. The manifest records the device and
+the width either way. The full legs should still be run
 serially because they share the local stack and are intentionally expensive.
 The vectors case remains first in a full contract run. Run it alone with
 `--case CONTRACT-VECTORS-001`.
 
 The six targets also have root scripts. `npm run e2e:web`, `e2e:extension` and
 `e2e:pwa` are the target as it stands. The other three need a platform, so their
-scripts carry it and there is no bare one — `e2e:ios` and `e2e:android` for
-`e2e-mobile`, then `e2e:contract:android`, `e2e:visual:web` and so on — each the
-target plus `--platform`, not a target of its own, the way `e2e:web:headed` is.
+scripts carry it and there is no bare one. A native script also names the
+device class, which is its `--width`: `e2e:ios:iphone` / `e2e:ios:ipad` and
+`e2e:android:phone` / `e2e:android:tablet` for `e2e-mobile`, the same four after
+`e2e:visual:` for `e2e-visual`, and `e2e:contract:ios` / `e2e:contract:android`
+with no class, since the contract runs on a phone only. Each is the target plus
+`--platform` and `--width`, not a target of its own, the way `e2e:web:headed` is.
 `e2e:web:firefox` and `e2e:web:firefox:staging` are the Firefox subset, local
 and deployed (_firefox_, above). The staging scripts put the mode last:
-`e2e:extension:staging`, `e2e:ios:staging`, `e2e:contract:android:staging`,
-`e2e:build:ios:staging`. There
+`e2e:extension:staging`, `e2e:ios:iphone:staging`, `e2e:contract:android:staging`,
+`e2e:build:ios:staging` — and there is no `ipad` or `tablet` staging script. There
 is deliberately no bare `npm run e2e`: no honest fan-out
 can boot, build, select, and prepare both native platforms. `expo:ios` and
 `expo:android` are prerequisites, not tests; see [expo-build.md](./expo-build.md).
-On Android, run `npm run expo:android:reverse` after each emulator boot.
+On Android, run `npm run expo:android:reverse` after each emulator boot — with
+both AVDs up, once per AVD, each with `ANDROID_SERIAL=<serial>` in front, since
+a bare `adb reverse` refuses to choose between two devices. A Metro on another
+port — a second checkout's Metro already holding 8081 — is named the way the
+flows are told: `EXPO_DEV_CLIENT_LINK` with that port in its inner url, and the
+Android preflight then requires that port reversed in place of 8081.
 
 To watch a web run, `npm run e2e:web:headed` opens the browser window and paces
 it: the root script is `e2e-web` with `--headed --slow-mo 250 --workers 1`, not
@@ -2237,8 +2358,8 @@ comma-separated and work across the wrappers:
 npm run e2e:web -- --suite smoke
 npm run e2e:web -- --case WEB-LINK-001
 npm run e2e:extension -- --case EXT-AUTH-001
-npm run e2e:ios -- --device <udid> --exclude-trait destructive
-npm run e2e:android -- --from TAXONOMY-DND-002
+npm run e2e:ios:iphone -- --device <udid> --exclude-trait destructive
+npm run e2e:android:phone -- --from TAXONOMY-DND-002
 ```
 
 `--from <case-id>` picks a native run back up where one failed: it drops every

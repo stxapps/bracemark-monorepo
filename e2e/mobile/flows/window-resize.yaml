@@ -1,0 +1,27 @@
+# A half-typed link survives the window crossing 768 and coming back, on
+# Android, where the crossing is a configuration change: the add panel is open
+# with a URL in it while the runner shrinks the display to 600dp and restores it
+# (runner/mobile.ts, WINDOW-RESIZE-ANDROID-001). A fold, an unfold and a
+# split-screen drag change the window the same way, and each changes the
+# smallest width — which MainActivity's `configChanges` has to declare
+# (plugins/with-android-manifest-policy.js). Undeclared, the activity is
+# recreated, the React tree remounts, and the panel and its URL are gone on the
+# gesture that should only have re-laid them out (docs/expo-build.md, _devices_).
+#
+# Android only, and a wide run only: it starts on the tablet. iOS has no
+# scriptable window resize; an iPad's Split View is release qualification.
+appId: com.bracemark.app
+tags: [WINDOW-RESIZE-ANDROID-001, full, online, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- runFlow:
+    file: subflows/dismiss-logbox.yaml
+- tapOn: 'Add link'
+- runFlow:
+    file: subflows/type-autofocused.yaml
+    env:
+      FIELD: add-link-url
+      TEXT: ${LINK_URL}
+- waitForAnimationToEnd:
+    timeout: 5000

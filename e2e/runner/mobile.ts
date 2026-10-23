@@ -61,6 +61,7 @@ import {
   openSystemShare,
   startPlainTextShareSource,
 } from './share';
+import { WIDE_MIN_WIDTH, wmDensity, wmSize } from './width';
 
 // Cases whose subject is a Plus lever get the existing `manual` grant before the
 // device signs in, so the sign-in's entitlement read already carries it
@@ -480,6 +481,73 @@ function assertClosedOver(
 // Standalone native journeys. The platform is deliberately mandatory, and the
 // device is either named or the only one booted (runner/device.ts): a result
 // that does not say which runtime it exercised is not a baseline.
+// The kit's dialog cap, `max-w-lg`. A wide window draws the add panel, the
+// link editor and advanced search as centred dialogs at it; the narrow shapes
+// are wider — the add sheet's `max-w-xl`, the editor's `max-w-2xl` column —
+// so a full-width field inside one tells the two apart (docs/safe-area.md,
+// _wide windows on native_).
+const DIALOG_MAX_WIDTH = 512;
+
+async function unitsPerPoint(context: CaseStepContext): Promise<number> {
+  if (context.platform === 'ios') return 1;
+  return wmDensity(await adbShell(context.deviceId, ['wm', 'density'])) / 160;
+}
+
+// The surface a full-width field sits in, read off the field: a `dialog` is no
+// wider than the cap and centred in the WINDOW — one drawn inside the links
+// screen centres on the pane beside the docked rail instead, 140pt off — and a
+// `sheet` is wider than the cap.
+function surfaceShape(what: string, id: string, expected: 'dialog' | 'sheet') {
+  return async (context: CaseStepContext): Promise<null> => {
+    const root = parseHierarchy(await context.hierarchy());
+    const screen = screenBox(root);
+    const field = boxById(root, id);
+    const perPoint = await unitsPerPoint(context);
+    const width = Math.round((field.right - field.left) / perPoint);
+    const offset = Math.round(Math.abs(centerOf(field).x - centerOf(screen).x) / perPoint);
+    const shape = width <= DIALOG_MAX_WIDTH && offset <= 12 ? 'dialog' : 'sheet';
+    if (shape !== expected) {
+      throw new Error(
+        `${what}: #${id} is ${width}pt wide and ${offset}pt off the window’s centre — ` +
+          `a ${shape}, where this window draws a ${expected}`,
+      );
+    }
+    return null;
+  };
+}
+
+// The display's current width in dp, as the window configuration reports it.
+async function displayWidth(deviceId: string): Promise<number> {
+  const dump = await adbShell(deviceId, ['dumpsys', 'window', 'displays']);
+  const width = / w(\d+)dp h\d+dp/.exec(dump)?.[1];
+  if (!width) throw new Error('`dumpsys window displays` reports no w…dp');
+  return Number(width);
+}
+
+// Resize an Android display across 768 and wait for its configuration to say
+// so. `narrow` is 600dp wide by the display's own short side tall — a 7" tablet
+// upright, a split-screen half: under 768, and with a smaller smallest width,
+// the change `configChanges` must declare (plugins/with-android-manifest-policy.js)
+// or the activity is recreated and the React tree remounted. `reset` puts the
+// display back; it is also the case's cleanup, so a failed run does not leave
+// the tablet a phone.
+async function resizeDisplay(deviceId: string, to: 'narrow' | 'reset'): Promise<void> {
+  if (to === 'reset') {
+    await adbShell(deviceId, ['wm', 'size', 'reset']);
+  } else {
+    const density = wmDensity(await adbShell(deviceId, ['wm', 'density']));
+    const short = Math.min(...wmSize(await adbShell(deviceId, ['wm', 'size'])));
+    await adbShell(deviceId, ['wm', 'size', `${Math.round((600 * density) / 160)}x${short}`]);
+  }
+  const deadline = Date.now() + 15_000;
+  for (;;) {
+    const width = await displayWidth(deviceId);
+    if (to === 'narrow' ? width < WIDE_MIN_WIDTH : width >= WIDE_MIN_WIDTH) return;
+    if (Date.now() > deadline) throw new Error(`the display stayed ${width}dp wide after wm size`);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+}
+
 async function main(): Promise<void> {
   validateCaseRegistry();
   const options = parseNativeCli();
@@ -1186,6 +1254,49 @@ async function main(): Promise<void> {
             assertLeadsList(list, row, previous, 'a save at offset zero');
             return null;
           },
+        ];
+      }
+      if (testCase.id === 'LAYOUT-WIDE-001') {
+        env.LINK_URL = unresolvableUrl(`${run.runId}-wide-layout`);
+        steps = [
+          testCase.path,
+          surfaceShape('add panel', 'add-link-url', 'dialog'),
+          // A tap on the docked rail — a tenth of the way across, inside its
+          // 280pt on any wide window — which the add panel's backdrop has to
+          // take (link-add-host.tsx). Drawn in the links screen instead, the
+          // dim stops at the rail and the rail takes the tap.
+          async (context) => {
+            const screen = screenBox(parseHierarchy(await context.hierarchy()));
+            return writeTapFlow(context, 'docked-rail', {
+              x: screen.left + Math.round((screen.right - screen.left) / 10),
+              y: centerOf(screen).y,
+            });
+          },
+          'mobile/flows/parts/layout-wide-editor.yaml',
+          surfaceShape('link editor', 'edit-link-title', 'dialog'),
+          'mobile/flows/parts/layout-wide-search.yaml',
+          surfaceShape('advanced search', 'advanced-search-text-all', 'dialog'),
+          'mobile/flows/parts/layout-wide-search-closed.yaml',
+        ];
+      }
+      if (testCase.id === 'WINDOW-RESIZE-ANDROID-001') {
+        env.LINK_URL = unresolvableUrl(`${run.runId}-resize`);
+        cleanupActions.push(() => resizeDisplay(run.deviceId, 'reset'));
+        steps = [
+          testCase.path,
+          async () => {
+            await resizeDisplay(run.deviceId, 'narrow');
+            return null;
+          },
+          'mobile/flows/parts/window-resize-kept.yaml',
+          surfaceShape('add panel at 600dp', 'add-link-url', 'sheet'),
+          async () => {
+            await resizeDisplay(run.deviceId, 'reset');
+            return null;
+          },
+          'mobile/flows/parts/window-resize-kept.yaml',
+          surfaceShape('add panel back at full width', 'add-link-url', 'dialog'),
+          'mobile/flows/parts/window-resize-saved.yaml',
         ];
       }
       if (testCase.id === 'VIEWPORT-BULK-001') {

@@ -1,8 +1,12 @@
 # Delete all data from Settings → Data and wait for the receipt.
 appId: com.bracemark.app
 ---
-- tapOn:
-    id: 'settings-open-navigation'
+- runFlow:
+    when:
+      true: ${E2E_WIDTH !== 'wide'}
+    commands:
+      - tapOn:
+          id: 'settings-open-navigation'
 - tapOn:
     id: 'settings-nav-data'
 - tapOn:
