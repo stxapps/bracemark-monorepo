@@ -24,6 +24,7 @@ import { ALL_LABEL, flattenTree } from '@stxapps/shared';
 
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
+import { useSheetOpen } from '../../components/ui/sheet';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
 import { MoreOptionsMenu } from './more-options-menu';
@@ -91,15 +92,21 @@ export function Topbar() {
   // is app-global: an ungated handler answered the back press meant for Settings,
   // ran `restorePreSearch`, and the user came back to My List with the search
   // they had left thrown away — found by SEARCH-002 on the Pixel 8 AVD.
+  //
+  // …and only while no in-app sheet is open. The sheet registers its own once
+  // and relies on being the newest; this one re-registers whenever `focused`
+  // flips, so back from Subscription with Advanced Search still open it jumped
+  // ahead and closed the search row under the sheet (components/ui/sheet.tsx).
   const focused = useIsFocused();
+  const sheetOpen = useSheetOpen();
   useEffect(() => {
-    if (!searchVisible || !focused) return;
+    if (!searchVisible || !focused || sheetOpen) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       closeSearch();
       return true; // consumed — don't navigate
     });
     return () => sub.remove();
-  }, [searchVisible, focused, closeSearch]);
+  }, [searchVisible, focused, sheetOpen, closeSearch]);
 
   const toggleSearch = () => {
     if (!searchVisible) {

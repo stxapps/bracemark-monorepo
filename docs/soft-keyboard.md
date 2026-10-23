@@ -338,6 +338,17 @@ the app is not covered. Unregistering on those gates instead would re-register o
 the way back, on top of a picker still open. `sheet.spec.tsx` holds both; nothing
 on a device has re-driven them yet.
 
+Registering once holds the order only if nothing the sheet COVERS re-registers
+while it is up, and `topbar.tsx`'s search handler does: it is gated on its own
+`useIsFocused()`, so coming back from Subscription with Advanced Search still
+open re-registered it above the sheet's, and the first back press closed the
+search row under the sheet. So the covered content's back handlers also stand
+down while a sheet is open — `useSheetOpen()` from `ui/sheet.tsx`, read in the
+handler's gate — rather than racing the sheet for the top. The bulk-edit bar's
+handler needs no such gate only because no sheet opens in bulk-edit mode (the
+FAB and the search row are both hidden); a new back handler under SheetHost
+takes the gate.
+
 ⚠ **The header drag is not decoration: on a phone it is the only accidental
 door.** A tall form (the editor, Advanced Search) fills the window to the top
 gutter, `insets.top + 8`, and the strip above it is the status bar, whose

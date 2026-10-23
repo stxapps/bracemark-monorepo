@@ -25,7 +25,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import { AppCover } from '../../contexts/app-cover';
 import type { FocusedFieldReveal } from '../../lib/use-focused-field-reveal';
-import { Sheet, SheetCovered, SheetHost } from './sheet';
+import { Sheet, SheetCovered, SheetHost, useSheetOpen } from './sheet';
 
 // Whether the links route is the one on screen — false once another route
 // (Subscription, Settings) is pushed over it with the sheet still mounted.
@@ -170,6 +170,42 @@ it('lets back fall through while another route covers it or a relock hides it', 
   expect(onDismiss).toHaveBeenCalledTimes(1);
   // One registration throughout — the gates never re-order it.
   expect(BackHandler.addEventListener).toHaveBeenCalledTimes(1);
+});
+
+// The other half of the ordering: the topbar's search handler re-registers on
+// regaining focus, which put it ahead of an open sheet's, so the covered
+// content reads this and stands down instead.
+it('tells the covered content whether a sheet is open', () => {
+  function Probe() {
+    return <Text testID="probe">{String(useSheetOpen())}</Text>;
+  }
+  const tree = (isOpen: boolean) => (
+    <SheetHost>
+      <SheetCovered>
+        <Probe />
+      </SheetCovered>
+      {isOpen && (
+        <Sheet
+          title="Advanced search"
+          closeLabel="Close advanced search"
+          onClose={jest.fn()}
+          onDismiss={jest.fn()}
+          reveal={reveal}
+        >
+          <Text>body</Text>
+        </Sheet>
+      )}
+    </SheetHost>
+  );
+  const { rerender } = render(tree(false));
+  const probe = () => screen.getByTestId('probe', { includeHiddenElements: true });
+  expect(probe()).toHaveTextContent('false');
+
+  rerender(tree(true));
+  expect(probe()).toHaveTextContent('true');
+
+  rerender(tree(false));
+  expect(probe()).toHaveTextContent('false');
 });
 
 it('renders its body', () => {

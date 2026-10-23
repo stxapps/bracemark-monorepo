@@ -141,7 +141,12 @@ final class BracemarkShareKeyboardView: ExpoView {
   }
 
   private func measure(durationMs: Double) {
-    guard let window else { return }
+    // Not before the view has a size: `didMoveToWindow` can run before the
+    // frame lands, and a zero box's maxY is its own top — which reads as
+    // `detached` on an iPhone, a frame of the card shape before the real
+    // layout corrects it. The size arriving runs `layoutSubviews`, which
+    // measures again, so nothing is lost by waiting for it.
+    guard let window, !bounds.isEmpty else { return }
 
     var overlap: CGFloat = 0
     if let keyboardFrame, !keyboardFrame.isEmpty {
