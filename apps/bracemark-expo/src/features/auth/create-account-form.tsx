@@ -183,7 +183,7 @@ export function CreateAccountForm() {
               this screen's disclosure ("no email address, no password reset" —
               docs/account.md), i.e. the one line that has to land BEFORE anyone
               starts typing. The cost is one tap. Same divergence docs/editors.md
-              records for /edit-link's `focus` param: on native a focus summons
+              records for the link editor's `focus`: on native a focus summons
               the keyboard, which web's `focus()` never does, so the web twins
               keep theirs. A field that swaps in WITHIN this screen still
               focuses — see the confirm step below. docs/soft-keyboard.md,

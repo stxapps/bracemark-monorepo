@@ -2,8 +2,8 @@
 // (use-paused-while-covered.ts). Two ways this goes wrong, both silent: a pause
 // that never lifts leaves the links screen showing stale rows after Settings
 // closes, with nothing to say why; and a pause taken on BLUR instead of on the
-// disappear would also stop the rows behind the link editor's pageSheet, which
-// stays on screen.
+// disappear would also stop the rows behind an iOS pageSheet (`resume`), which
+// stay on screen.
 
 import { act, renderHook } from '@testing-library/react-native';
 

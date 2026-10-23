@@ -170,10 +170,12 @@ const HOME_PARAMS: SearchParams = {};
 //
 // HELD WHILE ANOTHER SCREEN IS ON TOP. "Global" means it follows whatever route
 // is focused, including ones that are not this page: pushing `/settings/general`
-// or `/edit-link` swings this hook onto THAT route's params, where the
+// or presenting `/resume` swings this hook onto THAT route's params, where the
 // no-filter-keys default parses out as My List — resetting the list, the drawer
 // highlight, the FlashList offset and bulk-edit mode under a screen the user is
-// still looking past (the editor presents modally) and expects to come back to.
+// still looking past (`resume` presents modally) and expects to come back to.
+// (The in-app sheets — add, edit, Advanced Search — are not routes and never
+// move the focus off this page.)
 // That is the round trip settings/close.ts's `dismiss()` exists to preserve. So
 // a bag is only TAKEN while the focused route is this page, and the last one
 // taken holds until it is again.

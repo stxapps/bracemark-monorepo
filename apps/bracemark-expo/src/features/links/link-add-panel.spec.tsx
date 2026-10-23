@@ -38,6 +38,12 @@ jest.mock('./page-provider', () => ({
   useLinksPage: () => ({ selection: { kind: 'all' } }),
 }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+// The sheet gates Android's back on its route being the focused one
+// (components/ui/sheet.tsx); there is no navigator here.
+jest.mock('@react-navigation/native', () => ({
+  ...jest.requireActual('@react-navigation/native'),
+  useIsFocused: () => true,
+}));
 jest.mock('../../lib/review-prompt', () => ({ noteReviewMoment: jest.fn() }));
 // The pickers behind the collapsed optional section — never opened here, and
 // their import graphs reach the rest of the store seam.

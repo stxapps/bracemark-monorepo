@@ -83,6 +83,7 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { BackHandler, Keyboard, View } from 'react-native';
@@ -101,9 +102,11 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
+import { useIsFocused } from '@react-navigation/native';
 import { X } from 'lucide-react-native';
 import { withUniwind } from 'uniwind';
 
+import { useAppCovered } from '../../contexts/app-cover';
 import type { FocusedFieldReveal } from '../../lib/use-focused-field-reveal';
 import { cn } from '../../lib/utils';
 import { useWideWindow } from '../../lib/window-class';
@@ -242,13 +245,37 @@ export function Sheet({
   // swallows — so it can never fall through to the navigator and pop the links
   // screen out from under the sheet. iOS-safe by construction: BackHandler has
   // no events there.
+  //
+  // ⚠ REGISTERED ONCE, at mount, reading the rest through a ref. BackHandler
+  // runs listeners newest-first, and a picker opened from the body (ListSelect,
+  // TagsField — kit Dialogs) registers its own after this one, so it answers
+  // back first and closes itself. Re-registering on a dep would undo that: the
+  // callers' `onDismiss` is a fresh closure every render, so toggling a tag in
+  // the open Tags picker moved this handler back on top, and the next back press
+  // went to the sheet instead — swallowed as dead with a dirty draft, or closing
+  // the form under the picker with a clean one.
+  //
+  // And the gates are checked in the handler, not by registering and
+  // unregistering — for the same ordering reason. The sheet stays mounted while
+  // another route covers the links section (the paywall's Upgrade pushes
+  // Subscription over an open Advanced Search) and while a relock hides it
+  // (AppLockGate); BackHandler is app-global, so an ungated handler took the back
+  // press meant for that screen — topbar.tsx's SEARCH-002 trap. Off-duty it
+  // returns false, so the press falls through to whoever owns it.
+  const focused = useIsFocused();
+  const covered = useAppCovered();
+  const backRef = useRef({ onDismiss, live: focused && !covered });
+  useLayoutEffect(() => {
+    backRef.current = { onDismiss, live: focused && !covered };
+  });
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      onDismiss();
+      if (!backRef.current.live) return false;
+      backRef.current.onDismiss();
       return true;
     });
     return () => sub.remove();
-  }, [onDismiss]);
+  }, []);
 
   const insets = useSafeAreaInsets();
   const { height: keyboardHeight } = useReanimatedKeyboardAnimation();

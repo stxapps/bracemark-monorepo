@@ -321,6 +321,23 @@ Cancel calls the same), `onDismiss` the accidental vectors — the backdrop,
 Android's back, and on the narrow shape a downward drag on the header — which a
 dirty editor swallows by not closing ([editors.md](./editors.md), invariant 3).
 
+⚠ **Android's back is registered ONCE, at the sheet's mount, and gated inside
+the handler — never by re-registering.** `BackHandler` runs listeners
+newest-first and is app-global, and both halves of that bit the first version,
+whose effect depended on `onDismiss`. The bodies pass a fresh `onDismiss` every
+render, so the handler re-registered on every render and climbed back above the
+picker opened from the body (ListSelect, TagsField — kit Dialogs, which close
+themselves on back): toggle a tag in the open Tags picker, press back, and the
+sheet answered instead — dead on a dirty draft, closing the form under the
+picker on a clean one. And it was ungated, while the sheet stays mounted under a
+pushed route (the paywall's Upgrade opens Subscription over an open Advanced
+Search) and under a relock, so it took the press meant for that screen —
+`topbar.tsx`'s SEARCH-002 trap again. Now the handler reads `onDismiss` through a
+ref and returns `false` (falls through) unless the links route is focused and
+the app is not covered. Unregistering on those gates instead would re-register on
+the way back, on top of a picker still open. `sheet.spec.tsx` holds both; nothing
+on a device has re-driven them yet.
+
 ⚠ **The header drag is not decoration: on a phone it is the only accidental
 door.** A tall form (the editor, Advanced Search) fills the window to the top
 gutter, `insets.top + 8`, and the strip above it is the status bar, whose

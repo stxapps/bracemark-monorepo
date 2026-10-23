@@ -10,7 +10,11 @@
 //     which is SheetCovered's job and nothing else's;
 //   - a sheet outside a SheetHost has no box to cover and no count to raise —
 //     it would draw over whatever its parent happens to be and hide nothing —
-//     so it must throw instead.
+//     so it must throw instead;
+//   - Android's back reaches the sheet only while it is the thing on screen and
+//     only after anything opened over it — a picker, registered later, answers
+//     first however often the body re-renders, and a covering route or a relock
+//     gets the press instead.
 //
 // The geometry (the avoider, the reveal, the swipe) is a device behaviour
 // (docs/soft-keyboard.md, _the in-app sheet_); none of it is asserted here.
@@ -19,8 +23,17 @@ import * as React from 'react';
 import { BackHandler, Text, View } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
+import { AppCover } from '../../contexts/app-cover';
 import type { FocusedFieldReveal } from '../../lib/use-focused-field-reveal';
 import { Sheet, SheetCovered, SheetHost } from './sheet';
+
+// Whether the links route is the one on screen — false once another route
+// (Subscription, Settings) is pushed over it with the sheet still mounted.
+let mockFocused = true;
+jest.mock('@react-navigation/native', () => ({
+  ...jest.requireActual('@react-navigation/native'),
+  useIsFocused: () => mockFocused,
+}));
 
 // The reveal's worklets need a mounted native scroller; the shell only passes
 // its handles through.
@@ -36,6 +49,7 @@ const reveal = {
 let backListeners: (() => boolean | null | undefined)[] = [];
 
 beforeEach(() => {
+  mockFocused = true;
   backListeners = [];
   jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_event, listener) => {
     backListeners.push(listener);
@@ -85,6 +99,77 @@ it('sends the ✕ to onClose and Android back to onDismiss, and consumes the bac
   expect(backListeners.at(-1)?.()).toBe(true);
   expect(onDismiss).toHaveBeenCalledTimes(1);
   expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+it('keeps a picker opened over it answering back first, across body re-renders', () => {
+  const tree = (onDismiss: () => void) => (
+    <SheetHost>
+      <Sheet
+        title="Edit link"
+        closeLabel="Close edit link"
+        onClose={jest.fn()}
+        onDismiss={onDismiss}
+        reveal={reveal}
+      >
+        <Text>body</Text>
+      </Sheet>
+    </SheetHost>
+  );
+  const first = jest.fn();
+  const { rerender } = render(tree(first));
+  // A kit Dialog opened from the body registers after the sheet (BackHandler
+  // runs listeners newest-first) and closes itself on back.
+  const picker = jest.fn(() => true);
+  BackHandler.addEventListener('hardwareBackPress', picker);
+
+  // A tag toggled in the picker re-renders the body, and the callers' onDismiss
+  // is a fresh closure every render.
+  const latest = jest.fn();
+  rerender(tree(latest));
+
+  expect(backListeners).toHaveLength(2);
+  expect(backListeners.at(-1)).toBe(picker);
+  // Once the picker has closed, back reaches the sheet — and its CURRENT
+  // onDismiss, the one that knows the draft as it is now.
+  expect(backListeners[0]()).toBe(true);
+  expect(latest).toHaveBeenCalledTimes(1);
+  expect(first).not.toHaveBeenCalled();
+});
+
+it('lets back fall through while another route covers it or a relock hides it', () => {
+  const onDismiss = jest.fn();
+  const tree = (covered: boolean) => (
+    <AppCover covered={covered}>
+      <SheetHost>
+        <Sheet
+          title="Advanced search"
+          closeLabel="Close advanced search"
+          onClose={jest.fn()}
+          onDismiss={onDismiss}
+          reveal={reveal}
+        >
+          <Text>body</Text>
+        </Sheet>
+      </SheetHost>
+    </AppCover>
+  );
+  const { rerender } = render(tree(false));
+
+  // Upgrade pushed Subscription over the links section; the sheet stays mounted.
+  mockFocused = false;
+  rerender(tree(false));
+  expect(backListeners[0]()).toBe(false);
+
+  mockFocused = true;
+  rerender(tree(true));
+  expect(backListeners[0]()).toBe(false);
+  expect(onDismiss).not.toHaveBeenCalled();
+
+  rerender(tree(false));
+  expect(backListeners[0]()).toBe(true);
+  expect(onDismiss).toHaveBeenCalledTimes(1);
+  // One registration throughout — the gates never re-order it.
+  expect(BackHandler.addEventListener).toHaveBeenCalledTimes(1);
 });
 
 it('renders its body', () => {

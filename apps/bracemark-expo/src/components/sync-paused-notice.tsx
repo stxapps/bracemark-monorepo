@@ -11,7 +11,7 @@
 // buttons beside them don't.
 //
 // Divergences from web: "Sign in to resume" PUSHES the `/resume` modal route
-// (a router screen, like `/edit-link`, so the keyboard controller works inside it)
+// (a router screen, so the keyboard controller works inside it)
 // where web opens a dialog; and the confirm action is a plain destructive Button,
 // not AlertDialogAction — the rn-primitives Action closes the root BEFORE its press
 // handler runs (link-destroy-confirm.tsx has the same note).

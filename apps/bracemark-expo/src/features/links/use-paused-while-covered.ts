@@ -23,8 +23,11 @@ interface TransitionEvents {
 //
 //  - A card push (Settings) makes the route disappear, so it pauses once the
 //    push has finished, not while its own slide-out is still on screen.
-//  - An iOS pageSheet modal (the link editor) never makes it disappear: the
-//    sheet leaves the links screen showing behind it, so it keeps updating.
+//  - A presentation that leaves the links screen showing behind it (an iOS
+//    pageSheet — `resume`, as the link editor once was) never makes it
+//    disappear, so it keeps updating. The in-app sheets (add, edit, Advanced
+//    Search — components/ui/sheet.tsx) are not routes at all: they are drawn
+//    inside the links section, so they cannot pause it.
 //  - It resumes at `transitionStart` with `closing: false`, which fires when a
 //    pop or a back-swipe begins, so the reveal already shows the screen
 //    catching up. A cancelled swipe ends with the route disappearing again,
