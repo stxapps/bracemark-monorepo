@@ -6,6 +6,7 @@ import { BROWSER_LAUNCH, E2E_BROWSER, IS_FIREFOX } from './runner/browser';
 import { E2E_ENVIRONMENT, IS_STAGING } from './runner/environment';
 import { createRunId } from './runner/lib';
 import { selectCases } from './runner/registry';
+import { type E2EWidth } from './runner/width';
 import { WEB_URL } from './web/fixtures/env';
 import { runArtifactDir } from './paths';
 
@@ -33,6 +34,19 @@ const selection =
       )
     : requestedSelection;
 
+// The narrow window (docs/e2e.md, _narrow and wide_): the cases whose entry
+// admits `narrow`, run again at 390×844 by the `narrow` project, intersected
+// with the wrapper's selection the same per-project way as above. Local Chrome
+// only: width matters to layout, and neither the engine (Firefox) nor the server
+// path (staging) is split by it — the native legs make the same call.
+const runsNarrow = !IS_STAGING && !IS_FIREFOX;
+const narrowSelection = new RegExp(
+  selectCases('web', { width: 'narrow' })
+    .filter((entry) => !requestedSelection || requestedSelection.test(`@${entry.id}`))
+    .map((entry) => `@${entry.id}(?=\\s|$)`)
+    .join('|') || '(?!)',
+);
+
 // Whole-flow e2e for bracemark-web. The design record — what belongs at this
 // layer, why the standard auth fixture cannot work here, and the four repo
 // constraints that shape it — is docs/e2e.md. This file is only the wiring.
@@ -42,7 +56,7 @@ const selection =
 // `storageState` cannot carry it. Adding a plain `page`-fixture spec would appear
 // to work and then fail the moment it needed to be signed in. Anonymous staging
 // security checks use the default browser fixture and need no session.
-export default defineConfig({
+export default defineConfig<object, { layout: E2EWidth }>({
   testDir: IS_STAGING ? '.' : './web',
   // `.e2e.ts`, never `.spec.ts`. Nothing here may be picked up by jest: the
   // `@nx/jest` plugin infers a `test` target from a jest config's mere presence,
@@ -56,13 +70,27 @@ export default defineConfig({
   // sharing the stack meanwhile timed out on its own sync and delete-all
   // receipts. A dependent project starts only after `web` has finished — and is
   // skipped if `web` failed, which a red run reports as "did not run".
+  //
+  // `narrow` is the same specs at the narrow window, for the cases admitted
+  // there; capacity waits for it too, or it would no longer run alone.
   projects: [
-    { name: 'web', testIgnore: '**/capacity.e2e.ts', grep: selection },
+    { name: 'web', testIgnore: '**/capacity.e2e.ts', grep: selection, use: { layout: 'wide' } },
+    ...(runsNarrow
+      ? [
+          {
+            name: 'narrow',
+            testIgnore: '**/capacity.e2e.ts',
+            grep: narrowSelection,
+            use: { layout: 'narrow' as const },
+          },
+        ]
+      : []),
     {
       name: 'capacity',
       testMatch: '**/capacity.e2e.ts',
-      dependencies: ['web'],
+      dependencies: runsNarrow ? ['web', 'narrow'] : ['web'],
       grep: selection,
+      use: { layout: 'wide' },
     },
   ],
 

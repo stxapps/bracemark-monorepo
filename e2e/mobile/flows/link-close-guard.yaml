@@ -5,8 +5,15 @@
 #
 # The accidental vectors are platform ones, which is why this is a device case:
 # the backdrop tap on both platforms, Android's hardware back (the sheet's
-# BackHandler), and on a phone the swipe-down on the sheet's header. What
-# "dirty" means stays in jest (docs/editors.md, _invariant 3_).
+# BackHandler), and on a phone the swipe-down on the sheet's header. On a wide
+# window both bodies are a centred `max-w-lg` dialog with the swipe disabled
+# (`Gesture.Pan().enabled(!wide)` in sheet.tsx), so the backdrop beside the
+# dialog is the door there, for the editor too (docs/safe-area.md, _wide
+# windows on native_). What "dirty" means stays in jest (docs/editors.md,
+# _invariant 3_).
+#
+# Widths: narrow and wide. The branches read the runner's E2E_WIDTH
+# (docs/e2e.md, _narrow and wide_).
 #
 #   maestro test mobile/flows/link-close-guard.yaml -e USERNAME=… -e PASSWORD=… \
 #     -e ANCHOR_URL=https://e2e-local.invalid/anchor \
@@ -56,17 +63,10 @@ tags: [LINK-CLOSE-001, full, online, ios, android]
     id: 'add-link-note'
 - inputText: ${DRAFT_NOTE}
 
-# The backdrop has no accessible node (it is `accessible={false}`), so it is a
-# point: the horizontal centre, 15% down. It is TAPPED TWICE, and the first tap is
-# the reason. With the keyboard up the panel is parked on it and reaches nearly
-# to the top gutter, so the first tap may land on the panel's own chrome — which
-# only dismisses the keyboard — and a single tap would pass having never touched
-# the backdrop. Once the keyboard is down the panel sits on the bottom edge, well
-# below 15%, so the second tap is the backdrop whichever the first one was.
-- tapOn:
-    point: '50%,15%'
-- tapOn:
-    point: '50%,15%'
+# A backdrop tap — the point is the window's shape, and it is tapped twice
+# (subflows/tap-sheet-backdrop.yaml says why).
+- runFlow:
+    file: subflows/tap-sheet-backdrop.yaml
 - assertVisible:
     id: 'add-link-note'
     text: ${DRAFT_NOTE}
@@ -101,19 +101,25 @@ tags: [LINK-CLOSE-001, full, online, ios, android]
     id: 'edit-link-note'
 - inputText: ${DRAFT_NOTE}
 
-# iOS: the sheet's swipe-down, dragged from its header. On a phone the editor
-# fills the window to the status bar, whose strip iOS keeps for itself, so this
-# — not a backdrop tap — is its accidental door there (docs/soft-keyboard.md,
+# iOS on a phone: the sheet's swipe-down, dragged from its header. There the
+# editor fills the window to the status bar, whose strip iOS keeps for itself,
+# so this — not a backdrop tap — is its accidental door (docs/soft-keyboard.md,
 # _the in-app sheet_). The header's title is plain text, so the drag starts on
 # nothing pressable.
 - runFlow:
     when:
       platform: iOS
+      true: ${E2E_WIDTH !== 'wide'}
     commands:
       - swipe:
           start: '50%,12%'
           end: '50%,90%'
           duration: 400
+# Wide, both platforms: the editor is a dialog with backdrop around it.
+- runFlow:
+    when:
+      true: ${E2E_WIDTH === 'wide'}
+    file: subflows/tap-sheet-backdrop.yaml
 # Android: back, twice — the first may only close the IME.
 - runFlow:
     when:

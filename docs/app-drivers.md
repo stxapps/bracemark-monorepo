@@ -191,6 +191,20 @@ the guest, the host process at ~4 GB RSS. Cold boot 32 s the first time, 15 s
 after. Disk **2.0 GB** after a full boot/shutdown cycle, read the way the phone's
 is read above.
 
+**⚠ Boot only the device a leg runs on — it is memory, not the foreground.**
+This Mac has 16 GB, and the four e2e devices booted together (both AVDs, the
+iPhone and the iPad simulators) beside `npm run dev`, Metro and a browser put it
+8.2 GB into a 9.2 GB swap file. The emulators' own CPU read 8–11%: their guests
+were paged out, and every Maestro step waited on swap. Measured 2026-10-23: the
+Pixel took 9m31s for `SEARCH-002` and 5m51s for `FILTER-001`, where the tablet
+AVD running alone took about 3m for each. With the three idle devices shut down
+mid-run, swap fell to 4.0 GB and the Pixel's next case, `VIEWPORT-KEYBOARD-001`,
+ran in the 53s the tablet AVD takes alone. Nothing fails while a device is
+swapped out. Steps slow until a fixed wait — a 10s `extendedWaitUntil` — runs
+out under one, and that red reads as a flake. Shut the others down between legs
+(`xcrun simctl shutdown <udid>`, `adb -s <serial> emu kill`). Whether a window
+in the background costs anything on top, once memory is free, was not measured.
+
 **⚠ It boots with no software keyboard.** `hw.keyboard = yes` (the phone table,
 for Maestro's `inputText`) reads as a physical keyboard, and on the tablet,
 unlike the phone, Gboard then hides itself: a focused field shows a caret and no
@@ -215,6 +229,37 @@ bare `adb` call still needs `-s <serial>` (`adb devices`), and
 per AVD. The store screenshots are a different leg and stay on the Pixel 8:
 `e2e/shot/mobile.ts` accepts only its 1080×2400 ([e2e.md](./e2e.md), _the
 published screenshots_).
+
+#### ⚠ the iPad simulator
+
+The `wide` iOS device is an **iPad (A16)** simulator — 820 × 1180 pt upright,
+docked rails both ways, and the model `e2e:ios:ipad` expects
+([e2e.md](./e2e.md), _narrow and wide_). Not the iPad mini, which is narrow
+upright. It needs the iPhone's keyboard settings (_the software keyboard_,
+below) and one of its own:
+
+**⚠ AutoFill Passwords goes off, or no wide iOS flow gets past sign-in.** On a
+successful sign-in iOS offers to save the password. On the iPhone that sheet is
+in Maestro's tree, and `subflows/sign-in.yaml` presses its Not Now. On the iPad
+it is a centred card that **nothing in the tree shows**: the hierarchy holds the
+status bar and nothing else, neither the card nor the app beneath it, so the
+subflow's `tapOn: Not Now` reports WARNED on every pass. The run then fails as
+`links-screen is visible` after five minutes, with the links screen signed in and
+painted under the card in every screenshot. Measured on iOS 26.5, 2026-10-23. A
+point tap cannot stand in for the missing node: the card is centred on the
+screen, so its place follows the orientation, and on the passes where no card
+is up the same point lands on the link list. So the setting goes off once, on the device:
+
+_Settings → General → AutoFill & Passwords → AutoFill Passwords and Passkeys_
+
+It lives in the device's data, so it survives reboots and is lost to an erase.
+**The runner does not check it, and there is nothing it could read.** The
+device's `com.apple.WebUI` `AutoFillPasswords` follows the toggle, but it is a
+mirror: a `defaults write` of `true` landed in the plist, and Settings, relaunched,
+still showed the toggle off. A preflight reading it could pass a device with
+AutoFill on. The symptom above is the check.
+The iPhone keeps its default, so the AutoFill path `sign-in.yaml` handles still
+runs on every phone leg.
 
 #### ⚠ the software keyboard
 

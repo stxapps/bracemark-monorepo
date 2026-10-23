@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures/app';
 import { unique } from './fixtures/data';
+import { openNavigation } from './fixtures/layout';
 
 // Lists cross two surfaces that no single component spec covers together: the
 // settings editor writes one, and the links sidebar reads it back through the
@@ -23,7 +24,9 @@ test.describe('lists', () => {
       await expect(page.locator(`input[aria-label="List name"][value="${name}"]`)).toBeVisible();
 
       await page.goto('/links');
-      await expect(page.getByRole('button', { name })).toBeVisible();
+      // The rail, or narrow the drawer the page title opens (fixtures/layout.ts).
+      const navigation = await openNavigation(page);
+      await expect(navigation.getByRole('button', { name, exact: true })).toBeVisible();
     },
   );
 });

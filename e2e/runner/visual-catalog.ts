@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import { E2E_ROOT } from '../paths';
 import type { E2ECase } from './registry';
+import type { E2EWidth } from './width';
 
 // The named visual checkpoints (e2e/visual.json) and the captures each one
 // owes a run (docs/e2e.md, _visual checkpoints_). Like cases.json it organizes
@@ -80,15 +81,35 @@ export function captureKey(id: string, variant: CaptureVariant): string {
   return [id, variant.layout, variant.appearance].filter(Boolean).join('.');
 }
 
+// The checkpoints photographed inside the iOS share extension, which no Maestro
+// run can reach on an iPad: there the system share sheet is a popover and the
+// extension a card that neither shows in the tree — under Safari's app id, the
+// extension's, or SpringBoard's — so a flow can neither press Bracemark's row
+// nor see that the extension arrived (docs/app-drivers.md, _the iPad
+// simulator_). A wide iOS run skips the steps that open them
+// (runner/visual-native.ts) and owes none of their captures. The Android
+// tablet's share activity is in its tree, and keeps them.
+export const IOS_SHARE_CHECKPOINTS = new Set(['share-editor', 'share-no-url', 'large-font-share']);
+
+export function capturedAt(
+  checkpointId: string,
+  platform: VisualPlatform,
+  width: E2EWidth | undefined,
+): boolean {
+  return !(platform === 'ios' && width === 'wide' && IOS_SHARE_CHECKPOINTS.has(checkpointId));
+}
+
 export function expectedCaptures(
   caseIds: string[],
   platform: VisualPlatform,
   catalog = readVisualCatalog(),
+  width?: E2EWidth,
 ): ExpectedCapture[] {
   const layouts: (WebLayout | undefined)[] = platform === 'web' ? WEB_LAYOUTS : [undefined];
   return catalog.checkpoints
     .filter((checkpoint) => caseIds.includes(checkpoint.case))
     .filter((checkpoint) => checkpoint.platforms.includes(platform))
+    .filter((checkpoint) => capturedAt(checkpoint.id, platform, width))
     .flatMap((checkpoint) =>
       layouts.flatMap((layout) =>
         checkpoint.appearances.map((appearance) => {

@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures/app';
 import { unique, unresolvableUrl } from './fixtures/data';
+import { isNarrow } from './fixtures/layout';
 import {
   addLink,
   addLinkButton,
@@ -110,7 +111,11 @@ test.describe('link editors', () => {
 
       // The two accidental vectors of the anchored popover: Escape, and a press
       // outside it. The outside press lands on the topbar's title, which is not
-      // a control, so a refused close is the only thing it can cause.
+      // a control, so a refused close is the only thing it can cause. Narrow,
+      // quick-add is a bottom sheet (link-add-surface.tsx) over an overlay that
+      // takes the press instead — and the title there is the drawer's button,
+      // under that overlay — so the press is the overlay's top-left corner,
+      // above a sheet capped at 85dvh.
       //
       // Asserted on Radix's `data-state`, NOT on the form still being visible.
       // A popover that DID close keeps its content mounted for the length of its
@@ -121,7 +126,8 @@ test.describe('link editors', () => {
       const quickAdd = page.getByRole('dialog').filter({ has: page.locator('#link-url') });
       await page.keyboard.press('Escape');
       await expect(quickAdd).toHaveAttribute('data-state', 'open');
-      await page.locator('h1').first().click();
+      if (isNarrow(page)) await page.mouse.click(4, 4);
+      else await page.locator('h1').first().click();
       await expect(quickAdd).toHaveAttribute('data-state', 'open');
       await expect(page.getByRole('textbox', { name: 'Note' })).toHaveValue(draftNote);
 

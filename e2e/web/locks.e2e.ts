@@ -2,6 +2,7 @@ import { type Page } from '@playwright/test';
 
 import { expect, test } from './fixtures/app';
 import { unique, unresolvableUrl } from './fixtures/data';
+import { openSearchBox } from './fixtures/layout';
 import { addLinkButton, displayUrl, linkRow, openSidebarItem } from './fixtures/links';
 import { grantPlusAndLoad } from './fixtures/plan';
 import { createInSettings, lockListInSettings, moveListUnder } from './fixtures/taxonomy';
@@ -171,7 +172,7 @@ test.describe('locks', () => {
       await expect(linkRow(page, open)).toHaveCount(1);
       await expectCoveredAbsent();
 
-      await page.getByRole('textbox', { name: 'Search links' }).fill(word);
+      await (await openSearchBox(page)).fill(word);
       await page.keyboard.press('Enter');
       await expect(page).toHaveURL(/[?&]text=/);
       await expect(linkRow(page, open)).toHaveCount(1);

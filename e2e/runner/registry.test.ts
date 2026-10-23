@@ -7,6 +7,7 @@ import {
   selectCases,
   selectCasesForPlatform,
   validateCaseRegistry,
+  widthsOf,
 } from './registry';
 
 const ids = (cases: { id: string }[]) => cases.map((testCase) => testCase.id);
@@ -86,8 +87,9 @@ test('a native case runs narrow unless its entry admits wide, and a wide run tak
   assert.ok(wide.includes('RAIL-WIDE-001') && !narrow.includes('RAIL-WIDE-001'));
   assert.ok(wide.includes('NATIVE-LINK-001') && narrow.includes('NATIVE-LINK-001'));
   assert.throws(
-    () => selectCasesForPlatform('native', 'android', { width: 'wide', cases: ['FILTER-001'] }),
-    /FILTER-001 does not run wide/,
+    () =>
+      selectCasesForPlatform('native', 'android', { width: 'wide', cases: ['NATIVE-ACCOUNT-002'] }),
+    /NATIVE-ACCOUNT-002 does not run wide/,
   );
   assert.throws(
     () =>
@@ -96,22 +98,44 @@ test('a native case runs narrow unless its entry admits wide, and a wide run tak
   );
 });
 
-test('widths is a native field, and a non-empty set of the two', () => {
+test('widths is a native or web field, a non-empty set of the two, and web keeps wide', () => {
   const entry = readCaseRegistry().find((testCase) => testCase.id === 'RAIL-WIDE-001');
   assert.ok(entry);
-  const web = readCaseRegistry().find((testCase) => testCase.surface === 'web');
+  const web = readCaseRegistry().find((testCase) => testCase.id === 'WEB-LINK-001');
   assert.ok(web);
+  const extension = readCaseRegistry().find((testCase) => testCase.surface === 'extension');
+  assert.ok(extension);
   for (const bad of [
     { ...entry, widths: [] },
     { ...entry, widths: ['wide', 'wide'] },
     { ...entry, widths: ['tablet'] },
-    { ...web, widths: ['wide'] },
+    { ...web, widths: ['narrow'] },
+    { ...extension, widths: ['wide'] },
   ]) {
     assert.throws(
       () => validateCaseRegistry([bad as typeof entry]),
-      /invalid widths \(a native case only\)/,
+      /invalid widths \(an automated native case, or a web case that keeps wide\)/,
     );
   }
+  validateCaseRegistry(
+    readCaseRegistry().map((testCase) =>
+      testCase.surface === 'web' && testCase.id === web.id
+        ? { ...web, widths: ['wide', 'narrow'] }
+        : testCase,
+    ),
+  );
+});
+
+test('a web case is wide unless it admits narrow, and a native one narrow unless it admits wide', () => {
+  const web = readCaseRegistry().find((testCase) => testCase.id === 'WEB-LINK-001');
+  const native = readCaseRegistry().find((testCase) => testCase.id === 'NATIVE-ACCOUNT-002');
+  assert.ok(web && native);
+  assert.deepEqual(widthsOf({ ...web, widths: undefined }), ['wide']);
+  assert.deepEqual(widthsOf({ ...native, widths: undefined }), ['narrow']);
+  const narrowWeb = selectCases('web', { width: 'narrow' });
+  assert.ok(narrowWeb.length > 0);
+  for (const testCase of narrowWeb) assert.ok(testCase.widths?.includes('narrow'), testCase.id);
+  assert.equal(selectCases('web', { width: 'wide' }).length, selectCases('web').length);
 });
 
 test('--width defaults to narrow, and is refused where it means nothing', () => {

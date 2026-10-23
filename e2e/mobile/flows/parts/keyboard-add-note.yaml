@@ -6,6 +6,14 @@ appId: com.bracemark.app
 - inputText: ${LINK_URL}
 - tapOn:
     id: 'add-link-optional'
+# Note can sit below the fold: the tablet AVD on its side with the keyboard up
+# leaves the dialog about 250dp, so it caps itself and scrolls its fields — the
+# Note row is under Tags, out of view (2026-10-23). The same step as
+# link-close-guard.yaml's; a no-op wherever Note is already in view.
+- scrollUntilVisible:
+    element:
+      id: 'add-link-note'
+    direction: DOWN
 - tapOn:
     id: 'add-link-note'
 - waitForAnimationToEnd:

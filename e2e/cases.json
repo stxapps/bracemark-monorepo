@@ -9,7 +9,8 @@
     "path": "web/account.e2e.ts",
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
     "environments": ["local", "staging"],
-    "browsers": ["chrome", "firefox"]
+    "browsers": ["chrome", "firefox"],
+    "widths": ["wide", "narrow"]
   },
   {
     "id": "WEB-ACCOUNT-002",
@@ -170,7 +171,8 @@
     "path": "web/links.e2e.ts",
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
     "environments": ["local", "staging"],
-    "browsers": ["chrome", "firefox"]
+    "browsers": ["chrome", "firefox"],
+    "widths": ["wide", "narrow"]
   },
   {
     "id": "WEB-LINK-002",
@@ -203,7 +205,8 @@
     "fixture": "empty",
     "path": "web/link-editor.e2e.ts",
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
-    "environments": ["local", "staging"]
+    "environments": ["local", "staging"],
+    "widths": ["wide", "narrow"]
   },
   {
     "id": "LINK-LIFECYCLE-001",
@@ -236,7 +239,8 @@
     "fixture": "empty",
     "path": "web/lists.e2e.ts",
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
-    "environments": ["local", "staging"]
+    "environments": ["local", "staging"],
+    "widths": ["wide", "narrow"]
   },
   {
     "id": "TAXONOMY-EDITOR-001",
@@ -258,7 +262,8 @@
     "fixture": "small",
     "path": "web/taxonomy.e2e.ts",
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
-    "browsers": ["chrome", "firefox"]
+    "browsers": ["chrome", "firefox"],
+    "widths": ["wide", "narrow"]
   },
   {
     "id": "FILTER-001",
@@ -268,7 +273,8 @@
     "traits": ["online", "destructive"],
     "fixture": "small",
     "path": "web/taxonomy.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "widths": ["wide", "narrow"]
   },
   {
     "id": "FILTER-HIDDEN-LOCKED-001",
@@ -289,7 +295,8 @@
     "fixture": "small",
     "path": "web/search.e2e.ts",
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
-    "environments": ["local", "staging"]
+    "environments": ["local", "staging"],
+    "widths": ["wide", "narrow"]
   },
   {
     "id": "SEARCH-002",
@@ -299,7 +306,8 @@
     "traits": ["online", "destructive"],
     "fixture": "small",
     "path": "web/search.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "widths": ["wide", "narrow"]
   },
   {
     "id": "SEARCH-SCROLL-001",
@@ -333,7 +341,8 @@
     "fixture": "small",
     "path": "web/bulk-edit.e2e.ts",
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
-    "environments": ["local", "staging"]
+    "environments": ["local", "staging"],
+    "widths": ["wide", "narrow"]
   },
   {
     "id": "BULK-TRASH-001",
@@ -376,7 +385,8 @@
     "traits": ["online", "destructive"],
     "fixture": "small",
     "path": "web/locks.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "widths": ["wide", "narrow"]
   },
   {
     "id": "LOCK-FOCUS-WEB-001",
@@ -1009,7 +1019,8 @@
     "fixture": "empty",
     "path": "mobile/flows/link-close-guard.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
-    "environments": ["local", "staging"]
+    "environments": ["local", "staging"],
+    "widths": ["narrow", "wide"]
   },
   {
     "id": "LINK-LIFECYCLE-002",
@@ -1052,7 +1063,8 @@
     "traits": ["online", "destructive", "ios", "android"],
     "fixture": "small",
     "path": "mobile/flows/taxonomy-dnd.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "widths": ["narrow", "wide"]
   },
   {
     "id": "FILTER-001",
@@ -1063,7 +1075,8 @@
     "fixture": "small",
     "path": "mobile/flows/filters.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
-    "environments": ["local", "staging"]
+    "environments": ["local", "staging"],
+    "widths": ["narrow", "wide"]
   },
   {
     "id": "SEARCH-001",
@@ -1085,7 +1098,8 @@
     "traits": ["online", "destructive", "ios", "android"],
     "fixture": "small",
     "path": "mobile/flows/search-advanced.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "widths": ["narrow", "wide"]
   },
   {
     "id": "BULK-002",
@@ -1149,7 +1163,8 @@
     "traits": ["online", "destructive", "ios", "android"],
     "fixture": "small",
     "path": "mobile/flows/lock-list.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "widths": ["narrow", "wide"]
   },
   {
     "id": "LOCK-AUTORELOCK-001",
@@ -1232,7 +1247,8 @@
     "traits": ["online", "android"],
     "fixture": "small",
     "path": "mobile/flows/share-android.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "widths": ["narrow", "wide"]
   },
   {
     "id": "SHARE-ANDROID-002",

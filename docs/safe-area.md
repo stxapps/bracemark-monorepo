@@ -595,7 +595,10 @@ platforms — but not run on an iPad simulator, a tablet AVD or a foldable. The 
 suite now has a wide leg for it — `e2e:ios:ipad`, `e2e:android:tablet` and their
 visual twins, with cases for the docked rails, the dialogs, the backdrop over
 the rail and an Android resize across 768 ([e2e.md](./e2e.md), _narrow and
-wide_) — which has not completed a device run yet either. Before a release: run
+wide_). Its first device runs, 2026-10-23, held all of those — the resize on
+the tablet AVD, the rest on it on its side and on the iPad (A16) upright; the
+reds on the way were the harness
+(e2e.md, _what the first wide runs found_). What they do not cover is below. Before a release: run
 each on an iPad (full screen, both Split View widths, rotation across 768), a
 tablet AVD, and a foldable AVD folding and
 unfolding with the add panel open; and on the iPad, the iPad keyboard's floating

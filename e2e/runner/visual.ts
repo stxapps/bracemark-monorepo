@@ -133,6 +133,7 @@ async function runNative(options: VisualCliOptions & { platform: 'ios' | 'androi
       profile: `${run.platform}-${device.model}-${device.osVersion}`,
       platform: run.platform,
       caseIds: selected.map((testCase) => testCase.id),
+      width: run.width,
       accept: options.accept && captured,
     });
     await run.finish(captured && !failed ? 'passed' : 'failed');

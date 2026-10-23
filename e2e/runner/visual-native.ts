@@ -30,7 +30,7 @@ import { capture } from './process';
 import { type E2ECase } from './registry';
 import { openSystemShare, startPlainTextShareSource } from './share';
 import { freezeStatusBar } from './status-bar';
-import { captureKey, checkpointById, readVisualCatalog } from './visual-catalog';
+import { capturedAt, captureKey, checkpointById, readVisualCatalog } from './visual-catalog';
 import { capturesDir } from './visual-compare';
 
 // The visual checkpoint cases on a device (docs/e2e.md, _visual checkpoints_):
@@ -231,6 +231,17 @@ export async function runVisualNativeCase(
   testCase: E2ECase,
   found: DeviceLook,
 ): Promise<void> {
+  // False on a wide iOS run, which cannot cross the share sheet at all
+  // (visual-catalog.ts, IOS_SHARE_CHECKPOINTS): its steps are left out, and the
+  // share case, all of whose checkpoints are inside it, does not run.
+  const shareReachable = capturedAt('share-editor', run.platform, run.width);
+  if (testCase.id === 'VISUAL-SHARE-001' && !shareReachable) {
+    console.log(
+      `${testCase.id}: skipped on a wide iOS run — the iPad’s share sheet and ` +
+        'extension are not in the tree (visual-catalog.ts, IOS_SHARE_CHECKPOINTS)',
+    );
+    return;
+  }
   const caseDir = join(run.runDir, 'cases', testCase.id);
   const library = await writeVisualLibrary(join(caseDir, 'fixture', 'visual.zip'));
   const plus = testCase.id === 'VISUAL-LOCK-001';
@@ -408,10 +419,14 @@ export async function runVisualNativeCase(
         { flow: 'mobile/flows/parts/visual-settings.yaml', env: { SECTION: section } },
         shot(`large-font-settings-${section}`),
       ]),
-      openShare,
-      shareEditor,
-      shot('large-font-share'),
-      'mobile/flows/parts/visual-share-close.yaml',
+      ...(shareReachable
+        ? [
+            openShare,
+            shareEditor,
+            shot('large-font-share'),
+            'mobile/flows/parts/visual-share-close.yaml',
+          ]
+        : []),
     ];
   } else {
     throw new Error(`no visual runner owns ${testCase.id}`);

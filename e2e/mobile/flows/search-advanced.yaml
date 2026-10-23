@@ -26,8 +26,12 @@ tags: [SEARCH-002, full, online, destructive, ios, android]
     env:
       NOUN: list
       NAME: ${LIST_NAME}
-- tapOn:
-    id: 'settings-open-navigation'
+- runFlow:
+    when:
+      true: ${E2E_WIDTH !== 'wide'}
+    commands:
+      - tapOn:
+          id: 'settings-open-navigation'
 - tapOn:
     id: 'settings-nav-tags'
 - runFlow:
@@ -99,6 +103,14 @@ tags: [SEARCH-002, full, online, destructive, ios, android]
 # y 800–836 under the pinned footer (794–830), counted as visible, and the tap
 # went to the footer — reported COMPLETED, toggled nothing, and the query ran
 # without its tag. `centerElement` scrolls it clear.
+#
+# Wide, the keyboard was still up when the rows were pressed — the dialog is
+# tall enough that the scrolls need little or no dragging — so the dialog stays
+# squeezed above it, and the last row, the tag, sits at the scroller's end where
+# centring cannot move it: under the footer. Measured on the iPad (A16): the tag
+# row at y 772–808 and the footer at 782–818, the press reported COMPLETED and
+# toggled nothing; with the keys down the row sits at 907–943, clear. So a wide
+# run puts the keyboard away itself once the word is in.
 - tapOn:
     id: 'links-search-toggle'
 - tapOn:
@@ -115,6 +127,27 @@ tags: [SEARCH-002, full, online, destructive, ios, android]
     centerElement: true
 - waitForAnimationToEnd:
     timeout: 5000
+# Wide: a tap on the Lists checklist's caption, which is plain text. The sheet's
+# scroller is `keyboardShouldPersistTaps="handled"` (components/ui/sheet.tsx),
+# so a tap nothing handles puts the keyboard away. Not `hideKeyboard` (on the
+# iPad Maestro reports it "Couldn't hide the keyboard") and not a drag (the
+# scroller's `keyboardDismissMode` is `interactive`, which an upward drag never
+# trips and Android ignores). `below` the Note field, because the match is
+# case-insensitive and the rail's LISTS heading is the other "Lists".
+- runFlow:
+    when:
+      true: ${E2E_WIDTH === 'wide'}
+    commands:
+      - tapOn:
+          text: 'Lists'
+          below:
+            id: 'advanced-search-note'
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - scrollUntilVisible:
+          element: 'My List: included'
+          direction: DOWN
+          centerElement: true
 - tapOn: 'My List: included'
 - tapOn: 'My List: excluded'
 - assertVisible: 'My List: not selected'

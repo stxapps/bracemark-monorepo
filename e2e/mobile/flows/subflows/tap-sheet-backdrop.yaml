@@ -1,0 +1,39 @@
+# Tap the in-app sheet's backdrop, twice. Pulled in with `runFlow`; never run
+# directly.
+#
+# The backdrop has no accessible node (`accessible={false}` in
+# src/components/ui/sheet.tsx), so it is a point, and the point is the
+# window's shape:
+#
+# - narrow: the horizontal centre, 15% down. The sheet rests on the bottom
+#   edge, and with the keyboard up it reaches nearly to the top gutter.
+# - wide: the right edge, 20% down. The sheet is a 512-wide dialog centred in
+#   the room above the keys, so the centre column is the dialog's; 95% is past
+#   it on the iPad (A16) upright (its right edge at 81%) and the tablet AVD on
+#   its side (70%), below the topbar and above the keys. Not the LEFT edge:
+#   that is the docked rail — the backdrop covers it too (LAYOUT-WIDE-001), but
+#   a tap that missed the backdrop there would navigate instead of failing.
+#
+# TWICE, because with the keyboard up the first tap may land on the sheet's own
+# chrome, which only puts the keyboard away; a single tap would then pass having
+# never reached the backdrop. With the keyboard down the second is the backdrop
+# whichever the first was. The branch is the runner's E2E_WIDTH (docs/e2e.md,
+# _narrow and wide_); unset reads as narrow.
+appId: com.bracemark.app
+---
+- runFlow:
+    when:
+      true: ${E2E_WIDTH !== 'wide'}
+    commands:
+      - tapOn:
+          point: '50%,15%'
+      - tapOn:
+          point: '50%,15%'
+- runFlow:
+    when:
+      true: ${E2E_WIDTH === 'wide'}
+    commands:
+      - tapOn:
+          point: '95%,20%'
+      - tapOn:
+          point: '95%,20%'

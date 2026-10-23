@@ -11,8 +11,8 @@ appId: com.bracemark.app
       id: 'links-screen'
     timeout: 30000
 
-- tapOn:
-    id: 'links-open-navigation'
+- runFlow:
+    file: ../subflows/open-links-navigation.yaml
 - tapOn:
     id: 'links-nav-list-.*'
     text: ${LIST_NAME}
@@ -20,8 +20,8 @@ appId: com.bracemark.app
     visible: '.*${LINK_MATCH}.*'
     timeout: 20000
 
-- tapOn:
-    id: 'links-open-navigation'
+- runFlow:
+    file: ../subflows/open-links-navigation.yaml
 - tapOn:
     id: 'links-nav-tag-.*'
     text: ${TAG_NAME}

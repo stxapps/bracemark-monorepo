@@ -1836,6 +1836,8 @@ and every case says which widths it has been written for.
 | `e2e:visual:<platform>:<device>`           | either   | the same four                                           | the four checkpoint cases, at both      |
 | `e2e:contract:ios`, `e2e:contract:android` | `narrow` | the phone                                               | the contract — it never sees the window |
 | every `…:staging` native script            | `narrow` | the phone                                               | staging admission, as before            |
+| `e2e:web`, project `web`                   | `wide`   | 1280×900, local Chrome                                  | every web case — the full suite         |
+| `e2e:web`, project `narrow`                | `narrow` | 390×844, local Chrome                                   | the cases whose entry admits `narrow`   |
 
 **The axes do not multiply, and that is the design.** Width matters only to
 layout; the environment matters only to the server path; the data path —
@@ -1844,10 +1846,10 @@ full functional suite runs once per platform on the phone; a small set chosen
 per case runs on the tablet; the visual matrix, the cheapest coverage layout
 has, takes all four devices; and neither the contract nor staging is split by
 width, since a round trip through the crypto and a deployed api never see the
-window. Web is already split the other way: its functional run is wide
-(1280×900, desktop browsers), its narrow claims switch the viewport inside the
-case (`link-move.e2e.ts`, `locks.e2e.ts`), and its visual run takes both layouts
-as Playwright projects.
+window. Web is split the other way round, because its suite was written at the
+other width: the full functional run is wide (1280×900), and a chosen set runs
+again narrow (_the narrow web project_, below). Firefox and staging are not split
+by width either, and the visual run takes both layouts as Playwright projects.
 
 **A device's width is its upright width, read off the screen**
 (`runner/width.ts`): the short side against 768 — `wm size` over `wm density`
@@ -1860,12 +1862,39 @@ refuses before an account exists. The 768 is bracemark-expo's `WIDE_MIN_WIDTH`
 (`src/lib/window-class.ts`), repeated rather than imported, since e2e never
 imports an app — keep the two in step.
 
-**`widths` in `cases.json`, missing means narrow.** It is a native field only
-(`npm run check:registry` refuses it elsewhere), and a case is admitted to
-`wide` once its flows hold on a tablet and an iPad. A flow written on a phone
-can tap `links-open-navigation` or `settings-open-navigation`, which a docked
-rail does not have, or a `point:` measured on a phone's screen, and either
-fails on a tablet as a timeout naming neither cause. Admitted wide today:
+**A wide device runs in ONE orientation, and the two devices take different
+ones.** Both clear 768 upright, so a tablet in portrait is the wide layout, not a
+phone's: the rails dock and the forms are dialogs either way round. What turns
+with the device is the room inside that layout. Portrait gives the narrowest
+pane beside the rail (the iPad's 820 − 280 = 540pt: the card grid's columns, the
+bulk bar's overflow, a long name's truncation). Landscape gives the least height,
+and with the keyboard up the least of all: the tablet AVD on its side leaves
+about 250dp for a sheet (`flows/link-close-guard.yaml`), and that is where a
+dialog squeezed above the keys meets its pinned footer. The iPad simulator boots
+upright and the tablet AVD on its side (`hw.initialOrientation`,
+[app-drivers.md](./app-drivers.md), _the tablet AVD_), so the two wide legs
+cover both pressures without a second pass of either. Both pressures turned up
+on the first runs. On the tablet on its side, a locked list's pane raised the
+keyboard over the docked rail's lower half, Show All included
+(`flows/lock-list.yaml`). And height bites upright too once the keyboard is up:
+`SEARCH-002`'s last checklist row sat under the dialog's footer on the iPad
+(`flows/search-advanced.yaml`). Keep that
+split rather than run the wide suite in both orientations, which would double
+the slowest legs for layouts each device already exercises. Turning **while a
+surface is up** is a different claim, and it gets a case of its own, the way
+`WINDOW-RESIZE-ANDROID-001` crosses 768 with the add panel open. None exists
+for rotation yet; until one does, rotation is release qualification
+([expo-build.md](./expo-build.md), _devices_).
+
+**`widths` in `cases.json`: missing means the width a surface's cases were written
+at** — narrow on native, wide on web (`widthsOf`, `runner/registry.ts`). It is a
+native and web field only, and a web entry always keeps `wide`, since the desktop
+run is every web case's baseline (`npm run check:registry` refuses the rest). A
+native case is admitted to `wide` once its flows hold on a tablet and an iPad. A
+flow written on a phone can tap `links-open-navigation` or
+`settings-open-navigation`, which a docked rail does not have, or a `point:`
+measured on a phone's screen, and either fails on a tablet as a timeout naming
+neither cause. Admitted wide today:
 
 - `NATIVE-ACCOUNT-001`, `NATIVE-LINK-001` — the smoke pair, so `--suite smoke`
   means something on a tablet;
@@ -1886,12 +1915,41 @@ fails on a tablet as a timeout naming neither cause. Admitted wide today:
   recreated for an undeclared `smallestScreenSize` would lose. Its cleanup resets
   the display whatever happens. iOS has no scriptable resize; an iPad's Split
   View is release qualification ([expo-build.md](./expo-build.md), _devices_);
+- `FILTER-001`, `LOCK-LIST-001` — the docked links rail as the navigator: five
+  views and a locked list's pane chosen from it, its rows never closing a drawer
+  (`subflows/open-links-navigation.yaml`, which presses the drawer button on a
+  phone and nothing on a tablet);
+- `LINK-CLOSE-001` — the dirty guard on the two forms as dialogs, whose
+  accidental door on a tablet is the backdrop beside them, for the editor too:
+  the narrow sheet's swipe-down is disabled there
+  (`subflows/tap-sheet-backdrop.yaml` holds both widths' points);
+- `TAXONOMY-DND-002` — the touch drags in Settings → Lists, in a pane beside
+  the docked settings rail;
+- `SEARCH-002` — advanced search as a dialog, and the Settings round trip
+  through the docked settings rail;
+- `SHARE-ANDROID-001` — the share activity's centred panel on a tablet, its
+  pickers and the configuration change under it;
 - the four checkpoint cases.
+
+**Not admitted, and why: the iOS share cases.** On an iPad, Safari's share sheet
+is a popover and the extension a centred card, and **neither is in the tree
+Maestro reads**. That holds under Safari's app id, the extension's
+(`com.bracemark.app.ShareExtension`) and SpringBoard's: the hierarchy holds the
+status bar and a "dismiss popup" region, so a flow cannot press Bracemark's row
+or see `share-add` arrive (measured on the iPad (A16), iOS 26.5, 2026-10-23,
+with the extension plainly up in the screenshot). `SHARE-IOS-*` stay
+phone-only, and on `e2e:visual:ios:ipad` the checkpoints inside the extension are
+skipped and not owed (`IOS_SHARE_CHECKPOINTS`, `runner/visual-catalog.ts`). The
+iPad's share card is driven by hand ([share-sheet.md](./share-sheet.md), _On an
+iPad the sheet floats_). The same blindness is why the iPad simulator needs
+AutoFill off ([app-drivers.md](./app-drivers.md), _the iPad simulator_).
 
 **⚠ A flow branches on `E2E_WIDTH`, never on what is visible.** The runner
 passes the run's width to every Maestro invocation (`runner/native-run.ts`), the
 way it passes `E2E_BUILD_VARIANT`, and a flow that differs by width says
 `when: true: ${E2E_WIDTH !== 'wide'}` — `subflows/open-settings.yaml`,
+`subflows/open-links-navigation.yaml`, `subflows/tap-sheet-backdrop.yaml`,
+`link-close-guard.yaml`, `search-advanced.yaml`, `lock-list.yaml`,
 `parts/visual-settings.yaml`, `parts/visual-delete-all.yaml`,
 `parts/visual-list-lock.yaml`. A `when: visible` on the drawer button instead
 would race the screen it is on: right after Settings is opened the button is
@@ -1899,27 +1957,88 @@ still sliding in, the check reads false on a phone, the drawer is never opened,
 and the next tap times out — sometimes. Unset, as in a hand-run `maestro test`,
 it reads as narrow, so every phone path is the one it always was.
 
-**What is not yet known — this shape was written without a device run.** The
-selection, the preflight and the registry are covered by `npm run check:runner`;
-no wide flow has completed on a device yet. The first wide runs should expect
-these, in rough order of risk:
+**What the first wide runs found.** Measured 2026-10-23 on the iPad (A16)
+simulator, iOS 26.5, and the `bracemark-tablet` AVD, Android 16, Maestro 2.8.0,
+each leg alone: **iOS 11/11** of the cases admitted wide, over two invocations
+(`--from` after a fix), and **Android 13/13**, over four. Every red in between
+was the harness, none the app — the split every first run here has had (_state
+today_, below) — and each fix is written where it bites:
 
-- **The iOS share crossings on an iPad.** `subflows/open-system-share.yaml` and
-  `parts/visual-share-no-url.yaml` tap points measured on the iPhone's share
-  sheet (`61%,74%`, `40%,75%`); an iPad's sheet is a popover elsewhere on the
-  screen. That is `VISUAL-SHARE-001` and the last step of `VISUAL-FONT-001` on
-  `e2e:visual:ios:ipad` — measure the iPad's points and branch on `E2E_WIDTH`.
-- **The `relative-time` strip's size** — twice-and-a-bit the ⋯'s width, an
-  estimate of "Mar 2009" in `text-xs` plus the gap; widen it if a baseline shows
-  a date's edge.
-- **`assertNotVisible` on a put-away rail** (`RAIL-WIDE-001`): a closed `front`
-  drawer keeps its rows mounted off screen, and whether Maestro counts them as
-  visible decides two asserts.
-- **A fresh AVD's first Maestro run.** Measured on the tablet AVD the day it was
-  made: `DeviceServerDiedException … during 'deviceInfo'` through the runner,
-  while a bare `maestro hierarchy` on the same device worked. Another checkout's
-  session was driving Maestro on this Mac at the same time, so the cause is not
-  settled — run the wide legs with nothing else driving a device.
+- **iPadOS draws two system surfaces outside Maestro's tree:** the Save
+  Password card after a sign-in, and the share sheet with the extension in it.
+  The first is a device setting ([app-drivers.md](./app-drivers.md), _the iPad
+  simulator_); the second is why the iOS share cases are not admitted (above).
+- **A dialog squeezed above the keys hides what a phone's sheet shows.**
+  `SEARCH-002`: the last checklist row under the dialog's footer on the iPad
+  upright, so a wide run puts the keyboard away first
+  (`flows/search-advanced.yaml`). `VIEWPORT-KEYBOARD-001`: the add panel's Note
+  below the fold on the tablet on its side (`parts/keyboard-add-note.yaml`).
+  `LOCK-LIST-001`: a lock pane's keyboard over the docked rail, tablet on its
+  side (`flows/lock-list.yaml`).
+- **A point measured as a share of a phone's width.** The LogBox toast's ✕ at
+  96% of the toast is its body on the tablet, and a press there opens the
+  inspector over the app (`subflows/dismiss-logbox.yaml`) — the trap
+  [app-drivers.md](./app-drivers.md) records for the drawer scrim, met again.
+
+Two earlier unknowns are settled. `RAIL-WIDE-001`'s `assertNotVisible` on a
+put-away rail passed on both: a closed `front` drawer's off-screen rows are not
+visible to Maestro on either platform. And the tablet AVD's four invocations,
+run with nothing else driving a device, never met the `DeviceServerDiedException`
+its first day did. **Still unknown: the wide visual legs**, not yet run — so
+the `relative-time` strip's size (twice-and-a-bit the ⋯'s width, an estimate of
+"Mar 2009" in `text-xs` plus the gap) is unchecked against a wide baseline;
+widen it if one shows a date's edge.
+
+#### the narrow web project
+
+bracemark-web changes shape at `md` (768, its `MD_QUERY`), and below it five
+surfaces take another form: the links rail is a drawer behind the page title
+(`sidebar-drawer.tsx`), search is a row the topbar summons, quick-add is a bottom
+sheet, Move to (a link's and a list's) is a sheet, and the settings rail is a
+section menu in the topbar. The bulk toolbar folds Edit tags, Pin, Unpin and
+Archive into its ⋯ below a 900px pane, which every narrow window is. A case whose
+journey crosses one of them carries `"widths": ["wide", "narrow"]`, and
+`playwright.config.ts` runs it a second time in the `narrow` project at the
+visual catalog's 390×844 (`web/fixtures/layout.ts`, `WEB_VIEWPORTS`). The window is
+the worker's `layout` option, so every profile a fixture opens is that size from
+its first paint, and nothing is resized with a surface up. Admitted narrow, each
+for the fork it crosses:
+
+| case                              | the narrow shape it drives                                           |
+| --------------------------------- | -------------------------------------------------------------------- |
+| `WEB-ACCOUNT-001`, `WEB-LINK-001` | the smoke pair; quick-add as the sheet                               |
+| `LINK-CLOSE-001`                  | the sheet's guard: Escape, and a press on its overlay                |
+| `FILTER-001`, `WEB-TAXONOMY-001`  | the drawer: five views picked from it, a new list read in it         |
+| `SEARCH-001`                      | the summoned row: commit and clear                                   |
+| `SEARCH-002`                      | advanced search from the row; the section menu inside Settings       |
+| `BULK-ACTIONS-001`                | the bulk toolbar's overflow menu                                     |
+| `TAXONOMY-DND-001`                | a pointer drag at phone width; the tree in the drawer                |
+| `LOCK-LIST-001`                   | a list's Move to sheet; a locked list's pane reached from the drawer |
+
+`LINK-MOVE-001` and `LOCK-FOCUS-WEB-001` keep the narrow legs they switch to
+inside the case. Each makes a claim about the crossing itself — the link row's
+sheet beside its submenu, and focus kept in the drawer as the window narrows.
+
+**⚠ The helpers branch on the window the harness set (`isNarrow`), never on
+what is visible** — the native rule, for the native reason: the drawer's door
+exists only below `md`, and "press it if it's there" reads false while a sheet
+is still leaving. `openSidebarItem`, `moveListUnder`, `openNavigation`,
+`openSearchBox` and `openSettingsSection` take the narrow path themselves, so a
+spec states its journey once. Two things the first narrow run met, each a
+selector that was only ever right at one width: the settings topbar is a
+`header` inside `main`, so it is no `banner`; and the list's Move to sheet is named for
+the list (`Move “<name>” to`), where the link row's is plain `Move to`.
+
+**It is still not a phone.** Desktop Chromium at 390px has no touch, no visual
+viewport moving under a soft keyboard and no Safari toolbars, so the iOS Safari
+specimens in [safe-area.md](./safe-area.md) — the advanced-search footer behind
+the toolbar among them — stay a device check. The `narrow` project runs on local
+Chrome only: Firefox admission and staging are not split by width
+(_firefox_, _deployed staging and mobile Release builds_). `capacity` waits for
+both projects, so it still runs last and alone. Run the project by itself with
+`npx nx e2e-web @stxapps/e2e -- --project narrow`. Through `npm run e2e:web --`
+the flag never reaches Playwright: `nx` reads `--project` as its own, and the
+run is silently the whole suite.
 
 ### visual checkpoints
 

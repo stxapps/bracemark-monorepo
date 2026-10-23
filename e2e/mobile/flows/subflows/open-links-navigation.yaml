@@ -1,0 +1,22 @@
+# Bring the links screen's lists and tags into reach. Pulled in with `runFlow`;
+# never run directly.
+#
+# On a phone that is the drawer, behind the topbar's `links-open-navigation`. On
+# a wide window the links rail is docked beside the list (docs/safe-area.md,
+# _wide windows on native_) and that button does not exist, so the rows are
+# already there and this does nothing. A row press then navigates and leaves
+# the rail where it is (RAIL-WIDE-001), where a drawer would close — so a
+# caller asserts the destination, never that the rows went away.
+#
+# The branch is the runner's E2E_WIDTH, never a visibility check: the button
+# is still sliding in right after Settings closes, and a check would race it
+# (docs/e2e.md, _narrow and wide_). Unset, as in a hand-run `maestro test`, it
+# reads as narrow.
+appId: com.bracemark.app
+---
+- runFlow:
+    when:
+      true: ${E2E_WIDTH !== 'wide'}
+    commands:
+      - tapOn:
+          id: 'links-open-navigation'

@@ -1,5 +1,6 @@
-# Choose a user list, a tag, Show All, Archive and Trash from the drawer, and read
-# one member and one non-member in each view.
+# Choose a user list, a tag, Show All, Archive and Trash from the drawer — or,
+# on a wide window, the docked links rail — and read one member and one
+# non-member in each view.
 #
 # What only a device shows: each drawer pick becomes route params the links
 # screen re-reads against expo-sqlite (docs/search.md, _on native_ — a params hook
@@ -110,8 +111,8 @@ tags: [FILTER-001, full, online, destructive, ios, android]
     timeout: 10000
 
 # --- the user list ------------------------------------------------------------------
-- tapOn:
-    id: 'links-open-navigation'
+- runFlow:
+    file: subflows/open-links-navigation.yaml
 - tapOn:
     id: 'links-nav-list-.*'
     text: ${LIST_NAME}
@@ -121,8 +122,8 @@ tags: [FILTER-001, full, online, destructive, ios, android]
 - assertNotVisible: ".*${INBOX_URL.replace('https://', '')}.*"
 
 # --- the tag ------------------------------------------------------------------------
-- tapOn:
-    id: 'links-open-navigation'
+- runFlow:
+    file: subflows/open-links-navigation.yaml
 - tapOn:
     id: 'links-nav-tag-.*'
     text: ${TAG_NAME}
@@ -132,8 +133,8 @@ tags: [FILTER-001, full, online, destructive, ios, android]
 - assertNotVisible: ".*${INBOX_URL.replace('https://', '')}.*"
 
 # --- Show All: Archive is in it, Trash is not --------------------------------------
-- tapOn:
-    id: 'links-open-navigation'
+- runFlow:
+    file: subflows/open-links-navigation.yaml
 - tapOn:
     id: 'links-nav-all'
 - extendedWaitUntil:
@@ -143,8 +144,8 @@ tags: [FILTER-001, full, online, destructive, ios, android]
 - assertNotVisible: ".*${TRASHED_URL.replace('https://', '')}.*"
 
 # --- Archive ------------------------------------------------------------------------
-- tapOn:
-    id: 'links-open-navigation'
+- runFlow:
+    file: subflows/open-links-navigation.yaml
 - tapOn:
     id: 'links-nav-list-archive'
 - extendedWaitUntil:
@@ -153,8 +154,8 @@ tags: [FILTER-001, full, online, destructive, ios, android]
 - assertNotVisible: ".*${INBOX_URL.replace('https://', '')}.*"
 
 # --- Trash --------------------------------------------------------------------------
-- tapOn:
-    id: 'links-open-navigation'
+- runFlow:
+    file: subflows/open-links-navigation.yaml
 - tapOn:
     id: 'links-nav-list-trash'
 - extendedWaitUntil:

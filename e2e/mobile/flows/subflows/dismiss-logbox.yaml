@@ -20,6 +20,15 @@
 # opened. Specimen: FILTER-001 on Android, 2026-09-20, `add-link-url not found`
 # on the add after a row-menu action — four runs blamed the app, the panel and
 # the row before the badge. Keep both spellings in the matcher.
+#
+# ⚠ THE ✕ IS A FIXED SIZE AT THE TOAST'S RIGHT EDGE, so its share of the toast's
+# width is the window's. 96% is the Pixel 8's. On the tablet AVD the toast runs
+# 15–1905px and the ✕ 1857–1887, so 96% lands at 1829, on the toast's body — and
+# a press there OPENS the LogBox inspector over the whole app, which the
+# caller's next press then fails to find anything under (FILTER-001 on the
+# tablet, 2026-10-23: `Add link` not found, the tree a "Console Error" screen).
+# 98% lands at 1867. The branch is the runner's E2E_WIDTH (docs/e2e.md, _narrow
+# and wide_).
 appId: com.bracemark.app
 ---
 - runFlow:
@@ -27,9 +36,20 @@ appId: com.bracemark.app
       platform: Android
       visible: '(!|[0-9]+), .+'
     commands:
-      - tapOn:
-          text: '(!|[0-9]+), .+'
-          point: '96%,50%'
+      - runFlow:
+          when:
+            true: ${E2E_WIDTH !== 'wide'}
+          commands:
+            - tapOn:
+                text: '(!|[0-9]+), .+'
+                point: '96%,50%'
+      - runFlow:
+          when:
+            true: ${E2E_WIDTH === 'wide'}
+          commands:
+            - tapOn:
+                text: '(!|[0-9]+), .+'
+                point: '98%,50%'
       - extendedWaitUntil:
           notVisible: '(!|[0-9]+), .+'
           timeout: 5000

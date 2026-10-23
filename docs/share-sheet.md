@@ -336,6 +336,13 @@ parks on the keys. **Not driven**: a floating, split or hardware-keyboard-bar
 keyboard (the same Simulator limit soft-keyboard.md records); the view lifts to
 such a keyboard's top edge wherever it intersects the frame.
 
+**This card is driven by hand only, and it stays that way.** Maestro reads no
+tree from it: on the iPad simulator the system sheet's popover and the extension
+are both absent from the hierarchy under every app id, so `SHARE-IOS-*` run on
+the iPhone alone and the iPad visual leg skips the share checkpoints
+([e2e.md](./e2e.md), _narrow and wide_). A change to the floating card's
+geometry needs the hand pass above, on the iPad, both orientations.
+
 **The root must not paint, whatever its size.** Left to itself
 `ShareExtensionViewController` fills that view with `.systemBackground` and
 square corners. The sheet's four screens are not one height — compose and saved

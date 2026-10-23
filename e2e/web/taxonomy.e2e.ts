@@ -2,6 +2,7 @@ import { type Locator, type Page } from '@playwright/test';
 
 import { expect, test } from './fixtures/app';
 import { unique, unresolvableUrl } from './fixtures/data';
+import { openNavigation } from './fixtures/layout';
 import {
   addLink,
   addLinkButton,
@@ -185,9 +186,10 @@ test.describe('lists, tags and filters', () => {
       await expect(nameField(page, 'list', b)).toHaveCount(0);
       await expect(nameField(page, 'list', c)).toBeVisible();
 
-      // The links rail reads the same tree: B sits under A's disclosure.
+      // The links rail reads the same tree: B sits under A's disclosure. Narrow,
+      // the rail is the drawer, which a disclosure toggle leaves open.
       await page.goto('/links');
-      const rail = page.getByRole('complementary');
+      const rail = await openNavigation(page);
       await expect(rail.getByRole('button', { name: b, exact: true })).toBeVisible();
       // The row's own wrapper: the innermost div holding A's nav button, which
       // also holds A's disclosure toggle.

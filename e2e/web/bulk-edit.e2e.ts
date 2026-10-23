@@ -3,6 +3,7 @@ import { type Locator, type Page } from '@playwright/test';
 import { importArchive } from '../seed/steps';
 import { expect, test } from './fixtures/app';
 import { unique, unresolvableUrl } from './fixtures/data';
+import { isNarrow } from './fixtures/layout';
 import { writePagedLibrary } from './fixtures/library';
 import {
   addLink,
@@ -48,10 +49,25 @@ function toolbarButton(page: Page, name: string): Locator {
   return page.getByRole('main').getByRole('button', { name, exact: true });
 }
 
+// The actions a pane under the toolbar's COLLAPSE_WIDTH (900px) folds into its ⋯
+// (bulk-edit-toolbar.tsx). Every narrow window is under it and the desktop
+// window's pane is not, so the window decides, never the menu's visibility.
+const OVERFLOWED = new Set(['Edit tags', 'Pin', 'Unpin', 'Archive']);
+
+// Press one toolbar action, inline or from the overflow menu.
+async function pressAction(page: Page, name: string) {
+  if (isNarrow(page) && OVERFLOWED.has(name)) {
+    await toolbarButton(page, 'More actions').click();
+    await page.getByRole('menuitem', { name, exact: true }).click();
+  } else {
+    await toolbarButton(page, name).click();
+  }
+}
+
 // Run one toolbar action. Every write action ends the mode on success
 // (`runBulk` → exitBulkEdit), so the mode ending is the settled state.
 async function runAction(page: Page, name: string) {
-  await toolbarButton(page, name).click();
+  await pressAction(page, name);
   await expect(bulkToggle(page)).toHaveAttribute('aria-pressed', 'false');
 }
 
@@ -173,7 +189,7 @@ test.describe('bulk edit', () => {
       // --- Retag: the shared tag is editable, the partial one is untouched ------
       await enterBulkEdit(page);
       await select(page, [one, two]);
-      await toolbarButton(page, 'Edit tags').click();
+      await pressAction(page, 'Edit tags');
       const dialog = page.getByRole('dialog', { name: 'Edit tags' });
       await expect(dialog.getByRole('option', { name: shared, exact: true })).toHaveAttribute(
         'aria-checked',

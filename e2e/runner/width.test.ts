@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { androidShortSide, iosShortSide, widthOf, wmDensity, wmSize } from './width';
+import { expectedCaptures, IOS_SHARE_CHECKPOINTS } from './visual-catalog';
+import { androidShortSide, type E2EWidth, iosShortSide, widthOf, wmDensity, wmSize } from './width';
 
 test('the upright width decides the side of 768: phones and the iPad mini narrow, tablets wide', () => {
   // `adb shell wm size` / `wm density`, as the two AVDs print them.
@@ -32,4 +33,22 @@ test('an override is what the app is laid out in, so it wins over the physical v
   assert.equal(wmDensity(density), 320);
   assert.equal(androidShortSide(size, 'Physical density: 240\n'), 600);
   assert.throws(() => wmSize('error: no devices/emulators found'), /unreadable `wm size`/);
+});
+
+test('a wide iOS run owes no capture from inside the share extension, and nothing else is dropped', () => {
+  const ids = (platform: 'ios' | 'android', width: E2EWidth) =>
+    expectedCaptures(['VISUAL-SHARE-001', 'VISUAL-FONT-001'], platform, undefined, width).map(
+      (capture) => capture.checkpoint.id,
+    );
+  const iphone = ids('ios', 'narrow');
+  const ipad = ids('ios', 'wide');
+  for (const id of IOS_SHARE_CHECKPOINTS) {
+    assert.ok(iphone.includes(id), id);
+    assert.ok(!ipad.includes(id), id);
+    assert.ok(ids('android', 'wide').includes(id), id);
+  }
+  assert.deepEqual(
+    ipad,
+    iphone.filter((id) => !IOS_SHARE_CHECKPOINTS.has(id)),
+  );
 });

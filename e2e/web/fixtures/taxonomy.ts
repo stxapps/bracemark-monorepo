@@ -1,5 +1,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
+import { isNarrow } from './layout';
+
 // The Settings → Lists / Tags tables, driven the way a person drives them. Both
 // are the same table kit (settings/_components/table-kit.tsx): a create row, then
 // one uncontrolled rename field per entity.
@@ -72,13 +74,22 @@ export async function unlockListInSettings(page: Page, name: string, password: s
   await expect(row.getByLabel('Unlocked', { exact: true })).toBeVisible();
 }
 
-// Reparent through the row kebab's Move to submenu (the viewport this suite
-// launches is above `md`, so it is the submenu shape, not the dialog).
+// Reparent through the row kebab's Move to: a submenu when wide, and below `md`
+// an item that hands off to the Move to sheet, saying so with its ellipsis
+// (lists-section.tsx) — the shape the link row menu takes too.
 export async function moveListUnder(page: Page, child: string, parent: string) {
   await page.goto('/settings/lists');
   await settingsRow(page, 'list', child).getByRole('button', { name: 'List actions' }).click();
-  await page.getByRole('menuitem', { name: 'Move to' }).hover();
-  await page.getByRole('option', { name: parent, exact: true }).click();
+  if (isNarrow(page)) {
+    await page.getByRole('menuitem', { name: 'Move to…', exact: true }).click();
+    // Named for the list it moves, unlike the link row's sheet.
+    const sheet = page.getByRole('dialog', { name: `Move “${child}” to` });
+    await sheet.getByRole('option', { name: parent, exact: true }).click();
+    await expect(sheet).toHaveCount(0);
+  } else {
+    await page.getByRole('menuitem', { name: 'Move to' }).hover();
+    await page.getByRole('option', { name: parent, exact: true }).click();
+  }
   await expect(
     settingsRow(page, 'list', parent).getByRole('button', { name: 'Collapse' }),
   ).toBeVisible();

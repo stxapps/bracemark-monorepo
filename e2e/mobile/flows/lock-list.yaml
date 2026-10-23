@@ -46,8 +46,12 @@ tags: [LOCK-LIST-001, full, online, destructive, ios, android]
 - extendedWaitUntil:
     visible: 'Collapse'
     timeout: 10000
-- tapOn:
-    id: 'settings-open-navigation'
+- runFlow:
+    when:
+      true: ${E2E_WIDTH !== 'wide'}
+    commands:
+      - tapOn:
+          id: 'settings-open-navigation'
 - tapOn:
     id: 'settings-nav-tags'
 - runFlow:
@@ -101,8 +105,8 @@ tags: [LOCK-LIST-001, full, online, destructive, ios, android]
     id: 'settings-close'
 
 # --- browse the child: its pane, and no link ---------------------------------------------------
-- tapOn:
-    id: 'links-open-navigation'
+- runFlow:
+    file: subflows/open-links-navigation.yaml
 - tapOn:
     id: 'links-nav-list-.*'
     text: ${CHILD_LIST}
@@ -112,10 +116,25 @@ tags: [LOCK-LIST-001, full, online, destructive, ios, android]
     timeout: 10000
 - assertNotVisible: ".*${COVERED_URL.replace('https://', '')}.*"
 - takeScreenshot: child-list-locked-by-parent
+# Wide: the pane focused its password field on arrival, and on the tablet AVD
+# on its side the keyboard then covers the docked rail's lower half — Show All
+# and the tags are under the keys, and the next press finds no `links-nav-all`
+# (2026-10-23). A person puts the keyboard away first; so does this, with a tap
+# on the pane's top band, its heading above the field, which nothing handles:
+# the pane is `keyboardShouldPersistTaps="handled"` (components/lock-pane.tsx).
+- runFlow:
+    when:
+      true: ${E2E_WIDTH === 'wide'}
+    commands:
+      - tapOn:
+          id: 'list-lock-pane'
+          point: '50%,2%'
+      - waitForAnimationToEnd:
+          timeout: 5000
 
 # --- Show All, the tag, a search ---------------------------------------------------------------
-- tapOn:
-    id: 'links-open-navigation'
+- runFlow:
+    file: subflows/open-links-navigation.yaml
 - tapOn:
     id: 'links-nav-all'
 - extendedWaitUntil:
@@ -123,8 +142,8 @@ tags: [LOCK-LIST-001, full, online, destructive, ios, android]
     timeout: 10000
 - assertNotVisible: ".*${COVERED_URL.replace('https://', '')}.*"
 
-- tapOn:
-    id: 'links-open-navigation'
+- runFlow:
+    file: subflows/open-links-navigation.yaml
 - tapOn:
     id: 'links-nav-tag-.*'
     text: ${TAG_NAME}
@@ -154,8 +173,8 @@ tags: [LOCK-LIST-001, full, online, destructive, ios, android]
     id: 'links-search-clear'
 
 # --- open the covering lock from the child's pane ------------------------------------------------
-- tapOn:
-    id: 'links-open-navigation'
+- runFlow:
+    file: subflows/open-links-navigation.yaml
 - tapOn:
     id: 'links-nav-list-.*'
     text: ${CHILD_LIST}
@@ -181,8 +200,8 @@ tags: [LOCK-LIST-001, full, online, destructive, ios, android]
     timeout: 20000
 
 # The parent's lock is what opened, so the other reads have the link back too.
-- tapOn:
-    id: 'links-open-navigation'
+- runFlow:
+    file: subflows/open-links-navigation.yaml
 - tapOn:
     id: 'links-nav-all'
 - extendedWaitUntil:

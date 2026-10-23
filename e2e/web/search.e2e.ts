@@ -3,6 +3,7 @@ import { type Locator, type Page } from '@playwright/test';
 import { importArchive } from '../seed/steps';
 import { expect, test } from './fixtures/app';
 import { unique, unresolvableUrl } from './fixtures/data';
+import { openSearchBox, openSettingsSection } from './fixtures/layout';
 import { writePagedLibrary } from './fixtures/library';
 import { addLink, addLinkButton, linkRow, openSidebarItem } from './fixtures/links';
 import { grantPlusAndLoad } from './fixtures/plan';
@@ -42,8 +43,9 @@ test.describe('search', () => {
       await addLink(page, match);
       await addLink(page, miss);
 
-      await searchBox(page).fill(word);
-      await searchBox(page).press('Enter');
+      const box = await openSearchBox(page);
+      await box.fill(word);
+      await box.press('Enter');
       await expect(page).toHaveURL(/[?&]text=/);
       expect(params(page, 'text')).toEqual([word]);
       await expect(pageTitle(page, 'Search')).toBeVisible();
@@ -55,6 +57,8 @@ test.describe('search', () => {
       await page.getByRole('button', { name: 'Clear search' }).click();
       await expect(page).not.toHaveURL(/[?&]text=/);
       expect(new URL(page.url()).pathname).toBe('/links');
+      // The box stays, emptied — in the topbar, or narrow in the summoned row,
+      // which stays until the topbar's toggle or Escape closes it (topbar.tsx).
       await expect(searchBox(page)).toHaveValue('');
       await expect(pageTitle(page, 'My List')).toBeVisible();
       await expect(linkRow(page, match)).toHaveCount(1);
@@ -113,6 +117,8 @@ test.describe('search', () => {
       };
 
       // --- commit -----------------------------------------------------------------
+      // Advanced search rides in the search box's row — narrow, a summoned one.
+      await openSearchBox(page);
       await page.getByRole('button', { name: 'Advanced search' }).click();
       // The editor opens on the committed query, and bare /links IS a query — the
       // default inbox. A row cycles include → exclude → off, so My List takes two.
@@ -140,10 +146,15 @@ test.describe('search', () => {
       await expect(page).toHaveURL(committed);
       await expectResults();
 
-      // --- leave, then the settings ✕ ---------------------------------------------
+      // --- leave, change section, then the settings ✕ ----------------------------
+      // A section picked inside Settings — the rail, or narrow the topbar's
+      // section menu (fixtures/layout.ts) — is still Settings: the ✕ returns to
+      // the query the visit left from, not to the default inbox.
       await page.getByRole('button', { name: /^More options/ }).click();
       await page.getByRole('menuitem', { name: 'Settings' }).click();
       await expect(page).toHaveURL(/\/settings\//);
+      await openSettingsSection(page, 'Tags');
+      await expect(page).toHaveURL(/\/settings\/tags/);
       await page.getByRole('link', { name: 'Close settings' }).click();
       await expect(page).toHaveURL(committed);
       await expectResults();

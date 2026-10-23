@@ -1,5 +1,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
+import { isNarrow, openNavigation } from './layout';
+
 // The topbar's quick-add trigger.
 //
 // Scoped to the banner because there are TWO "Add link" buttons on an empty links
@@ -62,7 +64,21 @@ export async function chooseRowMenuItem(page: Page, url: string, item: string): 
 // are exact because namespaced fixture names can share a prefix; `aria-current`
 // is the settled state, since the rows below repaint a beat after the click.
 // Scoped to the rail's `nav`: a row's tag chips are buttons named by the tag too.
+//
+// Narrow, the rail is the drawer behind the page title (./layout.ts), and a pick
+// closes it, taking the row and its `aria-current` with it. The settled state
+// there is the drawer gone and the title naming the view — the row's name less
+// the lock badge's "Locked", which is the row's and not the title's.
 export async function openSidebarItem(page: Page, name: string): Promise<void> {
+  if (isNarrow(page)) {
+    const drawer = await openNavigation(page);
+    await drawer.getByRole('navigation').getByRole('button', { name, exact: true }).click();
+    await expect(drawer).toHaveCount(0);
+    await expect(
+      page.getByRole('heading', { level: 1, name: name.replace(/ Locked$/, ''), exact: true }),
+    ).toBeVisible();
+    return;
+  }
   const item = page.getByRole('navigation').getByRole('button', { name, exact: true });
   await item.click();
   await expect(item).toHaveAttribute('aria-current', 'true');

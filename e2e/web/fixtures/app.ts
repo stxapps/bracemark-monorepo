@@ -1,9 +1,11 @@
 import { expect, type Page, test as base } from '@playwright/test';
 
 import { profileDir } from '../../paths';
+import { type E2EWidth } from '../../runner/width';
 import { type Credentials } from './account';
 import { takeCspViolations } from './csp';
 import { launchApp, type LaunchedApp } from './launch';
+import { WEB_VIEWPORTS } from './layout';
 
 // THE fixture for every web e2e. Read the constraint before changing it.
 //
@@ -35,18 +37,26 @@ interface AppFixtures {
 }
 
 interface AppWorkerFixtures {
+  // The window this project drives (playwright.config.ts): `wide` for the
+  // desktop run, `narrow` for the cases admitted at 390×844. Every profile the
+  // fixtures open takes it from the first paint, so a surface is opened the way
+  // a person at that width opens it rather than resized while it is up.
+  layout: E2EWidth;
   app: LaunchedApp;
 }
 
 export const test = base.extend<AppFixtures, AppWorkerFixtures>({
+  layout: ['wide', { scope: 'worker', option: true }],
+
   app: [
     // The empty pattern is REQUIRED, not a style choice: Playwright reads this
     // signature to work out which fixtures the function depends on, and rejects
     // anything that isn't a destructuring pattern ("First argument must use the
     // object destructuring pattern"). `_` fails at runtime. Hence the disable.
-    // eslint-disable-next-line no-empty-pattern
-    async ({}, use, workerInfo) => {
-      const app = await launchApp(profileDir(`w${workerInfo.workerIndex}`));
+    async ({ layout }, use, workerInfo) => {
+      const app = await launchApp(profileDir(`w${workerInfo.workerIndex}`), {
+        viewport: WEB_VIEWPORTS[layout],
+      });
       await use(app);
       await app.close();
     },
@@ -72,10 +82,11 @@ export const test = base.extend<AppFixtures, AppWorkerFixtures>({
     { auto: true },
   ],
 
-  // eslint-disable-next-line no-empty-pattern
-  isolatedApp: async ({}, use, testInfo) => {
+  isolatedApp: async ({ layout }, use, testInfo) => {
     const safeId = testInfo.testId.replace(/[^a-zA-Z0-9_-]+/g, '-').slice(-80);
-    const app = await launchApp(profileDir(`isolated-w${testInfo.workerIndex}-${safeId}`));
+    const app = await launchApp(profileDir(`isolated-w${testInfo.workerIndex}-${safeId}`), {
+      viewport: WEB_VIEWPORTS[layout],
+    });
     await use(app);
     await app.close();
   },

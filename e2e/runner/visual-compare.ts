@@ -11,6 +11,7 @@ import {
   type VisualCatalog,
   type VisualPlatform,
 } from './visual-catalog';
+import { type E2EWidth } from './width';
 
 // Compare what a visual run captured with the accepted baseline, and say so in a
 // report a person reads (docs/e2e.md, _visual checkpoints_).
@@ -65,6 +66,9 @@ export async function compareVisualRun(options: {
   profile: string;
   platform: VisualPlatform;
   caseIds: string[];
+  // A native run's device width: what a wide iOS run cannot capture is not
+  // owed (visual-catalog.ts, `capturedAt`).
+  width?: E2EWidth;
   accept: boolean;
   catalog?: VisualCatalog;
 }): Promise<{ failed: boolean; results: CaptureResult[] }> {
@@ -78,7 +82,7 @@ export async function compareVisualRun(options: {
     ? (JSON.parse(await readFile(historyPath, 'utf8')) as History)
     : {};
 
-  const expected = expectedCaptures(options.caseIds, options.platform, catalog);
+  const expected = expectedCaptures(options.caseIds, options.platform, catalog, options.width);
   const results: CaptureResult[] = [];
   const rasters = new Map<string, Raster>();
 

@@ -12,6 +12,7 @@ import {
 } from './account';
 import { watchCspViolations } from './csp';
 import { WEB_URL } from './env';
+import { WEB_VIEWPORTS } from './layout';
 
 // Launching a signed-in bracemark-web, as a plain function rather than a fixture —
 // because three callers need it and only one of them is a spec: the worker fixture
@@ -88,6 +89,9 @@ export interface LaunchOptions {
   // cross-origin request, R2's included, and blocking it is how that run
   // prices the worker and sees the requests it otherwise hides.
   serviceWorkers?: 'allow' | 'block';
+  // The window the profile opens at. Omitted is the desktop window every spec
+  // was first written at; the `narrow` project passes its own (./layout.ts).
+  viewport?: { width: number; height: number };
 }
 
 export async function launchApp(
@@ -111,7 +115,7 @@ export async function launchApp(
     // The repo's type sizes are small enough that a 1x screenshot is hard to read
     // when a failure needs eyeballing.
     deviceScaleFactor: options.deviceScaleFactor ?? 2,
-    viewport: { width: 1280, height: 900 },
+    viewport: options.viewport ?? WEB_VIEWPORTS.wide,
     ...(options.serviceWorkers ? { serviceWorkers: options.serviceWorkers } : {}),
   });
 
