@@ -1,6 +1,6 @@
 // The level number a tree row shows once its indent has stopped — web-ui's
-// links/tree-level.tsx on native, which carries the reasoning: past the indent
-// ceiling (TREE_INDENT_MAX_LEVELS and its narrow twin, @stxapps/shared
+// links/tree-level-marker.tsx on native, which carries the reasoning: past the
+// indent ceiling (TREE_INDENT_MAX_LEVELS and its narrow twin, @stxapps/shared
 // sync/tree.ts) every row sits at one indent, and the number is what keeps a
 // chain below it from reading as a column of siblings. Nothing renders until
 // `depth` is past `maxLevels`.

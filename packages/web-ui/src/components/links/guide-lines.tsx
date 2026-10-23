@@ -28,14 +28,14 @@
 // At most TREE_INDENT_MAX_LEVELS_NARROW of them (@stxapps/shared sync/tree.ts):
 // at 24px a level, the four that fit beside a name in a 256px "Move to" submenu.
 // Past that a row keeps the indent of the level at it and TreeLevelMarker
-// (tree-level.tsx) numbers its level over the last slot — the group is
+// (tree-level-marker.tsx) numbers its level over the last slot — the group is
 // `self-stretch`, so the marker is the row's full height and centres its digits
 // on the name's line. The bound also caps the elements: every ListCommand row is
 // mounted (nothing is virtualized), so a line per level per row was the square
 // of a deep chain's length.
 
 import { TREE_INDENT_MAX_LEVELS_NARROW } from '@stxapps/shared';
-import { TreeLevelMarker } from '@stxapps/web-ui/components/links/tree-level';
+import { TreeLevelMarker } from '@stxapps/web-ui/components/links/tree-level-marker';
 
 export function GuideLines({ depth }: { depth: number }) {
   return (

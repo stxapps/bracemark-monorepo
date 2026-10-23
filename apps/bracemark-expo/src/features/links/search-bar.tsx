@@ -41,7 +41,7 @@ import { useEntitlements, useLists, useTags } from '@stxapps/expo-react';
 import { emptyQuery, flattenTree, type LinkQuery, TREE_INDENT_MAX_LEVELS } from '@stxapps/shared';
 
 import { FirstLineSlot } from '../../components/first-line-slot';
-import { TreeLevelMarker } from '../../components/links/tree-level';
+import { TreeLevelMarker } from '../../components/links/tree-level-marker';
 import { StickyFooter } from '../../components/sticky-footer';
 import { Button } from '../../components/ui/button';
 import {

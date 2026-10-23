@@ -20,7 +20,7 @@
 // aria-hidden like the indent it stands in for: no tree surface exposes its
 // depth to assistive tech yet, and a bare number read before every deep row's
 // name would be noise rather than structure. `bracemark-expo`'s
-// components/links/tree-level.tsx is the native twin.
+// components/links/tree-level-marker.tsx is the native twin.
 
 import { cn } from '@stxapps/web-ui/lib/utils';
 

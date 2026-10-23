@@ -184,7 +184,7 @@ list in an import (it finds by name), and as two folders with one path in a CSV.
   draws a tree indents to a ceiling and then says the level**: past
   `TREE_INDENT_MAX_LEVELS` (8) or its narrow twin `TREE_INDENT_MAX_LEVELS_NARROW`
   (4), a row keeps the indent of the level at the ceiling, and
-  `TreeLevelMarker` (`links/tree-level.tsx`, web-ui and expo) prints its level —
+  `TreeLevelMarker` (`links/tree-level-marker.tsx`, web-ui and expo) prints its level —
   `depth + 1`, the scale the import receipts count in — in the indent's last
   step, so the content does not move when it appears. Each surface keeps its
   own step and takes one of the pair by how much width its label has:

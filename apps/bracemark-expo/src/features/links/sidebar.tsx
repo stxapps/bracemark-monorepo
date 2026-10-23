@@ -60,7 +60,7 @@ import {
 } from '@stxapps/shared';
 
 import { BrandLockup } from '../../components/brand-lockup';
-import { TreeLevelMarker } from '../../components/links/tree-level';
+import { TreeLevelMarker } from '../../components/links/tree-level-marker';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';

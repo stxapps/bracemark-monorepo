@@ -26,7 +26,7 @@ import Link from 'next/link';
 
 import { flattenTree, TREE_INDENT_MAX_LEVELS } from '@stxapps/shared';
 import { emptyQuery, type LinkQuery, useEntitlements, useLists, useTags } from '@stxapps/web-react';
-import { TreeLevelMarker } from '@stxapps/web-ui/components/links/tree-level';
+import { TreeLevelMarker } from '@stxapps/web-ui/components/links/tree-level-marker';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
 import { Field, FieldLabel } from '@stxapps/web-ui/components/ui/field';

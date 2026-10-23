@@ -97,7 +97,7 @@ import {
   writeSidebarCollapsedIds,
 } from '@stxapps/web-react';
 import { BrandLockup } from '@stxapps/web-ui/components/brand-lockup';
-import { TreeLevelMarker } from '@stxapps/web-ui/components/links/tree-level';
+import { TreeLevelMarker } from '@stxapps/web-ui/components/links/tree-level-marker';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Input } from '@stxapps/web-ui/components/ui/input';
 import { cn } from '@stxapps/web-ui/lib/utils';
@@ -272,7 +272,7 @@ function NavItem({
           : undefined
       }
     >
-      {/* Past the indent ceiling the row says its level instead (tree-level.tsx). */}
+      {/* Past the indent ceiling the row says its level instead (tree-level-marker.tsx). */}
       <TreeLevelMarker depth={depth} maxLevels={TREE_INDENT_MAX_LEVELS_NARROW} />
       {onToggle ? (
         <button

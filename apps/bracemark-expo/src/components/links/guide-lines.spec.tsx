@@ -15,7 +15,7 @@ import { GuideLines } from './guide-lines';
 //
 // And the lines are WIDTH: at 24 a level, more than four left a picker row's
 // name nothing (@stxapps/shared sync/tree.ts, TREE_INDENT_MAX_LEVELS_NARROW).
-// Past them the row numbers its level instead (tree-level.tsx).
+// Past them the row numbers its level instead (tree-level-marker.tsx).
 
 const LEVELS = TREE_INDENT_MAX_LEVELS_NARROW;
 

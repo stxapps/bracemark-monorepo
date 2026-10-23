@@ -37,18 +37,18 @@
 // AT MOST `TREE_INDENT_MAX_LEVELS_NARROW` LINES, whatever `depth` says — the
 // four that leave a name room at 24 a level (@stxapps/shared sync/tree.ts).
 // Past that a row keeps the indent of the level at it and TreeLevelMarker
-// (tree-level.tsx, a leaf the share bundle may reach too) numbers its level
-// over the last slot, the full row height like the lines. The bound also caps
-// the views: both pickers mount every row in a ScrollView, so a view per level
-// per row is the square of a deep `parentId` chain's length — and how deep a
-// chain is gets decided by a restored backup or another device, not here.
+// (tree-level-marker.tsx, a leaf the share bundle may reach too) numbers its
+// level over the last slot, the full row height like the lines. The bound also
+// caps the views: both pickers mount every row in a ScrollView, so a view per
+// level per row is the square of a deep `parentId` chain's length — and how
+// deep a chain is gets decided by a restored backup or another device, not here.
 // web-ui's links/guide-lines.tsx carries the same bound.
 
 import { View } from 'react-native';
 
 import { TREE_INDENT_MAX_LEVELS_NARROW } from '@stxapps/shared';
 
-import { TreeLevelMarker } from './tree-level';
+import { TreeLevelMarker } from './tree-level-marker';
 
 export function GuideLines({ depth }: { depth: number }) {
   return (

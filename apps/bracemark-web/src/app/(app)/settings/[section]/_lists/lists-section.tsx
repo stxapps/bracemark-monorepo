@@ -85,7 +85,7 @@ import {
 } from '@stxapps/web-react';
 import { ListCommand } from '@stxapps/web-ui/components/links/list-command';
 import { MoveToSurface } from '@stxapps/web-ui/components/links/move-to-surface';
-import { TreeLevelMarker } from '@stxapps/web-ui/components/links/tree-level';
+import { TreeLevelMarker } from '@stxapps/web-ui/components/links/tree-level-marker';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
   DropdownMenu,

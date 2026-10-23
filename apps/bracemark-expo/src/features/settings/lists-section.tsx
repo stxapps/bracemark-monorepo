@@ -70,7 +70,7 @@ import {
 } from '@stxapps/shared';
 
 import { ListCommand } from '../../components/links/list-command';
-import { TreeLevelMarker } from '../../components/links/tree-level';
+import { TreeLevelMarker } from '../../components/links/tree-level-marker';
 import { LockPasswordDialog } from '../../components/lock-password-dialog';
 import { Button } from '../../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
