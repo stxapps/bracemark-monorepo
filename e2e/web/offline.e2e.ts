@@ -13,15 +13,16 @@ import {
   linkRow,
   openSidebarItem,
 } from './fixtures/links';
-import { syncAndWait } from './fixtures/sync';
+import { countPendingOps, syncAndWait } from './fixtures/sync';
 
 // Local-first with the network gone, on a page that stays open: the library is
 // read from IndexedDB, a new link and an edit are written there and queued, and
-// the queue drains once the network is back — to a SECOND profile, since seeing
-// a local write on the writer is not a sync claim. The engine's queue and
-// reconcile are unit-tested; what only a browser shows is that the mounted app
-// keeps working through `fetch` failing underneath it, says so, and recovers
-// without a reload (docs/local-first-sync.md, _the three flows_).
+// the queue drains by itself once the network is back — to a SECOND profile,
+// since seeing a local write on the writer is not a sync claim. The engine's
+// queue and reconcile are unit-tested; what only a browser shows is that the
+// mounted app keeps working through `fetch` failing underneath it, says so, and
+// recovers without a reload or a press (docs/local-first-sync.md, _the three
+// flows_).
 //
 // `context.setOffline` cuts the browser off at the network layer — every fetch
 // fails as it would with the Wi-Fi off. The dev server has no service worker, so
@@ -76,8 +77,19 @@ test.describe('offline', () => {
         await context.setOffline(false);
       }
 
-      // --- reconnect: the user's retry drains the queue ---------------------------------
-      await syncAndWait(page);
+      // --- reconnect: the queue drains with nobody pressing anything ------------------
+      // The failed cycle left a retry scheduled, and coming back online starts it
+      // at once (docs/local-first-sync.md, _retrying a failure_, L3). Nothing else
+      // runs a cycle on a mounted page that nobody touches, so a queue that drains
+      // here drained by that retry; before it, it waited for a press of Sync.
+      // The queue is the claim, not the label: the ⋯ button reads plain "More
+      // options" while a cycle is still running, too.
+      await expect
+        .poll(() => countPendingOps(page), {
+          message: 'the queue did not drain on its own after reconnecting',
+          timeout: 60_000,
+        })
+        .toBe(0);
       await expect(page.getByRole('button', { name: 'More options', exact: true })).toBeVisible();
 
       const reader = await launchApp(profileDir(`offline-reader-w${testInfo.workerIndex}`), {

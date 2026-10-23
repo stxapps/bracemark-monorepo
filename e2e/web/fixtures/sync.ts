@@ -30,3 +30,25 @@ export async function syncAndWait(page: Page, timeoutMs = 60_000): Promise<void>
 
   await page.keyboard.press('Escape');
 }
+
+// How many edits are waiting to push — the `pendingOps` table alone, read
+// straight off the store by its schema names (web-react data/db.ts).
+export async function countPendingOps(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      new Promise<number>((resolve, reject) => {
+        const open = indexedDB.open('bracemark-data');
+        open.onerror = () => reject(open.error ?? new Error('indexedDB.open failed'));
+        open.onsuccess = () => {
+          const db = open.result;
+          const tx = db.transaction('pendingOps', 'readonly');
+          const count = tx.objectStore('pendingOps').count();
+          tx.oncomplete = () => {
+            db.close();
+            resolve(count.result);
+          };
+          tx.onerror = () => reject(tx.error ?? new Error('count transaction failed'));
+        };
+      }),
+  );
+}

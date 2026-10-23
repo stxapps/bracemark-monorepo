@@ -531,8 +531,8 @@ case already carries `online`) and are `full`, so they never block a smoke run;
 ### Offline and reconnect
 
 - [x] `OFFLINE-WEB-001` While the page remains open, go offline, read cached data,
-      create/edit a link, reconnect, sync, and prove another profile receives the
-      queued write.
+      create/edit a link, reconnect, and prove the queue drains with no press and
+      another profile receives the queued write.
 - [x] `OFFLINE-IOS-001` Repeat local read/write/reconnect on iOS.
 - [x] `OFFLINE-ANDROID-001` Repeat local read/write/reconnect on Android.
 - [x] `PWA-001` Add a separate production-build PWA target; install/register the

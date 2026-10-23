@@ -1,4 +1,6 @@
-import { type BrowserContext, type Locator, type Page } from '@playwright/test';
+import { type BrowserContext, type Locator, type Page, type Request } from '@playwright/test';
+
+import { BLOB_PATH, INITIAL_SYNC_RETRY_DELAYS_MS, SYNC_RETRY_JITTER } from '@stxapps/shared';
 
 import { profileDir } from '../paths';
 import { importArchive, waitForSync } from '../seed/steps';
@@ -202,26 +204,58 @@ function pagedListing(pageSize: number) {
 // connection the case is about, and it is the second thing these cases change on
 // the wire (the first is the listing's page size, above).
 //
-// A blob is recognised by its key, which ends `.enc` wherever the stack serves it
-// from: the api's dev proxy here, a presigned R2 URL anywhere else.
+// `cut()` counts the downloads refused. The case asserts it is not zero, so a read
+// this matcher does not recognise fails there, by name, rather than as a gate that
+// never offers Try again.
 function brokenDownloads(survivor: string) {
   let broken = true;
+  let cut = 0;
   return {
     heal(): void {
       broken = false;
     },
+    cut: (): number => cut,
     async prepare(context: BrowserContext): Promise<void> {
-      await context.route(
-        (url) => url.pathname.endsWith('.enc'),
-        async (route) => {
-          const { pathname } = new URL(route.request().url());
-          const spared = route.request().method() !== 'GET' || pathname.endsWith(`/${survivor}`);
-          if (broken && !spared) await route.abort('connectionreset');
-          else await route.fallback();
-        },
-      );
+      await context.route('**/*', async (route) => {
+        const read = blobReadOf(route.request());
+        const spared = read === survivor || read?.endsWith(`/${survivor}`);
+        if (broken && read !== undefined && !spared) {
+          cut += 1;
+          await route.abort('connectionreset');
+        } else {
+          await route.fallback();
+        }
+      });
     },
   };
+}
+
+// What a request reads a blob at — its path, or a url path ending in it — or
+// undefined when it is anything else, an upload included. A read takes one of
+// two shapes, by what `files/sign` answered:
+//   - the api's blob route (BLOB_PATH, docs/api-contracts.md): ONE url for every
+//     read, so the path is in the token — a POST whose text body is
+//     `Blob v1.<payload>.<mac>` (web's read; a GET carries it as Authorization),
+//     the payload base64url JSON whose `p` is the path and `m` the grant;
+//   - a presigned R2 url, or the api's dev proxy: a GET of the key, which ends in
+//     the path.
+// Matching only the second shape is how this case once broke nothing at all: the
+// first sync went through, and the gate never offered Try again.
+function blobReadOf(request: Request): string | undefined {
+  const { pathname } = new URL(request.url());
+  if (pathname.endsWith(BLOB_PATH)) {
+    const credential =
+      request.method() === 'POST' ? request.postData() : request.headers()['authorization'];
+    const payload = credential?.split(' ')[1]?.split('.')[1];
+    if (!payload) return undefined;
+    const grant = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
+      p?: string;
+      m?: string;
+    };
+    return grant.m === 'GET' ? grant.p : undefined;
+  }
+  if (request.method() !== 'GET' || !pathname.endsWith('.enc')) return undefined;
+  return pathname;
 }
 
 // Whether this profile's local store holds a record at `path` — read straight off
@@ -403,8 +437,8 @@ test.describe('sync between clients in use at once', () => {
     'a first sync cut short and tried again drops a link another device deleted in between',
     { tag: ['@SYNC-RETRY-001', '@full', '@online'] },
     async ({ isolatedApp: writer }, testInfo) => {
-      // Two Argon2id ceremonies.
-      test.setTimeout(3 * 60 * 1000);
+      // Two Argon2id ceremonies, and the gate's own retries sat out in full.
+      test.setTimeout(4 * 60 * 1000);
       const { page } = writer;
       await page.goto('/links');
       const doomed = unresolvableUrl(unique('retry-doomed'));
@@ -420,8 +454,26 @@ test.describe('sync between clients in use at once', () => {
         prepare: downloads.prepare,
       });
       try {
+        // The instrument first: the first sync's downloads are being cut.
+        await expect
+          .poll(downloads.cut, {
+            message: 'no blob read matched brokenDownloads — has the read changed shape?',
+            timeout: 30_000,
+          })
+          .toBeGreaterThan(0);
+        // The gate retries a dropped connection on its own first, behind its
+        // "Retrying…" line, and offers Try again only once that schedule is spent
+        // (@stxapps/shared runInitialSyncWithRetries). Every one of those attempts
+        // meets the same broken downloads, so the button comes after the longest
+        // the schedule can jitter to, plus four attempts' own in-place retries.
+        await expect(reader.page.getByRole('status').filter({ hasText: 'Retrying…' })).toBeVisible({
+          timeout: 60_000,
+        });
+        const schedule = INITIAL_SYNC_RETRY_DELAYS_MS.reduce((sum, ms) => sum + ms, 0);
         const tryAgain = reader.page.getByRole('button', { name: 'Try again' });
-        await expect(tryAgain).toBeVisible({ timeout: 60_000 });
+        await expect(tryAgain).toBeVisible({
+          timeout: schedule * (1 + SYNC_RETRY_JITTER) + 60_000,
+        });
         // The premise, checked rather than assumed: the interrupted attempt left
         // that link in the store. Without it the case below would pass on any
         // engine, having tested a retry over an empty store.

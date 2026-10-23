@@ -1389,6 +1389,22 @@ things about using it:
   way six thousand do — a legal answer, since the api may return fewer than it
   was asked for. `SYNC-RETRY-001` fails blob downloads, which is the dropped
   connection it is about. No clock is mocked and no response body is edited.
+- **`SYNC-RETRY-001` must recognise a blob read in every shape the stack sends
+  one.** Through the api's blob route a read has no key in its URL: every read
+  is the same POST to `BLOB_PATH`, and the path is in the token in its body
+  ([api-contracts.md](./api-contracts.md)). Only a presigned R2 URL or the dev
+  proxy has a URL ending in `.enc`. When the route arrived, the case matched only
+  `.enc` and let every POST through as an upload. So it broke nothing, the
+  first sync went through, and the case waited for a Try again that never came.
+  It reads the token's payload for that reason, and a new read shape needs
+  adding there. This case is in `web`, so its failure also skips the dependent
+  `capacity` project.
+- **`SYNC-RETRY-001` then sits out the gate's own retries, about a minute of
+  them.** A dropped connection is transient, so the gate retries it behind
+  "Retrying…" on `INITIAL_SYNC_RETRY_DELAYS_MS` before it offers Try again
+  ([local-first-sync.md](./local-first-sync.md), _retrying a failure_), and every
+  one of those attempts meets the same broken downloads. The case waits for the
+  line and then the button, with a deadline derived from that schedule.
 - **The library is built through the app, never from the paged-library
   fixture.** That fixture's ids all sort after any random id, so a link saved
   during a listing could never land BEHIND it and the case would pass on the
@@ -1539,6 +1555,18 @@ route's RSC payload and falls back to a full document load when it cannot. The
 links page's view changes now go through the History API
 ([search.md](./search.md), _two writers, not a mirror_); the same click
 before the fix fails the case at its first view change.
+
+**`OFFLINE-WEB-001` reconnects without a press.** Once the network is back it
+touches nothing and waits for `pendingOps` to empty. The retry the failed
+cycle scheduled, started at once by `online`, is the only thing that can empty
+it ([local-first-sync.md](./local-first-sync.md), _retrying a failure_, L3). It
+used to press Sync there, which drained the queue by hand and could not see
+that layer. It reads the queue, not the ⋯ button: the button reads plain "More
+options" while a cycle is still running, too. Measured 2026-10-23 against the
+provider with `retries.watch(cycle)` removed in the running dev server: the
+case failed with "the queue did not drain on its own" (received 2). In the
+same run, `SYNC-RETRY-001` without the first sync's local-only drop failed on
+the deleted link (`toHaveCount(0)`, received 1).
 
 **The server gone** (`OFFLINE-EXPORT-WEB-001`, `OFFLINE-API-ERROR-WEB-001`,
 `SESSION-INVALID-WEB-001`, `PWA-003`, and the native four below). The question

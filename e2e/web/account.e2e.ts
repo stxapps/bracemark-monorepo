@@ -8,7 +8,7 @@ import { unique, unresolvableUrl } from './fixtures/data';
 import { API_URL, SITE_URL } from './fixtures/env';
 import { launchApp } from './fixtures/launch';
 import { addLink, addLinkButton, linkRow } from './fixtures/links';
-import { syncAndWait } from './fixtures/sync';
+import { countPendingOps, syncAndWait } from './fixtures/sync';
 
 // Both ways out of a session land on the marketing site's origin by a cross-origin
 // `location.replace`. See the sign-out spec below for why it is stubbed.
@@ -766,27 +766,6 @@ function pausedNotice(page: Page) {
   // Modal dialogs hide the underlying status from accessibility queries. Its
   // disappearance must mean resume landed, even while sign-out covers the page.
   return page.getByRole('status', { includeHidden: true }).filter({ hasText: 'Sync is paused' });
-}
-
-// How many edits are waiting to push — the `pendingOps` table alone.
-async function countPendingOps(page: Page): Promise<number> {
-  return page.evaluate(
-    () =>
-      new Promise<number>((resolve, reject) => {
-        const open = indexedDB.open('bracemark-data');
-        open.onerror = () => reject(open.error ?? new Error('indexedDB.open failed'));
-        open.onsuccess = () => {
-          const db = open.result;
-          const tx = db.transaction('pendingOps', 'readonly');
-          const count = tx.objectStore('pendingOps').count();
-          tx.oncomplete = () => {
-            db.close();
-            resolve(count.result);
-          };
-          tx.onerror = () => reject(tx.error ?? new Error('count transaction failed'));
-        };
-      }),
-  );
 }
 
 // Replace the bearer token in this profile's session record — what a purged row
