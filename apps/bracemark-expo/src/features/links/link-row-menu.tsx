@@ -12,10 +12,10 @@
 // from web:
 //
 //  - Copy link goes through expo-clipboard (web's navigator.clipboard).
-//  - Edit / Edit tags / Edit note PUSH the modal edit-link route (web opens
-//    the page-level hoisted dialog instead — hoisted there because virtualized
-//    rows repaint under an open dialog; a pushed screen isn't row-anchored, so
-//    no `editing` view state exists here). The `focus` param is web's
+//  - Edit / Edit tags / Edit note open LinkEditHost's sheet (link-edit-panel.tsx),
+//    hoisted out of the row for web's reason — virtualized rows repaint under
+//    an open editor — but with no `editing` view state: the draft is a
+//    snapshot, so nothing beneath it needs holding still. The `focus` is web's
 //    LinkEditRequest focus: 'note' SCROLLS the note into view instead of
 //    focusing it — reading one is still what most opens are for (the
 //    fixed-height rows can only badge it), and a native focus would summon the

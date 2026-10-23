@@ -2869,8 +2869,9 @@ why is `docs/brand-assets.md`, _the generated pictures_.
 `apps/bracemark-site/src/content/figures.ts`, shown on `/docs/search` — and it is
 the one framed scene: the Advanced search panel, 320 CSS px wide, at DPR 3 so a
 figure drawn at the panel's own width has a 960px file for a DPR-3 phone. Its
-viewport height is room rather than design. The panel is capped at `70vh` and
-scrolls inside that cap, so a viewport too short for it does not fail and does
+viewport height is room rather than design. The panel is capped at `70dvh` (or
+the room below its trigger, if less — [safe-area.md](./safe-area.md), _popups &
+dialogs_) and scrolls inside that cap, so a viewport too short for it does not fail and does
 not look wrong: it photographs with Clear and Search pinned under a checklist
 that is cut off. The scene's `settle` measures both scroll boxes and fails the
 run instead. The draft in the picture is built through the real controls and

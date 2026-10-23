@@ -191,6 +191,16 @@ export function SheetCovered({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Whether a sheet is open over the links section — for the covered content's
+ * own Android back handlers, which must stand down while one is (the Sheet's
+ * back note: a handler that re-registers while a sheet is open jumps ahead of
+ * the sheet's).
+ */
+export function useSheetOpen(): boolean {
+  return useContext(SheetHostContext)?.covered ?? false;
+}
+
 export function Sheet({
   title,
   description,
@@ -262,6 +272,13 @@ export function Sheet({
   // (AppLockGate); BackHandler is app-global, so an ungated handler took the back
   // press meant for that screen — topbar.tsx's SEARCH-002 trap. Off-duty it
   // returns false, so the press falls through to whoever owns it.
+  //
+  // Registering once only holds the order if nothing BELOW re-registers while
+  // the sheet is up, and topbar.tsx's search handler does, on regaining focus:
+  // back from Subscription with Advanced Search still open, it landed on top
+  // and the first back press closed the search row under the sheet. So the
+  // covered content's handlers stand down while a sheet is open
+  // (`useSheetOpen`) rather than racing it.
   const focused = useIsFocused();
   const covered = useAppCovered();
   const backRef = useRef({ onDismiss, live: focused && !covered });

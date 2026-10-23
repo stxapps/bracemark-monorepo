@@ -67,8 +67,9 @@ function DialogCloseButton({ onClose }: { onClose?: () => void }) {
 // caller's UNGUARDED close directly, the way its Cancel does: a deliberate door,
 // not an accidental vector. Escape and the backdrop keep going through
 // `onOpenChange`, which is the whole point — those are the strays. The same
-// division link-add-surface's sheet and bracemark-expo's link-edit-screen draw
-// by hand. `showCloseButton={false}` still drops the button entirely.
+// division link-add-surface's sheet draws by hand, and bracemark-expo's in-app
+// sheet (components/ui/sheet.tsx) as two props, `onClose` and `onDismiss`.
+// `showCloseButton={false}` still drops the button entirely.
 function DialogContent({
   className,
   children,

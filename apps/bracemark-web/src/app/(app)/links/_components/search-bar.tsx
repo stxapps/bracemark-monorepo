@@ -410,9 +410,19 @@ function AdvancedSearch() {
           )}
         </Button>
       </PopoverTrigger>
+      {/* The cap is the SMALLER of 70dvh and the room Radix measured below
+          the trigger, never a bare viewport unit. PopoverContent's own
+          `max-h-(--radix-popover-content-available-height)` is what keeps the
+          Clear/Search row on screen, and tailwind-merge drops it for any
+          `max-h-*` passed here — so the `max-h-[70vh]` this carried replaced
+          it outright. On iPhone Safari `vh` is the LARGE viewport (toolbars
+          retracted), the links frame is `h-dvh` and never scrolls them away,
+          and the summoned search row puts the trigger ~100px down: 70vh from
+          there ran past the bottom toolbar, and the pinned footer sat behind
+          it. */}
       <PopoverContent
         align="end"
-        className="max-h-[70vh] w-80 overflow-y-auto"
+        className="max-h-[min(70dvh,var(--radix-popover-content-available-height))] w-80 overflow-y-auto"
         // Belt-and-suspenders with the onOpenChange guard: the modal paywall's
         // focus grab must not dismiss the popover underneath it.
         onInteractOutside={(e) => gated && e.preventDefault()}
@@ -425,7 +435,7 @@ function AdvancedSearch() {
             is what dissolves the grouping when the labels are only 12px to begin
             with. 14px against `Field`'s internal `gap-1` gives a 1:3.5 ratio, and
             being a half-step down from the form still pays for itself in a panel
-            that's `max-h-[70vh]` with ten children stacked in it. */}
+            capped at 70dvh with ten children stacked in it. */}
         <div className="flex min-h-0 flex-col gap-3.5">
           {/* The app's ONE panel-title style, the same string SheetTitle and
               DialogTitle carry (sheet.tsx, dialog.tsx). This popover is a titled
@@ -440,8 +450,10 @@ function AdvancedSearch() {
               Search used to sit at the end of the scroll, under the Lists and
               Tags checklists — the longest part of the panel — so committing a
               query meant scrolling back down past them. bracemark-expo's sheet
-              pins the same row (components/sticky-footer.tsx), and the link
-              edit dialog has always drawn its footer this way.
+              pins the same row (components/ui/sheet.tsx's `footer`), and the
+              link edit dialog has always drawn its footer this way. Pinned only
+              while the panel's cap is the room actually on screen — the note on
+              PopoverContent above.
 
               `-mx-4 px-4` runs the scroll box out to PopoverContent's edge and
               pads back, so the clip lands where the panel's did and the

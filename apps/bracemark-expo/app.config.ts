@@ -125,7 +125,7 @@ const config: ExpoConfig = {
       },
     ],
     [
-      // The app only ever calls launchImageLibraryAsync (link-edit-screen.tsx),
+      // The app only ever calls launchImageLibraryAsync (link-edit-panel.tsx),
       // so camera/microphone are declined explicitly. Left undefined, the plugin
       // writes DEFAULT NSCameraUsageDescription + NSMicrophoneUsageDescription
       // strings and adds android.permission.RECORD_AUDIO; `false` deletes those

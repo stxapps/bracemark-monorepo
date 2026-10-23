@@ -626,6 +626,18 @@ keyboard docked to the bottom of the window ([soft-keyboard.md](./soft-keyboard.
    on a dynamic-island device — and in landscape, where the side inset is 44–59px
    in Safari either way.
 
+   ⚠ **The padding only works through the content's `max-h`, and a caller's
+   `max-h-*` REPLACES it.** Each of those contents carries
+   `max-h-(--radix-…-content-available-height)`, and tailwind-merge drops it for
+   any `max-h-*` in the caller's `className` — so a caller that wants a tighter
+   cap has to keep the variable inside it:
+   `max-h-[min(70dvh,var(--radix-popover-content-available-height))]`, never a
+   bare viewport unit. Advanced Search's popover (`links/_components/search-bar.tsx`)
+   said `max-h-[70vh]`, and on iPhone Safari — where `vh` is the LARGE viewport,
+   toolbars retracted — it ran ~70vh down from a trigger in the summoned search
+   row and pinned its Clear/Search footer behind Safari's bottom toolbar. No
+   error, no failing test; only an iPhone shows it.
+
 2. **Hand-roll only when Radix can't express the UI** (custom anchored panel,
    coordinate-driven menu). Size against `visualViewport` (keyboard/pinch-zoom
    aware) minus insets:
