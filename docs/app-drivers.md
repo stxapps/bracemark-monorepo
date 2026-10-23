@@ -110,15 +110,20 @@ android.intent.action.SEND` for share intents, `adb logcat` — and crucially
 friendliest of the three surfaces. The Play Store image cannot `adb root`, so
 pull the plain `google_apis` variant if that ever matters.
 
-#### the AVD
+#### the AVDs
 
-One emulator, `bracemark-pixel8` — a **Pixel 8** (1080×2400, 420 dpi) on the
-`android-36.1` `google_apis_playstore` arm64-v8a image. Phone only; there is no
-tablet AVD until something needs one.
+Two emulators on one system image — the `android-36.1` `google_apis_playstore`
+arm64-v8a:
+
+| AVD                | device                                         | window, in dp                              | role                                                                       |
+| ------------------ | ---------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------- |
+| `bracemark-pixel8` | **Pixel 8** (1080×2400, 420 dpi)               | 411 × 914 — phone layout upright           | the canonical phone; every e2e run, every shot                             |
+| `bracemark-tablet` | **Pixel Tablet** profile at 1920×1200, 240 dpi | 1280 × 800, sw800 — docked rails both ways | the wide window ([safe-area.md](./safe-area.md), _wide windows on native_) |
 
 The image choice is **disk, not preference**: that one was already downloaded
 (2.3 GB), and any other API level or variant is a fresh 1.5–2.5 GB. `minSdkVersion`
-is 33, so 36.1 is comfortably in range.
+is 33, so 36.1 is comfortably in range. Both AVDs read it in place, so the
+second one cost no download.
 
 Created with `avdmanager`, which needed `cmdline-tools` — the SDK here shipped
 with `emulator` and `platform-tools` only, so it was bootstrapped from Google's
@@ -140,7 +145,7 @@ four for disk and two the defaults get wrong for e2e:
 
 | key                         | default → set    | why                                                        |
 | --------------------------- | ---------------- | ---------------------------------------------------------- |
-| `disk.dataPartition.size`   | `10G` → `4G`     | the qcow2 grows into this cap                              |
+| `disk.dataPartition.size`   | `10G` → `6G`     | the qcow2 grows into this cap                              |
 | `hw.sdCard` / `sdcard.size` | `yes`/512M → off | nothing here uses one                                      |
 | `fastboot.forceColdBoot`    | `no` → `yes`     | a boot snapshot is ~RAM-sized, ~2 GB                       |
 | `firstboot.*Snapshot`       | `yes` → `no`     | ditto, plus avoids a snapshot download                     |
@@ -155,9 +160,57 @@ Disk is **~2.4 GB** in `~/.android/avd`, essentially all of it
 reads 1.0 GB the moment boot completes and settles at 2.3 GB after the first
 clean shutdown. Measure after a full boot/shutdown cycle or you will record less
 than half the real cost. The cap is `disk.dataPartition.size` above, so it grows
-toward 4 GB as the app writes and never past it. The cold-boot settings do hold
+toward 6 GB as the app writes and never past it (it stood at 4.2 GB on
+2026-10-23, after two months of dev builds). The cold-boot settings do hold
 — the shutdown log says `Snapshots have been disabled by the user, save request
 is ignored`, which is the ~2 GB that is _not_ on disk.
+
+#### ⚠ the tablet AVD
+
+`bracemark-tablet` was made the same way, from the `pixel_tablet` profile, with
+the same six edits plus four of its own:
+
+| key                     | default → set            | why                                                                                                                            |
+| ----------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `hw.lcd.width`/`height` | 2560×1600 → 1920×1200    | the same 1280 × 800 dp window for 56% of the pixels: smaller frames, smaller captures                                          |
+| `hw.lcd.density`        | 320 → 240                | keeps the dp; hdpi is a density neither the phone nor the simulators run, so its rounding (a 1.5× hairline) gets run somewhere |
+| `hw.initialOrientation` | `portrait` → `landscape` | a tablet's natural orientation; it boots the way it is mostly held                                                             |
+| `showDeviceFrame`       | `yes` → `no`             | no skin is installed for it                                                                                                    |
+
+**Why 1280 × 800 dp.** It is the Android tablet: the Pixel Tablet and most other
+10–11" tablets are sw800dp. Both orientations
+clear 768, so the rails dock upright and on its side, and the side that does
+NOT is reached on the same AVD: split-screen in landscape hands the app roughly
+half of 1280, below 768 (not yet measured), and a freeform window narrower still. A 7" (sw600) tablet
+would only re-run the phone layout upright. A foldable is a separate AVD
+(`pixel_9_pro_fold`), made when the fold itself needs running.
+
+**RAM 2 GB, 4 cores** — the phone's, so a timing measured on one carries to the
+other. Measured on the home screen 30 s after a cold boot: 830 MB available in
+the guest, the host process at ~4 GB RSS. Cold boot 32 s the first time, 15 s
+after. Disk **2.0 GB** after a full boot/shutdown cycle, read the way the phone's
+is read above.
+
+**⚠ It boots with no software keyboard.** `hw.keyboard = yes` (the phone table,
+for Maestro's `inputText`) reads as a physical keyboard, and on the tablet,
+unlike the phone, Gboard then hides itself: a focused field shows a caret and no
+keys, `mInputShown=false`, and nothing fails — the same trap as the iOS
+Simulator's hardware keyboard (_the software keyboard_, below). The fix is
+Android's _Show on-screen keyboard while a physical keyboard is active_, set once
+on the device:
+
+```sh
+adb -s <serial> shell settings put secure show_ime_with_hard_keyboard 1
+```
+
+It lives in userdata, so it survives cold boots and is lost to `-wipe-data` or
+re-creating the AVD. Check with `settings get secure show_ime_with_hard_keyboard`
+(should read `1`).
+
+**With both AVDs up, every `adb` call needs `-s <serial>`** (`adb devices`); the
+e2e runner refuses to guess and asks for `--device`. The visual run refuses the
+tablet outright: `e2e/shot/mobile.ts` accepts only the Pixel 8's 1080×2400, and
+the matrix has no tablet profile yet ([e2e.md](./e2e.md), _visual checkpoints_).
 
 #### ⚠ the software keyboard
 

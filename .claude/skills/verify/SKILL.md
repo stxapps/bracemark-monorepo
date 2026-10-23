@@ -368,8 +368,8 @@ No driver, no session, nothing to install. `adb`/`emulator` are on PATH via
 `.zshenv`, with `ANDROID_HOME=~/Library/Android/sdk`.
 
 ```sh
-$ANDROID_HOME/emulator/emulator -avd bracemark-pixel8 -no-audio -no-boot-anim &
-adb wait-for-device                          # ~32 s cold; the only AVD, a Pixel 8
+$ANDROID_HOME/emulator/emulator -avd bracemark-pixel8 -no-audio -no-boot-anim &   # or bracemark-tablet
+adb wait-for-device                          # ~32 s cold; both up → adb -s <serial>, docs/app-drivers.md
 adb exec-out screencap -p > shot.png         # capture
 adb shell uiautomator dump                   # bounds only — see Gotchas, not state
 adb shell cat /sdcard/window_dump.xml \
