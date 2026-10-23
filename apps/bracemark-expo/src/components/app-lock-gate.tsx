@@ -39,19 +39,19 @@ const StyledSafeAreaView = withUniwind(SafeAreaView);
 // app opens is (docs/locks.md, _overlays over a relock_). The kit's dialogs and
 // menus portal to the root PortalHost — on iOS inside a FullWindowOverlay — and
 // stayed up over the pane, so the AppCover below tells them to unmount while
-// covered (contexts/app-cover.tsx). A react-native `Modal` is its
-// own window on Android and stayed up too; its one user gates `visible` on the
-// same flag. The router modal (`edit-link`) IS reached: hidden on both
-// platforms — though iOS dismisses it outright, so an unsaved edit there does
-// not survive the relock.
-// Lint confines new overlays to the kit (eslint.config.mjs).
+// covered (contexts/app-cover.tsx). A react-native `Modal` is its own window on
+// Android and stays up too, which is why the app has none (lint fences it —
+// eslint.config.mjs). The in-app sheets (ui/sheet.tsx) ARE reached: they are
+// drawn in the links layout's own tree, so they are hidden with it and come
+// back, draft intact, on unlock. Lint confines new overlays to the kit.
 //
 // And the flag outlasts the pane until the pane's KEYBOARD is down. Unlocking
 // by password ends with the pane's field focused, so the keyboard is still up
 // — or mid-hide — in the commit that uncovers the app. An overlay that
-// re-presents in that commit mounts into it: the advanced-search sheet's
-// StickyFooter seeded its lift from the keyboard that was up and then missed
-// the hide, and stayed a keyboard's height up the screen (measured on Android).
+// re-presents in that commit mounts into it: the advanced-search sheet, when it
+// was a Modal, seeded its keyboard-riding footer from the keyboard that was up
+// and then missed the hide, and stayed a keyboard's height up the screen
+// (measured on Android).
 // Held until the keyboard reports hidden, everything returns into a settled
 // screen; a biometric unlock, with no keyboard, releases at once.
 export function AppLockGate({ children }: { children: ReactNode }) {

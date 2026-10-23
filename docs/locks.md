@@ -513,11 +513,17 @@ backgrounded the app with it up — is drawn wherever its channel draws, and thr
 channels were measured on the iOS simulator and the Android emulator by opening
 each, backgrounding past the grace window, and foregrounding:
 
-| channel                                             | iOS                    | Android                |
-| --------------------------------------------------- | ---------------------- | ---------------------- |
-| the kit's Dialog / AlertDialog / DropdownMenu       | **over the pane**      | **over the pane**      |
-| react-native `Modal` (the advanced-search sheet)    | hidden                 | **over the pane**      |
-| router modal (`edit-link`, `presentation: 'modal'`) | hidden — and dismissed | hidden, back on unlock |
+| channel                                                   | iOS                    | Android                |
+| --------------------------------------------------------- | ---------------------- | ---------------------- |
+| the kit's Dialog / AlertDialog / DropdownMenu             | **over the pane**      | **over the pane**      |
+| react-native `Modal` (the advanced-search sheet, then)    | hidden                 | **over the pane**      |
+| router modal (`edit-link`, then; `presentation: 'modal'`) | hidden — and dismissed | hidden, back on unlock |
+
+Neither of the last two channels is used any more. The add panel, the link editor
+and Advanced Search are all the kit's in-app sheet (`components/ui/sheet.tsx`),
+which is drawn in the links layout's own tree, INSIDE the gate
+(`(app)/links/_layout.tsx`), so the gate's `display: none` hides it like any other subtree and it comes back
+with its draft on unlock — on both platforms, needing no flag.
 
 The kit's overlays portal to the root `PortalHost`, outside the gate — on iOS
 inside a `FullWindowOverlay`, where the leaked menu also hid the pane from the
@@ -529,8 +535,7 @@ The fix is per channel, not per call site, so a new dialog cannot miss it. The
 gate provides `useAppCovered()` (`contexts/app-cover.tsx`) to its
 subtree, and the three kit content components render `null` while it is set; the
 caller still owns the open state, so the overlay comes back on unlock (a field
-typed into inside it does not — the content remounted). The one `Modal` gates `visible` on
-the same flag, keeping its draft in the component that owns the sheet. What makes
+typed into inside it does not — the content remounted). What makes
 it hold for the next overlay is lint: the app's ESLint config forbids
 `@rn-primitives/*` outside `src/components/ui` and a bare `Modal` from
 `react-native`, so an overlay has to come through the kit or say why not. Lint
@@ -541,9 +546,10 @@ row.
 
 The flag outlasts the pane by one thing: **the pane's keyboard.** A password
 unlock uncovers the app in the same commit the keyboard starts to hide, and the
-advanced-search sheet, re-presented into that commit, seeded its `StickyFooter`
-lift from the keyboard that was up, missed the hide, and left Clear/Search
-stranded a keyboard's height up an empty screen (Android, measured). So the gate
+advanced-search sheet — a `Modal` then, re-presented into that commit — seeded
+its keyboard-riding footer from the keyboard that was up, missed the hide, and
+left Clear/Search stranded a keyboard's height up an empty screen (Android,
+measured). So the gate
 holds `covered` until keyboard-controller reports the keyboard hidden; a
 biometric unlock, with no keyboard, releases at once. `app-lock-gate.spec.tsx`
 pins the hold.

@@ -27,13 +27,13 @@ writing `autoFocus`. Neighbours:
 Two mechanisms exist, and **the presentation container decides which, not the
 feature**:
 
-| surface                                                       | mechanism                                                                      | examples                                                   |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| regular expo-router screen                                    | keyboard-controller `KeyboardAwareScrollView` in the screen wrapper            | `auth-screen.tsx`, `settings/[section].tsx`                |
-| portaled overlay content (`Dialog`)                           | keyboard-controller `KeyboardAvoidingView` in the CONTAINER                    | `ui/dialog.tsx`'s `DialogOverlay`; AdvancedSearch from 768 |
-| RN `Modal`                                                    | keyboard-controller `KeyboardAwareScrollView` — the lib handles the window     | AdvancedSearch below 768 (`links/search-bar.tsx`)          |
-| share sheet (iOS extension process / Android `ShareActivity`) | its own bottom padding (`useShareKeyboard`) — neither library's avoider works  | `share/share-kit.tsx` `ShareSheet`                         |
-| an in-tree overlay panel                                      | keyboard-controller `KeyboardAvoidingView` in the PANEL, which owns the window | the add panel (`links/link-add-panel.tsx`)                 |
+| surface                                                       | mechanism                                                                       | examples                                              |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| regular expo-router screen                                    | keyboard-controller `KeyboardAwareScrollView` in the screen wrapper             | `auth-screen.tsx`, `settings/[section].tsx`           |
+| portaled overlay content (`Dialog`)                           | keyboard-controller `KeyboardAvoidingView` in the CONTAINER                     | `ui/dialog.tsx`'s `DialogOverlay`                     |
+| the in-app sheet (`Sheet`)                                    | keyboard-controller `KeyboardAvoidingView` in the SHEET, which owns the window  | add link, edit link, Advanced Search (`ui/sheet.tsx`) |
+| share sheet (iOS extension process / Android `ShareActivity`) | its own bottom padding (`useShareKeyboard`) — neither library's avoider works   | `share/share-kit.tsx` `ShareSheet`                    |
+| RN `Modal`                                                    | none in the app — lint fences it ([locks.md](./locks.md)); the history is below | —                                                     |
 
 - **The default is react-native-keyboard-controller.** Its `KeyboardProvider`
   mounts once at the root (`src/app/_layout.tsx`) and feeds
@@ -44,7 +44,9 @@ feature**:
   sections (`lists-section.tsx`, `tags-section.tsx`), future
   `ListSelect`/`TagsField` cousins — declare nothing themselves. Don't nest a
   second avoider; two stacked avoiders double the offset.
-- **Why RN `Modal` does NOT opt out — it used to, and that reasoning is dead.**
+- **Why RN `Modal` did NOT opt out — kept as history: the app no longer has
+  one** (AdvancedSearch was the last, and is an in-app sheet now — _the in-app
+  sheet_, below). The finding still holds for any `Modal` that comes back.
   The old rule here was that a `Modal` is its own native window, so the
   provider's `KeyboardControllerView` can't drive content inside it. That is no
   longer true of the pinned version. On **Android** the lib handles the modal's
@@ -68,9 +70,9 @@ feature**:
   no avoider of either library can give it. **Pin the version when
   you re-check this**: the Android half is a library behaviour, not a platform
   one, so a downgrade silently takes it away.
-- **The page sheet used to carry a `keyboardVerticalOffset` correction. It
-  doesn't any more — but the arithmetic behind it is still true of every avoider
-  in the tree.** Both KAV implementations lift by `max(frame.y + frame.height −
+- **The page sheet used to carry a `keyboardVerticalOffset` correction —
+  history now, but the arithmetic behind it is still true of every avoider in
+  the tree.** Both KAV implementations lift by `max(frame.y + frame.height −
 (screenHeight − keyboardHeight − keyboardVerticalOffset), 0)`, verbatim, and
   under `presentationStyle="pageSheet"` on iOS the `onLayout` frame is measured
   relative to the SHEET while `screenHeight` spans the whole screen. So at the
@@ -84,9 +86,8 @@ feature**:
   (`UIScreen.main.bounds`, re-emitted on rotation) rather than react-native's
   same-named window hook — the terms only cancel if both are read off the same
   ruler. **Put an avoider in a page sheet and you owe it that measurement
-  again**; AdvancedSearch no longer pays it because it no longer has an avoider,
-  not because the sheet stopped needing one. A `Modal` that is NOT a page sheet
-  (Android's, or an iOS `fullScreen`) never did.
+  again** — and on an iPad you cannot pay it at all (_the in-app sheet_). A `Modal`
+  that is NOT a page sheet (Android's, or an iOS `fullScreen`) never did.
 - **⚠ An avoider cannot give a focused field AIR above the keyboard — only the
   thing that scrolls can.** This is what ended the avoider on AdvancedSearch, and
   it generalises: a KAV pads the container by its overlap with the keyboard and
@@ -101,20 +102,17 @@ feature**:
   on a real iPhone the field stayed exactly where it was on the keys while the
   container's bottom edge rose 16pt OVER its bottom border — the gap appeared,
   but it belonged to the keyboard and it ate the field's own edge. The number has
-  to reach the code that computes the scroll, and keyboard-controller spells that
-  `bottomOffset` on `KeyboardAwareScrollView`: "the distance between the keyboard
-  and the focused `TextInput`". So AdvancedSearch is now a
-  `KeyboardAwareScrollView bottomOffset={16}` in the sheet — no avoider, and no
-  page-sheet correction either, because that component's terms are already
-  screen-absolute on both sides (the focused field's `absoluteY` is its frame
-  converted to the root view controller's view, the lib's `globalFrame`, so the
-  sheet's ~60pt offset is inside it). **16 is this app's number for that gap** —
-  every `KeyboardAwareScrollView` here passes it (`auth-screen.tsx`,
-  `link-edit-screen.tsx`, `settings/scroll-host.tsx`, `lock-pane.tsx`);
-  `ui/dialog.tsx`'s 8 is a different measurement, a floating card's corner off
-  the keys rather than a field. And **never nest an aware scroller inside an
-  avoider**: it pads its own content by the keyboard's full height, which the
-  avoider has already removed from the container.
+  to reach the code that computes the scroll: on a screen, keyboard-controller's
+  `KeyboardAwareScrollView bottomOffset` ("the distance between the keyboard and
+  the focused `TextInput`"); inside an avoider, which an aware scroller cannot
+  nest in, `useFocusedFieldReveal` (_the in-app sheet_). **16 is this app's number
+  for that gap** — every `KeyboardAwareScrollView` here passes it
+  (`auth-screen.tsx`, `settings/scroll-host.tsx`, `lock-pane.tsx`), and a form
+  sheet gets it from its footer's `pt-4`; `ui/dialog.tsx`'s 8 is a different
+  measurement, a floating card's corner off the keys rather than a field. And
+  **never nest an aware scroller inside an avoider**: it pads its own content
+  by the keyboard's full height, which the avoider has already removed from the
+  container.
 - **Why a portaled dialog is NOT the `Modal` case, and still needs its own
   avoider.** `Dialog` content portals to the root `PortalHost`, which is mounted
   _inside_ `KeyboardProvider` (`src/app/_layout.tsx`), so keyboard-controller's
@@ -150,13 +148,10 @@ behavior="padding"` around the centring box in `DialogOverlay` — the container
   `keyboardVerticalOffset={8}` on the avoider puts the gutter back (padding
   becomes `keyboardHeight − insets.bottom`); the lift is scaled by the keyboard's
   progress, so it is inert with the keyboard down. The add panel is flush on
-  purpose — an edge-attached panel, not a floating card. Related: this finding put the two plain-KAV
-  surfaces in question on Android. AdvancedSearch has since been driven on both
-  platforms and swapped to keyboard-controller (bullet above) — RN's KAV turned
-  out to work there, so the swap is for consistency, not repair. The share sheet
-  still has no swap available (next bullet); its iOS half no longer uses a KAV
-  at all, for a reason that turned out to be more fundamental than the lift
-  arithmetic (bullet after next).
+  purpose — an edge-attached panel, not a floating card. The share sheet has
+  no keyboard-controller swap available (next bullet); its iOS half no longer
+  uses a KAV at all, for a reason that turned out to be more fundamental than
+  the lift arithmetic (bullet after next).
 - **Why the share sheet can't use it at all** (the stronger constraint):
   keyboard-controller's iOS layer is built on `UIApplication.shared`, which
   doesn't exist in an app-extension process — expo-share-extension's
@@ -203,78 +198,43 @@ behavior="padding"` around the centring box in `DialogOverlay` — the container
   [share-sheet.md](./share-sheet.md), _what an app-extension process breaks in
   React Native itself_.
 - **For a new surface, decide the presentation first; the keyboard answer
-  follows.** A router screen inherits the keyboard-controller path for free; a
-  page-sheet `Modal` (like AdvancedSearch) takes a keyboard-controller
-  `KeyboardAwareScrollView` for the same reasons a screen does, and if it takes
-  an avoider instead it must copy the `keyboardVerticalOffset` measurement above
-  with it, or inherit the under-lift (invisible until its body is tall enough to
-  scroll); a **form sheet sized to its contents** answers the
-  keyboard by itself and forbids the scroller the first answer is built on, the
-  next section.
+  follows.** A router screen inherits the keyboard-controller path for free. A
+  form over the screen is a `Sheet` (`ui/sheet.tsx`, _the in-app sheet_), which
+  brings its own avoider, cap, squeeze and focused-field reveal. Not a page-sheet
+  `Modal` or a modal route: both float on an iPad where nothing in JS can
+  measure them. And not a react-native-screens **form sheet sized to its
+  contents**, which answers the keyboard by itself and forbids the scroller every
+  other answer is built on (_the add panel_, below).
 
-### the sticky footer
+### the in-app sheet
 
-The two full-screen editors — edit link (`link-edit-screen.tsx`) and
-AdvancedSearch — pin their Cancel/Save (Clear/Search) row **below** the
-`KeyboardAwareScrollView` instead of ending the scroll with it, in
-`components/sticky-footer.tsx`. Both forms run past the fold on a phone, so a
-scrolled footer put the commit button a scroll away: edit link's Save under the
-12:7 image preview, a long way from the Note that "Edit note" lands on;
-AdvancedSearch's Search under the Tags tree. The bar **rides the keyboard**, so a
-note can be typed and saved without putting the keyboard away.
+⚠ **Every form drawn over the links section is ONE component: `Sheet`
+(`components/ui/sheet.tsx`) — a bottom sheet below the docking width (768,
+`lib/window-class.ts`) and a centred card at and above it, in the app's own
+window.** Add link (`links/link-add-panel.tsx`), edit link
+(`links/link-edit-panel.tsx`) and Advanced Search (`links/search-bar.tsx`) are
+bodies in it. Don't give a fourth form a presentation of its own; the history
+below is why.
 
-Four things make it work, and a miss on any of them produces no error:
+The name is overloaded, so: in these docs "form sheet" and "page sheet" mean the
+NATIVE presentations (UIKit's, react-native-screens'), which this replaced;
+web-ui's `Sheet` is edge-anchored at every width, so this is web's whole
+quick-add SURFACE rather than its twin; and the share sheet
+([share-sheet.md](./share-sheet.md)) wears the same two shapes from another
+process, where none of this component's machinery runs.
 
-- **⚠ The lift is a Reanimated shared value, NOT keyboard-controller's
-  `KeyboardStickyView`.** The sticky view moves itself through react-native's
-  `Animated` with the native driver, and on iOS that update did not reach the
-  bar while its `Modal` was presenting. The specimen: focus the links search
-  box, then press Advanced search. iOS hides the keyboard about 150ms into the
-  sheet's slide, and keyboard-controller reports it (`keyboardWillHide` and
-  `keyboardDidHide`, height 0, logged in the sheet). Yet the bar stayed lifted a
-  full keyboard's height over an empty screen, with no keyboard in the
-  accessibility tree. It dropped into place on the sheet's next re-render, so the
-  value was right and the view never received it. Measured on the iOS 26.5
-  simulator, iPhone 17 Pro. The bar now keeps its own shared value, set from
-  `useKeyboardHandler`'s `onMove`/`onInteractive`/`onEnd` (per frame on both
-  platforms), and seeds it from `KeyboardController.state()` so a bar mounted
-  over an open keyboard starts on it. That is the mechanism the add panel
-  already uses in the same tree. Don't swap `KeyboardStickyView` back in without
-  re-running that specimen.
-- **`bottomOffset` adds the bar's height** (`16 + footerHeight`, measured by the
-  bar's `onLayout`). The aware scroller resolves the focused field against the
-  keyboard's top edge; once the bar sits on that edge it covers another
-  bar-height band, and a field focused behind it comes to rest under the bar,
-  not above it.
-- **The lift gives the bottom inset back, on both platforms:**
-  `max(keyboardHeight − insets.bottom, 0)`. The bar rests on the
-  `SafeAreaView`'s bottom padding, and the reported height runs to the bottom of
-  the screen. On iOS the keyboard's frame contains the home indicator. On
-  Android the lib reports the IME inset **including** the navigation bar,
-  because `edgeToEdgeEnabled` is on and `KeyboardProvider` therefore passes
-  `navigationBarTranslucent` (`animated.tsx`, `IS_EDGE_TO_EDGE`). The first
-  version of this bar read the Android default instead, and gave nothing back
-  there. The clamp keeps the bar still while the keyboard's edge is inside the
-  inset band.
-- **It is not an avoider**, so it doesn't break the rule against nesting an
-  aware scroller inside one. It moves only itself (a transform) and leaves the
-  scroller's frame alone.
+The three used to be three presentations — the add panel in the tree, the editor
+an expo-router modal route, Advanced Search an RN `Modal` page sheet — and the
+two presented ones each grew a SECOND shell from 768, a kit `Dialog`, because of
+one finding:
 
-The add panel does **not** use it: the whole panel already rides the keyboard —
-parked on it as the narrow sheet, centred above it as the wide card — so its
-footer is just the last child below the panel's `shrink` scroller. Web quick-add and the web advanced-search popover pin theirs the same
-way, below a scroll box that holds only the fields.
-
-**Status:** driven on the iOS simulator: the specimen above, a focused field
-(the bar sits flush on the keys), and drag-to-dismiss. Not yet driven on an AVD.
-
-**⚠ On an iPad the lift overshoots, and JS cannot correct it.** The lift is
+**On an iPad a presented sheet floats, and nothing in JS can learn where.** Both
+presented forms pinned their Cancel/Save row below the scroller and lifted it by
 `keyboardHeight − insets.bottom`, which is right only while the bar rests on the
-screen's bottom edge. An iPad sheet floats above that edge. Measured on the iPad
-(A16) simulator, iOS 26.5: Advanced Search's page sheet held upright reaches the
-bottom (no gap), but on its side it floats, and the bar stopped visibly short of
-the keys. Correcting it needs the bar's position in the WINDOW, and nothing
-inside the Modal reports one:
+screen's bottom edge. An iPad page sheet held on its side floats above that edge,
+and the bar stopped visibly short of the keys (iPad (A16) simulator, iOS 26.5).
+Correcting it needs the bar's position in the WINDOW, and nothing inside the
+presentation reports one:
 
 - Fabric's `measureInWindow` returns the sheet's coordinates (a form sheet's
   bar "rested" at 650 in both orientations, its height, not its position);
@@ -286,34 +246,113 @@ inside the Modal reports one:
 - `TextInput.State.currentlyFocusedInput()` returned a stale field.
 
 A `formSheet` fixes the width (580pt both ways, against the page sheet's 820 and 936) and UIKit then raises the sheet for the keyboard itself, which makes the
-lift both unnecessary held upright and unknowable on its side. So **Advanced
-Search leaves the Modal from 768** and opens in the kit's `Dialog`, where every
-number is the window's (`search-bar.tsx`, _the two shells_). The footer is the
-card's last row, and the kit's avoider puts it 8pt above the keys. The aware
-scroller's focused-field tracking, which cannot nest in that avoider, is
-replaced by `useFocusedFieldReveal`: the add panel's Note reveal, generalised to
-every field. Driven on the iPad both ways round (Note focused from a closed
-keyboard in landscape lands as the last field above the footer) and re-driven
-on the iPhone 17 Pro, which keeps the sheet. **Edit link had the same
-overshoot and takes the same answer**: below 768 it is still the `/edit-link`
-route, and from 768 the row menu opens `LinkEditDialog` instead
-(`link-edit-screen.tsx`, opened through `link-edit-host.tsx`). That Dialog
-portals to the kit's `APP_PORTAL_HOST` rather than the root host, because the
-form needs the signed-in providers (`useLinkMutations` reads `useSync()`) and
-the root host sits above them (`components/ui/portal-host.tsx`). Driven on the
-iPad both ways round: Note focused from a closed keyboard is revealed above the
-footer, a backdrop tap is swallowed while dirty, the List picker stacks above
-the editor, and Save closes it. Re-driven on the iPhone, which keeps the
-route. The StickyFooter now has only phone-shaped hosts, where its lift is
-right.
+lift both unnecessary held upright and unknowable on its side. (The share sheet
+meets the same wall from inside another process, and gets past it with a native
+view — [share-sheet.md](./share-sheet.md), _on an iPad the sheet floats_. Inside
+the app there is no need: leave the presentation instead.)
+
+So the fix is the add panel's model for all three: drawn in the app's own window,
+where every number is the window's on both platforms, the same tree at every
+width, and so the same code on a phone, an iPad, an Android tablet, a foldable
+and a Split View drag across 768. What the presentations cost besides, all gone
+with them:
+
+- **The `Modal` was an Android window of its own.** The paywall (a kit `Dialog`
+  on the root `PortalHost`) drew BEHIND it, so Advanced Search closed itself
+  around the paywall and reopened on "Not now"; and a relock could not hide it,
+  so it gated `visible` on `useAppCovered()` ([locks.md](./locks.md)). In the
+  tree the paywall stacks above the sheet, as web's does above its popover, and
+  the lock's `display: none` reaches it.
+- **The bar needed its own keyboard tracking.** keyboard-controller's
+  `KeyboardStickyView` moves itself through react-native's `Animated`, and on
+  iOS an update did not reach the bar while its `Modal` was presenting: open
+  Advanced Search with the basic search box focused, iOS hides the keyboard
+  ~150ms into the slide, the library reports it, and the bar stayed a
+  keyboard's height up an empty screen until the next re-render (iPhone 17 Pro,
+  iOS 26.5). Inside a sheet the whole panel rides the avoider, so the footer is
+  simply the row below the `shrink` scroller — on the keys on a phone, 8pt
+  above them as a card — and needs nothing of its own.
+- **The page sheet's arc forked the header** (the app's only `ios:` variants).
+
+**How it is built** — the add panel's three mechanisms, now the shell's
+(`ui/sheet.tsx` carries each in full):
+
+- **Avoidance** — keyboard-controller's `KeyboardAvoidingView` spans the window
+  and parks the sheet on the keyboard's top edge (`justify-end`) or centres the
+  card in what the keyboard leaves (`justify-center`), so `max-h-full` on the
+  panel resolves against "the window minus the keyboard" with nothing measured.
+- **The squeeze** — the body's ONE scroller carries `shrink grow-0`, so the cap
+  squeezes the fields and never the header or the footer (_the traps_).
+- **Focus visibility** — no aware scroller can nest in the avoider, so
+  `lib/use-focused-field-reveal.ts` keeps the focused field above the fold: the
+  add panel's Note reveal (_the add panel_, below, has its three traps),
+  generalised to every field, with the field's blur and its growth (a
+  multiline note typed past a line) tracked. It scrolls the field's bottom ON
+  the viewport's edge; the 16 between it and the buttons is the footer's
+  `pt-4`, which — pinned below the scroller — shows at every scroll position.
+
+**Drawn in the tree, inside `SheetHost`**, which `(app)/links/_layout.tsx`
+wraps around the links Drawer: each opener's host (add, edit, Advanced Search)
+sits between it and the Drawer and renders its sheet as a sibling after the
+covered Drawer (`SheetCovered`). That decides the sheet's REACH (the whole links
+section, the docked rail included — drawn in the screen, the add panel's dim
+stopped at the rail's edge), its CONTEXT (the links layout's providers), and its
+LOCK behaviour (inside AppLockGate: hidden on a relock, back with the draft on
+unlock). It replaced `APP_PORTAL_HOST`, which existed for the wide editor's
+Dialog alone.
+
+⚠ **Never portal a form whose inputs are controlled from outside the portal —
+Android eats keystrokes.** The sheet WAS portaled for a while, to a host in the
+same place. `@rn-primitives/portal` passes its children to the host through a
+store set from an effect, so the host renders them a commit after the caller
+did, and a controlled `TextInput` in there can re-render with a value one
+keystroke old after the native field has moved on. React Native writes that
+stale value back, and the next character lands on it: on the Pixel 8 AVD a
+Maestro `inputText` of `https://…` arrived as `htps://…` — over and over, in
+the add panel and in the search flows' setup — the second `t` typed onto a
+field just reset to `ht`. No error, no warning; on a phone it reads as a
+fumbled keystroke. The kit's Dialogs keep their portal because their inputs
+keep their own state inside the portaled content. A sheet body's draft is its
+opener's, so the sheet renders in the opener's tree.
+
+**Closing is split in two props**, as the route split it between
+`usePreventRemove` and its own buttons: `onClose` is the deliberate ✕ (a body's
+Cancel calls the same), `onDismiss` the accidental vectors — the backdrop,
+Android's back, and on the narrow shape a downward drag on the header — which a
+dirty editor swallows by not closing ([editors.md](./editors.md), invariant 3).
+
+⚠ **The header drag is not decoration: on a phone it is the only accidental
+door.** A tall form (the editor, Advanced Search) fills the window to the top
+gutter, `insets.top + 8`, and the strip above it is the status bar, whose
+touches iOS keeps — measured on the iPhone 17 Pro, a tap at 6% of the height
+never reached the backdrop. The route had swipe-down for free; the sheet
+restores it on the header only (the body's own downward drag scrolls it), and a
+guarded draft springs back home. The card has no drag: anchored to no edge,
+there is nowhere for "down" to take it.
+
+**Driven** on the Pixel 8 AVD through the e2e cases (NATIVE-LINK-001,
+LINK-EDITOR-002, LINK-CLOSE-001, SEARCH-001, SEARCH-002, VIEWPORT-KEYBOARD-001,
+all passing), and on the tablet AVD (1280×800dp) through the ones that do not
+assume a phone: NATIVE-LINK-001, LINK-CLOSE-001 and SEARCH-001 pass; the editor
+and Advanced Search cases navigate through the narrow window's drawer button and
+`keyboard-add-note` taps a Note that the landscape card has scrolled below its
+fold, so those flows still need a wide-window pass. By hand, on the iPad (A16)
+simulator both ways round (the editor with Note focused, its dirty backdrop
+swallowed and Cancel closing it; Advanced Search's Note field revealed above
+Clear/Search in landscape) and on the iPhone 17 Pro (the editor full-height,
+Note revealed on the keys; swipe-down closing a clean editor and springing back
+on a dirty one; Advanced Search on the keys) — **but those iOS checks ran
+against the portaled version**, before the portal finding above; the in-tree
+sheet has not been re-driven on iOS, nor through the iOS e2e cases.
 
 ### the add panel — and why it is not a sheet presentation
 
-The add surface is a panel the LINKS SECTION draws over itself
-(`links/link-add-panel.tsx`, rendered by `links/link-add-host.tsx` — which
-`(app)/links/_layout.tsx` wraps around the links Drawer — while its `adding`
-state is true): a bottom sheet on a narrow window and a centred card on a wide
-one (_the two shapes_, below). It is not a route, and getting there cost three
+The add surface was the first form drawn in the app's own window, and the one
+`Sheet` (_the in-app sheet_, above) was later extracted from: a bottom sheet on a
+narrow window and a centred card on a wide one (_the two shapes_, below). The
+mechanisms below are the shell's now (`components/ui/sheet.tsx`,
+`lib/use-focused-field-reveal.ts`), but the findings were made here and are
+recorded here. It is not a route, and getting there cost three
 measured findings — all in react-native-screens 4.16, all silent, and all worth
 keeping because the presentation they rule out is the one the platform appears
 to offer (the expo-animation skill's tool table still names `formSheet`, and for
@@ -455,13 +494,11 @@ it updates React state on `keyboardDidShow`/`keyboardDidHide`, leaving the inset
 in place until the keyboard has finished moving and then visibly contracting the
 panel.
 
-**The editor stayed a route below 768**, and should. `/edit-link` is a
-full-height form (title, list, tags, note, image) with no dead space to
-reclaim, it is opaque so none of the three findings above touch it, and a
-presented route is what gives it swipe-down, the back gesture and
-`usePreventRemove` for free. Driven on the emulator with the keyboard up: the
-ordinary screen answer (`KeyboardAwareScrollView`) is doing its job there. From
-768 it is a Dialog instead, for the iPad reason in _the sticky footer_.
+**The editor used to stay a route below 768**, on the argument that a
+full-height opaque form has no dead space to reclaim and the route gave it
+swipe-down, the back gesture and `usePreventRemove` for free. The sheet now
+gives it all three (_the in-app sheet_), and one shell at every width outweighed
+the rest.
 
 ### the add panel's two shapes — what an iPad keyboard does to a bottom sheet
 
@@ -570,7 +607,7 @@ it. Nothing lints this; the symptom is only visible with a keyboard actually up.
 field (`TextInput.js`): a single-line input defaults to `'blurAndSubmit'`, so
 return dismisses whether or not `onSubmitEditing` is set. A **`multiline`** one
 defaults to `'newline'` and never blurs — correct, but it means the note fields
-in `link-add-panel.tsx` / `link-edit-screen.tsx` depend entirely on 2 and 3.
+in `link-add-panel.tsx` / `link-edit-panel.tsx` depend entirely on 2 and 3.
 So does any field that sets **`submitBehavior="submit"`** on purpose to keep the
 keyboard for the next entry: `components/links/tags-command.tsx`,
 `share/share-list-picker.tsx`, `share/share-tags-picker.tsx`. Those three are
@@ -731,17 +768,16 @@ so the rows jump under the finger. There, `interactive`, provided the surface
 has a tap-to-dismiss (above) so `interactive` is not the only way out — on
 Android it maps to `none`. The current map:
 
-| scroller                                                               | mode          | why                                                                                                                     |
-| ---------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| links `FlashList` (`main.tsx`), links drawer (`sidebar.tsx`)           | `on-drag`     | full-height, top-anchored; scrolling results is the dismissal already in hand                                           |
-| links `EmptyState` (`shared.tsx`)                                      | `on-drag`     | stands in for the list above when it has no rows, so it answers the same gestures; Android's drag is `"handled"`'s (2)  |
-| `auth-screen`, `lock-pane`, `link-edit-screen`, settings `scroll-host` | `on-drag`     | `KeyboardAwareScrollView` screens — it tracks the focused field, so no field is out of reach                            |
-| AdvancedSearch body + its checklists (`search-bar.tsx`), below 768     | `on-drag`     | page sheet, top-anchored; the lift only pads its foot                                                                   |
-| AdvancedSearch body from 768 (`search-bar.tsx`)                        | `interactive` | a centred `Dialog`: it re-centres, so the add panel's reason, and the reveal scrolls a lower field clear                |
-| `ListCommand`, `TagsCommand` (every host a `Dialog`)                   | `interactive` | the dialog re-centres; filtering is type-scan-type; chrome tap + `"handled"` are the tap exits                          |
-| add panel (`link-add-panel.tsx`)                                       | `interactive` | above                                                                                                                   |
-| share pickers (`share-list-picker.tsx`, `share-tags-picker.tsx`)       | `interactive` | bottom-parked, so the whole sheet fell a keyboard's height mid-drag; `ShareSheet`'s tap layer is the exit (_verifying_) |
-| `link-destroy-confirm`, settings drawer, `contract-vectors`            | none          | no keyboard can be up: an alert drops it on open, the other two hold no field                                           |
+| scroller                                                         | mode          | why                                                                                                                     |
+| ---------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| links `FlashList` (`main.tsx`), links drawer (`sidebar.tsx`)     | `on-drag`     | full-height, top-anchored; scrolling results is the dismissal already in hand                                           |
+| links `EmptyState` (`shared.tsx`)                                | `on-drag`     | stands in for the list above when it has no rows, so it answers the same gestures; Android's drag is `"handled"`'s (2)  |
+| `auth-screen`, `lock-pane`, settings `scroll-host`               | `on-drag`     | `KeyboardAwareScrollView` screens — it tracks the focused field, so no field is out of reach                            |
+| AdvancedSearch's checklists (`search-bar.tsx`)                   | `on-drag`     | a nested `max-h-40` box; the sheet's own scroller is the one that keeps the keyboard                                    |
+| `ListCommand`, `TagsCommand` (every host a `Dialog`)             | `interactive` | the dialog re-centres; filtering is type-scan-type; chrome tap + `"handled"` are the tap exits                          |
+| every `Sheet` body (`ui/sheet.tsx`) — add, edit, AdvancedSearch  | `interactive` | above; the reveal scrolls a lower field clear, and the sheet's pressable chrome is the tap exit                         |
+| share pickers (`share-list-picker.tsx`, `share-tags-picker.tsx`) | `interactive` | bottom-parked, so the whole sheet fell a keyboard's height mid-drag; `ShareSheet`'s tap layer is the exit (_verifying_) |
+| `link-destroy-confirm`, settings drawer, `contract-vectors`      | none          | no keyboard can be up: an alert drops it on open, the other two hold no field                                           |
 
 `"handled"` sits on every row above that carries a mode — the rule in 2 has no
 exception.
@@ -789,7 +825,7 @@ a keyboard up are part of the typing, or have their own answer already:
   Continue into the confirm step) — the keyboard is about to be wanted again;
 - the pickers that set `submitBehavior="submit"` to keep it for the next entry (1);
 - anything parked ON the keyboard — the add panel's Save (on the keys as the
-  sheet, 8pt above them as the wide card), the sticky footer's —
+  sheet, 8pt above them as the wide card), and every other `Sheet` footer's —
   where nothing can land behind it and the press closes the surface anyway;
 - a `Dialog`'s buttons: the avoider lifts the whole card, error slot included;
 - a submit whose error belongs to the FIELD and mounts above the button —
@@ -870,7 +906,7 @@ on Android that is a back press delivered to the app (_verifying any of this_).
 the keyboard**, so on a pushed screen it runs the keyboard's slide-up against the
 navigator's slide-in, and then has the screen's `KeyboardAwareScrollView` scroll
 the field clear — all before the screen has finished arriving. This is the same
-divergence [editors.md](./editors.md) records for `/edit-link`'s `focus` param,
+divergence [editors.md](./editors.md) records for the editor's `focus` field,
 where native scrolls the field into view instead of focusing it.
 
 The rule is **not** "never on a pushed screen". It is what sits above the field,

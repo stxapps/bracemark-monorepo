@@ -556,26 +556,24 @@ Eight things nothing would flag:
   `plugins/with-android-manifest-policy.js` adds it to `MainActivity`'s
   `configChanges`; without it the window resize is not a `Dimensions` event but a
   remount, and the open screen and a half-typed link go with it.
-- **A full-window modal on an Android tablet is the full window — which is
-  why neither editor uses one there any more.** Below 768 the link editor and
-  Advanced Search present as an iOS `pageSheet` (full-screen on Android) and cap
-  their scrollers' content at the settings column (`w-full max-w-2xl
-self-center`), leaving the bars to span. From 768 both are centred `max-w-lg`
-  Dialogs on both platforms: an iPad page sheet is 820pt wide upright (the whole
-  screen on an iPad (A16)) and 936 on its side, too wide for these forms, and it
-  floats its sticky footer off the keys ([soft-keyboard.md](./soft-keyboard.md),
-  _the sticky footer_). The add panel is a bottom sheet below 768, capped at `max-w-xl`
-  and centred, with side borders from `sm` or wherever a side inset detaches it
-  from the edge. From 768 it is a centred `max-w-lg` card, because on an iPad
-  the keyboard's top edge the sheet would rest on is not reliably where the
-  keyboard is ([soft-keyboard.md](./soft-keyboard.md), _the add panel's two
-  shapes_).
+- **A full-window modal on a tablet is the full window — which is why no form
+  uses one.** The add panel, the link editor and Advanced Search are all the
+  app's in-app sheet (`Sheet`, `components/ui/sheet.tsx`): a bottom sheet below 768, capped
+  at `max-w-xl` and centred, with side borders from `sm` or wherever a side
+  inset detaches it from the edge; from 768 a centred `max-w-lg` card, because
+  on an iPad the keyboard's top edge a sheet would rest on is not reliably where
+  the keyboard is ([soft-keyboard.md](./soft-keyboard.md), _the add panel's two
+  shapes_). The editor and Advanced Search used to be an iOS `pageSheet`
+  (full-screen on Android) — 820pt wide upright on an iPad (A16), the whole
+  screen, and 936 on its side, floating its footer off the keys where nothing
+  could measure it ([soft-keyboard.md](./soft-keyboard.md), _the in-app
+  sheet_).
 - **⚠ An overlay drawn in the links SCREEN stops at the docked rail.** On a wide
   window the screen is the pane beside the permanent Drawer, so an
   `absolute inset-0` layer inside it dims the list and leaves the rail bright
   and tappable. On a phone the screen is the window, so it passes everywhere it
-  is tested. The add panel is hosted around the Drawer for this reason
-  (`features/links/link-add-host.tsx`). The portaled dialogs never had the
+  is tested. The sheets' host is mounted around the Drawer for this reason
+  (`SheetHost`, `components/ui/sheet.tsx`). The portaled dialogs never had the
   problem: they land in the root PortalHost.
 - **Insets are per edge, and a side inset is not always a landscape notch.**
   The iPhone Duo's outer display reserves a strip down its trailing edge for
@@ -583,7 +581,7 @@ self-center`), leaving the bars to span. From 768 both are centred `max-w-lg`
   ([expo-build.md](./expo-build.md), _devices_). Anything that pads by
   `insets.top` and `insets.bottom` only, or mirrors one side onto the other
   (`width - insets.left * 2`), puts content in it. The screens' `SafeAreaView`s
-  and DialogOverlay were already per edge; the add panel's sides were not, and
+  and DialogOverlay were already per edge; the sheet's sides were not, and
   now are; `main.tsx`'s column math subtracts each side separately.
 - **The app is not always the whole screen** — a Split View or Slide Over
   window, an Android split-screen half, the Duo's centred compatibility window.
@@ -858,16 +856,16 @@ and both apps' surfaces are edge-to-edge by default (iOS always was; Android
   `edges` prop / per-side inset styles.
 - **Why the native `SafeAreaView` and not `useSafeAreaInsets` + padding:** it
   measures **its own** insets natively, per window and per container — inside
-  the AdvancedSearch `Modal` it correctly supplies the status-bar inset on
-  Android's full-screen modal and near-zero top inset inside iOS's pageSheet
-  (`search-bar.tsx`), with no context reaching across the Modal's window
-  boundary and no first-frame flash. Reach for `useSafeAreaInsets()` only when
+  a `Modal` (AdvancedSearch was one) it supplied the status-bar inset on
+  Android's full-screen modal and a near-zero top inset inside iOS's pageSheet,
+  with no context reaching across the Modal's window boundary and no
+  first-frame flash. Reach for `useSafeAreaInsets()` only when
   you need the numbers (e.g. as a prop, below).
 - **An overlay panel does its own inset arithmetic, and the hook is the right
-  tool there.** The add panel (`links/link-add-panel.tsx`,
-  [soft-keyboard.md](./soft-keyboard.md), _the add panel_) is an absolute layer
-  over the links section (rail and screen, `links/link-add-host.tsx`), so it
-  cannot inherit the screen's `SafeAreaView`: it pads its avoider by
+  tool there.** The in-app sheet (`components/ui/sheet.tsx`,
+  [soft-keyboard.md](./soft-keyboard.md), _the in-app sheet_) is an absolute layer
+  over the links section (rail and screen, its `SheetHost`), so it cannot
+  inherit the screen's `SafeAreaView`: it pads its avoider by
   `insets.top + 8` — DialogOverlay's gutter, which is what
   keeps a maxed-out panel out of the notch — and by the bare `insets.left` /
   `insets.right` on the sides (no gutter: it is an edge-attached sheet, so a

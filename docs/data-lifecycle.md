@@ -2177,8 +2177,9 @@ simulator, Mac and bundle; `2f27d0c` plus the uncommitted changes; calibration
   links layout pauses from when the route has **disappeared**
   (`transitionEnd`, `closing`) to when it starts to **reappear**
   (`transitionStart`, not `closing`), in `features/links/use-paused-while-covered.ts`.
-  Keyed on the native disappear, so the link editor's iOS pageSheet, which leaves
-  the links screen showing behind it, never pauses it. `DATA-IMPORT-NATIVE-001`
+  Keyed on the native disappear, so a presentation that leaves the links screen
+  showing behind it (an iOS pageSheet, as the link editor once was) never
+  pauses it; the in-app sheets are drawn inside the links section and cannot. `DATA-IMPORT-NATIVE-001`
   (an import from Settings, then its link, list and tag on the links screen once
   Settings closes) passes on the iOS simulator.
 

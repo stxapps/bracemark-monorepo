@@ -3,7 +3,7 @@ import { type LayoutChangeEvent, View } from 'react-native';
 import { Text } from '../ui/text';
 
 // A labeled field row in the two link editors (features/links/link-add-panel.tsx,
-// link-edit-screen.tsx) — the native cousin of the `<Label density="dense">` over
+// link-edit-panel.tsx) — the native cousin of the `<Label density="dense">` over
 // a control in a `flex-col gap-1.5` that web's link-add-surface and
 // link-edit-dialog draw, and the one place the dense label tier
 // (`text-xs text-muted-foreground`) is stated for both, as web-ui's label.tsx

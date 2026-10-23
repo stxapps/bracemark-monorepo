@@ -12,7 +12,6 @@ import { AppLockGate } from '../../components/app-lock-gate';
 import { AuthGuard } from '../../components/auth-guard';
 import { InitialSyncGate } from '../../components/initial-sync-gate';
 import { ShareBridge } from '../../components/share-bridge';
-import { AppPortalHost } from '../../components/ui/portal-host';
 import { PaywallProvider } from '../../contexts/paywall-provider';
 import { SignOutProvider } from '../../contexts/sign-out-provider';
 
@@ -92,10 +91,6 @@ import { SignOutProvider } from '../../contexts/sign-out-provider';
 // rather than directly under SyncProvider. (The Android share activity's inline
 // sync kick lives in saveSharedDraft itself, not here; what it cannot do from
 // its own root — that page fetch — it hands off, and this collects it.)
-// The named PortalHost after the Stack is for overlays whose content needs
-// these providers — the wide link editor's Dialog (components/ui/portal-host.tsx). Inside
-// AppLockGate, so `useAppCovered()` takes it down under a relock as it does the
-// root host's dialogs, and inside PaywallProvider so it could raise the paywall.
 export default function AppLayout() {
   return (
     <AuthGuard>
@@ -110,30 +105,14 @@ export default function AppLayout() {
                     <InitialSyncGate>
                       <PaywallProvider>
                         <Stack screenOptions={{ headerShown: false }}>
-                          {/* The link EDITOR, below the docking width, presents
-                            modally (iOS pageSheet; Android slides up); a wider
-                            window opens it as a Dialog instead
-                            (link-edit-screen.tsx's LinkEditDialog). A router
-                            screen, not an RN Modal, so
-                            keyboard-controller and portals work inside it
-                            (link-edit-screen.tsx). Add has no entry here: it is a
-                            layer the links screen draws over itself, because every
-                            presentation that could have sized it to its contents
-                            fails on one platform or the other
-                            (features/links/link-add-panel.tsx). */}
-                          <Stack.Screen
-                            name="edit-link"
-                            options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-                          />
                           {/* "Sign in to resume" for an expired session
-                              (docs/sessions.md) — modal for the same reason: a form
-                              with a keyboard, over a library that stays open. */}
+                              (docs/sessions.md) — modal: a form with a keyboard,
+                              over a library that stays open. */}
                           <Stack.Screen
                             name="resume"
                             options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
                           />
                         </Stack>
-                        <AppPortalHost />
                       </PaywallProvider>
                     </InitialSyncGate>
                   </AppLockGate>

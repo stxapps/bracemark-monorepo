@@ -2,9 +2,11 @@ import { Drawer } from 'expo-router/drawer';
 
 import { LiveReadPause } from '@stxapps/expo-react';
 
+import { SheetCovered, SheetHost } from '../../../components/ui/sheet';
 import { LinkAddHost } from '../../../features/links/link-add-host';
 import { LinkEditHost } from '../../../features/links/link-edit-host';
 import { LinksPageProvider } from '../../../features/links/page-provider';
+import { AdvancedSearchHost } from '../../../features/links/search-bar';
 import { Sidebar } from '../../../features/links/sidebar';
 import {
   HideRailButton,
@@ -43,21 +45,30 @@ import { RAIL_WIDTH } from '../../../lib/window-class';
 // Drawer, `useNavigation()` is the (app) stack's, whose events say when this
 // route is covered.
 //
-// LinkAddHost wraps the Drawer rather than living in the screen, so the add
-// panel's layer spans the docked rail too (features/links/link-add-host.tsx).
-// Inside LinksPageProvider because the panel reads the viewing list.
-// LinkEditHost owns the wide link editor's Dialog (features/links/link-edit-host.tsx).
+// SheetHost wraps the Drawer rather than living in the screen, so a sheet — the
+// add panel, the link editor, Advanced Search (components/ui/sheet.tsx) — spans
+// the docked rail too. The three hosts inside it own those sheets' open state
+// and draw each sheet as a sibling AFTER the covered Drawer
+// (features/links/link-add-host.tsx, link-edit-host.tsx, search-bar.tsx); all
+// sit inside LinksPageProvider because the bodies read the viewing list and the
+// query.
 export default function LinksLayout() {
   const paused = usePausedWhileCovered();
   return (
     <LiveReadPause paused={paused}>
       <LinksPageProvider>
         <SidebarRailProvider>
-          <LinkAddHost>
-            <LinkEditHost>
-              <LinksDrawer />
-            </LinkEditHost>
-          </LinkAddHost>
+          <SheetHost>
+            <LinkAddHost>
+              <LinkEditHost>
+                <AdvancedSearchHost>
+                  <SheetCovered>
+                    <LinksDrawer />
+                  </SheetCovered>
+                </AdvancedSearchHost>
+              </LinkEditHost>
+            </LinkAddHost>
+          </SheetHost>
         </SidebarRailProvider>
       </LinksPageProvider>
     </LiveReadPause>

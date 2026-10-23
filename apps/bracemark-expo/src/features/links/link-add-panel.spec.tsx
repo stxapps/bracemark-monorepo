@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import type { LinkItem } from '@stxapps/expo-react';
 import { TRASH_ID } from '@stxapps/shared';
 
+import { SheetHost } from '../../components/ui/sheet';
 import { noteReviewMoment } from '../../lib/review-prompt';
 import { LinkAddPanel } from './link-add-panel';
 
@@ -37,16 +38,6 @@ jest.mock('./page-provider', () => ({
   useLinksPage: () => ({ selection: { kind: 'all' } }),
 }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
-// The test renderer mounts no native scroll view, so the panel's animated ref
-// never resolves and `useScrollOffset` warns on every mount. Only Note's reveal
-// reads the offset, and that is a device behaviour (docs/soft-keyboard.md).
-jest.mock('react-native-reanimated', () => ({
-  // Not carried by the spread, and without it the default export (`Animated`)
-  // is read off the wrong object.
-  __esModule: true,
-  ...jest.requireActual<typeof import('react-native-reanimated')>('react-native-reanimated'),
-  useScrollOffset: () => ({ get: () => 0 }),
-}));
 jest.mock('../../lib/review-prompt', () => ({ noteReviewMoment: jest.fn() }));
 // The pickers behind the collapsed optional section — never opened here, and
 // their import graphs reach the rest of the store seam.
@@ -80,7 +71,13 @@ beforeEach(() => {
   mockReadLinkByUrlKey.mockReset().mockResolvedValue(undefined);
   noted.mockClear();
   onClose.mockClear();
-  render(<LinkAddPanel onClose={onClose} />);
+  // The panel is a sheet, which needs the host it covers
+  // (components/ui/sheet.tsx) — without one it throws.
+  render(
+    <SheetHost>
+      <LinkAddPanel onClose={onClose} />
+    </SheetHost>,
+  );
 });
 
 // The positive control: without it, every "notes nothing" below would pass just

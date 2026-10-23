@@ -1,0 +1,131 @@
+// The in-app sheet's contract with its bodies (components/ui/sheet.tsx). The add
+// panel, the link editor and Advanced Search all lean on the same three
+// promises, and each is silent when broken:
+//
+//   - the ✕ is DELIBERATE and Android's back is ACCIDENTAL — a dirty editor
+//     guards the second by swallowing it, so the two must reach different
+//     callbacks, or the ✕ goes dead exactly when it is wanted (docs/editors.md,
+//     invariant 3);
+//   - while a sheet is open the subtree it covers leaves the accessibility tree,
+//     which is SheetCovered's job and nothing else's;
+//   - a sheet outside a SheetHost has no box to cover and no count to raise —
+//     it would draw over whatever its parent happens to be and hide nothing —
+//     so it must throw instead.
+//
+// The geometry (the avoider, the reveal, the swipe) is a device behaviour
+// (docs/soft-keyboard.md, _the in-app sheet_); none of it is asserted here.
+
+import * as React from 'react';
+import { BackHandler, Text, View } from 'react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
+
+import type { FocusedFieldReveal } from '../../lib/use-focused-field-reveal';
+import { Sheet, SheetCovered, SheetHost } from './sheet';
+
+// The reveal's worklets need a mounted native scroller; the shell only passes
+// its handles through.
+const reveal = {
+  scrollRef: React.createRef(),
+  onScroll: jest.fn(),
+  content: React.createRef(),
+  onFieldFocus: jest.fn(),
+  onFieldBlur: jest.fn(),
+  onContentLayout: jest.fn(),
+} as unknown as FocusedFieldReveal;
+
+let backListeners: (() => boolean | null | undefined)[] = [];
+
+beforeEach(() => {
+  backListeners = [];
+  jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_event, listener) => {
+    backListeners.push(listener);
+    return { remove: () => (backListeners = backListeners.filter((l) => l !== listener)) };
+  });
+});
+
+afterEach(() => jest.restoreAllMocks());
+
+function renderSheet(open: boolean, onClose = jest.fn(), onDismiss = jest.fn()) {
+  const tree = (isOpen: boolean) => (
+    <SheetHost>
+      <SheetCovered>
+        <View testID="covered" />
+      </SheetCovered>
+      {isOpen && (
+        <Sheet
+          title="Edit link"
+          closeLabel="Close edit link"
+          onClose={onClose}
+          onDismiss={onDismiss}
+          reveal={reveal}
+        >
+          <Text>body</Text>
+        </Sheet>
+      )}
+    </SheetHost>
+  );
+  const utils = render(tree(open));
+  return {
+    ...utils,
+    rerenderOpen: (isOpen: boolean) => utils.rerender(tree(isOpen)),
+    onClose,
+    onDismiss,
+  };
+}
+
+it('sends the ✕ to onClose and Android back to onDismiss, and consumes the back press', () => {
+  const { onClose, onDismiss } = renderSheet(true);
+
+  fireEvent.press(screen.getByLabelText('Close edit link'));
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(onDismiss).not.toHaveBeenCalled();
+
+  // Consumed whatever the caller does with it, so it never falls through to
+  // the navigator and pops the links screen out from under the sheet.
+  expect(backListeners.at(-1)?.()).toBe(true);
+  expect(onDismiss).toHaveBeenCalledTimes(1);
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+it('renders its body', () => {
+  renderSheet(true);
+
+  expect(screen.getByText('body')).toBeTruthy();
+});
+
+it('hides the covered subtree from a screen reader while open, and only then', () => {
+  const { rerenderOpen } = renderSheet(false);
+  // The nearest ancestor of the covered content that says anything about it.
+  const hidden = () => {
+    let node = screen.getByTestId('covered', { includeHiddenElements: true }).parent;
+    while (node && node.props.importantForAccessibility === undefined) node = node.parent;
+    return node?.props.importantForAccessibility;
+  };
+
+  expect(hidden()).toBe('auto');
+
+  rerenderOpen(true);
+  expect(hidden()).toBe('no-hide-descendants');
+
+  rerenderOpen(false);
+  expect(hidden()).toBe('auto');
+  expect(backListeners).toHaveLength(0);
+});
+
+it('throws outside a SheetHost rather than covering nothing', () => {
+  jest.spyOn(console, 'error').mockImplementation(jest.fn());
+
+  expect(() =>
+    render(
+      <Sheet
+        title="Orphan"
+        closeLabel="Close"
+        onClose={jest.fn()}
+        onDismiss={jest.fn()}
+        reveal={reveal}
+      >
+        <Text>body</Text>
+      </Sheet>,
+    ),
+  ).toThrow('Sheet must be rendered inside a SheetHost');
+});

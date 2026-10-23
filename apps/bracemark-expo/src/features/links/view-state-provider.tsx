@@ -16,10 +16,9 @@
 // move or unmount it out from under the user. Counted, not a bool, so one
 // opening as another closes can't leave it stuck — see shared.tsx
 // useEngagedOpen). Web's remaining engagement signal (`editing`) is
-// deliberately NOT ported: the editor here is a pushed modal screen
-// (link-edit-screen.tsx), not a hoisted dialog — nothing row-anchored stays
-// mounted under it, and its draft is a snapshot, so a repaint beneath the
-// modal has nothing to disturb. Web's `selectRange` (shift-click) has no
+// deliberately NOT ported: the editor here is hoisted out of the row
+// altogether (LinkEditHost, link-edit-panel.tsx) and its draft is a snapshot,
+// so a repaint beneath it has nothing to disturb. Web's `selectRange` (shift-click) has no
 // analogue on touch and is deliberately not ported.
 //
 // Like web, navigating to another view exits bulk-edit mode (watched off the

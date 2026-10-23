@@ -1154,7 +1154,7 @@ All of them are in the app:
 | `add-link-tags`               | ”                                                                                               |
 | `add-link-note`               | ”                                                                                               |
 | `add-link-cancel`             | ” — the explicit discard                                                                        |
-| `edit-link-title`             | `src/features/links/link-edit-screen.tsx`                                                       |
+| `edit-link-title`             | `src/features/links/link-edit-panel.tsx`                                                        |
 | `edit-link-list`              | ”                                                                                               |
 | `edit-link-tags`              | ”                                                                                               |
 | `edit-link-note`              | ”                                                                                               |
@@ -1175,7 +1175,7 @@ All of them are in the app:
 | `links-search-clear`          | ”                                                                                               |
 | `links-search-advanced`       | ” — opens the advanced sheet                                                                    |
 | `advanced-search-<field>`     | ” — `text-all` `text-any` `text-none` `url` `title` `note`                                      |
-| `advanced-search-submit`      | ” — also `-clear`, `-close`                                                                     |
+| `advanced-search-submit`      | ” — also `-clear`, `-close` (the sheet's ✕, `components/ui/sheet.tsx`)                          |
 | `links-select-links`          | `src/features/links/more-options-menu.tsx` — enters bulk edit                                   |
 | `links-lock-app`              | ” — relocks the app                                                                             |
 | `bulk-count`                  | `src/features/links/bulk-edit-bar.tsx`                                                          |

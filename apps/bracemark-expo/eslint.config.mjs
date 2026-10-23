@@ -99,7 +99,7 @@ export default [
               name: 'react-native',
               importNames: ['Modal'],
               message:
-                'A react-native Modal is its own window on Android, which a relock cannot hide — it stays over the lock pane. Use the kit’s Dialog, or gate `visible` on useAppCovered() (search-bar.tsx) and disable this line with that reason. docs/locks.md, _overlays over a relock_.',
+                'A react-native Modal is its own window on Android, which a relock cannot hide — it stays over the lock pane. Use the kit’s Dialog or Sheet (src/components/ui), or gate `visible` on useAppCovered() and disable this line with that reason. docs/locks.md, _overlays over a relock_.',
             },
           ],
           patterns: [

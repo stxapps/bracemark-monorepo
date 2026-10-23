@@ -1,12 +1,12 @@
 # A dirty editor refuses an ACCIDENTAL close and permits an EXPLICIT discard, in
-# both native editors: the add panel (an absolute layer over the links screen)
-# and the edit screen (a modal router screen under usePreventRemove).
+# both native editors — the add panel and the link editor, both bodies in the
+# in-app sheet (src/components/ui/sheet.tsx), which routes every accidental
+# vector to the body's `onDismiss`.
 #
 # The accidental vectors are platform ones, which is why this is a device case:
-# the add panel's backdrop tap on both platforms plus Android's hardware back
-# (its own BackHandler), and the edit screen's iOS sheet swipe-down plus Android
-# back (usePreventRemove). What "dirty" means stays in jest
-# (docs/editors.md, _invariant 3_).
+# the backdrop tap on both platforms, Android's hardware back (the sheet's
+# BackHandler), and on a phone the swipe-down on the sheet's header. What
+# "dirty" means stays in jest (docs/editors.md, _invariant 3_).
 #
 #   maestro test mobile/flows/link-close-guard.yaml -e USERNAME=… -e PASSWORD=… \
 #     -e ANCHOR_URL=https://e2e-local.invalid/anchor \
@@ -21,7 +21,7 @@ tags: [LINK-CLOSE-001, full, online, ios, android]
 - runFlow:
     file: subflows/sign-in.yaml
 
-# A saved link: what the edit screen opens on, and what makes the absence
+# A saved link: what the editor opens on, and what makes the absence
 # assertions after the restart mean something.
 - tapOn: 'Add link'
 - runFlow:
@@ -45,6 +45,13 @@ tags: [LINK-CLOSE-001, full, online, ios, android]
       TEXT: ${DISCARDED_URL}
 - tapOn:
     id: 'add-link-optional'
+# Note can sit below the fold: on a short window with the keyboard up (a tablet
+# on its side leaves ~250dp) the sheet caps itself and scrolls its fields. A
+# no-op wherever Note is already in view.
+- scrollUntilVisible:
+    element:
+      id: 'add-link-note'
+    direction: DOWN
 - tapOn:
     id: 'add-link-note'
 - inputText: ${DRAFT_NOTE}
@@ -85,7 +92,7 @@ tags: [LINK-CLOSE-001, full, online, ios, android]
       id: 'add-link-url'
     timeout: 10000
 
-# --- the edit screen ----------------------------------------------------------------
+# --- the editor -----------------------------------------------------------------------
 - tapOn:
     id: 'link-options'
 - tapOn:
@@ -94,8 +101,11 @@ tags: [LINK-CLOSE-001, full, online, ios, android]
     id: 'edit-link-note'
 - inputText: ${DRAFT_NOTE}
 
-# iOS: the page sheet's own dismissal gesture, dragged down from its header. The
-# header's title is plain text, so the drag starts on nothing pressable.
+# iOS: the sheet's swipe-down, dragged from its header. On a phone the editor
+# fills the window to the status bar, whose strip iOS keeps for itself, so this
+# — not a backdrop tap — is its accidental door there (docs/soft-keyboard.md,
+# _the in-app sheet_). The header's title is plain text, so the drag starts on
+# nothing pressable.
 - runFlow:
     when:
       platform: iOS

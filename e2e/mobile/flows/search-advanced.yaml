@@ -130,6 +130,15 @@ tags: [SEARCH-002, full, online, destructive, ios, android]
     centerElement: true
 - tapOn: '${TAG_NAME}: not selected'
 - assertVisible: '${TAG_NAME}: included'
+# Back up to the word field: the checklists sit below the fold of a sheet the
+# keyboard has shortened (the sheet keeps the keyboard while it scrolls —
+# docs/soft-keyboard.md, _the in-app sheet_), so the field it asserts on has
+# scrolled out of view. What is asserted is the draft, not the scroll.
+- scrollUntilVisible:
+    element:
+      id: 'advanced-search-text-all'
+    direction: UP
+    centerElement: true
 - assertVisible:
     id: 'advanced-search-text-all'
     text: ${WORD}

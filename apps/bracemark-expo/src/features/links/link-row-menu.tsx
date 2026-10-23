@@ -38,7 +38,6 @@
 // the item (web needed the trigger outside the row's <a> instead).
 
 import * as Clipboard from 'expo-clipboard';
-import { useRouter } from 'expo-router';
 import {
   Archive,
   ArchiveRestore,
@@ -69,7 +68,6 @@ import {
 } from '../../components/ui/dropdown-menu';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
-import { useWideWindow } from '../../lib/window-class';
 import { useLinkEdit } from './link-edit-host';
 import { MoveToDialog } from './move-to-dialog';
 import { useEngagedOpen } from './shared';
@@ -86,7 +84,6 @@ export function LinkRowMenu({
   pinnedAbove: LinkView | undefined;
   pinnedBelow: LinkView | undefined;
 }) {
-  const router = useRouter();
   const { pin, unpin, moveUp, moveDown } = usePinMutations();
   const { update } = useLinkMutations();
   const { requestDestroy } = useLinksViewActions();
@@ -96,20 +93,9 @@ export function LinkRowMenu({
   const inTrash = link.listId === TRASH_ID;
   const inArchive = link.listId === ARCHIVE_ID;
 
-  // The editor's shell follows the docking width: the `/edit-link` route (a
-  // page sheet) below it, LinkEditHost's centred Dialog at and above it —
-  // link-edit-screen.tsx's LinkEditDialog carries why an iPad cannot keep the
-  // sheet.
-  const wide = useWideWindow();
+  // The editor is LinkEditHost's sheet at every width (link-edit-panel.tsx).
   const { openEdit } = useLinkEdit();
-  const openEditor = (focus?: 'tags' | 'note') => {
-    const linkId = linkIdOf(link);
-    if (wide) {
-      openEdit({ linkId, focus });
-      return;
-    }
-    router.push({ pathname: '/edit-link', params: { linkId, ...(focus ? { focus } : {}) } });
-  };
+  const openEditor = (focus?: 'tags' | 'note') => openEdit({ linkId: linkIdOf(link), focus });
 
   const copyLink = (
     <DropdownMenuItem onPress={() => void Clipboard.setStringAsync(link.url)}>

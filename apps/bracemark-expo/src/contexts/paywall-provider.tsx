@@ -77,10 +77,10 @@ export function PaywallProvider({ children }: { children: ReactNode }) {
     // Diverges from web's upgrade button, whose close fires onDismiss on the
     // way out — harmless there because navigating unmounts the caller's
     // surface. Here a push keeps the caller mounted underneath, and a caller's
-    // onDismiss may re-show its own surface (the search sheet reopens its
-    // native Modal, which would cover the Subscription screen) — so upgrading
-    // drops the callback unfired, honoring onDismiss's "closes without
-    // upgrading" contract above.
+    // onDismiss may re-show its own surface — which, if that surface is a
+    // native window, would cover the Subscription screen — so upgrading drops
+    // the callback unfired, honoring onDismiss's "closes without upgrading"
+    // contract above.
     setFeature(null);
     dismissRef.current = undefined;
     router.push('/settings/subscription');

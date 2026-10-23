@@ -31,7 +31,7 @@ overrides). Create collects a strict subset of edit's fields.
 | web quick-add              | `apps/bracemark-web/.../links/_components/link-add-surface.tsx` | create    | URL, then list/tags/note behind a disclosure       |
 | web edit dialog            | `apps/bracemark-web/.../links/_components/link-edit-dialog.tsx` | full edit | title, list, tags, note, image                     |
 | bracemark-expo quick-add   | `apps/bracemark-expo/src/features/links/link-add-panel.tsx`     | create    | URL, then list/tags/note behind a disclosure       |
-| bracemark-expo edit screen | `apps/bracemark-expo/src/features/links/link-edit-screen.tsx`   | full edit | title, list, tags, note, image                     |
+| bracemark-expo edit panel  | `apps/bracemark-expo/src/features/links/link-edit-panel.tsx`    | full edit | title, list, tags, note, image                     |
 | bracemark-expo share sheet | `apps/bracemark-expo/src/features/share/share-screen.tsx`       | create    | list, tags (URL/title arrive in the share payload) |
 
 **Every create surface gates on the plan's link cap, because nothing behind them
@@ -114,46 +114,47 @@ is derived from those same fields, so a reverting collapse would disarm the clos
 guard exactly when a draft was in hand.
 
 The two bracemark-expo in-app editors are the web pair's behavioral twins (same
-validation, same quota banner on create, same dirty close guard) presented
-phone-shaped — but they are presented by **different mechanisms**, and only one
-of them is a route.
+validation, same quota banner on create, same dirty close guard), and they are
+presented by **one mechanism**: both are bodies in the in-app sheet,
+`Sheet` (`components/ui/sheet.tsx`) — a bottom sheet below the docking width
+(768, `md`) and a centred card at and above it, drawn in the app's own window,
+inside the `SheetHost` that `(app)/links/_layout.tsx` wraps around the links
+Drawer — each opener's host renders its sheet after the covered Drawer, in the
+tree (never portaled: [soft-keyboard.md](./soft-keyboard.md), _the in-app sheet_,
+has the dropped keystrokes that rule out). Advanced Search is the third body. Why one shell, and what it
+replaced — a modal route for edit, an RN `Modal` for Advanced Search, each with
+a second, Dialog shell from 768 because an iPad page sheet floats where nothing
+in JS can measure it — is [soft-keyboard.md](./soft-keyboard.md), _the in-app
+sheet_.
 
-The **edit** editor has two shells on the docking width (768, `md`), over one
-draft (`useLinkEditDraft`) and one set of fields (`link-edit-screen.tsx`).
-Below it, a modal-presented expo-router screen: `/edit-link`, pushed by the row
-menu with a `linkId` + optional `focus` param (`presentation: 'modal'` — an iOS
-page sheet, an Android slide-up). A router screen, not an RN `Modal`, so it
-inherits the screens' `KeyboardAwareScrollView` path for free and portalled
-dialogs work inside it (docs/soft-keyboard.md — the presentation decides the
-keyboard mechanism), and its accidental close vectors (swipe-down, Android
-back) are swallowed while dirty by `usePreventRemove`. At and above it, the row
-menu hands the same two values to `LinkEditHost` (`link-edit-host.tsx`, hoisted
-around the links Drawer for web's reason: the row is virtualized), which opens
-`LinkEditDialog`, a centred `max-w-lg` card portaled to `APP_PORTAL_HOST`. Its
-guard maps the same split onto the Dialog: the backdrop and Android back arrive
-as `onOpenChange(false)` and are swallowed while dirty, and ✕/Cancel stay the
-deliberate doors.
+The sheet owns everything about the frame: the avoider, the cap and squeeze,
+the focused-field reveal, the backdrop, Android's back, the narrow shape's
+header swipe-down, and modality for a screen reader (`accessibilityViewIsModal`
+on iOS, `SheetHost` hiding the subtree it covers on Android). The bodies own
+their drafts and the close guard, which the sheet splits into two props:
+`onClose` for the deliberate ✕ (Cancel calls the same), `onDismiss` for the
+accidental backdrop / back / swipe — swallowed while dirty (invariant 3). Each
+body mounts only while open, so a draft is a snapshot taken at open.
 
-The **add** editor is **not a route at all**, and that is a load-bearing
-decision rather than an accident of history. `link-add-panel.tsx` is an absolute
-layer that `link-add-host.tsx` draws over the whole links section — the docked
-rail as well as the screen — while its `adding` state is true (the FAB flips
-it); its header carries the three measured facts that pushed it
-out of expo-router, all of them silent — a `fitToContents` form sheet has no
-Android half once the keyboard is up, a fitted sheet may hold no scroller (which
-costs two of the three keyboard-dismissal paths), and presenting a transparent
-modal route a second time drops the WHOLE app's accessibility tree. What the
-route was providing it now provides itself, one line each: a fresh draft per open
-(the host mounts it only while `adding`), Android's hardware back via a
-`BackHandler` that swallows the press while the optional section holds work, and
-modality for a screen reader (`accessibilityViewIsModal` on iOS, the host
-hiding the subtree it covers on Android). Its backdrop is web's outside-click and is
-guarded the same way. → docs/soft-keyboard.md, _the add panel_.
+The **add** editor (`link-add-panel.tsx`) is opened by `link-add-host.tsx`'s
+`adding` state (the FAB flips it). It was never a route, and its file header
+records why — the three measured facts that pushed it out of expo-router, all of
+them silent: a `fitToContents` form sheet has no Android half once the keyboard
+is up, a fitted sheet may hold no scroller (which costs two of the three
+keyboard-dismissal paths), and presenting a transparent modal route a second
+time drops the WHOLE app's accessibility tree (docs/soft-keyboard.md, _the add
+panel_). The sheet the other two now share was extracted from it.
 
-Two structural consequences: the edit screen
-needs **no hoisted `editing` view state** (web hoists its dialog because
-virtualized rows repaint under it; a pushed screen isn't row-anchored and its
-draft is a snapshot), and its custom-image flow is **uri/path-based end to
+The **edit** editor (`link-edit-panel.tsx`) is opened by the row menu through
+`LinkEditHost` (`link-edit-host.tsx`, hoisted beside the add host for web's
+reason: the row that asked is virtualized and may repaint or recycle under an
+open editor) with a `linkId` and an optional `focus` field to scroll to.
+
+Two structural consequences: the editor
+needs **no `editing` view state** (web hoists its dialog because virtualized
+rows repaint under it; here the editor is hoisted into `LinkEditHost` and its
+draft is a snapshot, so a repaint has nothing to disturb), and its custom-image
+flow is **uri/path-based end to
 end** (expo-image-picker → `resizeImage` uri→uri → `saveCustomImage` →
 `writeFile` path-to-path copy) — file bytes never enter the JS heap, the
 platform's file-store doctrine. They can't render the web pickers (`web-ui` is
@@ -256,10 +257,9 @@ the moment the draft was finished. How each surface does it:
 - **Web quick-add and the advanced-search popover:** a scroll box of fields,
   bled out with `-mx-4 px-4 -my-1 py-1` so its clip doesn't cut the ghost
   disclosure's overhang or the focus rings.
-- **The expo add panel:** its footer sits below the panel's `shrink` scroller.
-- **The two full-screen expo editors:** `components/sticky-footer.tsx`, a bar
-  that also rides the keyboard ([soft-keyboard.md](./soft-keyboard.md), _the
-  sticky footer_).
+- **The expo in-app sheets** (add, edit, Advanced Search): the footer sits below
+  the sheet's `shrink` scroller, and the whole sheet rides the keyboard
+  ([soft-keyboard.md](./soft-keyboard.md), _the in-app sheet_).
 
 The bulk-tags dialogs never needed the change, because `TagsCommand` scrolls its
 own rows.
@@ -939,8 +939,8 @@ editors:
   fourth field (past the image preview too, back when that sat second). The presence of a note is still signalled — that is
   `NoteBadge`'s job on the row (next bullet), not the menu's. Both are absent
   from the Trash variant, like the other edit affordances.
-- On bracemark-expo the same items push `/edit-link` with the same `focus` union
-  as a route param — with one native divergence: `focus` **scrolls** the field
+- On bracemark-expo the same items open the editor sheet with the same `focus`
+  union (`LinkEditHost`'s `openEdit`) — with one native divergence: `focus` **scrolls** the field
   into view instead of focusing it, because focusing a native input summons the
   keyboard over the very note most opens are there to read (web's `focus()` has
   no such side effect). The rename doesn't change that: an always-on item is
@@ -1151,8 +1151,10 @@ Nothing about that was decided per surface: it is where the guard sits. Radix an
 from an Escape, and a guard written there catches all three. The two surfaces that
 did not use a primitive's close had no such problem and always got this right —
 web quick-add's sheet (its own X, `onOpenChange(false)`) and bracemark-expo's
-link-edit-screen (its own header X, setting `closing` to drop
-`usePreventRemove`). So `DialogContent` on both platforms, and web's
+editor when it was a route (its own header X, setting `closing` to drop
+`usePreventRemove`). bracemark-expo's `Sheet` is built the same way: its ✕ calls
+`onClose` and only the accidental vectors reach `onDismiss`. So `DialogContent`
+on both platforms, and web's
 `SheetContent`, take an **`onClose`** prop: given one, the corner button stops
 being a primitive `Close` and calls it directly, while Escape and the backdrop
 keep routing through `onOpenChange` where the guard still wants them.
@@ -1457,17 +1459,12 @@ decision ([architecture.md](./architecture.md), _dependency versions_) — and t
 one that looks free, a `formSheet` route presentation, is NOT the answer for a
 surface with a keyboard: it has no Android half and it forbids the scroller the
 keyboard rules are built on ([soft-keyboard.md](./soft-keyboard.md), _the add
-panel_, carries all three measurements). The quick-add is a panel the links
-section draws over itself instead (`links/link-add-panel.tsx`, hosted around the
-Drawer by `links/link-add-host.tsx`) — a bottom sheet below `md` and a centred
-card from it, which is web's own narrow/wide split — so the two clients agree on
-the container as well as the form. **The expo EDITOR stays a modal route below
-`md`**: it is a full-height form with nothing to reclaim, and a presented route
-is what gives it swipe-down, back and `usePreventRemove`. From `md` it is a
-centred Dialog, because an iPad page sheet floats its sticky footer off the
-keys ([soft-keyboard.md](./soft-keyboard.md), _the sticky footer_). A growable picker that outgrows a dialog
-still has no sheet primitive to reach for; the panel is a one-caller shape, not a
-component, until a second surface needs it.
+panel_, carries all three measurements). The quick-add, the editor and Advanced
+Search are bodies in the app's own in-app sheet instead (`components/ui/sheet.tsx`)
+— a bottom sheet below `md` and a centred card from it, which is web's own
+narrow/wide split — so the two clients agree on the container as well as the
+form ([soft-keyboard.md](./soft-keyboard.md), _the in-app sheet_). A growable
+picker that outgrows a dialog is a candidate for the same sheet.
 What a dialog does NOT get for free is the keyboard, or the room the keyboard
 leaves: portaled content inherits nothing from the screen's scroll container, so
 `ui/dialog.tsx` carries its own avoider and bounds itself to what is left, and a
@@ -1477,5 +1474,5 @@ is why the bulk tags editor stays a dialog rather than becoming a route screen
 bulk tags dialog renders the picker body the in-app editors' `TagsField` opens
 (`TagsCommand`) directly — filter input and reuse-or-mint Create included; the
 single-link case no longer rides this dialog anyway — the row
-menu's Edit tags pushes `/edit-link` focused on tags, like web). Web's
+menu's Edit tags opens the editor focused on tags, like web). Web's
 shift-click `selectRange` has no touch analogue and is not ported.

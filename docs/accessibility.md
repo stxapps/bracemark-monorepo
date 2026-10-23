@@ -563,9 +563,9 @@ The web has no equivalent policy: browser text zoom reflows, and
 ### a 36dp box is not a 44pt target (expo)
 
 Every icon button in expo's chrome is `size-9` (36) — both topbars, the two
-floating-surface closes (`ui/dialog.tsx`'s corner X and the add panel's) — or
-`size-10` (40) for the two system-modal header closes (edit-link, Advanced
-Search) and the advanced-search trigger. iOS HIG asks for 44pt and Material for
+floating-surface closes (`ui/dialog.tsx`'s corner X and the in-app sheet's,
+`ui/sheet.tsx`, which add link, edit link and Advanced Search share) — or
+`size-10` (40) for the advanced-search trigger. iOS HIG asks for 44pt and Material for
 48dp, so **every one of them is under the floor as drawn**, and the fix is
 `hitSlop`, not a bigger box.
 
@@ -582,15 +582,14 @@ trigger, while the closes on the three editor surfaces — edit-link, Advanced
 Search, the add panel — shipped bare at 40, and `ui/dialog.tsx`'s shipped at 40
 effective because its box was the 16pt glyph plus `hitSlop={12}`. Nothing
 reported it: an under-floor target is a working button. The values, each read off
-the rule above rather than picked: the two in-row header closes take
-`{ top: 4, bottom: 4, left: 8, right: 6 }` (54x48 — `right: 6` runs out to the
-row's `pr-1.5` frame edge, and the left 8 is free because the title beside them
-is a `Text`, which takes no touches); the add panel's takes a plain `8` (52x52,
-nothing pressable near it); the dialog's takes `6` on the kit's 36 box (48). The
-five closes sit at the app's two glyph rungs for the same reason the topbars do —
-`size-5` on the two bar-shaped headers, `size-4` on the floating pair — which is
-`features/links/topbar.tsx`'s free-margin rule, not a size preference: 40/20 and
-36/16 both leave 10pt a side.
+the rule above rather than picked: the sheet's takes a plain `8` (52x52,
+nothing pressable near it); the dialog's takes `6` on the kit's 36 box (48). (The
+editor and Advanced Search had in-row header closes of their own while they were
+system modals, `size-10` with `{ top: 4, bottom: 4, left: 8, right: 6 }` — gone
+with the presentations.) Both closes sit at the floating tier's glyph rung,
+`size-4`, for the reason the topbars sit at theirs —
+`features/links/topbar.tsx`'s free-margin rule, not a size preference: 36/16
+leaves 10pt a side.
 
 The **share sheet's** close (`features/share/share-kit.tsx`) takes the topbars'
 plain `6` on its `size-9` box for the topbars' reason — the lockup it trails is
@@ -667,9 +666,11 @@ to grow the row, not clip the name.
 ### modality — an overlay that covers the screen must also cover the a11y tree
 
 A surface drawn OVER the app rather than presented by the navigator has to say
-so, or a screen reader walks straight out of it into the content behind. The add
-panel (`links/link-add-panel.tsx`, [soft-keyboard.md](./soft-keyboard.md), _the
-add panel_) is the case that proves the two halves are not equal:
+so, or a screen reader walks straight out of it into the content behind. The form
+sheet (`components/ui/sheet.tsx` — add link, edit link, Advanced Search;
+[soft-keyboard.md](./soft-keyboard.md), _the in-app sheet_) is the case that proves
+the two halves are not equal; it was measured on the add panel, the sheet's
+first body:
 
 - **iOS: `accessibilityViewIsModal` on the panel's root works.** Measured with
   `maestro hierarchy` on an iPhone 17 Pro: with the panel up the tree holds the
@@ -903,5 +904,5 @@ the place to say what the role came from. Both `create-account-form`s carry one.
 | `apps/bracemark-expo/src/lib/font-scale.ts`                              | the 1.3 ceiling and `useCappedFontScale`                                         |
 | `apps/bracemark-expo/src/components/ui/text.tsx`                         | heading roles + `aria-level`; one of the two font-scale chokepoints              |
 | `apps/bracemark-expo/src/features/links/topbar.tsx`                      | the `hitSlop` rule and the glyph-rung divergence the boxes are derived from      |
-| `apps/bracemark-expo/src/features/links/link-add-panel.tsx`              | modality on an in-tree overlay: what iOS honours and what Android drops          |
+| `apps/bracemark-expo/src/components/ui/sheet.tsx`                        | modality on an in-tree overlay: what iOS honours and what Android drops          |
 | `packages/web-ui/src/components/auth/create-account-form.tsx`            | the live-verdict vs. error distinction, worked through in comments               |

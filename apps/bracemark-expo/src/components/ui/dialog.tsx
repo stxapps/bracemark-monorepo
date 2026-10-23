@@ -183,8 +183,8 @@ function DialogOverlay({
 // press on a control named Close from a stray tap on the overlay, and the X goes
 // visibly dead at the moment it is most wanted. Given `onClose` the button calls
 // that directly, the way its Cancel does — a deliberate door, not an accidental
-// vector. bracemark-expo's link-edit-screen already draws the same division by
-// hand, with its own header X against `usePreventRemove`.
+// vector. ui/sheet.tsx draws the same division as two props, `onClose` for its
+// ✕ and `onDismiss` for the backdrop and Android's back.
 //
 // IT IS THE KIT'S BUTTON, and that is the second half of the port. This was a
 // bare `Pressable` wearing `rounded opacity-70 active:opacity-100` — the
