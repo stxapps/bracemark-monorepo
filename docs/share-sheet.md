@@ -137,16 +137,20 @@ sheet. No `keyboardVerticalOffset` rescues this; raising it makes the lift
 bigger, and it feeds back into KAV's own `onLayout`.
 
 The notification itself is fine — UIKit posts `UIKeyboardFrameEndUserInfoKey` in
-SCREEN coordinates, and reading it needs no window. So the number comes from our
-own module: `BracemarkShareKeyboard`
+SCREEN coordinates, and reading it needs no key window. So the number comes from
+our own native VIEW: `BracemarkShareKeyboard`
 (`modules/bracemark-share/ios/BracemarkShareKeyboardModule.swift`) observes
-`keyboardWillChangeFrame` and `keyboardWillHide` and emits the keyboard's top
-edge in screen points plus the system's animation duration.
-`features/share/share-keyboard.ts` turns that into `useShareKeyboard()` —
-`max(panelBottomOnScreen - keyboardTop, 0)`, played onto the system's own curve
-with `LayoutAnimation` — and `share-kit.tsx` applies it as bottom padding on the
-frame. A hide is reported as "top edge = bottom of the screen", so the lift
-falls to zero without a special case.
+`keyboardWillChangeFrame` and `keyboardWillHide`, converts the keyboard's frame
+into its OWN coordinates, and reports how much of itself the keyboard covers
+(`overlap`, 0 once it is down) plus the system's animation duration. It is the
+outermost box of the sheet (`ShareKeyboardFrame`), so that overlap is exactly
+the padding the frame needs. `features/share/share-keyboard.ts` turns it into
+`useShareKeyboard()`, played onto the system's own curve with `LayoutAnimation`,
+and `share-kit.tsx` applies it as bottom padding on the frame. It is a view
+rather than an event carrying the keyboard's top edge — which is what it was —
+because the other half of "how much does the keyboard cover" is where the sheet
+is, and on an iPad nothing in JS knows that (_on an iPad the sheet floats_,
+below).
 
 The panel uses the same number a second time: it subtracts it from the bottom
 safe-area inset, because a keyboard's frame reaches the bottom of the screen and
@@ -226,8 +230,8 @@ keyboard inside a 520pt container. The key is now **omitted on purpose**. The
 panel is bottom-anchored and paints its own background, so a full-screen
 container looks identical while the keyboard is down and simply stops being the
 ceiling when it is up. Nothing in JS may assume the surface's origin any more:
-the lift is computed from the keyboard's own top edge, not from where the
-container starts.
+the lift is the frame's own overlap with the keyboard, measured natively, not a
+sum over where the container is believed to start.
 
 ⚠ **"Full-screen" is a SIZE, and upstream applies it as a POSITION too — which
 put the whole sheet 72pt below the bottom of the screen.** `configureRootView`'s
@@ -275,11 +279,62 @@ display. `useSafeAreaInsets()` reports a clean 34 for such a view, because that
 is what `UIView.safeAreaInsets` says; the Save button had its 16 + 34 of
 clearance and all of it was off-screen. It is the same family as the two RN bugs
 in _what an app-extension process breaks_ above — a plausible number, no error —
-except that here the number is right and its **origin** is not. This is also why
-`share-keyboard.ts`'s `panelBottom` (`Dimensions.get('screen').height`) was
-wrong by the same 72 while it lasted: its doc comment asserts the RN root is
-"flush with the bottom of the screen", which is exactly the assumption upstream
-was breaking. That assertion is now true.
+except that here the number is right and its **origin** is not. The JS lift of the day
+(`Dimensions.get('screen').height` minus the keyboard's top edge) was wrong by
+the same 72 while it lasted, because it assumed the RN root was flush with the
+bottom of the screen — the assumption upstream was breaking, and the one an
+iPad breaks for good (next).
+
+⚠ **On an iPad the sheet floats, and only a view inside it knows where.** The
+host presents the extension as a **form sheet**: a 580×640 card centred on the
+screen, not a full-width sheet on its bottom edge. Measured on the iPad (A16)
+simulator, iOS 26.5, with the native view's own `convert(bounds, to: nil)`:
+
+| state                    | the card on screen          | keyboard top | right lift | old lift |
+| ------------------------ | --------------------------- | ------------ | ---------- | -------- |
+| landscape, keyboard down | `(300, 90)` 580×640         | —            | 0          | 0        |
+| landscape, keyboard up   | `(300, 52)` — host moved it | 398          | 294        | 422      |
+| portrait, keyboard down  | `(120, 270)` 580×640        | —            | 0          | 0        |
+| portrait, keyboard up    | clear of the keys           | 843          | 0          | stale    |
+
+Two things happen that a screen-coordinate sum cannot see. The card's bottom is
+not the screen's (90pt above it in landscape, 270 in portrait). And **the host
+moves the card for the keyboard itself** — re-centred in the room above the
+keys, stopped at a top margin — so the sheet was avoided twice: in landscape the
+picker's list squeezed to nothing under a 422pt lift where 294 was due, and in
+portrait, where the host clears the keys entirely, it lifted at all. It is the
+form-sheet wall [soft-keyboard.md](./soft-keyboard.md) records for the app's own
+editors (_On an iPad the lift overshoots, and JS cannot correct it_); the app
+escaped it by leaving the form sheet, and the extension cannot, because the
+host chooses its presentation.
+
+**JS cannot see either.** Fabric's `measureInWindow` reports the card's resting
+origin (300, 90) — right at rest — and goes on reporting it after the host has
+moved the card to 52 and after a rotation has re-centred it, because it reads a
+viewport offset cached at layout, and neither move re-lays the surface out.
+`Dimensions` stays on the orientation the extension launched in (the window
+behind it is `RCTKeyWindow()` again). A UIView's own conversion has neither
+problem, and it also answers WHEN: the card read y 90 at
+`keyboardWillChangeFrame` and y 52 on the **next main-queue turn**, a whole
+keyboard animation before `keyboardDidChangeFrame`. So the view measures one
+`DispatchQueue.main.async` after the notification — exact, and still early
+enough for the panel to travel with the keys in one motion. (In the extension
+`window.screen.bounds` also stayed on the launch orientation; the view compares
+against the window, which followed the rotation.)
+
+**And on a floating card the panel centres.** A bottom sheet inside a form
+sheet is a card glued to the floor of an invisible box. The view also reports
+`detached` — its bottom edge stops short of the window's — and `share-kit.tsx`
+then centres the panel, rounds all four corners and keeps `SHEET_GAP` below it
+as well as above: the iPadOS idiom, and the app's own add panel from 768
+(soft-keyboard.md, _the add panel's two shapes_). The keyboard still squeezes it
+from below, by the frame's real overlap. On an iPhone the frame is flush with
+the window, `detached` is false, and nothing changed. Driven on the iPad (A16)
+both ways round — compose, the tags picker, its search focused, dismissed, and
+rotated with the keyboard up — and on the iPhone 17 Pro, whose picker still
+parks on the keys. **Not driven**: a floating, split or hardware-keyboard-bar
+keyboard (the same Simulator limit soft-keyboard.md records); the view lifts to
+such a keyboard's top edge wherever it intersects the frame.
 
 **The root must not paint, whatever its size.** Left to itself
 `ShareExtensionViewController` fills that view with `.systemBackground` and
@@ -1194,7 +1249,7 @@ can neither see the share sheet nor anything in this process. →
 | iOS extension target, App Group, preprocessing JS                                                                    | `expo-share-extension` plugin in `app.config.ts` + `share-extension/preprocessing.js` + `withShareExtension` in `metro.config.js`                                                                                                                                                                                   |
 | iOS extension target's build settings, and its root view's frame                                                     | `apps/bracemark-expo/plugins/with-share-extension-build-settings.js` (team, deployment target, versions, display name) + `plugins/with-share-extension-root-view.js` (root view fills its superview, not the screen) — both `finalized` mods                                                                        |
 | Android ShareActivity + close() module                                                                               | `apps/bracemark-expo/modules/bracemark-share/android/` (autolinked local module; activity + intent-filter merged from its AndroidManifest)                                                                                                                                                                          |
-| iOS keyboard frames for the extension (`BracemarkShareKeyboard`) + the lift JS reads them through                    | `apps/bracemark-expo/modules/bracemark-share/ios/` (same local module, `BracemarkShare.podspec` path-linked into BOTH targets by `use_expo_modules!`) + `features/share/share-keyboard.ts`                                                                                                                          |
+| iOS keyboard overlap for the extension (`BracemarkShareKeyboard`, a native view) + the lift JS reads it through      | `apps/bracemark-expo/modules/bracemark-share/ios/` (same local module, `BracemarkShare.podspec` path-linked into BOTH targets by `use_expo_modules!`) + `features/share/share-keyboard.ts`                                                                                                                          |
 | iOS: holding the system's swipe-to-dismiss off on the pickers (`BracemarkShareSwipeGuard`)                           | the same module's `ios/BracemarkShareSwipeGuardModule.swift` (posts) + `plugins/with-share-extension-swipe-hold.js` (the controller's observer) + `features/share/share-swipe-guard.tsx`, mounted by `share-kit`'s `holdSwipe`                                                                                      |
 
 Like the other native pieces (the `BracemarkCrypto` pod's modules, the embedded

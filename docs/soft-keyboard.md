@@ -179,11 +179,15 @@ behavior="padding"` around the centring box in `DialogOverlay` — the container
   padding larger than the surface it pads — the content box collapses and
   `justify-end` parks the shrunken panel above the sheet. The repair is a native
   module of ours, `BracemarkShareKeyboard`
-  (`modules/bracemark-share/ios/`), which reads
+  (`modules/bracemark-share/ios/`), a native VIEW that reads
   `UIKeyboardFrameEndUserInfoKey` straight off the notification — UIKit posts it
-  in screen coordinates, so no window is needed — and emits the keyboard's top
-  edge plus the system's animation duration. `features/share/share-keyboard.ts`
-  turns that into `useShareKeyboard()` and `share-kit.tsx` applies it as
+  in screen coordinates, so no key window is needed — and reports how much of
+  ITSELF the keyboard covers, plus the system's animation duration. It is a view
+  because on an iPad the sheet is a form sheet that the host moves for the
+  keyboard itself, and only a view inside it sees where it went
+  ([share-sheet.md](./share-sheet.md), _on an iPad the sheet floats_).
+  `features/share/share-keyboard.ts` turns that into `useShareKeyboard()` and
+  `share-kit.tsx` applies it as
   bottom padding on the frame — on both hosts, Android's number coming from
   RN's own `keyboardDidShow` height plus the bottom inset. (The same number
   also cancels the bottom safe-area inset while the keyboard is up, since a

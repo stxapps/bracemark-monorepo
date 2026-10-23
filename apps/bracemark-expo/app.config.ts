@@ -174,9 +174,11 @@ const config: ExpoConfig = {
         // screen and still takes touches, which is why share-kit.tsx's
         // `share-backdrop` (already there for the band) matters more: it is the
         // tap-outside-to-close for the whole screen now. And nothing in JS may
-        // assume the surface's origin any more — the lift is computed from the
-        // keyboard's own top edge (features/share/share-keyboard.ts), not from
-        // where this container starts.
+        // assume the surface's origin any more — the lift is the share frame's
+        // own overlap with the keyboard, measured natively against the frame
+        // itself (features/share/share-keyboard.ts), because on an iPad this
+        // container is a form sheet that floats mid-screen and that the host
+        // moves for the keyboard on its own.
         excludedPackages: [
           'expo-dev-client',
           'expo-splash-screen',

@@ -37,7 +37,7 @@ import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
 import { closeShareSheet } from './share-host';
-import { useShareKeyboard } from './share-keyboard';
+import { ShareKeyboardFrame, useShareKeyboard } from './share-keyboard';
 import { ShareSwipeGuard } from './share-swipe-guard';
 
 // The panel's own padding, in points, because the bottom edge is no longer a
@@ -46,9 +46,10 @@ import { ShareSwipeGuard } from './share-swipe-guard';
 const SHEET_PAD = 16;
 
 // The strip of backdrop kept above the panel, BEYOND the top inset — see the
-// panel's `marginTop`. A floor on what stays visible of the host app, not a
-// cushion: it is what makes the surface read as a sheet over something rather
-// than as a screen.
+// panel's `marginTop` — and, when the host floats the sheet as a card, below it
+// as well. A floor on what stays visible of the host app, not a cushion: it is
+// what makes the surface read as a sheet over something rather than as a
+// screen.
 const SHEET_GAP = 24;
 
 // THE SHEET NEEDS A PROVIDER, and the version this was first written against is
@@ -79,17 +80,28 @@ const INITIAL_METRICS = {
 // The sheet's frame. Two very different native hosts, one tree below this
 // point (docs/share-sheet.md):
 //
-//   - iOS — expo-share-extension hands us a FULL-SCREEN root view with square
-//     corners and, since `backgroundColor` alpha 0 (app.config.ts), no fill of
-//     its own. It is a layout container, not a sheet: the panel below is ours —
-//     rounded top, its own background, bottom-aligned so Save stays under the
-//     thumb — and what shows above it is the host app under the system's own
-//     dimming, which is what every other iOS sheet does. It used to be a fixed
-//     520pt BAND pinned to the screen bottom, and that number is what made a
-//     keyboard unsurvivable rather than merely awkward: a picker is ~520 of
-//     chrome and list, the keyboard takes ~340 of the screen, and no amount of
-//     correct lifting fits the first into what is left of the second.
-//     app.config.ts's `height` note is the other half of this.
+//   - iOS — expo-share-extension hands us a root view that fills the host's
+//     presentation, with square corners and, since `backgroundColor` alpha 0
+//     (app.config.ts), no fill of its own. It is a layout container, not a
+//     sheet: the panel below is ours — rounded, its own background — and what
+//     shows around it is the host app under the system's own dimming, which is
+//     what every other iOS sheet does. It used to be a fixed 520pt BAND pinned
+//     to the screen bottom, and that number is what made a keyboard
+//     unsurvivable rather than merely awkward: a picker is ~520 of chrome and
+//     list, the keyboard takes ~340 of the screen, and no amount of correct
+//     lifting fits the first into what is left of the second. app.config.ts's
+//     `height` note is the other half of this.
+//
+//     THAT PRESENTATION HAS TWO SHAPES, and the frame only learns which from
+//     the native view that measures it (share-keyboard.ts). On an iPhone it is
+//     full-width and flush with the screen's bottom edge, and the panel is a
+//     bottom sheet: bottom-aligned so Save stays under the thumb. On an iPad
+//     the host makes it a FORM SHEET — a 580x640 card floating mid-screen, its
+//     bottom edge 90pt above the screen's in landscape — and a bottom sheet in
+//     there is a card glued to the floor of an invisible box. So when the
+//     frame is `detached` the panel centres and rounds all four corners: the
+//     iPadOS idiom for a form sheet, and what the app's own add panel does from
+//     768 (docs/soft-keyboard.md, _the add panel's two shapes_).
 //   - Android — the activity is translucent and full-screen, so the panel was
 //     already ours: same rounded top and background, plus its own scrim.
 //
@@ -120,8 +132,11 @@ const INITIAL_METRICS = {
 // not have (docs/soft-keyboard.md, _avoidance_).
 //
 // So the frame pads its own bottom by `useShareKeyboard()` — how much of it the
-// keyboard covers, from our native module on iOS and from the trustworthy half
-// of RN's events on Android. Bottom padding on a `justify-end` column, so
+// keyboard covers, from our native view on iOS and from the trustworthy half
+// of RN's events on Android. On iOS it is the FRAME'S OWN overlap, measured by
+// the frame, because on an iPad the host also moves the sheet for the keyboard
+// and only a view inside the sheet can see where it went (share-keyboard.ts).
+// Bottom padding on a `justify-end` (or, detached, `justify-center`) column, so
 // everything below — the panel, the tap layer, the pickers' scrollers —
 // squeezes identically on the two hosts. That squeeze chain is `min-h-0 shrink`
 // at each link, and it is load-bearing: a panel that cannot shrink does not
@@ -193,8 +208,9 @@ function ShareSheetFrame({ children, holdSwipe }: { children: ReactNode; holdSwi
   const insets = useSafeAreaInsets();
   // How much of the frame the keyboard covers, on both hosts (share-keyboard.ts)
   // — the frame's bottom padding at the foot of this function, and the inset
-  // subtraction just below.
-  const lift = useShareKeyboard(insets.bottom);
+  // subtraction just below — and whether the host floats the sheet as a card,
+  // which picks the panel's shape (the header).
+  const { lift, detached, onKeyboardGeometry } = useShareKeyboard(insets.bottom);
   const panel = (
     <View
       style={{
@@ -220,7 +236,12 @@ function ShareSheetFrame({ children, holdSwipe }: { children: ReactNode; holdSwi
         // is absolute against the frame's PADDING box (its own note), so frame
         // padding would pull the dismiss target out from under exactly the gap
         // this creates — the one part of the sheet that most invites a tap.
+        //
+        // A detached panel is centred, so it keeps the same strip below it too —
+        // between it and the keyboard while that is up, as the app's own wide
+        // add-panel card does.
         marginTop: insets.top + SHEET_GAP,
+        marginBottom: detached ? SHEET_GAP : 0,
         paddingBottom: SHEET_PAD + Math.max(insets.bottom - lift, 0),
       }}
       // `min-h-0 shrink`: the first link of the squeeze chain (see the header).
@@ -239,7 +260,10 @@ function ShareSheetFrame({ children, holdSwipe }: { children: ReactNode; holdSwi
       // by the fill (the two tokens are the same white). The saved specimen's
       // corner cut is painted in this fill and has to move with it
       // (share-specimen.tsx, OVERLAY).
-      className="min-h-0 shrink rounded-t-2xl border-t border-border bg-popover px-4 pt-4"
+      className={cn(
+        'min-h-0 shrink border-border bg-popover px-4 pt-4',
+        detached ? 'rounded-2xl border' : 'rounded-t-2xl border-t',
+      )}
     >
       {/* Tap-anywhere-dead to drop the keyboard, and it WRAPS the children
           rather than sitting behind them as an absolute layer. The absolute
@@ -308,10 +332,18 @@ function ShareSheetFrame({ children, holdSwipe }: { children: ReactNode; holdSwi
     </>
   );
 
+  // The measured box wraps the padded one rather than being it: the native view
+  // reports how much of ITSELF the keyboard covers, which is a question about
+  // the whole frame, and the padding inside is the answer.
   return (
-    <View style={{ paddingBottom: lift }} className="flex-1 justify-end">
-      {sheet}
-    </View>
+    <ShareKeyboardFrame onKeyboardGeometry={onKeyboardGeometry} style={{ flex: 1 }}>
+      <View
+        style={{ paddingBottom: lift }}
+        className={cn('flex-1', detached ? 'justify-center' : 'justify-end')}
+      >
+        {sheet}
+      </View>
+    </ShareKeyboardFrame>
   );
 }
 
