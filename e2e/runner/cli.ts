@@ -88,12 +88,12 @@ function filters(values: Map<string, string[]>): CommonFilters {
 
 const FILTER_FLAGS = new Set(['suite', 'case', 'include-trait', 'exclude-trait']);
 
-function width(values: Map<string, string[]>): E2EWidth {
-  const value = one(values, 'width') ?? 'narrow';
-  if (!E2E_WIDTHS.includes(value as E2EWidth)) {
+function width(values: Map<string, string[]>): E2EWidth | undefined {
+  const value = one(values, 'width');
+  if (value !== undefined && !E2E_WIDTHS.includes(value as E2EWidth)) {
     throw new Error(`--width must be "narrow" or "wide", got ${value}`);
   }
-  return value as E2EWidth;
+  return value as E2EWidth | undefined;
 }
 
 export function parseNativeCli(argv = process.argv.slice(2)): NativeCliOptions {
@@ -125,7 +125,7 @@ export function parseNativeCli(argv = process.argv.slice(2)): NativeCliOptions {
   if (!IS_STAGING && releaseReceipt) throw new Error('--release-receipt requires staging mode');
   // Staging proves the deployed services, which never see the window, so it is
   // made on the phone alone (docs/e2e.md, _narrow and wide_).
-  const runWidth = width(parsed.values);
+  const runWidth = width(parsed.values) ?? 'narrow';
   if (IS_STAGING && runWidth === 'wide') {
     throw new Error(
       'staging runs on a phone only; a wide run is local (docs/e2e.md, _narrow and wide_)',
@@ -145,13 +145,22 @@ export interface WebCliOptions extends CommonFilters {
   playwrightArgs: string[];
   // `--slow-mo <ms>`: how long each browser operation is held back, for
   // watching a `--headed` run. Playwright has no such flag, so it is the
-  // wrapper's — and only where `watch` is set (runner/web.ts). Anywhere else it
+  // wrapper's — and only where `web` is set (runner/web.ts). Anywhere else it
   // stays a passthrough and Playwright refuses it by name.
   slowMo?: number;
+  // `--width narrow|wide`: the one window's Playwright projects, where a run
+  // takes both unless told (playwright.config.ts). It stands in for
+  // Playwright's `--project`, which `nx` reads as its own and drops without a
+  // word (docs/e2e.md, _the narrow web project_). Only where `web` is set, like
+  // `--slow-mo`.
+  width?: E2EWidth;
 }
 
-export function parseWebCli(argv = process.argv.slice(2), watch = false): WebCliOptions {
-  const parsed = parseArguments(argv, watch ? new Set([...FILTER_FLAGS, 'slow-mo']) : FILTER_FLAGS);
+export function parseWebCli(argv = process.argv.slice(2), web = false): WebCliOptions {
+  const parsed = parseArguments(
+    argv,
+    web ? new Set([...FILTER_FLAGS, 'slow-mo', 'width']) : FILTER_FLAGS,
+  );
   // The last one wins, so a value after `--` overrides the root script's.
   const slowMo = parsed.values.get('slow-mo')?.at(-1);
   if (slowMo !== undefined && !/^\d+$/.test(slowMo)) {
@@ -161,6 +170,7 @@ export function parseWebCli(argv = process.argv.slice(2), watch = false): WebCli
     ...filters(parsed.values),
     playwrightArgs: parsed.passthrough,
     slowMo: slowMo === undefined ? undefined : Number(slowMo),
+    width: width(parsed.values),
   };
 }
 
@@ -201,5 +211,11 @@ export function parseVisualCli(argv = process.argv.slice(2)): VisualCliOptions {
   if (platform === 'web' && parsed.values.has('width')) {
     throw new Error('--width is for ios and android only; web takes wide and narrow in every run');
   }
-  return { ...filters(parsed.values), platform, deviceId, width: width(parsed.values), accept };
+  return {
+    ...filters(parsed.values),
+    platform,
+    deviceId,
+    width: width(parsed.values) ?? 'narrow',
+    accept,
+  };
 }

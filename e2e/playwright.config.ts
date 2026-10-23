@@ -34,12 +34,17 @@ const selection =
       )
     : requestedSelection;
 
+// The wrapper's `--width` (runner/web.ts): one window's projects, or, unset,
+// both. In the environment rather than as `--project`, which `nx` drops.
+const runWidth = process.env.E2E_WIDTH as E2EWidth | undefined;
+const runsWide = runWidth !== 'narrow';
+
 // The narrow window (docs/e2e.md, _narrow and wide_): the cases whose entry
 // admits `narrow`, run again at 390×844 by the `narrow` project, intersected
 // with the wrapper's selection the same per-project way as above. Local Chrome
 // only: width matters to layout, and neither the engine (Firefox) nor the server
 // path (staging) is split by it — the native legs make the same call.
-const runsNarrow = !IS_STAGING && !IS_FIREFOX;
+const runsNarrow = !IS_STAGING && !IS_FIREFOX && runWidth !== 'wide';
 const narrowSelection = new RegExp(
   selectCases('web', { width: 'narrow' })
     .filter((entry) => !requestedSelection || requestedSelection.test(`@${entry.id}`))
@@ -72,9 +77,19 @@ export default defineConfig<object, { layout: E2EWidth }>({
   // skipped if `web` failed, which a red run reports as "did not run".
   //
   // `narrow` is the same specs at the narrow window, for the cases admitted
-  // there; capacity waits for it too, or it would no longer run alone.
+  // there; capacity waits for it too, or it would no longer run alone. A
+  // `--width` run keeps one window's projects, and capacity is a wide one.
   projects: [
-    { name: 'web', testIgnore: '**/capacity.e2e.ts', grep: selection, use: { layout: 'wide' } },
+    ...(runsWide
+      ? [
+          {
+            name: 'web',
+            testIgnore: '**/capacity.e2e.ts',
+            grep: selection,
+            use: { layout: 'wide' as const },
+          },
+        ]
+      : []),
     ...(runsNarrow
       ? [
           {
@@ -85,13 +100,17 @@ export default defineConfig<object, { layout: E2EWidth }>({
           },
         ]
       : []),
-    {
-      name: 'capacity',
-      testMatch: '**/capacity.e2e.ts',
-      dependencies: runsNarrow ? ['web', 'narrow'] : ['web'],
-      grep: selection,
-      use: { layout: 'wide' },
-    },
+    ...(runsWide
+      ? [
+          {
+            name: 'capacity',
+            testMatch: '**/capacity.e2e.ts',
+            dependencies: runsNarrow ? ['web', 'narrow'] : ['web'],
+            grep: selection,
+            use: { layout: 'wide' as const },
+          },
+        ]
+      : []),
   ],
 
   // No `webServer`: `npm run dev` is the one definition of the stack, and this

@@ -145,9 +145,22 @@ test('--width defaults to narrow, and is refused where it means nothing', () => 
     () => parseNativeCli(['--platform', 'ios', '--width', 'tablet']),
     /--width must be "narrow" or "wide"/,
   );
+  assert.equal(parseVisualCli(['--platform', 'android']).width, 'narrow');
   assert.equal(parseVisualCli(['--platform', 'android', '--width', 'wide']).width, 'wide');
   assert.throws(
     () => parseVisualCli(['--platform', 'web', '--width', 'wide']),
     /--width is for ios and android only/,
   );
+});
+
+test('--width is the web wrapper’s, unset means both windows, and the others hand it on', () => {
+  assert.equal(parseWebCli([], true).width, undefined);
+  assert.equal(parseWebCli(['--width', 'narrow'], true).width, 'narrow');
+  assert.deepEqual(parseWebCli(['--width=wide', '--headed'], true).playwrightArgs, ['--headed']);
+  assert.throws(
+    () => parseWebCli(['--width', 'tablet'], true),
+    /--width must be "narrow" or "wide"/,
+  );
+  assert.throws(() => parseWebCli(['--width'], true), /--width requires a value/);
+  assert.deepEqual(parseWebCli(['--width', 'narrow']).playwrightArgs, ['--width', 'narrow']);
 });

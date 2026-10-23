@@ -26,6 +26,21 @@ async function main(): Promise<void> {
       'use --case/--suite/--include-trait/--exclude-trait; do not combine them with --grep',
     );
   }
+  // `--width` is the one way to pick a window: Playwright's `--project` is also
+  // `nx`'s, which keeps it without a word, so through a root script it never
+  // arrives and the run is silently both (docs/e2e.md, _the narrow web project_).
+  if (
+    options.playwrightArgs.some(
+      (argument) => argument === '--project' || argument.startsWith('--project='),
+    )
+  ) {
+    throw new Error('use --width narrow or --width wide; --project is not passed through');
+  }
+  if (options.width === 'narrow' && (IS_STAGING || IS_FIREFOX)) {
+    throw new Error(
+      'the narrow window runs on local Chrome only (docs/e2e.md, _the narrow web project_)',
+    );
+  }
   const selected = selectCases('web', {
     ...options,
     environment: E2E_ENVIRONMENT,
@@ -74,6 +89,8 @@ async function main(): Promise<void> {
     E2E_RUN_DIR: runDir,
     E2E_GREP: grep,
   };
+  // The width travels the same way, to drop the other window's project.
+  if (options.width) env.E2E_WIDTH = options.width;
   const args = ['test', ...options.playwrightArgs];
   // `--headed` alone changes nothing: the specs launch their own persistent
   // contexts (web/fixtures/launch.ts), which read these instead.
@@ -103,6 +120,8 @@ async function main(): Promise<void> {
     status: 'running',
     startedAt: new Date().toISOString(),
     suite: options.suite,
+    // Absent: both windows, as the config has them.
+    width: options.width,
     filters: {
       cases: options.cases,
       includeTraits: options.includeTraits,

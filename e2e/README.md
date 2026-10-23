@@ -32,7 +32,7 @@ test data. Native runners need Metro as well.
 
 ```sh
 npx nx e2e-web @stxapps/e2e
-npx nx e2e-web @stxapps/e2e -- --project narrow   # only the cases admitted at 390×844
+npx nx e2e-web @stxapps/e2e -- --width narrow   # only the cases admitted at 390×844; never --project
 npx nx e2e-web @stxapps/e2e --headed
 npx nx e2e-web:report @stxapps/e2e
 npx nx e2e-extension @stxapps/e2e

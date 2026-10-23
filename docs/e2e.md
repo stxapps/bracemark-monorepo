@@ -2082,10 +2082,21 @@ specimens in [safe-area.md](./safe-area.md) — the advanced-search footer behin
 the toolbar among them — stay a device check. The `narrow` project runs on local
 Chrome only: Firefox admission and staging are not split by width
 (_firefox_, _deployed staging and mobile Release builds_). `capacity` waits for
-both projects, so it still runs last and alone. Run the project by itself with
-`npx nx e2e-web @stxapps/e2e -- --project narrow`. Through `npm run e2e:web --`
-the flag never reaches Playwright: `nx` reads `--project` as its own, and the
-run is silently the whole suite.
+both projects, so it still runs last and alone. Run one window by itself with
+`npm run e2e:web:narrow` or `e2e:web:wide`: the target plus the wrapper's
+`--width`, which it passes to the config as `E2E_WIDTH`. The config then keeps
+only that window's projects, with `capacity` in the wide one, still waiting on
+`web`, and narrows the selection to the cases that width admits. A `--case`
+that width does not admit is refused by name. `--width narrow` is refused on
+Firefox and staging, which have no `narrow` project.
+
+⚠ **It is `--width` and not Playwright's `--project` because `nx` drops that
+flag silently.** `--project` is one of `nx run`'s own options (so are `-c`,
+`--verbose`, `--parallel` and `--help`). After `npm run e2e:web --`, `nx` takes
+it and passes nothing on, so the run is the whole suite with no warning. Only a
+second `--` would get it through. `runner/web.ts` refuses a `--project` that
+does reach it, pointing to `--width`, so there is one way to pick a window. Any
+new wrapper flag needs a name `nx` does not own, or it vanishes the same way.
 
 ### visual checkpoints
 
@@ -2428,6 +2439,8 @@ stop it.
 ```sh
 npx nx e2e-web @stxapps/e2e
 npx nx e2e-web @stxapps/e2e --headed   # watch it; `npm run e2e:web:headed` adds the pacing
+npm run e2e:web:narrow                 # one window: the cases admitted at 390×844
+npm run e2e:web:wide                   # the other: `web`, then `capacity`
 npx nx e2e-web:report @stxapps/e2e
 npx nx e2e-extension @stxapps/e2e
 npx nx e2e-pwa @stxapps/e2e   # builds the production export itself; needs :3001 free
@@ -2458,7 +2471,8 @@ The vectors case remains first in a full contract run. Run it alone with
 `--case CONTRACT-VECTORS-001`.
 
 The six targets also have root scripts. `npm run e2e:web`, `e2e:extension` and
-`e2e:pwa` are the target as it stands. The other three need a platform, so their
+`e2e:pwa` are the target as it stands. `e2e:web:narrow` and `e2e:web:wide` are
+`e2e-web` with `--width`, one window of the two it runs (_the narrow web project_). The other three need a platform, so their
 scripts carry it and there is no bare one. A native script also names the
 device class, which is its `--width`: `e2e:ios:iphone` / `e2e:ios:ipad` and
 `e2e:android:phone` / `e2e:android:tablet` for `e2e-mobile`, the same four after
