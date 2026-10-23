@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 
 import { BRAND, SOCIAL, themeInitScript } from '@stxapps/shared';
 
+import { NoScriptNotice } from '../components/no-script-notice';
 import { InnerLayout } from './inner-layout';
 
 import './globals.css';
@@ -160,6 +161,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Set the `.dark` class before paint so there's no flash of the wrong
             theme. Runs synchronously ahead of hydration. */}
         <script dangerouslySetInnerHTML={{ __html: themeInitScript() }} />
+        <NoScriptNotice />
         <InnerLayout>{children}</InnerLayout>
       </body>
     </html>

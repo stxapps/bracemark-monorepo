@@ -19,6 +19,7 @@ if (!siteUrl) throw new Error('NEXT_PUBLIC_SITE_URL is not set');
 export const SITE_URL = siteUrl;
 export const ABOUT_URL = `${siteUrl}/about`;
 export const FAQ_URL = `${siteUrl}/faq`;
+export const PRICING_URL = `${siteUrl}/pricing`;
 export const SUPPORT_URL = `${siteUrl}/support`;
 export const TERMS_URL = `${siteUrl}/terms`;
 export const PRIVACY_URL = `${siteUrl}/privacy`;

@@ -227,6 +227,17 @@ Three things keep the link working, and nothing fails loudly if one breaks:
 It adds no third-party load the published pages don't already describe: Paddle.js
 still arrives only on Settings → Subscription.
 
+In live, the link's host must itself be an **approved checkout domain**, and the
+match is exact: `bracemark.com` being approved does not cover `app.bracemark.com`,
+which needs its own approval. That approval is needed anyway, because the
+checkout opens on this origin and live checkout refuses unapproved domains. So a
+link on the apex that redirects here would not help. Paddle's review fetches the
+domain, and a fetch that runs no JavaScript gets this app's static shell with an
+empty `<body>`: a title and nothing else, which reads as "not live". The root
+layout's `<noscript>` (`components/no-script-notice.tsx`) gives that reader a real
+page while staying invisible to every browser that runs the app. Keep it: Paddle can
+re-review an approved domain.
+
 ### enforcement — who enforces which limit
 
 The E2E trust split, spelled out (matches the business model's principle: hard
