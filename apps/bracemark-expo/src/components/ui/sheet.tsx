@@ -372,12 +372,26 @@ export function Sheet({
   const gutterStyle = useAnimatedStyle(() => ({
     paddingBottom: wide ? Math.max(insets.bottom + keyboardHeight.get(), 0) + 8 : 0,
   }));
-  const dimStyle = useAnimatedStyle(() => ({
-    opacity: withTiming(enter.get() > 0 ? 1 : 0, {
-      duration: wide ? POPUP_FADE_MS : DIM_MS,
-      reduceMotion: ReduceMotion.System,
-    }),
-  }));
+
+  // The dim's own value, driven once at the arrival like `enter`. NOT a
+  // `withTiming` returned from the style below: an animated style re-runs
+  // whenever a value it reads changes, and each run REPLACES the running
+  // animation with a fresh one from the current value. Keyed off `enter`, that
+  // restarted the fade every frame of the slide, each restart at the ease-in
+  // start of its curve, so the dim crept to about a fifth by the time the
+  // panel landed and reached full ~200ms after it.
+  const dim = useSharedValue(0);
+  useEffect(() => {
+    dim.set(
+      withTiming(1, {
+        duration: wide ? POPUP_FADE_MS : DIM_MS,
+        reduceMotion: ReduceMotion.System,
+      }),
+    );
+    // `wide` is read once, at the arrival — `enter`'s reason.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dim]);
+  const dimStyle = useAnimatedStyle(() => ({ opacity: dim.get() }));
 
   return (
     <>
