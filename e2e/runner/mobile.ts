@@ -23,7 +23,7 @@ import { syncAndWait } from '../web/fixtures/sync';
 import { createInSettings } from '../web/fixtures/taxonomy';
 import { startFaultApi } from './api-fault';
 import { type ApiControl, controlApi } from './api-pause';
-import { parseNativeCli } from './cli';
+import { type NativePlatform, parseNativeCli } from './cli';
 import {
   countAppRows,
   readExportFile,
@@ -50,7 +50,7 @@ import {
   writeTapFlow,
 } from './hierarchy';
 import { keyboardFrame } from './keyboard';
-import { provisionAccount, writeJson } from './lib';
+import { maestro, maestroHierarchy, provisionAccount, writeJson } from './lib';
 import { type CaseStep, type CaseStepContext, prepareNativeRun } from './native-run';
 import { inkShare, screenshot } from './pixels';
 import { adbShell, capture } from './process';
@@ -546,6 +546,111 @@ async function resizeDisplay(deviceId: string, to: 'narrow' | 'reset'): Promise<
     if (Date.now() > deadline) throw new Error(`the display stayed ${width}dp wide after wm size`);
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
+}
+
+type Orientation = 'portrait' | 'landscape';
+
+const ROTATE_PARTS: Record<Orientation, string> = {
+  portrait: 'mobile/flows/parts/window-rotate-portrait.yaml',
+  landscape: 'mobile/flows/parts/window-rotate-landscape.yaml',
+};
+
+// Which way round the window is, off the screen Maestro reports.
+function orientationOf(hierarchy: string): Orientation {
+  const screen = screenBox(parseHierarchy(hierarchy));
+  return screen.right - screen.left > screen.bottom - screen.top ? 'landscape' : 'portrait';
+}
+
+// An Android display's rotation lock, as the auto-rotate tile leaves it:
+// `accelerometer_rotation` 0 holds the display at `user_rotation`, counted in
+// quarter turns from the display's NATURAL orientation. The tablet AVD's is
+// landscape, so 0 is on its side there — which is why Android is not turned by
+// Maestro's `setOrientation`, whose PORTRAIT writes 0 (Maestro 2.8.0's
+// AndroidDriver) and leaves the tablet as it was. `null` is a setting never
+// written, put back by deleting it.
+async function androidRotationSettings(deviceId: string) {
+  const read = (key: string) => adbShell(deviceId, ['settings', 'get', 'system', key]);
+  return { auto: await read('accelerometer_rotation'), user: await read('user_rotation') };
+}
+
+async function putAndroidSetting(deviceId: string, key: string, value: string): Promise<void> {
+  await adbShell(
+    deviceId,
+    value === 'null'
+      ? ['settings', 'delete', 'system', key]
+      : ['settings', 'put', 'system', key, value],
+  );
+}
+
+// The rotation the display is drawn at now, in the same quarter turns —
+// whatever held it there, the lock or the (emulated) sensor.
+async function androidDisplayRotation(deviceId: string): Promise<number> {
+  const dump = await adbShell(deviceId, ['dumpsys', 'window', 'displays']);
+  const rotation = /\bmRotation=(\d)\b/.exec(dump)?.[1];
+  if (rotation === undefined) throw new Error('`dumpsys window displays` reports no mRotation');
+  return Number(rotation);
+}
+
+// A quarter turn from however the device is held, the turn back, and — the
+// case's cleanup — the turn back again whatever happened in between, so a
+// failed run does not leave the device the other way round for the cases
+// after it. Each turn is a step that issues it and a step that waits to see
+// it: a rotation command that returned is not a window that turned, and an
+// assertion made on the old window would pass for the wrong reason.
+function deviceRotation(platform: NativePlatform, deviceId: string) {
+  let start: Orientation | undefined;
+  let expected: Orientation | undefined;
+  let android: { auto: string; user: string; rotation: number } | undefined;
+
+  const other = (orientation: Orientation): Orientation =>
+    orientation === 'portrait' ? 'landscape' : 'portrait';
+
+  const issue = async (to: Orientation, quarter: number): Promise<string | null> => {
+    expected = to;
+    if (platform === 'ios') return ROTATE_PARTS[to];
+    if (!android) throw new Error('the display was turned back before it was turned');
+    await putAndroidSetting(deviceId, 'accelerometer_rotation', '0');
+    await putAndroidSetting(deviceId, 'user_rotation', String((android.rotation + quarter) % 4));
+    return null;
+  };
+
+  const turned = async (context: CaseStepContext): Promise<null> => {
+    const deadline = Date.now() + 15_000;
+    for (;;) {
+      const now = orientationOf(await context.hierarchy());
+      if (now === expected) return null;
+      if (Date.now() > deadline) throw new Error(`the window stayed ${now}, turned ${expected}`);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  };
+
+  return {
+    async turn(context: CaseStepContext): Promise<string | null> {
+      start = orientationOf(await context.hierarchy());
+      if (platform === 'android') {
+        android = {
+          ...(await androidRotationSettings(deviceId)),
+          rotation: await androidDisplayRotation(deviceId),
+        };
+      }
+      return issue(other(start), 1);
+    },
+    async back(): Promise<string | null> {
+      if (!start) throw new Error('the display was turned back before it was turned');
+      return issue(start, 0);
+    },
+    turned,
+    async restore(): Promise<void> {
+      if (platform === 'android') {
+        if (!android) return;
+        await putAndroidSetting(deviceId, 'user_rotation', android.user);
+        await putAndroidSetting(deviceId, 'accelerometer_rotation', android.auto);
+        return;
+      }
+      if (!start || orientationOf(await maestroHierarchy({ platform, deviceId })) === start) return;
+      await maestro(ROTATE_PARTS[start], { platform, deviceId });
+    },
+  };
 }
 
 async function main(): Promise<void> {
@@ -1288,15 +1393,41 @@ async function main(): Promise<void> {
             await resizeDisplay(run.deviceId, 'narrow');
             return null;
           },
-          'mobile/flows/parts/window-resize-kept.yaml',
+          'mobile/flows/parts/window-change-kept.yaml',
           surfaceShape('add panel at 600dp', 'add-link-url', 'sheet'),
           async () => {
             await resizeDisplay(run.deviceId, 'reset');
             return null;
           },
-          'mobile/flows/parts/window-resize-kept.yaml',
+          'mobile/flows/parts/window-change-kept.yaml',
           surfaceShape('add panel back at full width', 'add-link-url', 'dialog'),
-          'mobile/flows/parts/window-resize-saved.yaml',
+          'mobile/flows/parts/window-change-saved.yaml',
+        ];
+      }
+      if (testCase.id === 'WINDOW-ROTATE-IOS-001' || testCase.id === 'WINDOW-ROTATE-ANDROID-001') {
+        env.LINK_URL = unresolvableUrl(`${run.runId}-rotate`);
+        const rotation = deviceRotation(run.platform, run.deviceId);
+        cleanupActions.push(rotation.restore);
+        // The panel as it has to be either way round: the same dialog, the
+        // keyboard still up — the URL field kept its focus — and the field and
+        // Save above the keys.
+        const settled = (label: string) => async (context: CaseStepContext) => {
+          await surfaceShape(label, 'add-link-url', 'dialog')(context);
+          await clearOfKeyboard(context, label, byIds('add-link-url', 'add-link-save'));
+          return null;
+        };
+        steps = [
+          testCase.path,
+          settled('add panel, before the turn'),
+          rotation.turn,
+          rotation.turned,
+          'mobile/flows/parts/window-change-kept.yaml',
+          settled('add panel, turned'),
+          rotation.back,
+          rotation.turned,
+          'mobile/flows/parts/window-change-kept.yaml',
+          settled('add panel, turned back'),
+          'mobile/flows/parts/window-change-saved.yaml',
         ];
       }
       if (testCase.id === 'VIEWPORT-BULK-001') {

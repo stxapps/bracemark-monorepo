@@ -1,4 +1,4 @@
-# The URL that rode out both resizes saves like any other.
+# The URL that rode out the window changes saves like any other.
 # Parameter: LINK_URL.
 appId: com.bracemark.app
 ---
@@ -11,4 +11,4 @@ appId: com.bracemark.app
 - extendedWaitUntil:
     visible: ".*${LINK_URL.replace('https://', '')}.*"
     timeout: 20000
-- takeScreenshot: saved-after-resize
+- takeScreenshot: saved-after-window-change

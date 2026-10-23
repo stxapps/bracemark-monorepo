@@ -1,4 +1,5 @@
-# After a resize: the same panel, with the same URL in it.
+# After the window changed under it — a resize, a rotation: the same panel,
+# with the same URL in it.
 # Parameter: LINK_URL.
 appId: com.bracemark.app
 ---

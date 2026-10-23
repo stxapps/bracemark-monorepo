@@ -1,0 +1,32 @@
+# A half-typed link survives the tablet turning under it, both ways: the add
+# panel is open with a URL in it and the keyboard up while the runner rotates
+# the device a quarter turn and back (runner/mobile.ts, WINDOW-ROTATE-*). The
+# two shapes are one tree (docs/soft-keyboard.md, _the two shapes are one
+# tree_), so a turn should only re-lay the panel out: the same dialog, the same
+# URL, the keyboard still up, and the field and Save still clear of it in the
+# new orientation's room — portrait squeezes the width, landscape the height.
+#
+# A tablet is wide both ways round, so a turn never crosses 768; that is
+# WINDOW-RESIZE-ANDROID-001. What a turn changes that the two wide legs, each
+# fixed in one orientation, never do is the window WHILE a surface is up: on
+# iOS the avoider's window height and the keyboard's frame are re-read
+# mid-edit, and on Android the activity has to ride out an `orientation` and a
+# `screenSize` change without being recreated (docs/expo-build.md, _devices_).
+#
+# One flow for two registry ids: the claim is registered per platform, and a
+# wide run only — it starts on the iPad upright or the tablet AVD on its side.
+appId: com.bracemark.app
+tags: [WINDOW-ROTATE-IOS-001, WINDOW-ROTATE-ANDROID-001, full, online, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- runFlow:
+    file: subflows/dismiss-logbox.yaml
+- tapOn: 'Add link'
+- runFlow:
+    file: subflows/type-autofocused.yaml
+    env:
+      FIELD: add-link-url
+      TEXT: ${LINK_URL}
+- waitForAnimationToEnd:
+    timeout: 5000

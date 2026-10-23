@@ -1,0 +1,8 @@
+# Stand an iPad upright (runner/mobile.ts, WINDOW-ROTATE-IOS-001) — also the
+# case's cleanup, so a failed run does not leave the simulator on its side for
+# the cases after it. iOS only, as parts/window-rotate-landscape.yaml says.
+appId: com.bracemark.app
+---
+- setOrientation: PORTRAIT
+- waitForAnimationToEnd:
+    timeout: 5000

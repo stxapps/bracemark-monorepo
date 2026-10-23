@@ -571,7 +571,10 @@ edge and none of it cares how wide the panel is. The iPad (A16) simulator, iOS
   dialogs already are.
 - **The two shapes are one tree**, so a rotation, a Split View drag or an
   unfold across 768 re-shapes an open panel without losing the draft, the focus
-  or the scroll. They share the avoider, the `max-h-full` cap, the `shrink`
+  or the scroll. Two kinds of change are held by e2e: the Android resize across
+  768 (`WINDOW-RESIZE-ANDROID-001`), and a rotation with the keyboard up on both
+  tablets (`WINDOW-ROTATE-IOS-001`/`-ANDROID-001`, [e2e.md](./e2e.md), _narrow
+  and wide_). They share the avoider, the `max-h-full` cap, the `shrink`
   scroller, the pinned footer and every dismissal path. The card's footer is
   still pinned below the scroller, because Save has to stay in view while the
   fields scroll, but it is no longer on the keyboard. The only boxes that

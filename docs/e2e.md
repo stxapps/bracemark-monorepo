@@ -1910,9 +1910,9 @@ keyboard over the docked rail's lower half, Show All included
 split rather than run the wide suite in both orientations, which would double
 the slowest legs for layouts each device already exercises. Turning **while a
 surface is up** is a different claim, and it gets a case of its own, the way
-`WINDOW-RESIZE-ANDROID-001` crosses 768 with the add panel open. None exists
-for rotation yet; until one does, rotation is release qualification
-([expo-build.md](./expo-build.md), _devices_).
+`WINDOW-RESIZE-ANDROID-001` crosses 768 with the add panel open:
+`WINDOW-ROTATE-IOS-001` and `WINDOW-ROTATE-ANDROID-001` turn each tablet a
+quarter and back with the panel up and the keyboard on it (below).
 
 **`widths` in `cases.json`: missing means the width a surface's cases were written
 at** — narrow on native, wide on web (`widthsOf`, `runner/registry.ts`). It is a
@@ -1943,6 +1943,25 @@ neither cause. Admitted wide today:
   recreated for an undeclared `smallestScreenSize` would lose. Its cleanup resets
   the display whatever happens. iOS has no scriptable resize; an iPad's Split
   View is release qualification ([expo-build.md](./expo-build.md), _devices_);
+- `WINDOW-ROTATE-IOS-001`, `WINDOW-ROTATE-ANDROID-001` (wide only, one flow) —
+  the add panel open with a URL in it and the keyboard up while the runner
+  turns the device a quarter from however it is held, then back: after each
+  turn the panel is still the centred dialog, the URL is still in it, the
+  keyboard is still up, and the field and Save are above the keys. A tablet is
+  wide both ways round, so a turn never crosses 768. What it changes is the
+  window under an open surface: on iOS the avoider's window height and the
+  keyboard frame are re-read in the middle of an edit, and on Android the
+  activity has to take `orientation|screenSize` without being recreated. Each
+  turn is followed by a wait that reads the turn off the hierarchy's screen box,
+  because a rotation command that returned is not a window that turned. iOS
+  turns with Maestro's `setOrientation`
+  (`parts/window-rotate-{landscape,portrait}.yaml`). Android is turned by the
+  runner with `user_rotation`, a quarter on from `dumpsys`'s `mRotation`.
+  Maestro's Android `setOrientation` writes `user_rotation` counted from the
+  display's NATURAL orientation, so its PORTRAIT is 0, which is landscape on the
+  tablet AVD and leaves it as it was. The cleanup puts the device back whatever
+  happens: the two rotation settings as they were read on Android, and the
+  starting orientation on iOS;
 - `FILTER-001`, `LOCK-LIST-001` — the docked links rail as the navigator: five
   views and a locked list's pane chosen from it, its rows never closing a drawer
   (`subflows/open-links-navigation.yaml`, which presses the drawer button on a

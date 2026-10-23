@@ -1716,6 +1716,28 @@
     "widths": ["wide"]
   },
   {
+    "id": "WINDOW-ROTATE-IOS-001",
+    "title": "A half-typed link survives an iPad turning on its side and back, the panel a dialog clear of the keyboard both ways",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "ios"],
+    "fixture": "empty",
+    "path": "mobile/flows/window-rotate.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "widths": ["wide"]
+  },
+  {
+    "id": "WINDOW-ROTATE-ANDROID-001",
+    "title": "A half-typed link survives an Android tablet turning upright and back, the panel a dialog clear of the keyboard both ways",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/window-rotate.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "widths": ["wide"]
+  },
+  {
     "id": "VISUAL-APP-001",
     "title": "The app's named visual checkpoints on a phone and a tablet, light and dark",
     "surface": "native",

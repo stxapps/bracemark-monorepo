@@ -1,0 +1,8 @@
+# Turn an iPad on its side (runner/mobile.ts, WINDOW-ROTATE-IOS-001). iOS only:
+# on Android Maestro's orientations are counted from the display's natural one,
+# which on the tablet AVD is landscape, so the runner turns that display itself.
+appId: com.bracemark.app
+---
+- setOrientation: LANDSCAPE_LEFT
+- waitForAnimationToEnd:
+    timeout: 5000
