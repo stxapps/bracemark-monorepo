@@ -1,7 +1,13 @@
+# On a wide window the settings rail is docked and has no button to open it
+# (subflows/open-settings.yaml), so Tags is one tap away.
 appId: com.bracemark.app
 ---
-- tapOn:
-    id: 'settings-open-navigation'
+- runFlow:
+    when:
+      true: ${E2E_WIDTH !== 'wide'}
+    commands:
+      - tapOn:
+          id: 'settings-open-navigation'
 - tapOn:
     id: 'settings-nav-tags'
 - extendedWaitUntil:

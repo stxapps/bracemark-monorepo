@@ -1976,7 +1976,18 @@ neither cause. Admitted wide today:
   through the docked settings rail;
 - `SHARE-ANDROID-001` — the share activity's centred panel on a tablet, its
   pickers and the configuration change under it;
+- `SHARE-CREATE-001` — a list and a tag typed into the pickers and created
+  with the keyboard up, in that panel on the tablet on its side;
 - the four checkpoint cases.
+
+**Left narrow on purpose: the rest of the Android share cases.**
+`SHARE-ANDROID-002`, `SHARE-EXTRACT-ANDROID-001` and `SHARE-CROSS-CLIENT-001`
+save through the same panel with the defaults `SHARE-ANDROID-001` already drives
+wide; what they test is the data path behind it — a killed app's pending write,
+the device extractor, sync to the web — which no window width changes.
+`SHARE-BOUNDARY-001`'s two states are text in that panel (its no-link state is
+photographed wide by `VISUAL-SHARE-001`), and it is also an iOS case, so a wide
+entry would put it on the iPad, which cannot reach the share sheet (below).
 
 **Not admitted, and why: the iOS share cases.** On an iPad, Safari's share sheet
 is a popover and the extension a centred card, and **neither is in the tree
@@ -1998,7 +2009,8 @@ way it passes `E2E_BUILD_VARIANT`, and a flow that differs by width says
 `subflows/open-links-navigation.yaml`, `subflows/tap-sheet-backdrop.yaml`,
 `link-close-guard.yaml`, `search-advanced.yaml`, `lock-list.yaml`,
 `parts/visual-settings.yaml`, `parts/visual-delete-all.yaml`,
-`parts/visual-list-lock.yaml`. A `when: visible` on the drawer button instead
+`parts/visual-list-lock.yaml`, `parts/share-create-tag-result.yaml`. A
+`when: visible` on the drawer button instead
 would race the screen it is on: right after Settings is opened the button is
 still sliding in, the check reads false on a phone, the drawer is never opened,
 and the next tap times out — sometimes. Unset, as in a hand-run `maestro test`,

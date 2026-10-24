@@ -1338,7 +1338,8 @@
     "traits": ["online", "android"],
     "fixture": "small",
     "path": "mobile/flows/share-create.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "widths": ["narrow", "wide"]
   },
   {
     "id": "SHARE-CROSS-CLIENT-001",
