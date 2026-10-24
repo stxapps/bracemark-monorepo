@@ -1861,7 +1861,7 @@ a loop, so chunking can't reach it:
   and a half times this file, if it keeps scaling linearly. Until then it stays
   on the main thread. (Since split into chunks on both platforms, because
   expo crossed the line first: _readings — expo_, **2026-09-26, the parse**.
-  Web not re-measured.)
+  Web re-measured in **2026-10-24, a regression check**, below: 0 ms.)
 - **HTML, CSV and text exports (290–378 ms):** the single `toArray()` in
   `gatherLinks` that reads the whole `links/` namespace in one IndexedDB
   request. The structured clone of every record lands in one task. The fix is
@@ -1871,6 +1871,36 @@ a loop, so chunking can't reach it:
   lines in pieces.
 
 Neither of the last two has been changed.
+
+**2026-10-24, a regression check** — the same M1 and slowdown, Chrome
+156.0.8078.47, the production export, from `72d1217` with a clean tree;
+calibration 128–129 ms at 1×, 473–529 ms at 4×. 286 commits after `353fa04`,
+among them the import limits, the depth cut on export, and stored records
+bound to their paths. Longest main-thread task per leg:
+
+| leg                   | 1,000 links | 10,000 links | 50,000 links |
+| --------------------- | ----------- | ------------ | ------------ |
+| import HTML bookmarks | < 50 ms     | < 50 ms      | < 50 ms      |
+| import backup         | < 50 ms     | 51 ms        | 149 ms       |
+| export HTML bookmarks | < 50 ms     | 70 ms        | 342 ms       |
+| export CSV            | < 50 ms     | 75 ms        | 385 ms       |
+| export plain text     | < 50 ms     | 68 ms        | 292 ms       |
+| export backup         | < 50 ms     | 64 ms        | 315 ms       |
+
+- **Nothing regressed.** Every leg the parse change didn't touch reads within
+  a run's noise of **after chunking**, and so do wall times: the 50,000-link
+  restore took 27.9 s (31 s then).
+- **The HTML import has no long task left at any size** (424 ms at 50,000
+  then). This is the first web reading of the chunked parse
+  (_readings — expo_, **2026-09-26, the parse**). That leaves no step in the
+  table's worker row.
+- **The 50,000-link exports are still 0.3–0.4 s** and still carry the owners
+  named above, both unchanged: the `toArray()` in `gatherLinks`
+  (`IDBRequest.onsuccess` again in the frame attribution) and zip.js's
+  `TextReader`.
+- The interop exports hold 962 of 1,000 links (9,592 and 47,989 at the larger
+  sizes) because the seed's shape puts ~4% in Trash, which those formats leave
+  out. The backup holds them all.
 
 #### readings — expo
 
@@ -2223,6 +2253,75 @@ blocking and wall time unchanged. The HTML import didn't move, so its decode
 was never its longest task; what is has not been profiled. What would take the
 restore further is `unzipSync`: fflate's streaming `Unzip` would inflate the
 archive a piece per turn, as the backup export already deflates it. Not made.
+
+**2026-10-24, a regression check** — `npm run measure:data:ios`, the **iPhone 17
+Pro** simulator (iOS 26.5; the development client installed there, built
+2026-10-23 after the last native change), same Mac and production bundle, from
+`72d1217` with a clean tree; calibration 771–778 ms, as before. A simulator runs
+at the Mac's speed whatever the model, and the calibration matches, so this
+compares with the iPhone 17 readings above. Longest single JS-thread stall per
+leg, then the 10,000-link legs against **after the hold** (the imports against
+**the whole-file yields**):
+
+| leg                   | 300 links | 1,000 links | 10,000 links | 10,000, 2026-09-26 |
+| --------------------- | --------- | ----------- | ------------ | ------------------ |
+| import HTML bookmarks | 126 ms    | 296 ms      | 276 ms       | 272 ms             |
+| import backup         | 123 ms    | 132 ms      | 311 ms       | 322 ms             |
+| export HTML bookmarks | 55 ms     | 64 ms       | **457 ms**   | 310 ms             |
+| export CSV            | < 50 ms   | 62 ms       | 310 ms       | 387 ms             |
+| export plain text     | < 50 ms   | 54 ms       | 311 ms       | 346 ms             |
+| export backup         | 87 ms     | 132 ms      | 351 ms       | 336 ms             |
+
+- **One regression: the HTML export at 10,000 links, 310 → 457 ms.** A second
+  10,000-link run read 458 ms, with every other leg within a few percent of the
+  first, so it is not noise. It is still in the 200 ms – 1 s band, as before.
+  **Not the serializer:** `toNetscapeHtml` at `2f27d0c` and at `72d1217`, timed
+  on the app's Hermes CLI over the same 9,592-link bundle, both took ~96 ms and
+  produced identical output. The CSV export shares the gather and the assemble
+  step with it and did not regress. The HTML export is also the first leg after
+  the restore's sync settles, so work that starts after a sync could land in its
+  window. Not profiled. The next step is a Hermes CPU profile over that leg
+  ([e2e.md](./e2e.md), _finding what owns a native stall_).
+- **Everything else held.** The imports' wall times and blocking matched the
+  whole-file yields: restore 17.0 s and 9.0 s blocking (17.7 s and 9.5 s),
+  HTML import 12.8 s and 6.8 s (13.3 s and 7.1 s). The 1,000-link HTML import
+  (296 ms) matches its 294 ms.
+
+**2026-10-24, the first Android reading** — `npm run measure:data:android` on the
+`bracemark-pixel8` AVD (Android 16, 2 GB RAM, 4 cores — [app-drivers.md](./app-drivers.md),
+_the AVDs_) running alone on the same M1, the same production bundle, from
+`72d1217` plus the measure flow's picker fix below. No Android reading came
+before it, so this is a baseline, not a comparison. Calibration 761–861 ms,
+rising through the run. Longest single JS-thread stall per leg, with a second
+10,000-link run beside the first:
+
+| leg                   | 300 links | 1,000 links | 10,000 links | 10,000, again |
+| --------------------- | --------- | ----------- | ------------ | ------------- |
+| import HTML bookmarks | 137 ms    | 332 ms      | 335 ms       | 310 ms        |
+| import backup         | 136 ms    | 158 ms      | 377 ms       | 353 ms        |
+| export HTML bookmarks | 57 ms     | 276 ms      | 2,482 ms     | 1,886 ms      |
+| export CSV            | 54 ms     | 98 ms       | 8,845 ms     | 1,027 ms      |
+| export plain text     | 67 ms     | 115 ms      | 832 ms       | 849 ms        |
+| export backup         | 109 ms    | 184 ms      | 875 ms       | 856 ms        |
+
+- **The imports read like iOS**, ~10–20% slower, and steadily across the two runs.
+- **The 10,000-link exports are memory, not code.** The second run sampled
+  `dumpsys meminfo` every 10 s. The app's native heap held ~280 MB through both
+  imports, then grew to ~640 MB during the restore's sync (154 s, unmeasured),
+  and the guest's swap filled with it. The exports then ran with 0.5–0.68 GB of
+  the app swapped out, so the same leg swung from 8.8 s to 1.0 s between runs and
+  the calibration rose. Every export reading at this size is a swap reading.
+- **What the extra ~360 MB is has not been attributed**: the Hermes heap, the
+  SQLite connection, or something the sync engine keeps. It was still allocated
+  after the last export. On a 2 GB phone that growth decides whether a large
+  export freezes, so it is the next thing to find, ahead of any export chunking.
+  iOS has no such reading: the simulator has the Mac's memory.
+- **The measure flow's Android picker step had drifted.** It tapped an unscoped
+  `Downloads`, which [e2e.md](./e2e.md) warns can hit the breadcrumb behind
+  DocumentsUI's drawer and open Recent, where an adb-pushed file is never
+  listed. The first leg failed on exactly that. `measure/flows/import.yaml` now
+  scopes the wait and the tap to `roots_list`, as `mobile/flows/import-data.yaml`
+  does.
 
 ### deferred
 

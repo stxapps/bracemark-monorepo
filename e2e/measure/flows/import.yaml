@@ -40,9 +40,18 @@ appId: com.bracemark.app
     commands:
       - tapOn: 'Show roots'
       - extendedWaitUntil:
-          visible: 'Downloads'
+          visible:
+            text: 'Downloads'
+            childOf:
+              id: 'com.google.android.documentsui:id/roots_list'
           timeout: 20000
-      - tapOn: 'Downloads'
+      # Scoped to the drawer, as import-data.yaml is: the picker can reopen
+      # Downloads and keep its breadcrumb behind the drawer, and an unscoped match
+      # taps Recent there, which never lists the adb-pushed file.
+      - tapOn:
+          text: 'Downloads'
+          childOf:
+            id: 'com.google.android.documentsui:id/roots_list'
 
 # The STEM, not the file name: iOS Files hides a known extension, so a staged
 # `measure-bookmarks-300.html` is listed as `measure-bookmarks-300`.

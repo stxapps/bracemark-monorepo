@@ -170,7 +170,8 @@ over the cap `400`s at the contract before any work runs (the abuse gate).
 > the worst case (a sparse batch; a dense one is a few listings, _the three flows:
 > push_), on top of the auth
 > middleware's D1 read (and renewal write), the bulk delete and the DO RPC, all
-> in one invocation. Workers Free — staging's plan — allows **1000 calls to
+> in one invocation. Workers Free — staging's plan outside a 10,000-link
+> measurement run, which needs Paid ([e2e.md](./e2e.md), _the sync leg_) — allows **1000 calls to
 > Cloudflare services per invocation**, bindings included. At a cap of 1000 a full
 > chunk came to 1001+, the last `HEAD` threw, and the commit answered `500` —
 > deterministically, so every retry re-uploaded the same chunk and failed the same
@@ -2819,6 +2820,61 @@ and the 1,000-link run:
   Both engines now open the span before the peek and note the kind after it, so
   a failed peek reads as a failed cycle without a kind. Read the cycle walls
   above, and in every reading before, as short by one `ops/list`.
+
+**Reading, 2026-10-24 — a regression check on staging** (`72d1217`, deployed the
+same day, clean tree; service worker allowed, Chrome 156 on an Apple M1 Mac,
+staging on Workers Paid for the run): the default run on 1,000 links, then
+`--links 10000 --legs bulk-edit --bulk 10,100,1000`. 49 commits after `7cdcd07`,
+the sync ones being the span fix above, the `op-logs.ts` refactor, the blob PUT
+route's refactor and the receipt fence's delete scan moved into SQL. Every wall is
+the leg's. The 1,000-link run:
+
+|                                          | `7cdcd07`          | `72d1217`          |
+| ---------------------------------------- | ------------------ | ------------------ |
+| push wall                                | 41.9 s             | 41.1 s             |
+| PUTs in flight, rate; `r2-put` mean      | 80.9, 69.1; 1.15 s | 82.3, 70.2; 1.11 s |
+| pull wall; GETs per s against the floor  | 20.2 s; 131 / 128  | 21.9 s; 125 / 124  |
+| incremental (100 links onto 1,000)       | 4.6 s              | 4.1 s              |
+| bulk edit of 10 / 158 / 1,058: push      | 3.1 / 4.8 / 15.7 s | 3.7 / 5.5 / 16.1 s |
+| … and its pull on the second device      | 2.2 / 3.4 / 9.7 s  | 2.7 / 3.2 / 11.3 s |
+| bulk delete of 158: commit (`r2-delete`) | 2.5 s (2.15 s)     | 2.6 s (2.23 s)     |
+
+and the 10,000-link run:
+
+|                                     | `7cdcd07`             | `72d1217`             |
+| ----------------------------------- | --------------------- | --------------------- |
+| push wall                           | 369.2 s, no failure   | 296.7 s, no failure   |
+| PUTs in flight, rate                | 87.2, 65.4 per s      | 86.6, 82.6 per s      |
+| `r2-put` mean                       | 1.31 s                | 0.99 s                |
+| upload / `push` span                | 351.2 / 357.0 s       | 278.2 / 284.4 s       |
+| signs (70) / commits (70)           | 44.9 / 39.9 s, beside | 46.0 / 47.9 s, beside |
+| bulk edit 10 / 158 / 1,058: push    | 4.2 / 7.6 / 21.3 s    | 3.6 / 6.2 / 15.8 s    |
+| … `r2-put` mean                     | 2.20 / 2.40 / 1.56 s  | 1.27 / 1.66 / 1.01 s  |
+| … and its pull on the second device | —                     | 2.4 / 3.8 / 10.2 s    |
+
+- **Nothing regressed.** At 1,000 links every row is within the spread of the
+  runs before it. The pull ran at its floor (1.0×) both times.
+- **The 10,000-link run was faster, and that was R2.** The fan-out ran as full
+  as before (86.6 of 96 in flight), and `r2-put` fell from 1.31 to 0.99 s, which
+  is the whole difference: 86.6 over 0.99 s is ~87 a second, and the push ran
+  82.6. The same reading in the bulk-edit legs explains why those were faster
+  too. The client's side did not change.
+- **Receipts still carry every commit.** All 89 commit calls of the two runs
+  read `r2-stat` 0, with no `r2-list` or `r2-head` beside them.
+- **No transient this time.** 0 of 22,972 PUTs failed, the runner pressed
+  nothing, and no cycle failed, so _retrying a failure_ and the namespace-split
+  listing again went unexercised.
+- **The slow small-edit PUTs after a large push held, more weakly**, for a
+  fourth run: `r2-put` 1.27 and 1.66 s for 10 and 158 edits onto 10,000 links,
+  against ~1.0 s for the 1,058 after them. Still not separated from the burst
+  before them.
+- **`auth` ~270 ms and `d1-ceilings` ~270–300 ms** per call, as before.
+
+The same day, `npm run measure:sync` on the local stack (wrangler dev, miniflare's
+bucket, no service worker) priced the client at the same commit: push 7.1 s (2,363
+files, 78.8 PUTs in flight), pull 3.5 s, incremental 0.6 s, bulk edit of 10 / 158
+/ 1,058 0.3 / 0.8 / 3.7 s, bulk delete 0.5 s. No earlier local reading was taken
+with the blob route, so this is the local baseline, not a comparison.
 
 ### deferred
 

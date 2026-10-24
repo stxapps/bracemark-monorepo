@@ -3427,7 +3427,7 @@ npm run measure:sync:staging                        # dryrunbase.com, 1,000 link
 npm run measure:sync:staging -- --links 1000,5000
 npm run measure:sync:staging -- --no-sw             # the app's service worker blocked
 npm run measure:sync:staging -- --legs push         # push only (pull, incremental, floor)
-npm run measure:sync:staging -- --legs bulk-edit --bulk 10,100,500 --links 10000
+npm run measure:sync:staging -- --legs bulk-edit --bulk 10,100,500 --links 10000  # Workers Paid first (⚠ below)
 npm run measure:sync:staging -- --legs bulk-delete --delete 500
 npm run measure:sync:staging -- --no-images --cpu 4
 npm run dev && npm run measure:sync                 # the local stack, for client-side questions
@@ -3473,6 +3473,11 @@ trace: open it in ui.perfetto.dev.
   responses carried no Server-Timing. Only responses that went on the wire
   count: one the service worker answered shows the page no Server-Timing, so a
   leg whose every api call was a GET (a deletes-only pull) is not noted.
+- **⚠ A 10,000-link staging run needs Workers Paid first.** Staging normally
+  runs on Workers Free. Upgrade the staging Cloudflare account to Workers Paid
+  before any `--links 10000` (or larger) run against it. The runner doesn't
+  check the plan, so nothing stops a run started without it.
+  [STAGING.md](../e2e/STAGING.md), _Sync measurement_, has the scale.
 - **The local stack can't answer the network question.** Blob bytes go through
   the api's blob route on every tier now ([local-first-sync.md](./local-first-sync.md),
   _the blob route_), but locally that api is `wrangler dev` on loopback over
@@ -3669,6 +3674,8 @@ end: an exposed passphrase on its setup step made Chrome treat Continue as a
 submission (the username check's fetch counts as one) and offer to save before
 the account existed. It prints a ✓/✗ line per flow and exits non-zero on a
 difference, and writes each flow's raw log to `.artifacts/measure/<run>/`.
+Last run 2026-10-24 on Chrome 156.0.8078.47, from `72d1217`: all seven as
+expected, so the parse the notes above read on Chrome 155 still holds.
 
 **It is not a test, and it is in no suite.** The internals page is a debugging
 surface, not a contract, and the system Chrome auto-updates, so a suite gated on

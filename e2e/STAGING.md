@@ -483,7 +483,17 @@ smoke cases passed with the guard in place, under no CSP.
 npm run measure:sync:staging                      # 1,000 links: push, pull, incremental, floor
 npm run measure:sync:staging -- --links 1000,5000
 npm run measure:sync:staging -- --no-sw           # the app's service worker blocked
+npm run measure:sync:staging -- --links 10000 --legs bulk-edit --bulk 10,100,1000  # Workers Paid first
 ```
+
+**⚠ A 10,000-link run needs the staging account on Workers Paid.** Staging
+normally runs on Workers Free. Upgrade the staging Cloudflare account to Workers
+Paid **before** a `--links 10000` (or larger) run, and let it lapse afterwards.
+Which Free limit such a run crosses has not been pinned down. For scale:
+the default 1,000-link run sent ~9,050 api requests inside its measured windows
+(2026-10-24). A 10,000-link push alone is ~23,000 blob PUTs, each a Worker
+invocation with a Durable Object write behind its commit. Nothing in the runner
+checks the plan.
 
 Where a sync spends its time, against the deployed app, api and R2
 (`docs/e2e.md`, _the sync leg_; `docs/local-first-sync.md`, _measuring a sync_).
