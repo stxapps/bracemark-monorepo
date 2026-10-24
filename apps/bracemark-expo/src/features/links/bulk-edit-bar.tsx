@@ -15,15 +15,25 @@
 //    at EVERY width — web collapses them below a measured 900px, and a phone is
 //    always below it, so the split is fixed rather than measured. Copy, Move to,
 //    and the destructive Remove stay inline, exactly web's collapsed set.
-//  - Those inline actions are GLYPHS with no label — web's second tier, the
-//    icon-only one below its measured 560px, fixed here for the same reason.
-//    They carried labels once, and the row was wider than a narrow Android
-//    phone: Button is `shrink-0`, so the surplus pushed Remove past the right
-//    edge, further while Copy read "Copied" or the font scale was raised. Each
-//    name lives in `aria-label` instead, busy and "Copied" wording included.
-//    Unlike web's squares the buttons share the row (`flex-1`): this bar gives
-//    the actions a row of their own, and a 36dp square is a small target for a
-//    thumb to tell Remove from the ⋯ beside it.
+//  - Below the wide window (768, `useWideWindow`), those inline actions are
+//    GLYPHS with no label — web's second tier, the icon-only one below its
+//    measured 560px. They carried labels once, and the row was wider than a
+//    narrow Android phone: Button is `shrink-0`, so the surplus pushed Remove
+//    past the right edge, further while Copy read "Copied" or the font scale was
+//    raised. Each name lives in `aria-label` there, busy and "Copied" wording
+//    included. Unlike web's squares the glyphs share the row (`flex-1`): this
+//    bar gives the actions a row of their own, and a 36dp square is a small
+//    target for a thumb to tell Remove from the ⋯ beside it.
+//  - On a wide window they get their labels back, sized to their content and
+//    gathered at the row's end — web's labelled tier, with Remove on the outer
+//    edge where web puts it. Stretched across a tablet's pane, four `flex-1`
+//    glyphs were ~240dp boxes that said nothing. The switch is the window's
+//    768, not web's measured 560 — the app's one layout number
+//    (docs/safe-area.md, _wide windows on native_) — and it holds at the
+//    narrowest wide pane: 768 less the docked rail leaves 488, and the labelled
+//    set takes ~335 of it at 1× and still fits at 1.5×. Web's 900 tier, the ⋯
+//    items inline, would not (another ~380), so the ⋯ menu stays at every
+//    width.
 //  - Select all is a plain boolean checkbox — the reusables Checkbox has no
 //    indeterminate (same note as the search editor's tri-state rows), so a
 //    partial selection just shows unchecked; pressing it then selects all.
@@ -44,7 +54,7 @@
 // readPins), so a pin landing from another device mid-selection is accounted
 // for — web's useLiveQuery(readPins), verbatim in spirit.
 
-import { useEffect, useRef, useState } from 'react';
+import { type ComponentProps, useEffect, useRef, useState } from 'react';
 import { BackHandler, Pressable, View } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
@@ -54,6 +64,7 @@ import {
   Check,
   Copy,
   FolderInput,
+  type LucideIcon,
   MoreHorizontal,
   Pin,
   PinOff,
@@ -84,6 +95,7 @@ import {
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
+import { useWideWindow } from '../../lib/window-class';
 import { MoveToDialog } from './move-to-dialog';
 import { useLinksPage } from './page-provider';
 import { useLinksViewState } from './view-state-provider';
@@ -97,8 +109,42 @@ type BulkAction = 'restore' | 'move' | 'pin' | 'unpin' | 'archive' | 'remove';
 // apart, the action row's `py-2`, and each takes HALF of it, so neither eats
 // the other's visible box. The actions also take the 8 of `py-2` under them,
 // where nothing is pressable: 48 tall on a phone. No horizontal slop — they
-// share the row's width at `gap-2`, so there is none to take and none needed.
+// sit `gap-2` apart at every width (sharing the row on a phone, labelled wider
+// than 44 on a wide window), so there is none to take and none needed.
 const ACTION_HIT_SLOP = { top: 4, bottom: 8 } as const;
+
+// One inline action in either shape (header): a glyph sharing the row, named by
+// `aria-label`, or on a wide window a labelled button sized to its content. The
+// label is then the visible text, and no `aria-label` restates it
+// (docs/accessibility.md — `aria-label` only where there is no text to keep);
+// the accessible name is the same words either way, which is what the e2e
+// flows' `text:` selectors match.
+function BarAction({
+  wide,
+  icon,
+  iconClassName,
+  label,
+  className,
+  ...props
+}: ComponentProps<typeof Button> & {
+  wide: boolean;
+  icon: LucideIcon;
+  iconClassName?: string;
+  label: string;
+}) {
+  return (
+    <Button
+      size="sm"
+      className={cn(!wide && 'flex-1', className)}
+      hitSlop={ACTION_HIT_SLOP}
+      aria-label={wide ? undefined : label}
+      {...props}
+    >
+      <Icon as={icon} className={cn(wide ? 'size-4' : 'size-5', iconClassName)} />
+      {wide ? <Text>{label}</Text> : null}
+    </Button>
+  );
+}
 
 export function BulkEditBar({ links }: { links: LinkView[] }) {
   const { selection } = useLinksPage();
@@ -113,6 +159,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
   } = useLinksViewState();
   const { updateMany } = useLinkMutations();
   const { pin, unpin } = usePinMutations();
+  const wide = useWideWindow();
   const [busy, setBusy] = useState<BulkAction | null>(null);
   const [moveOpen, setMoveOpen] = useState(false);
   // The "Copied" flash on Copy links; the timer is cleared on unmount so a
@@ -274,75 +321,65 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
           />
         </Pressable>
       </View>
-      <View className="flex-row items-center gap-2 py-2">
-        <Button
+      <View className={cn('flex-row items-center gap-2 py-2', wide && 'justify-end')}>
+        <BarAction
+          wide={wide}
           variant="outline"
-          size="sm"
-          className="flex-1"
           testID="bulk-copy"
-          hitSlop={ACTION_HIT_SLOP}
-          aria-label={copied ? 'Copied' : 'Copy'}
+          icon={copied ? Check : Copy}
+          iconClassName={cn(copied && 'text-primary')}
+          label={copied ? 'Copied' : 'Copy'}
           disabled={disabled}
           onPress={() => void onCopy()}
-        >
-          <Icon as={copied ? Check : Copy} className={cn('size-5', copied && 'text-primary')} />
-        </Button>
+        />
         {inTrash ? (
           <>
-            <Button
+            <BarAction
+              wide={wide}
               variant="outline"
-              size="sm"
-              className="flex-1"
               testID="bulk-restore"
-              hitSlop={ACTION_HIT_SLOP}
-              aria-label={busy === 'restore' ? 'Restoring…' : 'Restore'}
+              icon={Undo2}
+              label={busy === 'restore' ? 'Restoring…' : 'Restore'}
               disabled={disabled}
               onPress={() => void runMove('restore', selected, DEFAULT_LIST_ID)}
-            >
-              <Icon as={Undo2} className="size-5" />
-            </Button>
-            <Button
+            />
+            <BarAction
+              wide={wide}
               variant="destructive"
-              size="sm"
-              className="flex-1"
               testID="bulk-delete"
-              hitSlop={ACTION_HIT_SLOP}
-              aria-label="Delete forever"
+              icon={Trash2}
+              label="Delete permanently"
               disabled={disabled}
               onPress={() => requestDestroy(selected)}
-            >
-              <Icon as={Trash2} className="size-5" />
-            </Button>
+            />
           </>
         ) : (
           <>
-            <Button
+            <BarAction
+              wide={wide}
               variant="outline"
-              size="sm"
-              className="flex-1"
               testID="bulk-move"
-              hitSlop={ACTION_HIT_SLOP}
-              aria-label={busy === 'move' ? 'Moving…' : 'Move to'}
+              icon={FolderInput}
+              label={busy === 'move' ? 'Moving…' : 'Move to'}
               disabled={disabled || actionable.length === 0}
               onPress={() => setMoveOpen(true)}
-            >
-              <Icon as={FolderInput} className="size-5" />
-            </Button>
+            />
             {/* The share of the row goes on the menu ROOT, not the trigger: on
                 native the root is a View of its own, so that — not the Button
                 inside it — is the row's flex child, and the Button stretches
-                across it. */}
-            <DropdownMenu className="flex-1">
+                across it. On a wide window it stays a glyph, a square among the
+                labelled buttons, as web's ⋯ does. */}
+            <DropdownMenu className={cn(!wide && 'flex-1')}>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
-                  size="sm"
+                  size={wide ? 'icon-sm' : 'sm'}
                   testID="bulk-more"
                   hitSlop={ACTION_HIT_SLOP}
                   aria-label="More actions"
                   disabled={disabled || actionable.length === 0}
                 >
-                  <Icon as={MoreHorizontal} className="size-5" />
+                  <Icon as={MoreHorizontal} className={wide ? 'size-4' : 'size-5'} />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">
@@ -401,18 +438,15 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button
+            <BarAction
+              wide={wide}
               variant="destructive"
-              size="sm"
-              className="flex-1"
               testID="bulk-remove"
-              hitSlop={ACTION_HIT_SLOP}
-              aria-label={busy === 'remove' ? 'Removing…' : 'Remove'}
+              icon={Trash2}
+              label={busy === 'remove' ? 'Removing…' : 'Remove'}
               disabled={disabled || actionable.length === 0}
               onPress={() => void runMove('remove', actionable, TRASH_ID)}
-            >
-              <Icon as={Trash2} className="size-5" />
-            </Button>
+            />
           </>
         )}
       </View>

@@ -11,8 +11,9 @@
 # The "Copied" flash is asserted on iOS only. It lasts 1.5s, and measured on the
 # Pixel 8 AVD a Maestro tap returns about six seconds after it presses, so the
 # label has reverted before any assertion can run there. "Copy" / "Copied" is
-# the button's accessible name — the bar's actions are glyphs with no visible
-# label (bulk-edit-bar.tsx) — which is what `text` matches on both platforms.
+# the button's accessible name — its `aria-label` on a phone, where the bar's
+# actions are glyphs, and its visible label on a wide window (bulk-edit-bar.tsx)
+# — which is what `text` matches on both platforms.
 #
 #   maestro test mobile/flows/bulk-copy.yaml -e USERNAME=… -e PASSWORD=… \
 #     -e OLDEST_URL=… -e MIDDLE_URL=… -e NEWEST_URL=…

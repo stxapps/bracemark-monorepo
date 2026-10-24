@@ -49,7 +49,14 @@ export function Landing() {
   return (
     <StyledSafeAreaView className="flex-1 bg-background">
       <View className="flex-1 justify-center px-6">
-        <View className="w-full max-w-sm gap-8 self-center">
+        {/* `max-w-md`, one step wider than the auth screens' `max-w-sm`, and it
+            only binds on a tablet or a phone on its side (a phone's column is
+            already narrower). There is no card here to draw the column's edge,
+            and at 384 the `text-3xl` tagline broke into three ragged lines — a
+            thin strip down the middle of a tablet. 448 gives it two. The type
+            stays unprefixed: a `text-*` under a breakpoint makes
+            `testing/line-budget.ts` phone-only (docs/safe-area.md). */}
+        <View className="w-full max-w-md gap-8 self-center">
           <BrandLockup testID="heading" />
 
           <Text
@@ -86,7 +93,7 @@ export function Landing() {
           and it earns its place by resolving the tagline's momentary "…is it
           broken?" reading from a step away. */}
       <View className="px-6 pb-8">
-        <Text className="max-w-sm self-center text-center text-xs leading-5 text-muted-foreground">
+        <Text className="max-w-md self-center text-center text-xs leading-5 text-muted-foreground">
           {BRAND.slogan}
         </Text>
       </View>

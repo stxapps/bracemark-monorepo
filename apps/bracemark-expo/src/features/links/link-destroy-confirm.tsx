@@ -1,4 +1,4 @@
-// The confirmation behind Trash's "Delete forever" — the expo port of
+// The confirmation behind Trash's "Delete permanently" — the expo port of
 // bracemark-web's LinkDestroyConfirm (`(app)/links/_components/
 // link-destroy-confirm.tsx`, the canonical doc: destroy is the one
 // irreversible link action — it removes the link plus its pin/extraction/
