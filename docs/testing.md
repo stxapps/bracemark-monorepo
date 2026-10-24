@@ -477,8 +477,15 @@ a `*.ts` beside the source.
 Both expo suites run the real modules over shimmed native seams, which is what
 makes that possible — `src/testing/node-sqlite.ts` puts the real DDL and the
 real drizzle driver on `node:sqlite`, and `src/testing/memory-file-system.ts`
-puts the real `data/file-store.ts` on an in-memory filesystem. Two
-strictnesses in that shim are deliberate, because both catch real bugs: a
+puts the real `data/file-store.ts` on an in-memory filesystem. The sqlite shim
+models one device behaviour that node:sqlite lacks. It counts a statement as
+live until it is finalized, because the device keeps it compiled even after
+node:sqlite would have collected it, and a finalized statement throws if it is
+used again.
+`statementCounts()` reports how many are prepared and how many are live, which
+is how `data/db.spec.ts` sees a leak that would otherwise exist only as native
+heap on a device (client-queries.md, _the expo port_). Two strictnesses in the
+file-system shim are deliberate, because both catch real bugs: a
 `delete()` of something absent throws, as the native API does, and so does a
 write into a directory nobody created. It stores **bytes**, and used to store
 strings — the sync plane never looks at a `files/` payload (it moves

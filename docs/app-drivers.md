@@ -140,6 +140,19 @@ avdmanager create avd -n bracemark-pixel8 \
 $ANDROID_HOME/emulator/emulator -avd bracemark-pixel8 -no-audio -no-boot-anim &
 ```
 
+**⚠ That trailing `&` runs the emulator at nice 5 under zsh.** zsh's
+`BG_NICE` option, on by default, renices every background job, and macOS then
+schedules the `qemu-system` process as background work (`ps -o pri,nice` read
+priority 4, nice 5, against 47 and 0 for a foreground launch). Nothing fails:
+the guest just runs slower. The specimen is `measure:data:android`, whose
+calibration read 3,163–3,333 ms against a 761–886 ms band, which made every
+stall 4× too long. A `npm run dev` started the same way is niced too. For
+anything timed, run the emulator in a terminal of its own, or put
+`setopt no_bg_nice;` in front of the line. Check with
+`ps -o pri,nice -p $(pgrep -f qemu-system)`
+([data-lifecycle.md](./data-lifecycle.md), _readings — expo_, **2026-10-24,
+the statement leak**).
+
 Six edits to `~/.android/avd/bracemark-pixel8.avd/config.ini` after creating it,
 four for disk and two the defaults get wrong for e2e:
 

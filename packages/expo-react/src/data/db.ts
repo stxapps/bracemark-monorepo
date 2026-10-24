@@ -565,13 +565,74 @@ let db: ExpoSQLiteDatabase<typeof schema> | null = null;
 // business running (scrubFreedPages below).
 let sqlite: ReturnType<typeof openDatabaseSync> | null = null;
 
+type SqliteClient = ReturnType<typeof openDatabaseSync>;
+type SqliteStatement = ReturnType<SqliteClient['prepareSync']>;
+
+// ⚠ How many compiled statements drizzle's connection keeps. drizzle's expo
+// driver prepares a statement for every `.get()`, `.all()` and `.run()` and
+// never finalizes one (drizzle-orm 0.45, `expo-sqlite/session.js`), and
+// expo-sqlite does not finalize one it drops: on Android the native release
+// frees only the JNI wrapper, and on iOS nothing runs at all. A statement
+// nobody finalized stays compiled on its connection until the connection
+// closes, and this one never closes. So every query the app ran was native
+// memory kept for the life of the process: ~320 MB over one 10,000-link restore
+// sync on a 2 GB Android emulator, which pushed the exports after it into swap
+// (docs/data-lifecycle.md, _readings — expo_, **2026-10-24, the statement
+// leak**). Nothing else reports it: no error, and the iOS simulator has the
+// Mac's memory.
+//
+// So drizzle prepares through `cacheStatements`: one statement per SQL text,
+// reused (expo-sqlite resets and rebinds it on every execute), and the least
+// recently used finalized past this many. That bounds the memory and drops the
+// re-prepare on a repeated query. The texts that churn are the `IN (…)` batches,
+// one per batch length up to 500. This keeps the hot ones (a transaction's
+// `begin`/`commit`, the per-op reads) far from eviction: a whole 10,000-link
+// HTML import compiles 35 texts.
+export const STATEMENT_CACHE_SIZE = 256;
+
+// The client drizzle gets: `client` with `prepareSync` going through the cache
+// above. Reusing a statement is sound because the driver is synchronous: it
+// prepares, executes and reads a statement's rows to the end before it
+// prepares another. So the cache never hands out a statement whose last result
+// is still being read, and the one it evicts is never the one in use. The
+// exception is a query held from drizzle's `.prepare()` across other queries,
+// whose statement the cache may finalize under it, so none is held (none
+// exists today).
+function cacheStatements(client: SqliteClient, size: number): SqliteClient {
+  // A Map iterates in insertion order, so re-inserting on use makes it an LRU.
+  const statements = new Map<string, SqliteStatement>();
+  const prepareSync = (source: string): SqliteStatement => {
+    const cached = statements.get(source);
+    if (cached) {
+      statements.delete(source);
+      statements.set(source, cached);
+      return cached;
+    }
+    const statement = client.prepareSync(source);
+    statements.set(source, statement);
+    if (statements.size > size) {
+      const [oldest, evicted] = statements.entries().next().value as [string, SqliteStatement];
+      statements.delete(oldest);
+      evicted.finalizeSync();
+    }
+    return statement;
+  };
+  return new Proxy(client, {
+    get(target, key) {
+      if (key === 'prepareSync') return prepareSync;
+      const value: unknown = Reflect.get(target, key, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+
 export function getDb(): ExpoSQLiteDatabase<typeof schema> {
   if (!db) {
     sqlite = openDatabaseSync(DB_NAME, { enableChangeListener: true });
     // WAL lets the change-listener reads proceed while a write is in flight.
     sqlite.execSync('PRAGMA journal_mode = WAL;');
     sqlite.execSync(DDL);
-    db = drizzle(sqlite, { schema });
+    db = drizzle(cacheStatements(sqlite, STATEMENT_CACHE_SIZE), { schema });
   }
   return db;
 }

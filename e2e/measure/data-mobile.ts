@@ -16,6 +16,7 @@ import { API_URL, SITE_URL, WEB_URL } from '../web/fixtures/env';
 import { grantPlus } from '../web/fixtures/plan';
 import { writeBackupLibrary, writeBookmarksHtml } from './library';
 import { band } from './main-thread';
+import { formatMemory, type MemoryReading, readMemory, traceMemory } from './memory';
 
 // How long import and export block bracemark-expo's JS thread, at library sizes
 // you pick — the native half of docs/data-lifecycle.md, _main-thread cost_,
@@ -25,6 +26,7 @@ import { band } from './main-thread';
 //   npm run measure:data:ios                      # the one booted simulator
 //   npm run measure:data:android -- --links 1000,10000
 //   npm run measure:data:ios -- --device <udid>   # one of several booted
+//   npm run measure:data:android -- --memory-trace  # + memory.jsonl, every 10 s
 //
 // NOT A TEST, for measure/data-web.ts's reason. Numbers for a person to read and
 // record in the doc.
@@ -48,6 +50,11 @@ import { band } from './main-thread';
 // api. The origins are pinned in Metro's own environment (an exported variable
 // outranks every env file), and the served bundle is checked before anything
 // runs: it must name the local api and no deployed one.
+//
+// ON ANDROID IT ALSO READS MEMORY: `dumpsys meminfo` as each leg ends and around
+// the restore's sync (measure/memory.ts), outside the probe's windows. The
+// debug native shell makes these numbers higher than a release build's, so
+// compare them run with run, not with a phone. Growth is the reading.
 //
 // A SIMULATOR IS NOT A PHONE. The iOS simulator and an Apple-silicon emulator
 // run at the Mac's speed and there is no CPU throttle for either. Every leg
@@ -81,6 +88,7 @@ interface Options {
   deviceId: string;
   links: number[];
   exports: boolean;
+  memoryTrace: boolean;
 }
 
 // What the command line says; `--device` is optional, as in the e2e runners.
@@ -104,6 +112,17 @@ interface NativeLeg {
   leg: string;
   reading: StallReading;
   calibration: StallCalibration;
+  // The app's memory as the leg ends, outside the probe's window (measure/memory.ts).
+  // Android only.
+  memory?: MemoryReading;
+}
+
+// The restore's sync, which no probe windows: how long, and what it left behind.
+interface SyncReading {
+  links: number;
+  wallMs: number;
+  before?: MemoryReading;
+  after?: MemoryReading;
 }
 
 function parseOptions(argv: string[]): ParsedOptions {
@@ -111,6 +130,7 @@ function parseOptions(argv: string[]): ParsedOptions {
   let deviceId: string | undefined;
   let links = [1_000, 10_000];
   let exports = true;
+  let memoryTrace = false;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     const value = () => {
@@ -131,6 +151,7 @@ function parseOptions(argv: string[]): ParsedOptions {
         throw new Error('--links takes positive whole numbers, comma-separated');
       }
     } else if (arg === '--no-exports') exports = false;
+    else if (arg === '--memory-trace') memoryTrace = true;
     else throw new Error(`unknown option ${arg}`);
   }
   if (!platform) {
@@ -139,7 +160,10 @@ function parseOptions(argv: string[]): ParsedOptions {
         '`npm run measure:data:ios`, `measure:data:android`.',
     );
   }
-  return { platform, deviceId, links, exports };
+  if (memoryTrace && platform !== 'android') {
+    throw new Error('--memory-trace reads dumpsys, so it is Android only (measure/memory.ts)');
+  }
+  return { platform, deviceId, links, exports, memoryTrace };
 }
 
 async function main(): Promise<void> {
@@ -160,12 +184,19 @@ async function main(): Promise<void> {
   await mkdir(runDir, { recursive: true });
 
   const metro = await startMetro(options.platform, runDir);
+  const trace = options.memoryTrace
+    ? traceMemory(options.deviceId, APP_ID, join(runDir, 'memory.jsonl'))
+    : undefined;
   const legs: NativeLeg[] = [];
+  const syncs: SyncReading[] = [];
   try {
     for (const links of options.links) {
-      legs.push(...(await measureSize(links, runDir, options)));
+      const size = await measureSize(links, runDir, options);
+      legs.push(...size.legs);
+      if (size.sync) syncs.push(size.sync);
     }
   } finally {
+    await trace?.stop();
     await metro.stop();
   }
 
@@ -182,12 +213,17 @@ async function main(): Promise<void> {
     bundle: 'production (--no-dev --minify) on the development client',
     checkout: { commit: commit.stdout.trim(), dirty: status.stdout.trim().length > 0 },
     legs,
+    syncs,
   });
-  report(legs);
+  report(legs, syncs);
   console.log(`\nresults: ${resultsPath}`);
 }
 
-async function measureSize(links: number, runDir: string, options: Options): Promise<NativeLeg[]> {
+async function measureSize(
+  links: number,
+  runDir: string,
+  options: Options,
+): Promise<{ legs: NativeLeg[]; sync?: SyncReading }> {
   const count = links.toLocaleString('en-US');
   // Names the document-picker staging accepts (runner/device-files.ts).
   const htmlName = `measure-bookmarks-${links}.html`;
@@ -195,6 +231,7 @@ async function measureSize(links: number, runDir: string, options: Options): Pro
   await writeBookmarksHtml(join(runDir, htmlName), links);
   await writeBackupLibrary(join(runDir, backupName), links);
   const legs: NativeLeg[] = [];
+  let sync: SyncReading | undefined;
 
   // An empty library for the interop import, as on web.
   legs.push(await importLeg(`import HTML (${count})`, 'interop', htmlName, runDir, options));
@@ -203,18 +240,29 @@ async function measureSize(links: number, runDir: string, options: Options): Pro
   legs.push(await importLeg(`import backup (${count})`, 'restore', backupName, runDir, options));
   if (options.exports) {
     await flow('to-data.yaml', options);
+    const before = await memoryOf(options);
     const started = Date.now();
     await waitForSync(options);
-    console.log(`  (the restore synced in ${seconds(Date.now() - started)} — not measured)`);
+    sync = { links, wallMs: Date.now() - started, before, after: await memoryOf(options) };
+    console.log(
+      `  (the restore synced in ${seconds(sync.wallMs)} — not probed; native heap ` +
+        `${formatMemory(sync.before)} → ${formatMemory(sync.after)})`,
+    );
     for (const { label } of EXPORT_FORMATS) {
       const leg = `export ${label} (${count})`;
       console.log(`\n${leg}`);
       await flow('export.yaml', options, { FORMAT_LABEL: label });
-      legs.push({ leg, ...(await readProbe(options, 'export')) });
+      legs.push({ leg, ...(await readProbe(options, 'export')), memory: await memoryOf(options) });
       await flow('to-data.yaml', options);
     }
   }
-  return legs;
+  return { legs, sync };
+}
+
+function memoryOf(options: Options): Promise<MemoryReading | undefined> {
+  return options.platform === 'android'
+    ? readMemory(options.deviceId, APP_ID)
+    : Promise.resolve(undefined);
 }
 
 async function importLeg(
@@ -244,7 +292,7 @@ async function importLeg(
   } finally {
     await unstage();
   }
-  return { leg, ...(await readProbe(options, 'import')) };
+  return { leg, ...(await readProbe(options, 'import')), memory: await memoryOf(options) };
 }
 
 async function flow(
@@ -457,8 +505,8 @@ async function describeDevice(options: Options): Promise<string> {
 
 // --- the report ---------------------------------------------------------------------
 
-function report(legs: NativeLeg[]): void {
-  const rows = legs.map(({ leg, reading, calibration }) => [
+function report(legs: NativeLeg[], syncs: SyncReading[]): void {
+  const rows = legs.map(({ leg, reading, calibration, memory }) => [
     leg,
     seconds(reading.wallMs),
     `${reading.longestMs.toLocaleString('en-US')} ms`,
@@ -466,8 +514,18 @@ function report(legs: NativeLeg[]): void {
     String(reading.stalls),
     band(reading.longestMs),
     `${calibration.workMs} ms`,
+    formatMemory(memory),
   ]);
-  const header = ['leg', 'wall', 'longest stall', 'blocking', 'stalls', 'band', 'calibration'];
+  const header = [
+    'leg',
+    'wall',
+    'longest stall',
+    'blocking',
+    'stalls',
+    'band',
+    'calibration',
+    'native heap after',
+  ];
   const widths = header.map((title, column) =>
     Math.max(title.length, ...rows.map((row) => row[column].length)),
   );
@@ -476,6 +534,12 @@ function report(legs: NativeLeg[]): void {
   console.log(`\n${line(header)}`);
   console.log(widths.map((width) => '-'.repeat(width)).join('  '));
   for (const row of rows) console.log(line(row));
+  for (const sync of syncs) {
+    console.log(
+      `\nthe ${sync.links.toLocaleString('en-US')}-link restore’s sync: ${seconds(sync.wallMs)}, ` +
+        `native heap ${formatMemory(sync.before)} → ${formatMemory(sync.after)}`,
+    );
+  }
 }
 
 function seconds(ms: number): string {

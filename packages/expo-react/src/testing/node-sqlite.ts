@@ -16,8 +16,15 @@
 // The driver's client contract is small — this implements only what
 // `drizzle-orm/expo-sqlite`'s session actually calls (`prepareSync`, and on the
 // statement `executeSync` / `executeForRawResultSync`), plus the `execSync` that
-// db.ts uses for the PRAGMA and the DDL. Transactions need nothing extra:
-// drizzle drives `begin`/`commit`/`rollback` through the same prepare path.
+// db.ts uses for the PRAGMA and the DDL, and the `finalizeSync` its statement
+// cache calls on eviction. Transactions need nothing extra: drizzle drives
+// `begin`/`commit`/`rollback` through the same prepare path.
+//
+// A finalized statement THROWS when it is used again, as expo-sqlite's does
+// (`maybeThrowForFinalizedStatement`), and `statementCounts()` says how many were
+// prepared and how many are still live. node:sqlite finalizes a dropped
+// statement on GC, which the device never does (db.ts, STATEMENT_CACHE_SIZE),
+// so the live count is what a spec reads to see the device's leak.
 //
 // NOT emulated: `enableChangeListener`. drizzle's `useLiveQuery` subscribes to
 // expo-sqlite's change events, so reactivity stays out of scope here — these
@@ -25,8 +32,33 @@
 
 import { DatabaseSync, type SQLInputValue, type StatementSync } from 'node:sqlite';
 
-function wrapStatement(stmt: StatementSync) {
+// Across every database this module opened, since the registry loaded it.
+const counts = { prepared: 0, finalized: 0 };
+
+export function statementCounts(): { prepared: number; live: number } {
+  return { prepared: counts.prepared, live: counts.prepared - counts.finalized };
+}
+
+function wrapStatement(source: StatementSync) {
+  counts.prepared += 1;
+  let finalized = false;
+  const live = (): StatementSync => {
+    if (finalized) throw new Error('Access to closed resource: the statement was finalized');
+    return source;
+  };
+  // Through `live()` from here on, so a finalized statement can't be used.
+  const stmt = {
+    run: (...params: SQLInputValue[]) => live().run(...params),
+    all: (...params: SQLInputValue[]) => live().all(...params),
+    get: (...params: SQLInputValue[]) => live().get(...params),
+    setReturnArrays: (enabled: boolean) => live().setReturnArrays(enabled),
+  };
   return {
+    finalizeSync() {
+      live();
+      finalized = true;
+      counts.finalized += 1;
+    },
     // expo-sqlite returns ONE result object that answers both "how many rows
     // changed" and "give me the rows"; node:sqlite makes you choose `run()` vs
     // `all()` up front. So execution is deferred to whichever face the caller

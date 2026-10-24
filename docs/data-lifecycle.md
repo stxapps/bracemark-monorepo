@@ -2311,17 +2311,112 @@ rising through the run. Longest single JS-thread stall per leg, with a second
   and the guest's swap filled with it. The exports then ran with 0.5–0.68 GB of
   the app swapped out, so the same leg swung from 8.8 s to 1.0 s between runs and
   the calibration rose. Every export reading at this size is a swap reading.
+  _Since corrected: the swing was the swap, the floor was not_ (**2026-10-24,
+  the statement leak**, below).
 - **What the extra ~360 MB is has not been attributed**: the Hermes heap, the
   SQLite connection, or something the sync engine keeps. It was still allocated
   after the last export. On a 2 GB phone that growth decides whether a large
   export freezes, so it is the next thing to find, ahead of any export chunking.
-  iOS has no such reading: the simulator has the Mac's memory.
+  iOS has no such reading: the simulator has the Mac's memory. _Since
+  attributed and fixed: compiled SQLite statements that were never finalized_
+  (**2026-10-24, the statement leak**, below).
 - **The measure flow's Android picker step had drifted.** It tapped an unscoped
   `Downloads`, which [e2e.md](./e2e.md) warns can hit the breadcrumb behind
   DocumentsUI's drawer and open Recent, where an adb-pushed file is never
   listed. The first leg failed on exactly that. `measure/flows/import.yaml` now
   scopes the wait and the tap to `roots_list`, as `mobile/flows/import-data.yaml`
   does.
+
+**2026-10-24, the statement leak** — what the ~360 MB above was, the fix, and
+the Android run again. The rule this produced lives in
+[client-queries.md](./client-queries.md), _the expo port_; this is the reading.
+
+**The samples named it.** The second run's 10 s samples were of `Native Heap`
+→ `Heap Alloc`, which counts live malloc only, so freed blocks the allocator
+keeps can't account for them. The heap rose in a straight line through the
+restore's sync, 295 → 619 MB over ~150 s (~15 MB every 10 s, about 30 KB for
+each link in the backup), and never fell during the exports. Each leg's cold
+launch reset it to ~266 MB. Memory that grows with the work done, is never
+released, and goes only with the process was owned by something long-lived.
+The owner, in the code:
+
+- **drizzle's expo driver finalizes nothing.** `prepareQuery`
+  (drizzle-orm 0.45.2, `expo-sqlite/session.js`) calls `prepareSync` for every
+  `.get()`, `.all()` and `.run()`, and the driver has no `finalizeSync` call
+  anywhere.
+- **expo-sqlite finalizes only at close.** On Android, releasing a statement
+  (`NativeStatement.sharedObjectDidRelease`) calls
+  `NativeStatementBinding.close()`, which is `mHybridData.resetNative()`. That
+  frees the JNI wrapper and leaves `sqlite3_stmt` compiled on the connection,
+  to be finalized only by `finalizeUnusedStatementsBeforeClosing` when the
+  database closes. On iOS the release step doesn't exist at all.
+- **`getDb()`'s connection never closes.** So every query the process had run
+  was still compiled. The push's per-op read (`getItemForOp`: a transaction
+  around two selects) is four statements, before the commit phase's own.
+
+**The fix** is in `data/db.ts`: drizzle prepares through an LRU of
+`STATEMENT_CACHE_SIZE` (256) statements keyed by SQL text, and the cache
+finalizes the one it evicts (`data/db.spec.ts` pins it). Under jest, the
+measure's 10,000-link HTML import compiles 35 statements with the cache and
+669 without it, so it never evicts. The import was already set-at-a-time
+(**2026-09-26, after**), so the leak was mostly the sync's per-op reads.
+
+`measure:data:android -- --links 300,1000,10000 --memory-trace`, the same
+`bracemark-pixel8` AVD, M1 and production bundle, from `65281a0` (the measure
+flow's picker fix committed) plus this change; calibration 774–886 ms. That is
+the baseline's band (761–861). The memory readings are the runner's own now
+([e2e.md](./e2e.md), _the native leg_). Native heap is `Heap Alloc`:
+
+| 10,000 links                          | before the fix | with the cache |
+| ------------------------------------- | -------------- | -------------- |
+| the restore's sync, native heap       | 295 → 619 MB   | 248 → 258 MB   |
+| native heap after the last export     | ~650 MB        | 267 MB         |
+| native heap after the restore (A/B ¹) | 341 MB         | 249 MB         |
+
+¹ The two import legs alone (`--no-exports`), run back to back with the cache
+and with `getDb()` handing drizzle the raw client.
+
+The heap never rose above 267 MB in 144 samples over the whole run, at any leg or size.
+That ~240 MB floor is the debug native shell plus a Hermes compile of the
+bundle on the device, and it says nothing about a release build. Longest
+single JS-thread stall per leg, against the baseline's two runs:
+
+| leg (10,000 links)    | first baseline run | second baseline run | with the cache |
+| --------------------- | ------------------ | ------------------- | -------------- |
+| import HTML bookmarks | 335 ms             | 310 ms              | 1,639 ms ²     |
+| import backup         | 377 ms             | 353 ms              | 392 ms         |
+| export HTML bookmarks | 2,482 ms           | 1,886 ms            | 1,752 ms       |
+| export CSV            | 8,845 ms           | 1,027 ms            | 945 ms         |
+| export plain text     | 832 ms             | 849 ms              | 859 ms         |
+| export backup         | 875 ms             | 856 ms              | 921 ms         |
+
+- **The leak was the swing, not the floor.** The exports now read like the
+  baseline's _second_ run, not better. The first run's 8.8 s CSV came from the
+  swap the leak caused, but the ~0.9–1.8 s at 10,000 links is the exports' own
+  cost on this device, against iOS's 310–457 ms (**2026-10-24, a regression
+  check**). The guest still keeps 150–330 MB of the app in swap with the heap
+  flat, because a 2 GB AVD running Play services is at its limit before the app
+  grows. A Hermes CPU profile of the HTML export on Android is the next step,
+  ahead of any export chunking.
+- ² **The HTML import's outlier is noise, by repetition.** Its blocking read
+  26.1 s in this run against 6.9 s and 7.9 s in the baselines. The `--no-exports`
+  repeats read 7.7 s without the cache and 10.0 s and 7.9 s with it (longest
+  374, 422 and 373 ms), and the cache cuts the import's own SQL work (669 → 35
+  prepares). The single 26 s reading came while the guest was swapping and is
+  not explained.
+- **The 300- and 1,000-link legs** read within ~20% of the baseline both ways,
+  and their syncs moved the heap by 1 MB or less.
+- **⚠ An emulator started with `&` from zsh runs at nice 5.** zsh's `BG_NICE`
+  option is on by default, and macOS schedules the niced `qemu-system` as
+  background work. The first attempt at this run read a 3,163–3,333 ms
+  calibration, 4× the band, and was discarded. The emulator must be started
+  in the foreground of its own terminal, or with `setopt no_bg_nice;` in
+  front ([app-drivers.md](./app-drivers.md), _the AVDs_). The
+  calibration is the check: it is what caught this.
+- **iOS has the same leak by the same code** and was never read on a phone.
+  The simulator's footprint would show the growth, though not what it costs
+  against the per-app limit iOS kills an app at. The fix is the same
+  `getDb()` on both platforms.
 
 ### deferred
 

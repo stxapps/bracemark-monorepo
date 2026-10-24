@@ -3538,6 +3538,7 @@ npm run dev                                         # api + web; accounts are ma
 npm run measure:data:ios                            # the one booted simulator
 npm run measure:data:android -- --links 1000,10000
 npm run measure:data:ios -- --device <udid>         # one of several booted
+npm run measure:data:android -- --memory-trace      # + memory.jsonl, every 10 s
 ```
 
 The root scripts carry `--platform`. Without `--device` the run takes the one
@@ -3554,6 +3555,22 @@ refuses rather than choose between two.
   launch and must see it as a stall, or the runner stops. That is the same
   positive control as web's `calibrate`, and it is also the number that makes
   a simulator reading comparable to a phone's.
+- **On Android it reads memory too** (`e2e/measure/memory.ts`): a
+  `dumpsys meminfo` snapshot when each leg ends and on both sides of the
+  restore's sync wait, taken after the probe's window closes so it costs the
+  stall readings nothing. The table gets a _native heap after_ column (live
+  malloc, with the swapped share alongside), and the report ends with the
+  sync's before → after. `--memory-trace` adds `memory.jsonl` to the run
+  directory, one reading every 10 s, which shows the shape of a growth between
+  two snapshots. It is off by default because each dump is a binder call into
+  the app while a probe window may be open. The memory reading is Android
+  only on purpose, since the simulator has the Mac's memory and never swaps.
+  The debug native shell (⚠ below) makes the absolute numbers higher than a
+  release build's, so compare growth between runs, never a reading against a
+  phone. This is how the statement leak showed up
+  ([data-lifecycle.md](./data-lifecycle.md), _readings — expo_, **2026-10-24,
+  the statement leak**): the sync left ~320 MB behind, and the stall readings
+  could only show it indirectly, as exports run out of swap.
 - **⚠ A production bundle on the development client, with the api pinned.**
   A release build against localhost is unsupported ([env-files.md](./env-files.md),
   _bracemark-expo_), so the runner starts its own Metro with

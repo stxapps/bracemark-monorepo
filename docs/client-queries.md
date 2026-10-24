@@ -600,6 +600,25 @@ changes is mechanical, and only the substrate forces it:
   rows sharing a timestamp — free when timestamps are distinct, the whole group
   per page after a bulk import stamps thousands of links the same millisecond.
   The reasoning and the measurements are in `db.ts`, above the DDL.
+- **⚠ Every statement goes through a cache, because nothing else finalizes
+  one.** drizzle's expo driver prepares a fresh statement for every `.get()`,
+  `.all()` and `.run()` and never finalizes it. expo-sqlite doesn't finalize a
+  dropped statement either: Android's release frees only the JNI wrapper, and
+  iOS has no release step at all. A statement that is never finalized stays
+  compiled on its connection until the connection closes, and `getDb()`'s
+  connection is never closed. Each query therefore kept a compiled statement
+  in native memory for as long as the process ran: a sync, a live-read re-run,
+  a page read. So `getDb()` hands drizzle a client whose `prepareSync` goes
+  through an LRU of `STATEMENT_CACHE_SIZE` (256) statements keyed by SQL text,
+  and it finalizes the one it evicts. Reuse is sound only because the driver is
+  synchronous: each statement is read to the end before the next is prepared.
+  For the same reason, never hold a drizzle `.prepare()`d query across other
+  queries, because the cache may finalize its statement. Nothing reports the
+  leak if it comes back: no error, specs stay green, and the iOS simulator has
+  the Mac's memory. `data/db.spec.ts` pins the live statement count, which the
+  node:sqlite shim keeps as the device would. The reading that found it is
+  [data-lifecycle.md](./data-lifecycle.md), _readings — expo_, **2026-10-24,
+  the statement leak**.
 - **multiEntry tag index → junction table.** Tag membership is the
   `item_tag_ids` junction (db.ts): the tag driver selects candidate paths from
   it, and the tag predicates read a junction-built `path → tagIds` map instead of
