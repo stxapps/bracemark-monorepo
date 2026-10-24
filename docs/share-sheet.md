@@ -19,7 +19,8 @@ One RN share screen, written once, hosted by two very different native shells:
 - **Android** — a translucent native `ShareActivity` in the **same app
   process** (local Expo module `modules/bracemark-share`, injected by manifest
   merge — no config plugin needed), hosting the same registered RN root
-  (`bracemarkShare`) as a bottom sheet over the caller. The intent payload is
+  (`bracemarkShare`) as a bottom sheet over the caller — a centred card from
+  768dp wide (_Android draws its own card_, below). The intent payload is
   handed to the root as launch options in `onCreate`, so it can't get lost the
   way expo-share-intent's route-into-the-sleeping-main-activity flow lost it.
   The activity declares its own `android:configChanges` — `MainActivity`'s list
@@ -335,6 +336,22 @@ rotated with the keyboard up — and on the iPhone 17 Pro, whose picker still
 parks on the keys. **Not driven**: a floating, split or hardware-keyboard-bar
 keyboard (the same Simulator limit soft-keyboard.md records); the view lifts to
 such a keyboard's top edge wherever it intersects the frame.
+
+**Android draws its own card, from 768.** No Android host picks a shape: the
+activity is the whole window, so the panel was a bottom sheet at every width —
+1280dp of it on the tablet AVD on its side, every row and the Save button
+stretched across the screen. From `WIDE_MIN_WIDTH` (`lib/window-class.ts`, the
+width the rails dock at) `share-kit.tsx` treats the sheet as `detached` itself
+and caps the panel at `max-w-lg`: the iPad's shape, and the app's own add panel
+at the same width (components/ui/sheet.tsx), so one tablet shows one kind of
+card. The navigation bar's inset moves outside the card, under its bottom gap,
+where a sheet keeps it inside as Save's clearance. The width is read reactively,
+so a split screen or a fold that crosses 768 changes the shape under an open
+sheet; rotation does not, a tablet being wide both ways round. iOS keeps the
+host's word alone: the iPad's card is already 580 wide, and the extension's
+window size is not to be trusted (above). `SHARE-ANDROID-001`,
+`SHARE-CREATE-001` and `VIEWPORT-KEYBOARD-001` drive the card on the tablet AVD
+([e2e.md](./e2e.md), _narrow and wide_).
 
 **This card is driven by hand only, and it stays that way.** Maestro reads no
 tree from it: on the iPad simulator the system sheet's popover and the extension

@@ -36,6 +36,7 @@ import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
+import { useWideWindow } from '../../lib/window-class';
 import { closeShareSheet } from './share-host';
 import { ShareKeyboardFrame, useShareKeyboard } from './share-keyboard';
 import { ShareSwipeGuard } from './share-swipe-guard';
@@ -103,7 +104,12 @@ const INITIAL_METRICS = {
 //     iPadOS idiom for a form sheet, and what the app's own add panel does from
 //     768 (docs/soft-keyboard.md, _the add panel's two shapes_).
 //   - Android — the activity is translucent and full-screen, so the panel was
-//     already ours: same rounded top and background, plus its own scrim.
+//     already ours: same rounded top and background, plus its own scrim. And
+//     so is its shape, which no host picks here: from 768 (lib/window-class.ts)
+//     the panel takes the iPad's — a centred `max-w-lg` card, the app's own
+//     add panel at that width (components/ui/sheet.tsx) — where a bottom sheet
+//     ran the full 1280dp of a tablet on its side. Reactive, so a split screen
+//     or a fold that crosses 768 changes the shape under an open sheet.
 //
 // Neither host bounds the panel from the top, so the panel does it itself and
 // identically on both (its `marginTop`, below) — which leaves ONE panel
@@ -210,7 +216,17 @@ function ShareSheetFrame({ children, holdSwipe }: { children: ReactNode; holdSwi
   // — the frame's bottom padding at the foot of this function, and the inset
   // subtraction just below — and whether the host floats the sheet as a card,
   // which picks the panel's shape (the header).
-  const { lift, detached, onKeyboardGeometry } = useShareKeyboard(insets.bottom);
+  const { lift, detached: hostDetached, onKeyboardGeometry } = useShareKeyboard(insets.bottom);
+  // Android's own card on a wide window (the header). Only Android: the iPad's
+  // card is the host's, already 580 wide, and the extension's window size is
+  // not to be trusted (docs/share-sheet.md, _On an iPad the sheet floats_).
+  const wide = useWideWindow();
+  const card = isAndroid && wide;
+  const detached = hostDetached || card;
+  // The bottom inset belongs OUTSIDE a card Android centres, under the gap: it is
+  // the navigation bar's, and inside the card it would only pad Save off the
+  // card's own bottom edge. A sheet keeps it inside, flush with the screen.
+  const insetBelow = Math.max(insets.bottom - lift, 0);
   const panel = (
     <View
       style={{
@@ -241,8 +257,8 @@ function ShareSheetFrame({ children, holdSwipe }: { children: ReactNode; holdSwi
         // between it and the keyboard while that is up, as the app's own wide
         // add-panel card does.
         marginTop: insets.top + SHEET_GAP,
-        marginBottom: detached ? SHEET_GAP : 0,
-        paddingBottom: SHEET_PAD + Math.max(insets.bottom - lift, 0),
+        marginBottom: card ? SHEET_GAP + insetBelow : detached ? SHEET_GAP : 0,
+        paddingBottom: SHEET_PAD + (card ? 0 : insetBelow),
       }}
       // `min-h-0 shrink`: the first link of the squeeze chain (see the header).
       // Without it the panel keeps its content height when the keyboard takes
@@ -263,6 +279,7 @@ function ShareSheetFrame({ children, holdSwipe }: { children: ReactNode; holdSwi
       className={cn(
         'min-h-0 shrink border-border bg-popover px-4 pt-4',
         detached ? 'rounded-2xl border' : 'rounded-t-2xl border-t',
+        card && 'w-full max-w-lg self-center',
       )}
     >
       {/* Tap-anywhere-dead to drop the keyboard, and it WRAPS the children
