@@ -151,7 +151,12 @@ anything timed, run the emulator in a terminal of its own, or put
 `setopt no_bg_nice;` in front of the line. Check with
 `ps -o pri,nice -p $(pgrep -f qemu-system)`
 ([data-lifecycle.md](./data-lifecycle.md), _readings — expo_, **2026-10-24,
-the statement leak**).
+the statement leak**). **Nice 0 is not the whole check.** On 2026-10-24 an
+emulator started with `setopt no_bg_nice` read nice 0 but priority 4 just
+before a `measure:data:android` run. That run's first size calibrated at
+3,336–3,610 ms. By its second size the calibration was back to 760–810 ms, and
+priority to 47. What demoted it was not found. Read the calibration whatever
+`ps` says (**2026-10-24, the gather profiled**).
 
 Six edits to `~/.android/avd/bracemark-pixel8.avd/config.ini` after creating it,
 four for disk and two the defaults get wrong for e2e:

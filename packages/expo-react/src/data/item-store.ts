@@ -12,7 +12,7 @@
 // fields (`updatedAt`, `data`, `hasDataFile`), so reads don't join the junction
 // tables back in — the read layer queries those directly.
 
-import { and, eq, gte, inArray, lt, sql } from 'drizzle-orm';
+import { and, count, eq, gt, gte, inArray, lt, sql } from 'drizzle-orm';
 
 import { chunk } from '@stxapps/shared';
 
@@ -133,6 +133,40 @@ export function namespaceRows(prefix: string): ItemRow[] {
     .from(items)
     .where(and(gte(items.path, prefix), lt(items.path, prefixEnd(prefix))))
     .all();
+}
+
+// The same range a page at a time: up to `limit` rows whose path sorts after
+// `after` ('' starts at the prefix), in path order, so the last row's path is
+// the next call's `after`. For a caller that yields between pages. Handing a
+// whole namespace across in one `.all()` is one block of the JS thread however
+// the caller chunks what it decodes: 10,000 links took ~0.9 s on the Android
+// emulator, ~0.7 s of it inside expo-sqlite's `getAllSync`
+// (docs/data-lifecycle.md, _readings — expo_, **2026-10-24, the gather
+// profiled**). Path order is the primary key's, so SQLite pages it off the
+// index with no sort.
+export function namespaceRowsPage(prefix: string, after: string, limit: number): ItemRow[] {
+  return getDb()
+    .select()
+    .from(items)
+    .where(
+      and(
+        after === '' ? gte(items.path, prefix) : gt(items.path, after),
+        lt(items.path, prefixEnd(prefix)),
+      ),
+    )
+    .orderBy(items.path)
+    .limit(limit)
+    .all();
+}
+
+// How many rows the range holds, without reading one: the paged reader's total.
+export function namespaceCount(prefix: string): number {
+  const row = getDb()
+    .select({ n: count() })
+    .from(items)
+    .where(and(gte(items.path, prefix), lt(items.path, prefixEnd(prefix))))
+    .get();
+  return row?.n ?? 0;
 }
 
 // The same range, only the path and the two URL columns — what an import's

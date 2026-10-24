@@ -1865,12 +1865,13 @@ a loop, so chunking can't reach it:
 - **HTML, CSV and text exports (290–378 ms):** the single `toArray()` in
   `gatherLinks` that reads the whole `links/` namespace in one IndexedDB
   request. The structured clone of every record lands in one task. The fix is
-  to read in keyed pages rather than to yield.
+  to read in keyed pages rather than to yield. (Since made, on both platforms:
+  _readings — expo_, **2026-10-24, the gather profiled**.)
 - **Backup export (302 ms):** zip.js's main-thread side, handling
   `items.jsonl` passed as one string (`TextReader`). The fix is to hand it the
   lines in pieces.
 
-Neither of the last two has been changed.
+Neither of the last two was changed then. The first has been since.
 
 **2026-10-24, a regression check** — the same M1 and slowdown, Chrome
 156.0.8078.47, the production export, from `72d1217` with a clean tree;
@@ -1901,6 +1902,38 @@ bound to their paths. Longest main-thread task per leg:
 - The interop exports hold 962 of 1,000 links (9,592 and 47,989 at the larger
   sizes) because the seed's shape puts ~4% in Trash, which those formats leave
   out. The backup holds them all.
+
+**2026-10-24, keyed pages** — the same M1, slowdown, Chrome and production
+export, from `9658dfc` plus the change; calibration 129–131 ms at 1×,
+492–533 ms at 4×. `gatherLinks` now reads `links/` in `GATHER_CHUNK` pages
+keyed on the primary key (`between(after, …)` past the last page's path, then
+`limit`), with a yield between pages, instead of one `toArray()`. The reason
+and the expo half are in _readings — expo_, **2026-10-24, the gather
+profiled**. Longest main-thread task at 50,000 links, against the regression
+check above:
+
+| leg (50,000 links)    | regression check | keyed pages |
+| --------------------- | ---------------- | ----------- |
+| export plain text     | 292 ms           | 103 ms      |
+| export HTML bookmarks | 342 ms           | 383 ms      |
+| export CSV            | 385 ms           | 397 ms      |
+| export backup         | 315 ms           | 315 ms      |
+
+Every 1,000- and 10,000-link leg stayed under 85 ms, and the imports read as
+before (50,000-link restore 157 ms, HTML import none).
+
+- **The read was the plain-text export's long task**, and nothing else is that
+  long in that leg, so it fell to a third.
+- **HTML and CSV did not move, because their read was never alone.** A `--dev
+--trace` run at 50,000 links put the 384 ms HTML task in the serializer and
+  the file: `toNetscapeHtml` 192 ms (`esc` 96 of it), `new Blob` 90 ms,
+  `bundleFromLibrary` 64 ms. The 405 ms CSV task is `toRaindropCsv` 234 ms
+  (`created`, the date cell, 108 of it), `new Blob` 74 ms and
+  `bundleFromLibrary` 64 ms. All of it runs in one task after the last read, which is
+  why the frame attribution still names `IDBRequest.onsuccess`. The serializers
+  are pure and synchronous. Yielding inside them, as the parsers do, would
+  split this task. Not made.
+- **The backup's 315 ms is zip.js's `TextReader`**, as above. Not changed.
 
 #### readings — expo
 
@@ -2029,7 +2062,8 @@ What is still above the ~200 ms band, and why nothing more changed here:
 - **Exports at 10,000 links (318–376 ms):** not profiled at this size. By
   analogy with web's reading, the likely owner is the single `namespaceRows`
   read of the whole `links/` namespace, which materializes every row in one
-  native call. The fix would be keyed pages.
+  native call. The fix would be keyed pages. (Since profiled and made:
+  **2026-10-24, the gather profiled**, below.)
 
 Outside the windows the probe measures, the sync push that follows an import
 has the same drizzle cost: `clearDrainedOps` and `stampItemUpdatedAts` issue a
@@ -2281,7 +2315,9 @@ leg, then the 10,000-link legs against **after the hold** (the imports against
   step with it and did not regress. The HTML export is also the first leg after
   the restore's sync settles, so work that starts after a sync could land in its
   window. Not profiled. The next step is a Hermes CPU profile over that leg
-  ([e2e.md](./e2e.md), _finding what owns a native stall_).
+  ([e2e.md](./e2e.md), _finding what owns a native stall_). _Since profiled on
+  Android: that is what lands there, a fallback sync cycle_ (**2026-10-24, the
+  gather profiled**, below). iOS was not re-profiled.
 - **Everything else held.** The imports' wall times and blocking matched the
   whole-file yields: restore 17.0 s and 9.0 s blocking (17.7 s and 9.5 s),
   HTML import 12.8 s and 6.8 s (13.3 s and 7.1 s). The 1,000-link HTML import
@@ -2397,7 +2433,8 @@ single JS-thread stall per leg, against the baseline's two runs:
   check**). The guest still keeps 150–330 MB of the app in swap with the heap
   flat, because a 2 GB AVD running Play services is at its limit before the app
   grows. A Hermes CPU profile of the HTML export on Android is the next step,
-  ahead of any export chunking.
+  ahead of any export chunking. _Since taken:_ **2026-10-24, the gather
+  profiled**, below.
 - ² **The HTML import's outlier is noise, by repetition.** Its blocking read
   26.1 s in this run against 6.9 s and 7.9 s in the baselines. The `--no-exports`
   repeats read 7.7 s without the cache and 10.0 s and 7.9 s with it (longest
@@ -2417,6 +2454,84 @@ single JS-thread stall per leg, against the baseline's two runs:
   The simulator's footprint would show the growth, though not what it costs
   against the per-app limit iOS kills an app at. The fix is the same
   `getDb()` on both platforms.
+
+**2026-10-24, the gather profiled** — what still held the exports at 10,000
+links on Android, and the change it led to. The profile came first: the same
+`bracemark-pixel8` AVD and M1, from `9658dfc` with a clean tree, a
+10,000-link restore and its sync, then the four exports each under a Hermes CPU
+profile. The bundle was the production one served unminified, so the frames
+carry names ([e2e.md](./e2e.md), _finding what owns a native stall_). The
+probe read the HTML export at 1,614 ms (1,752 ms in **the statement leak**), so
+the profiler did not change its shape. The longest busy stretch of each export:
+
+| export     | longest stretch | `namespaceRows(links/)` | inside expo-sqlite's `getAllSync` |
+| ---------- | --------------- | ----------------------- | --------------------------------- |
+| HTML       | 1,621 ms        | 901 ms                  | ~610 ms                           |
+| CSV        | 974 ms          | 915 ms                  | 731 ms                            |
+| plain text | 1,013 ms        | 976 ms                  | 710 ms                            |
+| backup     | 1,276 ms        | 919 ms                  | 725 ms                            |
+
+- **One read of the whole namespace was every export's longest task.**
+  `gatherLinks` read `links/` with a single `namespaceRows`, every row and its
+  blob in one `.all()`. Most of it is native: `getAllSync` handing 10,000 rows
+  across to JS. Drizzle's `mapResultRow` turning them into objects was most of
+  the rest, 180–260 ms. The decode after it was already chunked, and its first yield came
+  only after the read. The guess in **2026-09-26, after** named this owner. The
+  serializers barely appear: the HTML export's second-longest stretch, 533 ms,
+  is `bundleFromLibrary` (its `new URL` per link 135 ms) and `toNetscapeHtml`
+  (155 ms), and the file write is not visible at all.
+- **The HTML export also carried a fallback sync.** The rest of its 1,621 ms
+  was `listItemUpdatedAts` (703 ms) in `fallbackCycle`, the scan of every local
+  row's stamp, run in the export's opening refresh and in the same task as the
+  read. The profile names only bundle lines, which matched the engine's call
+  once the same bundle was rebuilt. It lands on the HTML export because that
+  is the first leg after the restore. A new account's import ends its push on
+  the `(0, '')` cursor, so the next cycle falls back over the whole library
+  ([local-first-sync.md](./local-first-sync.md), _What it costs_, an empty log).
+  That is very likely the iOS regression in **2026-10-24, a regression check**:
+  the cursor rule came in at `1e3d691`, between its two readings. iOS was not
+  re-profiled. Not changed.
+
+**What changed:** `gatherLinks` reads `links/` a `GATHER_CHUNK` (500) page at a
+time, keyed on the path: item-store's `namespaceRowsPage` (`path > after`,
+`ORDER BY path`, `LIMIT`), with a yield before each page, and `namespaceCount`
+for the progress total. Web's gather does the same through Dexie
+(_readings_, **2026-10-24, keyed pages**). Pages read across yields can see a
+write in between, which the extraction pass always could; a link's key is its
+path, so it is read once either way. `export-import.spec.ts` in both packages
+exports two full pages and pins every link exactly once. An inclusive lower
+bound, a stop after a full page, or the wrong `after` each turn it red.
+
+`measure:data:android -- --links 1000,10000`, the production (minified) bundle,
+from `9658dfc` plus the change; calibration 760–810 ms at 10,000. The 1,000-link
+size of that run calibrated at 3,336–3,610 ms, with the emulator demoted to
+priority 4 at nice 0 ([app-drivers.md](./app-drivers.md), _the AVDs_). So it was
+discarded and run again alone, at 753–795 ms. Longest single JS-thread stall,
+against **the statement leak**'s run with the cache:
+
+| leg                   | 1,000, with the cache | 1,000, pages | 10,000, with the cache | 10,000, pages |
+| --------------------- | --------------------- | ------------ | ---------------------- | ------------- |
+| import HTML bookmarks | 332 ms ³              | 331 ms       | 1,639 ms               | 397 ms        |
+| import backup         | 158 ms ³              | 146 ms       | 392 ms                 | 373 ms        |
+| export HTML bookmarks | 276 ms ³              | 244 ms       | 1,752 ms               | **702 ms**    |
+| export CSV            | 98 ms ³               | 114 ms       | 945 ms                 | **325 ms**    |
+| export plain text     | 115 ms ³              | 100 ms       | 859 ms                 | **243 ms**    |
+| export backup         | 184 ms ³              | 156 ms       | 921 ms                 | **236 ms**    |
+
+³ The 1,000-link column here is the first Android reading's
+(**2026-10-24, the first Android reading**), as **the statement leak** recorded
+only the 10,000-link legs against it.
+
+- **The exports fell to a third or a quarter at 10,000 links**: CSV, plain text
+  and backup now sit at 236–325 ms. They are still in the 200 ms – 1 s band, but
+  near its floor. Their new longest task has not been profiled.
+- **The HTML export's 702 ms is the fallback**, which matches the 703 ms the
+  profile gave `listItemUpdatedAts`. It is one task per account: on a library
+  that has already settled into incremental pulls, the HTML export would read
+  like the CSV one. Nothing here changes the cursor rule.
+- **The imports and the 1,000-link legs held** (the 1,639 ms HTML import was the
+  noise **the statement leak** explains: 397 ms now). At 1,000 links the
+  whole namespace is one page, so nothing was expected to move.
 
 ### deferred
 

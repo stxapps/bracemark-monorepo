@@ -44,6 +44,7 @@ import {
   filesSignEndpoint,
   LINKS_PREFIX,
   LISTS_PREFIX,
+  MY_LIST_ID,
   opsCommitEndpoint,
   opsListEndpoint,
   PINS_PREFIX,
@@ -73,7 +74,12 @@ import {
 } from '../testing/memory-file-system';
 import { clearCacheFiles } from './cache-files';
 import { getDb } from './db';
-import { assertZipWritable, exportAllData, ExportTooLargeError } from './export-all-data';
+import {
+  assertZipWritable,
+  exportAllData,
+  ExportTooLargeError,
+  GATHER_CHUNK,
+} from './export-all-data';
 import { dataFileFor, ensureDataFilesDir } from './file-store';
 import { importAllData } from './import-all-data';
 import { getItem, markItemDataFile, namespaceRows, putItemsTx } from './item-store';
@@ -1015,6 +1021,50 @@ describe('the output the share sheet is presented over', () => {
       expect(listFileUris().filter((uri) => uri.startsWith('file:///cache/'))).toEqual([]);
     },
   );
+});
+
+describe('a library past one gather page', () => {
+  // The gather reads links a page at a time, each from just past the last
+  // page's key (item-store.ts namespaceRowsPage). Every other case here fits in
+  // one page, so a slip at the seam (an inclusive bound, a stop after a full
+  // page) would pass them all, and silently drop or repeat links in every large
+  // export. Two full pages also exercise the empty read that ends them.
+  it('writes every link exactly once', async () => {
+    const urls = Array.from(
+      { length: 2 * GATHER_CHUNK },
+      (_, i) => `https://page.invalid/${String(i).padStart(4, '0')}`,
+    );
+    getDb().transaction((tx) =>
+      putItemsTx(
+        tx,
+        urls.map((url, i) =>
+          toItemRecord(
+            `${LINKS_PREFIX}l_${String(i).padStart(4, '0')}.enc`,
+            5000,
+            utf8(
+              JSON.stringify({
+                url,
+                listId: MY_LIST_ID,
+                tagIds: [],
+                createdAt: T + i,
+                updatedAt: T + i,
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    const outcome = await exportAllData({
+      format: 'text',
+      deps: deps(),
+      excludedListIds: new Set<string>(),
+    });
+
+    expect(outcome.linkCount).toBe(urls.length);
+    const text = new TextDecoder().decode(readFileBytes(outcome.file.uri));
+    expect(text.trimEnd().split('\n').sort()).toEqual(urls);
+  });
 });
 
 // --- the cross-platform half --------------------------------------------------------

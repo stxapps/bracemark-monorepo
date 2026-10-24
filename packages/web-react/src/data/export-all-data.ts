@@ -120,7 +120,7 @@ interface GatheredLink {
 // to run every link and then every extraction in one task each, which held the
 // page for 1.5–1.8 s at 50,000 links (docs/data-lifecycle.md, _main-thread
 // cost_).
-const GATHER_CHUNK = 500;
+export const GATHER_CHUNK = 500;
 
 // The records a run read and couldn't decode, counted at each read so the
 // receipt can say how many it left out (ExportOutcome.unreadableCount).
@@ -156,26 +156,45 @@ async function readRawNamespace<T extends z.ZodTypeAny>(
 // Decode the whole `links/` namespace (newest first), join each survivor's
 // extraction, and drop locked-list links. O(library) by nature — the export IS
 // a full read — so both passes go a GATHER_CHUNK at a time, yielding between
-// chunks so the page can paint the progress they report.
+// chunks so the page can paint the progress they report. The links are READ a
+// chunk at a time too, as keyed pages on the primary key, not only decoded: one
+// `toArray()` of the namespace lands the structured clone of every record in a
+// single task, the longest left in each 50,000-link export
+// (docs/data-lifecycle.md, _main-thread cost_). A page read after a yield can
+// see a write the previous one didn't, which the extraction pass below always
+// could; a link is keyed by its path, so it is read once either way.
 async function gatherLinks(
   excludedListIds: ReadonlySet<string>,
   tally: Tally,
   onProgress: ProgressFn,
 ): Promise<GatheredLink[]> {
-  const records = await db.items.where('path').startsWith(LINKS_PREFIX).toArray();
-  const total = records.length;
+  const namespace = () => db.items.where('path').startsWith(LINKS_PREFIX);
+  const total = await namespace().count();
   onProgress(0, total);
 
   const included: { path: string; link: Link }[] = [];
-  for (let i = 0; i < records.length; i += GATHER_CHUNK) {
-    if (i > 0) await yieldToMain();
-    for (const record of records.slice(i, i + GATHER_CHUNK)) {
+  let read = 0;
+  for (let after = ''; ;) {
+    if (after !== '') await yieldToMain();
+    // `startsWith`'s own upper bound, from just past the last page's key.
+    const records = await (
+      after === ''
+        ? namespace()
+        : db.items.where('path').between(after, `${LINKS_PREFIX}\uffff`, false, false)
+    )
+      .limit(GATHER_CHUNK)
+      .toArray();
+    for (const record of records) {
       const link = parseBlob(record.data, linkSchema);
       // Counted whatever list it was in: an unreadable link names none.
       if (link === undefined) tally.unreadable += 1;
       else if (!excludedListIds.has(link.listId)) included.push({ path: record.path, link });
     }
-    onProgress(Math.min(i + GATHER_CHUNK, total), total);
+    read += records.length;
+    // The count was taken before the pages, and a sync can add links meanwhile.
+    onProgress(read, Math.max(read, total));
+    if (records.length < GATHER_CHUNK) break;
+    after = records[records.length - 1].path;
   }
   included.sort((a, b) => b.link.createdAt - a.link.createdAt);
 

@@ -1394,7 +1394,17 @@ first sync has finished — and that one is kept.
   pulls. For a new account that is one extra `files/list` of a near-empty
   namespace, on its second push. A cursor that never left `(0, '')` would
   re-list the whole library on every cycle instead, which is what the spec pins
-  against.
+  against. **The namespace is not near-empty when the first push is an
+  import.** Sign up, then import or restore a library, which is an ordinary
+  first day: the import's push runs as the fallback that starts on the empty
+  log, so it ends on `(0, '')`, and the NEXT cycle falls back over the whole
+  library just pushed. That means a full `files/list`, plus
+  `listItemUpdatedAts` over every local row in a single task. At 10,000 links
+  on the Android emulator, the scan alone held the JS thread for 703 ms, inside
+  the opening refresh of the first export after a restore
+  ([data-lifecycle.md](./data-lifecycle.md), _readings — expo_, **2026-10-24,
+  the gather profiled**). It happens once per account, and nothing about it is
+  wrong, only costly. Not changed.
 
 **What it does not change.** An `object-without-op` is still invisible to
 incremental pull and healed only by a fallback (_source of truth_). And the

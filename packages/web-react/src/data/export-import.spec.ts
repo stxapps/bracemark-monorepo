@@ -71,7 +71,7 @@ import {
 
 import type { SyncDeps } from '../sync/engine';
 import { db } from './db';
-import { exportAllData } from './export-all-data';
+import { exportAllData, GATHER_CHUNK } from './export-all-data';
 import { importAllData } from './import-all-data';
 import { toItemRecord } from './projection';
 import { AccountFencedError } from './sync-store';
@@ -1031,6 +1031,42 @@ describe('the interop formats', () => {
       );
     }
     expect(Object.keys(stored).filter((path) => path.startsWith(EXTRACTIONS_PREFIX))).toEqual([]);
+  });
+});
+
+describe('a library past one gather page', () => {
+  // The gather reads links a page at a time, each from just past the last
+  // page's key. Every other case here fits in one page, so a slip at the seam
+  // (an inclusive bound, a stop after a full page) would pass them all, and
+  // silently drop or repeat links in every large export. Two full pages also
+  // exercise the empty read that ends them.
+  it('writes every link exactly once', async () => {
+    const urls = Array.from(
+      { length: 2 * GATHER_CHUNK },
+      (_, i) => `https://page.invalid/${String(i).padStart(4, '0')}`,
+    );
+    await db.items.bulkPut(
+      urls.map((url, i) =>
+        toItemRecord(
+          `${LINKS_PREFIX}l_${String(i).padStart(4, '0')}.enc`,
+          5000,
+          utf8(
+            JSON.stringify({
+              url,
+              listId: MY_LIST_ID,
+              tagIds: [],
+              createdAt: T + i,
+              updatedAt: T + i,
+            }),
+          ),
+        ),
+      ),
+    );
+
+    const { text, outcome } = await exportInterop('text');
+
+    expect(outcome.linkCount).toBe(urls.length);
+    expect(text.trimEnd().split('\n').sort()).toEqual(urls);
   });
 });
 

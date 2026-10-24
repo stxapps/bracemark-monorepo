@@ -88,7 +88,13 @@ import { loadEntityContents, runIncrementalSync, type SyncDeps } from '../sync/e
 import { finishExportFile, newExportFile } from './cache-files';
 import { getDb } from './db';
 import { dataFileFor } from './file-store';
-import { bulkGetItems, getItem, namespaceRows } from './item-store';
+import {
+  bulkGetItems,
+  getItem,
+  namespaceCount,
+  namespaceRows,
+  namespaceRowsPage,
+} from './item-store';
 import { parseBlob } from './projection';
 import { readLists, readTags } from './queries';
 import { AccountFencedError, assertAccountOwnsStoreTx } from './sync-store';
@@ -175,7 +181,7 @@ interface GatheredLink {
   extraction: Extraction | undefined;
 }
 
-const GATHER_CHUNK = 500;
+export const GATHER_CHUNK = 500;
 
 // The records a run read and couldn't decode (ExportOutcome.unreadableCount).
 interface Tally {
@@ -210,26 +216,35 @@ function readRawNamespace<T extends z.ZodTypeAny>(
 // a full read — so both passes go a GATHER_CHUNK at a time with a real yield
 // between chunks, as on web. Without one the chunks only split the progress
 // count: the store reads are synchronous here, so the whole gather ran as one
-// block of the JS thread (docs/data-lifecycle.md, _readings — expo_).
+// block of the JS thread (docs/data-lifecycle.md, _readings — expo_). The links
+// are READ a chunk at a time too (namespaceRowsPage), not only decoded: one read
+// of the namespace was the longest task left in every export. A page read after
+// a yield can see a write the previous one didn't, which the extraction pass
+// below always could; a link is keyed by its path, so it is read once either way.
 async function gatherLinks(
   excludedListIds: ReadonlySet<string>,
   tally: Tally,
   onProgress: ProgressFn,
 ): Promise<GatheredLink[]> {
-  const records = namespaceRows(LINKS_PREFIX);
-  const total = records.length;
+  const total = namespaceCount(LINKS_PREFIX);
   onProgress(0, total);
 
   const included: { path: string; link: Link }[] = [];
-  for (let i = 0; i < records.length; i += GATHER_CHUNK) {
+  let read = 0;
+  for (let after = ''; ;) {
     await yieldToMain();
-    for (const record of records.slice(i, i + GATHER_CHUNK)) {
+    const records = namespaceRowsPage(LINKS_PREFIX, after, GATHER_CHUNK);
+    for (const record of records) {
       const link = parseBlob(record.data ?? undefined, linkSchema);
       // Counted whatever list it was in: an unreadable link names none.
       if (link === undefined) tally.unreadable += 1;
       else if (!excludedListIds.has(link.listId)) included.push({ path: record.path, link });
     }
-    onProgress(Math.min(i + GATHER_CHUNK, total), total);
+    read += records.length;
+    // The count was taken before the pages, and a sync can add links meanwhile.
+    onProgress(read, Math.max(read, total));
+    if (records.length < GATHER_CHUNK) break;
+    after = records[records.length - 1].path;
   }
   included.sort((a, b) => b.link.createdAt - a.link.createdAt);
 
