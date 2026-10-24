@@ -120,9 +120,15 @@ it('refuses a move that would take a list past the depth limit, and writes nothi
   mockLists = [list('m1', 'a0', 'm2'), list('m2', 'a0', 'm1'), list('a', 'a1', 'm2'), ...chain];
   const { result } = renderHook(() => useListMutations());
 
-  await expect(
-    act(() => result.current.move(mockLists[0], null, [mockLists[2]], 1)),
-  ).rejects.toThrow(`Moving “m1” there would nest lists more than ${TREE_MAX_DEPTH} levels deep.`);
+  // `rejects` inside `act`, not around it: `act` returns a bare thenable whose
+  // `then` returns nothing, so an outer `await expect(act(…)).rejects` settles at
+  // once — the asserts below would run before the move, and this one after the
+  // test (docs/testing.md, _an `act()` that a matcher can't await_).
+  await act(async () => {
+    await expect(result.current.move(mockLists[0], null, [mockLists[2]], 1)).rejects.toThrow(
+      `Moving “m1” there would nest lists more than ${TREE_MAX_DEPTH} levels deep.`,
+    );
+  });
   expect(mockWriteList).not.toHaveBeenCalled();
 
   // One list shorter, and the same move goes through.

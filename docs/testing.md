@@ -202,6 +202,19 @@ rely on a single run:
   `@babel/runtime` that it cannot resolve from there, and `node_modules/` is not
   transformed at all.
 
+#### tripwire: an `act()` that a matcher can't await
+
+`await expect(act(() => promise)).rejects.toThrow(…)` passes, and it asserts
+nothing. RTL's and RNTL's async `act` return a bare thenable whose `then` returns
+`undefined`. Jest's `resolves`/`rejects` return whatever `then` returns, so the
+`await` settles at once. The lines after it run before the promise settles. A
+later `act` then overlaps this one, and the only sign is React's _"You seem to
+have overlapping act() calls"_ `console.error`. The matcher itself runs after the
+fact, so a wrong message does not fail the test: it crashes the worker with an
+unhandled rejection. Both `use-list-mutations` specs carried this. Put the
+matcher inside `act`, on the real promise:
+`await act(async () => { await expect(promise).rejects.toThrow(…); })`.
+
 #### tripwire: jest cannot time out a synchronous test
 
 A spec whose subject is "this finishes" — a walk that must not be quadratic, a
