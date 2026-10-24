@@ -600,6 +600,16 @@ iOS that X is the only VISIBLE way out of the compose screen — the system's
 swipe-down and the backdrop both work and neither announces itself
 ([share-sheet.md](./share-sheet.md)).
 
+The **settings back link** (`SettingsBackLink`, `features/settings/settings-kit.tsx`)
+is not a kit `Button` at all but a bare `Pressable` with no height and no padding,
+so its box is its own `text-sm` line — ~20 tall, the furthest under the floor of
+anything here, and the one that read as "hard to press" on a device. It takes a
+plain `12` (44 tall): the pane's `py-8` above, the title's `Text` below, the
+gutter less its `-ml-1` (exactly 12 on a phone) to the left, nothing to the right.
+The Lists and Tags tables' **Sort** button (`SortMenu`, `features/settings/table-kit.tsx`)
+is a kit `sm` at 36 and takes the chrome's plain `6` (48): the nearest pressable is
+the table's create row ~35 below, so half the gap is nowhere near binding.
+
 The link card/list tag chips use the same lever on one axis: their 24pt visual
 height gets 10pt of top and bottom slop, reaching 44pt vertically without
 changing how many adaptive chips fit. They deliberately get no horizontal slop:

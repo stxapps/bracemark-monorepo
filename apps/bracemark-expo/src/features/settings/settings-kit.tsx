@@ -402,6 +402,14 @@ export function SettingsBackLink({
       // screen), so a flow binds to the id rather than the text.
       testID="settings-back"
       onPress={onPress}
+      // The box is just the `text-sm` line, ~20 tall — under the 44pt floor by
+      // more than any chrome button — and growing it would move the title, so
+      // the floor is slop (docs/accessibility.md, _a 36dp box is not a 44pt
+      // target_). 12 a side reaches 44 and takes nothing from a neighbour: above
+      // is the pane's `py-8`, below is the title (a Text takes no touches), left
+      // is the pane's gutter less the `-ml-1` — exactly 12 on a phone — and
+      // `self-start` leaves the right empty.
+      hitSlop={12}
       className={cn('-ml-1 flex-row items-center gap-1 self-start rounded-sm', className)}
     >
       <Icon as={ChevronLeft} className="size-4 text-muted-foreground" />

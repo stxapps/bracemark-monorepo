@@ -392,8 +392,16 @@ export function SortMenu({
               value. Web's peer lands on the same 4px, so the two platforms agree.
               The leading icon keeps the
               padding trim the Button derives from its children, so it stays 10px
-              before the glyph and 12px after the word. */}
-          <Button variant="ghost" size="sm" disabled={disabled} className="-mr-3">
+              before the glyph and 12px after the word.
+
+              `hitSlop={6}` lifts the `sm` box's 36 to 48, the chrome's plain value
+              (docs/accessibility.md, _a 36dp box is not a 44pt target_). The
+              half-gap rule is nowhere near binding: the pane's `gap-8` less the
+              `-mb-1` leaves 28 to the table, and the nearest pressable inside it
+              (CreateRow, past the border and its `py-1.5`) is ~35 down; above is
+              the header's or the notice's text. Sideways the row holds nothing
+              else, and slop past the screen edge on the right costs nothing. */}
+          <Button variant="ghost" size="sm" disabled={disabled} className="-mr-3" hitSlop={6}>
             <Icon as={ArrowUpDown} className="size-4" />
             <Text className="font-normal">Sort</Text>
           </Button>
