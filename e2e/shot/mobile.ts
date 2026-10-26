@@ -231,6 +231,28 @@ async function quitApp(bundleId: string): Promise<void> {
   await command('xcrun', ['simctl', 'terminate', 'booted', bundleId]).catch(() => undefined);
 }
 
+// ⚠ AN OUT-OF-DATE CHROME BADGES ITS OWN MENU, AND THE AVD'S CHROME IS ALWAYS
+// OUT OF DATE. The system image ships the Chrome of the day it was built and
+// nothing on an emulator updates it, so a few months on Chrome swaps its ⋮ for a
+// red update badge — on the tablet, where the toolbar sits above the sheet, the
+// share picture photographed it. Nothing fails; it is simply a store screenshot
+// that advertises a stale browser. `--force-update-menu-type=none` is Chrome's
+// own switch for pinning that menu state, read from `chrome-command-line` at
+// process start — and on a `release-keys` image only when Chrome is the debug
+// app, which is why both are set. Hence the force-stop: a running Chrome has
+// already read its flags. Checked first, so only the run that changes them pays.
+const CHROME_FLAGS_FILE = '/data/local/tmp/chrome-command-line';
+const CHROME_FLAGS = '_ --force-update-menu-type=none';
+
+async function pinChromeFlags(): Promise<void> {
+  const flags = await capture('adb', ['shell', 'cat', CHROME_FLAGS_FILE]).catch(() => '');
+  const debugApp = await capture('adb', ['shell', 'settings', 'get', 'global', 'debug_app']);
+  if (flags === CHROME_FLAGS && debugApp === 'com.android.chrome') return;
+  await adbShell(['sh', '-c', `echo '${CHROME_FLAGS}' > ${CHROME_FLAGS_FILE}`]);
+  await adbShell(['am', 'set-debug-app', '--persistent', 'com.android.chrome']);
+  await adbShell(['am', 'force-stop', 'com.android.chrome']);
+}
+
 async function openShareSource(platform: Platform): Promise<void> {
   if (platform === 'ios') {
     await quitApp('com.bracemark.app');
@@ -238,6 +260,8 @@ async function openShareSource(platform: Platform): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 2_000));
     return;
   }
+
+  await pinChromeFlags();
 
   // Put a real browser behind the translucent activity, then hand the activity
   // the same ACTION_SEND payload a chooser would. Selecting Bracemark in the

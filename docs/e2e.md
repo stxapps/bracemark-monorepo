@@ -2986,6 +2986,12 @@ reason:
   its raster rather than `simctl io`'s, so the picture is on its side like the
   other three. Android's tablet share runs `share.yaml` unchanged
   (`SHARE-ANDROID-001` already drives that panel wide).
+- **⚠ Chrome's toolbar is in the Android tablet's share picture**, above the
+  sheet, and an AVD's Chrome is never updated — so a few months after the
+  system image it swaps ⋮ for a red update badge, and the store picture
+  advertises a stale browser. The runner pins Chrome's
+  `--force-update-menu-type=none` before opening the page (`pinChromeFlags`,
+  `shot/mobile.ts`, which says why Chrome also has to be the debug app).
 
 The raster is the device check, and it is stricter than the e2e runs': **the
 iPad must be the iPad Pro 11-inch**, its own 2420×1668 on its side, and the

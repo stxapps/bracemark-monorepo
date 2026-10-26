@@ -193,7 +193,18 @@ the same six edits plus four of its own:
 | `hw.lcd.width`/`height` | 2560×1600 → 1920×1200    | the same 1280 × 800 dp window for 56% of the pixels: smaller frames, smaller captures                                          |
 | `hw.lcd.density`        | 320 → 240                | keeps the dp; hdpi is a density neither the phone nor the simulators run, so its rounding (a 1.5× hairline) gets run somewhere |
 | `hw.initialOrientation` | `portrait` → `landscape` | a tablet's natural orientation; it boots the way it is mostly held                                                             |
-| `showDeviceFrame`       | `yes` → `no`             | no skin is installed for it                                                                                                    |
+| `showDeviceFrame`       | `yes` → `no`             | no frame, and no `skin.*` keys either — see below                                                                              |
+
+**⚠ No skin, and Android Studio's edit dialog undoes the four edits above.**
+The SDK does ship a `pixel_tablet` skin, but its rounded corners are a
+foreground mask on the emulator's _window_ — the display still reports
+`RoundedCorner{… radius=0}` and every `screencap` and Maestro raster stays
+square, so it changes nothing a capture shows. And choosing a skin in
+Studio's _Edit device_ dialog writes the profile's defaults back:
+`hw.lcd.*` returned to 2560×1600 @ 320 and `hw.sdCard` to `yes`, measured on
+2026-10-26, after which `npm run shot:mobile -- android --tablet` refuses every
+capture (`verifyTablet` wants 1920×1200). Edit `config.ini` by hand, with the
+emulator shut down, and check `adb shell wm size` after the next boot.
 
 **Why 1280 × 800 dp.** It is the Android tablet: the Pixel Tablet and most other
 10–11" tablets are sw800dp. Both orientations
