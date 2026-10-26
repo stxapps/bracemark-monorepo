@@ -47,7 +47,7 @@ The release also carried two changes we made in the week before it, and the revi
 
 **Restoring a backup now places deep lists instead of refusing.** A line past 100 levels is placed at the 100th, so a restore keeps every list. The review found this holds the tree a restore stores to 100 levels, but that a loop of parents in the file hid long chains the restore didn’t measure, and one ordinary move afterwards could join them into a single chain as deep as the file. A probe of the restore’s shared code produced 19,802 levels from a file of that many lines. Our fix stores the loop as the screens already show it, cut, and has every move measure the tree after it, not before. A separate agent rechecked the fix on 21 October and found that it holds for that route: after a restore, none of the moves it tried — about 31,000 each for lists and for tags, and thousands more at random — took a tree past 100 levels. It also found that a loop can still be built across several restores, which the restore doesn’t see, and that the check on every move is what keeps it from being released.
 
-Both fixes are committed and not yet deployed. When they are, they cover what happens from then on; a preview already deleted isn’t restored.
+Both fixes are in the web app as of 26 October. The restore fix reaches the iOS and Android apps in their next update, which hasn’t been released yet. Each fix covers what happens after it arrives; a preview already deleted isn’t restored.
 
 ## What reading the source can’t settle
 

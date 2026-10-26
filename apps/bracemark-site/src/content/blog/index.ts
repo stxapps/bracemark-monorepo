@@ -23,7 +23,7 @@ export const BLOG_POSTS: BlogPost[] = [
     title: 'Source security review, October 2026',
     description:
       'Our AI-assisted source review recorded low-severity findings and open questions. We explain the method, what launch changed, and what still needs evidence.',
-    publishedAt: '2026-10-23T00:00:00Z',
+    publishedAt: '2026-10-26T00:00:00Z',
   },
 ];
 
