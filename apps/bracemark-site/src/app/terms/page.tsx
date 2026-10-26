@@ -8,6 +8,7 @@ import { PageShell } from '../../components/page-shell';
 import {
   COMPANY,
   PADDLE_REFUND_POLICY_URL,
+  SITE_URL,
   SOURCE,
   SUPPORT_EMAIL,
   TERMS_UPDATED,
@@ -16,6 +17,7 @@ import {
 export const metadata: Metadata = {
   title: 'Terms of Service',
   description: 'The terms you agree to when you use Bracemark.',
+  alternates: { canonical: `${SITE_URL}/terms` },
 };
 
 // Both Apple and Google require a reachable terms URL on the listing, and the

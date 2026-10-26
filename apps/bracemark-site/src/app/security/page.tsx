@@ -16,6 +16,7 @@ import {
   SECURITY_ACK_WINDOW,
   SECURITY_EMAIL,
   SECURITY_TRIAGE_WINDOW,
+  SITE_URL,
   SOURCE,
 } from '../../lib/site';
 
@@ -23,6 +24,7 @@ export const metadata: Metadata = {
   title: 'Security',
   description:
     'How the key works, the parameters it uses, what someone who took our server would have, and the two things we have not done.',
+  alternates: { canonical: `${SITE_URL}/security` },
 };
 
 // The page for the reader who accepts the architecture and wants the mechanism.

@@ -5,12 +5,13 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { MailLink } from '../../components/mail-link';
 import { PageShell } from '../../components/page-shell';
-import { ABUSE_EMAIL, SOURCE } from '../../lib/site';
+import { ABUSE_EMAIL, SITE_URL, SOURCE } from '../../lib/site';
 
 export const metadata: Metadata = {
   title: 'bracemark-extractor',
   description:
     'What bracemark-extractor is, why it fetched your page, the caps it holds itself to, and how to stop it if you would rather it didn’t.',
+  alternates: { canonical: `${SITE_URL}/extractor` },
 };
 
 // The page every outbound fetch promises. `bracemark-extractor` identifies itself

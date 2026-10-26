@@ -171,6 +171,7 @@ the static params, the sidebar and prev/next all read one list, and
 `src/content/docs/docs.spec.ts` holds the manifest and the folder to each other.
 The docs index and each page also set their own canonical URL and social preview
 metadata; each article's title and description come from that same manifest.
+Every other page on the site sets its canonical too ([hosting.md](./hosting.md#sitemapxml-and-json-ld)).
 
 **A page imports nothing.** Numbers come from `@stxapps/shared` through the
 component map (`<FreeLinks />` reads the plan table, never a typed 200), a store

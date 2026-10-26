@@ -9,6 +9,7 @@ import {
   BACKUP_RETENTION_DAYS,
   COMPANY,
   PRIVACY_UPDATED,
+  SITE_URL,
   SOURCE,
   SUPPORT_EMAIL,
 } from '../../lib/site';
@@ -16,6 +17,7 @@ import {
 export const metadata: Metadata = {
   title: 'Privacy Policy',
   description: 'What Bracemark stores, what it cannot read, and what it never collects.',
+  alternates: { canonical: `${SITE_URL}/privacy` },
 };
 
 // Every store requires a reachable privacy-policy URL, so this route must carry

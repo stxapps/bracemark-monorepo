@@ -8,13 +8,14 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 import { ArrowGlyph, ChevronGlyph } from '../../components/glyphs';
 import { JsonLd } from '../../components/json-ld';
 import { FAQ_GROUPS } from '../../content/faq';
-import { CREATE_ACCOUNT_URL } from '../../lib/site';
+import { CREATE_ACCOUNT_URL, SITE_URL } from '../../lib/site';
 import { faqPage } from '../../lib/structured-data';
 
 export const metadata: Metadata = {
   title: 'FAQ',
   description:
     'How Bracemark’s encryption, account, plans, and features work — including the questions with uncomfortable answers.',
+  alternates: { canonical: `${SITE_URL}/faq` },
 };
 
 // The questions themselves live in `content/faq.tsx`, shared with /pricing. This

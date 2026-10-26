@@ -425,8 +425,9 @@ which a browser reads as scheme-relative and follows off-site.
   scanner will flag as missing, and someone will eventually fill it in.
 
   The exemption is why the root is the one page with two live URLs — `/index.html`
-  and `/index` both answer 200 beside `/`, and no `<link rel="canonical">` settles
-  it. Canonicalizing them (`/index.html` → `/`) is a one-line change and is
+  and `/index` both answer 200 beside `/`, and only the page's own
+  `<link rel="canonical">` (the bare origin, [below](#sitemapxml-and-json-ld))
+  tells a search engine which one counts. Redirecting them (`/index.html` → `/`) is a one-line change and is
   deliberately not made: it converts that same misconfiguration from an ugly
   redirect into an **infinite** one on `/`, taking the homepage down, and the
   function cannot detect the case — a default-root-object rewrite arrives
@@ -666,6 +667,14 @@ not). Three things to know:
   the first two and trusts `lastmod` only where it has proven accurate. Blog
   articles alone carry it, from their author-set publication or substantive
   update time; ordinary pages never get a build timestamp.
+- **Every listed page names its own URL as canonical**, through
+  `alternates.canonical` in its own metadata, and the same spec holds each one
+  to its sitemap entry. A missing canonical leaves the choice to the search
+  engine. A wrong one is worse, and fails silently: one copied from the page it
+  was cloned from declares this page a duplicate of that one, and Google drops it
+  from the index while it renders and builds as before. **Never set it in the
+  root layout.** Metadata merges down the tree, so every page without its own
+  would inherit `/` as its canonical.
 
 `/feed.xml` is a static GET route compiled from the blog manifest at build time.
 The CloudFront clean-URL function passes the dotted path through. The deploy

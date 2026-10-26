@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import {
@@ -21,7 +22,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 import { ArrowGlyph } from '../components/glyphs';
 import { HeroPanel } from '../components/hero-panel';
 import { JsonLd } from '../components/json-ld';
-import { CREATE_ACCOUNT_URL, PREDECESSOR, SOURCE } from '../lib/site';
+import { CREATE_ACCOUNT_URL, PREDECESSOR, SITE_URL, SOURCE } from '../lib/site';
 import { SITE_GRAPH } from '../lib/structured-data';
 
 // Moved here from bracemark-web when the apex became this app. Two things changed
@@ -41,6 +42,15 @@ import { SITE_GRAPH } from '../lib/structured-data';
 // sees nothing" — it sees your username and your plan; the copy on this page says
 // so now, and the rationale should not keep the version the copy dropped.) The one thing it does show
 // is the hero panel below.
+
+// The home page's own canonical, set HERE and not in the root layout: metadata
+// merges down the tree, so a canonical in the layout would be inherited by every
+// page that doesn't set one and name `/` as the canonical copy of each — telling a
+// search engine to drop them from its index. Every page names itself instead, and
+// `sitemap.spec.ts` holds each one to its sitemap URL.
+export const metadata: Metadata = {
+  alternates: { canonical: `${SITE_URL}/` },
+};
 
 const FREE_LINKS = entitlementsOf('free').maxLinks;
 

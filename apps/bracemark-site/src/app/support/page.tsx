@@ -10,6 +10,7 @@ import {
   SECURITY_ACK_WINDOW,
   SECURITY_EMAIL,
   SECURITY_TRIAGE_WINDOW,
+  SITE_URL,
   SOURCE,
   SUPPORT_EMAIL,
 } from '../../lib/site';
@@ -18,6 +19,7 @@ export const metadata: Metadata = {
   title: 'Support',
   description:
     'How to get help with Bracemark: one email address, what to put in it, and the things we genuinely can’t do for you.',
+  alternates: { canonical: `${SITE_URL}/support` },
 };
 
 // A reachable support URL is a store-listing requirement, so this

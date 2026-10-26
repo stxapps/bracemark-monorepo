@@ -8,12 +8,20 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 import { ArrowGlyph } from '../../components/glyphs';
 import { MailLink } from '../../components/mail-link';
 import { PageShell } from '../../components/page-shell';
-import { COMPANY, CREATE_ACCOUNT_URL, PREDECESSOR, SOURCE, SUPPORT_EMAIL } from '../../lib/site';
+import {
+  COMPANY,
+  CREATE_ACCOUNT_URL,
+  PREDECESSOR,
+  SITE_URL,
+  SOURCE,
+  SUPPORT_EMAIL,
+} from '../../lib/site';
 
 export const metadata: Metadata = {
   title: 'About',
   description:
     'Who makes Bracemark, why it encrypts your library on your device, and how a bookmark manager pays for itself on subscriptions alone.',
+  alternates: { canonical: `${SITE_URL}/about` },
 };
 
 // Two rules held throughout, because an About page is where marketing copy
