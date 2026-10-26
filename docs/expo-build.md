@@ -431,6 +431,10 @@ and About prints whichever the running platform has. Belt and braces:
 version onto the extension regardless, so re-adding `ios.version` can't
 resurrect the mismatch — see below.
 
+A bump also wants `release-notes/bracemark-expo/<version>.md`, the text both
+stores' "What's new" field gets; `npm run check:release-notes` fails until it
+exists ([release-notes/README.md](../release-notes/README.md)).
+
 #### devices — every size, and the two OS floors ⚠
 
 **bracemark-expo ships for phones AND tablets, in every orientation, and half of

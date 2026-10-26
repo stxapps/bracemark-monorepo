@@ -274,7 +274,7 @@ Nx cache reporting `13/13 hit`, not projects being skipped. To force real
 execution, `npx nx reset` or scope to one project with
 `npx nx test @stxapps/<project>`.
 
-### the two things outside the two runners
+### the things outside the two runners
 
 `tools/cloudfront/rewrite-url.js` is the CloudFront function that gives both static
 sites their clean URLs ([hosting.md](./hosting.md#clean-urls--the-cloudfront-function)).
@@ -305,6 +305,16 @@ npm run test:check-service-worker
 Each refusal there has a passing control built from the same fixture, and the
 deployed half runs against a node server standing in for the CDN — which is the
 one thing it cannot be, and why the real check runs against the real host.
+
+`tools/scripts/check-release-notes.mjs` is the third: the store notes in
+`release-notes/` are Markdown pasted into a console, so neither the typography
+lint rule nor `listing-copy.spec.ts` reaches them, and the script is what holds
+their budgets and punctuation. A check that reads nothing passes, so it is
+pinned the same way — `check-release-notes.test.mjs` beside it:
+
+```bash
+npm run test:check-release-notes
+```
 
 **Lint does reach them, by a script rather than a target.** `tools/` and the
 root-level config files (`eslint.config.mjs`, the `jest.*` files) belong to no Nx

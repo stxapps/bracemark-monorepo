@@ -583,8 +583,8 @@ drift as the apostrophe, by the same route: each author spelled the way they
 spell, and nothing reads the page as a whole. The variant is **-ise**, not the
 Oxford -ize, because that is what the existing pages already used. The scope is
 every string a user reads, the same as the rest of this section, and it reaches
-the repository's own public prose — `SECURITY.md`, the root `README`, and the
-reports in `security-reviews/`. Four things stay as they are, because they are
+the repository's own public prose — `SECURITY.md`, the root `README`, the
+reports in `security-reviews/`, and the store notes in `release-notes/`. Four things stay as they are, because they are
 names or data rather than our prose: **another app's words** (Raindrop's
 _Favorites_, LinkWarden's _Unorganized_ collection, a CSV column called
 `favorite`), which the import help pages describe in their own spelling;

@@ -483,8 +483,8 @@ resolution exercises none of these rules
 ([below](#previewing-a-production-build-locally--nx-start)).
 
 `tools/cloudfront/rewrite-url.test.mjs` pins the table above — `npm run test:cloudfront`,
-node's own runner, 200ms, deliberately outside `npm run test` (docs/testing.md, _the one
-thing outside the two runners_). It cannot judge runtime compatibility or compute
+node's own runner, 200ms, deliberately outside `npm run test` (docs/testing.md, _the
+things outside the two runners_). It cannot judge runtime compatibility or compute
 utilization, so it comes before `test-function` rather than instead of it. What it is
 really there for is the two rules whose deletion is otherwise silent: the `/index.html`
 exemption and the absolute `Location`.
