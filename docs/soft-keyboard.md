@@ -30,8 +30,8 @@ feature**:
 | surface                                                       | mechanism                                                                       | examples                                              |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------- |
 | regular expo-router screen                                    | keyboard-controller `KeyboardAwareScrollView` in the screen wrapper             | `auth-screen.tsx`, `settings/[section].tsx`           |
-| portaled overlay content (`Dialog`)                           | keyboard-controller `KeyboardAvoidingView` in the CONTAINER                     | `ui/dialog.tsx`'s `DialogOverlay`                     |
-| the in-app sheet (`Sheet`)                                    | keyboard-controller `KeyboardAvoidingView` in the SHEET, which owns the window  | add link, edit link, Advanced Search (`ui/sheet.tsx`) |
+| portaled overlay content (`Dialog`)                           | the capped `KeyboardAvoidingView` (below) in the CONTAINER                      | `ui/dialog.tsx`'s `DialogOverlay`                     |
+| the in-app sheet (`Sheet`)                                    | the capped `KeyboardAvoidingView` (below) in the SHEET, which owns the window   | add link, edit link, Advanced Search (`ui/sheet.tsx`) |
 | share sheet (iOS extension process / Android `ShareActivity`) | its own bottom padding (`useShareKeyboard`) — neither library's avoider works   | `share/share-kit.tsx` `ShareSheet`                    |
 | RN `Modal`                                                    | none in the app — lint fences it ([locks.md](./locks.md)); the history is below | —                                                     |
 
@@ -39,6 +39,20 @@ feature**:
   mounts once at the root (`src/app/_layout.tsx`) and feeds
   WindowInsetsAnimation-synced keyboard values; screens consume them via
   `KeyboardAwareScrollView` (wrapped with `withUniwind` for `className`).
+- **⚠ The two avoiders are `ui/keyboard-avoiding-view.tsx`, not the
+  library's `KeyboardAvoidingView` — a copy of its `padding` mode whose overlap
+  is capped at the keyboard's own height. Don't swap the import back.** The
+  library pairs `screenHeight` (a `windowDidResize` event, through a render)
+  with its `onLayout` frame (the UI runtime), and a rotation changes both on
+  clocks nothing orders. Turned to landscape with the new height winning, the
+  tablet AVD padded by 1280 − (800 − 376) = 856dp in an 800dp window: the panel
+  laid out at zero height for a frame, and Android (P+) clears focus from a
+  zero-sized view (`View.sizeChange`, caught under a breakpoint), so the add
+  panel's URL field blurred and the keyboard dropped — intermittently, as the
+  race fell, and only turning to landscape (the other way the stale frame is
+  the shorter one and the overlap floors at 0). Nothing reports it but
+  `WINDOW-ROTATE-ANDROID-001`. Unchanged through keyboard-controller 1.22.8;
+  the copy's header has the rest.
 - **The unit of handling is the screen/scroll container, not the leaf.**
   Components rendered inside an already-keyboard-aware screen — the settings
   sections (`lists-section.tsx`, `tags-section.tsx`), future
@@ -277,8 +291,8 @@ with them:
 **How it is built** — the add panel's three mechanisms, now the shell's
 (`ui/sheet.tsx` carries each in full):
 
-- **Avoidance** — keyboard-controller's `KeyboardAvoidingView` spans the window
-  and parks the sheet on the keyboard's top edge (`justify-end`) or centres the
+- **Avoidance** — the capped `KeyboardAvoidingView` (_avoidance_, above) spans
+  the window and parks the sheet on the keyboard's top edge (`justify-end`) or centres the
   card in what the keyboard leaves (`justify-center`), so `max-h-full` on the
   panel resolves against "the window minus the keyboard" with nothing measured.
 - **The squeeze** — the body's ONE scroller carries `shrink grow-0`, so the cap
@@ -424,8 +438,8 @@ measure the height, no sheet to seize the scroller, and no modal container to
 lose. Its mechanisms are the ordinary ones, and they are `ui/dialog.tsx`'s three
 (that file carries the canonical derivation):
 
-- **Avoidance** — keyboard-controller's `KeyboardAvoidingView` spans the window
-  and parks the panel on the keyboard's top edge (`justify-end`,
+- **Avoidance** — the capped `KeyboardAvoidingView` (_avoidance_, above) spans
+  the window and parks the panel on the keyboard's top edge (`justify-end`,
   `behavior="padding"`), so `max-h-full` on the panel resolves against "the
   window minus the keyboard" with nothing measured.
 - **The squeeze** — that cap only reaches the body if the scroller carries

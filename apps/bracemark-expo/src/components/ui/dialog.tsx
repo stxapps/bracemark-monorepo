@@ -7,7 +7,6 @@ import {
   View,
   type ViewProps,
 } from 'react-native';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { FadeIn, FadeOut, ReduceMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FullWindowOverlay as RNFullWindowOverlay } from 'react-native-screens';
@@ -19,6 +18,7 @@ import { useAppCovered } from '../../contexts/app-cover';
 import { cn } from '../../lib/utils';
 import { Button } from './button';
 import { Icon } from './icon';
+import { KeyboardAvoidingView } from './keyboard-avoiding-view';
 import { NativeOnlyAnimatedView, POPUP_FADE_MS } from './native-only-animated-view';
 import { Text } from './text';
 
@@ -119,8 +119,9 @@ function DialogOverlay({
               lock dialogs is the Cancel/submit row (docs/safe-area.md,
               docs/soft-keyboard.md, _avoidance_).
 
-              keyboard-controller's KeyboardAvoidingView, NOT react-native's.
-              Both were driven on the emulator against a deliberately tall
+              keyboard-controller's KeyboardAvoidingView, NOT react-native's —
+              in the capped copy (./keyboard-avoiding-view.tsx: the library's
+              lifts a rotated window by a stale frame). Both were driven on the emulator against a deliberately tall
               dialog: RN's does not move this subtree at all under Android's
               edge-to-edge (its keyboard metrics come from a window resize that
               no longer happens), and it applies a phantom inset once the

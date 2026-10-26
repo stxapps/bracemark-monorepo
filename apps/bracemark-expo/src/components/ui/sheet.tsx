@@ -88,10 +88,7 @@ import {
 } from 'react';
 import { BackHandler, Keyboard, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import {
-  KeyboardAvoidingView,
-  useReanimatedKeyboardAnimation,
-} from 'react-native-keyboard-controller';
+import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import Animated, {
   Easing,
   ReduceMotion,
@@ -112,6 +109,7 @@ import { cn } from '../../lib/utils';
 import { useWideWindow } from '../../lib/window-class';
 import { Button } from './button';
 import { Icon } from './icon';
+import { KeyboardAvoidingView } from './keyboard-avoiding-view';
 import { NativeOnlyAnimatedView, POPUP_FADE_MS } from './native-only-animated-view';
 import { Text } from './text';
 
