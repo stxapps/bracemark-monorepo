@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
-import { access, copyFile, mkdir, readdir, readFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createInterface } from 'node:readline/promises';
 import { promisify } from 'node:util';
 
 import { SHOT_OUTPUT } from '../paths';
@@ -51,8 +52,16 @@ const SHOT_LOCALE = 'en_US';
 
 type Platform = 'ios' | 'android';
 
+// A phone capture or a tablet capture. The tablet leg is the same four scenes on
+// the `wide` device of each platform — the iPad on its side, the tablet AVD as it
+// boots — and it is what the iPad and Android-tablet store listings are composed
+// from. The device decides which one a run gets, so the flag is a CLAIM about the
+// booted device and `verifyCaptures` holds the raster to it.
+type Form = 'phone' | 'tablet';
+
 interface Options {
   platform: Platform;
+  form: Form;
   // Wipe the device and sign in again, rather than restarting the app onto the
   // session and library it already has. See mobile/shots/subflows/start.yaml for
   // which way round these are and why; the short version is that this one is for
@@ -63,19 +72,24 @@ interface Options {
 function selectedOptions(): Options {
   const argv = process.argv.slice(2);
   const fresh = argv.includes('--fresh');
-  const rest = argv.filter((arg) => arg !== '--fresh');
+  const tablet = argv.includes('--tablet');
+  const rest = argv.filter((arg) => arg !== '--fresh' && arg !== '--tablet');
   const platform = rest[0];
   if (rest.length !== 1 || (platform !== 'ios' && platform !== 'android')) {
     throw new Error(
       'choose one platform: `npm run shot:mobile -- ios` or `... -- android`\n' +
+        '    add `--tablet` to photograph the booted iPad or tablet AVD instead of a phone\n' +
         '    add `--fresh` to wipe the device and sign in, instead of restarting the app',
     );
   }
-  return { platform, fresh };
+  return { platform, form: tablet ? 'tablet' : 'phone', fresh };
 }
 
-function rawPath(platform: Platform, scene: string): string {
-  return `${SHOT_OUTPUT}/mobile-${platform}-${scene}.png`;
+// `mobile-` for the phone, which is what every existing consumer reads; the
+// tablet's are `tablet-` beside them rather than a suffix, so a glob for one form
+// can never pick up the other.
+function rawPath(form: Form, platform: Platform, scene: string): string {
+  return `${SHOT_OUTPUT}/${form === 'phone' ? 'mobile' : 'tablet'}-${platform}-${scene}.png`;
 }
 
 async function maestroCapture(runDir: string, name: string): Promise<string> {
@@ -205,8 +219,21 @@ async function clearStatusBar(platform: Platform): Promise<void> {
   await clearDeviceStatusBar(platform, undefined);
 }
 
+// ⚠ iOS DRAWS A BREADCRUMB IN THE STATUS BAR FOR THE APP THAT HANDED OFF, and it
+// is photographed with everything else. `simctl openurl` from a foreground
+// Bracemark puts `◀ Bracemark` beside Safari's clock; the next run's warm start,
+// launched over that Safari, puts `◀ Safari` beside the app's. Nothing fails —
+// it is a frozen, correct status bar with a back-link no fresh device shows. The
+// cure is to leave nothing to point back to: quit the app being left first, so
+// the next one opens from SpringBoard. Terminating a process that is not running
+// fails, which is the expected case on a first run.
+async function quitApp(bundleId: string): Promise<void> {
+  await command('xcrun', ['simctl', 'terminate', 'booted', bundleId]).catch(() => undefined);
+}
+
 async function openShareSource(platform: Platform): Promise<void> {
   if (platform === 'ios') {
+    await quitApp('com.bracemark.app');
     await command('xcrun', ['simctl', 'openurl', 'booted', SHARE_URL]);
     await new Promise((resolve) => setTimeout(resolve, 2_000));
     return;
@@ -215,7 +242,24 @@ async function openShareSource(platform: Platform): Promise<void> {
   // Put a real browser behind the translucent activity, then hand the activity
   // the same ACTION_SEND payload a chooser would. Selecting Bracemark in the
   // chooser changes no app pixels and makes this capture less repeatable.
-  await adbShell(['am', 'start', '-a', 'android.intent.action.VIEW', '-d', SHARE_URL]);
+  //
+  // ⚠ ONE TAB, NAMED. A bare VIEW intent opens a NEW Chrome tab every run, and on
+  // a phone nobody sees them pile up — on the tablet Chrome draws a tab strip, so
+  // the share picture photographed `New tab`, then two `Job interview` tabs, then
+  // three. `com.android.browser.application_id` is the browser contract for "the
+  // app that opened this": Chrome reuses the tab it gave that id, so every run
+  // lands in the same one.
+  await adbShell([
+    'am',
+    'start',
+    '-a',
+    'android.intent.action.VIEW',
+    '-d',
+    SHARE_URL,
+    '--es',
+    'com.android.browser.application_id',
+    'com.bracemark.shot',
+  ]);
   await new Promise((resolve) => setTimeout(resolve, 2_000));
   // `--activity-clear-task`, or the SECOND run of this script gets no sheet.
   // ShareActivity declares `taskAffinity=""` (bracemark-share's AndroidManifest),
@@ -249,15 +293,100 @@ async function openShareSource(platform: Platform): Promise<void> {
   ]);
 }
 
+/**
+ * The iPad's share capture, driven by hand.
+ *
+ * ⚠ ON AN iPAD MAESTRO CANNOT SEE THE SHARE SHEET. Safari's share sheet is a
+ * popover and the extension a centred card, and neither is in the tree Maestro
+ * reads — docs/e2e.md, _not admitted, and why: the iOS share cases_. share.yaml
+ * would wait out its timeout on `share-add` with the card plainly on screen. A
+ * point-tapped flow could cross it, but with nothing to wait on it would be a
+ * chain of sleeps that photographs whatever state the last tap reached, and this
+ * is the one kind of run whose output ships to a store listing.
+ *
+ * So a person brings the card to the same compose state share.yaml reaches on
+ * every other device, and Maestro only presses the shutter — its screenshot, not
+ * `simctl io`'s, so the raster comes out on its side like the other three.
+ */
+async function shareByHand(device: { platform: Platform; deviceId: string }, runDir: string) {
+  console.log(
+    [
+      '',
+      'iPad share sheet — by hand (Maestro cannot see it):',
+      '  1. In Safari: More → Share → Bracemark',
+      '  2. List: Interview prep',
+      '  3. Tags: work, interview, thursday → Done',
+      '  4. Leave the card in its compose state, Save not pressed, keyboard down',
+      '',
+    ].join('\n'),
+  );
+  const prompt = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    await prompt.question('Press Enter to take the picture… ');
+  } finally {
+    prompt.close();
+  }
+  await maestro('mobile/shots/shutter.yaml', {
+    ...device,
+    env: { SHOT: 'save-from-any-app' },
+    testOutputDir: runDir,
+  });
+}
+
+// ⚠ MAESTRO'S iPAD RASTER IS UPRIGHT, AND ONLY ITS METADATA SAYS IT IS NOT. Held
+// on its side, the iPad's screenshots come out 2064x2752 — the panel's native
+// portrait buffer, the UI turned a quarter inside it — plus an orientation tag,
+// written twice: EXIF `Orientation` in an `eXIf` chunk and `tiff:Orientation` in
+// the XMP `iTXt` (measured: 8, iOS 26.5, Maestro 2.8.0). Chrome, Preview and
+// `sips` all honour the tag, so the file LOOKS landscape everywhere a person
+// checks it, while its header says portrait to everything that reads only that
+// — `verifyCaptures`, a store console. And honouring it is not the same as
+// clearing it: `sips -r` on the tagged file turns the pixels AND keeps the tag,
+// which every viewer then applies a second time.
+//
+// So: read the tag, drop both chunks, and turn the bare pixels by what it said.
+// Whole chunks are length-prefixed and CRC'd individually, so removing one needs
+// no re-encode. `sips` is macOS's own, and this leg only runs on a Mac (xcrun).
+const ROTATE_FOR_ORIENTATION: Record<string, string | undefined> = {
+  '3': '180',
+  '6': '90',
+  '8': '270',
+};
+
+async function bakeOrientation(file: string): Promise<void> {
+  const bytes = await readFile(file);
+  const kept: Buffer[] = [bytes.subarray(0, 8)];
+  let orientation: string | undefined;
+  for (let at = 8; at < bytes.length;) {
+    const end = at + 12 + bytes.readUInt32BE(at);
+    const type = bytes.toString('latin1', at + 4, at + 8);
+    if (type === 'iTXt') {
+      orientation ??= /tiff:Orientation>(\d)</.exec(bytes.toString('latin1', at + 8, end - 4))?.[1];
+    }
+    if (type !== 'eXIf' && type !== 'iTXt') kept.push(bytes.subarray(at, end));
+    at = end;
+  }
+  if (!orientation || orientation === '1') return;
+  const degrees = ROTATE_FOR_ORIENTATION[orientation];
+  if (!degrees) throw new Error(`${file}: a mirrored orientation (${orientation}) is not expected`);
+  await writeFile(file, Buffer.concat(kept));
+  await command('sips', ['-r', degrees, file]);
+}
+
 function pngSize(bytes: Buffer): { width: number; height: number } {
   if (bytes.readUInt32BE(0) !== 0x89504e47) throw new Error('capture is not a PNG');
   return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
 }
 
-async function verifyCaptures(platform: Platform, files: string[]): Promise<void> {
+async function verifyCaptures(platform: Platform, form: Form, files: string[]): Promise<void> {
   for (const file of files) {
     await access(file);
     const { width, height } = pngSize(await readFile(file));
+    console.log(`  ${width}x${height}  ${file}`);
+    if (form === 'tablet') {
+      verifyTablet(platform, file, width, height);
+      continue;
+    }
     if (platform === 'android' && (width !== 1080 || height !== 2400)) {
       throw new Error(`${file}: expected the Pixel 8's 1080x2400 capture, got ${width}x${height}`);
     }
@@ -266,13 +395,39 @@ async function verifyCaptures(platform: Platform, files: string[]): Promise<void
         `${file}: expected a full-resolution portrait iPhone capture, got ${width}x${height}`,
       );
     }
-    console.log(`  ${width}x${height}  ${file}`);
+  }
+}
+
+// ⚠ THE SIZE IS THE DEVICE CHECK, and on the iPad it is a choice of device, not
+// of store slot. The App Store's required iPad slot is the 13" one, but the
+// picture is captured on the iPad Pro 11-inch and composed into it: the slot
+// fixes the FILE's size, not the screen's, and on the 11" the same layout is
+// 1210pt wide instead of 1376, so beside the fixed 280pt rail every row's type
+// lands about 14% larger and the panes fill to the bottom where the 13" left
+// them half-empty. Chosen side by side; the cost is a ~6% upscale. So this
+// refuses anything but that iPad's own raster, on its side — a portrait one means
+// the turn did not happen, and a different iPad would carry a corner and a scale
+// the composition was not measured against. The AVD's 1920x1200 is
+// `bracemark-tablet`'s (docs/app-drivers.md).
+const IPAD_TABLET = { width: 2420, height: 1668, name: 'iPad Pro 11-inch' };
+
+function verifyTablet(platform: Platform, file: string, width: number, height: number): void {
+  if (platform === 'android' && (width !== 1920 || height !== 1200)) {
+    throw new Error(
+      `${file}: expected the tablet AVD’s 1920x1200 landscape capture, got ${width}x${height}`,
+    );
+  }
+  if (platform === 'ios' && (width !== IPAD_TABLET.width || height !== IPAD_TABLET.height)) {
+    throw new Error(
+      `${file}: expected the ${IPAD_TABLET.name}’s ${IPAD_TABLET.width}x${IPAD_TABLET.height} ` +
+        `landscape capture, got ${width}x${height} — boot that simulator, on its own`,
+    );
   }
 }
 
 async function main(): Promise<void> {
-  const { platform, fresh } = selectedOptions();
-  console.log(`${platform}: ${fresh ? 'wiped cold start, then sign in' : 'warm restart'}`);
+  const { platform, form, fresh } = selectedOptions();
+  console.log(`${platform} ${form}: ${fresh ? 'wiped cold start, then sign in' : 'warm restart'}`);
   await waitForApi();
   if (!(await findUserId(SHOT_USER.username))) {
     throw new Error(
@@ -282,13 +437,13 @@ async function main(): Promise<void> {
 
   await mkdir(SHOT_OUTPUT, { recursive: true });
   const paths = {
-    onlyYou: rawPath(platform, 'only-you'),
-    search: rawPath(platform, 'search-on-device'),
-    listsAndTags: rawPath(platform, 'lists-and-tags'),
-    share: rawPath(platform, 'save-from-any-app'),
+    onlyYou: rawPath(form, platform, 'only-you'),
+    search: rawPath(form, platform, 'search-on-device'),
+    listsAndTags: rawPath(form, platform, 'lists-and-tags'),
+    share: rawPath(form, platform, 'save-from-any-app'),
   };
   const files = Object.values(paths);
-  const runId = `${platform}-${Date.now()}`;
+  const runId = `${platform}-${form}-${Date.now()}`;
   const storeRun = join(SHOT_OUTPUT, 'mobile-runs', `${runId}-store`);
   const shareRun = join(SHOT_OUTPUT, 'mobile-runs', `${runId}-share`);
   const credentials = {
@@ -297,13 +452,18 @@ async function main(): Promise<void> {
   };
 
   const device = { platform, deviceId: await deviceId(platform) };
+  // The flows branch on it exactly as the e2e flows do (docs/e2e.md, _narrow and
+  // wide_), so the shared subflows they pull in take the same path here.
+  const width = form === 'tablet' ? 'wide' : 'narrow';
 
   await freezeStatusBar(platform);
   try {
+    if (platform === 'ios') await quitApp('com.apple.mobilesafari');
     await maestro('mobile/shots/store.yaml', {
       ...device,
       env: {
         ...credentials,
+        E2E_WIDTH: width,
         // Passed on every run, never defaulted in the flow: a Maestro `env:`
         // block beats `-e` rather than yielding to it (start.yaml, last note).
         FRESH: String(fresh),
@@ -320,11 +480,15 @@ async function main(): Promise<void> {
     });
 
     await openShareSource(platform);
-    await maestro('mobile/shots/share.yaml', {
-      ...device,
-      env: { SAVE_FROM_ANY_APP_SHOT: 'save-from-any-app' },
-      testOutputDir: shareRun,
-    });
+    if (platform === 'ios' && form === 'tablet') {
+      await shareByHand(device, shareRun);
+    } else {
+      await maestro('mobile/shots/share.yaml', {
+        ...device,
+        env: { SAVE_FROM_ANY_APP_SHOT: 'save-from-any-app', E2E_WIDTH: width },
+        testOutputDir: shareRun,
+      });
+    }
     await copyCaptures(shareRun, { 'save-from-any-app': paths.share });
   } finally {
     await clearStatusBar(platform).catch((error) =>
@@ -332,8 +496,10 @@ async function main(): Promise<void> {
     );
   }
 
-  console.log(`\n${platform} mobile-store captures:`);
-  await verifyCaptures(platform, files);
+  if (platform === 'ios') await Promise.all(files.map(bakeOrientation));
+
+  console.log(`\n${platform} ${form} store captures:`);
+  await verifyCaptures(platform, form, files);
 }
 
 await main();

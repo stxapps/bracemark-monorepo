@@ -239,13 +239,30 @@ It lives in userdata, so it survives cold boots and is lost to `-wipe-data` or
 re-creating the AVD. Check with `settings get secure show_ime_with_hard_keyboard`
 (should read `1`).
 
+**⚠ Two things on it end up in a store screenshot, and the run passes.** Both
+are device state, found on the first `shot:mobile -- android --tablet` run and
+cleared by hand once:
+
+- **Safety Center's shield survives demo mode.** Its notifications (_no screen
+  lock_, an identity-check promo) put a shield beside the frozen 9:41 in every
+  picture, although the freeze sends `notifications visible false`. Clear the
+  shade (`adb shell cmd statusbar expand-notifications`, then _Clear all_);
+  `dumpsys notification` should list no `NotificationRecord`. Android may post
+  them again, so look at the status bar before placing a picture.
+- **Chrome's first run sits behind the share panel.** A Chrome that has never
+  been opened answers the share leg's VIEW intent with a notifications prompt,
+  photographed under `ShareActivity`. Open Chrome once and press _No thanks_. The
+  tab strip is the same kind of trap, and the runner now handles it
+  (`openShareSource`, the application id).
+
 **It is the `wide` device of every Android e2e run** — `e2e:android:tablet`,
 `e2e:visual:android:tablet` ([e2e.md](./e2e.md), _narrow and wide_). With both
 AVDs up the runner tells them apart by width, so neither needs a `--device`; a
 bare `adb` call still needs `-s <serial>` (`adb devices`), and
 `npm run expo:android:reverse` needs `ANDROID_SERIAL=<serial>` in front, once
-per AVD. The store screenshots are a different leg and stay on the Pixel 8:
-`e2e/shot/mobile.ts` accepts only its 1080×2400 ([e2e.md](./e2e.md), _the
+per AVD. The store screenshots are a different leg: the phone ones stay on the
+Pixel 8, and `e2e/shot/mobile.ts` accepts only its 1080×2400; the tablet ones
+(`--tablet`) are this AVD's 1920×1200 on its side ([e2e.md](./e2e.md), _the
 published screenshots_).
 
 #### ⚠ the iPad simulator
@@ -253,8 +270,11 @@ published screenshots_).
 The `wide` iOS device is an **iPad (A16)** simulator — 820 × 1180 pt upright,
 docked rails both ways, and the model `e2e:ios:ipad` expects
 ([e2e.md](./e2e.md), _narrow and wide_). Not the iPad mini, which is narrow
-upright. It needs the iPhone's keyboard settings (_the software keyboard_,
-below) and one of its own:
+upright. The store screenshots are the one leg that uses a different iPad, the
+**iPad Pro 11-inch**, for the size its type lands at in the listing
+([e2e.md](./e2e.md), _the published screenshots_); everything below applies to it
+too. It needs the iPhone's keyboard settings (_the software keyboard_, below) and
+one of its own:
 
 **⚠ AutoFill Passwords goes off, or no wide iOS flow gets past sign-in.** On a
 successful sign-in iOS offers to save the password. On the iPhone that sheet is

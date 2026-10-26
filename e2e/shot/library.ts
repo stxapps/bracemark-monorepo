@@ -20,7 +20,7 @@ import type { SeedLibrary } from '../seed/library';
 // "A private library is still a library" band
 // (apps/bracemark-site/src/app/page.tsx, `SCREENSHOT`).
 //
-// Sized for a frame that shows SEVEN of these links, not twenty-six: the capture
+// Sized for a frame that shows SEVEN of these links, not thirty: the capture
 // is 1000x760 over a virtualized list (web.ts counts the geometry), so the top
 // seven are the picture and the rest are what makes the account worth signing back
 // into. Order is newest-first, so the first entries in SHOT_LINKS below are the
@@ -34,7 +34,7 @@ import type { SeedLibrary } from '../seed/library';
 // and a wall that is two-thirds monogram argues the opposite of the band it sits
 // in.
 //
-// SO THIS FILE IS A LIST, NOT A GENERATOR. Twenty-six real URLs, typed out, each
+// SO THIS FILE IS A LIST, NOT A GENERATOR. Thirty real URLs, typed out, each
 // one checked (see ./preflight.ts) to return a real page and a real og:image
 // through `bracemark-extractor` itself. Nothing here invents a title or an image:
 // the archive carries bare URLs, list membership and tags, and the capture run
@@ -247,7 +247,7 @@ interface ShotLink {
 //
 // What CANNOT be removed, and is not the target: a hostname and a 16px favicon in
 // every row that has one. An all-Wikipedia library still prints
-// `en.wikipedia.org` and the Wikimedia W twenty-six times. That is nominative use
+// `en.wikipedia.org` and the Wikimedia W thirty times. That is nominative use
 // and it is what every bookmark manager's store screenshots show. The line is
 // drawn at artwork. (Which rows HAVE one is the `deviceExtractionMode` note
 // below: the mobile frames showed none at all until it moved, and one host serves
@@ -269,7 +269,7 @@ const SHOT_LINKS: ShotLink[] = [
   // ALTERNATE THE HOSTS. Wikipedia is the single largest supplier below, and left
   // in topic order it clustered: rows reading `en.wikipedia.org` four times under
   // four different photographs, which is the one thing in the frame that looks
-  // generated. It is exactly half the list — 13 of 26 — and it sits on every ODD
+  // generated. It is exactly half the list — 15 of 30 — and it sits on every ODD
   // index, which is the only arrangement that holds: n other hosts can separate at
   // most n+1 Wikipedia ones, so the two counts have to stay level, and a Wikipedia
   // URL added without a host to go with it breaks the pattern somewhere below
@@ -277,7 +277,7 @@ const SHOT_LINKS: ShotLink[] = [
   // about how a library fills up — nobody saves all their recipes on Tuesday and
   // all their holiday reading on Wednesday.
   //
-  // THE OTHER HALF IS FIVE HOSTS, and that count is a floor rather than a
+  // THE OTHER HALF IS SEVEN HOSTS, and that count is a floor rather than a
   // coincidence. The safe pool is small — open-licensed, photographic covers, no
   // vendor and no advocacy org — and the two obvious ways to fill it are both
   // traps. Wikibooks reads `Cookbook:Lasagne - Wikibooks, open books for an open
@@ -295,7 +295,7 @@ const SHOT_LINKS: ShotLink[] = [
   // is sensitive and the aggregate is a profile, which is the argument the hero
   // paragraph makes in prose and this list has to make in pictures. They live in
   // My List together, so the lead picture is the ordinary inbox rather than the
-  // Show All utility view; the remaining nineteen links keep every named list
+  // Show All utility view; the remaining twenty-three links keep every named list
   // populated for the drawer, search and return visits.
   //
   // THE SECOND ROW IS THE HEALTH ROW, and the pick was made on the COVER as much
@@ -365,6 +365,28 @@ const SHOT_LINKS: ShotLink[] = [
   { url: 'https://en.wikipedia.org/wiki/Sourdough', list: 'Recipes', tags: ['recipe', 'bread'] },
   { url: 'https://en.wikivoyage.org/wiki/Whitstable', list: 'Weekends', tags: ['weekend'] },
   { url: 'https://en.wikipedia.org/wiki/Apartment', list: 'Renting', tags: ['rented'] },
+  // THE TABLET'S FOURTH PICTURE IS THIS LIST'S CONTENTS, and these four are why
+  // it has any. On a phone `Lisbon` is a row in the drawer; on a tablet the rail
+  // is docked in every picture, so the store set's fourth selects it and shows
+  // what is in it (mobile/shots/store.yaml) — and with only Porto and Óbidos that
+  // was two rows over a pane three-quarters empty.
+  //
+  // Appended LAST because `createdAt` steps back by array index — anywhere else
+  // and every link below the insertion point would age in every picture that
+  // prints a date. Not Wikivoyage, whose titles end "Travel guide at Wikivoyage"
+  // and would join the `travel` search every search scene photographs. And the
+  // hosts alternate for the rule above: four Wikipedia pages in a row was the
+  // first draft, and in this list they would have been four `en.wikipedia.org`
+  // rows in one picture. So two hosts join the pool, from its two named
+  // categories — a public body (UNESCO) and a reference work (Britannica) — each
+  // checked through the extractor, which reaches both where `curl` gets 403s.
+  // UNESCO's Belém page was passed over for its title, which arrives as
+  // `Tower of Bel&eacute;m`: an entity the page never decoded is a typo in a store
+  // screenshot.
+  { url: 'https://whc.unesco.org/en/list/723/', list: 'Lisbon', tags: ['lisbon'] },
+  { url: 'https://en.wikipedia.org/wiki/Alfama', list: 'Lisbon', tags: ['lisbon'] },
+  { url: 'https://www.britannica.com/place/Lisbon', list: 'Lisbon', tags: ['lisbon'] },
+  { url: 'https://en.wikipedia.org/wiki/Cascais', list: 'Lisbon', tags: ['lisbon'] },
 ];
 
 // The catalog entry. It sits BELOW the array because it counts it: `SHOT_LINKS`
@@ -421,7 +443,7 @@ export function shotLinkList(url: string): string | undefined {
   return SHOT_LINKS.find((link) => link.url === url)?.list;
 }
 
-// ~14 hours between links, so twenty-six of them span about a fortnight and the
+// ~14 hours between links, so thirty of them span about two and a half weeks and the
 // list's dates read as one recent, ordinary stretch. The big seed walks back at
 // 3.7h because it has a thousand to place; this one is a fortnight of somebody's
 // life, not five months of it.
@@ -525,8 +547,8 @@ export function buildShotLibrary(now: number): SeedLibrary {
     // PENDING bucket, and by the time a phone signs in the web capture has
     // resolved every title and `titleImage` facet in the library. It finds no
     // work and fetches no pages. What `all` buys is the favicon queue, and that
-    // is SIX requests — icons are keyed per HOST, and twenty-six links resolve to
-    // six hosts.
+    // is EIGHT requests — icons are keyed per HOST, and thirty links resolve to
+    // eight hosts.
     //
     // SEEDED RATHER THAN CLICKED, unlike `serverExtraction` below, and the
     // asymmetry is not an oversight. That switch is clicked because it is a Plus

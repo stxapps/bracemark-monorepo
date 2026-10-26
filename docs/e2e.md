@@ -2881,7 +2881,7 @@ library is still a library" on the landing page, and the ones its `/docs` pages
 show), the screenshots `apps/bracemark-web`'s
 `manifest.json` hands Chrome's install dialog, and the browser extension's Chrome
 Web Store and AMO listings, and the native captures used to compose the App Store
-and Play Store phone listings.
+and Play Store phone and tablet listings.
 
 **ONE PRODUCER, THREE CONSUMERS, and they do not share a browser.**
 `shot/account.ts` builds the account — import, plan, extraction drain, synced
@@ -2906,6 +2906,8 @@ npm run shot:ext -- ext-sync                   # …only this PNG (the flow stil
 npm run shot:mobile -- ios      # four native iPhone captures
 npm run shot:mobile -- android  # four native Pixel captures; boot it separately
 npm run shot:mobile -- ios --fresh             # …wiping the device first (see below)
+npm run shot:mobile -- ios --tablet            # the same four on the iPad Pro 11", on its side
+npm run shot:mobile -- android --tablet        # …and on the tablet AVD
 ```
 
 **Why the whole thing is a folder of its own.** It was `seed/shot/` until the
@@ -2956,6 +2958,61 @@ plus the real platform share surface, verifies the native raster, and restores
 the status bar. Run iOS and Android separately: iOS uses Safari plus the share
 extension; Android uses Chrome behind `ShareActivity`. These are raw captures,
 not finished store canvases.
+
+**`--tablet` is the same four scenes on the `wide` device**, written beside the
+phone's as `tablet-<platform>-<scene>.png`. The runner passes `E2E_WIDTH=wide`,
+so the flows take the docked-rail path the wide e2e cases take (_narrow and
+wide_, above), and `shots/subflows/tablet.yaml` holds the device the way a
+tablet listing shows it: on its side, and in the list layout every other
+published picture uses. Three things differ from the phone leg, each for a
+reason:
+
+- **The layout is pressed, not assumed.** The subflow selects Settings → Misc's
+  **Sync** tab, which renders the synced `linksLayout` that `shot/account.ts`
+  asserts is the list (`useListLayout`). The tab is the device-local
+  `linksLayoutSource` and writes nothing that syncs; it is pressed on every run
+  because a Device-tab choice left on a simulator would otherwise be
+  photographed. The card grid was tried first and dropped: beside a docked rail
+  its covers took half the pane, a picture of other people's photographs.
+- **The fourth scene selects `Lisbon` in the rail** instead of opening a drawer:
+  on a tablet the rail is in every picture, so the drawer scene does not exist.
+  The list holds six links for this picture's sake (`shot/library.ts`, the last
+  four entries, and why they are not Wikivoyage).
+- **⚠ The iPad's share capture is driven by hand.** Maestro cannot see the share
+  popover or the extension's card on an iPad (_not admitted, and why: the iOS
+  share cases_, above), so `share.yaml` would time out on `share-add` with the
+  card plainly up. The runner opens Safari, prints the four steps, waits for
+  Enter, and only then has Maestro press the shutter (`shots/shutter.yaml`) —
+  its raster rather than `simctl io`'s, so the picture is on its side like the
+  other three. Android's tablet share runs `share.yaml` unchanged
+  (`SHARE-ANDROID-001` already drives that panel wide).
+
+The raster is the device check, and it is stricter than the e2e runs': **the
+iPad must be the iPad Pro 11-inch**, its own 2420×1668 on its side, and the
+tablet AVD must give its 1920×1200. Not the 13" iPad, although the App Store's
+required iPad slot is 13": the slot fixes the uploaded file's size, not the
+screen it shows, and on the 11" the same layout is 1210pt wide instead of 1376 —
+beside the fixed 280pt rail the type lands about 14% larger and the lists fill
+the pane, where the 13" left rows of empty width and a half-empty pane. The two
+were compared side by side (`verifyTablet`, `shot/mobile.ts`). Do the iPad
+simulator's setup on it ([app-drivers.md](./app-drivers.md), _the iPad
+simulator_): AutoFill Passwords off, or the first sign-in never finishes.
+Boot it alone; the runner refuses a second booted simulator.
+
+Two iOS fixes apply to the phone leg as well, because the defects were there all
+along and only showed at tablet size:
+
+- **⚠ A held iPad's raster is upright, and only its metadata says otherwise.**
+  Maestro writes the panel's portrait buffer plus an orientation tag (EXIF and
+  XMP), which every viewer honours and every header-reader ignores. The runner
+  drops both tags and turns the pixels by what they said (`bakeOrientation`),
+  so the file IS landscape rather than displaying as it.
+- **⚠ iOS photographs the hand-off breadcrumb.** Open Safari from the app and
+  the status bar reads `◀ Bracemark`; start the app over Safari and it reads
+  `◀ Safari` — a frozen, correct status bar with a back-link no fresh device
+  shows. The runner quits the app being left before each hand-off (`quitApp`),
+  so the next one opens from the home screen. The phone set's share picture
+  predates this and carries one.
 
 **The mobile leg restarts the app; it does not wipe it.** `mobile/shots/store.yaml`
 goes through `shots/subflows/start.yaml` rather than straight to

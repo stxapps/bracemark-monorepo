@@ -1,0 +1,42 @@
+# How a tablet capture is held. Pulled in with `runFlow` by store.yaml, only
+# under `E2E_WIDTH=wide`; never run directly.
+#
+# ON ITS SIDE. A tablet listing is landscape, so the iPad is turned before
+# anything is photographed — the simulator boots upright. The tablet AVD boots
+# on its side already (`hw.initialOrientation`, docs/app-drivers.md, _the tablet
+# AVD_), and Maestro's Android `setOrientation` counts from the display's
+# NATURAL orientation, so it is not touched here: shot/mobile.ts refuses a
+# portrait raster from either device instead.
+#
+# THE SYNCED LAYOUT, WHICH IS THE LIST. Every published picture of the product
+# is the list layout — web, the PWA dialog, the browser extension, both phone
+# sets — and the tablet set is too, so a listing reads as one app. The card grid
+# was tried here first and lost on that and on what it shows: beside a docked
+# rail its covers took about half the pane, so the frame was mostly other
+# people's photographs rather than the product's own titles, hosts and tags.
+#
+# So this selects the **Sync** tab, which renders the synced `linksLayout` that
+# shot/account.ts asserts is `list` (`useListLayout`). The tab is the device-local
+# `linksLayoutSource` and writes nothing that syncs; it is pressed on every run
+# because a Device-tab choice left on a simulator — by hand, or by an earlier
+# run — would otherwise be photographed silently.
+appId: com.bracemark.app
+---
+- runFlow:
+    when:
+      platform: iOS
+    file: ../../flows/parts/window-rotate-landscape.yaml
+
+- runFlow:
+    file: ../../flows/subflows/open-settings.yaml
+    env:
+      SECTION: misc
+- tapOn: 'Sync'
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: 'settings-close'
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 10000

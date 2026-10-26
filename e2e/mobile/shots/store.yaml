@@ -1,13 +1,22 @@
-# The three in-app mobile store captures. `shot/mobile.ts` supplies the
-# durable shot-account credentials, the run-local screenshot names and `FRESH`.
-# The runner copies those captures into stable artifacts after Maestro exits. The
-# fourth capture is the platform share surface in share.yaml.
+# The three in-app mobile store captures, on a phone or — under
+# `E2E_WIDTH=wide`, from `--tablet` — on a tablet. `shot/mobile.ts` supplies the
+# durable shot-account credentials, the run-local screenshot names, `FRESH` and
+# `E2E_WIDTH`. The runner copies those captures into stable artifacts after
+# Maestro exits. The fourth capture is the platform share surface in share.yaml.
 appId: com.bracemark.app
 ---
 # Warm restart by default, wiped cold start under `--fresh` — subflows/start.yaml
 # carries both and the reasoning for preferring the first here.
 - runFlow:
     file: subflows/start.yaml
+
+# A tablet capture is landscape and in the synced list layout (subflows/tablet.yaml). The
+# branch is the runner's E2E_WIDTH, never what is visible — docs/e2e.md,
+# _narrow and wide_. Unset, as in a hand-run `maestro test`, it reads as narrow.
+- runFlow:
+    when:
+      true: ${E2E_WIDTH === 'wide'}
+    file: subflows/tablet.yaml
 
 # Select the real My List through the drawer so a warm run cannot inherit an old
 # view. Its seven links are the visible fold of the listing-safe library, enough
@@ -30,8 +39,11 @@ appId: com.bracemark.app
 # What it cost while it was wrong: the drawer stayed up, the row assertions below
 # still passed behind it, and every later capture photographed navigation instead
 # of the requested scene.
-- tapOn:
-    id: 'links-open-navigation'
+#
+# On a tablet the rail is docked and there is no drawer button to press; the
+# subflow presses it on a phone and nothing on a tablet.
+- runFlow:
+    file: ../flows/subflows/open-links-navigation.yaml
 - tapOn:
     id: 'links-nav-list-my-list'
 - extendedWaitUntil:
@@ -75,8 +87,11 @@ appId: com.bracemark.app
 - tapOn: 'Search links'
 - inputText: travel
 - pressKey: Enter
+# Unanchored: a result can be one accessibility element whose label runs cover,
+# host and title together — measured on the iPad, in the card layout — and then
+# no node's text STARTS with the title the way a phone's list row does.
 - extendedWaitUntil:
-    visible: 'Porto.*'
+    visible: '.*Porto.*'
     timeout: 60000
 # A TAP ON THE TITLE changes nothing — it is a `Text`, not a pressable
 # (links/topbar.tsx) — and makes the committed state an explicit screen check.
@@ -91,14 +106,46 @@ appId: com.bracemark.app
 
 # Re-open the real navigation drawer and return to its top before checking the
 # whole composition.
-- tapOn:
-    id: 'links-open-navigation'
-- scrollUntilVisible:
-    element:
-      text: 'Lists'
-    direction: UP
-    timeout: 30000
-    speed: 60
+- runFlow:
+    when:
+      true: ${E2E_WIDTH !== 'wide'}
+    commands:
+      - tapOn:
+          id: 'links-open-navigation'
+      - scrollUntilVisible:
+          element:
+            text: 'Lists'
+          direction: UP
+          timeout: 30000
+          speed: 60
+
+# On a tablet there is no drawer to open: the rail is in every picture, so this
+# one has to say something the other three do not. It selects the nested list,
+# so the rail shows `Weekends › Lisbon` chosen and the pane shows what is in it.
+#
+# `leftOf` THE TITLE, because the name is not unique on this screen: the search
+# results behind it carry a `lisbon` tag chip, and the rail row is the only
+# match whose whole box sits left of the pane. The id can't be used instead —
+# a list's id is minted by the import, not named by the library.
+- runFlow:
+    when:
+      true: ${E2E_WIDTH === 'wide'}
+    commands:
+      - tapOn:
+          text: 'Lisbon'
+          leftOf:
+            id: 'links-title'
+      - extendedWaitUntil:
+          visible:
+            id: 'links-title'
+            text: 'Lisbon'
+          timeout: 10000
+      - extendedWaitUntil:
+          visible: '.*Porto.*'
+          timeout: 30000
+      - waitForAnimationToEnd:
+          timeout: 10000
+
 - assertVisible: 'Lists'
 - assertVisible: 'Lisbon'
 - assertVisible: 'Tags'

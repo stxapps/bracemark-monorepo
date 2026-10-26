@@ -1,0 +1,10 @@
+# Press the shutter and nothing else. shot/mobile.ts runs this after the iPad's
+# share sheet has been driven by hand (`shareByHand` says why it must be), so the
+# picture is Maestro's raster — on its side, the same as the three store.yaml
+# took — rather than `simctl io`'s.
+#
+# `appId` is required by Maestro and launches nothing: no step here opens the
+# app, so whatever is on screen is what is photographed.
+appId: com.bracemark.app
+---
+- takeScreenshot: ${SHOT}
