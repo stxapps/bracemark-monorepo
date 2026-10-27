@@ -126,6 +126,9 @@ const CASES = [
   // exactly, so a rule that grew a dotfolder case would take security.txt off the
   // air with a 404 that nobody on our side ever requests.
   [SITE, '/.well-known/security.txt', '', 'pass:/.well-known/security.txt'],
+  // The IndexNow key file (public/<key>.txt). The engines fetch it to verify a
+  // ping; rewritten to `.html` it 404s and every ping after is refused with a 403.
+  [SITE, '/4526d3eed555a40d30186c50dd8608d7.txt', '', 'pass:/4526d3eed555a40d30186c50dd8608d7.txt'],
   // The one real file with no dot, matched by exact path. Apple's servers fetch it
   // to verify the domain for Apple Pay (Paddle checkout); rewritten to `.html` it
   // 404s, and the only symptom is a failed Verify in Paddle's dashboard.

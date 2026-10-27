@@ -721,6 +721,37 @@ graph on the landing page, and an `FAQPage` on `/faq`.
   ([above](#security-headers--where-the-csp-has-to-live)). `<` is escaped as
   `\u003c` so a string containing `</script>` cannot close the tag.
 
+### IndexNow — the key file
+
+[IndexNow](https://www.indexnow.org/) is a ping that tells Bing (and Yandex,
+Seznam, Naver, Yep — **not** Google, which reads the sitemap only) that a URL
+changed. Bing's index is the one ChatGPT search draws on, so this is the fast
+path for a new blog post to reach it. The marketing site only.
+
+- **The key is `apps/bracemark-site/public/<key>.txt`**, a file holding nothing but
+  the key, and the engines fetch it before trusting a ping. It is public by
+  design, which makes it an identifier rather than a credential. It is a plain
+  `public/` file, not a route like `security.txt`, because nothing in it ever
+  needs to change. The CloudFront function passes it through on its dot, pinned
+  in `rewrite-url.test.mjs`, and `deploy-static.sh` uploads it in the
+  must-revalidate pass.
+- **The key is typed in three places**: the filename, the file's contents, and
+  `KEY` in `tools/scripts/indexnow.sh`, plus the test case. Rotate all of them
+  together. The script fetches the key file and compares it with `KEY` before it
+  sends anything. An engine may answer `202` and verify later, so a stale file
+  would otherwise fail with no error on our side.
+- **Staging serves the file too.** That's harmless: a key is valid only for the
+  host it is pinged for, and nothing ever pings `dryrunbase.com`.
+- **Ping after a production deploy, never before**, and only the URLs that
+  changed: `tools/scripts/indexnow.sh https://bracemark.com/blog/<slug>`.
+  `--sitemap` submits every URL in the live sitemap. Use it for the first
+  submission and after a URL-wide change, not on every deploy. Resubmitting
+  unchanged pages is what the protocol asks sites not to do, and a host that does
+  it gets `429`s. `--dry-run` prints the payload without sending it.
+
+Bing Webmaster Tools itself was verified by importing the Search Console
+property, so no `BingSiteAuth.xml` file or DNS record depends on the tree.
+
 ### Apple Pay domain verification
 
 Paddle offers Apple Pay in its checkout only on a domain Apple has verified, and
