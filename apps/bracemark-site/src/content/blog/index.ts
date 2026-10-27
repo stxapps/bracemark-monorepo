@@ -32,6 +32,13 @@ export const BLOG_POSTS: BlogPost[] = [
       'How we handle bookmark formats, test real exports, and measure long imports so you can try Bracemark with the links you already have.',
     publishedAt: '2026-10-27T00:00:00Z',
   },
+  {
+    slug: 'saving-from-the-share-sheet',
+    title: 'Saving a link without leaving what you’re reading',
+    description:
+      'How we built the iOS and Android share sheet: a smaller startup path, shared sign-in, searchable lists and tags, and room for the keyboard.',
+    publishedAt: '2026-10-28T00:00:00Z',
+  },
 ];
 
 export function findBlogPost(slug: string): BlogPost | undefined {

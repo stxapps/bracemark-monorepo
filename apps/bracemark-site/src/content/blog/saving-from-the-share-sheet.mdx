@@ -1,6 +1,3 @@
-{/* Draft title: Saving a link without leaving what you’re reading */}
-{/* Draft description: How we built the iOS and Android share sheet: a smaller startup path, shared sign-in, searchable lists and tags, and room for the keyboard. */}
-
 ## Save where you find the link
 
 You’re reading an article, looking at a product, or following a thread someone sent you. You want to keep the link and carry on.
@@ -29,11 +26,11 @@ We keep the native hosts responsible for the platform handoff and dismissal. The
 
 The iOS share extension therefore has a separate bundle. It loads the save screen and its pickers, while database work, navigation, and other app features stay outside its startup path. We import the specific modules and icons we need, and defer upload-related code until Save needs it.
 
-The sheet also leaves page fetching to the main app. It takes the address and any title supplied by the sharing app; it doesn’t visit the page or download an image before you can save.
+The sheet also leaves page fetching to the main app. It takes the address and any title supplied by the sharing app; it doesn’t visit the page or download an image before you can save. Once the link reaches the main app, the app fetches its title and image on the device.
 
 Memory changed a native design choice too. An early version used an Expo native view to control swipe dismissal while a picker was open. It worked in the simulator, but opening a picker could terminate the iOS share extension on a phone in a development build. We replaced that view with a native module function and a hook in the share extension’s controller, avoiding the extra view initialisation.
 
-That experience is why we distinguish simulator checks, development builds, and release builds. A screen working in the simulator doesn’t establish its memory headroom on a phone. We’ve measured a smaller release footprint in the simulator; release memory headroom on hardware still needs its own measurement.
+That experience is why we distinguish simulator checks, development builds, and release builds. A screen working in the simulator doesn’t establish its memory headroom on a phone. In the simulator, a release build of the sheet uses about 60 MiB on its first screen, against about 170 MiB for a development build. How much headroom a release build has on hardware still needs its own measurement.
 
 ## Carry sign-in across the boundary
 
@@ -45,7 +42,7 @@ Lists and tags take a different route. The app writes a snapshot into an App Gro
 
 These have different storage boundaries: the session copy is in Keychain; the list and tag snapshot is readable local data in the shared container. Links are encrypted before upload. This doesn’t mean every local file is encrypted at rest.
 
-If you haven’t signed in, the sheet asks you to sign in through the app. If the shared session isn’t available for an upload, a saved draft can wait for the main app to process it.
+If you haven’t signed in, the sheet asks you to open the app and sign in. If the shared session isn’t available for an upload, a saved draft can wait for the main app to process it. Each draft records the account that opened the sheet, so if you sign out or switch accounts while the sheet is open, Save refuses rather than filing the link into another account.
 
 ## Make room for lists, tags, and the keyboard
 
@@ -55,7 +52,9 @@ Both pickers filter names as you type. When a matching list is nested, its resul
 
 The same field can create a new list or tag. An exact name match, ignoring case, reuses the existing entry. New lists start at the top level; you can arrange them later in the app.
 
-Typing brings another constraint into that small space. In our iOS share extension, React Native’s usual keyboard events reported a zero-sized frame because their coordinate conversion depended on an application window the share extension didn’t have. We added a Swift module that reads the keyboard’s position from native notifications and passes it to the shared screen.
+Typing brings another constraint into that small space. In our iOS share extension, React Native’s usual keyboard events reported a zero-sized frame because their coordinate conversion depended on an application window the share extension didn’t have. We added Swift code that reads the keyboard’s position from the system’s notifications and reports how much of the sheet it covers.
+
+That measurement has to come from the sheet itself because of the iPad. There, the system shows the share extension as a card in the middle of the screen and moves the card when the keyboard appears, which a calculation in screen coordinates can’t see. On a wide Android screen, such as a tablet or an unfolded phone, the sheet draws the same kind of centred card.
 
 Android needed a different correction. Keyboard avoidance moved the panel up correctly, but could leave a gap after the keyboard closed. We use the shown keyboard’s height and explicitly remove the lift when it hides.
 
@@ -72,6 +71,8 @@ Both paths attempt sync after the local save. On iOS, the share extension can en
 The upload and the later draft processing use the same record IDs. That lets them refer to the same saved link, list, and tags when both paths run.
 
 The confirmation names the list you chose. The link stays in place on screen, and its preview tile gains a folded corner alongside the saved message. You can see what you saved and where it went before the sheet closes.
+
+If your library is already at your plan’s link limit, the sheet says so in place of the form, before you spend time choosing a list. [Pricing](/pricing) has the limit for each plan.
 
 ## The limits of this small surface
 
