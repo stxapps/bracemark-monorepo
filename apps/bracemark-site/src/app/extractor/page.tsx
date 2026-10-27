@@ -1,18 +1,21 @@
-import type { Metadata } from 'next';
+import type { Metadata, ResolvingMetadata } from 'next';
 import Link from 'next/link';
 
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { MailLink } from '../../components/mail-link';
 import { PageShell } from '../../components/page-shell';
-import { ABUSE_EMAIL, SITE_URL, SOURCE } from '../../lib/site';
+import { pageMetadata } from '../../lib/metadata';
+import { ABUSE_EMAIL, SOURCE } from '../../lib/site';
 
-export const metadata: Metadata = {
-  title: 'bracemark-extractor',
-  description:
-    'What bracemark-extractor is, why it fetched your page, the caps it holds itself to, and how to stop it if you would rather it didn’t.',
-  alternates: { canonical: `${SITE_URL}/extractor` },
-};
+export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise<Metadata> {
+  return pageMetadata(parent, {
+    title: 'bracemark-extractor',
+    description:
+      'What bracemark-extractor is, why it fetched your page, the caps it holds itself to, and how to stop it if you would rather it didn’t.',
+    path: '/extractor',
+  });
+}
 
 // The page every outbound fetch promises. `bracemark-extractor` identifies itself
 // as `bracemark-extractor/1.0 (+https://bracemark.com/extractor)` on EVERY request

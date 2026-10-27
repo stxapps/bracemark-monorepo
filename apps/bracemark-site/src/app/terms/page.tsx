@@ -1,24 +1,26 @@
-import type { Metadata } from 'next';
+import type { Metadata, ResolvingMetadata } from 'next';
 import Link from 'next/link';
 
 import { PLAN_LABELS, TRIAL_DAYS } from '@stxapps/shared';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { PageShell } from '../../components/page-shell';
+import { pageMetadata } from '../../lib/metadata';
 import {
   COMPANY,
   PADDLE_REFUND_POLICY_URL,
-  SITE_URL,
   SOURCE,
   SUPPORT_EMAIL,
   TERMS_UPDATED,
 } from '../../lib/site';
 
-export const metadata: Metadata = {
-  title: 'Terms of Service',
-  description: 'The terms you agree to when you use Bracemark.',
-  alternates: { canonical: `${SITE_URL}/terms` },
-};
+export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise<Metadata> {
+  return pageMetadata(parent, {
+    title: 'Terms of Service',
+    description: 'The terms you agree to when you use Bracemark.',
+    path: '/terms',
+  });
+}
 
 // Both Apple and Google require a reachable terms URL on the listing, and the
 // listings are what lock the bundle ID in — so this route has to

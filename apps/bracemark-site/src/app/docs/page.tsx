@@ -1,17 +1,20 @@
-import type { Metadata } from 'next';
+import type { Metadata, ResolvingMetadata } from 'next';
 import Link from 'next/link';
 
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { PageShell } from '../../components/page-shell';
 import { DOC_GROUPS } from '../../content/docs';
-import { docsMetadata } from '../../lib/docs/metadata';
+import { pageMetadata } from '../../lib/metadata';
 
-export const metadata: Metadata = docsMetadata(
-  'Docs',
-  'Guides to using Bracemark, with the labels you’ll see on screen and the details that affect your links and account.',
-  '/docs',
-);
+export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise<Metadata> {
+  return pageMetadata(parent, {
+    title: 'Docs',
+    description:
+      'Guides to using Bracemark, with the labels you’ll see on screen and the details that affect your links and account.',
+    path: '/docs',
+  });
+}
 
 // The /docs landing: the manifest's groups, each page with its description.
 // The FAQ gives short answers; a docs page has room for the full explanation.

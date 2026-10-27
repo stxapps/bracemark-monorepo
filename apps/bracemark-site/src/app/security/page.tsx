@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, ResolvingMetadata } from 'next';
 import Link from 'next/link';
 
 import {
@@ -12,20 +12,22 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { MailLink } from '../../components/mail-link';
 import { PageShell } from '../../components/page-shell';
+import { pageMetadata } from '../../lib/metadata';
 import {
   SECURITY_ACK_WINDOW,
   SECURITY_EMAIL,
   SECURITY_TRIAGE_WINDOW,
-  SITE_URL,
   SOURCE,
 } from '../../lib/site';
 
-export const metadata: Metadata = {
-  title: 'Security',
-  description:
-    'How the key works, the parameters it uses, what someone who took our server would have, and the two things we have not done.',
-  alternates: { canonical: `${SITE_URL}/security` },
-};
+export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise<Metadata> {
+  return pageMetadata(parent, {
+    title: 'Security',
+    description:
+      'How the key works, the parameters it uses, what someone who took our server would have, and the two things we have not done.',
+    path: '/security',
+  });
+}
 
 // The page for the reader who accepts the architecture and wants the mechanism.
 // Every fact on it was already published — scattered across the landing page's

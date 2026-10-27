@@ -6,6 +6,8 @@
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
+import type { Metadata } from 'next';
+
 import { BLOG_POSTS } from '../content/blog';
 import { DOC_PAGES } from '../content/docs';
 import { SITE_URL } from '../lib/site';
@@ -60,18 +62,18 @@ function routesOnDisk(): string[] {
 const LISTED = sitemap().map((entry) => entry.url.slice(SITE_URL.length));
 
 /**
- * The canonical a page declares, resolved as Next would: its static `metadata`,
+ * The metadata a page declares, resolved as Next would: its static `metadata`,
  * or its `generateMetadata` given the route's params and an empty parent.
  */
-async function canonicalOf(path: string): Promise<unknown> {
+async function metadataOf(path: string): Promise<Metadata> {
   const [, section, slug] = path.split('/');
   const isDynamic = slug !== undefined && (section === 'docs' || section === 'blog');
   const file = path === '/' ? './page' : isDynamic ? `./${section}/[slug]/page` : `.${path}/page`;
   const page = await import(file);
-  const metadata =
+  return (
     page.metadata ??
-    (await page.generateMetadata({ params: Promise.resolve({ slug }) }, Promise.resolve({})));
-  return metadata.alternates?.canonical;
+    (await page.generateMetadata({ params: Promise.resolve({ slug }) }, Promise.resolve({})))
+  );
 }
 
 describe('/sitemap.xml', () => {
@@ -97,6 +99,19 @@ describe('/sitemap.xml', () => {
   // one, and drops it from the index while it renders, builds and links exactly
   // as before. So each listed URL must be the canonical its own page declares.
   it.each(LISTED)('%s names its sitemap URL as its canonical', async (path) => {
-    await expect(canonicalOf(path)).resolves.toBe(`${SITE_URL}${path}`);
+    const metadata = await metadataOf(path);
+    expect(metadata.alternates?.canonical).toBe(`${SITE_URL}${path}`);
+  });
+
+  // The same failure in a social card: a page with no `openGraph` of its own
+  // inherits the root layout's, and every share of it is a card for the home
+  // page. `/` alone may, because that card is its own (lib/metadata.ts).
+  it.each(LISTED)('%s names its sitemap URL as its og:url', async (path) => {
+    const metadata = await metadataOf(path);
+    if (path === '/') {
+      expect(metadata.openGraph).toBeUndefined();
+    } else {
+      expect(metadata.openGraph?.url).toBe(`${SITE_URL}${path}`);
+    }
   });
 });

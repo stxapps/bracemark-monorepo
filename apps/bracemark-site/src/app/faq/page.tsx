@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, ResolvingMetadata } from 'next';
 import Link from 'next/link';
 
 import { entitlementsOf } from '@stxapps/shared';
@@ -8,15 +8,18 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 import { ArrowGlyph, ChevronGlyph } from '../../components/glyphs';
 import { JsonLd } from '../../components/json-ld';
 import { FAQ_GROUPS } from '../../content/faq';
-import { CREATE_ACCOUNT_URL, SITE_URL } from '../../lib/site';
+import { pageMetadata } from '../../lib/metadata';
+import { CREATE_ACCOUNT_URL } from '../../lib/site';
 import { faqPage } from '../../lib/structured-data';
 
-export const metadata: Metadata = {
-  title: 'FAQ',
-  description:
-    'How Bracemark’s encryption, account, plans, and features work — including the questions with uncomfortable answers.',
-  alternates: { canonical: `${SITE_URL}/faq` },
-};
+export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise<Metadata> {
+  return pageMetadata(parent, {
+    title: 'FAQ',
+    description:
+      'How Bracemark’s encryption, account, plans, and features work — including the questions with uncomfortable answers.',
+    path: '/faq',
+  });
+}
 
 // The questions themselves live in `content/faq.tsx`, shared with /pricing. This
 // file is only how they are read.

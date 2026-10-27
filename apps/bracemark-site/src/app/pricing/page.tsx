@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, ResolvingMetadata } from 'next';
 import Link from 'next/link';
 
 import {
@@ -19,17 +19,20 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { ArrowGlyph, CheckGlyph } from '../../components/glyphs';
 import { faqById, PRICING_FAQ_IDS } from '../../content/faq';
+import { pageMetadata } from '../../lib/metadata';
 import { formatLinks, linksLimitLabel } from '../../lib/plans';
-import { CREATE_ACCOUNT_URL, SITE_URL, UPGRADE_URL } from '../../lib/site';
+import { CREATE_ACCOUNT_URL, UPGRADE_URL } from '../../lib/site';
 
-export const metadata: Metadata = {
-  title: 'Pricing',
-  // Derived like everything else on the page: a search snippet that promises a
-  // cap or a trial length the product doesn't have is the same drift, just
-  // harder to notice because nobody reads it in review.
-  description: `Bracemark is free for your first ${entitlementsOf('free').maxLinks} links. ${PLAN_LABELS.plus} adds unlimited links, nested and hidden lists, the app lock, and the search editor — with a ${TRIAL_DAYS}-day free trial.`,
-  alternates: { canonical: `${SITE_URL}/pricing` },
-};
+export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise<Metadata> {
+  return pageMetadata(parent, {
+    title: 'Pricing',
+    // Derived like everything else on the page: a search snippet that promises a
+    // cap or a trial length the product doesn't have is the same drift, just
+    // harder to notice because nobody reads it in review.
+    description: `Bracemark is free for your first ${entitlementsOf('free').maxLinks} links. ${PLAN_LABELS.plus} adds unlimited links, nested and hidden lists, the app lock, and the search editor — with a ${TRIAL_DAYS}-day free trial.`,
+    path: '/pricing',
+  });
+}
 
 // The public pricing page. Every NUMBER on it — the prices, the link caps, the
 // trial length — and the paid tiers' feature copy are read from `iap/plans.ts`

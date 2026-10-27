@@ -163,11 +163,14 @@ export const metadata: Metadata = {
   // with only the og file Next emits no `twitter:image` tag at all. X does fall
   // back to `og:image`, but that is X's behaviour to change and not ours, and this
   // block published both tags before.
+  //
+  // This card is the HOME PAGE's. Every other page replaces it whole, through
+  // `pageMetadata` (lib/metadata.ts), which says why a page must.
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,
     siteName: 'Bracemark',
-    url: SITE_URL,
+    url: `${SITE_URL}/`,
     type: 'website',
   },
   twitter: {

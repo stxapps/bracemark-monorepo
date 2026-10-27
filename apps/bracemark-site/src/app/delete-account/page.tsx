@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, ResolvingMetadata } from 'next';
 import Link from 'next/link';
 
 import { SESSION_RETENTION } from '@stxapps/shared';
@@ -6,20 +6,17 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { MailLink } from '../../components/mail-link';
 import { PageShell } from '../../components/page-shell';
-import {
-  APP_URL,
-  BACKUP_RETENTION_DAYS,
-  SIGN_IN_URL,
-  SITE_URL,
-  SUPPORT_EMAIL,
-} from '../../lib/site';
+import { pageMetadata } from '../../lib/metadata';
+import { APP_URL, BACKUP_RETENTION_DAYS, SIGN_IN_URL, SUPPORT_EMAIL } from '../../lib/site';
 
-export const metadata: Metadata = {
-  title: 'Delete your account',
-  description:
-    'How to delete your Bracemark account and everything in it, from the Android or iOS app or from any browser, and exactly what is deleted and what is kept.',
-  alternates: { canonical: `${SITE_URL}/delete-account` },
-};
+export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise<Metadata> {
+  return pageMetadata(parent, {
+    title: 'Delete your account',
+    description:
+      'How to delete your Bracemark account and everything in it, from the Android or iOS app or from any browser, and exactly what is deleted and what is kept.',
+    path: '/delete-account',
+  });
+}
 
 // The URL Google Play's Data safety form asks for ("Delete account URL"), and the
 // reason this page exists rather than /faq `delete-account` alone. Play's policy

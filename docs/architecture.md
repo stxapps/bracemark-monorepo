@@ -152,8 +152,8 @@ current.
 | `.mdx-prose` (`globals.css`)        | the styling, as `.legal-prose` does for /terms and /privacy — so a page stays plain Markdown                                                                                                    |
 
 The last five rows are shared with `/blog` (next section), which is why they are
-named for MDX rather than for docs; what only docs uses — `lib/docs/metadata.ts`,
-`components/docs-nav.tsx` — stays named for it.
+named for MDX rather than for docs; what only docs uses — `components/docs-nav.tsx`
+— stays named for it.
 
 **We compile the MDX; `@next/mdx` doesn't.** Next 16 builds with Turbopack, which
 accepts remark/rehype plugins only as serializable strings, and the heading plugin
@@ -171,7 +171,8 @@ the static params, the sidebar and prev/next all read one list, and
 `src/content/docs/docs.spec.ts` holds the manifest and the folder to each other.
 The docs index and each page also set their own canonical URL and social preview
 metadata; each article's title and description come from that same manifest.
-Every other page on the site sets its canonical too ([hosting.md](./hosting.md#sitemapxml-and-json-ld)).
+Every page on the site builds both through one function, `pageMetadata` in
+`src/lib/metadata.ts` ([hosting.md](./hosting.md#sitemapxml-and-json-ld)).
 
 **A page imports nothing.** Numbers come from `@stxapps/shared` through the
 component map (`<FreeLinks />` reads the plan table, never a typed 200), a store

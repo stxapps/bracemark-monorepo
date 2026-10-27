@@ -1,24 +1,26 @@
-import type { Metadata } from 'next';
+import type { Metadata, ResolvingMetadata } from 'next';
 import Link from 'next/link';
 
 import { PLAN_LABELS, SESSION_RETENTION } from '@stxapps/shared';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { PageShell } from '../../components/page-shell';
+import { pageMetadata } from '../../lib/metadata';
 import {
   BACKUP_RETENTION_DAYS,
   COMPANY,
   PRIVACY_UPDATED,
-  SITE_URL,
   SOURCE,
   SUPPORT_EMAIL,
 } from '../../lib/site';
 
-export const metadata: Metadata = {
-  title: 'Privacy Policy',
-  description: 'What Bracemark stores, what it cannot read, and what it never collects.',
-  alternates: { canonical: `${SITE_URL}/privacy` },
-};
+export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise<Metadata> {
+  return pageMetadata(parent, {
+    title: 'Privacy Policy',
+    description: 'What Bracemark stores, what it cannot read, and what it never collects.',
+    path: '/privacy',
+  });
+}
 
 // Every store requires a reachable privacy-policy URL, so this route must carry
 // real content before submission.

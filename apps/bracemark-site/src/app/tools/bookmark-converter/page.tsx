@@ -1,18 +1,21 @@
-import type { Metadata } from 'next';
+import type { Metadata, ResolvingMetadata } from 'next';
 import Link from 'next/link';
 
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { PageShell } from '../../../components/page-shell';
-import { APP_URL, SITE_URL } from '../../../lib/site';
+import { pageMetadata } from '../../../lib/metadata';
+import { APP_URL } from '../../../lib/site';
 import { BookmarkConverter } from './bookmark-converter';
 
-export const metadata: Metadata = {
-  title: 'Bookmark converter — HTML, CSV, JSON, ZIP, and text',
-  description:
-    'Convert bookmark exports to browser HTML, CSV, or URL text in your browser. Read exports from Raindrop.io, Pocket, LinkWarden, Brace.to, and Bracemark backups. No upload or account needed.',
-  alternates: { canonical: `${SITE_URL}/tools/bookmark-converter` },
-};
+export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise<Metadata> {
+  return pageMetadata(parent, {
+    title: 'Bookmark converter — HTML, CSV, JSON, ZIP, and text',
+    description:
+      'Convert bookmark exports to browser HTML, CSV, or URL text in your browser. Read exports from Raindrop.io, Pocket, LinkWarden, Brace.to, and Bracemark backups. No upload or account needed.',
+    path: '/tools/bookmark-converter',
+  });
+}
 
 const INPUTS = [
   ['Bookmarks HTML', 'Browser exports, Raindrop.io, Karakeep, and other Netscape bookmark files.'],

@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, ResolvingMetadata } from 'next';
 
 import { cn } from '@stxapps/web-ui/lib/utils';
 
@@ -6,21 +6,23 @@ import { ElsewhereList } from '../../components/elsewhere-list';
 import { MailLink } from '../../components/mail-link';
 import { PageShell } from '../../components/page-shell';
 import { type ElsewhereCard, PRICING_CARD } from '../../content/elsewhere';
+import { pageMetadata } from '../../lib/metadata';
 import {
   SECURITY_ACK_WINDOW,
   SECURITY_EMAIL,
   SECURITY_TRIAGE_WINDOW,
-  SITE_URL,
   SOURCE,
   SUPPORT_EMAIL,
 } from '../../lib/site';
 
-export const metadata: Metadata = {
-  title: 'Support',
-  description:
-    'How to get help with Bracemark: one email address, what to put in it, and the things we genuinely can’t do for you.',
-  alternates: { canonical: `${SITE_URL}/support` },
-};
+export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise<Metadata> {
+  return pageMetadata(parent, {
+    title: 'Support',
+    description:
+      'How to get help with Bracemark: one email address, what to put in it, and the things we genuinely can’t do for you.',
+    path: '/support',
+  });
+}
 
 // A reachable support URL is a store-listing requirement, so this
 // page has a second job beyond helping people: an App Store or Play reviewer will

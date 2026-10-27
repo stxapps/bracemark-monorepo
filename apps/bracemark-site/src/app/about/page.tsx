@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, ResolvingMetadata } from 'next';
 import Link from 'next/link';
 
 import { entitlementsOf, PLAN_LABELS, PLAN_USD_PER_YEAR } from '@stxapps/shared';
@@ -8,21 +8,17 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 import { ArrowGlyph } from '../../components/glyphs';
 import { MailLink } from '../../components/mail-link';
 import { PageShell } from '../../components/page-shell';
-import {
-  COMPANY,
-  CREATE_ACCOUNT_URL,
-  PREDECESSOR,
-  SITE_URL,
-  SOURCE,
-  SUPPORT_EMAIL,
-} from '../../lib/site';
+import { pageMetadata } from '../../lib/metadata';
+import { COMPANY, CREATE_ACCOUNT_URL, PREDECESSOR, SOURCE, SUPPORT_EMAIL } from '../../lib/site';
 
-export const metadata: Metadata = {
-  title: 'About',
-  description:
-    'Who makes Bracemark, why it encrypts your library on your device, and how a bookmark manager pays for itself on subscriptions alone.',
-  alternates: { canonical: `${SITE_URL}/about` },
-};
+export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise<Metadata> {
+  return pageMetadata(parent, {
+    title: 'About',
+    description:
+      'Who makes Bracemark, why it encrypts your library on your device, and how a bookmark manager pays for itself on subscriptions alone.',
+    path: '/about',
+  });
+}
 
 // Two rules held throughout, because an About page is where marketing copy
 // usually starts drifting from the build:

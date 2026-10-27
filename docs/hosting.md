@@ -675,6 +675,18 @@ not). Three things to know:
   from the index while it renders and builds as before. **Never set it in the
   root layout.** Metadata merges down the tree, so every page without its own
   would inherit `/` as its canonical.
+- **Its social card names it too.** `og:url`, `og:title`, `og:description` and
+  the twitter pair come from the same function as the canonical, `pageMetadata`
+  in `src/lib/metadata.ts`, and the spec holds `og:url` to the sitemap entry as
+  well. Only `/` inherits the root layout's card, which is its own. The trap is
+  that Next merges metadata **one level** deep. A page with no `openGraph` of its
+  own inherits the layout's whole object, and until 2026-10-27 twelve pages did:
+  every link to `/pricing` shared as a card for the home page. A page that sets
+  `openGraph` replaces the whole object, **card images included**, because the
+  `opengraph-image.png` / `twitter-image.png` file conventions resolve into it.
+  Every docs page and blog post shipped with no card image for that reason.
+  `pageMetadata` carries the images through from the parent metadata, so a page
+  should never set `openGraph` or `twitter` by hand.
 
 `/feed.xml` is a static GET route compiled from the blog manifest at build time.
 The CloudFront clean-URL function passes the dotted path through. The deploy
