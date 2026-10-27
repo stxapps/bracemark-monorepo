@@ -18,12 +18,19 @@ export interface Credentials {
 export function newCredentials(): Credentials {
   return {
     username: `e2e_${randomBytes(6).toString('hex')}`,
-    // 44 base64url chars of CSPRNG. This has to clear BOTH gates in
+    // 24 base64url chars of CSPRNG. This has to clear BOTH gates in
     // `newPasswordSchema` and the strength meter behind it: 20 characters
     // minimum, and zxcvbn `guessesLog10 >= 18` (PASSWORD_MIN_GUESSES_LOG10).
-    // zxcvbn models an unmatched password as 10^length, so length alone carries
-    // this well past the floor — do NOT shorten it to something "readable".
-    password: randomBytes(33).toString('base64url'),
+    // zxcvbn models an unmatched password as 10^length, and a random string's
+    // chance fragments of dictionary words pull that down by up to ~2.5. Measured
+    // 2026-10-27 against the app's own scorer setup (common + en dictionaries,
+    // adjacency graphs, the username as a user input), 20,000 samples per length:
+    // at 20 chars 3 fell below 18 (worst 17.48); at 24 none did (worst 21.48).
+    // So 24 — not shorter, and NOT something "readable", which zxcvbn would match.
+    // Not longer either: Maestro types a character at a time (~0.16s each on
+    // Android) and every native sign-in types this, so the 44 it used to be cost
+    // ~3 minutes of a full Android run (docs/e2e.md, _driving the native apps_).
+    password: randomBytes(18).toString('base64url'),
   };
 }
 

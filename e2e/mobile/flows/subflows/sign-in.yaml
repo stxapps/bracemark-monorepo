@@ -85,12 +85,19 @@ appId: com.bracemark.app
 # The second half of the race: the sheet can still be on its way in when the
 # links screen is already up. This waits it out once — WARNED, not failed, when
 # it never comes — so the caller is handed a screen nothing is covering.
+#
+# Bounded, because the common case is that it never comes. A bare optional
+# `assertVisible` waits out Maestro's ~17s lookup timeout, and across the iOS
+# runs of 2026-10-17..26 the sheet was caught by the poll above 101 times and by
+# this wait 0 of 129 — ~12 minutes of a full iPhone run spent here for nothing.
+# A few seconds still covers a sheet that is mid-arrival.
 - runFlow:
     when:
       platform: iOS
     commands:
-      - assertVisible:
-          text: 'Save Password?'
+      - extendedWaitUntil:
+          visible: 'Save Password?'
+          timeout: 3000
           optional: true
       - tapOn:
           text: 'Not Now'

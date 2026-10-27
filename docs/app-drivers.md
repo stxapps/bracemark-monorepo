@@ -137,26 +137,41 @@ export ANDROID_HOME="$HOME/Library/Android/sdk"
 export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
 avdmanager create avd -n bracemark-pixel8 \
   -k "system-images;android-36.1;google_apis_playstore;arm64-v8a" -d pixel_8
-$ANDROID_HOME/emulator/emulator -avd bracemark-pixel8 -no-audio -no-boot-anim &
 ```
 
-**⚠ That trailing `&` runs the emulator at nice 5 under zsh.** zsh's
+Launch it with one of two root scripts, each in a terminal of its own (it runs
+in the foreground; ⌃C or `adb emu kill` stops it). `AVD=bracemark-tablet` in
+front picks the other one:
+
+```sh
+npm run expo:android:emulator            # with its window — to watch, or drive by hand
+npm run expo:android:emulator:headless   # no window — for a run you walk away from
+```
+
+**⚠ A trailing `&` runs the emulator at nice 5 under zsh.** zsh's
 `BG_NICE` option, on by default, renices every background job, and macOS then
 schedules the `qemu-system` process as background work (`ps -o pri,nice` read
 priority 4, nice 5, against 47 and 0 for a foreground launch). Nothing fails:
 the guest just runs slower. The specimen is `measure:data:android`, whose
 calibration read 3,163–3,333 ms against a 761–886 ms band, which made every
-stall 4× too long. A `npm run dev` started the same way is niced too. For
-anything timed, run the emulator in a terminal of its own, or put
-`setopt no_bg_nice;` in front of the line. Check with
+stall 4× too long. A `npm run dev` started the same way is niced too, and so is
+anything started through `npm run` — the renice lands on `npm` and every
+process under it inherits it (measured 2026-10-27:
+`npm run expo:android:emulator:headless &` from zsh put the emulator at nice
+5). The scripts themselves are safe: npm runs them under `/bin/sh`, which is
+bash here, and bash renices nothing. So the rule is about the shell that starts
+them: run the emulator, `npm run dev` and Metro each in a terminal of its own,
+or put `setopt no_bg_nice;` in front of a backgrounded line. Check with
 `ps -o pri,nice -p $(pgrep -f qemu-system)`
 ([data-lifecycle.md](./data-lifecycle.md), _readings — expo_, **2026-10-24,
 the statement leak**). **Nice 0 is not the whole check.** On 2026-10-24 an
 emulator started with `setopt no_bg_nice` read nice 0 but priority 4 just
 before a `measure:data:android` run. That run's first size calibrated at
 3,336–3,610 ms. By its second size the calibration was back to 760–810 ms, and
-priority to 47. What demoted it was not found. Read the calibration whatever
-`ps` says (**2026-10-24, the gather profiled**).
+priority to 47. What demoted it was not recorded then; a hidden or covered
+window does exactly this (_a hidden emulator window is a throttled emulator_,
+below), so take timed readings on the headless emulator. Read the calibration
+whatever `ps` says (**2026-10-24, the gather profiled**).
 
 Six edits to `~/.android/avd/bracemark-pixel8.avd/config.ini` after creating it,
 four for disk and two the defaults get wrong for e2e:
@@ -182,6 +197,40 @@ toward 6 GB as the app writes and never past it (it stood at 4.2 GB on
 2026-10-23, after two months of dev builds). The cold-boot settings do hold
 — the shutdown log says `Snapshots have been disabled by the user, save request
 is ignored`, which is the ~2 GB that is _not_ on disk.
+
+#### ⚠ a hidden emulator window is a throttled emulator
+
+**The Android emulator slows down when its window is hidden; the iOS simulator
+does not.** The emulator's guest and its window are one process
+(`qemu-system-aarch64`), and macOS demotes a process whose window has been
+hidden to background scheduling. Measured 2026-10-27, Pixel 8 AVD, M1, reading
+`ps -M` per thread:
+
+| state                                 | emulator threads             | iOS simulator's SpringBoard / backboardd |
+| ------------------------------------- | ---------------------------- | ---------------------------------------- |
+| window frontmost                      | priority 31                  | 31–63                                    |
+| window visible, another app frontmost | priority 31                  | —                                        |
+| window hidden (⌘H)                    | **priority 4, every thread** | 31–63, unchanged                         |
+| `-no-window`                          | priority 31                  | —                                        |
+
+The simulator is immune by construction: the simulated device runs as its own
+processes under `launchd_sim`, and Simulator.app is only a viewer of it.
+
+So **with a window there is no setting that keeps it at speed while hidden.**
+Leaving the window visible behind other windows is fine; hiding it, or
+minimising it, is not. One launch that had come up fully covered by other
+windows also read priority 4 until it was brought forward, so "visible" means
+actually on screen. A walk-away run goes on the headless emulator, which has no
+window for macOS to demote and which Maestro attaches to as usual (`maestro
+hierarchy` exit 0, a 72 KB tree). This is the most likely reading of the
+**priority 4 at nice 0** above (the BG_NICE note), whose cause was not found at the time.
+
+**⚠ `-no-window` alone falls back to software rendering.** Without a window the
+emulator picks `swangle_indirect` — SwiftShader on the CPU — which is the same
+software path the `hw.gpu.enabled = no` row above rules out. Both scripts pass
+`-gpu host` (log: `gpu mode host`, `Selecting Vulkan device: Apple M1`;
+SurfaceFlinger: `ANGLE … Metal`). A hand-typed `-no-window` without it runs,
+passes nothing faster and says nothing.
 
 #### ⚠ the tablet AVD
 

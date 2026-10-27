@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { E2E_ROOT, runArtifactDir } from '../paths';
 import { API_URL, EXTRACTOR_URL, SITE_URL, WEB_URL } from '../web/fixtures/env';
 import { type NativeCliOptions, type NativePlatform } from './cli';
+import { assertInstalledDevBuild } from './dev-build';
 import { deviceWidth, resolveDevice } from './device';
 import { E2E_ENVIRONMENT, IS_STAGING } from './environment';
 import {
@@ -476,6 +477,14 @@ export async function prepareNativeRun(
         `use ${WIDTH_DEVICES[options.platform][options.width]}, or the ${width} script ` +
         '(docs/e2e.md, _narrow and wide_)',
     );
+  }
+  if (!IS_STAGING) {
+    await assertInstalledDevBuild({
+      platform: options.platform,
+      deviceId,
+      appId: APP_ID,
+      installPath: identity.app.installPath,
+    });
   }
   const release = IS_STAGING
     ? await assertInstalledRelease({

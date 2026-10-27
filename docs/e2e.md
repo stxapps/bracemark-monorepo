@@ -844,10 +844,65 @@ tag #N` in the toast. That error is RN-internal and not worth chasing: the app
   `eraseText` from the other side (a caret at index 0) and remounts the form
   instead.
 
-- **A Maestro tap on the Pixel 8 AVD returns about six seconds after it presses.**
-  Feedback shorter than that — bulk Copy's 1.5s "Copied" — has reverted before any
-  assertion can run, so `flows/bulk-copy.yaml` asserts it on iOS only and proves
-  the clipboard write on both through the system Paste.
+- ⚠ **An element tap on Android costs ~2.8s, and most of it is Maestro waiting,
+  not the app.** Across the full phone run of 2026-10-25 (964 taps): median
+  2.84s, none under ~2.25s, against ~1.5s on the iPhone simulator — 47 minutes
+  of that run's 127 in `tapOn` alone. Maestro's log splits each tap in two, and
+  both halves have a floor:
+  - **before aiming** (`Tapping on element` → `Tap aimed via settled hierarchy`,
+    p10 1.24s, p50 1.28s): `Maestro.tap` settles the screen with the flow's
+    `appId`, and on Android that runs `AndroidDriver.waitForWindowToSettle`,
+    which polls `isWindowUpdating` for a FIXED 750ms — its `do … while (now <
+deadline)` never exits early, even once settled — and then, when the window
+    never reported updating, runs the hierarchy loop on top.
+  - **after the tap** (`Tapping at` → `Something has changed…`, p10 1.08s, p50
+    1.39s): `hierarchyBasedTap` (Android; iOS takes `screenshotBasedTap`) dumps
+    the hierarchy, compares it with the last, and sleeps 200ms until two dumps
+    match — so this half is as long as the screen keeps moving after the press.
+
+  It is not dump cost: a found-at-once `assertVisible`, one dump, is a median
+  174ms on Android and 207ms on iOS. Measured 2026-10-27 (headless Pixel 8
+  AVD), ten taps on the landing screen's static tagline: before aiming 1.24s
+  every time, after the tap 0.28s. So the first half is Maestro's alone, even on
+  a screen where nothing moves, and the second half in real flows (median 1.55s)
+  is the app's own motion after the press — navigation, the keyboard, sheets —
+  which is what the next step needs waited out. ⚠ **The emulator's animation
+  scales do not shorten it:** the same three cases (NATIVE-LINK-001,
+  LINK-EDITOR-002, LOCK-LIST-001) took 621s at the defaults and 604s with
+  `window_animation_scale` and `animator_duration_scale` at 0, the after-tap
+  median 1.57s against 1.55s — noise, because that motion is driven from JS,
+  not by platform animators. Do not reach for `transition_animation_scale` 0
+  either: it is the one React Native and Reanimated read as "reduce motion"
+  (`AccessibilityInfoModule`, `NativeProxy`), so every run would test the
+  reduced-motion path instead of the default one. ⚠ And **`waitToSettleTimeoutMs` cannot
+  remove the floor**: it reaches only the inner hierarchy loop, the 750ms window
+  ignores it, and the fallback after the window drops it altogether. Read from
+  Maestro 2.8.0's bytecode and the same code on upstream `main` at 2.12.0
+  (2026-10-26), so an upgrade does not fix it either. Typing is the other half
+  of Android's excess: `inputText` goes a character at a time, ~0.16s each
+  (a URL ~9s, a password ~6s; 20 minutes of the same run), and `pasteText` is no
+  way round it — it is `inputText` of Maestro's own host-side copy. That is why
+  the throwaway password is 24 characters, the shortest length measured to clear
+  the strength gate with margin, rather than the 44 it was
+  (`web/fixtures/account.ts`).
+  Feedback shorter than a tap — bulk Copy's 1.5s "Copied" — has reverted before
+  any assertion can run, so `flows/bulk-copy.yaml` asserts it on iOS only and
+  proves the clipboard write on both through the system Paste.
+
+- ⚠ **An optional `assertVisible` costs ~17s every time its target is absent.**
+  It waits out Maestro's own lookup timeout before it WARNs, and a WARNED step
+  fails nothing, so nothing points at it. Two such waits — the dev-client "Open"
+  alert in `subflows/cold-launch.yaml` and the late "Save Password?" sheet after
+  `subflows/sign-in.yaml`'s poll — ran on every iOS case and never once found
+  their target in the kept runs (0 of 84, 0 of 129), ~25 minutes of the 129 a
+  full iPhone run took on 2026-10-25. Both are now `extendedWaitUntil` with
+  `timeout: 3000` and `optional: true`. Use that form for a "maybe it comes"
+  wait; an optional `assertVisible` inside a `repeat … while` poll is fine,
+  since the poll ends the moment its condition holds. Find the next one with a
+  sum of WARNED durations over a run's `commands.json` files. The optional
+  `tapOn` after each wait still pays a lookup of its own when nothing is there
+  (3.2–4.3s on 2026-10-27), and gating it `when: visible:` instead saves
+  nothing: the condition is a timed lookup too (3.55s, measured the same day).
 - **Maestro's `PATH` entry is in `.zshenv`, not `.zshrc`.** `runner/lib.ts` falls
   back to `~/.maestro/bin/maestro` anyway, so a shell that lost it gets a working
   run instead of `ENOENT`.
@@ -2424,6 +2479,23 @@ selected it also fetches the bundle Metro serves and requires its api origin to
 be the one the run provisions against (_driving the native apps_). A failed
 preflight happens before account provisioning.
 
+⚠ **"The development build" is checked, not assumed** (`runner/dev-build.ts`):
+on Android the package must be `DEBUGGABLE`, on iOS the app must carry
+`EXDevLauncher.bundle`. Until 2026-10-27 the preflight checked only that _an_
+app was installed, and a staging run leaves its Release build on the device.
+That build launches, ignores the dev-launcher link, and runs its embedded
+bundle against the api it was built for. Every online case then failed 300s
+into sign-in with "Incorrect username or password" on screen and no request in
+the local api's log: the throwaway account exists only locally, and the Metro
+bundle check above passed, because it reads what Metro serves rather than what
+the device runs. So after a staging run, put the dev build back with
+`npm run expo:ios -- --no-bundler`, or on Android
+`adb uninstall com.bracemark.app && npm run expo:android -- --no-bundler` — a
+debug APK cannot update one signed with the upload key in place. The refusal
+prints the line for its platform. An `app-debug.apk` already built under
+`apps/bracemark-expo/android/app/build/outputs/apk/debug/` can be `adb install`ed
+after the uninstall instead of rebuilding.
+
 The listeners are checked **before** anything waits for a leg to answer. The
 wait (`waitForHttp`, 90s) is for a wrangler that is still booting — Next is up
 well before local D1/R2 are — and in the other order a run begun without
@@ -2498,7 +2570,11 @@ and deployed (_firefox_, above). The staging scripts put the mode last:
 is deliberately no bare `npm run e2e`: no honest fan-out
 can boot, build, select, and prepare both native platforms. `expo:ios` and
 `expo:android` are prerequisites, not tests; see [expo-build.md](./expo-build.md).
-On Android, run `npm run expo:android:reverse` after each emulator boot — with
+For a run you walk away from, boot the AVD with
+`npm run expo:android:emulator:headless`: a hidden emulator window is demoted to
+background scheduling by macOS and the run crawls, while the iOS simulator is
+unaffected ([app-drivers.md](./app-drivers.md), _a hidden emulator window is a
+throttled emulator_). On Android, run `npm run expo:android:reverse` after each emulator boot — with
 both AVDs up, once per AVD, each with `ANDROID_SERIAL=<serial>` in front, since
 a bare `adb reverse` refuses to choose between two devices. A Metro on another
 port — a second checkout's Metro already holding 8081 — is named the way the
@@ -2635,6 +2711,39 @@ and both disguised:
 
 Both passed alone throughout, because one case never fills a bucket. A red suite
 whose cases are individually green is this until proven otherwise.
+
+#### ⚠ a 503 the api never sent — `wrangler dev`'s dropped connection
+
+`bracemark-api` returns no 503 anywhere, yet the local one answers one now and
+then: `POST /v1/auth/sign-in 503 Service Unavailable`, `OPTIONS /v1/iap/status
+503`, with the body `Your worker restarted mid-request…` — and the worker never
+restarted. Measured 2026-10-27 on wrangler 4.105.0, with a one-line log added
+to `wrangler-dist/ProxyWorker.js` for the run and removed after. **What
+happens:** `wrangler dev` puts a proxy worker on :8787 in front of ours, and its
+forward to our worker sometimes fails with `Network connection lost.` — an idle
+keep-alive connection closed by the far side just as the proxy reuses it
+(workers-sdk #14641, open). Three runs of the web account cases met it 9 times:
+7 were `GET`s, which the proxy silently retries, and 2 were an `OPTIONS` and a
+`POST`, which it cannot, so they became the 503s.
+
+**Why it says "restarted":** to tell a real reload from a plain network error,
+4.105.0 compares the failed request's full URL with the bare worker URL. These
+two never match, so every error counts as a restart (#14593, fixed in 4.114.0).
+Upgrading changes only the label. From 4.129.1 a `POST` or `OPTIONS` that meets
+the race still fails, now as `Error inside ProxyWorker … Network connection
+lost`, and a preflight is still not retried (#16216, open). So the cost is the
+same either way: an occasional red case whose request most likely never
+reached our code. That is what a reused, already-closed connection implies, but
+a connection cut mid-response was not ruled out.
+
+**How to read one:** a single failed request with that body, or a 503 or
+"Network connection lost" in the api log, on a case that passes when re-run.
+Specimen: `WEB-ACCOUNT-*`, 2026-10-27, first run after `npm run dev` —
+"Could not sign in. Please try again.", a `sign-in 503` in the api log, then 8
+of 8 green twice running. A pass-after-retry still counts as red here (_artifacts
+and retries_), so re-run the case instead of raising its timeouts. Do not answer
+it with a client retry on 503 for `POST`s either: sign-in carries a signed,
+timestamped payload, and a write may already have landed.
 
 #### ⚠ granting Plus is two steps, and the second one is silent
 

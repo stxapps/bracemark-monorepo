@@ -66,9 +66,16 @@ appId: com.bracemark.app
       true: ${E2E_BUILD_VARIANT !== 'release'}
     commands:
       # The alert can arrive after the app has already painted behind it. Pace
-      # the optional tap with an optional lookup so we do not race that arrival.
-      - assertVisible:
-          text: 'Open'
+      # the optional tap with an optional lookup so we do not race that arrival
+      # — a BOUNDED one. A bare optional `assertVisible` waits out Maestro's own
+      # lookup timeout (~17s) every time the alert does not come, and on the
+      # iPhone 17 Pro simulator it never did: 0 of 84 cold launches across the
+      # iOS runs of 2026-10-17..26, which made this wait ~13 minutes of a full
+      # iPhone run. The alert answers `openurl`, which has already returned by
+      # now, so a few seconds is the window it has.
+      - extendedWaitUntil:
+          visible: 'Open'
+          timeout: 3000
           optional: true
       - tapOn:
           text: 'Open'
