@@ -84,6 +84,12 @@
       "measure:data:mobile": {
         "cache": false
       },
+      "measure:render:web": {
+        "cache": false
+      },
+      "measure:render:mobile": {
+        "cache": false
+      },
       "measure:password-manager": {
         "cache": false
       },
@@ -124,6 +130,8 @@
     "shot:mobile": "tsx shot/mobile.ts",
     "measure:data:web": "tsx measure/data-web.ts",
     "measure:data:mobile": "tsx measure/data-mobile.ts",
+    "measure:render:web": "tsx measure/render-web.ts",
+    "measure:render:mobile": "tsx measure/render-mobile.ts",
     "measure:password-manager": "tsx measure/password-manager.ts",
     "measure:sync": "tsx measure/sync.ts",
     "measure:sync:staging": "E2E_ENVIRONMENT=staging tsx measure/sync.ts"

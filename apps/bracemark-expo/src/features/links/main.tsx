@@ -46,7 +46,7 @@ import { LockPane } from '../../components/lock-pane';
 import { RAIL_WIDTH } from '../../lib/window-class';
 import { BulkEditBar } from './bulk-edit-bar';
 import { CARD_H_CHROME, LinkCard } from './link-card';
-import { hasKnownTags, LinkRow } from './link-row';
+import { hasKnownTags, LinkRow, rowItemWidth } from './link-row';
 import { useLinksPage } from './page-provider';
 import { EmptyState, type LinkItemProps, RefreshPill, useTagMap } from './shared';
 import { useSidebarRail } from './sidebar-rail';
@@ -114,6 +114,10 @@ type LayoutConfig = {
   // hence a Map lookup and no allocation.
   itemType?: (link: LinkView, tagsById: Map<string, string>) => string;
   columns: (paneWidth: number) => number;
+  // What this layout's item is told of its cell's width — only as much as it
+  // draws from (link-row.tsx, rowItemWidth). It is a prop of every mounted item,
+  // so whatever moves here re-renders all of them.
+  itemWidth: (cellWidth: number) => number;
   contentPadding: number;
 };
 
@@ -122,6 +126,7 @@ const LIST_LAYOUT: LayoutConfig = {
   Item: LinkRow,
   itemType: (link, tagsById) => (hasKnownTags(link, tagsById) ? 'tagged' : 'bare'),
   columns: () => 1,
+  itemWidth: rowItemWidth,
   contentPadding: 0,
 };
 const CARD_LAYOUT: LayoutConfig = {
@@ -135,6 +140,8 @@ const CARD_LAYOUT: LayoutConfig = {
   // and 16 outside, so the two platforms drop to one column at the same outer
   // width — 648 — rather than merely near each other.
   columns: (paneWidth) => Math.max(1, Math.floor(paneWidth / (MIN_CARD_WIDTH + CARD_H_CHROME))),
+  // All of it: the banner's height is the card's width times its aspect.
+  itemWidth: (cellWidth) => cellWidth,
   contentPadding: CARD_GRID_PADDING,
 };
 
@@ -276,7 +283,14 @@ function UnlockedMain() {
   // nobody is looking at.
   useEffect(() => () => reportRef.current([]), []);
 
-  const { name, Item, itemType, columns, contentPadding } = LAYOUTS[linksLayout] ?? LIST_LAYOUT;
+  const {
+    name,
+    Item,
+    itemType,
+    columns,
+    itemWidth: itemWidthOf,
+    contentPadding,
+  } = LAYOUTS[linksLayout] ?? LIST_LAYOUT;
   // Window width MINUS what the pane doesn't get, rather than a measured
   // container: the window value is available synchronously, so there's no
   // DEFAULT_COLUMNS flash to paper over (web's useElementWidth dance isn't
@@ -298,11 +312,10 @@ function UnlockedMain() {
   const { docked } = useSidebarRail();
   const paneWidth = width - (docked ? RAIL_WIDTH : insets.left) - insets.right - contentPadding * 2;
   const numColumns = columns(paneWidth);
-  // One cell's width, for the item's own internal budgets — today just the tag
-  // strip's, which estimates how many chips fit rather than measuring (see
-  // link-tag-chips.tsx for why measuring is the wrong trade in a recycling
-  // list). Derived here because this is where the column math already lives.
-  const itemWidth = paneWidth / numColumns;
+  // One cell's width, as far as this layout's item reads it — the card's banner,
+  // the row's date breakpoint (LayoutConfig.itemWidth). Derived here because
+  // this is where the column math already lives.
+  const itemWidth = itemWidthOf(paneWidth / numColumns);
 
   // Everything an item renders from beyond its own `link`, and so the ONLY
   // thing that re-renders mounted items. A cell (FlashList v2's ViewHolder, a
@@ -313,10 +326,11 @@ function UnlockedMain() {
   // change — no longer reach the items; only a change in here does: a selection
   // toggle (new map identity), a tag rename (tagsById — renames must repaint
   // immediately, see useTagMap), a sort change (the row's date column), a
-  // rotation (itemWidth, the tag strip's budget). Even then only the items whose
-  // own props moved render: every cell re-runs renderItem, but the items are
-  // React.memo (LinkItemProps' header), so a selection tap renders the one item
-  // it toggled.
+  // rotation or rail toggle that moves what an item draws (itemWidth — snapped
+  // per layout, so a row only hears of its date breakpoint). Even then only the
+  // items whose own props moved render: every cell re-runs renderItem, but the
+  // items are React.memo (LinkItemProps' header), so a selection tap renders the
+  // one item it toggled.
   //
   // The rule that keeps that correct: renderItem may read ONLY from here. A
   // value it closed over instead would go stale in already-mounted cells.
@@ -325,9 +339,11 @@ function UnlockedMain() {
   // pinnedBelow).
   // The ViewHolder skips renderItem when only an item's INDEX moves (its
   // children memo leaves index out), so a pin reorder would leave those stale
-  // if nothing in here changed with it. Today's reads build fresh LinkView
-  // objects anyway, so a new `links` already means every item changed and this
-  // costs nothing; it's here so a later structural-sharing read can't break it.
+  // if nothing in here changed with it. The read SHARES its rows now — a link
+  // whose records didn't change comes back as the same object (expo-react
+  // queries.ts, `viewOf`) — so a re-read re-runs renderItem in every cell and
+  // re-renders only the items whose props actually moved: the changed links,
+  // and the pinned neighbours a reorder moved.
   const itemExtra = useMemo<ItemExtra>(
     () => ({
       links,

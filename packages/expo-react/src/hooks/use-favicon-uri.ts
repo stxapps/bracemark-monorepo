@@ -9,12 +9,15 @@
 //    handling — no object URL to mint/revoke, no base64. readFavicon already
 //    folds the file-existence check, so an `ok` record here always has a file
 //    behind its uri.
-//  - The read rides useKeyedLiveRead over `favicons`, with the resolved-empty
-//    state mapped to `null` inside the read (use-image-file-uri's sentinel note:
-//    `undefined` means "read in flight"). KEYED, because the caller is a
-//    FlashList-recycled row: the same instance is handed the next link's host,
-//    and plain useLiveRead holds the previous host's verdict for a beat after.
-//    Web has no such beat to guard — its rows are keyed by link path and remount.
+//  - The read rides a shared, batched cache over `favicons`
+//    (data/keyed-live-cache.ts), with the resolved-empty state mapped to `null`
+//    inside the read (use-image-file-uri's sentinel note: `undefined` means
+//    "not read yet"). KEYED, because the caller is a FlashList-recycled row:
+//    the same instance is handed the next link's host, and must never be told
+//    the previous host's verdict. A host the cache holds — and with a few
+//    hundred hosts across a library, most are, a screen into a scroll —
+//    answers in the render that changed it. Web has no such beat to guard —
+//    its rows are keyed by link path and remount.
 //  - WHILE THE VERDICT IS IN FLIGHT, THE DISK ANSWERS. The uri needs only the
 //    file; the row is the fetch gate's bookkeeping. So for that beat — a first
 //    mount, or a recycle — the icon is shown iff its file exists, and a row
@@ -31,25 +34,36 @@ import {
   faviconFileFor,
   type FaviconRecord,
   isFaviconStale,
-  readFavicon,
+  readFavicons,
 } from '../data/favicon-store';
-import { useKeyedLiveRead } from './use-live-read';
+import { createKeyedLiveCache } from '../data/keyed-live-cache';
+import { useKeyedLiveCache } from './use-keyed-live-cache';
 
 // The mounted-and-settled gate before a request — rows are virtualized, so this
 // keeps a fast scroll from asking for every host it flies past. Matches
 // use-image-file-uri's delay.
 const REQUEST_SETTLE_MS = 300;
 
+// One for the app: every row's favicon reads through it. Compared by what a row
+// renders from — a re-read hands back fresh row objects, and identity alone
+// would re-render every mounted favicon on every `favicons` write.
+const faviconRecords = createKeyedLiveCache<string, FaviconRecord | null>({
+  tables: ['favicons'],
+  readMany: async (hosts) => {
+    const records = await readFavicons(hosts);
+    return new Map(hosts.map((host) => [host, records.get(host) ?? null]));
+  },
+  equals: (a, b) =>
+    a === b || (a !== null && b !== null && a.status === b.status && a.fetchedAt === b.fetchedAt),
+});
+
 export function useFaviconUri(host: string | undefined): string | undefined {
   const { requestFavicon } = useFavicon();
 
-  // `undefined` = query in flight, which includes the beat after `host` changes
-  // under a recycled row; `null` = resolved with no cached row.
-  const record = useKeyedLiveRead<string | undefined, FaviconRecord | null>(
-    host,
-    (h) => (h ? readFavicon(h).then((r) => r ?? null) : Promise.resolve(null)),
-    ['favicons'],
-  );
+  // `undefined` = not read yet, which includes the beat after `host` changes
+  // under a recycled row onto a host the cache doesn't hold; `null` = resolved
+  // with no cached row.
+  const record = useKeyedLiveCache(faviconRecords, host)?.value;
 
   // Recomputed per render rather than memoized on `record`: a `none` row's
   // staleness is a function of the CLOCK, not of the row, so a remount after
@@ -63,8 +77,9 @@ export function useFaviconUri(host: string | undefined): string | undefined {
   }, [host, stale, requestFavicon]);
 
   if (!host) return undefined;
-  const file = faviconFileFor(host);
+  // Settled: the verdict answers, and a host without an icon builds no File.
+  if (record !== undefined) return record?.status === 'ok' ? faviconFileFor(host).uri : undefined;
   // In flight: the disk answers — see the header.
-  const present = record === undefined ? file.exists : record?.status === 'ok';
-  return present ? file.uri : undefined;
+  const file = faviconFileFor(host);
+  return file.exists ? file.uri : undefined;
 }

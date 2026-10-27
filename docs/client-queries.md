@@ -662,19 +662,47 @@ changes is mechanical, and only the substrate forces it:
   from a querier must be `Promise.resolve`-wrapped or writes silently stop
   re-firing the query — **does not exist here**; expo helpers await freely.
   `react-virtual` likewise becomes `FlashList`.
-- **A recycled row's read is keyed.** Like Dexie's hook, `useLiveRead` holds its
-  previous value for a beat after its `deps` change. Web never meets that beat in
-  a row: its rows are keyed by link path and remount. FlashList **recycles** —
-  the same row instance is handed the next link — so a per-row hook is asked
-  about a new key while still holding the previous key's answer.
-  `useKeyedLiveRead` (same file) reports `undefined`, "in flight", for that beat
-  instead, and every per-row read uses it: `useFaviconUri` and `useImageFileUri`.
-  The specimen is the favicon: its value is a path _derived from the host_, so
-  the previous host's `ok` verdict became the next host's path and expo-image was
-  handed a `file://` uri with nothing behind it on every recycle from an icon'd
-  host to an icon-less one. What each slot renders for the beat is its own
-  decision — the favicon answers from the disk, the preview image blanks — and
-  lives in those two hooks' headers.
+- **A recycled row's read is keyed, and shared.** Like Dexie's hook,
+  `useLiveRead` holds its previous value for a beat after its `deps` change. Web
+  never meets that beat in a row: its rows are keyed by link path and remount.
+  FlashList **recycles**: the same row instance is handed the next link, so a
+  per-row read is asked about a new key while still holding the previous key's
+  answer. The specimen is the favicon. Its value is a path _derived from the
+  host_, so the previous host's `ok` verdict became the next host's path, and on
+  every recycle from a host with an icon to one without, expo-image was handed a
+  `file://` uri with nothing behind it. So the per-row reads, `useFaviconUri`
+  and `useImageFileUri`, report `undefined` ("not read yet") for a key they
+  don't hold, never the previous key's value. What each slot renders for that
+  beat is decided in the two hooks' headers: the favicon answers from the disk,
+  the preview image blanks.
+
+  They read through `data/keyed-live-cache.ts`, one cache per hook for the whole
+  app, and **not** through a `useLiveRead` per row. That is a render-cost rule,
+  and breaking it is silent. Each row once had its own keyed live read
+  (`useKeyedLiveRead`, still in `use-live-read.ts` for callers with one key).
+  So every mount, and every recycle, rebuilt an expo-sqlite change listener,
+  ran a synchronous drizzle query and a file stat on the JS thread, and rendered
+  again when the answer came back. A fling pays that for every cell FlashList
+  brings in, in the frames the scroll needs. The list layout pays it about four
+  times as often per scrolled pixel as the card layout, because its cells are
+  that much shorter: the blank space a fast scroll showed in the list and not in
+  the card. With about 40 rows mounted, every write to a watched table also
+  fanned out to about 80 listeners. The cache does three things:
+  - **Shared.** A key is read once and held. A row recycled onto a held key
+    answers in the render that changed the key: no query, no in-flight render.
+    Up to 2,000 unwatched entries are kept for a scroll back.
+  - **Batched.** Keys first asked for together (a fling mounts several rows in
+    one commit) are one `IN (…)` statement, `readFavicons` / `readFileUris`.
+  - **Live, once.** One listener per cache. A write to a watched table re-reads
+    the watched keys in one batch and notifies only the keys whose value moved,
+    and it honors `holdLiveReads` as `useLiveRead` does. The hook drops
+    notifications under a `LiveReadPause`.
+
+  Nothing flags a per-row read that slips back in: rows render the same and
+  every spec stays green. `keyed-live-cache.spec.ts` pins the counts (reads per
+  batch, notifications per change), and `npm run measure:render:ios` shows the
+  frames ([e2e.md](./e2e.md), _the render leg_).
+
 - **The FlashList scroll host stays structurally stable.** `main.tsx` always
   supplies its `RefreshControl`, including while bulk edit suspends
   pull-to-refresh. The rule is about the control's _presence_, not its identity —
@@ -713,7 +741,18 @@ changes is mechanical, and only the substrate forces it:
   mounted cell on every render of the pane (a scroll-flag flip, a menu opening,
   a sync or extraction status change). `itemExtra` also carries `links`, because
   the cell skips `renderItem` when only an item's _index_ moves, and `pinned` /
-  `pinnedAbove` / `pinnedBelow` are index-derived. The other half is context: an item, its
+  `pinnedAbove` / `pinnedBelow` are index-derived. Two inputs keep that from
+  re-rendering every item anyway. The read **shares its rows**: `readLinks`
+  memoizes the display join on the decode cache's object identities
+  (`queries.ts`, `viewOf`), so a link whose records didn't change comes back as
+  the same object. Before that, every page growth, sync landing or write to any
+  link re-rendered every mounted item, which was the list layout's longest
+  scroll stall. And `itemWidth` is **snapped per layout** (`LayoutConfig.itemWidth`):
+  a row is told only which side of its date breakpoint it is on
+  (`link-row.tsx`, `rowItemWidth`). The card gets its whole width for its banner.
+  Otherwise a rail toggle, which changes the pane's width by 280, re-rendered
+  every row while every row drew the same. `queries.view-identity.spec.ts` and
+  `main.spec.tsx` pin the two. The other half is context: an item, its
   row menu and its chip strip read `useLinksViewActions` (the setters, a value
   that never changes), never `useLinksViewState`, whose value moves with every
   menu open and scroll flag — one subscription there re-renders every mounted

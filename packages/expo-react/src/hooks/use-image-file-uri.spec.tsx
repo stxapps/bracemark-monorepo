@@ -15,8 +15,9 @@
 // between two photos on every recycle; hence a state of its own. Nothing fails either
 // way — it is a frame of the wrong picture, on a scroll.
 //
-// `readFileUri` and the content provider are mocked: queries.spec.ts covers what counts
-// as local, and the provider what a request does.
+// `readFileUris` and the content provider are mocked: queries.spec.ts covers what counts
+// as local, the provider what a request does, and keyed-live-cache.spec.ts how often
+// the store is asked.
 
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
@@ -46,7 +47,12 @@ const mockReadFileUri = jest.fn((fileId: string) => {
     : Promise.resolve(answer());
 });
 jest.mock('../data/queries', () => ({
-  readFileUri: (fileId: string) => mockReadFileUri(fileId),
+  // The batch the shared cache asks for (data/keyed-live-cache.ts), answered id by
+  // id — so a held id holds its whole batch, as one statement would.
+  readFileUris: async (fileIds: string[]) => {
+    const uris = await Promise.all(fileIds.map((fileId) => mockReadFileUri(fileId)));
+    return new Map(fileIds.map((fileId, i) => [fileId, uris[i]]));
+  },
 }));
 
 function hold(fileId: string): void {

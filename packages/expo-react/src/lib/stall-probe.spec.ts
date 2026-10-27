@@ -42,12 +42,26 @@ it('reads a block between two ticks as its length, to within a tick', () => {
   expect(reading?.blockingMs).toBe((reading?.longestMs ?? 0) - 50);
 });
 
-it('does not count a block a user would not feel', () => {
+it('does not count a block a user would not feel as a stall', () => {
   const clock = meterAt();
   clock.meter.begin('export');
   clock.block(40);
   clock.tick();
   expect(clock.meter.end()).toMatchObject({ stalls: 0, longestMs: 0 });
+});
+
+// A scroll's jank: many blocks each under a stall, which the stall count reads as
+// a clean run. The dropped frames are what see it — and an idle thread drops none.
+it('counts the frames short blocks drop, which no stall shows', () => {
+  const clock = meterAt();
+  clock.meter.begin('scroll');
+  clock.idle(160);
+  for (let i = 0; i < 10; i++) {
+    clock.block(32);
+    clock.tick();
+  }
+  clock.idle(160);
+  expect(clock.meter.end()).toMatchObject({ stalls: 0, droppedFrames: 20 });
 });
 
 // The run's LAST chunk resolves the promise whose `finally` closes the window,

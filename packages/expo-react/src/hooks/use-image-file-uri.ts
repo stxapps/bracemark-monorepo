@@ -4,9 +4,11 @@
 // mounting as the display signal, the settle delay against fast scrolls).
 // Platform divergences:
 //
-//  - The read is readFileUri via useLiveRead over `items` (the fetch's
-//    markItemDataFile touches the row, so the landing re-fires it) instead of
-//    readFileBytes via Dexie liveQuery.
+//  - The read is readFileUris through a shared, batched cache over `items`
+//    (data/keyed-live-cache.ts — the fetch's markItemDataFile touches the row,
+//    so the landing re-reads it) instead of readFileBytes via a Dexie liveQuery
+//    per row. A row recycled onto an id the cache holds answers at once; new ids
+//    mounting together are one statement.
 //  - The value is the on-disk plaintext's `file://` uri (content lives
 //    decrypted on disk — file-store.ts), not a minted object URL, so there's
 //    nothing to revoke on unmount.
@@ -30,22 +32,31 @@
 import { useEffect } from 'react';
 
 import { useFileContent } from '../contexts/file-content-provider';
-import { readFileUri } from '../data/queries';
-import { useKeyedLiveRead } from './use-live-read';
+import { createKeyedLiveCache } from '../data/keyed-live-cache';
+import { readFileUris } from '../data/queries';
+import { useKeyedLiveCache } from './use-keyed-live-cache';
 
 // See the module comment — the mounted-and-settled gate before a network request.
 const REQUEST_SETTLE_MS = 300;
 
+// One for the app: every row's image slot reads through it. `null` is the
+// resolved-empty sentinel, mapped here so the cache's "never read" stays the only
+// `undefined`.
+const imageFileUris = createKeyedLiveCache<string, string | null>({
+  tables: ['items'],
+  readMany: async (ids) => {
+    const uris = await readFileUris(ids);
+    return new Map(ids.map((id) => [id, uris.get(id) ?? null]));
+  },
+});
+
 export function useImageFileUri(fileId: string | undefined): string | null | undefined {
   const { requestFileContent } = useFileContent();
 
-  // `undefined` = query in flight, which includes the beat after `fileId`
-  // changes under a recycled row; `null` = resolved with nothing local.
-  const uri = useKeyedLiveRead<string | undefined, string | null>(
-    fileId,
-    (id) => (id ? readFileUri(id).then((u) => u ?? null) : Promise.resolve(null)),
-    ['items'],
-  );
+  // `undefined` = not read yet, which includes the beat after `fileId` changes
+  // under a recycled row onto an id the cache doesn't hold; `null` = resolved
+  // with nothing local.
+  const uri = useKeyedLiveCache(imageFileUris, fileId)?.value;
 
   // `uri === null` is exactly "resolved with nothing local" — in-flight and a
   // present uri both skip. A fetch that comes back missing leaves `uri` null

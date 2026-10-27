@@ -1,0 +1,39 @@
+# The render leg's scroll window (e2e/measure/render-mobile.ts): open the
+# probe's `scroll` window, fling the links list down FLINGS times and back up as
+# many, close the window, and stop on the reading. Starts on the links screen at
+# the top of the list.
+#
+# The swipes run between 30% and 75% of the screen's height down its middle:
+# below the topbar and the search bar, above the measurement controls in the
+# bottom-leading corner (components/measure-probe.tsx), and left of the FAB. A
+# 150 ms swipe over that span is a fling, not a drag, so each one hands the list
+# momentum — the scroll a person makes when looking for something, and the one
+# that outruns the render. A swipe that lands mid-momentum catches and re-flings
+# the list, which is harsher still; nothing waits for the list to rest.
+#
+# Parameters: FLINGS — swipes each way.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'measure-begin-scroll'
+- repeat:
+    times: ${FLINGS}
+    commands:
+      - swipe:
+          start: 50%, 75%
+          end: 50%, 30%
+          duration: 150
+- repeat:
+    times: ${FLINGS}
+    commands:
+      - swipe:
+          start: 50%, 30%
+          end: 50%, 75%
+          duration: 150
+- tapOn:
+    id: 'measure-end'
+- extendedWaitUntil:
+    visible:
+      id: 'measure-stall-reading'
+      text: '.*"label":"scroll".*'
+    timeout: 10000

@@ -40,8 +40,10 @@
 // the write's own transaction, ahead of the file, as data/mutations.ts's
 // writeFile has it.
 
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { Directory, File, Paths } from 'expo-file-system';
+
+import { chunk } from '@stxapps/shared';
 
 import { favicons, getDb } from './db';
 import { assertAccountOwnsStoreTx } from './sync-store';
@@ -79,6 +81,29 @@ export async function readFavicon(host: string): Promise<FaviconRecord | undefin
   const row = getDb().select().from(favicons).where(eq(favicons.host, host)).get();
   if (row?.status === 'ok' && !faviconFileFor(host).exists) return undefined;
   return row;
+}
+
+// Many hosts' rows at once — readFavicon's answer for each, the same `ok`-
+// without-a-file resolution included, in one statement per FAVICON_BATCH hosts.
+// The batch the row favicon cache reads (hooks/use-favicon-uri.ts,
+// data/keyed-live-cache.ts). Answers every host it is given, in order.
+const FAVICON_BATCH = 500;
+
+export async function readFavicons(
+  hosts: readonly string[],
+): Promise<Map<string, FaviconRecord | undefined>> {
+  const rows = new Map<string, FaviconRecord>();
+  for (const batch of chunk([...hosts], FAVICON_BATCH)) {
+    for (const row of getDb().select().from(favicons).where(inArray(favicons.host, batch)).all()) {
+      rows.set(row.host, row);
+    }
+  }
+  return new Map(
+    hosts.map((host) => {
+      const row = rows.get(host);
+      return [host, row?.status === 'ok' && !faviconFileFor(host).exists ? undefined : row];
+    }),
+  );
 }
 
 // Is there nothing usable for this host right now? True when the host is

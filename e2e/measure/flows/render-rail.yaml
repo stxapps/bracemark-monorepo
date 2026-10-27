@@ -1,0 +1,37 @@
+# The render leg's rail window (e2e/measure/render-mobile.ts), wide windows
+# only: open the probe's `rail` window, put the docked links rail away and bring
+# it back TOGGLES times, close the window, and stop on the reading. Each toggle
+# changes the list pane's width by the rail's (lib/window-class.ts RAIL_WIDTH),
+# which is what re-lays out every mounted item. Starts and ends docked.
+#
+# Each press waits for its counterpart button rather than for an animation: the
+# rail has none to wait on, and the counterpart mounting is the commit the
+# toggle caused.
+#
+# Parameters: TOGGLES — hide/show pairs.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'measure-begin-rail'
+- repeat:
+    times: ${TOGGLES}
+    commands:
+      - tapOn:
+          id: 'sidebar-rail-hide'
+      - extendedWaitUntil:
+          visible:
+            id: 'sidebar-rail-show'
+          timeout: 10000
+      - tapOn:
+          id: 'sidebar-rail-show'
+      - extendedWaitUntil:
+          visible:
+            id: 'sidebar-rail-hide'
+          timeout: 10000
+- tapOn:
+    id: 'measure-end'
+- extendedWaitUntil:
+    visible:
+      id: 'measure-stall-reading'
+      text: '.*"label":"rail".*'
+    timeout: 10000

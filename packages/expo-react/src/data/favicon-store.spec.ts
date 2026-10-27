@@ -32,6 +32,7 @@ import {
   putFavicon,
   putFaviconNone,
   readFavicon,
+  readFavicons,
 } from './favicon-store';
 import { AccountFencedError, seedNewAccount } from './sync-store';
 
@@ -99,6 +100,32 @@ describe('readFavicon', () => {
     await putFaviconNone(USER, HOST);
 
     expect((await readFavicon(HOST))?.status).toBe('none');
+  });
+});
+
+// The batch the row cache reads (keyed-live-cache.ts). It must answer exactly what
+// readFavicon answers host by host — the same split-storage resolution included — or a
+// row would show an icon from the batch that the provider's own single read calls
+// unresolved.
+describe('readFavicons', () => {
+  it('answers every host as readFavicon would', async () => {
+    await putFavicon(USER, HOST, ICON);
+    await putFavicon(USER, 'gone.example', ICON);
+    faviconFileFor('gone.example').delete();
+    await putFaviconNone(USER, 'none.example');
+    const hosts = [HOST, 'gone.example', 'none.example', 'never-seen.example'];
+
+    const batch = await readFavicons(hosts);
+    const single = await Promise.all(hosts.map((host) => readFavicon(host)));
+
+    expect(hosts.map((host) => batch.get(host)?.status)).toEqual([
+      'ok',
+      undefined,
+      'none',
+      undefined,
+    ]);
+    expect(hosts.map((host) => batch.get(host))).toEqual(single);
+    expect([...batch.keys()]).toEqual(hosts);
   });
 });
 

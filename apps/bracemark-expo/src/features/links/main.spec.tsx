@@ -1,5 +1,5 @@
 import * as React from 'react';
-import type { ScrollViewProps } from 'react-native';
+import { Dimensions, type ScrollViewProps } from 'react-native';
 import { render, screen } from '@testing-library/react-native';
 
 import type { LinkView } from '@stxapps/expo-react';
@@ -29,42 +29,65 @@ let mockSelection: { kind: string; id?: string } = { kind: 'none' };
 // foot of the file. Both empty everywhere else: nothing is locked.
 let mockLocked = new Set<string>();
 let mockLockedByHand = new Set<string>();
+// The rail-toggle cases at the foot of the file: the layout, whether the rail is
+// docked, and every `extraData` the list was handed, in order.
+let mockLayout = 'list';
+let mockDocked = false;
+const mockExtraData: unknown[] = [];
 
 jest.mock('@shopify/flash-list', () => {
   const { ScrollView } = jest.requireActual('react-native');
   return {
-    FlashList: ({ testID, keyboardShouldPersistTaps, keyboardDismissMode }: ScrollViewProps) => (
-      <ScrollView
-        testID={testID}
-        keyboardShouldPersistTaps={keyboardShouldPersistTaps}
-        keyboardDismissMode={keyboardDismissMode}
-      />
-    ),
+    FlashList: ({
+      testID,
+      keyboardShouldPersistTaps,
+      keyboardDismissMode,
+      extraData,
+    }: ScrollViewProps & { extraData: unknown }) => {
+      mockExtraData.push(extraData);
+      return (
+        <ScrollView
+          testID={testID}
+          keyboardShouldPersistTaps={keyboardShouldPersistTaps}
+          keyboardDismissMode={keyboardDismissMode}
+        />
+      );
+    },
   };
 });
-jest.mock('@stxapps/expo-react', () => ({
-  useExtraction: () => ({ reportDisplayedLinkPaths: jest.fn() }),
-  useLocks: () => ({
-    isListLocked: (id: string) => mockLocked.has(id),
-    isListLockedByHand: (id: string) => mockLockedByHand.has(id),
-    unlockList: jest.fn(),
-    biometricForList: () => false,
-    biometricLabel: '',
-    unlockListWithBiometric: jest.fn(),
-  }),
-  useSettings: () => ({ linksLayout: 'list' }),
-  useSync: () => ({ bgSyncStatus: 'idle', requestSync: jest.fn() }),
-  useTags: () => [],
-}));
+jest.mock('@stxapps/expo-react', () => {
+  // One tree for every render, as the live read holds one: a fresh array would
+  // rebuild the tag map, and with it the list's `extraData`, on every render.
+  const tags: never[] = [];
+  return {
+    useExtraction: () => ({ reportDisplayedLinkPaths: jest.fn() }),
+    useLocks: () => ({
+      isListLocked: (id: string) => mockLocked.has(id),
+      isListLockedByHand: (id: string) => mockLockedByHand.has(id),
+      unlockList: jest.fn(),
+      biometricForList: () => false,
+      biometricLabel: '',
+      unlockListWithBiometric: jest.fn(),
+    }),
+    useSettings: () => ({ linksLayout: mockLayout }),
+    useSync: () => ({ bgSyncStatus: 'idle', requestSync: jest.fn() }),
+    useTags: () => tags,
+  };
+});
 jest.mock('./page-provider', () => ({
   useLinksPage: () => ({ selection: mockSelection, query: { sortOn: 'createdAt' } }),
 }));
-// A phone-width window: the rail is a drawer, so the pane keeps the window.
-jest.mock('./sidebar-rail', () => ({ useSidebarRail: () => ({ docked: false }) }));
-jest.mock('./view-state-provider', () => ({
-  useLinksViewState: () => ({ bulkEditing: false, selectedLinks: new Map() }),
-  useLinksViewActions: () => ({ setScrolled: jest.fn(), toggleSelected: jest.fn() }),
-}));
+// A phone-width window by default: the rail is a drawer, so the pane keeps the
+// window. The rail-toggle cases dock it.
+jest.mock('./sidebar-rail', () => ({ useSidebarRail: () => ({ docked: mockDocked }) }));
+// Stable across renders, as the real provider's values are: a fresh map or
+// setter per render would hand the list a new `extraData` every time, and the
+// rail-toggle cases below could never see one held.
+jest.mock('./view-state-provider', () => {
+  const state = { bulkEditing: false, selectedLinks: new Map() };
+  const actions = { setScrolled: jest.fn(), toggleSelected: jest.fn() };
+  return { useLinksViewState: () => state, useLinksViewActions: () => actions };
+});
 jest.mock('./use-links', () => ({
   useLinks: () => ({
     links: mockLinks,
@@ -95,6 +118,9 @@ jest.mock('../../components/lock-pane', () => {
 beforeEach(() => {
   mockLocked = new Set();
   mockLockedByHand = new Set();
+  mockLayout = 'list';
+  mockDocked = false;
+  mockExtraData.length = 0;
 });
 
 const link = { path: 'links/a.enc', url: 'https://example.com', tagIds: [] } as unknown as LinkView;
@@ -231,4 +257,49 @@ test('each locked list gets a pane of its own', () => {
   view.rerender(<Main />);
 
   expect(paneSays()).toBe('asks');
+});
+
+// --- the rail toggle: what reaches the mounted items ---------------------------
+//
+// Docking or putting away the rail changes the pane's width by RAIL_WIDTH on one
+// tap, and everything the list's `extraData` carries is a memo'd prop of every
+// mounted item — so a new one there re-renders every row on screen at once,
+// which is what the toggle used to cost (docs/e2e.md, _the render leg_). A row
+// draws nothing from its width but which side of the date breakpoint it is on
+// (link-row.tsx, rowItemWidth), so across a toggle that leaves it on the same
+// side the list must be handed the SAME object. The card's banner is sized off
+// its width, so for the card it must not be — the control that the first case
+// isn't passing merely because nothing reaches `extraData` at all.
+describe('a rail toggle on a wide window', () => {
+  const tablet = { width: 1180, height: 820, scale: 2, fontScale: 1 };
+  const phone = Dimensions.get('window');
+  beforeEach(() => Dimensions.set({ window: tablet, screen: tablet }));
+  afterEach(() => Dimensions.set({ window: phone, screen: phone }));
+
+  const toggled = (layout: string) => {
+    mockLayout = layout;
+    mockLinks = [link];
+    mockSelection = { kind: 'none' };
+    mockDocked = true;
+    const view = render(<Main />);
+    const docked = mockExtraData.at(-1);
+    mockDocked = false;
+    view.rerender(<Main />);
+    return { docked, away: mockExtraData.at(-1) };
+  };
+
+  test('re-renders no list row whose date column stays put', () => {
+    const { docked, away } = toggled('list');
+    expect(docked).toBeDefined();
+    expect(away).toBe(docked);
+  });
+
+  // Wider undocked, and so a column more: each cell narrower, every banner new.
+  test('re-renders the cards, whose banners follow the width', () => {
+    const { docked, away } = toggled('card');
+    expect(away).not.toBe(docked);
+    expect((away as { itemWidth: number }).itemWidth).not.toBe(
+      (docked as { itemWidth: number }).itemWidth,
+    );
+  });
 });

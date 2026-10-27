@@ -41,7 +41,6 @@ import {
   useImportAllData,
   useLocks,
   usePendingChangesCount,
-  useStallProbe,
   useSync,
   warnIfNotSwept,
 } from '@stxapps/expo-react';
@@ -61,6 +60,7 @@ import {
 
 import { ErrorText } from '../../components/error-text';
 import { FirstLineSlot } from '../../components/first-line-slot';
+import { StallReadout } from '../../components/measure-probe';
 import { ProgressMeter } from '../../components/progress-meter';
 import { SyncPausedActions } from '../../components/sync-paused-notice';
 import { Button } from '../../components/ui/button';
@@ -332,20 +332,6 @@ function ImportStatus({ state }: { state: ImportState }) {
   );
 }
 
-// Measurement bundles only: the stall probe's latest reading and its
-// calibration, as text the measurement runner reads off the accessibility tree
-// (e2e/measure/data-mobile.ts). Renders nothing in any other build, where the
-// probe was never started.
-function StallReadout() {
-  const probe = useStallProbe();
-  if (probe === null) return null;
-  return (
-    <Text testID="measure-stall-reading" className="mt-3 text-xs text-muted-foreground">
-      {JSON.stringify(probe)}
-    </Text>
-  );
-}
-
 // What the picker offers. Types are advisory on both platforms (Android treats
 // them as a filter, iOS as UTI hints); the orchestrator sniffs the real format
 // from the bytes anyway, so a permissive list just keeps pickable files broad.
@@ -439,7 +425,7 @@ function ImportView({ onBack }: { onBack: () => void }) {
       ) : (
         <ImportStatus state={state} />
       )}
-      <StallReadout />
+      <StallReadout className="mt-3" />
     </View>
   );
 }
@@ -702,7 +688,7 @@ function ExportView({ onBack }: { onBack: () => void }) {
       </View>
 
       <ExportStatus state={state} excludedCount={lockedCount} />
-      <StallReadout />
+      <StallReadout className="mt-3" />
     </View>
   );
 }

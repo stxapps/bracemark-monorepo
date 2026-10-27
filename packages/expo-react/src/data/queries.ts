@@ -244,6 +244,28 @@ export function toItem(link: LinkItem): LinkItem {
   return item as LinkItem;
 }
 
+// toView, memoized on the IDENTITY of its two inputs — both come out of the
+// decode cache, which hands back the same object for a record whose bytes
+// haven't changed. So a re-read returns the same display row for every link
+// that didn't change, where it used to return a fresh object for all of them.
+//
+// That is what lets bracemark-expo's memo'd list items skip a re-read
+// (features/links/main.tsx, itemExtra): growing the page as the list nears its
+// end, a sync landing, a write to any other link — each re-reads the whole
+// loaded prefix, and every mounted item re-rendered on every one, because its
+// `link` prop was new. Measured on the list layout, that was the longest stall
+// of a fast scroll (docs/e2e.md, _the render leg_). Weak, so a row the decode
+// cache dropped takes its view with it.
+const views = new WeakMap<LinkItem, { extraction: Extraction | undefined; view: LinkView }>();
+
+function viewOf(link: LinkItem, extraction: Extraction | undefined): LinkView {
+  const hit = views.get(link);
+  if (hit !== undefined && hit.extraction === extraction) return hit.view;
+  const view = toView(link, extraction);
+  views.set(link, { extraction, view });
+  return view;
+}
+
 // Batch-join a page of links with their co-keyed extractions and resolve each
 // to a display row. The page is small (one screen's window), so this is cheap.
 async function joinExtractions(links: LinkItem[]): Promise<LinkView[]> {
@@ -252,7 +274,7 @@ async function joinExtractions(links: LinkItem[]): Promise<LinkView[]> {
   return links.map((link, i) => {
     const row = rows[i];
     const extraction = row ? decodeCachedExtraction(row) : undefined;
-    return toView(link, extraction);
+    return viewOf(link, extraction);
   });
 }
 
@@ -403,6 +425,35 @@ export async function readFileUri(fileId: string): Promise<string | undefined> {
   if (!row?.hasDataFile) return undefined;
   const file = dataFileFor(path);
   return file.exists ? file.uri : undefined;
+}
+
+// Many files' uris at once — readFileUri's answer for each id, both halves
+// checked the same way, in one projected statement per FILE_URI_BATCH ids
+// rather than a whole-row read per id. The batch the row image cache reads
+// (hooks/use-image-file-uri.ts, data/keyed-live-cache.ts): a fling brings in
+// several rows in one commit, and each used to read its own row.
+const FILE_URI_BATCH = 500;
+
+export async function readFileUris(
+  fileIds: readonly string[],
+): Promise<Map<string, string | undefined>> {
+  const hasFile = new Set<string>();
+  const paths = fileIds.map((id) => pathFromId(id, FILES_PREFIX));
+  for (const batch of chunk(paths, FILE_URI_BATCH)) {
+    const rows = getDb()
+      .select({ path: items.path, hasDataFile: items.hasDataFile })
+      .from(items)
+      .where(inArray(items.path, batch))
+      .all();
+    for (const row of rows) if (row.hasDataFile) hasFile.add(row.path);
+  }
+  return new Map(
+    fileIds.map((id, i) => {
+      if (!hasFile.has(paths[i])) return [id, undefined];
+      const file = dataFileFor(paths[i]);
+      return [id, file.exists ? file.uri : undefined];
+    }),
+  );
 }
 
 // --- extraction: tallies + the pending drain queue ---------------------------

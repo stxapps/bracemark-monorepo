@@ -32,6 +32,18 @@ import { useLinksViewActions } from './view-state-provider';
 // with the docked rail (features/links/sidebar-rail.tsx) is narrower than the window.
 const RELATIVE_TIME_MIN_ROW_WIDTH = 576;
 
+// What a row is told of its width (main.tsx, LayoutConfig.itemWidth): which side
+// of the date breakpoint it is on, and nothing finer, because that is all it
+// draws from. `itemWidth` is a memo'd prop of every mounted item, so the exact
+// width would re-render every row on any change to the pane — and docking or
+// putting away the rail (features/links/sidebar-rail.tsx) changes it by 280 on a
+// tap, while the rows draw exactly what they drew before. Snapped, a rail toggle
+// re-renders no row unless the date column actually comes or goes. The row's
+// text still re-wraps and FlashList still re-measures; that is native layout,
+// not React work. The card is told its full width: its banner is sized off it.
+export const rowItemWidth = (cellWidth: number) =>
+  cellWidth >= RELATIVE_TIME_MIN_ROW_WIDTH ? RELATIVE_TIME_MIN_ROW_WIDTH : 0;
+
 // Whether this row renders a chip strip, and so which of its two shapes it
 // takes: exactly the test LinkTagChips applies before it renders anything, so
 // the two must not drift. A plain `tagIds.length > 0` would be subtly wrong — a

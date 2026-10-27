@@ -1,0 +1,10 @@
+# From anywhere in Settings back to the links screen (e2e/measure/render-mobile.ts,
+# after the restore has synced on the Data view).
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'settings-close'
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 10000

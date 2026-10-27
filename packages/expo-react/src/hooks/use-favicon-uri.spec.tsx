@@ -15,7 +15,8 @@
 // in the device log, on a scroll.
 //
 // The store and the provider are mocked: favicon-store.spec.ts covers what a verdict IS,
-// favicon-provider.spec.tsx which hosts are fetched. Here a "host with an icon" is an
+// favicon-provider.spec.tsx which hosts are fetched, keyed-live-cache.spec.ts how often
+// the store is asked. Here a "host with an icon" is an
 // `ok` row plus a file, which is the pair `readFavicon` guarantees.
 
 import { act, renderHook, waitFor } from '@testing-library/react-native';
@@ -47,13 +48,20 @@ const mockOnDisk = new Set<string>();
 const mockHeld = new Map<string, () => void>();
 const mockUriFor = (host: string) => `file:///documents/bracemark-favicons/${host}`;
 
+const mockReadFavicon = (host: string) =>
+  mockHeld.has(host)
+    ? new Promise<FaviconRecord | undefined>((resolve) => {
+        mockHeld.set(host, () => resolve(mockRows.get(host)));
+      })
+    : Promise.resolve(mockRows.get(host));
+
 jest.mock('../data/favicon-store', () => ({
-  readFavicon: (host: string) =>
-    mockHeld.has(host)
-      ? new Promise<FaviconRecord | undefined>((resolve) => {
-          mockHeld.set(host, () => resolve(mockRows.get(host)));
-        })
-      : Promise.resolve(mockRows.get(host)),
+  // The batch the shared cache asks for (data/keyed-live-cache.ts), answered host
+  // by host — so a held host holds its whole batch, as one statement would.
+  readFavicons: async (hosts: string[]) => {
+    const records = await Promise.all(hosts.map(mockReadFavicon));
+    return new Map(hosts.map((host, i) => [host, records[i]]));
+  },
   // Unknown is stale and nothing else is: the TTL is the store's, covered there.
   isFaviconStale: (record: FaviconRecord | undefined) => record === undefined,
   faviconFileFor: (host: string) => ({ uri: mockUriFor(host), exists: mockOnDisk.has(host) }),

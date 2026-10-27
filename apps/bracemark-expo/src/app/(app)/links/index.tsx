@@ -2,6 +2,7 @@ import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { withUniwind } from 'uniwind';
 
+import { RenderMeasureControls } from '../../../components/measure-probe';
 import { SyncPausedNotice } from '../../../components/sync-paused-notice';
 import { AddLinkFab } from '../../../features/links/add-link-fab';
 import { BulkTagsDialog } from '../../../features/links/bulk-tags-dialog';
@@ -66,6 +67,9 @@ export default function LinksScreen() {
           {/* Screen-level, not in Main: the add affordance survives Main's
               LockPane/EmptyState swaps (web's topbar Add is always there). */}
           <AddLinkFab onPress={openAdd} />
+          {/* Measurement bundles only (the render leg's window controls);
+              nothing in any other build. */}
+          <RenderMeasureControls />
         </View>
       </StyledSafeAreaView>
       <BulkTagsDialog />

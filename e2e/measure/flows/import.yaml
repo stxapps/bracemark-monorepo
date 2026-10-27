@@ -6,20 +6,20 @@
 # reasoning for each step.
 #
 # Parameters: USERNAME, PASSWORD, IMPORT_FILE_STEM (the file name without its
-# extension), EXPO_DEV_CLIENT_LINK.
+# extension), EXPO_DEV_CLIENT_LINK, E2E_WIDTH (`wide` or `narrow`: on a wide
+# window the settings menu is docked with no button to open it). An Android
+# tablet runs it; an iPad cannot — its Files picker is a remote view that
+# exposes nothing to XCUITest, sidebar and tiles alike (data-mobile.ts refuses
+# one up front).
 appId: com.bracemark.app
 ---
 - runFlow:
     file: ../../mobile/flows/subflows/sign-in.yaml
 
-- tapOn:
-    id: 'links-more-options'
-- tapOn:
-    id: 'links-open-settings'
-- tapOn:
-    id: 'settings-open-navigation'
-- tapOn:
-    id: 'settings-nav-data'
+- runFlow:
+    file: ../../mobile/flows/subflows/open-settings.yaml
+    env:
+      SECTION: data
 - tapOn:
     id: 'import-data-open'
 - tapOn:

@@ -1,7 +1,9 @@
 import { useSyncExternalStore } from 'react';
 
-// How long the JS thread is blocked during an import or an export — the native
-// half of the measurement behind docs/data-lifecycle.md, _main-thread cost_.
+// How long the JS thread is blocked during an import, an export or a stretch of
+// scrolling — the native half of the measurements behind docs/data-lifecycle.md,
+// _main-thread cost_, and the links list's render cost (docs/e2e.md, _the render
+// leg_).
 // Web reads the browser's own `longtask` entries (e2e/measure/main-thread.ts);
 // React Native has no Long Tasks API, so this measures the same thing the only
 // way a JS runtime can see it from inside: a timer that should fire every
@@ -17,9 +19,11 @@ import { useSyncExternalStore } from 'react';
 //
 // The window is the import or export run itself: its hook calls
 // `beginStallWindow` when the run starts and `endStallWindow` when it settles
-// (use-import-all-data.ts, use-export-all-data.ts). The reading is published
-// for the Data view to render as text (`measure-stall-reading`), which is how
-// the runner reads it back off the device's accessibility tree.
+// (use-import-all-data.ts, use-export-all-data.ts). The render leg has no run to
+// hang it on, so the links screen's measurement controls open and close it
+// around the gestures (bracemark-expo components/measure-probe.tsx). The reading
+// is published for those screens to render as text (`measure-stall-reading`),
+// which is how the runner reads it back off the device's accessibility tree.
 
 // The timer's period: a frame.
 const TICK_MS = 16;
@@ -40,6 +44,12 @@ export interface StallReading {
   blockingMs: number;
   // Blocks over LONG_MS.
   stalls: number;
+  // Frames the JS thread missed: each late tick's lateness in whole TICK_MS.
+  // A scroll's jank is mostly blocks UNDER LONG_MS — a 30 ms cell mount per
+  // frame never counts as a stall, and still halves the frame rate while
+  // FlashList runs out of rendered rows — so this is the render leg's headline,
+  // where `longestMs` is the data path's.
+  droppedFrames: number;
 }
 
 export interface StallCalibration {
@@ -62,6 +72,7 @@ interface OpenWindow {
   longest: number;
   blocking: number;
   stalls: number;
+  dropped: number;
 }
 
 // The pure half, clock injected so the spec can drive it (stall-probe.spec.ts).
@@ -70,7 +81,9 @@ export function createStallMeter(now: () => number) {
   let open: OpenWindow | null = null;
 
   const observe = (late: number) => {
-    if (open === null || late <= LONG_MS) return;
+    if (open === null) return;
+    if (late >= TICK_MS) open.dropped += Math.floor(late / TICK_MS);
+    if (late <= LONG_MS) return;
     open.longest = Math.max(open.longest, late);
     open.blocking += late - LONG_MS;
     open.stalls += 1;
@@ -89,7 +102,7 @@ export function createStallMeter(now: () => number) {
     begin(label: string) {
       const t = now();
       last = t;
-      open = { label, start: t, longest: 0, blocking: 0, stalls: 0 };
+      open = { label, start: t, longest: 0, blocking: 0, stalls: 0, dropped: 0 };
     },
     // Closing counts the block still in progress: a run's LAST chunk settles
     // the promise that calls this before any tick has run after it, and without
@@ -107,6 +120,7 @@ export function createStallMeter(now: () => number) {
         longestMs: Math.round(open.longest),
         blockingMs: Math.round(open.blocking),
         stalls: open.stalls,
+        droppedFrames: open.dropped,
       };
       open = null;
       return reading;

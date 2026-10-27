@@ -1,22 +1,34 @@
-import { type ChildProcess, spawn } from 'node:child_process';
-import { createWriteStream } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { E2E_ROOT, MEASURE_OUTPUT } from '../paths';
+import { MEASURE_OUTPUT } from '../paths';
 import { type NativePlatform } from '../runner/cli';
-import { resolveDevice } from '../runner/device';
+import { deviceWidth, resolveDevice } from '../runner/device';
 import { stageDocumentPickerFile } from '../runner/device-files';
-import { findNodes, parseHierarchy } from '../runner/hierarchy';
-import { createRunId, maestro, maestroHierarchy, provisionAccount, writeJson } from '../runner/lib';
-import { capture } from '../runner/process';
-import { assertOriginOwnedByRepo, assertPortFree } from '../runner/stack';
-import { API_URL, SITE_URL, WEB_URL } from '../web/fixtures/env';
+import { createRunId, provisionAccount, writeJson } from '../runner/lib';
+import { assertOriginOwnedByRepo } from '../runner/stack';
+import { type E2EWidth } from '../runner/width';
+import { API_URL, WEB_URL } from '../web/fixtures/env';
 import { grantPlus } from '../web/fixtures/plan';
 import { writeBackupLibrary, writeBookmarksHtml } from './library';
 import { band } from './main-thread';
 import { formatMemory, type MemoryReading, readMemory, traceMemory } from './memory';
+import {
+  APP_ID,
+  assertInstalled,
+  checkout,
+  describeDevice,
+  flow,
+  printTable,
+  readProbe,
+  reversePorts,
+  seconds,
+  type StallCalibration,
+  type StallReading,
+  startMetro,
+  waitForSync,
+} from './native';
 
 // How long import and export block bracemark-expo's JS thread, at library sizes
 // you pick — the native half of docs/data-lifecycle.md, _main-thread cost_,
@@ -31,50 +43,15 @@ import { formatMemory, type MemoryReading, readMemory, traceMemory } from './mem
 // NOT A TEST, for measure/data-web.ts's reason. Numbers for a person to read and
 // record in the doc.
 //
-// THE INSTRUMENT is expo-react's stall probe (lib/stall-probe.ts): a 16 ms timer
-// whose lateness is the JS thread's blocking, windowed by the import and export
-// hooks, and rendered by the Data view as `measure-stall-reading` text that this
-// runner reads off the accessibility tree. It is compiled in only when the
-// bundle is built with EXPO_PUBLIC_MEASURE_STALLS=1, which this runner sets.
-//
-// A PRODUCTION BUNDLE ON THE DEVELOPMENT CLIENT, and why not a release build. A
-// release build bakes its api origin, and against localhost it is unsupported
-// (docs/env-files.md, _bracemark-expo_: Android refuses cleartext) — the only
-// release build that could run this is a staging one, which would push tens of
-// thousands of links into a deployed tier. So the installed dev client loads a
-// bundle Metro serves with `--no-dev --minify`: __DEV__ off, React's production
-// build, Hermes, minified — the JS a release build runs. Only the native shell is
-// the debug one, and the probe measures JS.
-//
-// ⚠ `--no-dev` MAKES METRO LOAD `.env.production`, which names the PRODUCTION
-// api. The origins are pinned in Metro's own environment (an exported variable
-// outranks every env file), and the served bundle is checked before anything
-// runs: it must name the local api and no deployed one.
+// THE INSTRUMENT, THE BUNDLE AND THE DEVICE are measure/native.ts's, shared
+// with the render leg (measure/render-mobile.ts): the stall probe read off the
+// screen, a production bundle on the development client with the api pinned,
+// and a calibration on every leg because a simulator is not a phone.
 //
 // ON ANDROID IT ALSO READS MEMORY: `dumpsys meminfo` as each leg ends and around
 // the restore's sync (measure/memory.ts), outside the probe's windows. The
 // debug native shell makes these numbers higher than a release build's, so
 // compare them run with run, not with a phone. Growth is the reading.
-//
-// A SIMULATOR IS NOT A PHONE. The iOS simulator and an Apple-silicon emulator
-// run at the Mac's speed and there is no CPU throttle for either. Every leg
-// records the probe's calibration — fixed work timed on this device's Hermes —
-// which is what makes readings from different devices comparable; for true phone
-// numbers, run this against a physical Android phone over USB (`adb reverse`
-// reaches the local stack exactly as it does from the emulator).
-
-const EXPO_ROOT = join(E2E_ROOT, '..', 'apps', 'bracemark-expo');
-const APP_ID = 'com.bracemark.app';
-const METRO_URL = 'http://localhost:8081';
-// mobile/flows/subflows/cold-launch.yaml's default, passed explicitly.
-const DEV_CLIENT_LINK =
-  'bracemark://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081%2F%3FdisableOnboarding%3D1';
-const DEPLOYED_APIS = ['https://api.bracemark.com', 'https://api.dryrunbase.com'];
-const FLOWS = join(E2E_ROOT, 'measure', 'flows');
-
-// Polling the Data card for a settled sync (see waitForSync below).
-const SYNC_TIMEOUT_MS = 30 * 60 * 1000;
-const SETTLED_POLLS = 3;
 
 const EXPORT_FORMATS = [
   { format: 'netscape', label: 'HTML bookmarks' },
@@ -86,27 +63,15 @@ const EXPORT_FORMATS = [
 interface Options {
   platform: NativePlatform;
   deviceId: string;
+  // The import flow's settings route turns on it (flows/import.yaml).
+  width: E2EWidth;
   links: number[];
   exports: boolean;
   memoryTrace: boolean;
 }
 
 // What the command line says; `--device` is optional, as in the e2e runners.
-type ParsedOptions = Omit<Options, 'deviceId'> & { deviceId?: string };
-
-interface StallReading {
-  label: string;
-  wallMs: number;
-  longestMs: number;
-  blockingMs: number;
-  stalls: number;
-}
-
-interface StallCalibration {
-  iterations: number;
-  workMs: number;
-  probeMs: number;
-}
+type ParsedOptions = Omit<Options, 'deviceId' | 'width'> & { deviceId?: string };
 
 interface NativeLeg {
   leg: string;
@@ -170,10 +135,20 @@ async function main(): Promise<void> {
   const parsed = parseOptions(process.argv.slice(2));
   // Without `--device`, the one booted simulator or attached Android device
   // (runner/device.ts), and never a choice between two.
+  const deviceId = await resolveDevice(parsed.platform, parsed.deviceId);
   const options: Options = {
     ...parsed,
-    deviceId: await resolveDevice(parsed.platform, parsed.deviceId),
+    deviceId,
+    width: await deviceWidth(parsed.platform, deviceId),
   };
+  // The iPad's Files picker is a remote view: XCUITest sees none of it, so the
+  // import flow could neither find the staged file nor tap it (flows/import.yaml).
+  if (options.platform === 'ios' && options.width === 'wide') {
+    throw new Error(
+      'the data leg imports through the Files picker, which an iPad exposes nothing of to ' +
+        'Maestro — run it on an iPhone simulator, or on the tablet AVD',
+    );
+  }
   await assertOriginOwnedByRepo(API_URL, 'bracemark-api', { required: true });
   await assertOriginOwnedByRepo(WEB_URL, 'bracemark-web', { required: true });
   await assertInstalled(options);
@@ -200,18 +175,14 @@ async function main(): Promise<void> {
     await metro.stop();
   }
 
-  const [device, commit, status] = await Promise.all([
-    describeDevice(options),
-    capture('git', ['rev-parse', 'HEAD'], { cwd: join(E2E_ROOT, '..') }),
-    capture('git', ['status', '--porcelain'], { cwd: join(E2E_ROOT, '..') }),
-  ]);
+  const [device, tree] = await Promise.all([describeDevice(options), checkout()]);
   const resultsPath = await writeJson(join(runDir, 'results.json'), {
     runId,
     measuredAt: new Date().toISOString(),
     platform: options.platform,
     device,
     bundle: 'production (--no-dev --minify) on the development client',
-    checkout: { commit: commit.stdout.trim(), dirty: status.stdout.trim().length > 0 },
+    checkout: tree,
     legs,
     syncs,
   });
@@ -288,219 +259,12 @@ async function importLeg(
       USERNAME: credentials.username,
       PASSWORD: credentials.password,
       IMPORT_FILE_STEM: fileName.replace(/\.[^.]+$/, ''),
+      E2E_WIDTH: options.width,
     });
   } finally {
     await unstage();
   }
   return { leg, ...(await readProbe(options, 'import')), memory: await memoryOf(options) };
-}
-
-async function flow(
-  name: string,
-  options: Options,
-  env: Record<string, string> = {},
-): Promise<void> {
-  await maestro(join(FLOWS, name), {
-    platform: options.platform,
-    deviceId: options.deviceId,
-    env: { EXPO_DEV_CLIENT_LINK: DEV_CLIENT_LINK, ...env },
-  });
-}
-
-// The readout the flow stopped on, parsed — and the calibration held to the
-// same bar as web's: nothing below is believed unless the probe saw the known
-// stall (main-thread.ts, `calibrate`, for why that is not a formality).
-async function readProbe(
-  options: Options,
-  label: string,
-): Promise<{ reading: StallReading; calibration: StallCalibration }> {
-  const root = parseHierarchy(await maestroHierarchy(options));
-  const nodes = findNodes(
-    root,
-    (attributes) => attributes['resource-id'] === 'measure-stall-reading',
-  );
-  const text = nodes.map((node) => node.attributes?.text || node.attributes?.accessibilityText)[0];
-  if (!text)
-    throw new Error('no measure-stall-reading on screen — was the bundle built with the probe?');
-  const probe = JSON.parse(text) as { calibration?: StallCalibration; last?: StallReading };
-  if (!probe.last || probe.last.label !== label) {
-    throw new Error(`the reading on screen is not this ${label}'s: ${text}`);
-  }
-  const calibration = probe.calibration;
-  if (!calibration)
-    throw new Error('the probe has no calibration yet — it runs 1.5 s after launch');
-  if (calibration.workMs < 50 || calibration.probeMs < calibration.workMs * 0.75) {
-    throw new Error(
-      `the probe missed its own calibration stall (work ${calibration.workMs} ms, ` +
-        `seen ${calibration.probeMs} ms) — every reading would be a false low`,
-    );
-  }
-  console.log(
-    `  longest ${probe.last.longestMs} ms, blocking ${probe.last.blockingMs} ms, ` +
-      `${probe.last.stalls} stalls (calibration ${calibration.workMs} ms, seen ${calibration.probeMs} ms)`,
-  );
-  return { reading: probe.last, calibration };
-}
-
-// The Data card settled: nothing waiting and "Last synced", three polls in a row
-// — seed/steps.ts `waitForSync`'s rule, for its reason (either half can read
-// settled for a moment before the first live read lands).
-async function waitForSync(options: Options): Promise<void> {
-  const deadline = Date.now() + SYNC_TIMEOUT_MS;
-  let settled = 0;
-  let lastReport = '';
-  while (Date.now() < deadline) {
-    const root = parseHierarchy(await maestroHierarchy(options));
-    const texts = findNodes(root, () => true).map(
-      (node) => `${node.attributes?.text ?? ''} ${node.attributes?.accessibilityText ?? ''}`,
-    );
-    const pending = texts.find((text) => /\d+ changes? waiting to sync/.test(text));
-    const synced = texts.some((text) => /Last synced/.test(text));
-    if (!pending && synced) {
-      if (++settled >= SETTLED_POLLS) return;
-    } else {
-      settled = 0;
-      const report = pending?.match(/\d+ changes? waiting to sync/)?.[0] ?? 'syncing';
-      if (report !== lastReport) console.log(`  ${report}`);
-      lastReport = report;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-  }
-  throw new Error(`the restore did not sync within ${SYNC_TIMEOUT_MS / 60_000} minutes`);
-}
-
-// --- Metro, serving the production bundle ---------------------------------------------
-
-async function startMetro(
-  platform: NativePlatform,
-  runDir: string,
-): Promise<{ stop(): Promise<void> }> {
-  await assertPortFree(METRO_URL, 'Metro (this run serves its own production bundle)');
-  const log = createWriteStream(join(runDir, 'metro.log'));
-  const child: ChildProcess = spawn(
-    'npx',
-    ['expo', 'start', '--no-dev', '--minify', '--port', '8081'],
-    {
-      cwd: EXPO_ROOT,
-      // Its own process group, so stopping it takes Metro's workers too.
-      detached: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: {
-        ...process.env,
-        CI: '1',
-        // See ⚠ above: these outrank .env.production, which --no-dev loads.
-        // --no-dev is production mode, so metro.config.js's production guard
-        // refuses a local URL without this.
-        BRACEMARK_NONPROD_RELEASE: '1',
-        EXPO_PUBLIC_API_URL: API_URL,
-        EXPO_PUBLIC_SITE_URL: SITE_URL,
-        EXPO_PUBLIC_MEASURE_STALLS: '1',
-      },
-    },
-  );
-  child.stdout?.pipe(log);
-  child.stderr?.pipe(log);
-  const stop = async () => {
-    if (child.pid !== undefined && child.exitCode === null) {
-      try {
-        process.kill(-child.pid, 'SIGTERM');
-      } catch {
-        // Already gone.
-      }
-    }
-    await new Promise<void>((resolve) => log.end(() => resolve()));
-  };
-
-  try {
-    const deadline = Date.now() + 120_000;
-    for (;;) {
-      try {
-        await fetch(`${METRO_URL}/status`);
-        break;
-      } catch {
-        if (Date.now() > deadline) throw new Error('Metro did not start within 2 minutes');
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
-    }
-    await assertMeasurementBundle(platform);
-    return { stop };
-  } catch (error) {
-    await stop();
-    throw error;
-  }
-}
-
-// Fetch the bundle the device is about to load — which also warms Metro's cache
-// for it — and refuse to run unless it is the build this run needs.
-async function assertMeasurementBundle(platform: NativePlatform): Promise<void> {
-  const manifest = (await (
-    await fetch(METRO_URL, {
-      headers: { 'expo-platform': platform, accept: 'application/expo+json,application/json' },
-    })
-  ).json()) as { launchAsset?: { url?: string } };
-  const url = manifest.launchAsset?.url;
-  if (!url) throw new Error('Metro served no launch asset');
-  if (!url.includes('dev=false') || !url.includes('minify=true')) {
-    throw new Error(`Metro is not serving a production bundle: ${url}`);
-  }
-  console.log('building the production bundle…');
-  const bundle = await (await fetch(url)).text();
-  const deployed = DEPLOYED_APIS.find((origin) => bundle.includes(origin));
-  if (deployed) throw new Error(`the bundle names ${deployed} — refusing to run against it`);
-  if (!bundle.includes(API_URL)) throw new Error(`the bundle does not name ${API_URL}`);
-  if (!bundle.includes('measure-stall-reading')) {
-    throw new Error('the bundle has no stall readout — EXPO_PUBLIC_MEASURE_STALLS did not apply');
-  }
-}
-
-// --- the device ---------------------------------------------------------------------
-
-async function assertInstalled(options: Options): Promise<void> {
-  const installed =
-    options.platform === 'ios'
-      ? await capture('xcrun', ['simctl', 'get_app_container', options.deviceId, APP_ID], {
-          allowFailure: true,
-        })
-      : await capture('adb', ['-s', options.deviceId, 'shell', 'pm', 'path', APP_ID], {
-          allowFailure: true,
-        });
-  if (!installed.stdout.trim()) {
-    throw new Error(
-      `${APP_ID} is not installed on ${options.deviceId} — install a development build ` +
-        '(`npm run expo:ios` / `npm run expo:android`) from this checkout first',
-    );
-  }
-}
-
-// The emulator (or a phone over USB) reaches the Mac's localhost through these —
-// `npm run expo:android:reverse`'s three, idempotent.
-async function reversePorts(deviceId: string): Promise<void> {
-  for (const port of ['8081', '8787', '8788']) {
-    await capture('adb', ['-s', deviceId, 'reverse', `tcp:${port}`, `tcp:${port}`]);
-  }
-}
-
-async function describeDevice(options: Options): Promise<string> {
-  if (options.platform === 'android') {
-    const model = await capture('adb', [
-      '-s',
-      options.deviceId,
-      'shell',
-      'getprop',
-      'ro.product.model',
-    ]);
-    const release = await capture('adb', [
-      '-s',
-      options.deviceId,
-      'shell',
-      'getprop',
-      'ro.build.version.release',
-    ]);
-    return `${model.stdout.trim()}, Android ${release.stdout.trim()} (${options.deviceId})`;
-  }
-  const list = await capture('xcrun', ['simctl', 'list', 'devices']);
-  const line = list.stdout.split('\n').find((entry) => entry.includes(options.deviceId));
-  return `${line?.trim() ?? options.deviceId} (simulator)`;
 }
 
 // --- the report ---------------------------------------------------------------------
@@ -526,24 +290,13 @@ function report(legs: NativeLeg[], syncs: SyncReading[]): void {
     'calibration',
     'native heap after',
   ];
-  const widths = header.map((title, column) =>
-    Math.max(title.length, ...rows.map((row) => row[column].length)),
-  );
-  const line = (cells: string[]) =>
-    cells.map((cell, column) => cell.padEnd(widths[column])).join('  ');
-  console.log(`\n${line(header)}`);
-  console.log(widths.map((width) => '-'.repeat(width)).join('  '));
-  for (const row of rows) console.log(line(row));
+  printTable(header, rows);
   for (const sync of syncs) {
     console.log(
       `\nthe ${sync.links.toLocaleString('en-US')}-link restore’s sync: ${seconds(sync.wallMs)}, ` +
         `native heap ${formatMemory(sync.before)} → ${formatMemory(sync.after)}`,
     );
   }
-}
-
-function seconds(ms: number): string {
-  return `${(ms / 1000).toFixed(1)} s`;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -3820,6 +3820,107 @@ bundle.js`. Bundle the code under test with esbuild, then lower it with
   quadruples when the input doubles is the finding. This is how the Netscape
   parser's quadratic regex was found (data-lifecycle.md, _readings — expo_).
 
+#### the render leg — `measure:render:*`
+
+`e2e/measure/render-mobile.ts` and `e2e/measure/render-web.ts` measure what
+the links list costs the JS thread to **draw**, not to load: a fast scroll down
+it and back, and the docked rail put away and brought back, in each link
+layout. They are what to re-run when a link item, the list, or anything per-row
+(a hook, a live read, a menu) changes. A scroll that shows blank space, or a
+rail toggle that hangs, is the symptom they turn into a number.
+
+```sh
+npm run dev                                          # api + web, as for the data leg
+npm run measure:render:ios                           # the one booted simulator
+npm run measure:render:ios -- --device <udid>        # an iPad, for the rail leg too
+npm run measure:render:android -- --layouts list --repeat 5
+npm run measure:render:web                           # 1,000 links, CPU 4x slower
+npm run measure:render:web -- --trace                # + a DevTools trace per run
+```
+
+Each run restores one fresh Plus account from a `plus-full`-shaped backup of
+`--links` links (1,000 by default) **with** its preview images, waits for the
+sync to settle, then for each layout runs the legs below. The native runner
+restores the library **on web** and signs the device in to pull it. That is not
+the data leg's on-device picker import: an iPad's Files picker is a remote view
+that exposes nothing to XCUITest, neither its sidebar nor its tiles, and the
+rail leg needs a wide window. A pull is also how a second device gets a library
+anyway. The data leg refuses an iPad up front for the same reason.
+`flows/import.yaml` does take the docked-settings route, so an Android tablet
+runs it.
+
+- **scroll**: native flings the list down `--flings` times and back up as many
+  (`flows/render-scroll.yaml`). Web sends a fast wheel scroll over the list's
+  own scroller.
+- **rail**: `--toggles` hide/show pairs of the docked links rail. Wide windows
+  only, so on native it needs a tablet simulator or the `bracemark-tablet` AVD.
+  On a phone the rail is a drawer and the leg is skipped.
+
+Each leg runs `--repeat` times (3 by default) and the report prints every run
+and the median. Why it is built the way it is:
+
+- **The headline is dropped frames, not stalls.** Scroll jank is a run of
+  blocks each a little over a frame, and none of them reaches the 50 ms that
+  counts as a stall or a long task. A row that costs 30 ms to mount, mounted
+  every frame, reads as zero stalls while FlashList runs out of rendered rows.
+  On native the stall probe counts each late tick's lateness in whole frames
+  (`droppedFrames`, `lib/stall-probe.ts`). On web a `requestAnimationFrame`
+  loop counts frame gaps over one and a half budgets. That loop is an init
+  script string for main-thread.ts's ⚠. Longest task and blocking are still
+  reported: a rail toggle is one big commit, and the longest stall is the
+  reading there.
+- **The native window is opened from the screen.** The data leg's windows are
+  opened by the import and export hooks. A scroll has no run to hang one on, so
+  a measurement bundle draws small `measure-begin-scroll` / `measure-begin-rail`
+  / `measure-end` controls and the readout in the links screen's bottom-leading
+  corner (`components/measure-probe.tsx`). They sit clear of the FAB and of the
+  swipe path, and they render nothing in any other build. A reading carries its
+  label, and the runner refuses one that is not the leg it just ran.
+- **Preview images are in, and the sync is at rest.** The image slot is part of
+  what a row costs to mount, so the backup carries the images the data leg
+  leaves out. A sync still pushing writes `items` rows throughout the window,
+  and every live read on screen re-runs on each one. That is a real state, but
+  not the one being measured.
+- **The fling is a fling.** A 150 ms swipe over 45% of the screen hands the
+  list momentum, and the next swipe catches it mid-flight. That is the scroll
+  that outruns the render, not a reading pace.
+- **⚠ The native commit runs on the JS thread, built for debug.** A Hermes
+  profile of the list's fling (_finding what owns a native stall_, below)
+  showed most of each stall in `[Host Function] completeRoot`. That is Fabric's
+  C++ commit (shadow-tree diff and Yoga layout), executed on the thread the
+  probe watches, and the development client's debug shell compiles it
+  unoptimized. So the render leg reads high against a Release build in a way
+  the data leg does not. The specimen that settled where the rest of the cost
+  sits, measured on the iPad (A16) simulator, 2026-10-27: after the row fixes in
+  [client-queries.md](./client-queries.md), _the expo port_, replacing the whole
+  row with a bare `View` + `Text`, or removing the ⋯ menu, paging, MVCP, the
+  viewability callback, or setting `drawDistance` 100, each left the scroll at
+  160–186 dropped frames. The same swipes over the topbar, where nothing
+  scrolls, read 0. So what is left is FlashList's per-scroll commits, not
+  anything a row does. Judge a row change by its delta between runs on one
+  build, and judge absolute smoothness on a Release build.
+- **Production bundle, calibrated.** It uses the same `measure/native.ts`
+  harness as the data leg: production JS on the development client with the api
+  pinned, plus the probe's calibration on every reading. A simulator runs at the
+  Mac's speed, so compare runs with runs on one device, and use a physical
+  Android phone for phone numbers.
+
+**Readings — expo, 2026-10-27**, iPad (A16) simulator (iOS 26.5),
+production bundle on the debug shell, 1,000 links, 8 flings / 5 toggles,
+median of 3. _Before_ is HEAD, _after_ is the three row fixes in
+[client-queries.md](./client-queries.md), _the expo port_: rows read through
+the shared keyed cache, `readLinks` shares unchanged rows, and the row's
+`itemWidth` is snapped.
+
+| leg         | dropped frames | longest stall | blocking         |
+| ----------- | -------------- | ------------- | ---------------- |
+| scroll list | 187 → 168      | 689 → 635 ms  | 1,812 → 1,490 ms |
+| rail list   | 202 → 166      | 276 → 201 ms  | 2,364 → 1,795 ms |
+| scroll card | 244 → 203      | 122 → 132 ms  | 1,446 → 969 ms   |
+| rail card   | 197 → 178      | 374 → 355 ms  | 2,464 → 2,138 ms |
+
+What is left is the per-scroll commit described under ⚠ above, not row work.
+
 ### measuring the password manager
 
 `e2e/measure/password-manager.ts` (`npm run measure:password-manager`) reports
