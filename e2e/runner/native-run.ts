@@ -343,7 +343,7 @@ async function androidDevice(
     if (!reversals.includes(`tcp:${port} tcp:${port}`)) {
       throw new Error(
         `Android device ${deviceId} is missing tcp:${port} reverse mapping. ` +
-          'Run `npm run expo:android:reverse` and retry' +
+          `Run \`ANDROID_SERIAL=${deviceId} npm run expo:android:reverse\` and retry` +
           (port === 8081 || port === 8787 || port === 8788
             ? '.'
             : ` — it covers 8081; this Metro needs \`adb -s ${deviceId} reverse tcp:${port} tcp:${port}\`.`),

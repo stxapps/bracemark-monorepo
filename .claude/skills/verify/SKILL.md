@@ -345,11 +345,13 @@ ad-hoc "show me my change" loop.
   `com.bracemark.app`. Both native dirs are prebuilt already — only re-run
   `npm run prebuild` after an `app.config.ts`/plugin/native-dep change.
 - **Android additionally needs `npm run expo:android:reverse`** once per emulator boot,
-  before anything hits the api — it is `adb reverse` for 8081 (Metro), 8787 (api)
+  unless an `expo:android:emulator:*` script booted it (those set the mappings
+  themselves once boot completes), before anything hits the api — it is `adb reverse` for 8081 (Metro), 8787 (api)
   and 8788 (extractor). It is deliberately NOT chained onto `expo:android` (that
   script never returns), it is idempotent and instant, and it survives reinstalls
   but not a device reboot. Re-run it whenever unsure.
-- **Launch with `npm run expo:ios:open` / `expo:android:open`, not the app icon**
+- **Launch with `npm run ios:open -w @stxapps/bracemark-expo` (or `android:open`),
+  not the app icon**
   (both platforms — same code path, not an Android quirk). The dev build only
   opens straight into the app while expo-dev-client's own prefs survive; anything
   that clears app data (a Maestro `clearState`, so any `npm run e2e:ios:iphone` /
@@ -368,8 +370,8 @@ No driver, no session, nothing to install. `adb`/`emulator` are on PATH via
 `.zshenv`, with `ANDROID_HOME=~/Library/Android/sdk`.
 
 ```sh
-$ANDROID_HOME/emulator/emulator -avd bracemark-pixel8 -no-audio -no-boot-anim &   # or bracemark-tablet
-adb wait-for-device                          # ~32 s cold; both up → adb -s <serial>, docs/app-drivers.md
+npm run expo:android:emulator:phone:headless   # run_in_background, never a trailing & (zsh renices it); or :tablet
+adb wait-for-device                          # ~32 s cold; both up → adb -s emulator-5554 (phone) / -5556 (tablet)
 adb exec-out screencap -p > shot.png         # capture
 adb shell uiautomator dump                   # bounds only — see Gotchas, not state
 adb shell cat /sdcard/window_dump.xml \

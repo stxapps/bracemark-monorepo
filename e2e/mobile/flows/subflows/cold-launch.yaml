@@ -27,8 +27,8 @@
 # for the emulator, so ONE link serves both platforms — Maestro turns `openLink`
 # into `xcrun simctl openurl` or an `am start` as needed. That does mean this
 # assumes a DEV build with Metro up, which the mobile legs already require
-# (e2e/README.md). The hand-driven twins are `npm run expo:ios:open` and
-# `expo:android:open`.
+# (e2e/README.md). The hand-driven twins are bracemark-expo's `ios:open` and
+# `android:open` (`npm run ios:open -w @stxapps/bracemark-expo`).
 #
 # The link's default lives IN the expression, not in an `env:` block. A
 # subflow's own `env:` beats both `-e` and the caller's `runFlow: env:` (measured

@@ -653,8 +653,8 @@ The repo-specific gotchas:
   link instead — bundle URL and `disableOnboarding=1` both stated up front, so
   neither screen has a reason to appear. One link covers both platforms: the
   param rides on the inner URL, which is what Android reads as the manifest URL
-  and iOS as `expoUrl`. The hand-driven twins are `npm run expo:ios:open` and
-  `npm run expo:android:open`. Its cost is that local mobile legs assume a
+  and iOS as `expoUrl`. The hand-driven twins are the app's `ios:open` and
+  `android:open` (`npm run ios:open -w @stxapps/bracemark-expo`). Its cost is that local mobile legs assume a
   **dev** build with Metro up. Staging Release uses plain `launchApp` instead
   (see _deployed staging and mobile Release builds_). The published-captures leg
   opts out of the wipe altogether — _the published screenshots_, below.
@@ -2571,12 +2571,15 @@ is deliberately no bare `npm run e2e`: no honest fan-out
 can boot, build, select, and prepare both native platforms. `expo:ios` and
 `expo:android` are prerequisites, not tests; see [expo-build.md](./expo-build.md).
 For a run you walk away from, boot the AVD with
-`npm run expo:android:emulator:headless`: a hidden emulator window is demoted to
-background scheduling by macOS and the run crawls, while the iOS simulator is
-unaffected ([app-drivers.md](./app-drivers.md), _a hidden emulator window is a
-throttled emulator_). On Android, run `npm run expo:android:reverse` after each emulator boot — with
-both AVDs up, once per AVD, each with `ANDROID_SERIAL=<serial>` in front, since
-a bare `adb reverse` refuses to choose between two devices. A Metro on another
+`npm run expo:android:emulator:phone:headless` (or `…:tablet:headless`): a
+hidden emulator window is demoted to background scheduling by macOS and the run
+crawls, while the iOS simulator is unaffected ([app-drivers.md](./app-drivers.md),
+_a hidden emulator window is a throttled emulator_). Those four
+`expo:android:emulator:*` scripts set the three reverse mappings on their own
+emulator once it has booted, so a fresh boot needs no separate step; an
+emulator started any other way, or one whose adbd has restarted, needs
+`npm run expo:android:reverse` — with both AVDs up, with `ANDROID_SERIAL=<serial>`
+in front, since a bare `adb reverse` refuses to choose between two devices. A Metro on another
 port — a second checkout's Metro already holding 8081 — is named the way the
 flows are told: `EXPO_DEV_CLIENT_LINK` with that port in its inner url, and the
 Android preflight then requires that port reversed in place of 8081.

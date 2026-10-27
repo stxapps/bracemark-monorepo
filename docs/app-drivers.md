@@ -139,14 +139,26 @@ avdmanager create avd -n bracemark-pixel8 \
   -k "system-images;android-36.1;google_apis_playstore;arm64-v8a" -d pixel_8
 ```
 
-Launch it with one of two root scripts, each in a terminal of its own (it runs
-in the foreground; ⌃C or `adb emu kill` stops it). `AVD=bracemark-tablet` in
-front picks the other one:
+Launch it with one of four root scripts, device × window, each in a terminal of
+its own (it runs in the foreground; ⌃C or `adb -s <serial> emu kill` stops it):
 
 ```sh
-npm run expo:android:emulator            # with its window — to watch, or drive by hand
-npm run expo:android:emulator:headless   # no window — for a run you walk away from
+npm run expo:android:emulator:phone             # with its window — to watch, or drive by hand
+npm run expo:android:emulator:tablet
+npm run expo:android:emulator:phone:headless    # no window — for a run you walk away from
+npm run expo:android:emulator:tablet:headless
 ```
+
+All four are `tools/scripts/android-emulator.sh`, which does two things a bare
+`emulator -avd` doesn't. It gives each AVD a **fixed console port**, so the
+phone is always `emulator-5554` and the tablet `emulator-5556`. It also sets the
+**reverse mappings** once `sys.boot_completed` reads 1: 8081, 8787 and 8788 on
+that serial only, so both can be up together without `ANDROID_SERIAL`. A
+boot prints `android-emulator: … reverse mappings set: …` once that is done
+(measured 2026-10-27: both AVDs headless at once, 16 s to the tablet's boot,
+the mappings still in place three minutes later). Trailing emulator options pass
+through (`… -- -wipe-data`). It refuses to start an AVD whose serial is already
+attached.
 
 **⚠ A trailing `&` runs the emulator at nice 5 under zsh.** zsh's
 `BG_NICE` option, on by default, renices every background job, and macOS then
@@ -157,8 +169,8 @@ calibration read 3,163–3,333 ms against a 761–886 ms band, which made every
 stall 4× too long. A `npm run dev` started the same way is niced too, and so is
 anything started through `npm run` — the renice lands on `npm` and every
 process under it inherits it (measured 2026-10-27:
-`npm run expo:android:emulator:headless &` from zsh put the emulator at nice
-5). The scripts themselves are safe: npm runs them under `/bin/sh`, which is
+`npm run expo:android:emulator:headless &`, the phone's headless script before
+it was renamed, from zsh put the emulator at nice 5). The scripts themselves are safe: npm runs them under `/bin/sh`, which is
 bash here, and bash renices nothing. So the rule is about the shell that starts
 them: run the emulator, `npm run dev` and Metro each in a terminal of its own,
 or put `setopt no_bg_nice;` in front of a backgrounded line. Check with
@@ -227,7 +239,7 @@ hierarchy` exit 0, a 72 KB tree). This is the most likely reading of the
 
 **⚠ `-no-window` alone falls back to software rendering.** Without a window the
 emulator picks `swangle_indirect` — SwiftShader on the CPU — which is the same
-software path the `hw.gpu.enabled = no` row above rules out. Both scripts pass
+software path the `hw.gpu.enabled = no` row above rules out. All four scripts pass
 `-gpu host` (log: `gpu mode host`, `Selecting Vulkan device: Apple M1`;
 SurfaceFlinger: `ANGLE … Metal`). A hand-typed `-no-window` without it runs,
 passes nothing faster and says nothing.
@@ -318,9 +330,10 @@ cleared by hand once:
 **It is the `wide` device of every Android e2e run** — `e2e:android:tablet`,
 `e2e:visual:android:tablet` ([e2e.md](./e2e.md), _narrow and wide_). With both
 AVDs up the runner tells them apart by width, so neither needs a `--device`; a
-bare `adb` call still needs `-s <serial>` (`adb devices`), and
-`npm run expo:android:reverse` needs `ANDROID_SERIAL=<serial>` in front, once
-per AVD. The store screenshots are a different leg: the phone ones stay on the
+bare `adb` call still needs `-s <serial>` — `emulator-5556` when the
+`expo:android:emulator:tablet*` scripts started it, which also set its reverse
+mappings; by hand, `npm run expo:android:reverse` needs `ANDROID_SERIAL=<serial>`
+in front, once per AVD. The store screenshots are a different leg: the phone ones stay on the
 Pixel 8, and `e2e/shot/mobile.ts` accepts only its 1080×2400; the tablet ones
 (`--tablet`) are this AVD's 1920×1200 on its side ([e2e.md](./e2e.md), _the
 published screenshots_).

@@ -143,7 +143,7 @@ Android has completed boot with all three reverse mappings. Web e2e is platform-
 
 ```sh
 npm run expo:ios                    # or: npm run expo:android
-npm run expo:android:reverse        # Android only, once per emulator boot
+npm run expo:android:reverse        # Android only, and only if the emulator wasn't started by expo:android:emulator:*
 npm run e2e:ios:iphone              # or e2e:android:phone
 npm run e2e:ios:ipad                # or e2e:android:tablet — the cases admitted wide
 npm run e2e:contract:ios            # or e2e:contract:android
