@@ -1,0 +1,115 @@
+## Start with the links you already have
+
+Trying a bookmark manager is easier when you can bring the links you’ve already saved. The titles you changed, the folders you arranged, and the notes you wrote are part of what you’re moving. An import that brings over the addresses but loses that work leaves you with another job before you can judge the app.
+
+We’ve worked on the details between choosing a file and finding your links in Bracemark: reading different exports, keeping the structure they carry, explaining what can’t cross, and giving the screen time to respond during a large import. Here’s how that work fits together, and where the limits still are.
+
+## Choose a file, without choosing a parser
+
+Open Settings → Data → Import data and choose your export. We inspect its contents to work out the format; the filename helps only when the contents are ambiguous. A Brace.to export, for example, can keep its original `.txt` name.
+
+These are the main routes in:
+
+| Your source         | File to bring                                    |
+| ------------------- | ------------------------------------------------ |
+| A browser           | Its HTML bookmarks export                        |
+| Raindrop.io         | HTML or CSV; prefer HTML for folder structure    |
+| Pocket              | Your saved export ZIP or the CSV files inside it |
+| Karakeep            | Its HTML bookmarks export                        |
+| LinkWarden          | Its JSON backup                                  |
+| Brace.to            | Its TXT export                                   |
+| Bracemark           | The ZIP from Export all data                     |
+| A list of addresses | A plain text file, with one link per line        |
+
+Those file extensions don’t mean every HTML, CSV, or JSON file is supported. We read bookmark exports and recognised fields, rather than arbitrary documents. Plain text carries addresses; it can’t tell us which folders or tags they used to have. [Import links](/docs/import) has the steps, and there are help pages for [Raindrop.io](/docs/import-from-raindrop), [Pocket](/docs/import-from-pocket-export), and the other sources.
+
+The file is read on your device. Imported links enter the same local store as links you save by hand, then sync as encrypted files. We don’t upload the original export. Previews are separate. If you turn on server previews in the web app, pending imported links can send their addresses to [our preview service](/extractor) as they come into view. The iPhone and Android apps fetch previews on the device, and include imported links when Link previews is set to All links. [Link previews](/docs/link-previews) explains both paths.
+
+## Keep the work around each address
+
+Folders become lists, including their nesting, on every plan. If a matching list already exists in the same place, we reuse it. A list named Specs under Work is different from a list named Specs under Home.
+
+A title in an ordinary bookmark export becomes your own title for that link. A later preview can supply a page title underneath it, but can’t overwrite the name you brought with you. Exports often don’t distinguish a title you typed from one the old app fetched, so keeping the exported title gives you control over it.
+
+Notes, tags, and saved dates cross when the source records them. Raindrop.io highlights are added to the note as quotes, after your written note, and its favorites get the tag Favorites. Pocket’s archived links go to Archive.
+
+Some differences need a choice before you export. Raindrop.io’s CSV joins nested collection names with “ / ”. A collection whose name contains that same separator becomes ambiguous. Its HTML export preserves the folder boundaries, which is why we recommend it.
+
+There are also losses to check. Files other apps kept for a link, such as archived pages, PDFs, and most images, don’t come across. Titles and notes longer than our limits are shortened, and a link keeps its first 100 tags. A folder nested more than 100 levels deep is placed at that depth, beside the other lists there. A saved date the calendar can’t represent is dropped, and the link is kept without it. Those last two rules came out of our [October source review](/blog/source-security-review-2026-10).
+
+An export also can’t carry links its producer left out; Raindrop.io’s exports, for example, leave out Trash. Keep your original file and compare a few links, notes, and lists before changing anything in the old app.
+
+## Real exports teach us what small examples miss
+
+We use fixtures — saved input files with expected results — to keep import behaviour under test. Small examples let us isolate a rule, such as a quoted CSV field containing a comma or a newline. Files produced by actual apps test the assumptions behind those rules.
+
+Our HTML set holds eight real exports, from Chromium, Firefox, Internet Explorer, Safari, Google Bookmarks, Delicious, and Shaarli. The Shaarli project collected them to test its own bookmark parser, and we reuse them under its open-source licence. We keep them as their producers wrote them, including unusual indentation, missing closing tags, and attributes without values. Tidying them first would remove some of the behaviour we need to handle.
+
+That has caught details a neatly written example wouldn’t suggest:
+
+- Firefox includes its built-in queries, such as Most Visited, alongside bookmarks. Those rows aren’t web links and shouldn’t become imported links.
+- Google Bookmarks writes saved dates in microseconds. Read as seconds, they date a link about 50 million years from now, and nothing reports an error.
+- Shaarli can put a thumbnail link inside a description. Treating every HTML anchor as a bookmark creates an extra link that was never part of the collection.
+
+We also keep a real Raindrop.io collection exported as both HTML and CSV. The tests check that the two import to the same links, including notes, highlights, tags, and renamed titles, and record the folder-name ambiguity as the one place they can’t agree.
+
+A real LinkWarden backup taught us to prefer its import date over the date its database row was created. Otherwise, links saved over years could all appear to have been saved on the day you moved to LinkWarden.
+
+This coverage has gaps. Pocket CSV has focused format tests, but we haven’t added a real Pocket export to that set. An exporter can also change after a fixture was captured. These files give us concrete cases to preserve as we make changes.
+
+## Test what happens after parsing
+
+A correctly read file still has to become stored links, show up on screen, and sync. Our tests cover those steps at different levels.
+
+The shared tests check format detection and how parsed rows become links, lists, and tags. The web and mobile storage tests exercise real backup archives, repeat imports, quota decisions, interrupted restores, and a write that arrives while a restore is pausing between chunks. Checked-in archives from both backup implementations let each platform test reading what the other wrote.
+
+The end-to-end cases go through the interface. On the web, a backup import is checked on the importing screen and in a separate browser profile after sync. On iOS and Android, native cases use the system file picker, check the imported links, lists, and tags in the app, and check them again after the app restarts. Selecting a filename alone isn’t the result we’re looking for.
+
+We also test leaving and reopening the import view while work is still running. The reopened view shows the run in progress and won’t start a second one. A second import halfway through the first would check for duplicates against a library the first hadn’t finished writing, so links the first still had to write could arrive twice.
+
+Ordinary imports skip links already present, including repeated addresses within the file. If an import stops partway, the links already written remain, and choosing the same file again brings in the rest. A Bracemark backup uses record identity instead: it adds missing records while leaving existing ones in place, so an old backup doesn’t replace newer local edits.
+
+When an ordinary export contains more new links than your plan has room for, we ask before writing: import the ones that fit, or cancel. Leaving the import screen before you answer cancels the import. A backup is refused as a whole if it won’t fit, because a partial restore could leave its lists and pins pointing at links that aren’t there.
+
+## Measure the pause, as well as the duration
+
+An import can take thirty seconds and still let the progress line update. A much shorter import can feel stuck if one uninterrupted task holds the screen for most of that time. We measure both total duration and the longest pause.
+
+Our measuring tools run imports and exports through the apps. The browser runner records long tasks, can slow the CPU, and can capture a trace to find the work responsible. Before measuring an import, it runs a known blocking task to check that the instrument actually sees a pause.
+
+One recorded comparison, from 25 September 2026, used a production web build on an Apple M1 Mac with 16 GB of memory, Chrome 153, and a fourfold CPU slowdown. For a backup containing 50,000 links:
+
+| Measurement              | Before chunking  | After chunking   |
+| ------------------------ | ---------------- | ---------------- |
+| Longest main-thread task | 2,210 ms         | 167 ms           |
+| Total import time        | About 28 seconds | About 31 seconds |
+
+We split record validation, existing-record lookups, and other loops into chunks, handing control back between them. The import took slightly longer overall, but the longest pause became much shorter. A check on 24 October, a month of changes later and in Chrome 156, read the same restore at 149 ms.
+
+Mobile needed its own measurements. An `async` function and an `await` don’t necessarily give the screen a turn: some of the database calls resumed immediately, keeping the whole loop on the JavaScript thread. We added explicit pauses between chunks, batched database statements, and split parsing work. We also paused data reads for the links screen while Settings covered it, reducing renders of content you couldn’t see.
+
+The native comparison on 26 September 2026 used the same Mac, an iPhone 17 simulator running iOS 26.5, and a production JavaScript bundle. Separating backup decompression, text decoding, and validation into different turns reduced the longest stall for a 10,000-link restore from 653 ms to 322 ms. Total time stayed around eighteen seconds.
+
+These are measurements from particular builds and environments, rather than a completion-time promise for your device. The native result is from a simulator, which runs at the Mac’s speed, so a phone can pause for longer. A large backup still has whole-file work we could split further. Keep the page or app open until the result appears. You can move to another screen inside it while the import runs, but closing it stops the import; what was already written stays, and importing the same file again brings in the rest.
+
+## A free converter, if you need another format
+
+We also made a free [bookmark converter](/tools/bookmark-converter) on the marketing site. It reads supported HTML, CSV, JSON, TXT, and ZIP inputs and creates browser bookmarks HTML, CSV, or plain URL text. You don’t need a Bracemark account to use it.
+
+Your browser processes the selected file in a worker, separately from the page’s interface. The tool doesn’t upload the contents, save them in browser storage, or visit the addresses inside. The page still loads its normal site assets.
+
+Before offering a download, it reads the generated output back and checks the addresses. It compares portable fields too, reporting changed or omitted titles, folder paths, notes, tags, and dates in a receipt. Possible duplicate addresses are counted and kept: another app may allow the same address in several folders.
+
+The receipt matters because converting to plain URL text necessarily loses titles and folders, and even HTML or CSV can mean different things to the receiving app. A converted file is a portable copy of bookmarks, rather than a full backup of settings and images.
+
+If you’re moving into Bracemark, use the supported original export directly. The converter is there when you need a different format, including for an app other than ours.
+
+## Try it with something familiar
+
+Start with an export you can keep. Import it, open a list you know, check a note you wrote, and search for a link you expect to find. That gives you a way to judge the app using your own saved links.
+
+The free plan gives you a place to try that, and [pricing](/pricing) has the details of each plan. Every plan can [export](/docs/export) again. Those readable exports are separate copies anyone holding the file can open, so store them somewhere you trust.
+
+Choosing Bracemark also means accepting its tradeoffs: search runs on each device’s synced copy, there are no shared lists, and your password and recovery code are the two ways into your account. If you lose both, we can’t restore access. [How encryption and search work](/docs/how-encryption-and-search-work) explains why.
+
+The import work gives you a starting point you recognise. You can then decide whether saving and finding your next link here fits the way you work.

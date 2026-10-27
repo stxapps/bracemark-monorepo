@@ -25,6 +25,13 @@ export const BLOG_POSTS: BlogPost[] = [
       'Our AI-assisted source review recorded low-severity findings and open questions. We explain the method, what launch changed, and what still needs evidence.',
     publishedAt: '2026-10-26T00:00:00Z',
   },
+  {
+    slug: 'importing-your-links',
+    title: 'Bringing your links to Bracemark',
+    description:
+      'How we handle bookmark formats, test real exports, and measure long imports so you can try Bracemark with the links you already have.',
+    publishedAt: '2026-10-27T00:00:00Z',
+  },
 ];
 
 export function findBlogPost(slug: string): BlogPost | undefined {
