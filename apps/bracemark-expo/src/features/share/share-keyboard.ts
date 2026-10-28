@@ -56,7 +56,14 @@
 // true in them: the height on show, and the fact of a hide.
 
 import { createElement, useCallback, useEffect, useRef, useState } from 'react';
-import { findNodeHandle, Keyboard, LayoutAnimation, Platform, View, type ViewProps } from 'react-native';
+import {
+  findNodeHandle,
+  Keyboard,
+  LayoutAnimation,
+  Platform,
+  View,
+  type ViewProps,
+} from 'react-native';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 
 // The native payload, in the frame's own points (BracemarkShareKeyboardModule.swift).

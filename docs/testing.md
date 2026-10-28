@@ -159,7 +159,7 @@ actually localizes it.
 
 _"An update to X inside a test was not wrapped in act(...)"_ is a `console.error`,
 not a failure. The spec stays green, and because it is often a race, a rerun can
-come out clean. Two shapes have produced it here:
+come out clean. Three shapes have produced it here:
 
 - **A synchronous `act()` around an event that starts async work.** Web's
   `contexts/auth-provider.spec.tsx`, _asks again on return to the foreground_,
@@ -183,6 +183,13 @@ come out clean. Two shapes have produced it here:
   they poll, so the late render is expected there. Don't reach for
   `notifyManager.setNotifyFunction(act)` as a global fix: it would call `act`
   inside those same `waitFor`s, where the act environment is off.
+- **A `describe`'s `afterEach` that changes something a mounted tree
+  subscribes to.** RNTL's (and RTL's) auto-`cleanup` is a top-level `afterEach`,
+  and jest runs a `describe`'s hooks before the top-level ones, so the tree from
+  the test is still mounted when they run. Expo's `links/main.spec.tsx`, _a rail
+  toggle on a wide window_, restored `Dimensions` there, and the pane's
+  `useWindowDimensions` re-rendered on every run. This one is not a race. Call
+  `cleanup()` first in that hook, then restore.
 
 **The Nx cache makes a race look permanent.** A warning captured once is
 replayed on every `npm run test` until that project's inputs change. So "it

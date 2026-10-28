@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Dimensions, type ScrollViewProps } from 'react-native';
-import { render, screen } from '@testing-library/react-native';
+import { cleanup, render, screen } from '@testing-library/react-native';
 
 import type { LinkView } from '@stxapps/expo-react';
 
@@ -274,7 +274,13 @@ describe('a rail toggle on a wide window', () => {
   const tablet = { width: 1180, height: 820, scale: 2, fontScale: 1 };
   const phone = Dimensions.get('window');
   beforeEach(() => Dimensions.set({ window: tablet, screen: tablet }));
-  afterEach(() => Dimensions.set({ window: phone, screen: phone }));
+  // Unmount first: RNTL's own cleanup is a top-level afterEach, which jest runs
+  // after this one, so the pane would still be subscribed to the window and
+  // re-render outside act (docs/testing.md, _an update that lands after act()_).
+  afterEach(() => {
+    cleanup();
+    Dimensions.set({ window: phone, screen: phone });
+  });
 
   const toggled = (layout: string) => {
     mockLayout = layout;
