@@ -18,6 +18,13 @@ appId: com.bracemark.app
     id: 'links-more-options'
 - tapOn:
     id: 'links-open-settings'
+# Settings is a modal that slides up from the bottom, and a row's bounds in the
+# hierarchy are where it will settle, not where it is. A tap fired mid-slide
+# lands on whatever row is passing under that point: on the iPad (A16)
+# simulator, 2026-10-28, `settings-nav-data` opened Subscription, the row above
+# it, on two runs in a row.
+- waitForAnimationToEnd:
+    timeout: 5000
 - runFlow:
     when:
       true: ${E2E_WIDTH !== 'wide'}

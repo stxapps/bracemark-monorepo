@@ -300,7 +300,10 @@ draft; each keystroke commits or reverts in place):
   drag _inside_ a page ScrollView — scroll-delta compensation, edge auto-scroll,
   scroll locking). Both platforms keep the up/down + "Move to" buttons as the
   complete non-drag fallback, and both route a nesting drop through the
-  `nestedLists` paywall rather than clamping the projection.
+  `nestedLists` paywall rather than clamping the projection. On native the rows
+  mount a slice a frame, and the drag counts only the rows already rendered, so
+  a row still to come is never a drop slot ([client-queries.md](./client-queries.md),
+  _the tree surfaces mount every row_).
 
   **The depth limit IS clamped, and refused at the drop.** No move may put a
   list's subtree past `TREE_MAX_DEPTH` levels: `getMovePlan` works out the

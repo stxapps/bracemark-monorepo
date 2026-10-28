@@ -14,17 +14,19 @@ import { waitForSync } from '../seed/steps';
 import { API_URL, CHROME_PATH, WEB_URL } from '../web/fixtures/env';
 import { launchApp } from '../web/fixtures/launch';
 import { grantPlusAndLoad } from '../web/fixtures/plan';
-import { writeBackupLibrary } from './library';
+import { writeBackupLibrary, writeWorstBackup } from './library';
 import { calibrate, type Calibration, instrument, type LegResult, measureLeg } from './main-thread';
 import { printTable } from './native';
 
 // What scrolling the links list and docking/undocking its rail cost
-// bracemark-web's main thread, per link layout — the render leg (docs/e2e.md,
-// _the render leg_), beside measure/render-mobile.ts for bracemark-expo.
+// bracemark-web's main thread, per link layout, and what mounting the list and
+// tag trees costs it — the render leg (docs/e2e.md, _the render leg_), beside
+// measure/render-mobile.ts for bracemark-expo.
 //
 //   npm run dev                                   # the api (only it is borrowed)
 //   npm run measure:render:web                    # 1,000 links, CPU 4x slower
 //   npm run measure:render:web -- --cpu 6 --repeat 5 --layouts list
+//   npm run measure:render:web -- --library worst --legs sidebar,settings
 //   npm run measure:render:web -- --trace         # + a DevTools trace per run
 //   npm run measure:render:web -- --dev           # the dev server on :3000 instead
 //
@@ -40,6 +42,19 @@ import { printTable } from './native';
 //   rail      TOGGLES hide/show pairs of the docked rail. Each changes the list
 //             pane's width, which re-measures every virtualized row.
 //
+// and then once, whatever the layout, the two TREE legs — the surfaces that
+// mount a row per list and per tag, unvirtualized (docs/client-queries.md,
+// _the tree surfaces mount every row_):
+//
+//   sidebar   TOGGLES collapse/expand pairs of the links sidebar's Lists and
+//             Tags sections. An expand mounts every row the section holds:
+//             the cost the first load pays, made repeatable.
+//   settings  a switch from Settings → Misc to About (the baseline: a switch
+//             with no table), to Lists and to Tags, each until its rows are in.
+//
+// The tree legs want a big tree, which `plus-full`'s 24 lists and 40 tags are
+// not: `--library worst` restores `plus-worst` instead (measure/library.ts).
+//
 // Beside the long tasks, each window counts DROPPED FRAMES off a
 // requestAnimationFrame loop (FRAME_SCRIPT below): a scroll's jank is a run of
 // frames each a little over budget, and none of them is a long task.
@@ -49,13 +64,46 @@ const EXPORT_URL = process.env.E2E_MEASURE_URL ?? 'http://localhost:3001';
 const LAYOUTS = { list: 'List', card: 'Card' } as const;
 type Layout = keyof typeof LAYOUTS;
 
+// The legs, in run order. scroll and rail run per layout; the tree legs once.
+// Shared with render-mobile.ts, which runs the same four.
+export const LEGS = ['scroll', 'rail', 'sidebar', 'settings'] as const;
+export type Leg = (typeof LEGS)[number];
+
+export function parseLegs(raw: string): Leg[] {
+  const names = raw.split(',');
+  const unknown = names.find((name) => !(LEGS as readonly string[]).includes(name));
+  if (unknown) throw new Error(`--legs takes ${LEGS.join(', ')}, not ${unknown}`);
+  return names as Leg[];
+}
+
+// Which library the run restores — `plus-full`'s shape scaled to `--links`, or
+// `plus-worst` as it is.
+export type Library = 'full' | 'worst';
+
+export function parseLibrary(raw: string): Library {
+  if (raw !== 'full' && raw !== 'worst') throw new Error('--library is full or worst');
+  return raw;
+}
+
+// The settings leg's switches, baseline first. `row` is the rename field every
+// row of the section carries (table-kit.tsx, both apps): a section's rows land
+// a commit after its title, when the live read answers, and all in that one
+// commit, so the first of them is the whole table. About has none.
+export const SETTINGS_TARGETS = [
+  { section: 'about', title: 'About', row: null },
+  { section: 'lists', title: 'Lists', row: 'List name' },
+  { section: 'tags', title: 'Tags', row: 'Tag name' },
+] as const;
+
 // One wheel notch every frame, this far: about 12,000 px/s, a flick on a
 // trackpad rather than a reading pace — the scroll that outruns the render.
 const WHEEL_PX = 200;
 const WHEEL_INTERVAL_MS = 16;
 
 interface Options {
+  library: Library;
   links: number;
+  legs: Leg[];
   layouts: Layout[];
   wheels: number;
   toggles: number;
@@ -68,7 +116,8 @@ interface Options {
 }
 
 interface RenderRun extends LegResult {
-  layout: Layout;
+  // null on the tree legs, which no layout touches.
+  layout: Layout | null;
   run: number;
   droppedFrames: number;
 }
@@ -101,7 +150,9 @@ interface FrameStore {
 
 function parseOptions(argv: string[]): Options {
   const options: Options = {
+    library: 'full',
     links: 1_000,
+    legs: [...LEGS],
     layouts: ['list', 'card'],
     wheels: 60,
     toggles: 5,
@@ -112,6 +163,7 @@ function parseOptions(argv: string[]): Options {
     build: true,
     headed: false,
   };
+  let linksGiven = false;
   const count = (arg: string, raw: string) => {
     const n = Number(raw.replaceAll('_', ''));
     if (!Number.isInteger(n) || n < 1) throw new Error(`${arg} takes a positive whole number`);
@@ -124,7 +176,11 @@ function parseOptions(argv: string[]): Options {
       if (next === undefined) throw new Error(`${arg} needs a value`);
       return next;
     };
-    if (arg === '--links') options.links = count(arg, value());
+    if (arg === '--links') {
+      options.links = count(arg, value());
+      linksGiven = true;
+    } else if (arg === '--library') options.library = parseLibrary(value());
+    else if (arg === '--legs') options.legs = parseLegs(value());
     else if (arg === '--layouts') {
       const names = value().split(',');
       const unknown = names.find((name) => !(name in LAYOUTS));
@@ -142,7 +198,16 @@ function parseOptions(argv: string[]): Options {
     else if (arg === '--headed') options.headed = true;
     else throw new Error(`unknown option ${arg}`);
   }
+  assertLibraryLinks(options.library, linksGiven);
   return options;
+}
+
+// `--links` sizes the `plus-full` shape; `plus-worst` is a fixed literal, so a
+// count beside it would be silently ignored, and a reading labelled with it wrong.
+export function assertLibraryLinks(library: Library, linksGiven: boolean): void {
+  if (library === 'worst' && linksGiven) {
+    throw new Error('--links sizes the plus-full library; --library worst has a fixed size');
+  }
 }
 
 async function main(): Promise<void> {
@@ -183,10 +248,13 @@ async function main(): Promise<void> {
       `instrument check: fixed work read ${calibration.baseMs} ms at 1x, ` +
         `${calibration.slowedMs} ms at ${calibration.cpuRate}x`,
     );
-    await restoreLibrary(app.page, runDir, options.links);
-    for (const layout of options.layouts) {
-      runs.push(...(await measureLayout(app.page, layout, runDir, options)));
+    await restoreLibrary(app.page, runDir, options.library, options.links);
+    if (options.legs.includes('scroll') || options.legs.includes('rail')) {
+      for (const layout of options.layouts) {
+        runs.push(...(await measureLayout(app.page, layout, runDir, options)));
+      }
     }
+    runs.push(...(await measureTrees(app.page, runDir, options)));
   } finally {
     await app.close();
     await origin?.stop();
@@ -204,7 +272,8 @@ async function main(): Promise<void> {
     cpuRate: options.cpuRate,
     calibration,
     browser: chrome.stdout.trim() || 'unknown',
-    links: options.links,
+    library: options.library,
+    links: options.library === 'worst' ? null : options.links,
     wheels: options.wheels,
     toggles: options.toggles,
     checkout: { commit: commit.stdout.trim(), dirty: status.stdout.trim().length > 0 },
@@ -218,13 +287,30 @@ async function countFrames(context: BrowserContext): Promise<void> {
   await context.addInitScript(FRAME_SCRIPT);
 }
 
-// A `plus-full`-shaped backup of `links` links, with its preview images,
-// imported through Settings → Data and synced to rest. render-mobile.ts restores
-// its device's library through this too, then signs the device in to pull it.
-export async function restoreLibrary(page: Page, runDir: string, links: number): Promise<void> {
+// A `plus-full`-shaped backup of `links` links, or the `plus-worst` library,
+// with its preview images, imported through Settings → Data and synced to rest.
+// render-mobile.ts restores its device's library through this too, then signs
+// the device in to pull it.
+export async function restoreLibrary(
+  page: Page,
+  runDir: string,
+  library: Library,
+  links: number,
+): Promise<void> {
+  if (library === 'worst') {
+    const backup = join(runDir, 'backup-worst.zip');
+    await writeWorstBackup(backup);
+    console.log('restoring the plus-worst library…');
+    await importBackup(page, backup);
+    return;
+  }
   const backup = join(runDir, `backup-${links}.zip`);
   await writeBackupLibrary(backup, links, { images: true });
   console.log(`restoring ${links.toLocaleString('en-US')} links…`);
+  await importBackup(page, backup);
+}
+
+async function importBackup(page: Page, backup: string): Promise<void> {
   await page.goto('/settings/data');
   await page.getByRole('button', { name: /^Import data/ }).click();
   const receipt = page.getByText(/^Imported \d+ link/);
@@ -255,11 +341,9 @@ async function measureLayout(
   await page.waitForTimeout(3000);
 
   const runs: RenderRun[] = [];
-  const measure = (leg: string, run: number) => ({
-    cpuRate: options.cpuRate,
-    ...(options.trace ? { tracePath: join(runDir, `${leg}-${layout}-${run}.trace.json`) } : {}),
-  });
-  for (let run = 1; run <= options.repeat; run++) {
+  const measure = (leg: string, run: number) =>
+    measureOptions(options, runDir, `${leg}-${layout}`, run);
+  for (let run = 1; run <= options.repeat && options.legs.includes('scroll'); run++) {
     console.log(`\nscroll, ${layout} layout, run ${run}/${options.repeat}`);
     const { x, y } = await scroller(page);
     await page.mouse.move(x, y);
@@ -285,7 +369,7 @@ async function measureLayout(
       }),
     );
   }
-  for (let run = 1; run <= options.repeat; run++) {
+  for (let run = 1; run <= options.repeat && options.legs.includes('rail'); run++) {
     console.log(`\nrail, ${layout} layout, run ${run}/${options.repeat}`);
     runs.push(
       await framed(page, layout, run, `rail ${layout}`, measure('rail', run), async () => {
@@ -302,11 +386,118 @@ async function measureLayout(
   return runs;
 }
 
+function measureOptions(
+  options: Options,
+  runDir: string,
+  name: string,
+  run: number,
+): { cpuRate: number; tracePath?: string } {
+  return {
+    cpuRate: options.cpuRate,
+    ...(options.trace ? { tracePath: join(runDir, `${name}-${run}.trace.json`) } : {}),
+  };
+}
+
+// The tree legs, once each, after the layouts — no layout changes what they
+// mount. See the header for what each one does.
+async function measureTrees(page: Page, runDir: string, options: Options): Promise<RenderRun[]> {
+  const runs: RenderRun[] = [];
+
+  if (options.legs.includes('sidebar')) {
+    await page.goto('/links');
+    await expect(page.getByRole('button', { name: 'Hide sidebar' })).toBeVisible({
+      timeout: 30_000,
+    });
+    // A section header is the button that carries `aria-expanded` under the
+    // section's name — a row's chevron carries it too, but is named Expand or
+    // Collapse.
+    const header = (name: string) =>
+      page.getByRole('button', { name, exact: true }).and(page.locator('[aria-expanded]'));
+    const toggle = async (name: string, expanded: boolean) => {
+      await header(name).click();
+      await expect(header(name)).toHaveAttribute('aria-expanded', String(expanded));
+    };
+    await expect(header('Lists')).toHaveAttribute('aria-expanded', 'true');
+    await expect(header('Tags')).toHaveAttribute('aria-expanded', 'true');
+    await page.waitForTimeout(3000);
+    for (let run = 1; run <= options.repeat; run++) {
+      console.log(`\nsidebar, run ${run}/${options.repeat}`);
+      runs.push(
+        await framed(
+          page,
+          null,
+          run,
+          'sidebar',
+          measureOptions(options, runDir, 'sidebar', run),
+          async () => {
+            // Lists first and last, as the native flow does (flows/render-sidebar.yaml):
+            // a big open tree pushes the Tags header out of reach there, and the two
+            // runners are easier to read side by side when they make the same taps.
+            for (let i = 0; i < options.toggles; i++) {
+              await toggle('Lists', false);
+              await toggle('Tags', false);
+              await toggle('Tags', true);
+              await toggle('Lists', true);
+            }
+            await page.waitForTimeout(500);
+          },
+        ),
+      );
+    }
+  }
+
+  if (options.legs.includes('settings')) {
+    const nav = page.getByRole('navigation', { name: 'Settings sections' });
+    const open = async (title: string) => {
+      const link = nav.getByRole('link', { name: title, exact: true });
+      await link.click();
+      await expect(link).toHaveAttribute('aria-current', 'page');
+    };
+    await page.goto('/settings/misc');
+    await expect(nav.getByRole('link', { name: 'Misc.', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page',
+      { timeout: 30_000 },
+    );
+    await page.waitForTimeout(3000);
+    for (const target of SETTINGS_TARGETS) {
+      const leg = `settings ${target.section}`;
+      for (let run = 1; run <= options.repeat; run++) {
+        console.log(`\n${leg}, run ${run}/${options.repeat}`);
+        runs.push(
+          await framed(
+            page,
+            null,
+            run,
+            leg,
+            measureOptions(options, runDir, `settings-${target.section}`, run),
+            async () => {
+              await open(target.title);
+              if (target.row) {
+                await expect(
+                  page.getByRole('textbox', { name: target.row, exact: true }).first(),
+                ).toBeVisible({ timeout: 20_000 });
+              }
+              await page.waitForTimeout(500);
+            },
+          ),
+        );
+        // Back to the start, unmeasured, and let Misc's own reads land before
+        // the next window opens.
+        await open('Misc.');
+        await page.waitForTimeout(1000);
+      }
+    }
+  }
+
+  return runs;
+}
+
 // measureLeg plus the frame counter, reset as the window opens and read as it
 // closes — inside the action, so the reading spans exactly the long tasks'.
 async function framed(
   page: Page,
-  layout: Layout,
+  layout: Layout | null,
   run: number,
   leg: string,
   measure: { cpuRate: number; tracePath?: string },

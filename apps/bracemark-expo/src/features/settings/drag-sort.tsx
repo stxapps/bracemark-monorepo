@@ -52,10 +52,12 @@
 // is a native module and a prebuild — a dependency decision, not a code one.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Keyboard, type LayoutChangeEvent, View } from 'react-native';
+import { Keyboard, type LayoutChangeEvent, Platform, View } from 'react-native';
 import { Gesture, GestureDetector, type PanGesture } from 'react-native-gesture-handler';
 import Animated, {
   clamp,
+  type DerivedValue,
+  type SharedValue,
   useAnimatedReaction,
   useAnimatedStyle,
   useDerivedValue,
@@ -88,6 +90,21 @@ const SETTLE_MS = 140;
 const COMMIT_TIMEOUT_MS = 1500;
 // The neighbours' gap-opening shift, and the lifted row's indent slide.
 const SHIFT_MS = 120;
+
+// Whether a row's style may seed itself as idle without asking the UI thread.
+// `useAnimatedStyle` runs the style worklet once on the JS thread at mount to
+// get the first frame's style, and there every `.value` read is a synchronous
+// round trip to the UI runtime. A Lists table of 109 rows paid 109 of them in
+// one commit — 239 ms of `executeOnUIRuntimeSync` in a Hermes profile of the
+// switch to it on a Pixel 8 emulator (docs/e2e.md, _the render leg_). The seed
+// is only the first frame's guess: the mapper Reanimated starts on the UI
+// runtime right after runs the same worklet for real and corrects it, so the
+// seed can skip the reads and say idle — which is what nearly every mount is.
+// The exception, a row remounting while a drop is still held (a dragged list's
+// children come back), is drawn idle for that one frame. Not on web or under
+// jest: both run the worklet on the JS thread for every frame, not just the
+// first, and there it is the only run there is.
+const SEED_IDLE_ON_JS = Platform.OS !== 'web' && process.env.JEST_WORKER_ID === undefined;
 // Auto-scroll: the band at each end of the viewport that pulls the page, the px
 // per frame at the very edge (eased in across the band), and the loop's period.
 const EDGE_BAND = 72;
@@ -137,6 +154,24 @@ export interface DragSortRow {
   onLayout: (e: LayoutChangeEvent) => void;
 }
 
+// What useDragRow needs from the table's hook — see `core` in useDragSort.
+export interface DragRowCore {
+  absoluteY: SharedValue<number>;
+  active: SharedValue<number>;
+  depthOffset: SharedValue<number>;
+  dragY: DerivedValue<number>;
+  dropTarget: SharedValue<number>;
+  handleDrop: (from: number, to: number, offsetX: number) => void;
+  handlePickUp: (index: number) => void;
+  hostScrollY: SharedValue<number> | null;
+  rowHeight: SharedValue<number>;
+  scrollAtStart: SharedValue<number>;
+  settling: SharedValue<boolean>;
+  target: DerivedValue<number>;
+  translationX: SharedValue<number>;
+  translationY: SharedValue<number>;
+}
+
 export interface DragSort {
   // Index of the lifted row on the JS side; null when idle. Drives the section's
   // own state (which row to exclude, which to style as lifted) — never the
@@ -145,6 +180,9 @@ export interface DragSort {
   // Called by each row component (unconditionally, it's a hook): the grip's
   // gesture, the row's animated style, and the height measurement.
   useRow: (index: number) => DragSortRow;
+  // The same, for a memoized row: stable for the hook's lifetime, so it can be a
+  // prop, with `useDragRow(core, index)` called in the row.
+  core: DragRowCore;
 }
 
 export function useDragSort(options: DragSortOptions): DragSort {
@@ -394,118 +432,195 @@ export function useDragSort(options: DragSortOptions): DragSort {
   );
 
   // --- per-row wiring ------------------------------------------------------
-  const useRow = (index: number): DragSortRow => {
-    const pan = useMemo(
-      () =>
-        Gesture.Pan()
-          .activateAfterLongPress(LONG_PRESS_MS)
-          .onStart(() => {
-            // The previous drop is still landing or held — its rows haven't
-            // re-rendered, so every index here is about to change. This press is
-            // dropped whole: the three callbacks below all test for a drag this
-            // row owns, and this one never becomes one.
-            if (active.value >= 0) return;
-            active.value = index;
-            dropTarget.value = -1;
-            settling.value = false;
-            translationY.value = 0;
-            translationX.value = 0;
-            depthOffset.value = 0;
-            scrollAtStart.value = hostScrollY?.value ?? 0;
-            scheduleOnRN(handlePickUp, index);
-          })
-          .onUpdate((e) => {
-            if (active.value !== index || settling.value) return;
-            translationY.value = e.translationY;
-            translationX.value = e.translationX;
-            absoluteY.value = e.absoluteY;
-          })
-          .onEnd(() => {
-            if (active.value !== index || settling.value) return;
-            scheduleOnRN(handleDrop, active.value, target.value, translationX.value);
-          })
-          .onFinalize(() => {
-            // Nothing was ever lifted (the long press didn't land, or it landed
-            // on top of a drop still in flight) — there's no state to unwind.
-            if (active.value !== index || settling.value) return;
-            // Fly the row into its slot and STOP there: nothing unwinds here.
-            // The gap stays open and the row stays put until the JS side has an
-            // answer — `reset` when the new order renders, `goHome` when there
-            // won't be one (see the header for why this can't be a timer).
-            const to = target.value;
-            dropTarget.value = to;
-            settling.value = true;
-            // From where the row IS, which is `dragY`: the style below stops
-            // adding the page's scroll delta once it's settling, so a landing
-            // that started from the raw translation would jump by however far
-            // the page auto-scrolled during the drag.
-            translationY.value = dragY.value;
-            translationY.value = withTiming((to - index) * rowHeight.value, {
-              duration: SETTLE_MS,
-            });
-          }),
-      // The row's own index is the only thing here that can change: the shared
-      // values are created once, the handlers are stable (they reach the scroll
-      // host through a ref), and the section's own callbacks are read fresh off
-      // `handlers.current` at call time.
-      [index],
-    );
+  // Everything a row's gesture and style close over, in one object that keeps
+  // its identity for the hook's lifetime: the shared values are created once and
+  // the two handlers are stable callbacks. A row component can take it as a
+  // prop and stay memoized, which is what lets a table mount in slices without
+  // every slice re-rendering the rows already in (lists-section.tsx).
+  const core = useMemo<DragRowCore>(
+    () => ({
+      absoluteY,
+      active,
+      depthOffset,
+      dragY,
+      dropTarget,
+      handleDrop,
+      handlePickUp,
+      hostScrollY,
+      rowHeight,
+      scrollAtStart,
+      settling,
+      target,
+      translationX,
+      translationY,
+    }),
+    [
+      absoluteY,
+      active,
+      depthOffset,
+      dragY,
+      dropTarget,
+      handleDrop,
+      handlePickUp,
+      hostScrollY,
+      rowHeight,
+      scrollAtStart,
+      settling,
+      target,
+      translationX,
+      translationY,
+    ],
+  );
+  const useRow = (index: number): DragSortRow => useDragRow(core, index);
 
-    // Every branch returns the same style keys so no property is ever left
-    // stranded at its last animated value.
-    const style = useAnimatedStyle(() => {
-      const idle = { transform: [{ translateY: 0 }, { translateX: 0 }, { scale: 1 }], zIndex: 0 };
-      if (active.value < 0) return idle;
+  return { activeIndex, useRow, core };
+}
 
-      if (index === active.value) {
-        return {
-          transform: [
-            // dragY, not translationY: the row is a child of the scrolling
-            // content, so it has to out-travel the content to stay under the
-            // finger. Once released it flies to a fixed slot instead.
-            { translateY: settling.value ? translationY.value : dragY.value },
-            { translateX: depthOffset.value },
-            { scale: settling.value ? 1 : 1.02 },
-          ],
-          // Both axes of "on top": zIndex orders siblings on iOS, elevation on
-          // Android (where it also casts the lift shadow — put down with the
-          // row, since a held row can sit in its slot for a while).
-          zIndex: 2,
-          elevation: settling.value ? 0 : 4,
-        };
-      }
+// One row's half of the drag: the grip's gesture, the row's animated style, and
+// its height measurement. A hook — call it unconditionally from the row.
+export function useDragRow(core: DragRowCore, index: number): DragSortRow {
+  const {
+    absoluteY,
+    active,
+    depthOffset,
+    dragY,
+    dropTarget,
+    handleDrop,
+    handlePickUp,
+    hostScrollY,
+    rowHeight,
+    scrollAtStart,
+    settling,
+    target,
+    translationX,
+    translationY,
+  } = core;
+  const pan = useMemo(
+    () =>
+      Gesture.Pan()
+        .activateAfterLongPress(LONG_PRESS_MS)
+        .onStart(() => {
+          // The previous drop is still landing or held — its rows haven't
+          // re-rendered, so every index here is about to change. This press is
+          // dropped whole: the three callbacks below all test for a drag this
+          // row owns, and this one never becomes one.
+          if (active.value >= 0) return;
+          active.value = index;
+          dropTarget.value = -1;
+          settling.value = false;
+          translationY.value = 0;
+          translationX.value = 0;
+          depthOffset.value = 0;
+          scrollAtStart.value = hostScrollY?.value ?? 0;
+          scheduleOnRN(handlePickUp, index);
+        })
+        .onUpdate((e) => {
+          if (active.value !== index || settling.value) return;
+          translationY.value = e.translationY;
+          translationX.value = e.translationX;
+          absoluteY.value = e.absoluteY;
+        })
+        .onEnd(() => {
+          if (active.value !== index || settling.value) return;
+          scheduleOnRN(handleDrop, active.value, target.value, translationX.value);
+        })
+        .onFinalize(() => {
+          // Nothing was ever lifted (the long press didn't land, or it landed
+          // on top of a drop still in flight) — there's no state to unwind.
+          if (active.value !== index || settling.value) return;
+          // Fly the row into its slot and STOP there: nothing unwinds here.
+          // The gap stays open and the row stays put until the JS side has an
+          // answer — `reset` when the new order renders, `goHome` when there
+          // won't be one (see the header for why this can't be a timer).
+          const to = target.value;
+          dropTarget.value = to;
+          settling.value = true;
+          // From where the row IS, which is `dragY`: the style below stops
+          // adding the page's scroll delta once it's settling, so a landing
+          // that started from the raw translation would jump by however far
+          // the page auto-scrolled during the drag.
+          translationY.value = dragY.value;
+          translationY.value = withTiming((to - index) * rowHeight.value, {
+            duration: SETTLE_MS,
+          });
+        }),
+    // The row's own index is the only thing here that can change: everything
+    // else is `core`'s, which keeps its identity for the table's lifetime (the
+    // shared values are created once, the handlers are stable — they reach the
+    // scroll host through a ref — and the section's own callbacks are read fresh
+    // off `handlers.current` at call time). Listed so the rule can see it.
+    [
+      index,
+      absoluteY,
+      active,
+      depthOffset,
+      dragY,
+      dropTarget,
+      handleDrop,
+      handlePickUp,
+      hostScrollY,
+      rowHeight,
+      scrollAtStart,
+      settling,
+      target,
+      translationX,
+      translationY,
+    ],
+  );
 
-      // Everyone between the lifted row's old slot and its new one shifts by
-      // exactly one row, opening the gap it will drop into.
-      const shift =
-        index > active.value && index <= target.value
-          ? -rowHeight.value
-          : index < active.value && index >= target.value
-            ? rowHeight.value
-            : 0;
+  // Every branch returns the same style keys so no property is ever left
+  // stranded at its last animated value.
+  const style = useAnimatedStyle(() => {
+    const idle = { transform: [{ translateY: 0 }, { translateX: 0 }, { scale: 1 }], zIndex: 0 };
+    if (SEED_IDLE_ON_JS && !_WORKLET) return idle;
+    if (active.value < 0) return idle;
+
+    if (index === active.value) {
       return {
         transform: [
-          { translateY: withTiming(shift, { duration: SHIFT_MS }) },
-          { translateX: 0 },
-          { scale: 1 },
+          // dragY, not translationY: the row is a child of the scrolling
+          // content, so it has to out-travel the content to stay under the
+          // finger. Once released it flies to a fixed slot instead.
+          { translateY: settling.value ? translationY.value : dragY.value },
+          { translateX: depthOffset.value },
+          { scale: settling.value ? 1 : 1.02 },
         ],
-        zIndex: 0,
+        // Both axes of "on top": zIndex orders siblings on iOS, elevation on
+        // Android (where it also casts the lift shadow — put down with the
+        // row, since a held row can sit in its slot for a while).
+        zIndex: 2,
+        elevation: settling.value ? 0 : 4,
       };
-    });
+    }
 
-    const onLayout = useCallback(
-      (e: LayoutChangeEvent) => {
-        const height = e.nativeEvent.layout.height;
-        if (height > 0 && Math.abs(height - rowHeight.value) > 0.5) rowHeight.value = height;
-      },
-      // rowHeight is a shared value from the enclosing hook — created once.
-      [],
-    );
+    // Everyone between the lifted row's old slot and its new one shifts by
+    // exactly one row, opening the gap it will drop into.
+    const shift =
+      index > active.value && index <= target.value
+        ? -rowHeight.value
+        : index < active.value && index >= target.value
+          ? rowHeight.value
+          : 0;
+    return {
+      transform: [
+        { translateY: withTiming(shift, { duration: SHIFT_MS }) },
+        { translateX: 0 },
+        { scale: 1 },
+      ],
+      zIndex: 0,
+    };
+  });
 
-    return { pan, style, onLayout };
-  };
+  const onLayout = useCallback(
+    (e: LayoutChangeEvent) => {
+      const height = e.nativeEvent.layout.height;
+      if (height > 0 && Math.abs(height - rowHeight.value) > 0.5) rowHeight.value = height;
+    },
+    // rowHeight is a shared value from the table's hook — created once.
+    [rowHeight],
+  );
 
-  return { activeIndex, useRow };
+  return { pan, style, onLayout };
 }
 
 // The wrapper every draggable row renders as. Uniwind styles reanimated

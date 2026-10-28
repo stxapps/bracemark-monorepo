@@ -95,3 +95,24 @@ it("leaves another label's window open", () => {
   expect(clock.meter.isOpen()).toBe(true);
   expect(clock.meter.end('import')?.label).toBe('import');
 });
+
+// A window closed at "quiet" must not close in the middle of a run of blocks:
+// a table filling a slice a frame is a block, a frame, a block — and the quiet
+// clock has to restart on each, or the window ends after the first slice.
+it('counts quiet from the end of the last block, not from the window opening', () => {
+  const { meter, idle, block, tick } = meterAt();
+  meter.begin('settings-lists');
+  idle(600);
+  expect(meter.quietFor()).toBeGreaterThanOrEqual(600);
+
+  block(200);
+  tick();
+  expect(meter.quietFor()).toBe(0);
+  idle(300);
+  expect(meter.quietFor()).toBeLessThan(500);
+  // A short block — a frame dropped, no stall — leaves the quiet running.
+  block(30);
+  tick();
+  idle(250);
+  expect(meter.quietFor()).toBeGreaterThanOrEqual(500);
+});

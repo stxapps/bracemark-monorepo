@@ -6,6 +6,7 @@ import { type Extraction, EXTRACTIONS_PREFIX } from '@stxapps/shared';
 import { buildBackupArchive } from '../seed/archive';
 import { seedUser } from '../seed/catalog';
 import { buildLibrary } from '../seed/library';
+import { buildWorstLibrary } from '../seed/worst';
 
 // The two inputs the data-path measurement feeds the app, at a size the caller
 // picks. Paid plans have no link cap (`maxLinks: null`, shared iap/plans.ts), so
@@ -102,6 +103,17 @@ export async function writeBackupLibrary(
     path,
     buildBackupArchive({ items, files: [], counts: { ...library.counts, files: 0 } }),
   );
+}
+
+// A Bracemark backup of the `plus-worst` library (seed/worst.ts), images and
+// all: 109 lists down a 100-deep chain and 100 tags, the names at their bounds.
+// Its size is fixed — the literals ARE the library — so it takes no count. The
+// render leg's tree legs restore it (`--library worst`, measure/render-*.ts):
+// the sidebars and the settings tables mount a row per list and tag, and
+// `plus-full`'s 24 and 40 is not where anyone feels that.
+export async function writeWorstBackup(path: string): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, buildBackupArchive(buildWorstLibrary({ now: Date.now() })));
 }
 
 // Every `seed-link-<n>` — a link's path, its extraction's and its pin's, and the

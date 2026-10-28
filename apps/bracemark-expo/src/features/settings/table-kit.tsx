@@ -23,7 +23,7 @@
 // `SortDir`) is neither platform's business and lives in `@stxapps/shared`
 // (sync/sort.ts), one copy for all four tables.
 
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ScrollView, TextInput, View } from 'react-native';
 import { ArrowDownAZ, ArrowDownZA, ArrowUpDown, Check, Plus, X } from 'lucide-react-native';
 
@@ -347,6 +347,28 @@ export function RenameField({
       }}
     />
   );
+}
+
+// A row's handlers as one object whose functions never change identity, each
+// calling the latest render's version. What lets a table's row be memoized: its
+// handlers used to be fresh closures per row per render, so every render of the
+// section — each frame of a progressive fill among them — re-rendered every row
+// already on screen (lists-section.tsx, tags-section.tsx). The keys are read
+// once, so pass the same set every render.
+export function useStableActions<T extends { [K in keyof T]: (...args: never[]) => unknown }>(
+  actions: T,
+): T {
+  const latest = useRef(actions);
+  latest.current = actions;
+  return useMemo(() => {
+    const call =
+      (key: string) =>
+      (...args: unknown[]) =>
+        ((latest.current as Record<string, unknown>)[key] as (...a: unknown[]) => unknown)(...args);
+    return Object.fromEntries(
+      Object.keys(latest.current).map((key) => [key, call(key)]),
+    ) as unknown as T;
+  }, []);
 }
 
 // The inline name field's focus pair, for a row that offers Rename in its kebab.

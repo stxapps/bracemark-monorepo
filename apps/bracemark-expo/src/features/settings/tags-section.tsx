@@ -16,7 +16,7 @@
 // confirm — which live in table-kit.tsx. What's left here is the flatness: that's the whole difference
 // between the two sections.
 
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { View } from 'react-native';
 import { ChevronDown, ChevronUp, MoreHorizontal, Pencil, Tag, Trash2 } from 'lucide-react-native';
 
@@ -33,8 +33,9 @@ import {
 } from '../../components/ui/dropdown-menu';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
+import { useProgressiveCount } from '../../lib/use-progressive-count';
 import { cn } from '../../lib/utils';
-import { DragHandle, DragRow, type DragSort, useDragSort } from './drag-sort';
+import { DragHandle, DragRow, type DragRowCore, useDragRow, useDragSort } from './drag-sort';
 import { SettingsHeader, SettingsNotice, SettingsPane } from './settings-kit';
 import {
   CreateRow,
@@ -44,6 +45,7 @@ import {
   useDestroyRequest,
   useOpRunner,
   useRenameFocus,
+  useStableActions,
 } from './table-kit';
 
 // The per-row overflow menu: rename, reorder within the group, delete. No
@@ -97,34 +99,42 @@ function RowActions({
   );
 }
 
+// What a row can ask of the section — one stable object for every row, so
+// Row's memo holds (the Lists table's reason, lists-section.tsx).
+interface TagRowActions {
+  rename: (tag: TagItem, name: string) => Promise<unknown>;
+  shift: (tag: TagItem, index: number, delta: number) => void;
+  destroy: (tag: TagItem) => void;
+}
+
 // One row. Flat — no indent. Reorder by dragging the grip, or by the kebab's
-// up/down.
-function Row({
+// up/down. Memoized, every prop a primitive or stable: the table mounts in
+// slices, and a row that re-rendered with each one made the fill quadratic
+// (lists-section.tsx's Row has the measurement).
+const Row = memo(function Row({
   tag,
   index,
-  drag,
+  dragCore,
   lifted,
   isFirst,
   isLast,
-  onRename,
-  onMoveUp,
-  onMoveDown,
-  onDelete,
+  actions,
 }: {
   tag: TagItem;
   index: number;
-  drag: DragSort;
+  dragCore: DragRowCore;
   // This row is the one being dragged — opaque + raised while it travels.
   lifted: boolean;
   isFirst: boolean;
   isLast: boolean;
-  onRename: (name: string) => Promise<unknown>;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-  onDelete: () => void;
+  actions: TagRowActions;
 }) {
-  const { pan, style, onLayout } = drag.useRow(index);
+  const { pan, style, onLayout } = useDragRow(dragCore, index);
   const { nameRef, focusName } = useRenameFocus();
+  const onRename = (name: string) => actions.rename(tag, name);
+  const onMoveUp = () => actions.shift(tag, index, -1);
+  const onMoveDown = () => actions.shift(tag, index, 1);
+  const onDelete = () => actions.destroy(tag);
 
   return (
     <DragRow
@@ -159,7 +169,7 @@ function Row({
       />
     </DragRow>
   );
-}
+});
 
 export function TagsSection() {
   const tree = useTags();
@@ -191,9 +201,12 @@ export function TagsSection() {
   // _the drop is held_): the dropped row stays in its slot until the ids below
   // come back in a new order, and goes home if the write is refused. Returning
   // nothing is the no-op drop — there is no new order to wait for.
+  // A screenful of rows at once, the rest a slice a frame — the Lists table's
+  // reason, in lists-section.tsx. The drag counts only the rendered rows.
+  const shownCount = useProgressiveCount(tags.length);
   const orderKey = useMemo(() => tags.map((t) => t.id).join(' '), [tags]);
   const drag = useDragSort({
-    count: tags.length,
+    count: shownCount,
     orderKey,
     onDrop: (from, to) => {
       if (from === to || from < 0 || to < 0) return;
@@ -201,6 +214,13 @@ export function TagsSection() {
       run(op);
       return op;
     },
+  });
+
+  // Every row's handlers, as one stable object (see TagRowActions).
+  const rowActions = useStableActions<TagRowActions>({
+    rename: (tag, name) => runAwait(() => rename(tag, name)),
+    shift,
+    destroy: (tag) => requestDestroy(tag),
   });
 
   return (
@@ -236,21 +256,20 @@ export function TagsSection() {
         {tags.length === 0 ? (
           <Text className="px-3 py-6 text-center text-sm text-muted-foreground">No tags yet.</Text>
         ) : (
-          tags.map((tag, index) => (
-            <Row
-              key={tag.id}
-              tag={tag}
-              index={index}
-              drag={drag}
-              lifted={drag.activeIndex === index}
-              isFirst={index === 0}
-              isLast={index === tags.length - 1}
-              onRename={(name) => runAwait(() => rename(tag, name))}
-              onMoveUp={() => shift(tag, index, -1)}
-              onMoveDown={() => shift(tag, index, 1)}
-              onDelete={() => requestDestroy(tag)}
-            />
-          ))
+          tags
+            .slice(0, shownCount)
+            .map((tag, index) => (
+              <Row
+                key={tag.id}
+                tag={tag}
+                index={index}
+                dragCore={drag.core}
+                lifted={drag.activeIndex === index}
+                isFirst={index === 0}
+                isLast={index === tags.length - 1}
+                actions={rowActions}
+              />
+            ))
         )}
       </View>
 

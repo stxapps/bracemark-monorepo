@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { Pressable, type TextInput } from 'react-native';
 import { PortalHost } from '@rn-primitives/portal';
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react-native';
 
 import { Text } from '../../components/ui/text';
-import { DestroyConfirm, RenameField, useDestroyRequest } from './table-kit';
+import { DestroyConfirm, RenameField, useDestroyRequest, useStableActions } from './table-kit';
 
 // Pins the delete flow the Lists and Tags tables share — web's peer
 // (settings/_components/table-kit.spec.tsx) names the failures. Its focus case
@@ -202,4 +202,26 @@ test('a blank name is not a rename, and never reaches the mutation', async () =>
 
   expect(onRename).not.toHaveBeenCalled();
   expect(inputRef.current).not.toBe(mounted);
+});
+
+// The tables' rows are memoized, and the handlers object is the one prop every
+// row shares: a fresh one per render would re-render every row on every render
+// of the section — each frame of a progressive fill among them, which is how
+// the Lists switch's total blocking nearly doubled on a Pixel (lists-section.tsx).
+// A stable one that froze the first render's handlers would be worse: a rename
+// would write against the lists as they were when the table mounted.
+test('useStableActions keeps one object and calls the latest render’s handler', () => {
+  const first = jest.fn();
+  const second = jest.fn();
+  const { result, rerender } = renderHook(({ handler }) => useStableActions({ run: handler }), {
+    initialProps: { handler: first },
+  });
+  const initial = result.current;
+
+  rerender({ handler: second });
+
+  expect(result.current).toBe(initial);
+  result.current.run();
+  expect(second).toHaveBeenCalledTimes(1);
+  expect(first).not.toHaveBeenCalled();
 });

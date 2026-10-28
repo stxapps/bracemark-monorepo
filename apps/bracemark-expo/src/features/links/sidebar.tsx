@@ -15,7 +15,7 @@
 // The one intentional divergence left is native affordances (no hover, so the
 // "Lock now" action is always shown; the row press also closes the drawer).
 
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Keyboard, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDrawerStatus } from '@react-navigation/drawer';
@@ -65,6 +65,7 @@ import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
+import { useProgressiveCount } from '../../lib/use-progressive-count';
 import { cn } from '../../lib/utils';
 import { type Selection, useLinksPage } from './page-provider';
 
@@ -131,6 +132,10 @@ function listIcon(id: string): LucideIcon {
   return Folder;
 }
 
+function hashIcon(): LucideIcon {
+  return Hash;
+}
+
 // The row's stable handle for the mobile flows (docs/e2e.md, _the testID
 // contract_), derived from the SELECTION rather than the label because the label
 // is user data: the system three are renameable (settings/lists-section.tsx) and
@@ -148,19 +153,35 @@ function navTestID(selection: Selection): string {
   return `links-nav-${selection.kind}`;
 }
 
-function isActive(current: Selection, candidate: Selection): boolean {
-  if (current.kind !== candidate.kind) return false;
-  if (current.kind === 'list' || current.kind === 'tag') {
-    return current.id === (candidate as { id: string }).id;
-  }
-  return true;
+// The row's selection, built from what it is rather than handed in as an
+// object — a fresh `{ kind, id }` every parent render would defeat NavItem's
+// memo below.
+type NavKind = 'list' | 'tag' | 'all';
+
+function selectionOf(kind: NavKind, id: string | undefined): Selection {
+  return kind === 'all' ? { kind } : { kind, id: id ?? '' };
 }
 
-function NavItem({
+// The id of the list or tag the page shows, or null for anything else — what a
+// row compares itself against to know it's the active one.
+function activeIdFor(selection: Selection, kind: 'list' | 'tag'): string | null {
+  return selection.kind === kind ? selection.id : null;
+}
+
+// MEMOIZED, and every prop is either a primitive or stable across the
+// sidebar's renders — which is why it takes `active` and `onSelect` rather than
+// reading the page context itself. A row that read the context re-rendered on
+// every selection, every rail toggle and, on a phone, every drawer open and
+// close (`useDrawerStatus` re-renders the sidebar): all 209 of `plus-worst`'s
+// rows for a change that moves one highlight. Now a render re-renders the rows
+// whose props moved — the old active row, the new one, a toggled parent.
+const NavItem = memo(function NavItem({
   icon,
   label,
-  selection,
-  onSelected,
+  kind,
+  id,
+  active,
+  onSelect,
   depth = 0,
   expanded,
   onToggle,
@@ -170,18 +191,22 @@ function NavItem({
 }: {
   icon: LucideIcon;
   label: string;
-  selection: Selection;
-  // Fired after the row commits its selection — the drawer closes on it.
-  onSelected: () => void;
+  // What the row selects: a list or tag by id, or Show All.
+  kind: NavKind;
+  id?: string;
+  active: boolean;
+  // Commits the row's selection and closes the drawer. Stable — see above.
+  onSelect: (selection: Selection) => void;
   // Tree nesting level — indents the row TREE_INDENT_WIDTH per level, up to
   // TREE_INDENT_MAX_LEVELS_NARROW (@stxapps/shared sync/tree.ts), and numbers it past
   // that. Applied to the whole row so the chevron indents with the label.
   depth?: number;
   // Present only on rows with children: whether the subtree is shown, and the
   // chevron's toggle — a SEPARATE sibling Pressable on the LEFT (row press =
-  // select filter, chevron = toggle), like web.
+  // select filter, chevron = toggle), like web. The toggle takes the row's id
+  // so one stable function serves every row.
   expanded?: boolean;
-  onToggle?: () => void;
+  onToggle?: (id: string) => void;
   // In a tree, childless rows still reserve the chevron's width so their icons
   // line up under the parents' labels; standalone rows (Show All) pass false.
   showSlot?: boolean;
@@ -194,8 +219,7 @@ function NavItem({
   // always shown when present.
   action?: ReactNode;
 }) {
-  const { selection: current, setSimpleQuery } = useLinksPage();
-  const active = isActive(current, selection);
+  const selection = selectionOf(kind, id);
 
   // No `gap` on the row: the 4px that used to sit BETWEEN the chevron slot and
   // the row is an `ml-1` BEFORE the slot instead (web twin, same move). The icon
@@ -215,11 +239,11 @@ function NavItem({
       }
     >
       <TreeLevelMarker depth={depth} maxLevels={TREE_INDENT_MAX_LEVELS_NARROW} />
-      {onToggle ? (
+      {onToggle && expanded !== undefined ? (
         <Button
           variant="ghost"
           size="icon-sm"
-          onPress={onToggle}
+          onPress={() => onToggle(id ?? '')}
           aria-expanded={expanded}
           aria-label={expanded ? 'Collapse' : 'Expand'}
           // 32, not the size's own 36: this is a row affordance in a dense tree
@@ -248,10 +272,7 @@ function NavItem({
       <Pressable
         role="button"
         testID={navTestID(selection)}
-        onPress={() => {
-          setSimpleQuery(selection);
-          onSelected();
-        }}
+        onPress={() => onSelect(selection)}
         // `accessibilityState`, not the web twin's `aria-current` — RN doesn't
         // declare that prop, so it announced nothing. See the twin comment in
         // features/settings/sidebar.tsx.
@@ -279,7 +300,7 @@ function NavItem({
       {action}
     </View>
   );
-}
+});
 
 // One forest → rows, parents before their children, each indented by its
 // depth; collapsed parents keep their subtree unrendered. Generic over lists
@@ -292,28 +313,37 @@ function NavItem({
 // which is as deep as a `parentId` chain a restored backup or another device
 // decides (@stxapps/shared sync/tree.ts) — and React's commit walks its tree
 // with a call frame per level.
+//
+// And rendered a screenful first, the rest a slice a frame
+// (lib/use-progressive-count.ts): the rail mounts with the links screen, so a
+// big tree's every row used to land in the links screen's first commits, and
+// again in one commit each time its section is opened.
 function NavTree<T extends TreeItem & { name: string }>({
   nodes,
+  kind,
   iconFor,
-  selectionFor,
-  onSelected,
+  activeId,
+  onSelect,
   collapsed,
   onToggle,
   badgeFor,
   actionFor,
 }: {
   nodes: TreeNode<T>[];
+  kind: 'list' | 'tag';
   iconFor: (id: string) => LucideIcon;
-  selectionFor: (id: string) => Selection;
-  onSelected: () => void;
+  activeId: string | null;
+  onSelect: (selection: Selection) => void;
   collapsed: ReadonlySet<string>;
   onToggle: (id: string) => void;
   badgeFor?: (id: string) => ReactNode;
   actionFor?: (id: string) => ReactNode;
 }) {
+  const rows = useMemo(() => flattenToRows(nodes, collapsed), [nodes, collapsed]);
+  const shown = useProgressiveCount(rows.length);
   return (
     <>
-      {flattenToRows(nodes, collapsed).map(({ item, depth, hasChildren, parentId }) => (
+      {rows.slice(0, shown).map(({ item, depth, hasChildren, parentId }) => (
         <NavItem
           // Scoped to the sibling group, as a key was when each level was its own
           // list: a row that changes parent remounts, and a store holding one id
@@ -321,11 +351,13 @@ function NavTree<T extends TreeItem & { name: string }>({
           key={`${parentId ?? ''}/${item.id}`}
           icon={iconFor(item.id)}
           label={item.name}
-          selection={selectionFor(item.id)}
-          onSelected={onSelected}
+          kind={kind}
+          id={item.id}
+          active={item.id === activeId}
+          onSelect={onSelect}
           depth={depth}
           expanded={hasChildren ? !collapsed.has(item.id) : undefined}
-          onToggle={hasChildren ? () => onToggle(item.id) : undefined}
+          onToggle={hasChildren ? onToggle : undefined}
           showSlot
           badge={badgeFor?.(item.id)}
           action={actionFor?.(item.id)}
@@ -341,6 +373,7 @@ function NavTree<T extends TreeItem & { name: string }>({
 function Section({
   id,
   label,
+  testID,
   collapsed,
   onToggle,
   forceOpen = false,
@@ -348,6 +381,10 @@ function Section({
 }: {
   id: string;
   label: string;
+  // The header's handle for the mobile flows (docs/e2e.md, _the testID
+  // contract_) — the label is ambiguous with "Manage lists" and with a list
+  // the user named "Lists".
+  testID: string;
   collapsed: ReadonlySet<string>;
   onToggle: (id: string) => void;
   forceOpen?: boolean;
@@ -358,6 +395,7 @@ function Section({
     <View className="flex-col gap-0.5">
       <Pressable
         role="button"
+        testID={testID}
         onPress={() => onToggle(id)}
         aria-expanded={!isCollapsed}
         // `pt-4 pb-1` — asymmetric on purpose, and NOT the split the web twin
@@ -428,7 +466,21 @@ export function Sidebar({
 }) {
   const lists = useLists();
   const tags = useTags();
-  const { selection } = useLinksPage();
+  const { selection, setSimpleQuery } = useLinksPage();
+  // One select for every row, stable across renders so NavItem's memo holds:
+  // the drawer's `closeDrawer` is a new closure each time the navigator renders
+  // this, so it is read through a ref at press time rather than closed over.
+  const closeDrawerRef = useRef(closeDrawer);
+  closeDrawerRef.current = closeDrawer;
+  const select = useCallback(
+    (next: Selection) => {
+      setSimpleQuery(next);
+      closeDrawerRef.current();
+    },
+    [setSimpleQuery],
+  );
+  const activeListId = activeIdFor(selection, 'list');
+  const activeTagId = activeIdFor(selection, 'tag');
   const { hiddenListIds, listLocks, lockList } = useLocks();
   const { collapsed, toggle, expand } = useCollapsedIds();
   const [filter, setFilter] = useState('');
@@ -607,6 +659,7 @@ export function Sidebar({
         <Section
           id={SECTION_LISTS}
           label="Lists"
+          testID="links-nav-section-lists"
           collapsed={collapsed}
           onToggle={toggle}
           forceOpen={filtering}
@@ -618,8 +671,10 @@ export function Sidebar({
                   key={node.item.id}
                   icon={listIcon(node.item.id)}
                   label={node.item.name}
-                  selection={{ kind: 'list', id: node.item.id }}
-                  onSelected={closeDrawer}
+                  kind="list"
+                  id={node.item.id}
+                  active={node.item.id === activeListId}
+                  onSelect={select}
                   badge={listBadge(node.item.id)}
                   action={listAction(node.item.id)}
                 />
@@ -642,9 +697,10 @@ export function Sidebar({
           ) : (
             <NavTree
               nodes={visibleLists}
+              kind="list"
               iconFor={listIcon}
-              selectionFor={(id) => ({ kind: 'list', id })}
-              onSelected={closeDrawer}
+              activeId={activeListId}
+              onSelect={select}
               collapsed={collapsed}
               onToggle={toggle}
               badgeFor={listBadge}
@@ -658,6 +714,7 @@ export function Sidebar({
         <Section
           id={SECTION_TAGS}
           label="Tags"
+          testID="links-nav-section-tags"
           collapsed={collapsed}
           onToggle={toggle}
           forceOpen={filtering}
@@ -669,8 +726,10 @@ export function Sidebar({
                   key={node.item.id}
                   icon={Hash}
                   label={node.item.name}
-                  selection={{ kind: 'tag', id: node.item.id }}
-                  onSelected={closeDrawer}
+                  kind="tag"
+                  id={node.item.id}
+                  active={node.item.id === activeTagId}
+                  onSelect={select}
                 />
               ))
             ) : (
@@ -681,9 +740,10 @@ export function Sidebar({
           ) : (
             <NavTree
               nodes={tags}
-              iconFor={() => Hash}
-              selectionFor={(id) => ({ kind: 'tag', id })}
-              onSelected={closeDrawer}
+              kind="tag"
+              iconFor={hashIcon}
+              activeId={activeTagId}
+              onSelect={select}
               collapsed={collapsed}
               onToggle={toggle}
             />
@@ -699,8 +759,9 @@ export function Sidebar({
             <NavItem
               icon={Layers}
               label={ALL_LABEL}
-              selection={{ kind: 'all' }}
-              onSelected={closeDrawer}
+              kind="all"
+              active={selection.kind === 'all'}
+              onSelect={select}
             />
             <View className="my-1 border-t border-border" />
             <FooterLink

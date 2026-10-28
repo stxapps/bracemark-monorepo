@@ -25,7 +25,7 @@
 // confirm — which live in table-kit.tsx. What's left here is the nesting: depth, projection, "Move
 // to", locks. That's the whole difference between the two sections.
 
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { View } from 'react-native';
 import {
   Archive,
@@ -84,6 +84,7 @@ import {
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { usePaywall } from '../../contexts/paywall-provider';
+import { useProgressiveCount } from '../../lib/use-progressive-count';
 import { cn } from '../../lib/utils';
 import { useWideWindow } from '../../lib/window-class';
 import {
@@ -93,7 +94,7 @@ import {
   INDENT_WIDTH,
   PROJECTION_OPTIONS,
 } from './dnd-helpers';
-import { DragHandle, DragRow, type DragSort, useDragSort } from './drag-sort';
+import { DragHandle, DragRow, type DragRowCore, useDragRow, useDragSort } from './drag-sort';
 import { SettingsHeader, SettingsNotice, SettingsPane } from './settings-kit';
 import {
   CreateRow,
@@ -103,6 +104,7 @@ import {
   useDestroyRequest,
   useOpRunner,
   useRenameFocus,
+  useStableActions,
 } from './table-kit';
 import { childrenOf, flattenToRows, forbiddenParentIds, type ListRow } from './tree-helpers';
 
@@ -240,32 +242,46 @@ function RowActions({
   );
 }
 
+// What a row can ask of the section, each taking the row it is for — one
+// stable object for every row (table-kit's useStableActions), so Row's memo
+// holds.
+interface ListRowActions {
+  toggle: (row: ListRow) => void;
+  rename: (row: ListRow, name: string) => Promise<unknown>;
+  moveUp: (row: ListRow) => void;
+  moveDown: (row: ListRow) => void;
+  moveTo: (row: ListRow) => void;
+  sortChildren: (row: ListRow, dir: SortDir) => void;
+  addLock: (row: ListRow) => void;
+  unlock: (row: ListRow) => void;
+  removeLock: (row: ListRow) => void;
+  toggleBiometric: (row: ListRow) => void;
+  destroy: (row: ListRow) => void;
+}
+
 // One row. Indented by depth, up to `indentLevels`, and numbered past it.
 // Reorder/reparent by dragging the grip (the row slides between indents as the
 // projection changes, and past the ceiling its number counts instead) or by
 // the kebab's up/down + "Move to…".
-function Row({
+//
+// MEMOIZED, with every prop a primitive or stable — `row` is the section's
+// memoized row object, `dragCore` and `actions` keep their identity. The table
+// mounts in slices (lib/use-progressive-count.ts), and a row that re-rendered
+// with each slice made the fill cost grow with the square of the table: on a
+// Pixel 8 emulator at 109 lists, the switch's total blocking went from 2.8 s to
+// 4.9 s before this, while its longest stall halved.
+const Row = memo(function Row({
   row,
   levelDepth,
   indentLevels,
   dragIndex,
-  drag,
+  dragCore,
   lifted,
-  collapsedIds,
+  collapsed,
   lock,
   biometricAvailable,
   biometricLabel,
-  onToggle,
-  onRename,
-  onMoveUp,
-  onMoveDown,
-  onMoveTo,
-  onSortChildren,
-  onAddLock,
-  onUnlock,
-  onRemoveLock,
-  onToggleBiometric,
-  onDelete,
+  actions,
 }: {
   row: ListRow;
   // The depth its level number shows: its own, or for the lifted row past the
@@ -275,27 +291,29 @@ function Row({
   // The row's position in the flat, currently-rendered list — what the drag
   // layer counts in (NOT `row.index`, which is the position among siblings).
   dragIndex: number;
-  drag: DragSort;
+  dragCore: DragRowCore;
   // This row is the one being dragged — opaque + raised while it travels.
   lifted: boolean;
-  collapsedIds: ReadonlySet<string>;
+  // Its subtree is folded away (only meaningful on a row with children).
+  collapsed: boolean;
   lock: ListLockInfo | undefined;
   biometricAvailable: boolean;
   biometricLabel: string;
-  onToggle: () => void;
-  onRename: (name: string) => Promise<unknown>;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-  onMoveTo: () => void;
-  onSortChildren: (dir: SortDir) => void;
-  onAddLock: () => void;
-  onUnlock: () => void;
-  onRemoveLock: () => void;
-  onToggleBiometric: () => void;
-  onDelete: () => void;
+  actions: ListRowActions;
 }) {
   const { nameRef, focusName } = useRenameFocus();
-  const { pan, style, onLayout } = drag.useRow(dragIndex);
+  const { pan, style, onLayout } = useDragRow(dragCore, dragIndex);
+  const onToggle = () => actions.toggle(row);
+  const onRename = (name: string) => actions.rename(row, name);
+  const onMoveUp = () => actions.moveUp(row);
+  const onMoveDown = () => actions.moveDown(row);
+  const onMoveTo = () => actions.moveTo(row);
+  const onSortChildren = (dir: SortDir) => actions.sortChildren(row, dir);
+  const onAddLock = () => actions.addLock(row);
+  const onUnlock = () => actions.unlock(row);
+  const onRemoveLock = () => actions.removeLock(row);
+  const onToggleBiometric = () => actions.toggleBiometric(row);
+  const onDelete = () => actions.destroy(row);
 
   return (
     <DragRow
@@ -324,11 +342,11 @@ function Row({
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label={collapsedIds.has(row.item.id) ? 'Expand' : 'Collapse'}
+          aria-label={collapsed ? 'Expand' : 'Collapse'}
           onPress={onToggle}
         >
           <Icon
-            as={collapsedIds.has(row.item.id) ? ChevronRight : ChevronDown}
+            as={collapsed ? ChevronRight : ChevronDown}
             className="size-4 text-muted-foreground"
           />
         </Button>
@@ -400,7 +418,7 @@ function Row({
       />
     </DragRow>
   );
-}
+});
 
 // The hoisted "Move to" picker — the dialog stand-in for web's ListCommand
 // submenu, embedding the same shared ListCommand body
@@ -484,6 +502,12 @@ export function ListsSection() {
   // the flat list the drag layer and the projection see (and that we render) —
   // a row can't be dropped inside its own children. Web does exactly this.
   const displayRows = useMemo(() => excludeActiveDescendants(rows, draggingId), [rows, draggingId]);
+  // A screenful of rows in the commit that switched here, the rest a slice a
+  // frame (lib/use-progressive-count.ts) — at 109 lists, one commit for all of
+  // them froze the switch for over a second. The drag layer counts only what is
+  // rendered, so a row still to come can't be a drop slot; the projection and
+  // the drop plan read `displayRows` whole, so what they compute is the same.
+  const shownCount = useProgressiveCount(displayRows.length);
   // The moving row must be findable regardless of collapse state (its own
   // ancestors may be collapsed); the picker's rows are ListCommand's own read.
   const allRows = useMemo(() => flattenToRows(lists, NO_COLLAPSED_IDS), [lists]);
@@ -537,7 +561,7 @@ export function ListsSection() {
     [displayRows],
   );
   const drag = useDragSort({
-    count: displayRows.length,
+    count: shownCount,
     orderKey,
     indentWidth: INDENT_WIDTH,
     onPickUp: (index) => setDraggingId(displayRows[index]?.item.id ?? null),
@@ -600,6 +624,31 @@ export function ListsSection() {
     },
   });
 
+  // Every row's handlers, as one stable object (see ListRowActions).
+  const rowActions = useStableActions<ListRowActions>({
+    toggle: (row) => toggle(row.item.id),
+    rename: (row, name) => runAwait(() => rename(row.item, name)),
+    moveUp: (row) => run(move(row.item, row.parentId, siblingsWithout(row), row.index - 1)),
+    moveDown: (row) => run(move(row.item, row.parentId, siblingsWithout(row), row.index + 1)),
+    moveTo: (row) => setMovingId(row.item.id),
+    sortChildren: (row, dir) => sortGroup(row.item.id, dir),
+    addLock: (row) =>
+      // Gate at the affordance, before any password dialog: a free user never
+      // types a secret into a form that can't submit. Unlock/remove stay open
+      // below so a downgraded (ex-Plus) user can always reach their existing
+      // locks.
+      entitlements.locks
+        ? setLockDialog({ mode: 'add', listId: row.item.id })
+        : paywall.show('locks'),
+    unlock: (row) => setLockDialog({ mode: 'unlock', listId: row.item.id }),
+    removeLock: (row) => setLockDialog({ mode: 'remove', listId: row.item.id }),
+    toggleBiometric: (row) =>
+      // A free convenience flag on an existing lock (creating the lock was the
+      // paywalled step), so no entitlement gate here.
+      run(setListBiometric(row.item.id, !(listLocks.get(row.item.id)?.biometric ?? false))),
+    destroy: (row) => requestDestroy(row.item),
+  });
+
   return (
     // NO INSET OVERRIDE HERE — and this table is why the pane HAS one to give.
     // SettingsPane is `px-4 md:px-6`, and the narrow half of that step exists for
@@ -646,44 +695,20 @@ export function ListsSection() {
           onCreate={(name) => runAwait(() => createTopLevel(name))}
         />
 
-        {displayRows.map((row, index) => (
+        {displayRows.slice(0, shownCount).map((row, index) => (
           <Row
             key={row.item.id}
             row={row}
             levelDepth={row.item.id === draggingId ? (liftedDepth ?? row.depth) : row.depth}
             indentLevels={indentLevels}
             dragIndex={index}
-            drag={drag}
+            dragCore={drag.core}
             lifted={row.item.id === draggingId}
-            collapsedIds={collapsedIds}
+            collapsed={collapsedIds.has(row.item.id)}
             lock={listLocks.get(row.item.id)}
             biometricAvailable={biometricAvailable}
             biometricLabel={biometricLabel}
-            onToggle={() => toggle(row.item.id)}
-            onRename={(name) => runAwait(() => rename(row.item, name))}
-            onMoveUp={() => run(move(row.item, row.parentId, siblingsWithout(row), row.index - 1))}
-            onMoveDown={() =>
-              run(move(row.item, row.parentId, siblingsWithout(row), row.index + 1))
-            }
-            onMoveTo={() => setMovingId(row.item.id)}
-            onSortChildren={(dir) => sortGroup(row.item.id, dir)}
-            onAddLock={() =>
-              // Gate at the affordance, before any password dialog: a free
-              // user never types a secret into a form that can't submit.
-              // Unlock/remove stay open below so a downgraded (ex-Plus)
-              // user can always reach their existing locks.
-              entitlements.locks
-                ? setLockDialog({ mode: 'add', listId: row.item.id })
-                : paywall.show('locks')
-            }
-            onUnlock={() => setLockDialog({ mode: 'unlock', listId: row.item.id })}
-            onRemoveLock={() => setLockDialog({ mode: 'remove', listId: row.item.id })}
-            onToggleBiometric={() =>
-              // A free convenience flag on an existing lock (creating the lock was
-              // the paywalled step), so no entitlement gate here.
-              run(setListBiometric(row.item.id, !(listLocks.get(row.item.id)?.biometric ?? false)))
-            }
-            onDelete={() => requestDestroy(row.item)}
+            actions={rowActions}
           />
         ))}
       </View>

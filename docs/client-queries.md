@@ -556,7 +556,7 @@ fast path at the cost of complexity, scroll-time UX, or a second code path for
 search/tag/pinned queries — so they wait until profiling or a product requirement
 forces the issue.
 
-### the tree surfaces mount every row (not virtualized yet)
+### the tree surfaces mount every row (not virtualized)
 
 Only the link layouts above are virtualized. Every surface that shows the list or
 tag tree mounts one element per row, so what it costs grows with the number of
@@ -576,8 +576,56 @@ lists or tags in the library, not with what fits on screen:
 
 None of this is a correctness risk: the limits bound depth, not count
 ([data-limits.md](./data-limits.md), _counts: none per kind_), so a library
-with thousands of lists or tags renders, only slowly. It waits, like the
-alternatives above, until a real library makes it worth the complexity.
+with thousands of lists or tags renders, only slowly. The render leg's tree legs
+([e2e.md](./e2e.md), _the render leg_) read what it costs:
+`--library worst --legs sidebar,settings`, on both platforms, with `--profile`
+on native for what owns the time.
+
+**Web needs nothing.** At `plus-worst` (109 lists, 100 tags) and 4× CPU the
+longest task in any tree leg is 133 ms, and `plus-full` has none.
+
+**Expo mounts the trees in slices, and does not virtualize them.** At
+`plus-worst`, switching Settings to Lists held the JS thread for 1.2 s on the
+iPad simulator and 1.4 s on a Pixel 8 emulator, in one stall, and the sidebar
+paid about 4 ms a row in the links screen's first commits. A virtualizer would
+cut the work as well as spread it, but on the tables it takes the drag layer
+with it: `drag-sort.tsx` measures a mounted row, shifts every mounted row by
+index, and auto-scrolls the page past rows that would not exist. For the
+sidebar it would be a FlashList in the drawer, with the section headers and the
+utility band as item types. A slice does neither, and it puts the switch on
+screen at once, which is the part a person feels:
+
+- **`lib/use-progressive-count.ts`** renders a screenful (24) in the commit
+  that mounts a tree, then 16 more a frame. The sidebar's two trees and both
+  tables take their rows through it. The drag counts only rendered rows, so a
+  row still to come is never a drop slot, and the projection still reads the
+  whole order. A loading state instead would not help: a spinner shown before
+  one big commit freezes with everything else for the length of it.
+- **A row's drag style seeds itself idle on the JS thread** (`drag-sort.tsx`,
+  `SEED_IDLE_ON_JS`). Reanimated runs each style worklet once on the JS thread
+  at mount, and every shared-value read there is a synchronous call to the UI
+  runtime. The Pixel profile of the Lists switch showed 239 ms of it.
+- **Every row on these surfaces is memoized, and slicing depends on it.** A
+  slice re-renders the tree that holds the rows. With rows that re-render
+  alongside it, each frame of the fill paid again for every row already in, so
+  the fill grew with the square of the tree. Measured on the Pixel at 109
+  lists: slicing alone halved the longest stall and raised the total blocking
+  from 2.8 s to 4.9 s. The settings rows take the drag layer's stable `core`
+  (`useDragRow`) and one stable handlers object (`useStableActions`,
+  `table-kit.tsx`). The sidebar's take `active` and a stable `onSelect` rather
+  than reading the page context, which also stops a selection, a rail toggle or
+  a phone's drawer opening (`useDrawerStatus`) from re-rendering every row.
+
+The readings are in [e2e.md](./e2e.md), _the render leg_. On iOS, Settings →
+Lists at 109 lists went from 1.2 s in one stall to 0.3 s longest, with less total
+work. On the Pixel emulator the longest stall halved and the total rose by about
+a second of native mounting, paid once per slice. That is the trade slicing
+makes: the screen answers at once and finishes over the next frames.
+
+What a row still costs is mostly Fabric's own (`createNode`, `completeRoot`),
+the SVG icons (react-native-svg's class components, four a settings row) and the
+garbage of the per-row worklet. If a library ever outgrows slicing, those are
+the next things to cut, and virtualizing the sidebar is the larger lever.
 
 ### the expo (SQLite/drizzle) port
 

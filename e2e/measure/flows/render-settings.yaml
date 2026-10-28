@@ -1,0 +1,64 @@
+# The render leg's settings window (e2e/measure/render-mobile.ts): from
+# Settings → Misc, open the probe's `settings-<SECTION>` window, switch to
+# SECTION, wait for its rows, and stop on the reading; then go back to Misc,
+# unmeasured. Starts and ends in Settings on Misc.
+#
+# The wait is for a ROW, not the section's title: the title commits with the
+# switch, and the Lists and Tags tables fill a commit later, when their live read
+# answers (expo-react use-live-read.ts). Every row lands in that one commit, so
+# the first row's rename field is the whole table. About has no rows; its title
+# is the wait, and it is the baseline — what a switch costs before a table.
+#
+# Parameters: SECTION — `about`, `lists` or `tags`; TITLE — the section's label,
+# as the topbar shows it; ROW — the rename field's label (`List name`, `Tag
+# name`), or `none` for About; E2E_WIDTH — `wide` or `narrow`.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'measure-begin-settings-${SECTION}'
+- runFlow:
+    when:
+      true: ${E2E_WIDTH !== 'wide'}
+    commands:
+      - tapOn:
+          id: 'settings-open-navigation'
+- tapOn:
+    id: 'settings-nav-${SECTION}'
+- extendedWaitUntil:
+    visible:
+      id: 'settings-title'
+      text: '${TITLE}'
+    timeout: 10000
+- runFlow:
+    when:
+      true: ${ROW !== 'none'}
+    commands:
+      # iOS can fold the field's value into its name after a comma, hence the
+      # optional tail (and head, for an iPad's leading slots — render-layout.yaml).
+      # The head must end in a comma, so `New list name` (the create field, there
+      # before the read answers) never matches.
+      - extendedWaitUntil:
+          visible: '(.*, )?${ROW}(, .*)?'
+          timeout: 20000
+- tapOn:
+    id: 'measure-end'
+# The end waits for the thread to go quiet (components/measure-probe.tsx): the
+# rows mount a slice a frame, and the window must hold the whole fill.
+- extendedWaitUntil:
+    visible:
+      id: 'measure-stall-reading'
+      text: '.*"label":"settings-${SECTION}".*'
+    timeout: 20000
+- runFlow:
+    when:
+      true: ${E2E_WIDTH !== 'wide'}
+    commands:
+      - tapOn:
+          id: 'settings-open-navigation'
+- tapOn:
+    id: 'settings-nav-misc'
+- extendedWaitUntil:
+    visible:
+      id: 'settings-title'
+      text: 'Misc\.'
+    timeout: 10000

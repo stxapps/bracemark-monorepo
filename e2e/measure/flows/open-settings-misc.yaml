@@ -1,0 +1,15 @@
+# From the links screen into Settings → Misc, where the render leg's settings
+# window starts (e2e/measure/render-mobile.ts, flows/render-settings.yaml).
+#
+# Parameters: E2E_WIDTH — `wide` or `narrow`, for open-settings.yaml's branch.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../../mobile/flows/subflows/open-settings.yaml
+    env:
+      SECTION: misc
+- extendedWaitUntil:
+    visible:
+      id: 'settings-title'
+      text: 'Misc\.'
+    timeout: 10000

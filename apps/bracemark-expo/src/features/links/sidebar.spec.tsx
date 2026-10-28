@@ -17,6 +17,7 @@ import {
   TREE_INDENT_MAX_LEVELS_NARROW,
 } from '@stxapps/shared';
 
+import { useProgressiveCount } from '../../lib/use-progressive-count';
 import type { Selection } from './page-provider';
 import { Sidebar } from './sidebar';
 
@@ -50,6 +51,12 @@ jest.mock('./page-provider', () => ({
 // keyboard dismissal, and the router only the footer links.
 jest.mock('@react-navigation/drawer', () => ({ useDrawerStatus: () => 'open' }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+// Every row at once, so the cases below read whole trees: the frame-by-frame
+// fill is the hook's own spec (lib/use-progressive-count.spec.ts). One case
+// caps it, which is what pins the trees reading it at all.
+jest.mock('../../lib/use-progressive-count', () => ({
+  useProgressiveCount: jest.fn((total: number) => total),
+}));
 
 let clock = 0;
 const rank = () => `a${(clock++).toString().padStart(4, '0')}`;
@@ -122,6 +129,9 @@ beforeEach(() => {
   jest.clearAllMocks();
   clock = 0;
   mockSelection = { kind: 'all' };
+  // clearAllMocks keeps implementations; the one case that caps the count
+  // must not cap every case after it.
+  jest.mocked(useProgressiveCount).mockImplementation((total) => total);
   jest.mocked(readSidebarCollapsedIds).mockReturnValue([]);
   setLists(NESTED());
   setTags([]);
@@ -220,6 +230,23 @@ describe('Sidebar — collapsing', () => {
     });
   });
 
+  // The rows are memoized and handed `active` by the sidebar rather than reading
+  // the page themselves, so a selection that moves after mount is the case a
+  // stale row would show: the old row still lit, the new one not.
+  it('moves the highlight when the selection changes after mount', () => {
+    mockSelection = { kind: 'list', id: 'home' };
+    const view = mount();
+    const selected = (id: string) =>
+      screen.getByTestId(`links-nav-list-${id}`).props.accessibilityState?.selected;
+    expect(selected('home')).toBe(true);
+
+    mockSelection = { kind: 'list', id: 'recipes' };
+    view.rerender(<Sidebar closeDrawer={jest.fn()} />);
+
+    expect(selected('recipes')).toBe(true);
+    expect(selected('home')).toBe(false);
+  });
+
   // The control for the case above: with the selection elsewhere, the stored
   // collapse stands — otherwise "everything is always expanded" passes it.
   it('leaves a stored collapse alone when the selection is not under it', () => {
@@ -292,6 +319,18 @@ describe('Sidebar — a tree that changes under it', () => {
 // every signed-in screen mounts). 3,000 is past where that version fell over
 // under jest; the list tree itself is built without recursion and is not what
 // is being tested (@stxapps/shared sync/tree.spec.ts goes far deeper).
+describe('Sidebar — a big tree mounts in slices', () => {
+  // A tree rendered whole in one commit is what froze the links screen's first
+  // load at `plus-worst` size (docs/e2e.md, _the render leg_). The tree renders
+  // the count the hook gives it, not the tree's length.
+  it('renders only the rows the progressive count has reached', () => {
+    jest.mocked(useProgressiveCount).mockImplementation((total) => Math.min(total, 2));
+    mount();
+
+    expect(ids()).toEqual(['work', 'cooking']);
+  });
+});
+
 describe('Sidebar — a chain deeper than React can nest', () => {
   it('renders every row, indented by its depth up to the cap', () => {
     const DEPTH = 3000;

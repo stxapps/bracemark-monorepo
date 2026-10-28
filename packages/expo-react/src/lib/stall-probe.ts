@@ -34,6 +34,11 @@ const LONG_MS = 50;
 // because Hermes interprets where V8 compiles; multiply web's reading by 0.1 to
 // compare the two engines on one machine.
 const CALIBRATION_ITERATIONS = 1.5e7;
+// `endStallWindowWhenQuiet`'s bar: the thread has gone this long without a
+// block over LONG_MS, so whatever the gesture set off is done.
+const QUIET_MS = 500;
+// …and the most it waits for that, so a thread that never settles still reads.
+const QUIET_CAP_MS = 10_000;
 
 export interface StallReading {
   label: string;
@@ -79,6 +84,8 @@ interface OpenWindow {
 export function createStallMeter(now: () => number) {
   let last = now();
   let open: OpenWindow | null = null;
+  // When the last block over LONG_MS ended (or the window opened, if later).
+  let quietSince = last;
 
   const observe = (late: number) => {
     if (open === null) return;
@@ -93,8 +100,14 @@ export function createStallMeter(now: () => number) {
     // One timer fire: how late was it?
     tick() {
       const t = now();
-      observe(t - last - TICK_MS);
+      const late = t - last - TICK_MS;
+      observe(late);
+      if (late > LONG_MS) quietSince = t;
       last = t;
+    },
+    // How long the thread has gone without a block over LONG_MS.
+    quietFor(): number {
+      return now() - quietSince;
     },
     isOpen(): boolean {
       return open !== null;
@@ -102,6 +115,7 @@ export function createStallMeter(now: () => number) {
     begin(label: string) {
       const t = now();
       last = t;
+      quietSince = t;
       open = { label, start: t, longest: 0, blocking: 0, stalls: 0, dropped: 0 };
     },
     // Closing counts the block still in progress: a run's LAST chunk settles
@@ -182,6 +196,27 @@ export function beginStallWindow(label: string): void {
 export function endStallWindow(): void {
   const reading = meter?.end();
   if (reading) publish({ ...state, last: reading });
+}
+
+// The same, once the thread has been quiet for QUIET_MS (or QUIET_CAP_MS has
+// passed). For a window whose gesture starts work that outlives it: a table
+// that mounts its rows a slice a frame (bracemark-expo lib/use-progressive-
+// count.ts) is still filling when its first row is on screen, which is what a
+// flow can wait for — closed there, the window missed the rest of the fill.
+export function endStallWindowWhenQuiet(): void {
+  const running = meter;
+  if (running === null || !running.isOpen()) return;
+  const started = performance.now();
+  const check = () => {
+    if (!running.isOpen()) return;
+    if (running.quietFor() < QUIET_MS && performance.now() - started < QUIET_CAP_MS) {
+      setTimeout(check, TICK_MS);
+      return;
+    }
+    const reading = running.end();
+    if (reading) publish({ ...state, last: reading });
+  };
+  check();
 }
 
 const subscribe = (listener: () => void) => {

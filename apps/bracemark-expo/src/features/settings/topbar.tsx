@@ -74,7 +74,11 @@ export function Topbar({ section }: { section: SettingsSectionId }) {
           <Icon as={Menu} className="size-5 text-foreground" />
         </Button>
       )}
-      <Text numberOfLines={1} className="min-w-0 flex-1 text-base font-medium">
+      <Text
+        testID="settings-title"
+        numberOfLines={1}
+        className="min-w-0 flex-1 text-base font-medium"
+      >
         {label}
       </Text>
       <Button

@@ -48,7 +48,7 @@ import { API_URL, SITE_URL } from '../web/fixtures/env';
 
 export const EXPO_ROOT = join(E2E_ROOT, '..', 'apps', 'bracemark-expo');
 export const APP_ID = 'com.bracemark.app';
-const METRO_URL = 'http://localhost:8081';
+export const METRO_URL = 'http://localhost:8081';
 // mobile/flows/subflows/cold-launch.yaml's default, passed explicitly.
 const DEV_CLIENT_LINK =
   'bracemark://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081%2F%3FdisableOnboarding%3D1';
@@ -104,10 +104,18 @@ export async function readProbe(
     root,
     (attributes) => attributes['resource-id'] === 'measure-stall-reading',
   );
-  const text = nodes.map((node) => node.attributes?.text || node.attributes?.accessibilityText)[0];
-  if (!text)
+  const texts = nodes
+    .map((node) => node.attributes?.text || node.attributes?.accessibilityText)
+    .filter((text): text is string => Boolean(text));
+  if (texts.length === 0)
     throw new Error('no measure-stall-reading on screen — was the bundle built with the probe?');
-  const probe = JSON.parse(text) as { calibration?: StallCalibration; last?: StallReading };
+  // More than one readout can be in the tree: Settings draws one, and the links
+  // screen it covers keeps its own. Every one renders the same probe state, but a
+  // covered screen may not re-render, so the readout with this leg's label wins;
+  // with none, the first is what the error below reports.
+  type Probe = { calibration?: StallCalibration; last?: StallReading };
+  const parsed = texts.map((text) => ({ text, probe: JSON.parse(text) as Probe }));
+  const { text, probe } = parsed.find((entry) => entry.probe.last?.label === label) ?? parsed[0];
   if (!probe.last || probe.last.label !== label) {
     throw new Error(`the reading on screen is not this ${label}'s: ${text}`);
   }
@@ -159,15 +167,18 @@ export async function waitForSync(options: DeviceOptions): Promise<void> {
 
 // --- Metro, serving the production bundle ---------------------------------------------
 
+// `minify: false` keeps function names for a CPU profile (hermes-profile.ts) and
+// costs nothing measurable (_finding what owns a native stall_, below).
 export async function startMetro(
   platform: NativePlatform,
   runDir: string,
+  { minify = true }: { minify?: boolean } = {},
 ): Promise<{ stop(): Promise<void> }> {
   await assertPortFree(METRO_URL, 'Metro (this run serves its own production bundle)');
   const log = createWriteStream(join(runDir, 'metro.log'));
   const child: ChildProcess = spawn(
     'npx',
-    ['expo', 'start', '--no-dev', '--minify', '--port', '8081'],
+    ['expo', 'start', '--no-dev', ...(minify ? ['--minify'] : []), '--port', '8081'],
     {
       cwd: EXPO_ROOT,
       // Its own process group, so stopping it takes Metro's workers too.
@@ -210,7 +221,7 @@ export async function startMetro(
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
-    await assertMeasurementBundle(platform);
+    await assertMeasurementBundle(platform, minify);
     return { stop };
   } catch (error) {
     await stop();
@@ -220,7 +231,7 @@ export async function startMetro(
 
 // Fetch the bundle the device is about to load — which also warms Metro's cache
 // for it — and refuse to run unless it is the build this run needs.
-async function assertMeasurementBundle(platform: NativePlatform): Promise<void> {
+async function assertMeasurementBundle(platform: NativePlatform, minify: boolean): Promise<void> {
   const manifest = (await (
     await fetch(METRO_URL, {
       headers: { 'expo-platform': platform, accept: 'application/expo+json,application/json' },
@@ -228,7 +239,7 @@ async function assertMeasurementBundle(platform: NativePlatform): Promise<void> 
   ).json()) as { launchAsset?: { url?: string } };
   const url = manifest.launchAsset?.url;
   if (!url) throw new Error('Metro served no launch asset');
-  if (!url.includes('dev=false') || !url.includes('minify=true')) {
+  if (!url.includes('dev=false') || url.includes('minify=true') !== minify) {
     throw new Error(`Metro is not serving a production bundle: ${url}`);
   }
   console.log('building the production bundle…');

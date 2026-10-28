@@ -1,0 +1,86 @@
+# The render leg's sidebar window (e2e/measure/render-mobile.ts): open the
+# probe's `sidebar` window, collapse and expand the links sidebar's two sections
+# TOGGLES times, and stop on the reading. Starts and ends on the links screen,
+# both sections expanded.
+#
+# An expand is the cheapest way to mount every row a section holds, and the only
+# repeatable one: the rail's content mounts once with the links screen, which
+# Settings never unmounts (it is a modal over it), so the cost the first load
+# pays is otherwise paid once a session. A collapse unmounts them again.
+#
+# Lists collapses first and expands last because with it open, a big tree puts
+# the Tags header below the fold, where a tap can't reach it. Each tap waits for
+# a row to come or go, which is the commit the tap caused: LIST_ROW and TAG_ROW
+# are each section's first row. Not `my-list`: a seeded library's own root
+# lists rank ahead of the system three (seed/library.ts, `buildLists`), and in
+# `plus-worst` that puts My List under a hundred-deep chain, off the screen.
+#
+# On a narrow window the rail is a drawer over the controls in the
+# bottom-leading corner, so the window opens before the drawer does and closes
+# after it has gone, with a tap on the scrim beside it. That puts the drawer's
+# opening and closing in the reading, which on a phone is the path a person
+# takes; a narrow reading is not comparable to a wide one.
+#
+# Parameters: TOGGLES — collapse/expand pairs per section; LIST_ROW, TAG_ROW —
+# the first list's and tag's ids; E2E_WIDTH — `wide` or `narrow`.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'measure-begin-sidebar'
+- runFlow:
+    when:
+      true: ${E2E_WIDTH !== 'wide'}
+    commands:
+      - tapOn:
+          id: 'links-open-navigation'
+      - extendedWaitUntil:
+          visible:
+            id: 'links-nav-section-lists'
+          timeout: 10000
+- repeat:
+    times: ${TOGGLES}
+    commands:
+      - tapOn:
+          id: 'links-nav-section-lists'
+      - extendedWaitUntil:
+          notVisible:
+            id: 'links-nav-list-${LIST_ROW}'
+          timeout: 10000
+      - tapOn:
+          id: 'links-nav-section-tags'
+      - extendedWaitUntil:
+          notVisible:
+            id: 'links-nav-tag-${TAG_ROW}'
+          timeout: 10000
+      - tapOn:
+          id: 'links-nav-section-tags'
+      - extendedWaitUntil:
+          visible:
+            id: 'links-nav-tag-${TAG_ROW}'
+          timeout: 10000
+      - tapOn:
+          id: 'links-nav-section-lists'
+      - extendedWaitUntil:
+          visible:
+            id: 'links-nav-list-${LIST_ROW}'
+          timeout: 10000
+- runFlow:
+    when:
+      true: ${E2E_WIDTH !== 'wide'}
+    commands:
+      # The scrim, right of the drawer: a tap there closes it.
+      - tapOn:
+          point: 95%, 50%
+      - extendedWaitUntil:
+          visible:
+            id: 'measure-end'
+          timeout: 10000
+- tapOn:
+    id: 'measure-end'
+# The end waits for the thread to go quiet (components/measure-probe.tsx): the
+# rows mount a slice a frame, and the window must hold the whole fill.
+- extendedWaitUntil:
+    visible:
+      id: 'measure-stall-reading'
+      text: '.*"label":"sidebar".*'
+    timeout: 20000

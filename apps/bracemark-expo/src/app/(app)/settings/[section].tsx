@@ -2,6 +2,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Redirect, useLocalSearchParams } from 'expo-router';
 import { withUniwind } from 'uniwind';
 
+import { RenderMeasureControls, SETTINGS_WINDOWS } from '../../../components/measure-probe';
 import { SettingsScrollHost } from '../../../features/settings/scroll-host';
 import { SectionContent } from '../../../features/settings/section-content';
 import { DEFAULT_SECTION_ID, isSettingsSectionId } from '../../../features/settings/sections';
@@ -39,6 +40,10 @@ export default function SettingsSectionScreen() {
       <SettingsScrollHost resetKey={section}>
         <SectionContent section={section} />
       </SettingsScrollHost>
+      {/* Measurement bundles only, null in every other build: the render leg's
+          section-switch windows (components/measure-probe.tsx), opened here
+          because the switch happens on this screen. */}
+      <RenderMeasureControls windows={SETTINGS_WINDOWS} />
     </StyledSafeAreaView>
   );
 }

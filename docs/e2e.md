@@ -1199,6 +1199,7 @@ All of them are in the app:
 | `links-nav-list-<id>`         | `src/features/links/sidebar.tsx` — a drawer row                                                 |
 | `links-nav-tag-<id>`          | ” — the tag rows                                                                                |
 | `links-nav-all`               | ” — Show All                                                                                    |
+| `links-nav-section-<section>` | ” — the `lists` and `tags` section headers (collapse/expand)                                    |
 | `links-more-options`          | `src/features/links/more-options-menu.tsx`                                                      |
 | `links-sync`                  | ” — the Sync menu item (`syncNow`)                                                              |
 | `links-open-settings`         | ” — the Settings menu item                                                                      |
@@ -1249,9 +1250,11 @@ All of them are in the app:
 | `lock-pane-<part>`            | `src/components/lock-pane.tsx` — `password` `unlock` `error`                                    |
 | `settings-open-navigation`    | `src/features/settings/topbar.tsx`                                                              |
 | `settings-close`              | ” — returns to the links route                                                                  |
+| `settings-title`              | ” — the active section's label                                                                  |
 | `settings-nav-<section>`      | `src/features/settings/sidebar.tsx`                                                             |
 | `settings-back`               | `src/features/settings/settings-kit.tsx` — a sub-view's back link (its label repeats the title) |
 | `measure-stall-reading`       | `src/features/settings/data-section.tsx` — measurement bundles only (`measure:data:<platform>`) |
+| `measure-begin-<label>`       | `src/components/measure-probe.tsx` — also `measure-end`; measurement bundles only               |
 | `export-data-format-<format>` | ” — `bracemark` `netscape` `csv` `text` export radio rows                                       |
 | `extraction-mode-<mode>`      | `src/features/settings/extraction-section.tsx` — `off` `saves` `all` radio rows                 |
 | `extraction-count-<bucket>`   | ” — the number in `done` `pending` `will-retry` `wont-retry`                                    |
@@ -3801,9 +3804,20 @@ window:
   `EXPO_PUBLIC_MEASURE_STALLS=1` as the runner (see ⚠ above: `--no-dev` still loads `.env.production`). That
   keeps function names and costs nothing measurable. Its comments do still name
   the deployed api, so check the live `baseUrl`, not a substring.
+- **The render leg does all of this itself with `--profile`**
+  (`measure/hermes-profile.ts`): an unminified bundle, a profile around each
+  tree-leg window written beside `results.json` as `<leg>-<run>.cpuprofile`, and
+  a summary printed per window. The summary splits Fabric's host calls from the
+  JS, and lists the busiest functions inclusive, with React's own scheduler
+  frames left out so the components show. `npx tsx measure/hermes-profile.ts
+<file> [top]` summarizes a saved profile again at any depth. The sampler costs
+  time of its own, so a profiled run's readings are for attribution only. To
+  name a frame, read its line in the bundle: start Metro as the runner does,
+  without `--minify`, and fetch the URL the profile's frames carry.
 - **Metro's inspector lists the runtimes** at `http://localhost:8081/json/list`.
-  Open the target's `webSocketDebuggerUrl` and send `Profiler.enable`,
-  `Profiler.start`, then `Profiler.stop` after the flow. The reply is a
+  Open the target's `webSocketDebuggerUrl` and send `Profiler.start`, then
+  `Profiler.stop` after the flow. `Profiler.enable` is answered "Unsupported
+  method" (2026-10-28), and `start` does not need it. The reply is a
   `.cpuprofile` that Chrome DevTools opens, or that a script can walk: a
   contiguous run of busy samples is one task, and the frames above it name the
   owner. A cold launch replaces the runtime, so attach after it.
@@ -3827,7 +3841,10 @@ the links list costs the JS thread to **draw**, not to load: a fast scroll down
 it and back, and the docked rail put away and brought back, in each link
 layout. They are what to re-run when a link item, the list, or anything per-row
 (a hook, a live read, a menu) changes. A scroll that shows blank space, or a
-rail toggle that hangs, is the symptom they turn into a number.
+rail toggle that hangs, is the symptom they turn into a number. Two **tree
+legs** do the same for the surfaces that mount a row per list and per tag
+([client-queries.md](./client-queries.md), _the tree surfaces mount every
+row_): the links sidebar and the Settings → Lists and Tags tables.
 
 ```sh
 npm run dev                                          # api + web, as for the data leg
@@ -3836,6 +3853,9 @@ npm run measure:render:ios -- --device <udid>        # an iPad, for the rail leg
 npm run measure:render:android -- --layouts list --repeat 5
 npm run measure:render:web                           # 1,000 links, CPU 4x slower
 npm run measure:render:web -- --trace                # + a DevTools trace per run
+npm run measure:render:ios -- --library worst --legs sidebar,settings
+npm run measure:render:web -- --library worst --legs sidebar,settings
+npm run measure:render:android -- --library worst --legs settings --repeat 1 --profile
 ```
 
 Each run restores one fresh Plus account from a `plus-full`-shaped backup of
@@ -3856,6 +3876,22 @@ runs it.
   only, so on native it needs a tablet simulator or the `bracemark-tablet` AVD.
   On a phone the rail is a drawer and the leg is skipped.
 
+Then, once and in whatever layout was picked last, the tree legs:
+
+- **sidebar**: `--toggles` collapse/expand pairs of the links sidebar's Lists
+  and Tags sections (`flows/render-sidebar.yaml`). Lists collapses first and
+  expands last, because a big open tree pushes the Tags header out of reach.
+- **settings**: from Settings → Misc, a switch to About, to Lists and to Tags,
+  each window closed once the section's rows are in
+  (`flows/render-settings.yaml`). The report has one row per section.
+
+`--legs` picks any of `scroll,rail,sidebar,settings` (all four by default).
+`--library worst` restores the `plus-worst` library (109 lists down a 100-deep
+chain, 100 tags, names at their bounds) instead of the `plus-full` shape, and
+refuses a `--links` beside it: that library's size is fixed. The tree legs are
+what it is for. `plus-full`'s 24 lists and 40 tags are not where anyone feels
+the tree surfaces.
+
 Each leg runs `--repeat` times (3 by default) and the report prints every run
 and the median. Why it is built the way it is:
 
@@ -3871,11 +3907,49 @@ and the median. Why it is built the way it is:
   reading there.
 - **The native window is opened from the screen.** The data leg's windows are
   opened by the import and export hooks. A scroll has no run to hang one on, so
-  a measurement bundle draws small `measure-begin-scroll` / `measure-begin-rail`
-  / `measure-end` controls and the readout in the links screen's bottom-leading
-  corner (`components/measure-probe.tsx`). They sit clear of the FAB and of the
-  swipe path, and they render nothing in any other build. A reading carries its
-  label, and the runner refuses one that is not the leg it just ran.
+  a measurement bundle draws small `measure-begin-<label>` / `measure-end`
+  controls and the readout in the bottom-leading corner of the links screen
+  (`scroll`, `rail`, `sidebar`) and of the settings screen (`settings-about`,
+  `settings-lists`, `settings-tags`), from `components/measure-probe.tsx`. On
+  the links screen they sit clear of the FAB and of the swipe path. They render
+  nothing in any other build. A reading carries its label, and the runner
+  refuses one that is not the leg it just ran. That is why each settings switch
+  has its own label: the three run back to back, and one shared label would
+  accept the previous switch's reading. With Settings up there are two readouts
+  in the tree, the covered links screen's and Settings', so `readProbe` takes the
+  one with the leg's label.
+- **An expand is the first load, made repeatable.** The links sidebar mounts
+  with the links screen, as drawer content always does, and Settings is a modal
+  over that screen, so nothing unmounts it within a session. Expanding a section
+  mounts every row it holds in one commit, with nothing else in the window.
+  That is the same row work the first load pays, beside the list's first paint.
+  On a phone the rail is a drawer over the controls, so the window also holds
+  the drawer opening and closing. That is the path a person takes there, and it
+  makes a narrow sidebar reading incomparable with a wide one.
+- **A settings window waits for a row, not the title.** The topbar's
+  `settings-title` commits with the switch. The Lists and Tags tables fill one
+  commit later, when their live read answers (`useLiveRead` on expo, Dexie's
+  `liveQuery` on web). All the rows land in that one commit, so the first row's
+  rename field (`List name`, `Tag name`) stands for the whole table. About has
+  no table. It is the baseline, so a section's reading less About's is what its
+  table costs.
+- **⚠ A tree window ends at quiet, not at the tap.** The trees mount a slice a
+  frame (`lib/use-progressive-count.ts`), so the first row is on screen while
+  the rest are still coming, and a window closed there misses the fill. On the
+  tree legs, `measure-end` closes the window once the JS thread has gone 500 ms
+  without a stall, capped at 10 s (`endStallWindowWhenQuiet`, `stall-probe.ts`).
+  The first readings after slicing landed were taken with the end at the tap.
+  They read low, and they were thrown away. `scroll` and `rail` still end at
+  the tap, so their recorded readings stay comparable.
+- **On Android the probe also sees the UI thread.** React Native's timers are
+  driven from it there, so a tick waits out native view creation as well as
+  JS. A Hermes profile of the same window can read less busy time than the
+  probe reads blocking, and the difference is the mount on the UI thread. iOS
+  readings do not show this.
+- **The sidebar flow waits on each library's first row**, `<prefix>-list-00`
+  and `<prefix>-tag-00`, not on `my-list`. A seeded library's root lists rank
+  ahead of the system three (`seed/library.ts`, `buildLists`), and in
+  `plus-worst` that puts My List under the hundred-deep chain, off the screen.
 - **Preview images are in, and the sync is at rest.** The image slot is part of
   what a row costs to mount, so the backup carries the images the data leg
   leaves out. A sync still pushing writes `items` rows throughout the window,
@@ -3920,6 +3994,36 @@ the shared keyed cache, `readLinks` shares unchanged rows, and the row's
 | rail card   | 197 → 178      | 374 → 355 ms  | 2,464 → 2,138 ms |
 
 What is left is the per-scroll commit described under ⚠ above, not row work.
+
+**Readings — the tree legs, 2026-10-28**, iOS 26.5 simulators and a Pixel 8
+emulator (Android 16), production bundle on the debug shell, `plus-worst` (109
+lists down a 100-deep chain, 100 tags), 5 toggle pairs, median of 3. Each cell
+is longest stall / blocking. _Before_ is `0d888d3`. _After_ is the slicing, the
+memoized rows and the idle-seeded drag style ([client-queries.md](./client-queries.md),
+_the tree surfaces mount every row_), read with the quiet end above.
+
+| leg            | iPad (A16)                    | iPhone 17 Pro                 | Pixel 8 emulator                |
+| -------------- | ----------------------------- | ----------------------------- | ------------------------------- |
+| sidebar        | 452 / 2,609 → **97 / 190**    | 385 / 3,017 → **86 / 203**    | 623 / 5,957 → **132 / 952**     |
+| settings about | 238 / 193 → 118 / 68          | 230 / 244 → 115 / 65          | 218 / 281 → 189 / 336           |
+| settings lists | 1,162 / 1,127 → **324 / 940** | 1,186 / 1,202 → **277 / 773** | 1,407 / 2,841 → **752 / 3,878** |
+| settings tags  | 958 / 928 → **282 / 598**     | 1,025 / 1,065 → **281 / 605** | 1,221 / 1,866 → **555 / 2,727** |
+
+The `bracemark-tablet` AVD (wide, docked rail), same runs: sidebar 779 / 7,033 →
+**246 / 1,656**, Lists 1,218 / 2,534 → **746** / 4,187, Tags 1,111 / 2,105 →
+**541** / 3,183, About 384 / 461 → 235 / 185. Its before was read on the
+change reverted in the working tree, with only the flows' testIDs kept.
+
+On iOS every reading fell. On both Android AVDs the longest stall fell by half
+or more, and the tables' total blocking rose by one to one and a half seconds. The probe there also reads the UI
+thread (⚠ above), and a Hermes profile of the Lists switch shows the JS side
+down from 3.7 s busy to 2.3 s, so the rise is native mounting paid once per
+slice. The phone sidebar includes the drawer opening and closing, which no
+longer re-renders the rows. `plus-full` (24 lists, 40 tags) before the change,
+for scale: the sidebar read 95–163 ms longest on all three, and the tables
+300–565 ms. Web, production export at 4× CPU: `plus-worst`'s sidebar reads
+60–98 ms longest, its Lists table 91–133 ms and its Tags table 50–57 ms, and
+`plus-full` has no long task in any tree leg.
 
 ### measuring the password manager
 
