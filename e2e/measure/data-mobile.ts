@@ -39,6 +39,7 @@ import {
 //   npm run measure:data:android -- --links 1000,10000
 //   npm run measure:data:ios -- --device <udid>   # one of several booted
 //   npm run measure:data:android -- --memory-trace  # + memory.jsonl, every 10 s
+//   npm run measure:data:ios -- --memory-trace      # the same, off the simulator
 //
 // NOT A TEST, for measure/data-web.ts's reason. Numbers for a person to read and
 // record in the doc.
@@ -48,10 +49,11 @@ import {
 // screen, a production bundle on the development client with the api pinned,
 // and a calibration on every leg because a simulator is not a phone.
 //
-// ON ANDROID IT ALSO READS MEMORY: `dumpsys meminfo` as each leg ends and around
-// the restore's sync (measure/memory.ts), outside the probe's windows. The
-// debug native shell makes these numbers higher than a release build's, so
-// compare them run with run, not with a phone. Growth is the reading.
+// IT ALSO READS MEMORY: `dumpsys meminfo` on Android, `footprint` on the iOS
+// simulator, as each leg ends and around the restore's sync (measure/memory.ts),
+// outside the probe's windows. The debug native shell makes these numbers higher
+// than a release build's, and the simulator's are the Mac's memory, so compare
+// them run with run, never with a phone. Growth is the reading.
 
 const EXPORT_FORMATS = [
   { format: 'netscape', label: 'HTML bookmarks' },
@@ -78,7 +80,6 @@ interface NativeLeg {
   reading: StallReading;
   calibration: StallCalibration;
   // The app's memory as the leg ends, outside the probe's window (measure/memory.ts).
-  // Android only.
   memory?: MemoryReading;
 }
 
@@ -125,9 +126,6 @@ function parseOptions(argv: string[]): ParsedOptions {
         '`npm run measure:data:ios`, `measure:data:android`.',
     );
   }
-  if (memoryTrace && platform !== 'android') {
-    throw new Error('--memory-trace reads dumpsys, so it is Android only (measure/memory.ts)');
-  }
   return { platform, deviceId, links, exports, memoryTrace };
 }
 
@@ -160,7 +158,7 @@ async function main(): Promise<void> {
 
   const metro = await startMetro(options.platform, runDir);
   const trace = options.memoryTrace
-    ? traceMemory(options.deviceId, APP_ID, join(runDir, 'memory.jsonl'))
+    ? traceMemory(options.platform, options.deviceId, APP_ID, join(runDir, 'memory.jsonl'))
     : undefined;
   const legs: NativeLeg[] = [];
   const syncs: SyncReading[] = [];
@@ -216,7 +214,7 @@ async function measureSize(
     await waitForSync(options);
     sync = { links, wallMs: Date.now() - started, before, after: await memoryOf(options) };
     console.log(
-      `  (the restore synced in ${seconds(sync.wallMs)} — not probed; native heap ` +
+      `  (the restore synced in ${seconds(sync.wallMs)} — not probed; memory ` +
         `${formatMemory(sync.before)} → ${formatMemory(sync.after)})`,
     );
     for (const { label } of EXPORT_FORMATS) {
@@ -231,9 +229,7 @@ async function measureSize(
 }
 
 function memoryOf(options: Options): Promise<MemoryReading | undefined> {
-  return options.platform === 'android'
-    ? readMemory(options.deviceId, APP_ID)
-    : Promise.resolve(undefined);
+  return readMemory(options.platform, options.deviceId, APP_ID);
 }
 
 async function importLeg(
@@ -288,13 +284,13 @@ function report(legs: NativeLeg[], syncs: SyncReading[]): void {
     'stalls',
     'band',
     'calibration',
-    'native heap after',
+    'memory after',
   ];
   printTable(header, rows);
   for (const sync of syncs) {
     console.log(
       `\nthe ${sync.links.toLocaleString('en-US')}-link restore’s sync: ${seconds(sync.wallMs)}, ` +
-        `native heap ${formatMemory(sync.before)} → ${formatMemory(sync.after)}`,
+        `memory ${formatMemory(sync.before)} → ${formatMemory(sync.after)}`,
     );
   }
 }
