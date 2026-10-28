@@ -1,5 +1,6 @@
 import type { Metadata, ResolvingMetadata } from 'next';
 
+import { STATUS } from '@stxapps/shared';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { ElsewhereList } from '../../components/elsewhere-list';
@@ -103,6 +104,24 @@ export default function Page() {
             so a reply can take a day or two. A person reads every message, and anything that needs
             an answer gets one — an AI model may help draft it, but a person writes or approves
             every reply we send.
+          </p>
+          {/* Before the "worth including" list, because it can save the email
+              altogether. No interval in the sentence: the check cadence lives in
+              the status repo's config, and a number here would go stale there
+              without anything in this repo noticing. */}
+          <p className={cn('mt-4 text-body text-muted-foreground')}>
+            If something stopped working all at once, check{' '}
+            <a
+              className={cn(
+                'rounded-sm text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
+              )}
+              href={STATUS.url}
+              rel="noreferrer"
+            >
+              {STATUS.label}
+            </a>{' '}
+            first. It shows whether each part of Bracemark is answering, checked from outside our
+            own servers.
           </p>
 
           <h2 className={cn('mt-8 text-sm font-semibold')}>Worth including</h2>

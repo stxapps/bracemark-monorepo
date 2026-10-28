@@ -844,7 +844,10 @@ same instinct one level down and not an exception to the table.
 
 **The repository is public: `github.com/stxapps/bracemark-monorepo`, AGPL-3.0.**
 The whole product is in it — both apps, the browser extension, both Workers, the
-marketing site. This is a **claim we make about ourselves**, so it is subject to
+marketing site. The one public surface outside it is the status page
+(`status.bracemark.com`), in `github.com/stxapps/bracemark-status` under the same
+licence, kept apart so it does not go down with what it reports on
+([hosting.md](./hosting.md), _the status page_). This is a **claim we make about ourselves**, so it is subject to
 the same rule as the brand lines: it must say the same thing on every surface,
 and it must not outrun what the code supports.
 

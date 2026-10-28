@@ -30,6 +30,10 @@ domains** rather than one domain split by subdomain:
 | `staging`    | `dryrunbase.com` | `app.dryrunbase.com` | `api.dryrunbase.com` | `extractor.dryrunbase.com` |
 | `production` | `bracemark.com`  | `app.bracemark.com`  | `api.bracemark.com`  | `extractor.bracemark.com`  |
 
+Production has a fifth host the table leaves out because nothing in this repo
+deploys to it: `status.bracemark.com`, the status page, built and served from its
+own repo on GitHub — [the status page](#the-status-page--statusbracemarkcom).
+
 Within each domain the pattern is `<role>.<domain>`, and the site is the
 exception that proves the rule — it has no `<role>.` label because it **is** the
 zone apex. Why the two tiers don't share a domain is
@@ -566,6 +570,68 @@ CloudFront and S3 access is refused them, and a refusal is not an empty list.
 **Turning any of it on is a /privacy change first.** If a fault ever needs
 access logs, the page says so before the setting moves, and the search words in
 the request line are the reason the order matters.
+
+### the status page — `status.bracemark.com`
+
+Whether each part of production is answering, at an address that does not go
+down with it. **It is not in this repo**: `github.com/stxapps/bracemark-status`,
+public, AGPL-3.0 like this one, no dependencies. Its README has the mechanics —
+what a check is, how the record is kept, how to write an incident — and this
+section has only what binds the two repos together.
+
+**Why GitHub, and why that is the whole design.** The API and the link-preview
+service run on Cloudflare; the marketing site and the web app are served by
+CloudFront. A status page on either provider shares a failure with half of what
+it reports on — Cloudflare Pages was rejected for exactly that. GitHub Actions
+runs the checks (cron every 15 minutes, off the hour; minutes are free in a
+public repo) and GitHub Pages serves the result, so neither the checker nor the
+page depends on what it watches. Production only — staging has no status page. The marketing site links to it
+from the footer's Company column, /support and the FAQ's `status` answer, and
+both apps link to it from Settings → About — all through `STATUS` in
+`packages/shared/src/brand/brand.ts`. Not from a sync error: the same message
+covers "you are offline", where a link to a page you cannot load points the
+blame the wrong way, and errors keep their fixed shape
+([brand-assets.md](./brand-assets.md), _errors have a fixed shape_).
+
+**What it requests**, from GitHub's runners, up to three tries of 10 seconds
+each:
+
+| part                 | request                                  | up when                   |
+| -------------------- | ---------------------------------------- | ------------------------- |
+| the website          | `https://bracemark.com/`                 | 2xx                       |
+| the web app          | `https://app.bracemark.com/`             | 2xx                       |
+| our API              | `https://api.bracemark.com/health`       | 2xx and `{"status":"ok"}` |
+| link-preview service | `https://extractor.bracemark.com/health` | 2xx and `{"status":"ok"}` |
+
+⚠ **Both `/health` routes are a contract with another repo.** Moving one,
+putting it behind auth or a rate limit a GitHub runner can trip, or changing its
+body shape marks that Worker **down** on a public page, and nothing in this repo
+— no type, no test — knows the status page exists. The routes carry a comment
+saying so (`apps/bracemark-api/src/app.ts`, `apps/bracemark-extractor/src/app.ts`).
+Note what `/health` does **not** prove: it answers from the Worker without
+touching D1, R2 or the Durable Object, so "up" means the Worker answers, not that
+sync works. A deeper probe is a change to the route, made here, with its cost
+(each check would then read storage) weighed here.
+
+⚠ **The `CNAME` is DNS only — grey cloud, never proxied.** The record is
+`status → stxapps.github.io` in the `bracemark.com` zone. Proxied, the page would
+be served through the Cloudflare network it exists to be independent of, and
+GitHub could not issue its certificate. What stays shared even unproxied is the
+DNS itself: the zone is Cloudflare's, so a Cloudflare DNS outage takes the name
+down too, and the page says so in its own _How this page works_. Moving that
+one name to a non-Cloudflare DNS provider would need a separate domain; it was
+judged not worth it.
+
+⚠ **/privacy names GitHub, and the page's own copy makes the trackers claim.**
+/privacy's scope line lists `status.bracemark.com`, _Technical and security
+data_ names GitHub as a holder of request logs, and _Who else processes it_
+lists it — all for this page alone. The page loads nothing from any other
+origin (a `default-src 'none'` CSP meta tag, and a test in its repo), which is
+what keeps the FAQ's _trackers_ answer — "anywhere in Bracemark" — true of it.
+Adding an analytics script, a font CDN or an embedded widget to the status page
+falsifies both, from a repo whose CI cannot see either sentence. Its user-facing
+copy is held to [brand-assets.md](./brand-assets.md) (_the voice_, _terminology_)
+like any other surface; the two Workers carry their terminology names there.
 
 ### `/.well-known/security.txt`
 

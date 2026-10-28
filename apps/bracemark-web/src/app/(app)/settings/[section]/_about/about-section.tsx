@@ -32,6 +32,7 @@
 // year is therefore the BUILD's year, same as the marketing site's footer.
 
 import {
+  Activity,
   AtSign,
   CircleQuestionMark,
   Code,
@@ -42,7 +43,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 
-import { BRAND, COMPANY, SOCIAL, SOURCE } from '@stxapps/shared';
+import { BRAND, COMPANY, SOCIAL, SOURCE, STATUS } from '@stxapps/shared';
 import { BracemarkIcon } from '@stxapps/web-ui/components/icons/bracemark-icon';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
@@ -86,8 +87,23 @@ const PAGES = [
     description: 'Get help, or tell us something is broken.',
   },
   {
-    // The one row here that doesn't point at the marketing site, and the only
-    // reason this list isn't just "the pages on the apex". It earns the seat: an
+    // Beside Support because it answers the question a user brings there first —
+    // is it me, or is it down? — without writing to anyone. It is the first of
+    // the rows that leave the apex: the status page is served by GitHub, apart
+    // from everything it reports on (docs/hosting.md, _the status page_), and this
+    // section still renders when our API is down, since the app is a static
+    // export. Production's in every tier — staging has no status page.
+    //
+    // Here and NOT in a sync error, which also fires when the user is offline —
+    // where a link to a page they cannot load blames the wrong party.
+    href: STATUS.url,
+    icon: <Activity className="size-5" />,
+    title: 'Status',
+    description: 'Whether each part of Bracemark is answering right now.',
+  },
+  {
+    // A row that doesn't point at the marketing site, and with Status above it
+    // the reason this list isn't just "the pages on the apex". It earns the seat: an
     // app whose pitch is that we CAN'T read your library should say, on the
     // surface where it describes itself, where to go and check that.
     //
@@ -100,10 +116,10 @@ const PAGES = [
     description: `Read what runs on your device. ${SOURCE.license}.`,
   },
   {
-    // The second row that isn't the marketing site, and the only one pointing at
-    // a property we don't control — which is why it sits last, after the two
-    // rows that are ours, mirroring where the site's footer puts it (under
-    // _Company_ with "Source code", never under _Product_).
+    // The third row that isn't the marketing site, and the only one pointing at
+    // a property we don't control — which is why it sits last, after the rows
+    // that are ours, mirroring where the site's footer puts it (under _Company_
+    // with "Status" and "Source code", never under _Product_).
     //
     // TITLED WITH THE HANDLE, like the footer's link and for the footer's reason
     // (docs/brand-assets.md — _the X account_): "X" alone names nothing read cold, and
@@ -113,7 +129,7 @@ const PAGES = [
     // a wrong handle here credits someone else's account and looks exactly like
     // a right one.
     //
-    // The description says announcements and stops there. Support is two rows
+    // The description says announcements and stops there. Support is three rows
     // above this one, and it is email on purpose — a public reply is the
     // wrong shape for questions that carry usernames (docs/brand-assets.md — _not on
     // /support_), so this row must not read as a second way to reach us.
@@ -164,7 +180,7 @@ export function AboutSection() {
       </div>
 
       {/* Both groups are captioned by their heading alone — a description under
-          "Pages" would explain a list of six labelled links, which is the kind of
+          "Pages" would explain a list of seven labelled links, which is the kind of
           text a settings surface accretes and nobody reads. */}
       <SettingsGroup title="Pages">
         <div className={cn('flex flex-col gap-3')}>

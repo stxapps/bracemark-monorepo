@@ -98,6 +98,12 @@ app.get('/', (c) => {
   return c.json({ message: 'Welcome to bracemark-extractor' });
 });
 
+// ⚠ status.bracemark.com polls this route every 15 minutes, from another repo
+// (stxapps/bracemark-status), and marks the link-preview service DOWN on a public page unless
+// it answers 2xx with exactly {"status":"ok"}. Nothing here can see that
+// dependency, so moving the path, changing the body, or putting it behind auth
+// is a change to the status page too. The standard rate limit is fine — the
+// checker sends at most three requests a run. → docs/hosting.md, _the status page_.
 app.get('/health', (c) => {
   return c.json({ status: 'ok' });
 });

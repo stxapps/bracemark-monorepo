@@ -168,6 +168,23 @@ export const SOCIAL = {
   url: 'https://x.com/bracemarkapp',
 } as const;
 
+// The status page, in the two spellings its surfaces need. Its own repo on
+// GitHub, off Cloudflare and AWS so it stays up when production doesn't
+// (docs/hosting.md, _the status page_). Here for SOCIAL's reason: three apps
+// name it — the marketing site's footer, /support and FAQ, and Settings → About
+// in both apps.
+//
+// Production's in every tier, because staging has no status page. A staging
+// build carrying it is fine: deploy-static.sh's tier check refuses the other
+// tier's ORIGINS as substrings, and `https://bracemark.com` is not a substring
+// of this one. A status page moved onto a path of the apex would be, and would
+// stop every staging deploy.
+export const STATUS = {
+  url: 'https://status.bracemark.com',
+  /** The URL without its scheme, for surfaces that print it rather than link it. */
+  label: 'status.bracemark.com',
+} as const;
+
 // The predecessor product, named by two surfaces on the marketing site — the
 // landing page's `If we disappear` footnote and /about's _Where it came from_ —
 // and by nothing else. It is here rather than in bracemark-site's `lib/site.ts`

@@ -104,6 +104,7 @@ that reading comes _before_ the edit; nothing downstream will tell you.
 | **testing on a real phone/tablet** — what connects, secure contexts, HTTPS     | `device-testing.md` ⚠           |
 | **deploying a Worker; applying a D1 migration**                                | `hosting.md` ⚠                  |
 | which host each app answers, the CSP, `nx start` preview                       | `hosting.md`                    |
+| **the status page** — its own repo; **a `/health` route**, the status `CNAME`  | `hosting.md` ⚠                  |
 | **turning on any CloudFront/S3 request log** — /privacy says we keep no copy   | `hosting.md` ⚠                  |
 | leaving an origin — cross-origin nav vs. the Next router                       | `hosting.md`                    |
 | **the public repo, the AGPL licence, what we claim about it**                  | `brand-assets.md` ⚠             |

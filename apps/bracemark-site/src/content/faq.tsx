@@ -9,6 +9,7 @@ import {
   LINK_NOTE_MAX,
   PLAN_LABELS,
   PLAN_USD_PER_YEAR,
+  STATUS,
   TRIAL_DAYS,
 } from '@stxapps/shared';
 
@@ -258,6 +259,30 @@ export const FAQ_GROUPS: FaqGroup[] = [
             Following a link out to the live page is the one thing that still needs a connection.{' '}
             <PageLink href="/docs/sync-and-devices">Sync and devices</PageLink> explains what
             happens to offline changes.
+          </>
+        ),
+      },
+      {
+        // Right after `offline` because it is the same fact seen from the other
+        // end: the library is on the device, so our API being down stops sync and
+        // sign-in, not reading. The second sentence must not outrun that answer —
+        // "queued and syncs" is its claim, restated, and nothing wider.
+        //
+        // This is the page's FIRST mention of our API, so it carries the gloss
+        // (docs/brand-assets.md, _terminology_); the self-hosting answer further
+        // down uses the bare name. No interval and no history length: both live
+        // in the status repo's config, where a change would leave a number here
+        // quietly wrong (docs/hosting.md, _the status page_).
+        id: 'status',
+        q: 'Is Bracemark down?',
+        a: (
+          <>
+            <ExternalLink href={STATUS.url}>{STATUS.label}</ExternalLink> shows whether each part of
+            Bracemark is answering — the website, the web app, our API (the service behind sign-in,
+            sync, and billing), and the link-preview service — checked from outside our own servers,
+            along with the outages it has recorded. While our API is down, a device that’s already
+            signed in still opens your library, and anything you change is queued and syncs once
+            it’s back.
           </>
         ),
       },

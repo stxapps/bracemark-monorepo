@@ -30,6 +30,7 @@
 import { Linking, Platform, View } from 'react-native';
 import Constants from 'expo-constants';
 import {
+  Activity,
   AtSign,
   CircleQuestionMark,
   Code,
@@ -42,7 +43,7 @@ import {
   Star,
 } from 'lucide-react-native';
 
-import { BRAND, COMPANY, SOCIAL, SOURCE } from '@stxapps/shared';
+import { BRAND, COMPANY, SOCIAL, SOURCE, STATUS } from '@stxapps/shared';
 
 import { BracemarkIcon } from '../../components/icons/bracemark-icon';
 import { Icon } from '../../components/ui/icon';
@@ -83,14 +84,22 @@ const PAGES: PageLink[] = [
     title: 'Support',
     description: 'Get help, or tell us something is broken.',
   },
-  // The last two rows are the ones that don't point at the marketing site: the
-  // repository, then the X account — the only link here to a property we don't
+  // The last three rows are the ones that don't point at the marketing site:
+  // the status page, the repository, then the X account — the only link here to a property we don't
   // control, which is why it goes last. Web's file carries the argument for both,
   // inline in its `PAGES`; the constraints that bite here are the same two. The
   // repo row says "read", never "verify" (docs/brand-assets.md — _the source_), and the X
   // row is TITLED with `SOCIAL.handle` rather than "X" and never retypes it
-  // (_the X account_). Its description stops at announcements: Support is two
-  // rows up and is email on purpose.
+  // (_the X account_). Its description stops at announcements: Support is three
+  // rows up and is email on purpose. Status sits beside Support, and stays out of
+  // sync errors, for the reasons web's file gives; this screen renders from the
+  // device, so it is reachable while our API is down.
+  {
+    url: STATUS.url,
+    icon: Activity,
+    title: 'Status',
+    description: 'Whether each part of Bracemark is answering right now.',
+  },
   {
     url: SOURCE.url,
     icon: Code,

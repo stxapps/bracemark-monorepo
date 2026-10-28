@@ -9,7 +9,7 @@
 
 // Imported rather than re-exported blind (the way COMPANY is, below) because
 // FOOTER_LINKS needs the repo URL in scope.
-import { SOCIAL, SOURCE } from '@stxapps/shared';
+import { SOCIAL, SOURCE, STATUS } from '@stxapps/shared';
 
 // Throws rather than falling back to production, matching bracemark-web's
 // lib/site.ts and lib/api-client.ts. A fallback here would mean a build that
@@ -127,7 +127,7 @@ export const PADDLE_REFUND_POLICY_URL = 'https://www.paddle.com/legal/refund-pol
 // so the two documents can never claim different vintages of the same rewrite —
 // and so bumping one after an edit is a deliberate act, not a forgotten one.
 export const TERMS_UPDATED = '13 October 2026';
-export const PRIVACY_UPDATED = '13 October 2026';
+export const PRIVACY_UPDATED = '28 October 2026';
 
 // How long a backup outlives what it copies — the window /privacy (_Backups_,
 // and the key-blob line above it) and /delete-account (_What is deleted_, _What
@@ -188,6 +188,9 @@ export const FOOTER_LINKS: { heading: string; links: FooterLink[] }[] = [
       { href: '/about', label: 'About' },
       { href: '/blog', label: 'Blog' },
       { href: '/support', label: 'Support' },
+      // Beside Support, because it answers the question a reader brings there
+      // first — is it me, or is it down? — without writing to anyone.
+      { href: STATUS.url, label: 'Status', external: true },
       // Under Company rather than Product: it is a fact about who builds this and
       // how, not a thing you can buy. Developers look in the footer for it, which
       // is the whole reason it is here as well as on /about.

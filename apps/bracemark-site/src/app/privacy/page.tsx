@@ -136,8 +136,8 @@ export default function Page() {
         <p>
           This policy explains what {COMPANY.legalName} (“{COMPANY.shortName}”, “we”, “us”) collects
           when you use Bracemark, why, and what happens to it. It covers bracemark.com,
-          app.bracemark.com, the Bracemark applications for iOS, Android, Chrome, and Firefox, and
-          the services behind them.
+          app.bracemark.com, status.bracemark.com, the Bracemark applications for iOS, Android,
+          Chrome, and Firefox, and the services behind them.
         </p>
         <p>
           {COMPANY.legalName} is the <strong>controller</strong> of the personal data described here
@@ -313,12 +313,24 @@ export default function Page() {
             been told exists. "Someone else's" is the party that is not already
             in the sentence.
 
-            If either setting changes, this paragraph and /security move with it. */}
+            If either setting changes, this paragraph and /security move with it.
+
+            GITHUB IS THE THIRD HOLDER, and only for status.bracemark.com. That
+            page is built and served by GitHub (Actions runs the checks, Pages
+            serves the HTML) from its own public repo, so a visit to it is a
+            request in GitHub's logs and nobody else's — the reason it sits
+            outside Cloudflare and AWS is the reason it has to be named here. The
+            checks themselves send no personal data anywhere: they request the
+            two pages and the two Workers' /health from GitHub's runners. The
+            "Two of the choices" paragraph below stays about the two Workers;
+            GitHub Pages has no request-log setting for us to choose. →
+            docs/hosting.md, _the status page_. */}
         <p>
-          That data lives in <strong>Cloudflare</strong>’s and <strong>Amazon Web Services</strong>’
-          own logs, under their retention periods rather than any we set, and we read it to diagnose
-          a fault or an attack. We run no analytics over it, we do not join it to your account, and
-          we keep no separate copy of our own.
+          That data lives in <strong>Cloudflare</strong>’s, <strong>Amazon Web Services</strong>’,
+          and, for the status page, <strong>GitHub</strong>’s own logs, under their retention
+          periods rather than any we set, and we read it to diagnose a fault or an attack. We run no
+          analytics over it, we do not join it to your account, and we keep no separate copy of our
+          own.
         </p>
         <p>
           Two of the choices that decide what reaches those logs are ours rather than theirs, and we
@@ -609,6 +621,10 @@ export default function Page() {
           <li>
             <strong>Amazon Web Services</strong> — serves this website and the web app as static
             files.
+          </li>
+          <li>
+            <strong>GitHub</strong> — runs the checks behind status.bracemark.com and serves that
+            page. It holds no account data, and sees only the requests made to that page.
           </li>
           <li>
             <strong>Paddle</strong> — sells and processes web subscriptions as merchant of record,
