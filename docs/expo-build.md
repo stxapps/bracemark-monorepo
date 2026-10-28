@@ -98,7 +98,27 @@ to that one, and a dev build takes its origins from Metro
 ([env-files.md](./env-files.md), _bracemark-expo_). So `start:lan` in one
 terminal plus `npm run expo:ios -- --device` in another is a valid iPhone setup,
 and `ios:lan` next to a plain `npm run start` is a silent `localhost` on the
-phone. A Metro on :8081 from any other directory gets a "use port 8082
+phone.
+
+**On Xcode 26.6 the install step can hang after `Build Succeeded`.** The CLI
+prints _Unexpected devicectl JSON version output from devicectl_ and then sits on
+`Connecting to: <phone>` with no further output; the build itself is good.
+Install and launch it with Xcode's own tool instead (unlock the phone first):
+
+```sh
+xcrun devicectl list devices    # the phone's identifier
+xcrun devicectl device install app --device <id> \
+  ~/Library/Developer/Xcode/DerivedData/Bracemark-*/Build/Products/Debug-iphoneos/Bracemark.app
+xcrun devicectl device process launch --device <id> --terminate-existing \
+  --payload-url 'bracemark://expo-development-client/?url=http%3A%2F%2F<mac-lan-ip>%3A8081' \
+  com.bracemark.app
+```
+
+**Don't start Metro with `CI=1`** to get past the CLI's prompts in a script or a
+background shell: in CI mode the Expo CLI turns file watching off, so every
+bundle Metro builds stays at whatever it first built — an edit never reaches the
+phone, and nothing says so. `< /dev/null` gets the non-interactive behaviour
+without it. A Metro on :8081 from any other directory gets a "use port 8082
 instead?" prompt instead, and yes starts a second Metro on the env files.
 
 **The store builds are `android:bundle` and `ios:bundle` → `ios:upload`.** The

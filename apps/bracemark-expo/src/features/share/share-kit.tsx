@@ -23,7 +23,7 @@
 //   - NO PORTALS, NO REANIMATED. Nothing here is a Dialog or a DropdownMenu;
 //     the pickers are screens within the sheet rather than overlays over it.
 
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { Keyboard, Platform, Pressable, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { LucideIcon } from 'lucide-react-native';
@@ -39,6 +39,7 @@ import { cn } from '../../lib/utils';
 import { useWideWindow } from '../../lib/window-class';
 import { closeShareSheet } from './share-host';
 import { ShareKeyboardFrame, useShareKeyboard } from './share-keyboard';
+import { markShareMemory } from './share-memory';
 import { ShareSwipeGuard } from './share-swipe-guard';
 
 // The panel's own padding, in points, because the bottom edge is no longer a
@@ -94,7 +95,7 @@ const INITIAL_METRICS = {
 //     `height` note is the other half of this.
 //
 //     THAT PRESENTATION HAS TWO SHAPES, and the frame only learns which from
-//     the native view that measures it (share-keyboard.ts). On an iPhone it is
+//     the native module that measures it (share-keyboard.ts). On an iPhone it is
 //     full-width and flush with the screen's bottom edge, and the panel is a
 //     bottom sheet: bottom-aligned so Save stays under the thumb. On an iPad
 //     the host makes it a FORM SHEET — a 580x640 card floating mid-screen, its
@@ -138,10 +139,11 @@ const INITIAL_METRICS = {
 // not have (docs/soft-keyboard.md, _avoidance_).
 //
 // So the frame pads its own bottom by `useShareKeyboard()` — how much of it the
-// keyboard covers, from our native view on iOS and from the trustworthy half
-// of RN's events on Android. On iOS it is the FRAME'S OWN overlap, measured by
-// the frame, because on an iPad the host also moves the sheet for the keyboard
-// and only a view inside the sheet can see where it went (share-keyboard.ts).
+// keyboard covers, from our native module on iOS and from the trustworthy half
+// of RN's events on Android. On iOS it is the FRAME'S OWN overlap, measured
+// natively against the frame's UIView, because on an iPad the host also moves
+// the sheet for the keyboard and only a view inside the sheet can see where it
+// went (share-keyboard.ts).
 // Bottom padding on a `justify-end` (or, detached, `justify-center`) column, so
 // everything below — the panel, the tap layer, the pickers' scrollers —
 // squeezes identically on the two hosts. That squeeze chain is `min-h-0 shrink`
@@ -183,13 +185,21 @@ const INITIAL_METRICS = {
 // that asks native to hold that swipe off while the screen is up
 // (share-swipe-guard.tsx); the compose screen leaves it unset and keeps the
 // platform's gesture. A no-op on Android, which has no such gesture.
+//
+// `screen` names the screen for the share extension's memory log: each one
+// marks the process's footprint and headroom as it mounts (share-memory.ts).
+// Required, so a new screen cannot join the sheet without showing up there.
 export function ShareSheet({
   children,
+  screen,
   holdSwipe = false,
 }: {
   children: ReactNode;
+  screen: string;
   holdSwipe?: boolean;
 }) {
+  useEffect(() => markShareMemory(screen), [screen]);
+
   return (
     <SafeAreaProvider initialMetrics={INITIAL_METRICS}>
       <ShareSheetFrame holdSwipe={holdSwipe}>{children}</ShareSheetFrame>
@@ -216,7 +226,7 @@ function ShareSheetFrame({ children, holdSwipe }: { children: ReactNode; holdSwi
   // — the frame's bottom padding at the foot of this function, and the inset
   // subtraction just below — and whether the host floats the sheet as a card,
   // which picks the panel's shape (the header).
-  const { lift, detached: hostDetached, onKeyboardGeometry } = useShareKeyboard(insets.bottom);
+  const { lift, detached: hostDetached } = useShareKeyboard(insets.bottom);
   // Android's own card on a wide window (the header). Only Android: the iPad's
   // card is the host's, already 580 wide, and the extension's window size is
   // not to be trusted (docs/share-sheet.md, _On an iPad the sheet floats_).
@@ -349,11 +359,11 @@ function ShareSheetFrame({ children, holdSwipe }: { children: ReactNode; holdSwi
     </>
   );
 
-  // The measured box wraps the padded one rather than being it: the native view
-  // reports how much of ITSELF the keyboard covers, which is a question about
+  // The measured box wraps the padded one rather than being it: the native module
+  // reports how much of the FRAME the keyboard covers, which is a question about
   // the whole frame, and the padding inside is the answer.
   return (
-    <ShareKeyboardFrame onKeyboardGeometry={onKeyboardGeometry} style={{ flex: 1 }}>
+    <ShareKeyboardFrame style={{ flex: 1 }}>
       <View
         style={{ paddingBottom: lift }}
         className={cn('flex-1', detached ? 'justify-center' : 'justify-end')}
@@ -530,7 +540,7 @@ export function ShareNotice({
   children: ReactNode;
 }) {
   return (
-    <ShareSheet>
+    <ShareSheet screen={testID}>
       <ShareHeader dismissible={false} />
       <View testID={testID} className="items-center gap-3 py-6">
         <View className="size-11 items-center justify-center rounded-full bg-muted">

@@ -25,9 +25,10 @@ import Foundation
 // controller worked on the simulator and killed the share extension on an
 // iPhone the moment a picker opened — no crash report, no error, the sheet just
 // gone. Mounting the first Expo native view in this process costs ~14MB
-// (simulator: a picker is +4MB without it, +18MB with), and a dev build of the
-// share extension runs within ~16MB of iOS's per-process memory limit for app
-// extensions, which the simulator does not enforce. Nothing in this process may
+// (simulator: a picker is +4MB without it, +18MB with), and the share extension
+// runs close to iOS's per-process memory limit for app extensions — 120MB on an
+// iPhone 12 — which the simulator does not enforce (docs/share-sheet.md, _the
+// share extension has almost no memory to spare_). Nothing in this process may
 // spend memory like that; a module function costs nothing measurable.
 //
 // iOS-only, and only the share extension calls it — the pod is linked into the

@@ -331,7 +331,7 @@ export function ShareScreen({ url, title }: SharePayload) {
   // flashing a spinner in an empty panel and then jumping.
   if (phase === 'loading' || !taxonomy) {
     return (
-      <ShareSheet>
+      <ShareSheet screen="loading">
         <ShareHeader />
         {url !== null && <ShareSpecimen url={url} title={title} />}
         <View className="items-center py-6">
@@ -369,7 +369,7 @@ export function ShareScreen({ url, title }: SharePayload) {
   // customer their library is full.
   if (taxonomy.maxLinks !== null && taxonomy.linkCount >= taxonomy.maxLinks) {
     return (
-      <ShareSheet>
+      <ShareSheet screen="link-cap">
         <ShareHeader dismissible={false} />
         <ShareSpecimen url={url} title={title} />
         <View testID="share-quota">
@@ -425,7 +425,7 @@ export function ShareScreen({ url, title }: SharePayload) {
   // seconds ago (bracemark-extension's Complete screen makes the same argument).
   if (phase === 'saved') {
     return (
-      <ShareSheet>
+      <ShareSheet screen="saved">
         <ShareHeader />
         <ShareSpecimen url={url} title={title} saved />
         <View className="flex-row items-center gap-2 py-1">
@@ -449,7 +449,7 @@ export function ShareScreen({ url, title }: SharePayload) {
   }
 
   return (
-    <ShareSheet>
+    <ShareSheet screen="compose">
       <ShareHeader />
       <ShareSpecimen url={url} title={title} />
 

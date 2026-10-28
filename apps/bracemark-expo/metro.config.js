@@ -110,7 +110,50 @@ const nxConfig = withNxMetro(mergeConfig(defaultConfig, customConfig), {
 // withShareExtension points the iOS share-extension target's bundle at
 // index.share.js (docs/share-sheet.md); withUniwindConfig must stay the
 // outermost wrapper.
-module.exports = withUniwindConfig(withShareExtension(nxConfig), {
+const shareConfig = withShareExtension(nxConfig);
+
+// THE iOS SHARE EXTENSION'S BUNDLE, AS A DEV BUILD REQUESTS IT. iOS kills an app
+// extension at a hard per-process cap — 120 MB on an iPhone 12, iOS 26.5 — and
+// Hermes compiles whatever Metro serves inside that process, from source
+// (docs/share-sheet.md, _the share extension has almost no memory to spare_).
+// expo-share-extension's controller builds its URL with RCTBundleURLProvider and
+// tags it `shareExtension=true`, so only the share extension is rewritten here;
+// the app's requests pass through untouched. Two rewrites:
+//
+//   - `dev=false&minify=true` — A PRODUCTION BUNDLE, EVEN FROM A DEV BUILD. The
+//     controller asks for `dev=true&minify=false` in every Debug build, and that
+//     bundle does not fit: the iPhone 12 killed the sheet at 122,994 KB on its
+//     first render, with or without an Expo native view mounted. The cost is
+//     the share sheet's dev tooling — no LogBox, no console relay to Metro — so
+//     BRACEMARK_SHARE_DEV_BUNDLE=1 in the shell restores the dev bundle for the
+//     simulator, which enforces no cap.
+//   - NO `transform.bytecode`, always. RCTBundleURLProvider sends no
+//     `transform.engine`, so Expo's own rewriter fills in the Hermes trio,
+//     `transform.bytecode=1` among them — and a bytecode request skips
+//     minification, leaving it to a `hermesc` step that only an export runs.
+//     The dev server then serves the text as is: the same 1,500 modules as
+//     8.0 MB and 210,757 lines instead of 3.2 MB minified. The engine itself
+//     stays (and is set here if Expo ever stops adding it): this process does
+//     run Hermes, and a release build bundles for it.
+const productionShareBundle = process.env.BRACEMARK_SHARE_DEV_BUNDLE !== '1';
+const rewriteShareRequest = shareConfig.server.rewriteRequestUrl;
+shareConfig.server.rewriteRequestUrl = (url) => {
+  const rewritten = rewriteShareRequest(url);
+  if (!url.includes('shareExtension=true')) return rewritten;
+  // Metro passes either a path or a full URL; parse against a dummy origin and
+  // hand back the same shape.
+  const parsed = new URL(rewritten, 'http://localhost');
+  const params = parsed.searchParams;
+  if (!params.has('transform.engine')) params.set('transform.engine', 'hermes');
+  params.delete('transform.bytecode');
+  if (productionShareBundle) {
+    params.set('dev', 'false');
+    params.set('minify', 'true');
+  }
+  return rewritten.startsWith('/') ? `${parsed.pathname}${parsed.search}` : parsed.toString();
+};
+
+module.exports = withUniwindConfig(shareConfig, {
   cssEntryFile: './global.css',
   dtsFile: './uniwind-env.d.ts',
 });

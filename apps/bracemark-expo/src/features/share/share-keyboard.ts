@@ -21,15 +21,25 @@
 // keyboard through `UIApplication.shared.windows` / `.activeWindow`, the very
 // API an extension process does not have.
 //
-// So on iOS the number comes from our own native VIEW — `BracemarkShareKeyboard`,
+// So on iOS the number comes from our own native module — `BracemarkShareKeyboard`,
 // modules/bracemark-share/ios — which reads `UIKeyboardFrameEndUserInfoKey`
-// straight off the notification and measures it against ITSELF. It has to be a
-// view, not a JS sum over screen coordinates: on an iPad the host floats the
-// sheet as a form sheet and then moves it out of the keyboard's way on its own,
-// and neither the card's position nor that move is visible to JS
-// (docs/share-sheet.md, _on an iPad the sheet floats_). Everything
-// platform-shaped about this lives HERE, so share-kit.tsx stays one tree for
-// both hosts.
+// straight off the notification and measures it against the FRAME'S OWN UIView.
+// It has to be measured natively, not summed in JS over screen coordinates: on an
+// iPad the host floats the sheet as a form sheet and then moves it out of the
+// keyboard's way on its own, and neither the card's position nor that move is
+// visible to JS (docs/share-sheet.md, _on an iPad the sheet floats_).
+//
+// ⚠ AND THE FRAME IS A PLAIN VIEW, NOT A NATIVE ONE. It was an Expo native view
+// that measured itself, and on an iPhone 12 that one view kept the share
+// extension at the memory-warning line under its 120MB cap for as long as the
+// sheet was up; a plain View that hands the module its tag (`track`, from
+// `onLayout`) measures the same box for nothing (docs/share-sheet.md, _the
+// share extension has almost no memory to spare_). `collapsable={false}` is
+// what keeps that box real: Fabric flattens a style-only View out of the
+// native tree, and then there is no UIView behind the tag to measure.
+//
+// Everything platform-shaped about this lives HERE, so share-kit.tsx stays one
+// tree for both hosts.
 //
 // ANDROID IS IN THIS FILE TOO, and it no longer goes through RN's
 // KeyboardAvoidingView either — for a different lie. Its share activity rides
@@ -45,49 +55,68 @@
 // reopened. So the hook below reads the same events and trusts only what is
 // true in them: the height on show, and the fact of a hide.
 
-import { type ComponentType, useCallback, useEffect, useState } from 'react';
-import {
-  Keyboard,
-  LayoutAnimation,
-  type NativeSyntheticEvent,
-  Platform,
-  View,
-  type ViewProps,
-} from 'react-native';
-import { requireNativeViewManager, requireOptionalNativeModule } from 'expo-modules-core';
+import { createElement, useCallback, useEffect, useRef, useState } from 'react';
+import { findNodeHandle, Keyboard, LayoutAnimation, Platform, View, type ViewProps } from 'react-native';
+import { requireOptionalNativeModule } from 'expo-modules-core';
 
-// The native payload, in the view's own points (BracemarkShareKeyboardModule.swift).
+// The native payload, in the frame's own points (BracemarkShareKeyboardModule.swift).
 // `overlap` is how much of the frame's bottom the keyboard covers — 0 while it
 // is down, so the lift falls to zero without a special case; `detached` is
-// whether the frame stops short of the window's bottom edge.
-type KeyboardGeometry = { overlap: number; detached: boolean; durationMs: number };
+// whether the frame stops short of the window's bottom edge. `durationMs` is the
+// keyboard's own animation and `startedAtMs` when it began, on `Date.now()`'s
+// clock — both 0 for a measure no keyboard motion caused.
+export type KeyboardGeometry = {
+  overlap: number;
+  detached: boolean;
+  durationMs: number;
+  startedAtMs: number;
+};
 
-export type KeyboardGeometryEvent = NativeSyntheticEvent<KeyboardGeometry>;
+// Below this much of the keyboard's motion left, the panel jumps rather than
+// animates: one frame of travel reads as a jump anyway.
+const MIN_TRAVEL_MS = 16;
 
-type ShareKeyboardFrameProps = ViewProps & {
-  onKeyboardGeometry?: (event: KeyboardGeometryEvent) => void;
+type ShareKeyboardModule = {
+  track: (viewTag: number) => void;
+  addListener: (
+    event: 'onKeyboardGeometry',
+    listener: (geometry: KeyboardGeometry) => void,
+  ) => { remove: () => void };
 };
 
 // OPTIONAL, not required, and that is the whole platform split: the module is
-// iOS-only, so it is absent from Android's share activity — which rides the
-// app's own process and reads RN's keyboard events instead (the hook below) —
-// and from jest, where the frame is then a plain View that reports a keyboard
-// that is never up. Resolved at module scope because
-// `requireOptionalNativeModule` is a lookup in a registry that is already
-// populated, not a require of anything heavy (the extension bundle's init
-// budget is docs/share-sheet.md's, _keep index.share.js lean_).
-const hasNativeFrame =
-  Platform.OS === 'ios' && requireOptionalNativeModule('BracemarkShareKeyboard') !== null;
+// iOS-only (expo-module.config.json registers no Android class for it), so it is
+// null in Android's share activity — which rides the app's own process and reads
+// RN's keyboard events instead (the hook below) — and null under jest. Resolved
+// at module scope because `requireOptionalNativeModule` is a lookup in a
+// registry that is already populated, not a require of anything heavy (the
+// extension bundle's init budget is docs/share-sheet.md's, _keep index.share.js
+// lean_).
+const shareKeyboard = requireOptionalNativeModule<ShareKeyboardModule>('BracemarkShareKeyboard');
 
 /**
  * The box the sheet's lift is measured against — share-kit.tsx's outermost
- * frame, filling the extension's root. On iOS the native view that measures
- * its own overlap with the keyboard; everywhere else a plain View, which drops
- * `onKeyboardGeometry` on the floor (Android's lift comes from RN's events).
+ * frame, filling the extension's root. A plain View on every host; on iOS it
+ * also hands the native module its tag on every layout, so the module can
+ * measure its overlap with the keyboard (the header).
  */
-export const ShareKeyboardFrame: ComponentType<ShareKeyboardFrameProps> = hasNativeFrame
-  ? requireNativeViewManager<ShareKeyboardFrameProps>('BracemarkShareKeyboard')
-  : (View as ComponentType<ShareKeyboardFrameProps>);
+export function ShareKeyboardFrame({ onLayout, ...props }: ViewProps) {
+  const ref = useRef<View>(null);
+  const track = useCallback<NonNullable<ViewProps['onLayout']>>(
+    (event) => {
+      // A number or nothing: `findNodeHandle` answers null for a view that is not
+      // mounted, and undefined under jest's renderer.
+      const tag = shareKeyboard && ref.current ? findNodeHandle(ref.current) : null;
+      if (typeof tag === 'number') shareKeyboard?.track(tag);
+      onLayout?.(event);
+    },
+    [onLayout],
+  );
+
+  // `createElement` rather than JSX only because this file is `.ts`, and the docs
+  // name it.
+  return createElement(View, { ...props, ref, collapsable: false, onLayout: track });
+}
 
 /**
  * How the share frame makes room for the keyboard. ONE shape on both hosts:
@@ -102,13 +131,12 @@ export const ShareKeyboardFrame: ComponentType<ShareKeyboardFrameProps> = hasNat
  *   - `detached` — the host made the sheet a floating card rather than a
  *     bottom sheet (an iPad's form sheet), so the panel centres instead of
  *     sitting on an edge that is not the screen's.
- *   - `onKeyboardGeometry` — for `ShareKeyboardFrame`, the box it measures.
  *
  * The hosts measure the lift differently:
  *
- *   - iOS — the frame's own `overlap`, from the native view: exact wherever the
- *     host puts the sheet, including after it has moved the sheet for the
- *     keyboard itself.
+ *   - iOS — the frame's own `overlap`, from the native module's
+ *     `onKeyboardGeometry` event: exact wherever the host puts the sheet,
+ *     including after it has moved the sheet for the keyboard itself.
  *   - Android — the event's `height` plus `bottomInset`. RN reports that height
  *     as the IME inset MINUS the system bars' (`ReactRootView`), i.e. measured
  *     from the top of the navigation bar, while the edge-to-edge frame runs
@@ -118,11 +146,7 @@ export const ShareKeyboardFrame: ComponentType<ShareKeyboardFrameProps> = hasNat
  *     the screen, and on a hide `screenY` is not a position at all (the header).
  *     Never detached: the activity is the whole window.
  */
-export function useShareKeyboard(bottomInset: number): {
-  lift: number;
-  detached: boolean;
-  onKeyboardGeometry: (event: KeyboardGeometryEvent) => void;
-} {
+export function useShareKeyboard(bottomInset: number): { lift: number; detached: boolean } {
   // What the host last reported, in ITS terms: the overlap itself on iOS; on
   // Android the keyboard's height above the system bars. Null while the
   // keyboard is down rather than zero, because the Android inset is added at
@@ -131,28 +155,50 @@ export function useShareKeyboard(bottomInset: number): {
   const [reported, setReported] = useState<number | null>(null);
   const [detached, setDetached] = useState(false);
 
-  const onKeyboardGeometry = useCallback(({ nativeEvent }: KeyboardGeometryEvent) => {
-    // On the system's own curve and duration — the same thing RN's
-    // KeyboardAvoidingView does with the same numbers, so the panel travels
-    // with the keyboard instead of snapping a frame ahead of it. Nothing here
-    // touches Reanimated: LayoutAnimation is a native view-level animation,
-    // which is what the share bundle is allowed to use (share-root.tsx).
-    if (nativeEvent.durationMs > 0) {
-      LayoutAnimation.configureNext({
-        duration: nativeEvent.durationMs,
-        update: { duration: nativeEvent.durationMs, type: 'keyboard' },
-      });
-    }
-    setReported(nativeEvent.overlap > 0 ? nativeEvent.overlap : null);
-    setDetached(nativeEvent.detached);
-  }, []);
-
   useEffect(() => {
-    // Not Android: the iOS lift arrives through `onKeyboardGeometry`. An iOS
-    // build without the native view, or jest, HOLDS AT ZERO rather than falling
-    // through to RN's events below: those are the very thing that lies in this
-    // process, and a zero lift leaves the safe-area inset switched on, which is
-    // the safe way to be wrong.
+    // Gated on the platform as well as the lookup, so the branch is the host's
+    // and not an accident of which modules a build happens to register.
+    const native = Platform.OS === 'ios' ? shareKeyboard : null;
+    if (native) {
+      const subscription = native.addListener('onKeyboardGeometry', (geometry) => {
+        // Riding along with the keyboard, which takes two corrections, both
+        // seen on an iPhone 12 (docs/share-sheet.md, _what an app-extension
+        // process breaks in React Native itself_). Nothing here touches
+        // Reanimated: LayoutAnimation is a native
+        // view-level animation, which is what the share bundle is allowed to
+        // use (share-root.tsx).
+        //
+        //   - OVER WHAT IS LEFT of the keyboard's motion, not all of it. The
+        //     keys start moving at the notification; this runs one main-queue
+        //     turn, a crossing to JS and a React commit later. Given the whole
+        //     duration from here, the panel started late AND finished late.
+        //   - `easeOut`, NOT `keyboard`. Fabric's LayoutAnimation does not
+        //     implement the `keyboard` type: it falls through to LINEAR
+        //     (react/renderer/animations/utils.cpp), so the panel crept up at
+        //     an even pace under keys that decelerate hard. `easeOut` is the
+        //     nearest curve Fabric has — fast first, settling last.
+        const remaining =
+          geometry.startedAtMs > 0
+            ? geometry.durationMs - (Date.now() - geometry.startedAtMs)
+            : geometry.durationMs;
+        if (remaining >= MIN_TRAVEL_MS) {
+          LayoutAnimation.configureNext({
+            duration: remaining,
+            update: { duration: remaining, type: 'easeOut' },
+          });
+        }
+        setReported(geometry.overlap > 0 ? geometry.overlap : null);
+        setDetached(geometry.detached);
+      });
+
+      return () => subscription.remove();
+    }
+
+    // Not Android and no module — an iOS build where it failed to resolve, or
+    // jest — HOLDS AT ZERO rather than falling through to RN's events below:
+    // those are the very thing that lies in the iOS extension process, and a
+    // zero lift leaves the safe-area inset switched on, which is the safe way to
+    // be wrong.
     if (Platform.OS !== 'android') return;
 
     // `Did`, not `Will`: the Will events are iOS-only. The hide's payload is
@@ -173,5 +219,5 @@ export function useShareKeyboard(bottomInset: number): {
     lift = Platform.OS === 'android' ? Math.max(reported + bottomInset, 0) : reported;
   }
 
-  return { lift, detached, onKeyboardGeometry };
+  return { lift, detached };
 }

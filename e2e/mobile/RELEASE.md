@@ -100,9 +100,13 @@ Release run from Xcode), signed into an account with a few dozen lists and tags:
    in steps 1–4. Confirm what took it in Settings → Privacy & Security →
    Analytics & Improvements → Analytics Data: look for a `JetsamEvent-…` entry
    at that minute naming `BracemarkShareExtension`.
-6. If the build has a way to read it, record the headroom rather than only the
-   verdict — the bytes `os_proc_available_memory()` reports with a picker up —
-   so the next release has a number to compare with, not a second "it passed".
+6. Record the headroom, not only the verdict, so the next release has a number
+   to compare with rather than a second "it passed". With the phone streaming in
+   Console.app (on the Mac, select the phone, _Start streaming_), filter on
+   `share-memory`: every screen logs `share-memory <screen>: footprint … MB,
+available … MB` as it mounts. Note the lowest `available` across the laps,
+   and the screen it was on (docs/share-sheet.md, _the share extension has almost
+   no memory to spare_).
 
 ## Store purchases
 

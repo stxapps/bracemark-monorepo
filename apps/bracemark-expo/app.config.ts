@@ -199,6 +199,36 @@ const config: ExpoConfig = {
           // is unaffected — only an install-action build flattens them — which
           // is why the e2e Release builds never saw it. docs/share-sheet.md.
           'expo-image-manipulator',
+          // NEVER CALLED FROM THE SHEET, and linking one is not free: every
+          // Expo module this target links is instantiated when the share
+          // extension starts, against a hard 120MB cap the sheet runs close to
+          // (docs/share-sheet.md, _the share extension has almost no memory to
+          // spare_). Neither share bundle — production or dev — names any of
+          // their native modules; the only dev-bundle reference, expo's
+          // `withDevTools` keep-awake, is a try/catch'd optional require. The
+          // dev-launcher trio is what `expo-dev-client` above pulls in (the
+          // bundle only probes `NativeModules.EXDevLauncher` behind a guard).
+          // Expo modules are safe to drop per target — each target gets its own
+          // ExpoModulesProvider — unlike the community ones, which
+          // plugins/with-share-extension-native-links.js can only partly drop
+          // (see its ⚠). NOT expo-router, though the sheet never routes: its
+          // Swift pod ExpoHead is what makes Expo's autolinking build
+          // react-native-screens with modular headers in this target, and
+          // Screens has to stay linked here (that same ⚠), so without
+          // expo-router `pod install` fails ("ExpoHead depends upon RNScreens,
+          // which does not define modules").
+          'expo-dev-launcher',
+          'expo-dev-menu',
+          'expo-dev-menu-interface',
+          'expo-linking',
+          'expo-document-picker',
+          'expo-image-picker',
+          'expo-sharing',
+          'expo-clipboard',
+          'expo-keep-awake',
+          'expo-local-authentication',
+          'expo-font',
+          'expo-system-ui',
         ],
         preprocessingFile: './share-extension/preprocessing.js',
       },
@@ -276,6 +306,16 @@ const config: ExpoConfig = {
     // `finalized` mod, same reason it cannot be an edit. See the plugin, and
     // docs/share-sheet.md — the pickers hold the system's swipe off.
     './plugins/with-share-extension-swipe-hold',
+    // The share extension's own autolinking pass links every community module
+    // the app does — Reanimated and Worklets among them, and Worklets builds a
+    // second JS runtime the moment Nitro's optional require finds it. This
+    // drops the ones the sheet never calls AND that register no Fabric
+    // component (an unlinked component class crashes the shared codegen
+    // provider), between the pass's list and link halves so codegen's shared
+    // autolinking.json stays the app's. Same
+    // `finalized` mod, same reason it cannot be an edit. See the plugin, and
+    // docs/share-sheet.md — the share extension has almost no memory to spare.
+    './plugins/with-share-extension-native-links',
   ],
 };
 

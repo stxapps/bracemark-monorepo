@@ -139,19 +139,51 @@ bigger, and it feeds back into KAV's own `onLayout`.
 
 The notification itself is fine — UIKit posts `UIKeyboardFrameEndUserInfoKey` in
 SCREEN coordinates, and reading it needs no key window. So the number comes from
-our own native VIEW: `BracemarkShareKeyboard`
+our own native module: `BracemarkShareKeyboard`
 (`modules/bracemark-share/ios/BracemarkShareKeyboardModule.swift`) observes
 `keyboardWillChangeFrame` and `keyboardWillHide`, converts the keyboard's frame
-into its OWN coordinates, and reports how much of itself the keyboard covers
-(`overlap`, 0 once it is down) plus the system's animation duration. It is the
-outermost box of the sheet (`ShareKeyboardFrame`), so that overlap is exactly
-the padding the frame needs. `features/share/share-keyboard.ts` turns it into
-`useShareKeyboard()`, played onto the system's own curve with `LayoutAnimation`,
-and `share-kit.tsx` applies it as bottom padding on the frame. It is a view
-rather than an event carrying the keyboard's top edge — which is what it was —
-because the other half of "how much does the keyboard cover" is where the sheet
-is, and on an iPad nothing in JS knows that (_on an iPad the sheet floats_,
-below).
+into the coordinates of the sheet's outermost box (`ShareKeyboardFrame`), and
+sends how much of that box the keyboard covers (`overlap`, 0 once it is down)
+plus the system's animation duration and when it started as its
+`onKeyboardGeometry` event. That overlap is exactly the padding the frame needs.
+`features/share/share-keyboard.ts` turns it into `useShareKeyboard()`, animated
+with `LayoutAnimation`, and `share-kit.tsx` applies it as bottom padding on the
+frame. It measures a VIEW rather than taking the keyboard's top edge on its own
+— which is what the first version did — because the other half of "how much
+does the keyboard cover" is where the sheet is, and on an iPad nothing in JS
+knows that (_on an iPad the sheet floats_, below).
+
+⚠ **And the frame is a plain React Native `View`, not a native one.** It was an
+Expo native view that measured itself, and that one view was most of the share
+extension's margin on a phone (_the share extension has almost no memory to
+spare_, below). Now the frame hands the module its tag from `onLayout`
+(`track`), and the module finds the UIView behind it with
+`appContext.findView(withTag:)` and measures that. Three things keep it working,
+and none fails loudly: the frame is `collapsable={false}`, because Fabric
+flattens a style-only View out of the native tree and then the tag resolves to
+nothing (the lift silently stays 0); the keyboard's frame is held by the
+module, not per view, so a screen that mounts under a keyboard already up — a
+picker the moment its search focuses — measures at once instead of waiting for
+the next notification; and every `track` REPORTS, even when nothing measured has
+changed. Fabric recycles component views, so each screen of the sheet arrives
+with a new tag and the previous screen's UIView — and a module that deduplicated
+by view stayed silent for every screen after the first. Each screen's hook
+starts at `detached` false, so on the iPad (A16) simulator the pickers, and the
+compose screen after them, rendered as bottom sheets pinned to the floor of the
+form sheet; an iPhone is never detached, so the phone could not show it.
+
+**The panel used to trail the keyboard, and it was two things.** On the iPhone
+12 the keys came up and only then did the panel start, and it crept. First, the
+lift reaches JS a main-queue turn, a bridge crossing and a React commit after
+the keys start moving, and it was then animated over the keyboard's WHOLE
+duration — late to start and late to finish. Now native stamps the notification
+(`startedAtMs`) and the hook animates over what is left of the motion, or jumps
+if almost none is. Second, it asked `LayoutAnimation` for `type: 'keyboard'` —
+"the system's own curve" — and Fabric does not implement that type: it falls
+through to LINEAR (`react/renderer/animations/utils.cpp`, `else` branch), an
+even creep under keys that decelerate hard. It is `easeOut` now, the nearest
+curve Fabric has. Neither shows on the simulator's Mac-speed commit, and no
+test can feel it; re-drive it on a phone after touching the hook.
 
 The panel uses the same number a second time: it subtracts it from the bottom
 safe-area inset, because a keyboard's frame reaches the bottom of the screen and
@@ -289,7 +321,7 @@ iPad breaks for good (next).
 ⚠ **On an iPad the sheet floats, and only a view inside it knows where.** The
 host presents the extension as a **form sheet**: a 580×640 card centred on the
 screen, not a full-width sheet on its bottom edge. Measured on the iPad (A16)
-simulator, iOS 26.5, with the native view's own `convert(bounds, to: nil)`:
+simulator, iOS 26.5, with the frame's own `convert(bounds, to: nil)`:
 
 | state                    | the card on screen          | keyboard top | right lift | old lift |
 | ------------------------ | --------------------------- | ------------ | ---------- | -------- |
@@ -333,9 +365,16 @@ from below, by the frame's real overlap. On an iPhone the frame is flush with
 the window, `detached` is false, and nothing changed. Driven on the iPad (A16)
 both ways round — compose, the tags picker, its search focused, dismissed, and
 rotated with the keyboard up — and on the iPhone 17 Pro, whose picker still
-parks on the keys. **Not driven**: a floating, split or hardware-keyboard-bar
-keyboard (the same Simulator limit soft-keyboard.md records); the view lifts to
-such a keyboard's top edge wherever it intersects the frame.
+parks on the keys. Re-driven on the iPad (A16) on 2026-10-28 after the frame
+became a plain View the module measures, with the module logging what it read:
+the card at (120, 270) and lift 0 at rest; raised by the host to y 101.5 under a
+keyboard topped at 843, lift 0; rotated to landscape with the keys up, the card
+at (300, 52) under a keyboard topped at 398, lift **294** — the right number,
+not the 422 that squeezed the list — and back to 0 on rotating back; and compose
+centred again after a picker created a list and returned. **Not driven**: a
+floating, split or hardware-keyboard-bar keyboard (the same Simulator limit
+soft-keyboard.md records); the module lifts to such a keyboard's top edge
+wherever it intersects the frame.
 
 **Android draws its own card, from 768.** No Android host picks a shape: the
 activity is the whole window, so the panel was a bottom sheet at every width —
@@ -701,25 +740,138 @@ carrying one. Three rules hold them together:
   touching the module, the plugin or `holdSwipe`.
 - ⚠ **The share extension has almost no memory to spare, and exceeding it looks
   like nothing at all.** iOS caps an app extension's memory per process and
-  kills it at the cap — no crash report, no error in Metro or Xcode, the sheet
-  simply gone — and the simulator enforces no such cap, so everything below
-  passes there. The guard above was first written as a sizeless Expo native
-  VIEW that found the controller through its own responder chain, which needed
-  no plugin. On the simulator it worked. On an iPhone 12 (iOS 26.5, dev build)
-  the extension died the moment either picker mounted. Measured: on the
-  simulator the extension's footprint is 170MB on the compose screen, a picker
-  adds 4MB, and a picker carrying that one native view adds 18MB — the first
-  Expo native view in this process costs ~14MB. On the phone, a probe that held
-  2MB more every 200ms over an open picker was last heard from at 12MB, so a dev
-  build has roughly 16MB of headroom over the compose screen. **Nothing on this
-  path may mount a native view from an Expo module, or otherwise spend memory in
-  the tens of megabytes**; a module FUNCTION costs nothing measurable, which is
-  why the guard is one.
+  kills it at the cap — no crash report you can count on, no error in Metro or
+  Xcode, the sheet simply gone — and the simulator enforces no such cap, so
+  everything below passes there. On an iPhone 12, iOS 26.5, the cap is **120MB**,
+  and the only reliable witness is the device's own log: Console.app → the phone
+  → _Start streaming_, filtered on `BracemarkShareExtension`, shows
 
-  **Most of that 170MB is the dev build, not the sheet.** The same screens,
-  release build against dev build, read off the simulator's own process with
-  `footprint` (`pgrep -f BracemarkShareExtension.appex` finds it — a simulator
-  process is a host process), iOS 26.5:
+  ```
+  kernel  memorystatus: BracemarkShareExtension [34635] exceeded mem limit: ActiveHard 120 MB (fatal)
+  kernel  memorystatus: killing_specific_process pid 34635 [BracemarkShareExtension] (per-process-limit …) 122994KB
+  ```
+
+  at the moment the sheet vanishes, usually after a run of `Received memory
+warning.` lines. On 2026-10-28 the phone handed over no `JetsamEvent` report
+  for either kill (`xcrun devicectl device copy from --domain-type
+systemCrashLogs`), so an empty Analytics Data is not evidence it survived.
+
+  The guard above was first written as a sizeless Expo native VIEW that found
+  the controller through its own responder chain, which needed no plugin. On the
+  simulator it worked. On the iPhone 12 (dev build) the extension died the moment
+  either picker mounted. Measured on the simulator, the first Expo native view in
+  this process costs ~14MB (a picker adds 4MB without it, 18MB with it). The
+  keyboard frame then became exactly such a view, mounted on every screen, and
+  passed the same simulator checks. Driven on the iPhone 12 (dev build, iOS
+  26.5, 2026-10-28), sharing from Safari and lapping both pickers with the
+  keyboard up:
+
+  | the extension's bundle         | keyboard frame   | on the phone                                     |
+  | ------------------------------ | ---------------- | ------------------------------------------------ |
+  | dev (10.6MB as served)         | Expo native view | killed on first render, 122,994KB                |
+  | dev                            | plain View       | killed on first render, 122,882KB                |
+  | production, unminified (8.0MB) | Expo native view | survives, `Received memory warning.` every ~12ms |
+  | production, unminified         | plain View       | survives, no memory warning at all               |
+
+  (The production rows were meant to be minified and were not: see rule 2 for
+  the parameter that undid it. The served bundle is now 3.2MB.)
+
+  So there are three rules, and each is enforced only by this paragraph:
+
+  1. **Nothing in this process may mount a native view from an Expo module**, or
+     otherwise spend memory in the tens of megabytes; a module FUNCTION or event
+     costs nothing measurable. The swipe guard is a function and the keyboard
+     frame is a plain View that a module measures (_what an app-extension process
+     breaks in React Native itself_, above).
+  2. **A dev build's share extension runs a production bundle.** In every Debug
+     build expo-share-extension's controller asks Metro for `dev=true&minify=false`,
+     and Hermes then compiles 10.6MB of unminified source inside the process —
+     too much on its own, as the second row shows. `metro.config.js` rewrites the
+     requests tagged `shareExtension=true` to `dev=false&minify=true`, so the
+     share extension gets `__DEV__ === false`, minified, from the same Metro the
+     app uses (which keeps its dev bundle). The same rewrite DROPS
+     `transform.bytecode`: the controller's URL carries no `transform.engine`, so
+     Expo's own rewriter fills in the Hermes parameters, `transform.bytecode=1`
+     among them, and a bytecode request skips minification — it expects a
+     `hermesc` step that only an export runs. The dev server then serves the
+     text as it is: the same 1,500 modules as 8.0MB and 210,757 lines, against
+     3.2MB minified. Nothing reports it; the `minify=true` is right there in the
+     bundle's own `sourceMappingURL`. The cost is the sheet's dev tooling —
+     no LogBox, no console relay to Metro — and `BRACEMARK_SHARE_DEV_BUNDLE=1` in
+     the shell that starts Metro gives the dev bundle back, for the simulator,
+     which has no cap. Edits still reach it: Metro rebuilds the production graph
+     on change exactly as it does the dev one. (A Metro started with `CI=1` does
+     not — the Expo CLI turns file watching off in CI mode, and every graph,
+     dev and production alike, stays at what it first built.)
+  3. **The extension target links only what its bundle can reach.** Every Expo
+     module the target links is instantiated when the extension starts, needed
+     or not. `excludedPackages` (app.config.ts) holds the Expo modules and
+     `plugins/with-share-extension-native-links.js` the community ones, which
+     `excludedPackages` cannot reach. One of those was worse than dead weight:
+     Save loads react-native-quick-crypto, whose react-native-nitro-modules runs
+     `installWorkletsSupport()` on import, and with react-native-worklets linked
+     that optional require builds Worklets' UI runtime — a second Hermes runtime
+     — in this process. As of 2026-10-28 the extension links 26 libraries where
+     the app links 55 (`Pods-BracemarkShareExtension.debug.xcconfig`'s
+     `OTHER_LDFLAGS`); before this rule it linked 41. Before excluding one more,
+     grep both share bundles (_keep `index.share.js` lean_, below, has the URLs)
+     for its native module's name — zero hits, or a try/catch'd optional require,
+     is the bar — and then check the two ways the targets are still bound
+     together, because both are silent until a phone:
+
+     - ⚠ **A community library the APP registers a Fabric component from cannot
+       be dropped**, whatever the sheet uses. Codegen's
+       `RCTThirdPartyComponentsProvider`, which both targets link, is an
+       NSDictionary literal of `NSClassFromString(@"…ComponentView")`, and in a
+       target that does not link the library the class is nil: an uncaught
+       `NSInvalidArgumentException` ("attempt to insert nil object from
+       objects[0]") as React Native starts. It prebuilt, compiled and linked
+       clean; on the iPhone 12 the share extension died before its first
+       screen. So the date picker, Gesture Handler,
+       react-native-keyboard-controller and Screens stay linked — check
+       `ios/build/generated/ios/RCTThirdPartyComponentsProvider.mm` after a
+       prebuild. (TurboModules are safe: that provider maps names to strings
+       and resolves them lazily.)
+     - **A Swift Expo pod's dependencies get modular headers per target.**
+       Dropping `expo-router` left the extension's `RNScreens` without them,
+       and `pod install` failed ("The Swift pod `ExpoHead` depends upon
+       `RNScreens`, which does not define modules"). That one fails loudly, at
+       prebuild — which is why `expo-router` stays linked too.
+
+  **Measure it where it is enforced.** Each screen of the sheet logs its own
+  footprint and headroom as it mounts (`features/share/share-memory.ts` →
+  `BracemarkShareMemoryModule.swift`): filter Console on `share-memory` and it
+  reads, per screen,
+
+  ```
+  share-memory compose: footprint <MB> MB, available <MB> MB
+  ```
+
+  — `phys_footprint`, which is what jetsam compares with the cap, and
+  `os_proc_available_memory()`, how far from it the process is; the two sum to
+  the cap. It is in every build, dev and release, at the unified log's default
+  level, numbers only. With all three rules in place — iPhone 12, iOS 26.5, dev
+  build, minified production bundle, 2026-10-28 — a full share (both pickers
+  lapped with the keyboard up, then Save) read **`saved: footprint 68.9 MB,
+available 51.1 MB`**, with no memory warning at any point. `saved` comes
+  after Save has loaded the crypto stack, so it is the share's high point. A
+  **release** build (`ios:release:staging`, the same phone, the same day), run
+  through `SHARE-IOS-MEMORY-RELEASE-001` — five laps of both pickers, then Save:
+
+  | screen                  | footprint | available |
+  | ----------------------- | --------- | --------- |
+  | `compose`, on open      | 21.1 MB   | 98.9 MB   |
+  | first `list-picker`     | 21.9 MB   | 98.1 MB   |
+  | `compose`, after 5 laps | 31.6 MB   | 88.4 MB   |
+  | `saved`                 | 31.8 MB   | 88.2 MB   |
+
+  — about 10MB gained over the five laps and never given back, and ~88MB of
+  room at the high point.
+
+  **The simulator's footprint is still useful for proportions**, read off its
+  own process with `footprint` (`pgrep -f BracemarkShareExtension.appex` finds
+  it — a simulator process is a host process). Before rules 2 and 3, iOS 26.5,
+  dev bundle against release build:
 
   |                                | dev build   | release build |
   | ------------------------------ | ----------- | ------------- |
@@ -730,28 +882,18 @@ carrying one. Three rules hold them together:
   The ~105 MiB between them is one line of the breakdown: `MALLOC_SMALL` is 105
   MiB in the dev build and 15 in release, which is the bundle arriving from Metro
   as source and being parsed in-process, plus the dev tooling, where a release
-  build maps Hermes bytecode from a file. What a release build still pays at
-  compose is mostly not JS either: 17 MiB of dyld private memory and 16 of
-  `__DATA`/`__DATA_CONST` — the cost of the binary the share extension target
-  links, spent before a line of the bundle runs — against 15 of malloc and 10 of
-  untagged VM (Hermes's heap, most likely). So the lever on the release
-  footprint is what that target LINKS (`excludedPackages`, `app.config.ts`),
-  more than anything in `features/share/`.
-
-  Two things those numbers do not say. They are not the phone's: the simulator
-  enforces no cap and its footprint is not a device's (the dev build that reads
-  170MB here still had its ~16MB of headroom on the iPhone 12), so **how much
-  room a release build has on hardware is still unmeasured** —
-  `os_proc_available_memory()`, read inside the extension with a picker up, is
-  the call that answers it, and `SHARE-IOS-MEMORY-RELEASE-001`
-  (`e2e/mobile/RELEASE.md`) is the check that stands in until something reads
-  it. And the dev build's figures do not repeat: its first picker costs anywhere
-  from 3 to 10 MiB, and it never gives a lap back — which is why no e2e case
-  asserts a footprint ([e2e.md](./e2e.md), _what e2e may not assert_). Two laps
-  cost the simulator's dev build ~14 MiB, which is about the headroom the phone's
-  had — so a DEV build that dies on a phone after a few laps through the pickers
-  may be this paragraph rather than a regression. Check a release build before
-  chasing it.
+  build maps Hermes bytecode from a file — rule 2 is what that line was saying.
+  What a release build still pays at compose is mostly not JS either: 17 MiB of
+  dyld private memory and 16 of `__DATA`/`__DATA_CONST` — the cost of the binary
+  the target links, spent before a line of the bundle runs — against 15 of malloc
+  and 10 of untagged VM (Hermes's heap, most likely). Rule 3 is the lever on
+  that. Two cautions: the simulator's numbers are not the phone's (the dev build
+  that read 170MB there was alive on the iPhone 12 under its 120MB cap), and the
+  dev build's do not repeat — its first picker cost anywhere from 3 to 10 MiB,
+  and it never gave a lap back — which is why no e2e case asserts a footprint
+  ([e2e.md](./e2e.md), _what e2e may not assert_). **How much room a release
+  build has on hardware** is what `SHARE-IOS-MEMORY-RELEASE-001`
+  (`e2e/mobile/RELEASE.md`) records, from the `share-memory` lines.
 
 - **The two disclosure rows say what they are to a screen reader**, even though
   they carry no visible label: `ShareRow` takes a `label` + `value` and announces
@@ -1137,9 +1279,9 @@ changing `excludedPackages` or adding a native module, prebuild and check
 extension.** The extension handles URLs and KB-sized entity JSON only —
 image/screenshot fetch, decrypt, and encrypt stay in the main app / extractor.
 This is what keeps the DATA out of the footprint; it does not make the process
-comfortable — the runtime alone leaves a dev build ~16MB short of the cap (_the
-share extension has almost no memory to spare_, above). Don't move image work
-across the process boundary to "save a round trip."
+comfortable — the runtime alone runs close to the 120MB cap (_the share
+extension has almost no memory to spare_, above). Don't move image work across
+the process boundary to "save a round trip."
 
 **Keep `index.share.js` lean.** Everything the share entry transitively imports
 is init cost paid on every cold share (see the cold-start note in the file map
@@ -1199,12 +1341,21 @@ stroked SVG path ([brand-assets.md](./brand-assets.md#the-mark), _at TILE scale_
 through it**, so this is not a cost the brand lockup adds and not one that
 dropping the lockup would remove.
 
-**The numbers, so a regression is legible.** Bundle
-`index.share.js` for iOS (`npx expo export:embed --platform ios --entry-file
-index.share.js --bundle-output /tmp/share.jsbundle --dev false`) and count the
-modules Metro reports. As of the deep-import pass: **1452 modules, 2.96MB**
-minified, of which roughly **640 execute at init** — down from 1661 / 3.65MB /
-~1050 through the barrels. Modules in the bundle are cheap (Hermes bytecode,
+**The numbers, so a regression is legible.** With Metro running from
+`apps/bracemark-expo`, fetch the share bundle the way the extension does and
+count its modules:
+
+```sh
+curl -s 'http://localhost:8081/apps/bracemark-expo/index.share.bundle?platform=ios&dev=false&minify=true' | grep -o '__d(' | wc -l
+```
+
+(`dev=true&minify=false` is the dev bundle; the path is relative to the
+monorepo, which is Metro's server root here. The `npx expo export:embed …
+--entry-file index.share.js` this paragraph used to give no longer resolves the
+entry.) As of the deep-import pass: **1452 modules, 2.96MB** minified, of which
+roughly **640 execute at init** — down from 1661 / 3.65MB / ~1050 through the
+barrels. On 2026-10-28: **1505 modules, 3.27MB** minified, and the dev bundle
+1626 modules, 10.6MB. Modules in the bundle are cheap (Hermes bytecode,
 paged in on use); modules EXECUTED at init are what the cold share pays for, and
 the two move together only when an import is removed rather than deferred. What
 remains eager is irreducible without a bigger change: zod and the `@stxapps/shared`
@@ -1260,21 +1411,24 @@ can neither see the share sheet nor anything in this process. →
 
 ### file map
 
-| piece                                                                                                                | where                                                                                                                                                                                                                                                                                                               |
-| -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| share screen UI + prop normalizing + close() seam                                                                    | `apps/bracemark-expo/src/features/share/` — `share-root` (prop normalizing), `share-screen` (the four screens + the draft), `share-kit` (frame/header/row/notice), `share-specimen` (the page + the fold), `share-list-picker`, `share-tags-picker`, `share-host` (close), `share-theme` (apply the mirrored theme) |
-| entries: `index.js` (main, registers `bracemarkShare`), `index.share.js` (iOS extension, registers `shareExtension`) | `apps/bracemark-expo/` (package.json `main` is now `index.js`, which imports `expo-router/entry` — required by expo-share-extension)                                                                                                                                                                                |
-| snapshot + outbox + saveSharedDraft (with both post-Add kicks) + drain/refresh + the Android handoff                 | `@stxapps/expo-react` `data/share-store.ts`                                                                                                                                                                                                                                                                         |
-| theme mirror (app writes, sheet reads) + the sheet's apply step                                                      | `@stxapps/expo-react` `data/share-theme-store.ts` + `features/share/share-theme.ts`, written from `contexts/theme-provider.tsx` ([theme.md](./theme.md))                                                                                                                                                            |
-| best-effort upload (entities from the draft, sign → PUT → commit)                                                    | `@stxapps/expo-react` `data/share-upload.ts`                                                                                                                                                                                                                                                                        |
-| app-side pump: outbox drain + Android handoff on launch/foreground, snapshot refresh on sync/edit                    | bracemark-expo `components/share-bridge.tsx`, mounted in `(app)/_layout`                                                                                                                                                                                                                                            |
-| session mirror in the shared Keychain (App Group id as access group) + `loadSharedSession`                           | `@stxapps/expo-react` `data/session-store.ts` over `@stxapps/expo-crypto` `lib/shared-keychain.ts` (BracemarkSharedKeychain, iOS Swift)                                                                                                                                                                             |
-| write edge (writeLink/writeTag/writeExtraction)                                                                      | `@stxapps/expo-react` `data/mutations.ts`                                                                                                                                                                                                                                                                           |
-| iOS extension target, App Group, preprocessing JS                                                                    | `expo-share-extension` plugin in `app.config.ts` + `share-extension/preprocessing.js` + `withShareExtension` in `metro.config.js`                                                                                                                                                                                   |
-| iOS extension target's build settings, and its root view's frame                                                     | `apps/bracemark-expo/plugins/with-share-extension-build-settings.js` (team, deployment target, versions, display name) + `plugins/with-share-extension-root-view.js` (root view fills its superview, not the screen) — both `finalized` mods                                                                        |
-| Android ShareActivity + close() module                                                                               | `apps/bracemark-expo/modules/bracemark-share/android/` (autolinked local module; activity + intent-filter merged from its AndroidManifest)                                                                                                                                                                          |
-| iOS keyboard overlap for the extension (`BracemarkShareKeyboard`, a native view) + the lift JS reads it through      | `apps/bracemark-expo/modules/bracemark-share/ios/` (same local module, `BracemarkShare.podspec` path-linked into BOTH targets by `use_expo_modules!`) + `features/share/share-keyboard.ts`                                                                                                                          |
-| iOS: holding the system's swipe-to-dismiss off on the pickers (`BracemarkShareSwipeGuard`)                           | the same module's `ios/BracemarkShareSwipeGuardModule.swift` (posts) + `plugins/with-share-extension-swipe-hold.js` (the controller's observer) + `features/share/share-swipe-guard.tsx`, mounted by `share-kit`'s `holdSwipe`                                                                                      |
+| piece                                                                                                                                       | where                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| share screen UI + prop normalizing + close() seam                                                                                           | `apps/bracemark-expo/src/features/share/` — `share-root` (prop normalizing), `share-screen` (the four screens + the draft), `share-kit` (frame/header/row/notice), `share-specimen` (the page + the fold), `share-list-picker`, `share-tags-picker`, `share-host` (close), `share-theme` (apply the mirrored theme) |
+| entries: `index.js` (main, registers `bracemarkShare`), `index.share.js` (iOS extension, registers `shareExtension`)                        | `apps/bracemark-expo/` (package.json `main` is now `index.js`, which imports `expo-router/entry` — required by expo-share-extension)                                                                                                                                                                                |
+| snapshot + outbox + saveSharedDraft (with both post-Add kicks) + drain/refresh + the Android handoff                                        | `@stxapps/expo-react` `data/share-store.ts`                                                                                                                                                                                                                                                                         |
+| theme mirror (app writes, sheet reads) + the sheet's apply step                                                                             | `@stxapps/expo-react` `data/share-theme-store.ts` + `features/share/share-theme.ts`, written from `contexts/theme-provider.tsx` ([theme.md](./theme.md))                                                                                                                                                            |
+| best-effort upload (entities from the draft, sign → PUT → commit)                                                                           | `@stxapps/expo-react` `data/share-upload.ts`                                                                                                                                                                                                                                                                        |
+| app-side pump: outbox drain + Android handoff on launch/foreground, snapshot refresh on sync/edit                                           | bracemark-expo `components/share-bridge.tsx`, mounted in `(app)/_layout`                                                                                                                                                                                                                                            |
+| session mirror in the shared Keychain (App Group id as access group) + `loadSharedSession`                                                  | `@stxapps/expo-react` `data/session-store.ts` over `@stxapps/expo-crypto` `lib/shared-keychain.ts` (BracemarkSharedKeychain, iOS Swift)                                                                                                                                                                             |
+| write edge (writeLink/writeTag/writeExtraction)                                                                                             | `@stxapps/expo-react` `data/mutations.ts`                                                                                                                                                                                                                                                                           |
+| iOS extension target, App Group, preprocessing JS                                                                                           | `expo-share-extension` plugin in `app.config.ts` + `share-extension/preprocessing.js` + `withShareExtension` in `metro.config.js`                                                                                                                                                                                   |
+| iOS extension target's build settings, and its root view's frame                                                                            | `apps/bracemark-expo/plugins/with-share-extension-build-settings.js` (team, deployment target, versions, display name) + `plugins/with-share-extension-root-view.js` (root view fills its superview, not the screen) — both `finalized` mods                                                                        |
+| Android ShareActivity + close() module                                                                                                      | `apps/bracemark-expo/modules/bracemark-share/android/` (autolinked local module; activity + intent-filter merged from its AndroidManifest)                                                                                                                                                                          |
+| iOS keyboard overlap for the extension (`BracemarkShareKeyboard`, a module measuring the frame's plain View) + the lift JS reads it through | `apps/bracemark-expo/modules/bracemark-share/ios/` (same local module, `BracemarkShare.podspec` path-linked into BOTH targets by `use_expo_modules!`) + `features/share/share-keyboard.ts`                                                                                                                          |
+| iOS: the share extension's memory per screen, in the device log (`BracemarkShareMemory`)                                                    | the same module's `ios/BracemarkShareMemoryModule.swift` + `features/share/share-memory.ts`, marked by each `ShareSheet`'s `screen`                                                                                                                                                                                 |
+| iOS: which native modules the extension target links                                                                                        | `excludedPackages` in `app.config.ts` (Expo modules) + `plugins/with-share-extension-native-links.js` (community modules, a `finalized` Podfile patch)                                                                                                                                                              |
+| iOS: the extension's bundle in a dev build is a production one                                                                              | `metro.config.js`, the `shareExtension=true` rewrite (`BRACEMARK_SHARE_DEV_BUNDLE=1` opts out)                                                                                                                                                                                                                      |
+| iOS: holding the system's swipe-to-dismiss off on the pickers (`BracemarkShareSwipeGuard`)                                                  | the same module's `ios/BracemarkShareSwipeGuardModule.swift` (posts) + `plugins/with-share-extension-swipe-hold.js` (the controller's observer) + `features/share/share-swipe-guard.tsx`, mounted by `share-kit`'s `holdSwipe`                                                                                      |
 
 Like the other native pieces (the `BracemarkCrypto` pod's modules, the embedded
 font), none of

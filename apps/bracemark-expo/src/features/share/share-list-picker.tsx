@@ -123,7 +123,7 @@ export function ShareListPicker({
   }, [trimmed, onCreateName, onDone]);
 
   return (
-    <ShareSheet holdSwipe>
+    <ShareSheet screen="list-picker" holdSwipe>
       <ShareHeader back={{ title: 'Choose list', onPress: onDone }} />
 
       <Input

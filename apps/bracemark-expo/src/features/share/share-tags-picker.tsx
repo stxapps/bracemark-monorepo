@@ -82,7 +82,7 @@ export function ShareTagsPicker({
   }, [trimmed, onSubmitName]);
 
   return (
-    <ShareSheet holdSwipe>
+    <ShareSheet screen="tags-picker" holdSwipe>
       <ShareHeader back={{ title: 'Add tags', onPress: onDone }} />
 
       <Input
