@@ -248,7 +248,7 @@ FINDING IT AGAIN
 
 YOURS TO LEAVE WITH
 • Full export in open formats, on every plan, forever
-• No ads, no trackers, no analytics — the only outside code we load runs the checkout
+• No ads, no trackers, and no analytics in the app — the only outside code it loads runs the checkout
 • No email address required — just a username
 
 WHAT IT COSTS TO BUILD IT THIS WAY
@@ -312,7 +312,7 @@ WHAT THE BROWSER EXTENSION DOES
 
 WHAT IT ASKS FOR
 • Access to a tab only when you click the button on it — never “Read and change all your data on all websites”
-• No ads, no trackers, no analytics
+• No ads, no trackers, no analytics code
 
 WHERE YOUR LINKS GO
 Everything you save turns up in the Bracemark web app, on any device you sign in on — where you search, pin, import, and export it. Export is in open formats, on every plan.

@@ -560,8 +560,37 @@ export default function Page() {
             To answer you when you write to us, and to turn the questions people ask into help pages
             and fixes — keeping the question, not who asked it.
           </li>
+          <li>To count, as totals, how many people use Bracemark and how many pay for it.</li>
           <li>To meet legal, tax, and accounting obligations.</li>
         </ul>
+        {/* THE TOTALS ARE AN INVENTORY, AND IT CLOSES. Each item is read from a
+            record this page already lists above — usernames' created/deleted
+            dates, sessions' last_seen_at (docs/sessions.md: it moves on any
+            authenticated request, background sync included, so "signed in or
+            synced" and never "opened the app"), subscription rows, and the
+            paths of the encrypted files (docs/local-first-sync.md, _crypto
+            boundary & what the server still learns_). A new item is a change
+            to this paragraph first, and the paths are counted per namespace,
+            never opened.
+
+            "NOTHING FINER" IS WHAT THE COUNT KEEPS, NOT WHAT IT TOUCHES. A
+            per-account figure exists in memory while a range is being filled
+            and is never written down; a range holding too few accounts to name
+            nobody is reported only as "fewer than five". That is why the verb
+            is "keep".
+
+            This is "Analytics" in Apple's App Privacy sense ("measure audience
+            size") and Play's Data safety sense, so the store declarations must
+            carry that purpose too, and every "no analytics" line on the property is
+            scoped to code we ship (docs/brand-assets.md, _terminology_). */}
+        <p>
+          Those totals are how many accounts there are, how many were created or deleted, how many
+          signed in or synced in the last week or month, how many subscribe, and how many links the
+          libraries hold, counted in ranges rather than per account. They come from the records
+          described above — the account and session records, the subscription record, and the paths
+          of the encrypted files — so nothing is collected for them. We keep the totals and nothing
+          finer: no figure about one account, and no list of who was counted.
+        </p>
         <p>
           We do not use your information for advertising, we do not sell or rent it, and we do not
           share it for anyone else’s marketing. There is no automated decision-making that produces
@@ -584,7 +613,9 @@ export default function Page() {
             answering requests, applying rate limits, diagnosing faults. The interest is running a
             service that works; the data involved is what any web server handles to reply at all.
             The same interest covers working out, from the questions people send us, which parts of
-            Bracemark need fixing or explaining better.
+            Bracemark need fixing or explaining better, and counting the totals under{' '}
+            <em>How we use what we collect</em>: knowing how many people use Bracemark and pay for
+            it, answered by a count that names nobody.
           </li>
           <li>
             <strong>Your consent</strong> — the one optional thing, the {PLAN_LABELS.plus} setting

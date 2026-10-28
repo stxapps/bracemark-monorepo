@@ -2059,6 +2059,12 @@ graph (all inside the ciphertext). Keeping metadata uniformly small (`< ~2 KB`)
 blunts size correlation. Acceptable for a bookmark manager — named here so it's a
 decision, not an accident.
 
+We read the counts back, and only as totals: how many `links/` files the
+libraries hold, counted per account into ranges that are reported only when
+they hold enough accounts to name nobody. /privacy lists it under _How we use
+what we collect_. A new reading of the paths — sizes per account, timestamps,
+another namespace — is a change to that paragraph first.
+
 ### authorization & quota
 
 Because the server can't inspect contents, it must enforce policy on the

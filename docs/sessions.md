@@ -110,7 +110,10 @@ this in `requireAuth`, `middleware/auth.ts`, through `renewSession`
   Where there is no execution context (`app.request()` in the specs) the
   renewal is awaited inline instead.
 - **`last_seen_at` moves with it.** The column already exists and was waiting
-  for this. It will serve a future sessions/devices list.
+  for this. It will serve a future sessions/devices list. It is also read, as a
+  total only, for how many accounts signed in or synced in the last week or
+  month (/privacy, _How we use what we collect_). Since background sync renews
+  it, that count is API activity, not a person opening the app.
 
 **Sliding alone needs no new columns.** `expires_at`, `last_seen_at` and
 `idx_sessions_expires_at` already existed. The explicit revocation marker below

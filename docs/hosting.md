@@ -310,7 +310,7 @@ The constraints baked in:
   admitting it falsifies the sentence /privacy and the FAQ's _trackers_ answer
   both print: one screen loads Paddle's script, and that script is the only
   third-party code in Bracemark. It would also put analytics on that screen,
-  next to "we run no analytics". The block costs nothing we use: we don't run
+  next to the FAQ's "We ship no analytics or advertising code". The block costs nothing we use: we don't run
   Retain, and price preview and the overlay checkout come from `*.paddle.com`
   alone. Three things keep the line from being noticed:
   - **It only happens in production.** Paddle's own wording is "Paddle.js

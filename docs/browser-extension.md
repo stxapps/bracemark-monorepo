@@ -414,7 +414,10 @@ Three things about that table are easy to get wrong later:
   disclosure, not a more cautious one.
 - **`technicalAndInteraction` must stay off.** There is no analytics, telemetry
   or crash reporting in this app, and listing it would contradict "No ads, no
-  trackers, no analytics" in `packages/shared/src/stores/listing-copy.ts`.
+  trackers, no analytics code" in `packages/shared/src/stores/listing-copy.ts`.
+  The totals we count on the server (/privacy, _How we use what we collect_)
+  come from session and file records every client already sends; the browser
+  extension sends nothing new for them, so they do not move this facet.
 
 The list is a claim about the API surface, so **a facet that sends something new
 to bracemark-api revisits it in the same change** — nothing in the build can

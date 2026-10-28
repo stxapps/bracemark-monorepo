@@ -1066,7 +1066,7 @@ export default function Page() {
               // longer than either of its neighbours.
               [
                 'No trackers',
-                'No analytics, no fingerprinting. The only third-party script we load is our payment provider’s, on the one screen where you subscribe.',
+                'No analytics code, no fingerprinting. The only third-party script we load is our payment provider’s, on the one screen where you subscribe.',
               ],
               // The local copy, not the format list. Lock-in is answered hardest
               // by the data already being on the machine — an export is a copy
