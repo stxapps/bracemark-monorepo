@@ -50,13 +50,13 @@ import { DEFAULT_LIST_ID } from '@stxapps/shared';
 
 import { LinksPageProvider, type Selection, useLinksPage } from './page-provider';
 
-// The provider's three data reads. `useLists`/`useTags` feed the stale-selection
-// fallback only, and an EMPTY tree is never taken as proof an id is gone (see
-// the provider), so `[]` keeps it quiet and the specs above it on the URL. The
+// The provider's three data reads. `useLists`/`useTagsOrUndefined` feed the
+// stale-selection fallback only, and a tree still loading is never taken as
+// proof an id is gone (see the provider) — `[]` lists, `undefined` tags — so
+// these keep it quiet and the specs above it on the URL. The
 // list tree is a subscribable value rather than a constant so that a spec can
 // delete a list under a MOUNTED provider, the way the live read delivers it.
 let mockLists: TreeNode<TreeItem>[] = [];
-const mockNoTags: TreeNode<TreeItem>[] = [];
 const mockListListeners = new Set<() => void>();
 jest.mock('@stxapps/expo-react', () => {
   const { useSyncExternalStore } = jest.requireActual<typeof import('react')>('react');
@@ -66,7 +66,7 @@ jest.mock('@stxapps/expo-react', () => {
   };
   return {
     useLists: () => useSyncExternalStore(subscribe, () => mockLists),
-    useTags: () => mockNoTags,
+    useTagsOrUndefined: () => undefined,
     useSettings: () => ({ sortOn: 'addedDT', sortOrder: 'desc' }),
   };
 });

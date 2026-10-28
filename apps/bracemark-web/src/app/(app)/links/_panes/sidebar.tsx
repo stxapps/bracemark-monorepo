@@ -82,6 +82,7 @@ import {
   flattenToRows,
   flattenTree,
   MY_LIST_ID,
+  type TagItem,
   TRASH_ID,
   TREE_INDENT_MAX_LEVELS_NARROW,
   TREE_INDENT_WIDTH,
@@ -93,7 +94,7 @@ import {
   readSidebarCollapsedIds,
   useLists,
   useLocks,
-  useTags,
+  useTagsOrUndefined,
   writeSidebarCollapsedIds,
 } from '@stxapps/web-react';
 import { BrandLockup } from '@stxapps/web-ui/components/brand-lockup';
@@ -154,6 +155,9 @@ const FOCUS_RING = 'focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-vi
 // we hide the box entirely — it reads as noise (or worse, as link search) when
 // there's nothing to filter.
 const FILTER_MIN_ITEMS = 12;
+
+// useTags' own empty default, stable so the trees' memos hold while pending.
+const NO_TAGS: TreeNode<TagItem>[] = [];
 
 // The device-local collapsed set (sidebar-view-store). Starts empty (everything
 // expanded) and loads the stored set AFTER mount — reading storage during render
@@ -468,7 +472,10 @@ export function SidebarBody({
   action?: React.ReactNode;
 }) {
   const lists = useLists();
-  const tags = useTags();
+  // Pending kept apart from empty for the "No tags yet" line below: lists need
+  // no such care, as the system three make a loaded tree never empty.
+  const loadedTags = useTagsOrUndefined();
+  const tags = loadedTags ?? NO_TAGS;
   const { selection } = useLinksPage();
   const { hiddenListIds, listLocks, lockList } = useLocks();
   const { collapsed, toggle, expand } = useCollapsedIds();
@@ -675,7 +682,7 @@ export function SidebarBody({
             ) : (
               <p className="py-1 pr-2 pl-5.5 text-xs text-muted-foreground">No matching tags</p>
             )
-          ) : tags.length === 0 ? (
+          ) : loadedTags === undefined ? null : tags.length === 0 ? (
             <p className="py-1 pr-2 pl-5.5 text-xs text-muted-foreground">No tags yet</p>
           ) : (
             <NavTree

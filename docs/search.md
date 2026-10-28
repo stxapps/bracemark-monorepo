@@ -295,14 +295,14 @@ same open-redirect hole `guest-guard.ts` closes on its `?next=` param.
 **A returned-to view can be stale**, because Settings is exactly where lists and tags
 get deleted. Both providers therefore carry `isStaleSelection`: a single-axis
 `selection` whose entity is gone is shown as home, and the URL is brought into line
-behind it (`replace`, so the vanished view isn't a back destination). It runs on
-**positive evidence only** — `useLists`/`useTags`
-collapse "still loading" into `[]`, so only a _non-empty_ tree can convict an id, which
-is what keeps a cold load of a shared list URL from bouncing to the inbox. Lists always
-land non-empty (the system three are merged in); the one case it can't judge is a tag id
-on an account whose last tag was just deleted, which is left showing an unnamed view
-(the title rule below). Compound queries are never judged — one dead id among live
-clauses isn't worth discarding the whole search. The rule lives with the URL rather than
+behind it (`replace`, so the vanished view isn't a back destination). It convicts
+**only once the store has answered**, which is what keeps a cold load of a shared list
+URL from bouncing to the inbox. `useLists` collapses "still loading" into `[]`, but a
+loaded list tree is never empty (the system three are merged in), so a _non-empty_ one
+means "answered". Tags can be loaded _and_ empty — the last one just deleted — so the
+providers read them through `useTagsOrUndefined`, `undefined` while pending, and an
+empty loaded tree convicts like any other. Compound queries are never judged — one dead
+id among live clauses isn't worth discarding the whole search. The rule lives with the URL rather than
 in the close button — or in the delete handlers — because a stale bookmark, a
 back-button entry and a deletion synced in from another device all reach the same
 state, and none of them passes through either.

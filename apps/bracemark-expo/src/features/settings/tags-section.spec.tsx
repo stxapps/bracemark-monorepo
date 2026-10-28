@@ -1,18 +1,18 @@
 import * as React from 'react';
 import { render } from '@testing-library/react-native';
 
-import { useTagMutations, useTags } from '@stxapps/expo-react';
+import { useTagMutations, useTagsOrUndefined } from '@stxapps/expo-react';
 
 import { TagsSection } from './tags-section';
 
 // The store seam is mocked whole — this spec is about the table's WIRING, not
 // the data layer (which is spec'd in expo-react).
 jest.mock('@stxapps/expo-react', () => ({
-  useTags: jest.fn(),
+  useTagsOrUndefined: jest.fn(),
   useTagMutations: jest.fn(),
 }));
 
-const useTagsMock = useTags as jest.Mock;
+const useTagsMock = useTagsOrUndefined as jest.Mock;
 const useTagMutationsMock = useTagMutations as jest.Mock;
 
 const tag = (id: string, name: string, rank: string) => ({
@@ -51,4 +51,12 @@ test('drops the grips along with the rows when there are no tags', () => {
 
   expect(queryAllByLabelText('Drag to reorder')).toHaveLength(0);
   expect(getByText('No tags yet.')).toBeTruthy();
+});
+
+// "No tags yet." is a claim about the library, so it waits for the read.
+test('says nothing about tags until the read lands', () => {
+  useTagsMock.mockReturnValue(undefined);
+  const { queryByText } = render(<TagsSection />);
+
+  expect(queryByText('No tags yet.')).toBeNull();
 });

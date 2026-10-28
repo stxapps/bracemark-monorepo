@@ -44,7 +44,7 @@ import { LinksPageProvider, type Selection, useLinksPage } from './page-provider
 
 let mockSearch = '';
 let mockLists: TreeNode<TreeItem>[] = [];
-let mockTags: TreeNode<TreeItem>[] = [];
+let mockTags: TreeNode<TreeItem>[] | undefined;
 let mockSetting = { sortOn: 'updatedAt', sortOrder: 'desc' };
 
 // The provider navigates through the History API (see its note on why not
@@ -62,7 +62,7 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('@stxapps/web-react', () => ({
   useLists: () => mockLists,
-  useTags: () => mockTags,
+  useTagsOrUndefined: () => mockTags,
   useSettings: () => mockSetting,
 }));
 
@@ -121,8 +121,10 @@ const emptyQuery = (): LinkQuery => ({
 
 describe('LinksPageProvider', () => {
   beforeEach(() => {
+    // Both trees read as still loading, which never convicts: the specs on the
+    // URL stay quiet, and the stale ones below say what the store holds.
     mockLists = [];
-    mockTags = [];
+    mockTags = undefined;
     mockSetting = { sortOn: 'updatedAt', sortOrder: 'desc' };
     push.mockClear();
     replace.mockClear();
@@ -391,6 +393,15 @@ describe('LinksPageProvider', () => {
       expect(replace).toHaveBeenCalledWith('/links');
     });
 
+    // Unlike lists, a loaded tag tree can be empty, so the pending read arrives
+    // as `undefined` rather than `[]` — and the account's LAST tag, deleted, is
+    // as gone as any other.
+    it('sends the last tag home once it is deleted', () => {
+      mockTags = [];
+      mountAt('tag=tag-deleted');
+      expect(replace).toHaveBeenCalledWith('/links');
+    });
+
     // `replaceState` is a mock here, so the URL never comes back around: what
     // the page reads below is the derivation alone. Leaving it to the navigation
     // paints the dead view first — an empty pane under a title with no name to
@@ -433,15 +444,18 @@ describe('LinksPageProvider', () => {
       expect(replace).not.toHaveBeenCalled();
     });
 
-    // The half that makes this safe to run continuously. An empty tree is what
-    // "still loading" and "the last one was deleted" both look like, so it never
-    // convicts — otherwise every cold load of a shared list URL would bounce to
-    // the inbox before the store answered.
-    it('never convicts on an empty tree', () => {
+    // The half that makes this safe to run continuously: nothing convicts before
+    // the store answers — otherwise every cold load of a shared list URL would
+    // bounce to the inbox. Pending is `[]` for lists (a loaded one never is) and
+    // `undefined` for tags.
+    it.each([
+      ['a list', 'list=list-abc', { kind: 'list', id: 'list-abc' }],
+      ['a tag', 'tag=tag-abc', { kind: 'tag', id: 'tag-abc' }],
+    ])('never convicts %s before the store answers', (_name, search, expected) => {
       mockLists = [];
-      mockTags = [];
-      const { selection } = mountAt('list=list-abc');
-      expect(selection).toEqual({ kind: 'list', id: 'list-abc' });
+      mockTags = undefined;
+      const { selection } = mountAt(search);
+      expect(selection).toEqual(expected);
       expect(replace).not.toHaveBeenCalled();
     });
 

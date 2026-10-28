@@ -41,7 +41,7 @@ import {
   readSidebarCollapsedIds,
   useLists,
   useLocks,
-  useTags,
+  useTagsOrUndefined,
   writeSidebarCollapsedIds,
 } from '@stxapps/expo-react';
 import {
@@ -51,6 +51,7 @@ import {
   flattenToRows,
   flattenTree,
   MY_LIST_ID,
+  type TagItem,
   TRASH_ID,
   TREE_INDENT_MAX_LEVELS_NARROW,
   TREE_INDENT_WIDTH,
@@ -75,6 +76,9 @@ const StyledSafeAreaView = withUniwind(SafeAreaView);
 // combined count (lists + tags) the trees fit at a glance and a box would read
 // as noise (web sidebar's FILTER_MIN_ITEMS, verbatim).
 const FILTER_MIN_ITEMS = 12;
+
+// useTags' own empty default, stable so the trees' memos hold while pending.
+const NO_TAGS: TreeNode<TagItem>[] = [];
 
 // Reserved collapse ids for the two section headers — prefixed so they can't
 // collide with a real list/tag id in the shared collapsed set.
@@ -465,7 +469,10 @@ export function Sidebar({
   headerAction?: ReactNode;
 }) {
   const lists = useLists();
-  const tags = useTags();
+  // Pending kept apart from empty for the "No tags yet" line below: lists need
+  // no such care, as the system three make a loaded tree never empty.
+  const loadedTags = useTagsOrUndefined();
+  const tags = loadedTags ?? NO_TAGS;
   const { selection, setSimpleQuery } = useLinksPage();
   // One select for every row, stable across renders so NavItem's memo holds:
   // the drawer's `closeDrawer` is a new closure each time the navigator renders
@@ -735,7 +742,7 @@ export function Sidebar({
             ) : (
               <Text className="py-1 pr-2 pl-6 text-xs text-muted-foreground">No matching tags</Text>
             )
-          ) : tags.length === 0 ? (
+          ) : loadedTags === undefined ? null : tags.length === 0 ? (
             <Text className="py-1 pr-2 pl-6 text-xs text-muted-foreground">No tags yet</Text>
           ) : (
             <NavTree

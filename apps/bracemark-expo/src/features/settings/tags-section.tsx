@@ -20,7 +20,7 @@ import { memo, useMemo } from 'react';
 import { View } from 'react-native';
 import { ChevronDown, ChevronUp, MoreHorizontal, Pencil, Tag, Trash2 } from 'lucide-react-native';
 
-import { useTagMutations, useTags } from '@stxapps/expo-react';
+import { useTagMutations, useTagsOrUndefined } from '@stxapps/expo-react';
 import { arrayMove, sortedByName, TAG_NAME_MAX, type TagItem } from '@stxapps/shared';
 
 import { Button } from '../../components/ui/button';
@@ -172,7 +172,9 @@ const Row = memo(function Row({
 });
 
 export function TagsSection() {
-  const tree = useTags();
+  // `undefined` until the first read lands, kept apart from an empty set for the
+  // "No tags yet." below (the links sidebar's same move).
+  const tree = useTagsOrUndefined();
   const { create, rename, move, destroy, destroyBlocker, reorder } = useTagMutations();
 
   const { error, run, runAwait } = useOpRunner();
@@ -182,7 +184,7 @@ export function TagsSection() {
 
   // The flat, ordered tag list. `useTags` nests by `parentId`, but nothing
   // nests tags, so the top level is the whole set — take its items in rank order.
-  const tags = useMemo(() => tree.map((node) => node.item), [tree]);
+  const tags = useMemo(() => (tree ?? []).map((node) => node.item), [tree]);
   // Resolved against the live list, so a tag deleted elsewhere closes its dialog.
   const destroyingTag = destroyRequest ? tags.find((t) => t.id === destroyRequest.id) : undefined;
 
@@ -253,7 +255,7 @@ export function TagsSection() {
           onCreate={(name) => runAwait(() => create(name, null, tags, 0))}
         />
 
-        {tags.length === 0 ? (
+        {tree === undefined ? null : tags.length === 0 ? (
           <Text className="px-3 py-6 text-center text-sm text-muted-foreground">No tags yet.</Text>
         ) : (
           tags

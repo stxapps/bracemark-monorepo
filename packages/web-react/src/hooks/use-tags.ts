@@ -12,7 +12,17 @@ import { buildTree, type TreeNode } from '@stxapps/shared';
 
 import { readTags, type TagItem } from '../data/queries';
 
+const NO_TAGS: TreeNode<TagItem>[] = [];
+
 export function useTags(): TreeNode<TagItem>[] {
+  return useTagsOrUndefined() ?? NO_TAGS;
+}
+
+// The same tree, but `undefined` until the first read lands — for a caller that
+// says something about an EMPTY tree, which useTags' `[]` can't tell from a read
+// still in flight (the sidebar's "No tags yet", which otherwise opens every
+// page load by claiming a tagged library has none).
+export function useTagsOrUndefined(): TreeNode<TagItem>[] | undefined {
   const tags = useLiveQuery(() => readTags(), []);
-  return useMemo(() => buildTree(tags ?? []), [tags]);
+  return useMemo(() => (tags === undefined ? undefined : buildTree(tags)), [tags]);
 }

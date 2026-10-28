@@ -35,7 +35,7 @@ import {
   type TreeItem,
   type TreeNode,
 } from '@stxapps/shared';
-import { type LinkQuery, useLists, useSettings, useTags } from '@stxapps/web-react';
+import { type LinkQuery, useLists, useSettings, useTagsOrUndefined } from '@stxapps/web-react';
 
 import { recordLinksReturn } from '@/lib/links-return';
 
@@ -282,24 +282,22 @@ function treeHasId<T extends TreeItem>(tree: TreeNode<T>[], id: string): boolean
 // live clauses, and dropping the whole search over one of them would throw away
 // far more than it fixes; it keeps showing, one clause narrower than it reads.
 //
-// POSITIVE EVIDENCE ONLY, which is what makes this safe to run continuously.
-// useLists/useTags collapse "still loading" into an empty tree, so an empty one
-// proves nothing and never convicts: an unmatched id is stale only when the tree
-// it should be in has entries. Lists always do once the read lands (the system
-// three are merged in, so `length > 0` is effectively "the store answered"), so
-// the only case this can't judge is a tag id on an account whose last tag was
-// just deleted — which is left on the unnamed view it would have shown anyway.
-// The inverse mistake — treating a loading tree as proof of absence —
-// would bounce every cold load of a shared list URL back to the inbox.
+// ONLY ONCE THE STORE HAS ANSWERED, which is what makes this safe to run
+// continuously: treating a loading tree as proof of absence would bounce every
+// cold load of a shared list URL back to the inbox. useLists collapses "still
+// loading" into an empty tree, but a loaded one is never empty (the system three
+// are merged in), so `length > 0` is "the store answered". Tags can be loaded
+// AND empty — the last one just deleted — so they come as useTagsOrUndefined's
+// `undefined` while pending, and an empty loaded tree convicts like any other.
 // Generic over the two item shapes so this file needs no entity types: all it
 // reads is `item.id`, which TreeItem already guarantees.
 function isStaleSelection<L extends TreeItem, T extends TreeItem>(
   selection: Selection,
   lists: TreeNode<L>[],
-  tags: TreeNode<T>[],
+  tags: TreeNode<T>[] | undefined,
 ): boolean {
   if (selection.kind === 'list') return lists.length > 0 && !treeHasId(lists, selection.id);
-  if (selection.kind === 'tag') return tags.length > 0 && !treeHasId(tags, selection.id);
+  if (selection.kind === 'tag') return tags !== undefined && !treeHasId(tags, selection.id);
   return false;
 }
 
@@ -378,7 +376,7 @@ function InnerLinksPageProvider({ children }: { children: React.ReactNode }) {
   // has committed — so the dead view was painted first, an empty pane under a
   // topbar titled "Unknown", for as long as the URL took to come back around.
   const lists = useLists();
-  const tags = useTags();
+  const tags = useTagsOrUndefined();
   const stale = isStaleSelection(selectionFromQuery(urlQuery), lists, tags);
 
   // The main pane's full filter: the URL's, unless what it names is gone.

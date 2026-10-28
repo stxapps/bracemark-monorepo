@@ -38,7 +38,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { ChevronDown, ChevronUp, MoreHorizontal, Pencil, Tag, Trash2 } from 'lucide-react';
 
 import { arrayMove, sortedByName, TAG_NAME_MAX } from '@stxapps/shared';
-import { type TagItem, useTagMutations, useTags } from '@stxapps/web-react';
+import { type TagItem, useTagMutations, useTagsOrUndefined } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
   DropdownMenu,
@@ -191,7 +191,9 @@ function SortableRow({
 }
 
 export function TagsSection() {
-  const tree = useTags();
+  // `undefined` until the first read lands, kept apart from an empty set for the
+  // "No tags yet." below (the links sidebar's same move).
+  const tree = useTagsOrUndefined();
   const { create, rename, move, destroy, destroyBlocker, reorder } = useTagMutations();
 
   const { error, run, runAwait } = useOpRunner();
@@ -208,7 +210,7 @@ export function TagsSection() {
 
   // The flat, ordered tag list. `useTags` nests by `parentId`, but nothing nests
   // tags, so the top level is the whole set — take its items in rank order.
-  const liveTags = useMemo(() => tree.map((node) => node.item), [tree]);
+  const liveTags = useMemo(() => (tree ?? []).map((node) => node.item), [tree]);
   // …with a just-dropped order standing in for it until the live read agrees
   // (table-kit's useDropHold says why a drop can't wait for the read).
   const { shown: tags, hold } = useDropHold(liveTags, tagOrder);
@@ -272,7 +274,7 @@ export function TagsSection() {
             onCreate={(name) => runAwait(() => create(name, null, tags, 0))}
           />
 
-          {tags.length === 0 ? (
+          {tree === undefined ? null : tags.length === 0 ? (
             <p className="px-3 py-6 text-center text-sm text-muted-foreground">No tags yet.</p>
           ) : (
             <DndContext

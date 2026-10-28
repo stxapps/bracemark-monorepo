@@ -24,7 +24,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useIsFocused } from '@react-navigation/native';
 import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
 
-import { useLists, useSettings, useTags } from '@stxapps/expo-react';
+import { useLists, useSettings, useTagsOrUndefined } from '@stxapps/expo-react';
 import {
   ALL_ID,
   coerceLinkSortOn,
@@ -317,16 +317,16 @@ function treeHasId<T extends TreeItem>(tree: TreeNode<T>[], id: string): boolean
 
 // A selection whose list or tag was DELETED while this screen still names it —
 // web's isStaleSelection, verbatim (see there for why only a single-axis
-// selection is judged, and why an empty tree is never taken as proof of
-// absence: both hooks collapse "still loading" into `[]`, so only a NON-empty
-// tree can convict).
+// selection is judged, and why nothing convicts before the store answers: a
+// list tree is judged only once non-empty, the system three making that
+// "loaded", and a tag tree only once useTagsOrUndefined stops being `undefined`).
 function isStaleSelection<L extends TreeItem, T extends TreeItem>(
   selection: Selection,
   lists: TreeNode<L>[],
-  tags: TreeNode<T>[],
+  tags: TreeNode<T>[] | undefined,
 ): boolean {
   if (selection.kind === 'list') return lists.length > 0 && !treeHasId(lists, selection.id);
-  if (selection.kind === 'tag') return tags.length > 0 && !treeHasId(tags, selection.id);
+  if (selection.kind === 'tag') return tags !== undefined && !treeHasId(tags, selection.id);
   return false;
 }
 
@@ -384,7 +384,7 @@ export function LinksPageProvider({ children }: { children: React.ReactNode }) {
   // on screen until it came back around, which on this platform is the frames
   // Settings slides away over.
   const lists = useLists();
-  const tags = useTags();
+  const tags = useTagsOrUndefined();
   const stale = isStaleSelection(selectionFromQuery(urlQuery), lists, tags);
   const query = stale ? homeQuery : urlQuery;
 

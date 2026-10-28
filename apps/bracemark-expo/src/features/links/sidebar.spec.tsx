@@ -6,7 +6,7 @@ import {
   readSidebarCollapsedIds,
   useLists,
   useLocks,
-  useTags,
+  useTagsOrUndefined,
   writeSidebarCollapsedIds,
 } from '@stxapps/expo-react';
 import {
@@ -36,7 +36,7 @@ import { Sidebar } from './sidebar';
 
 jest.mock('@stxapps/expo-react', () => ({
   useLists: jest.fn(),
-  useTags: jest.fn(),
+  useTagsOrUndefined: jest.fn(),
   useLocks: jest.fn(),
   readSidebarCollapsedIds: jest.fn(),
   writeSidebarCollapsedIds: jest.fn(),
@@ -90,7 +90,8 @@ const NESTED = () => [
 
 const setLists = (items: ListItem[]) =>
   jest.mocked(useLists).mockReturnValue(buildTree(items, { noChildrenIds: LIST_NO_CHILDREN_IDS }));
-const setTags = (items: TagItem[]) => jest.mocked(useTags).mockReturnValue(buildTree(items));
+const setTags = (items: TagItem[]) =>
+  jest.mocked(useTagsOrUndefined).mockReturnValue(buildTree(items));
 const setHidden = (ids: string[]) =>
   jest.mocked(useLocks).mockReturnValue({
     hiddenListIds: new Set(ids),
@@ -183,6 +184,23 @@ describe('Sidebar — the tree as flat rows', () => {
       { id: 't2', indent: 16 },
       { id: 't3', indent: 0 },
     ]);
+  });
+});
+
+// "No tags yet" is a claim about the library, so it waits for the read: the
+// pending `undefined` used to arrive as `[]` and the line opened every mount,
+// tagged library or not, until the read landed.
+describe('Sidebar — tags not read yet', () => {
+  it('says nothing about tags until the read lands', () => {
+    jest.mocked(useTagsOrUndefined).mockReturnValue(undefined);
+    const { rerender } = mount();
+
+    expect(screen.queryByText('No tags yet')).toBeNull();
+
+    setTags([]);
+    rerender(<Sidebar closeDrawer={jest.fn()} />);
+
+    expect(screen.getByText('No tags yet')).toBeTruthy();
   });
 });
 

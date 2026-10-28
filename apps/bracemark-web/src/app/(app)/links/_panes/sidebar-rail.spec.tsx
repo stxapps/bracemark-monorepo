@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { buildTree, LIST_NO_CHILDREN_IDS } from '@stxapps/shared';
-import { type SidebarRail, useLists, useLocks, useTags } from '@stxapps/web-react';
+import { type SidebarRail, useLists, useLocks, useTagsOrUndefined } from '@stxapps/web-react';
 
 import { RAIL_WIDTH, takeRailFocus } from '../_hooks/use-sidebar-rail';
 import { Sidebar } from './sidebar';
@@ -25,7 +25,7 @@ const mockWrite = jest.fn((patch: Partial<SidebarRail>) => {
 
 jest.mock('@stxapps/web-react', () => ({
   useLists: jest.fn(),
-  useTags: jest.fn(),
+  useTagsOrUndefined: jest.fn(),
   useLocks: jest.fn(),
   readSidebarCollapsedIds: () => [],
   writeSidebarCollapsedIds: jest.fn(),
@@ -83,7 +83,7 @@ beforeEach(() => {
   jest
     .mocked(useLists)
     .mockReturnValue(buildTree([], { noChildrenIds: LIST_NO_CHILDREN_IDS }) as never);
-  jest.mocked(useTags).mockReturnValue(buildTree([]) as never);
+  jest.mocked(useTagsOrUndefined).mockReturnValue(buildTree([]) as never);
   jest.mocked(useLocks).mockReturnValue({
     hiddenListIds: new Set(),
     listLocks: new Map(),
