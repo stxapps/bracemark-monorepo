@@ -26,11 +26,13 @@ We keep the native hosts responsible for the platform handoff and dismissal. The
 
 The iOS share extension therefore has a separate bundle. It loads the save screen and its pickers, while database work, navigation, and other app features stay outside its startup path. We import the specific modules and icons we need, and defer upload-related code until Save needs it.
 
-The sheet also leaves page fetching to the main app. It takes the address and any title supplied by the sharing app; it doesn’t visit the page or download an image before you can save. Once the link reaches the main app, the app fetches its title and image on the device.
+The sheet also leaves page fetching to the main app. It takes the address and any title supplied by the sharing app; it doesn’t visit the page or download an image before you can save. Once the link reaches the main app, the app fetches its title and image on the device, unless you’ve turned link previews off.
 
-Memory changed a native design choice too. An early version used an Expo native view to control swipe dismissal while a picker was open. It worked in the simulator, but opening a picker could terminate the iOS share extension on a phone in a development build. We replaced that view with a native module function and a hook in the share extension’s controller, avoiding the extra view initialisation.
+Memory shaped our native design choices too. Our first swipe-dismissal control was an Expo native view. It worked in the simulator, but in a development build on an iPhone 12, opening a picker ended the share extension. We replaced it with a native module function and a hook in the share extension’s controller. Later the keyboard measurement became the same kind of view, on every screen, and passed the same simulator checks. Now it’s a plain React Native view that a native module measures.
 
-That experience is why we distinguish simulator checks, development builds, and release builds. A screen working in the simulator doesn’t establish its memory headroom on a phone. In the simulator, a release build of the sheet uses about 60 MiB on its first screen, against about 170 MiB for a development build. How much headroom a release build has on hardware still needs its own measurement.
+What the share extension links matters as much as what it imports. Every Expo module the target links starts with the share extension, whether the sheet uses it or not. And because one library the sheet never uses was linked, loading the encryption code at Save started a second JavaScript runtime. The share extension now links 26 native libraries, where the app links 55.
+
+The simulator applies no memory cap, so none of this showed there. On our iPhone 12 test phone, on iOS 26.5, the cap is 120 MiB, and each screen of the sheet now writes its memory use, numbers only, to the phone’s own log. A release build opens at about 21 MiB and peaks at about 32 MiB after five laps of both pickers and a save, leaving about 88 MiB of room.
 
 ## Carry sign-in across the boundary
 
@@ -80,6 +82,6 @@ The iOS list and tag snapshot reflects the last refresh from the app. Changes ma
 
 There’s an accessibility cost on iOS too. React Native’s font scaling resolves incorrectly in the share extension process, so we currently disable it there to keep text visible. Dynamic Type doesn’t reach the iOS share sheet. Text in the main app still scales, and Android keeps the app’s font scaling behaviour.
 
-The wider product tradeoffs apply as well: search runs on each device’s synced copy, there are no shared lists, and we can’t reset your password. Your recovery code is the second way into your account. [How encryption and search work](/docs/how-encryption-and-search-work) explains those choices.
+The wider product tradeoffs apply as well: search runs on each device’s synced copy, there are no shared lists, and we cannot reset your password. Your recovery code is the second way into your account. [How encryption and search work](/docs/how-encryption-and-search-work) explains those choices.
 
 You can try the flow with a link you want to keep: share it to Bracemark, choose a list, add a tag, and save. Then open the app and find it again. [Get the apps](/docs/get-the-apps) has the iOS and Android entry points, and [saving links](/docs/save-links) covers the other ways in.
