@@ -106,7 +106,9 @@ export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise
 //     or bracemark-expo, so the promise had nothing behind it and nothing would
 //     have failed if it stayed. /terms carried the same promise in three places
 //     and lost it in the same change. If an in-app notice ever ships, these are
-//     the sentences that may widen again — not before.
+//     the sentences that may widen again — not before. On this website the
+//     notice is a dated _What changed_ section at the top of this page, kept
+//     for at least 30 days; _Changes to this policy_ says so.
 //
 // The rule this page follows: describe what the system does, not what we intend.
 // If a claim here is ever falsified by a change to the code, the change is wrong
@@ -147,6 +149,31 @@ export default function Page() {
           applies to you. The last few sections say what each of those adds.
         </p>
 
+        {/* THE NOTICE _Changes to this policy_ PROMISES: what changed, dated,
+            for at least 30 days. This one went up with the 29 October 2026
+            version and may come out on or after 28 November 2026; the next
+            change that affects what we collect, how we use it, or who receives
+            it puts its own here. Each entry says what is different for the
+            reader, and one is a correction rather than a change — Paddle's
+            dashboard always showed us a web buyer's name and email address,
+            and the policy said so only now. */}
+        <h2>What changed on 29 October 2026</h2>
+        <ul>
+          <li>
+            We now also count how people find Bracemark: our hosts’ totals of visits to our pages
+            and the sites those visits came from, and how often our store pages are seen. Like
+            everything else we count, these are totals that name nobody.
+          </li>
+          <li>
+            The totals are described by where they come from, not as a fixed list. A new total from
+            the same sources does not change this page; a new source does.
+          </li>
+          <li>
+            For a web purchase, Paddle shows us your name and email address in its dashboard. That
+            was always so, and this policy now says it.
+          </li>
+        </ul>
+
         <h2>The short version</h2>
         <ul>
           <li>
@@ -164,14 +191,16 @@ export default function Page() {
               to run the business: the second bullet says so up front rather
               than leaving it to be found under _How we use what we collect_.
               "For anyone else's marketing", not "for marketing": we market
-              Bracemark, with our own totals in hand. */}
+              Bracemark, with our own totals in hand. "Found" is there because
+              the totals include visits to our pages and store listings, not
+              only what happens after an account exists. */}
           <li>
             We do not ask for your email address. We ship no advertising or analytics code and no
             tracker, and we do not sell your data or share it for anyone else’s marketing.
           </li>
           <li>
-            We count how Bracemark is used and paid for, only as totals that name nobody, and use
-            them to decide what to build and how to reach more people.
+            We count how Bracemark is found, used, and paid for, only as totals that name nobody,
+            and use them to decide what to build and how to reach more people.
           </li>
           <li>We make money one way: the optional subscription.</li>
           {/* NOT "delete everything", which this page disproves twice below it —
@@ -287,9 +316,9 @@ export default function Page() {
         <p>
           Our infrastructure processes ordinary request data — including your{' '}
           <strong>IP address</strong>, the time of the request and your user agent — as any web
-          service must in order to answer it. We use it to keep the service running and to apply
-          rate limits against abuse, and we do not use it to build a profile of you or to track you
-          between visits.
+          service must in order to answer it. We use it to keep the service running, to apply rate
+          limits against abuse, and, as totals, to see how Bracemark is found and used. We do not
+          use it to build a profile of you or to track you between visits.
         </p>
         {/* WHAT WE CONFIGURE, NOT HOW LONG THEY KEEP IT. A compliance reader asked
             for a log-retention period and the tempting answer is a number. A
@@ -350,12 +379,24 @@ export default function Page() {
             two pages and the two Workers' /health from GitHub's runners. The
             "Two of the choices" paragraph below stays about the two Workers;
             GitHub Pages has no request-log setting for us to choose. →
-            docs/hosting.md, _the status page_. */}
+            docs/hosting.md, _the status page_.
+
+            NO "ONLY" ON WHY WE READ IT. This said "we read it only to diagnose a
+            fault or an attack" for a stretch, which was a promise about a
+            dashboard we do not control: Cloudflare's and AWS's consoles compile
+            visits, pages and referring sites from these logs whether anyone
+            opens them or not, and the sentence turned every glance at one into
+            a broken promise. The uses are the two the page names everywhere
+            else — running the service, and totals that name nobody — and the
+            Nos that matter are the ones that stay: no profile, no tracking
+            between visits, no join to an account, no copy of our own. */}
         <p>
           That data lives in <strong>Cloudflare</strong>’s, <strong>Amazon Web Services</strong>’,
           and, for the status page, <strong>GitHub</strong>’s own logs, under their retention
-          periods rather than any we set, and we read it only to diagnose a fault or an attack. We
-          do not join it to your account, and we keep no separate copy of our own.
+          periods rather than any we set. We read it to find a fault or an attack, and their
+          dashboards compile totals from it — visits, pages, the sites a visit came from — which we
+          read like the totals under <em>How we use what we collect</em>. We do not join it to your
+          account, and we keep no separate copy of our own.
         </p>
         <p>
           Two of the choices that decide what reaches those logs are ours rather than theirs, and we
@@ -488,16 +529,18 @@ export default function Page() {
             payment reports are order records, not counts, and the
             subscription section above is where a payment is accounted for.
             Reviews are not either: they are public, under the reviewer's own
-            name, and nothing here describes them as anonymous. */}
+            name, and nothing here describes them as anonymous. "Such as": the
+            stores add and rename reports on their own schedule, so the list is
+            a sample and the bound is "counts and anonymous reports". */}
         <h3>What the stores tell us</h3>
         <p>
           As the publisher of the mobile apps and the browser extension, we can see the figures the
-          App Store, Google Play, the Chrome Web Store, and Firefox Add-ons compile for us: how
-          often our store pages are seen, installs and uninstalls, which versions are in use, and
-          the crash and performance reports the operating systems collect. They arrive as counts and
-          anonymous reports — they carry no account, and we cannot connect one to a person. None of
-          our apps, the browser extension included, ships an analytics or crash-reporting library of
-          ours.
+          App Store, Google Play, the Chrome Web Store, and Firefox Add-ons compile for us, such as
+          how often our store pages are seen, installs and uninstalls, which versions are in use,
+          and the crash and performance reports the operating systems collect. They arrive as counts
+          and anonymous reports — they carry no account, and we cannot connect one to a person. None
+          of our apps, the browser extension included, ships an analytics or crash-reporting library
+          of ours.
         </p>
 
         <h3>How link previews are fetched</h3>
@@ -598,67 +641,62 @@ export default function Page() {
             and fixes — keeping the question, not who asked it.
           </li>
           <li>
-            To count, as totals, how many people use Bracemark and how many pay for it, and to
-            decide from those totals what to build and how to reach more people.
+            To count, as totals, how Bracemark is found, used, and paid for, and to decide from
+            those totals what to build and how to reach more people.
           </li>
           <li>To meet legal, tax, and accounting obligations.</li>
         </ul>
-        {/* THE TOTALS ARE BOUNDED BY WHAT THEY ARE MADE FROM, NOT BY A LIST.
-            For a stretch this paragraph was a closed list of figures, and every
-            new total was an edit to this page and a deploy before it could be
-            read. A list like that goes stale silently, which is the failure
-            this whole page is written against. What closes now is three
-            things, and they are what make "no individual tracking" checkable:
+        {/* THE TOTALS ARE BOUNDED BY WHAT THEY ARE MADE FROM AND THE FORM THEY
+            ARE KEPT IN — NEVER BY A LIST OF FIGURES OR OF SOURCES. Twice this
+            paragraph closed a list: first of figures, then of the records they
+            were read from. Each time a new total meant an edit and a deploy
+            before it could be read, and each list went stale silently, which
+            is the failure this whole page is written against. A page that
+            moves with every new spreadsheet column also teaches a reader that
+            its promises are provisional. So it closes two things, and they are
+            what make "no individual tracking" checkable:
 
-            THE INPUTS. Only records this page already lists: usernames'
-            created and deleted dates; sessions (docs/sessions.md —
+            THE INPUTS: WHAT THIS PAGE ALREADY DESCRIBES. Our own records
+            (usernames' created and deleted dates; sessions — docs/sessions.md,
             last_seen_at moves on any authenticated request, background sync
-            included, so "signed in or synced" and never "opened the app"; two
-            or more live sessions is "more than one device", which a reinstall
-            can make read a little high, never low); subscription rows; and the
-            paths of the encrypted files, counted per namespace and never opened
-            (docs/local-first-sync.md, _crypto boundary & what the server still
-            learns_). Paddle's checkout totals are Paddle's record, not ours,
-            which is why they get a clause of their own after "nothing is
-            collected for them" rather than a place in the list it closes.
+            included, so "signed in or synced" and never "opened the app";
+            subscription rows; the paths of the encrypted files, counted per
+            namespace and never opened, docs/local-first-sync.md), the request
+            data under _Technical and security data_ as our hosts' dashboards
+            total it, and what the stores and Paddle compile for us. A new total
+            from any of those needs no edit here. Something this page does not
+            describe — a new field, a new provider, anything a client would
+            have to send — does, first, because then it is the inventory above
+            that has changed.
 
-            THE FORM. "Nothing finer" is what the count KEEPS, not what it
-            touches: a per-account value exists in memory while a range or a
-            group is being filled and is never written down, and a range or
-            group too small to name nobody is reported only as "fewer than
-            five", or not broken down at all. That is why the verb is "keep".
+            THE FORM: "totals that name nobody". A per-account value exists in
+            memory while a range or a group is being filled and is never written
+            down, which is why the verb is "keep". How small a group may be
+            before it is withheld is a working rule of ours, not a published number.
 
-            THE NOES, SCOPED TO WHAT COUNTING DOES. "To count them we add no
-            event tracking", not "we record no events": a session row's last_seen_at is a record
-            of activity, and so is the request log Cloudflare and AWS keep (see
-            _Technical and security data_), so the absolute would be refuted on
-            this page. The claim is that the counting adds none. "None of it
-            comes from inside your library, which we cannot open" holds because
-            a path and a count are the envelope, not the contents — and it is
-            "cannot", by the brand-assets test, because the verb is about
-            reaching the library.
-
-            A new total from the same inputs, kept in the same form, needs no
-            edit here. A new input does, first — a file's size in bytes, a
-            timestamp per file, another provider's record, anything per person.
-            The examples in the first sentence are a sample; the FAQ (_trackers_)
-            points here for "those records and what we keep of them".
+            THE NOES, SCOPED TO WHAT COUNTING ADDS. "No analytics or tracking
+            code" is about what we ship, the same scope as every "no analytics"
+            line on the property. It said "no analytics product" for a stretch,
+            which a reader could fairly hold against the hosts' own dashboards
+            once the paragraph above admits we read them. "None of it comes from
+            inside your library, which we cannot open" holds because a path and
+            a count are the envelope, not the contents — and it is "cannot", by
+            the brand-assets test, because the verb is about reaching the
+            library.
 
             This is "Analytics" in Apple's App Privacy sense ("measure audience
             size") and Play's Data safety sense, so the store declarations must
             carry that purpose too, and every "no analytics" line on the property is
             scoped to code we ship (docs/brand-assets.md, _terminology_). */}
         <p>
-          Those totals describe Bracemark as a whole: how many accounts there are and how that
-          changes, how many signed in or synced in the last week or month and on how many devices,
-          how many subscribe, and how large the libraries are, counted in ranges. Each comes from
-          the records described above — the account and session records, the subscription record,
-          and the paths of the encrypted files — so nothing is collected for them. From Paddle,
-          which runs the checkout, we read the same kind of totals about checkouts. We keep the
-          totals and nothing finer: no figure about one account, no list of who was counted, and no
-          breakdown of a group too small to name nobody. To count them we add no event tracking, no
-          record of the screens you open, and no analytics product, and none of it comes from inside
-          your library, which we cannot open.
+          Those totals describe Bracemark as a whole — for example, how many accounts there are and
+          how that changes over time, how many signed in or synced lately and on how many devices,
+          how many subscribe, how large the libraries are, counted in ranges, and how often our
+          website and store pages are visited. They come from what this page already describes: our
+          own records, the request data our hosts process, and the figures the stores and Paddle
+          compile for us. Nothing is collected for them. We keep totals that name nobody — no figure
+          about one account and no list of who was counted. Counting adds no analytics or tracking
+          code to Bracemark, and none of it comes from inside your library, which we cannot open.
         </p>
         <p>
           We do not use your information for advertising, we do not sell or rent it, and we do not
@@ -683,8 +721,8 @@ export default function Page() {
             service that works; the data involved is what any web server handles to reply at all.
             The same interest covers working out, from the questions people send us, which parts of
             Bracemark need fixing or explaining better, and counting the totals under{' '}
-            <em>How we use what we collect</em>: knowing how many people use Bracemark and pay for
-            it, so we can run it as a business, answered by a count that names nobody.
+            <em>How we use what we collect</em>: knowing how Bracemark is found, used, and paid for,
+            so we can run it as a business, answered by totals that name nobody.
           </li>
           <li>
             <strong>Your consent</strong> — the one optional thing, the {PLAN_LABELS.plus} setting
@@ -698,9 +736,19 @@ export default function Page() {
         </ul>
 
         <h2>Who else processes it</h2>
+        {/* NOT "THEY ACT ON OUR INSTRUCTIONS", which was said of the whole list
+            and is false of three of it. Paddle is merchant of record — it sells
+            the subscription itself — and Apple and Google sell through their
+            own stores, so each of them decides what it collects at checkout,
+            under its own policy, as _If you subscribe_ already says. The others
+            process on our behalf. Nor "receive ONLY what their function
+            requires": what a host sees of a request is the host's to decide,
+            and "only" is the word a reader holds us to. */}
         <p>
-          We use a small number of providers to run the service. They act on our instructions and
-          receive only what their function requires.
+          We use a small number of providers to run the service, and each receives what its part of
+          it requires. Those that host the service, serve it, or help with support email process
+          data on our behalf; Paddle, Apple, and Google sell the subscriptions and collect what a
+          payment needs under their own privacy policies.
         </p>
         <ul>
           {/* The link-preview service is named here because this list is where
@@ -746,9 +794,10 @@ export default function Page() {
         <p>
           Beyond these, we disclose information only where we are legally required to — in response
           to a valid legal request — or where it is necessary to protect our rights or someone’s
-          safety. What we can disclose is bounded by what we hold: encrypted files we cannot
-          decrypt, and the account record described above. If we are ever part of a merger or sale
-          of assets, this policy travels with the data and you will be told before it moves.
+          safety. What we can disclose is bounded by what we hold, which this page describes — and
+          your library is part of it only as encrypted files we cannot decrypt. If we are ever part
+          of a merger or sale of assets, this policy travels with the data, and we will give notice
+          on this website before it moves.
         </p>
 
         <h2>Where your data is</h2>
@@ -883,8 +932,7 @@ export default function Page() {
             behavioural advertising, and we do not profile you
           </strong>{' '}
           — not for advertising, and not for any decision that affects you. That has been true for
-          every one of the last twelve months, and there is no revenue model here that would make it
-          stop being true.
+          every one of the last twelve months.
         </p>
         <p>
           Where your state grants them, you have the right to know what we hold, to receive a copy,
@@ -897,7 +945,7 @@ export default function Page() {
           for one to switch off — no tracking, no sale, no sharing — so we treat any such signal as
           already satisfied. California residents may also ask, under the Shine the Light law, what
           personal information we disclosed to third parties for those parties’ own direct
-          marketing: the answer is none, and it is none every year.
+          marketing: the answer is none.
         </p>
 
         <h2>Security</h2>
@@ -921,9 +969,10 @@ export default function Page() {
           reproducible builds we do not publish yet.
         </p>
         <p>
-          If a breach ever affects personal data we hold, we will tell the people affected and the
-          regulators that require telling, within the time the applicable law sets. What such a
-          notice could say is bounded by what we hold: your library would still be ciphertext.
+          If a breach ever affects personal data we hold, we will give notice as the applicable law
+          requires and within the time it sets — to the regulators it names, and to you on this
+          website, since we hold no email address to write to. What such a notice could say is
+          bounded by what we hold: your library would still be ciphertext.
         </p>
         <p>
           If you believe you have found a vulnerability, please see the{' '}
@@ -938,11 +987,31 @@ export default function Page() {
           you believe a child has created an account, write to us and we will remove it.
         </p>
 
+        {/* THE PROMISE IS A MECHANISM, NOT AN ADJECTIVE. "We will highlight any
+            material change on this website" named no place, no form and no
+            length, so nobody could tell whether it had been kept — including
+            us, the first time a change came along. It now says what happens:
+            a dated note at the top of this page (_What changed_), for a stated
+            time, and the page changes before the practice does, which the
+            law asks for a new purpose anyway (GDPR Art. 13(3)). The history
+            sentence is a fact, not a chore: this page's source is in the
+            public repository, so every earlier version already exists there.
+
+            "CONTINUING TO USE … MEANS YOU ACCEPT" IS GONE ON PURPOSE. That is
+            contract language, and /terms keeps it, where it belongs. This page
+            is a notice: none of _Our legal bases_ rests on your accepting it,
+            and the one consent here is a setting you switch on. Saying that
+            use means acceptance invites a reader to think the opposite. */}
         <h2>Changes to this policy</h2>
         <p>
-          We may update this policy. The date at the top of the page shows when it last changed, and
-          we will highlight any material change on this website. Continuing to use Bracemark after a
-          change means you accept the updated policy.
+          We may update this policy, and the date at the top of the page shows when it last changed.
+          When a change affects what we collect, how we use it, or who receives it, we say what
+          changed at the top of this page for at least 30 days, and we change this page before we
+          start anything new it describes, not after. Every earlier version is in the history of{' '}
+          <a href={SOURCE.url} rel="noreferrer">
+            {SOURCE.label}
+          </a>
+          .
         </p>
 
         <h2>Contact</h2>

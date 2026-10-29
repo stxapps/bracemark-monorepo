@@ -421,9 +421,12 @@ export const FAQ_GROUPS: FaqGroup[] = [
         // what we keep of them" rather than "lists all of it", which pointed at a closed list
         // of figures the page no longer keeps. It must not grow into a second
         // copy of that paragraph either way.
-        // "ALREADY KEPT TO RUN THE SERVICE", not "the service already keeps":
-        // the counting also reads Paddle's checkout totals, which are Paddle's
-        // record rather than ours, and the old subject made that one false.
+        // "RECORDS THAT ALREADY EXIST", not "the service already keeps" and not
+        // "already kept to run the service": the counting also reads totals that
+        // Paddle, the stores and our hosts compile — their records, not ours —
+        // and each narrower subject made one of those false. "How often our
+        // pages are visited" is in the sample because it is the one source a
+        // reader would not guess from the other three.
         //
         // "MUST LOAD", not "loads": the script is a condition of the screen
         // rather than something we chose to add, and it arrives WITH the screen
@@ -438,15 +441,15 @@ export const FAQ_GROUPS: FaqGroup[] = [
         a: (
           <>
             We ship no analytics or advertising code, fingerprint nothing, and set no cookies of our
-            own, anywhere in Bracemark. What we do count comes from records already kept to run the
-            service, and only as totals — how many accounts there are, how many signed in lately,
-            how many subscribe — and the privacy policy names those records and what we keep of
-            them. One screen loads code that isn’t ours: opening Settings → Subscription must load
-            Paddle’s script, to show your price in your own currency and to run the checkout if you
-            subscribe. That script is the only third-party code in Bracemark, and the cookies it
-            sets are the only cookies. Even the fonts come from us rather than from a font provider.
-            Bracemark does keep data in your browser, but it is your library, kept there so it works
-            offline.
+            own, anywhere in Bracemark. What we do count comes from records that already exist, and
+            only as totals — how many accounts there are, how many signed in lately, how many
+            subscribe, how often our pages are visited — and the privacy policy says where those
+            totals come from and what we keep of them. One screen loads code that isn’t ours:
+            opening Settings → Subscription must load Paddle’s script, to show your price in your
+            own currency and to run the checkout if you subscribe. That script is the only
+            third-party code in Bracemark, and the cookies it sets are the only cookies. Even the
+            fonts come from us rather than from a font provider. Bracemark does keep data in your
+            browser, but it is your library, kept there so it works offline.
           </>
         ),
       },
