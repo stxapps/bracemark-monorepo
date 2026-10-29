@@ -307,6 +307,10 @@ with them:
   multiline note typed past a line) tracked. It scrolls the field's bottom ON
   the viewport's edge; the 16 between it and the buttons is the footer's
   `pt-4`, which — pinned below the scroller — shows at every scroll position.
+- ⚠ **The body's taps are claimed below the scroller** (`ScrollClaim`). The
+  panel is a `Pressable`, so without that a drag starting on a label, a hint or
+  the empty image slot did not scroll on iOS. See _the traps_, _a claiming
+  ancestor freezes a scroller_.
 
 **Drawn in the tree, inside `SheetHost`**, which `(app)/links/_layout.tsx`
 wraps around the links Drawer: each opener's host (add, edit, Advanced Search)
@@ -1019,6 +1023,29 @@ type error or a failing test.
   you would assume on every component. If a tint doesn't show, that is not
   evidence the element is missing; put the colour in the `className` instead
   before drawing any conclusion.
+- ⚠ **A claiming ancestor freezes a scroller on iOS.** A touch that nothing
+  under the finger claims (a label, a hint, an alert's description, the seam
+  between two rows) bubbles up to the first ancestor that does. Several surfaces
+  claim on purpose, AROUND their scroller: the in-app sheet's panel
+  `Pressable`, `DialogContent` (whose @rn-primitives native Content answers
+  `onStartShouldSetResponder` with true), the AlertDialog overlay's
+  `Pressable`, and the share sheet's frame. And Fabric's iOS scroll view will
+  not scroll while ANY ancestor is the JS responder
+  (`RCTScrollViewComponentView`, `_shouldDisableScrollInteraction`). The result
+  is that a drag starting on the link editor's "Title" hint did nothing, while
+  the same drag starting on the Title input, which claims its own touch from
+  below, scrolled. Measured on the iPhone 17 Pro simulator: 0pt against 37pt,
+  the form's whole overflow. Two things hid it. With the keyboard up a
+  `"handled"` ScrollView claims those touches itself, so it showed only with
+  the keyboard down. And Android's `ReactScrollView` never consults the JS
+  responder, so the Pixel scrolled either way. The fix is a claimant BELOW the
+  scroller, `components/ui/scroll-claim.tsx`, whose press drops the keyboard as
+  the ancestor's claim did. **Any scroller inside one of those claimants wraps
+  its content in `ScrollClaim`**: the sheet body, `list-command.tsx`,
+  `tags-command.tsx`, the two alert-dialog bodies (`link-destroy-confirm.tsx`,
+  settings' `table-kit.tsx`) and the share sheet's two pickers. The structural
+  half is pinned in jest (`testing/scroll-claim.ts`); the drag itself only a
+  device can show.
 - **`keyboardShouldPersistTaps` is the tap-eating default, not just a dismissal
   knob.** Covered above, repeated here because it is the one that ships: the
   default `'never'` withholds the tap from the child. The bug reads as "the

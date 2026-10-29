@@ -30,6 +30,7 @@ import {
   AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 import { Button } from '../../components/ui/button';
+import { ScrollClaim } from '../../components/ui/scroll-claim';
 import { Text } from '../../components/ui/text';
 import { useLinksViewState } from './view-state-provider';
 
@@ -96,12 +97,17 @@ export function LinkDestroyConfirm() {
             no layout at all (docs/soft-keyboard.md, _the traps_). Any scroller
             put directly under Alert/DialogContent wants both classes. */}
         <ScrollView className="shrink grow-0" nestedScrollEnabled>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete permanently?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {what} will be removed from all your devices. This can’t be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
+          {/* ScrollClaim: the overlay Pressable around this claims touches,
+              and this body is all Text, so without it no drag on it scrolled
+              on iOS (components/ui/scroll-claim.tsx). */}
+          <ScrollClaim>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete permanently?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {what} will be removed from all your devices. This can’t be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+          </ScrollClaim>
         </ScrollView>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={deleting}>

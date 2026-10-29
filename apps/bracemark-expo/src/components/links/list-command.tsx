@@ -48,6 +48,7 @@ import { flattenToPathRows, type TreePathRow } from '@stxapps/shared';
 import { cn } from '../../lib/utils';
 import { Icon } from '../ui/icon';
 import { Input } from '../ui/input';
+import { ScrollClaim } from '../ui/scroll-claim';
 import { Text } from '../ui/text';
 import { GuideLines } from './guide-lines';
 
@@ -179,84 +180,89 @@ export function ListCommand({
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
       >
-        {/* Suppressed when there's a Create row: that row IS the next step. */}
-        {visibleRows.length === 0 && !canCreate && (
-          <Text className="py-6 text-center text-sm text-muted-foreground">No lists found.</Text>
-        )}
-        {root && !filtering && (
-          // Hidden while filtering: it has no name to match, and the flat
-          // filtered view is name-matches only.
-          <>
-            <Pressable
-              disabled={root.selected}
-              onPress={() => root.onSelect()}
-              accessibilityRole="menuitem"
-              className={cn(
-                'min-h-11 flex-row items-center justify-between gap-2 rounded-xl px-3 py-2.5 active:bg-muted',
-                root.selected && 'opacity-50',
-              )}
-            >
-              <Text numberOfLines={1} className="min-w-0 flex-1">
-                {root.label}
-              </Text>
-              {root.selected && (
-                <Icon as={Check} className="size-4 shrink-0 text-muted-foreground" />
-              )}
-            </Pressable>
-            <View className="my-1 h-px bg-border" />
-          </>
-        )}
-        {visibleRows.map(({ item, depth, ancestors }) => {
-          const disabled = disabledIds?.includes(item.id) === true;
-          return (
-            <Pressable
-              key={item.id}
-              disabled={disabled}
-              onPress={() => pick(item.id)}
-              accessibilityRole="menuitem"
-              className={cn(
-                'min-h-11 flex-row items-center justify-between gap-2 rounded-xl px-3 py-2.5 active:bg-muted',
-                disabled && 'opacity-50',
-              )}
-            >
-              {!filtering && depth > 0 && <GuideLines depth={depth} />}
-              {/* `middle` while a path leads the name: at the tail, a long path
+        {/* ScrollClaim: the DialogContent around this claims touches, so a
+            drag from the divider or the empty text would not scroll on iOS
+            (components/ui/scroll-claim.tsx). */}
+        <ScrollClaim>
+          {/* Suppressed when there's a Create row: that row IS the next step. */}
+          {visibleRows.length === 0 && !canCreate && (
+            <Text className="py-6 text-center text-sm text-muted-foreground">No lists found.</Text>
+          )}
+          {root && !filtering && (
+            // Hidden while filtering: it has no name to match, and the flat
+            // filtered view is name-matches only.
+            <>
+              <Pressable
+                disabled={root.selected}
+                onPress={() => root.onSelect()}
+                accessibilityRole="menuitem"
+                className={cn(
+                  'min-h-11 flex-row items-center justify-between gap-2 rounded-xl px-3 py-2.5 active:bg-muted',
+                  root.selected && 'opacity-50',
+                )}
+              >
+                <Text numberOfLines={1} className="min-w-0 flex-1">
+                  {root.label}
+                </Text>
+                {root.selected && (
+                  <Icon as={Check} className="size-4 shrink-0 text-muted-foreground" />
+                )}
+              </Pressable>
+              <View className="my-1 h-px bg-border" />
+            </>
+          )}
+          {visibleRows.map(({ item, depth, ancestors }) => {
+            const disabled = disabledIds?.includes(item.id) === true;
+            return (
+              <Pressable
+                key={item.id}
+                disabled={disabled}
+                onPress={() => pick(item.id)}
+                accessibilityRole="menuitem"
+                className={cn(
+                  'min-h-11 flex-row items-center justify-between gap-2 rounded-xl px-3 py-2.5 active:bg-muted',
+                  disabled && 'opacity-50',
+                )}
+              >
+                {!filtering && depth > 0 && <GuideLines depth={depth} />}
+                {/* `middle` while a path leads the name: at the tail, a long path
                   cut the list's own name off — the word just typed to find it.
                   The middle cut keeps the root and the name, and loses the
                   ancestors between (web-ui's ListPathLabel, the web form). */}
-              <Text
-                numberOfLines={1}
-                ellipsizeMode={filtering && ancestors.length > 0 ? 'middle' : 'tail'}
-                className="min-w-0 flex-1"
-              >
-                {filtering && ancestors.length > 0 && (
-                  <Text className="text-muted-foreground">{`${ancestors.join(' / ')} / `}</Text>
+                <Text
+                  numberOfLines={1}
+                  ellipsizeMode={filtering && ancestors.length > 0 ? 'middle' : 'tail'}
+                  className="min-w-0 flex-1"
+                >
+                  {filtering && ancestors.length > 0 && (
+                    <Text className="text-muted-foreground">{`${ancestors.join(' / ')} / `}</Text>
+                  )}
+                  {item.name}
+                </Text>
+                {item.id === value && (
+                  <Icon as={Check} className="size-4 shrink-0 text-muted-foreground" />
                 )}
-                {item.name}
-              </Text>
-              {item.id === value && (
-                <Icon as={Check} className="size-4 shrink-0 text-muted-foreground" />
+              </Pressable>
+            );
+          })}
+          {canCreate && (
+            <Pressable
+              testID="list-picker-create"
+              disabled={creating}
+              onPress={() => void create()}
+              accessibilityRole="menuitem"
+              className={cn(
+                'min-h-11 flex-row items-center gap-2 rounded-xl px-3 py-2.5 active:bg-muted',
+                creating && 'opacity-50',
               )}
+            >
+              <Icon as={Plus} className="size-4 shrink-0 text-muted-foreground" />
+              <Text numberOfLines={1} className="min-w-0 flex-1">
+                Create “{trimmed}”
+              </Text>
             </Pressable>
-          );
-        })}
-        {canCreate && (
-          <Pressable
-            testID="list-picker-create"
-            disabled={creating}
-            onPress={() => void create()}
-            accessibilityRole="menuitem"
-            className={cn(
-              'min-h-11 flex-row items-center gap-2 rounded-xl px-3 py-2.5 active:bg-muted',
-              creating && 'opacity-50',
-            )}
-          >
-            <Icon as={Plus} className="size-4 shrink-0 text-muted-foreground" />
-            <Text numberOfLines={1} className="min-w-0 flex-1">
-              Create “{trimmed}”
-            </Text>
-          </Pressable>
-        )}
+          )}
+        </ScrollClaim>
       </ScrollView>
     </>
   );

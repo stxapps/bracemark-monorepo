@@ -28,6 +28,7 @@ import type { ShareNewEntity, ShareTaxonomyTag } from '@stxapps/expo-react/data/
 import { TagPickerRows } from '../../components/links/tag-picker-rows';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
+import { ScrollClaim } from '../../components/ui/scroll-claim';
 import { Text } from '../../components/ui/text';
 import { ShareHeader, ShareSheet } from './share-kit';
 
@@ -104,31 +105,36 @@ export function ShareTagsPicker({
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
       >
-        <TagPickerRows
-          rows={[
-            ...visibleNew.map((tag) => ({ ...tag, selected: true })),
-            ...visibleTags.map((tag) => ({
-              ...tag,
-              selected: selectedTagIds.includes(tag.id),
-            })),
-          ]}
-          onToggle={(id) => (newTags.some((tag) => tag.id === id) ? onRemoveNew(id) : onToggle(id))}
-          emptyText={
-            visibleTags.length === 0 && visibleNew.length === 0 && !canCreate
-              ? tags.length === 0 && newTags.length === 0
-                ? 'No tags yet. Type a name to make one.'
-                : 'No tags found.'
-              : undefined
-          }
-          createName={canCreate ? trimmed : undefined}
-          onCreate={canCreate ? submit : undefined}
-          testIDForRow={(row) =>
-            newTags.some((tag) => tag.id === row.id)
-              ? `share-new-tag-${row.id}`
-              : `share-tag-${row.id}`
-          }
-          createTestID="share-tag-create"
-        />
+        {/* ScrollClaim: the list picker's reason. */}
+        <ScrollClaim>
+          <TagPickerRows
+            rows={[
+              ...visibleNew.map((tag) => ({ ...tag, selected: true })),
+              ...visibleTags.map((tag) => ({
+                ...tag,
+                selected: selectedTagIds.includes(tag.id),
+              })),
+            ]}
+            onToggle={(id) =>
+              newTags.some((tag) => tag.id === id) ? onRemoveNew(id) : onToggle(id)
+            }
+            emptyText={
+              visibleTags.length === 0 && visibleNew.length === 0 && !canCreate
+                ? tags.length === 0 && newTags.length === 0
+                  ? 'No tags yet. Type a name to make one.'
+                  : 'No tags found.'
+                : undefined
+            }
+            createName={canCreate ? trimmed : undefined}
+            onCreate={canCreate ? submit : undefined}
+            testIDForRow={(row) =>
+              newTags.some((tag) => tag.id === row.id)
+                ? `share-new-tag-${row.id}`
+                : `share-tag-${row.id}`
+            }
+            createTestID="share-tag-create"
+          />
+        </ScrollClaim>
       </ScrollView>
 
       <Button variant="outline" size="lg" onPress={onDone}>

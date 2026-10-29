@@ -48,6 +48,7 @@ import {
 } from '../../components/ui/dropdown-menu';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
+import { ScrollClaim } from '../../components/ui/scroll-claim';
 import { Text } from '../../components/ui/text';
 
 // One error slot plus the two ways these tables fire a mutation at it. Both
@@ -166,7 +167,8 @@ export function DestroyConfirm({
             content's `max-h-full` cap, and a "Delete list?" confirm rendered
             full screen with the buttons a thumb's travel from its message. */}
         <ScrollView className="shrink grow-0" nestedScrollEnabled>
-          <View className="gap-3">
+          {/* ScrollClaim: LinkDestroyConfirm's reason. */}
+          <ScrollClaim className="gap-3">
             <AlertDialogHeader>
               <AlertDialogTitle>
                 {blocker ? `Can’t delete this ${noun}` : `Delete ${noun}?`}
@@ -174,7 +176,7 @@ export function DestroyConfirm({
               <AlertDialogDescription>{blocker ?? description}</AlertDialogDescription>
             </AlertDialogHeader>
             {error && <ErrorText>{error}</ErrorText>}
-          </View>
+          </ScrollClaim>
         </ScrollView>
         <AlertDialogFooter>
           {blocker ? (

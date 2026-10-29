@@ -45,6 +45,7 @@ import { TreeLevelMarker } from '../../components/links/tree-level-marker';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
+import { ScrollClaim } from '../../components/ui/scroll-claim';
 import { Sheet } from '../../components/ui/sheet';
 import { Text } from '../../components/ui/text';
 import { usePaywall } from '../../contexts/paywall-provider';
@@ -265,45 +266,48 @@ function TriCheckList({
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         >
-          {visible.length === 0 && (
-            <Text className="px-1.5 py-1 text-sm text-muted-foreground">
-              No matching {label.toLowerCase()}
-            </Text>
-          )}
-          {visible.map((o) => {
-            const state = include.includes(o.id)
-              ? 'include'
-              : exclude.includes(o.id)
-                ? 'exclude'
-                : 'off';
-            return (
-              <Pressable
-                key={o.id}
-                onPress={() => cycle(o.id)}
-                accessibilityRole="checkbox"
-                aria-label={`${o.name}: ${
-                  state === 'include'
-                    ? 'included'
-                    : state === 'exclude'
-                      ? 'excluded'
-                      : 'not selected'
-                }`}
-                className="flex-row items-center gap-2 rounded px-1.5 py-2 active:bg-muted"
-                // 12 a level up to TREE_INDENT_MAX_LEVELS, then the level as a
-                // number (@stxapps/shared sync/tree.ts) — web's checklist, same
-                // numbers. Uncapped, a deep chain's box left the screen.
-                style={
-                  o.depth > 0
-                    ? { paddingLeft: Math.min(o.depth, TREE_INDENT_MAX_LEVELS) * 12 + 6 }
-                    : undefined
-                }
-              >
-                <TreeLevelMarker
-                  depth={o.depth}
-                  maxLevels={TREE_INDENT_MAX_LEVELS}
-                  className="-mr-2"
-                />
-                {/* Every value here is ui/checkbox.tsx's, restated because this
+          {/* ScrollClaim: the sheet's own claimant sits around this scroller
+              (components/ui/scroll-claim.tsx). */}
+          <ScrollClaim>
+            {visible.length === 0 && (
+              <Text className="px-1.5 py-1 text-sm text-muted-foreground">
+                No matching {label.toLowerCase()}
+              </Text>
+            )}
+            {visible.map((o) => {
+              const state = include.includes(o.id)
+                ? 'include'
+                : exclude.includes(o.id)
+                  ? 'exclude'
+                  : 'off';
+              return (
+                <Pressable
+                  key={o.id}
+                  onPress={() => cycle(o.id)}
+                  accessibilityRole="checkbox"
+                  aria-label={`${o.name}: ${
+                    state === 'include'
+                      ? 'included'
+                      : state === 'exclude'
+                        ? 'excluded'
+                        : 'not selected'
+                  }`}
+                  className="flex-row items-center gap-2 rounded px-1.5 py-2 active:bg-muted"
+                  // 12 a level up to TREE_INDENT_MAX_LEVELS, then the level as a
+                  // number (@stxapps/shared sync/tree.ts) — web's checklist, same
+                  // numbers. Uncapped, a deep chain's box left the screen.
+                  style={
+                    o.depth > 0
+                      ? { paddingLeft: Math.min(o.depth, TREE_INDENT_MAX_LEVELS) * 12 + 6 }
+                      : undefined
+                  }
+                >
+                  <TreeLevelMarker
+                    depth={o.depth}
+                    maxLevels={TREE_INDENT_MAX_LEVELS}
+                    className="-mr-2"
+                  />
+                  {/* Every value here is ui/checkbox.tsx's, restated because this
                     box is hand-rolled rather than that component (the header's
                     third divergence: the primitive is boolean-only, and this row
                     needs a third state). Hand-rolled control chrome does not
@@ -312,41 +316,42 @@ function TriCheckList({
                     web-ui's 6, a valid box with valid classes two radii away
                     from every other checkbox in the app. If ui/checkbox.tsx
                     moves, move this with it. → docs/theme.md, _the two kits_. */}
-                <View
-                  className={cn(
-                    'size-4 shrink-0 items-center justify-center rounded-[6px] border',
-                    state === 'off' ? 'border-input' : 'border-primary bg-primary',
-                  )}
-                >
-                  {state === 'include' && (
-                    <Icon
-                      as={Check}
-                      size={12}
-                      strokeWidth={3.5}
-                      className="text-primary-foreground"
-                    />
-                  )}
-                  {state === 'exclude' && (
-                    <Icon
-                      as={Minus}
-                      size={12}
-                      strokeWidth={3.5}
-                      className="text-primary-foreground"
-                    />
-                  )}
-                </View>
-                <Text
-                  numberOfLines={1}
-                  className={cn(
-                    'min-w-0 flex-1 text-sm',
-                    state === 'exclude' && 'text-muted-foreground line-through',
-                  )}
-                >
-                  {o.name}
-                </Text>
-              </Pressable>
-            );
-          })}
+                  <View
+                    className={cn(
+                      'size-4 shrink-0 items-center justify-center rounded-[6px] border',
+                      state === 'off' ? 'border-input' : 'border-primary bg-primary',
+                    )}
+                  >
+                    {state === 'include' && (
+                      <Icon
+                        as={Check}
+                        size={12}
+                        strokeWidth={3.5}
+                        className="text-primary-foreground"
+                      />
+                    )}
+                    {state === 'exclude' && (
+                      <Icon
+                        as={Minus}
+                        size={12}
+                        strokeWidth={3.5}
+                        className="text-primary-foreground"
+                      />
+                    )}
+                  </View>
+                  <Text
+                    numberOfLines={1}
+                    className={cn(
+                      'min-w-0 flex-1 text-sm',
+                      state === 'exclude' && 'text-muted-foreground line-through',
+                    )}
+                  >
+                    {o.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollClaim>
         </ScrollView>
       </View>
     </View>

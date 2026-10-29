@@ -4,6 +4,7 @@ import { PortalHost } from '@rn-primitives/portal';
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react-native';
 
 import { Text } from '../../components/ui/text';
+import { touchClaim } from '../../testing/scroll-claim';
 import { DestroyConfirm, RenameField, useDestroyRequest, useStableActions } from './table-kit';
 
 // Pins the delete flow the Lists and Tags tables share — web's peer
@@ -47,6 +48,18 @@ function Harness({
     </>
   );
 }
+
+// The confirm's body is all Text in a ScrollView under the AlertDialog overlay's
+// Pressable. Claimed by that overlay, a drag on the message does not scroll on
+// iOS, which is the one thing a message long enough to need the scroller wants
+// (components/ui/scroll-claim.tsx).
+test('claims a touch on the message inside its scroller, not at the overlay', async () => {
+  render(<Harness blocker={() => Promise.resolve(null)} onDestroy={jest.fn()} />);
+
+  fireEvent.press(screen.getByText('Request a'));
+
+  expect(touchClaim(await screen.findByText('Confirm a'))).toBe('inside');
+});
 
 test('a blocked delete opens as the refusal, with nothing that can fire destroy', async () => {
   const onDestroy = jest.fn(() => Promise.resolve());

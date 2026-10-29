@@ -111,6 +111,7 @@ import { Button } from './button';
 import { Icon } from './icon';
 import { KeyboardAvoidingView } from './keyboard-avoiding-view';
 import { NativeOnlyAnimatedView, POPUP_FADE_MS } from './native-only-animated-view';
+import { ScrollClaim } from './scroll-claim';
 import { Text } from './text';
 
 // Composite components need the wrapper to accept `className` (the note in
@@ -483,7 +484,8 @@ export function Sheet({
                 target, so a tap on the panel's own chrome — the header's empty
                 middle, a seam — would fall through to the backdrop and discard
                 the draft. Claiming those taps is the job; dropping the keyboard
-                is what to do with them (the scroller covers the body). */}
+                is what to do with them. The body's own content box claims its
+                taps first, which is load-bearing: see the scroller below. */}
             <StyledAnimatedView
               as="Pressable"
               accessible={false}
@@ -553,7 +555,12 @@ export function Sheet({
                   buttons is the footer's `pt-4`. No end padding while a footer
                   shows, for that reason: end padding is the last thing in the
                   scroll and would be scrolled away exactly when the fields
-                  overflow. */}
+                  overflow.
+
+                  ⚠ The content box is a `ScrollClaim`, or a drag that starts
+                  on a label, a hint or the empty image slot does not scroll on
+                  iOS, since the panel around the scroller claims touches
+                  (components/ui/scroll-claim.tsx). */}
               <StyledAnimatedScrollView
                 ref={reveal.scrollRef}
                 onScroll={reveal.onScroll}
@@ -563,9 +570,13 @@ export function Sheet({
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="interactive"
               >
-                <View ref={reveal.content} onLayout={reveal.onContentLayout} className="gap-4">
+                <ScrollClaim
+                  ref={reveal.content}
+                  onLayout={reveal.onContentLayout}
+                  className="gap-4"
+                >
                   {children}
-                </View>
+                </ScrollClaim>
               </StyledAnimatedScrollView>
               {/* PINNED below the scroller rather than its last child, so the
                   commit button stays in view while the fields scroll — and,

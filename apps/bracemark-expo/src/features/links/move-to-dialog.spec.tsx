@@ -5,6 +5,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { useLists } from '@stxapps/expo-react';
 import { buildTree, type ListItem, TRASH_ID } from '@stxapps/shared';
 
+import { touchClaim } from '../../testing/scroll-claim';
 import { MoveToDialog } from './move-to-dialog';
 
 // The Move-to picker the row menu and the bulk bar share. Both hosts hand it one
@@ -177,6 +178,19 @@ test('offers no create for the name of the Trash it hides', () => {
   // The control: a name no list has still gets its Create row.
   typeName('Bins');
   expect(screen.getByTestId('list-picker-create')).toBeTruthy();
+});
+
+// DialogContent claims every touch its children leave, from AROUND the
+// picker's scroller, so ListCommand claims them first from inside. Without that,
+// a drag starting on the empty text or the root's divider does not scroll on iOS
+// (components/ui/scroll-claim.tsx).
+test('claims a touch on non-row content inside the picker scroller', () => {
+  jest.mocked(useLists).mockReturnValue(buildTree([WORK, PERSONAL, list(TRASH_ID, 'Bin', 'a2')]));
+  mount(jest.fn());
+
+  typeName('bin');
+
+  expect(touchClaim(screen.getByText('No lists found.'))).toBe('inside');
 });
 
 // The crash the provider stand-in above exists for. Wire the create inside the

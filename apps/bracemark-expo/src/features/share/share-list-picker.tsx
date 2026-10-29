@@ -38,6 +38,7 @@ import { GuideLines } from '../../components/links/guide-lines';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
+import { ScrollClaim } from '../../components/ui/scroll-claim';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
 import { ShareHeader, ShareSheet } from './share-kit';
@@ -174,35 +175,40 @@ export function ShareListPicker({
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
       >
-        {visible.length === 0 && !canCreate && (
-          <Text className="py-6 text-center text-sm text-muted-foreground">No lists found.</Text>
-        )}
+        {/* ScrollClaim: ShareSheet's frame around this claims touches, so a
+            drag from the empty text would not scroll on iOS
+            (components/ui/scroll-claim.tsx). */}
+        <ScrollClaim>
+          {visible.length === 0 && !canCreate && (
+            <Text className="py-6 text-center text-sm text-muted-foreground">No lists found.</Text>
+          )}
 
-        {visible.map(({ list, ancestors }) => (
-          <ListRow
-            key={list.id}
-            testID={list.id === newList?.id ? 'share-new-list' : `share-list-${list.id}`}
-            name={list.name}
-            path={filtering && ancestors.length > 0 ? `${ancestors.join(' / ')} / ` : undefined}
-            indent={filtering ? 0 : list.depth}
-            selected={list.id === selectedId}
-            onPress={() => select(list.id)}
-          />
-        ))}
+          {visible.map(({ list, ancestors }) => (
+            <ListRow
+              key={list.id}
+              testID={list.id === newList?.id ? 'share-new-list' : `share-list-${list.id}`}
+              name={list.name}
+              path={filtering && ancestors.length > 0 ? `${ancestors.join(' / ')} / ` : undefined}
+              indent={filtering ? 0 : list.depth}
+              selected={list.id === selectedId}
+              onPress={() => select(list.id)}
+            />
+          ))}
 
-        {canCreate && (
-          <Pressable
-            testID="share-list-create"
-            onPress={create}
-            accessibilityRole="button"
-            className="min-h-11 flex-row items-center gap-2 rounded-xl px-3 py-2.5 active:bg-muted"
-          >
-            <Icon as={Plus} className="size-4 shrink-0 text-muted-foreground" />
-            <Text numberOfLines={1} className="min-w-0 flex-1">
-              Create “{trimmed}”
-            </Text>
-          </Pressable>
-        )}
+          {canCreate && (
+            <Pressable
+              testID="share-list-create"
+              onPress={create}
+              accessibilityRole="button"
+              className="min-h-11 flex-row items-center gap-2 rounded-xl px-3 py-2.5 active:bg-muted"
+            >
+              <Icon as={Plus} className="size-4 shrink-0 text-muted-foreground" />
+              <Text numberOfLines={1} className="min-w-0 flex-1">
+                Create “{trimmed}”
+              </Text>
+            </Pressable>
+          )}
+        </ScrollClaim>
       </ScrollView>
 
       {/* Outline, not primary: Save on the compose screen is the only primary

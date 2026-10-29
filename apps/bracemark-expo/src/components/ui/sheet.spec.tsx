@@ -14,10 +14,14 @@
 //   - Android's back reaches the sheet only while it is the thing on screen and
 //     only after anything opened over it — a picker, registered later, answers
 //     first however often the body re-renders, and a covering route or a relock
-//     gets the press instead.
+//     gets the press instead;
+//   - a touch on the body's plain text is claimed INSIDE the scroller, not by
+//     the panel Pressable around it, or on iOS a drag that starts on a label
+//     does not scroll (components/ui/scroll-claim.tsx).
 //
-// The geometry (the avoider, the reveal, the swipe) is a device behaviour
-// (docs/soft-keyboard.md, _the in-app sheet_); none of it is asserted here.
+// The geometry (the avoider, the reveal, the swipe) and the drag itself are
+// device behaviour (docs/soft-keyboard.md, _the in-app sheet_); none of it is
+// asserted here.
 
 import * as React from 'react';
 import { BackHandler, Text, View } from 'react-native';
@@ -25,6 +29,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import { AppCover } from '../../contexts/app-cover';
 import type { FocusedFieldReveal } from '../../lib/use-focused-field-reveal';
+import { touchClaim } from '../../testing/scroll-claim';
 import { Sheet, SheetCovered, SheetHost, useSheetOpen } from './sheet';
 
 // Whether the links route is the one on screen — false once another route
@@ -212,6 +217,11 @@ it('renders its body', () => {
   renderSheet(true);
 
   expect(screen.getByText('body')).toBeTruthy();
+});
+
+it('claims a touch on body text inside the scroller, not around it', () => {
+  renderSheet(true);
+  expect(touchClaim(screen.getByText('body'))).toBe('inside');
 });
 
 it('hides the covered subtree from a screen reader while open, and only then', () => {

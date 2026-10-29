@@ -6,6 +6,7 @@ import { flattenTree } from '@stxapps/shared';
 
 import { cn } from '../../lib/utils';
 import { Input } from '../ui/input';
+import { ScrollClaim } from '../ui/scroll-claim';
 import { TagPickerRows } from './tag-picker-rows';
 
 // The searchable, multi-select tag picker body — the expo port of web-ui's
@@ -113,15 +114,18 @@ export function TagsCommand({
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
       >
-        <TagPickerRows
-          rows={visible.map((option) => ({ ...option, selected: value.includes(option.id) }))}
-          onToggle={onToggle}
-          emptyText="No tags found."
-          createName={canCreate ? trimmed : undefined}
-          creating={creating}
-          onCreate={canCreate ? () => void create() : undefined}
-          createTestID="tag-picker-create"
-        />
+        {/* ScrollClaim: list-command.tsx's reason. */}
+        <ScrollClaim>
+          <TagPickerRows
+            rows={visible.map((option) => ({ ...option, selected: value.includes(option.id) }))}
+            onToggle={onToggle}
+            emptyText="No tags found."
+            createName={canCreate ? trimmed : undefined}
+            creating={creating}
+            onCreate={canCreate ? () => void create() : undefined}
+            createTestID="tag-picker-create"
+          />
+        </ScrollClaim>
       </ScrollView>
     </View>
   );

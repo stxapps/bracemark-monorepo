@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 import type { LinkView } from '@stxapps/expo-react';
 
+import { touchClaim } from '../../testing/scroll-claim';
 import { BulkTagsDialog } from './bulk-tags-dialog';
 
 const mockCloseRetag = jest.fn();
@@ -12,13 +13,16 @@ const mockUpdateMany = jest.fn();
 const mockFindOrCreate = jest.fn();
 let mockRetagging: LinkView[] | null = null;
 
+const TAGS = [
+  { item: { id: 'only-a', name: 'Only A' }, depth: 0, children: [] },
+  { item: { id: 'common', name: 'Common' }, depth: 0, children: [] },
+  { item: { id: 'only-b', name: 'Only B' }, depth: 0, children: [] },
+];
+let mockTags = TAGS;
+
 jest.mock('@stxapps/expo-react', () => ({
   useLinks: jest.fn(),
-  useTags: () => [
-    { item: { id: 'only-a', name: 'Only A' }, depth: 0, children: [] },
-    { item: { id: 'common', name: 'Common' }, depth: 0, children: [] },
-    { item: { id: 'only-b', name: 'Only B' }, depth: 0, children: [] },
-  ],
+  useTags: () => mockTags,
   useLinkMutations: () => ({ updateMany: mockUpdateMany }),
   useTagMutations: () => ({ findOrCreate: mockFindOrCreate }),
 }));
@@ -45,11 +49,23 @@ function mount() {
 }
 
 beforeEach(() => {
+  mockTags = TAGS;
   mockRetagging = [A, B];
   mockCloseRetag.mockClear();
   mockExitBulkEdit.mockClear();
   mockUpdateMany.mockReset().mockResolvedValue(undefined);
   mockFindOrCreate.mockReset();
+});
+
+// TagsCommand's scroller sits under DialogContent, which claims every touch its
+// children leave; TagsCommand has to claim them first from inside, or a drag
+// starting on the empty text does not scroll on iOS
+// (components/ui/scroll-claim.tsx).
+test('claims a touch on non-row content inside the picker scroller', () => {
+  mockTags = [];
+  mount();
+
+  expect(touchClaim(screen.getByText('No tags found.'))).toBe('inside');
 });
 
 test('renders nothing when no bulk tag request is open', () => {
