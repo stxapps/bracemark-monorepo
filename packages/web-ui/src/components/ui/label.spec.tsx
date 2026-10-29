@@ -49,6 +49,35 @@ describe('Label htmlFor forwarding', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
+  // A press on the label of an OPEN popup has already dismissed it (it is an
+  // outside press); activating the trigger as well would just reopen it.
+  it.each([
+    ['a non-labelable', 'div'],
+    ['a labelable', 'button'],
+  ] as const)('ends at focus when %s target was expanded at press', (_, Tag) => {
+    const onClick = jest.fn();
+    render(
+      <>
+        <Label htmlFor="trigger">Tags</Label>
+        <Tag
+          id="trigger"
+          role="combobox"
+          tabIndex={0}
+          aria-controls="trigger-list"
+          aria-expanded
+          onClick={onClick}
+        />
+      </>,
+    );
+
+    const label = screen.getByText('Tags');
+    fireEvent.pointerDown(label);
+    fireEvent.click(label);
+
+    expect(onClick).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(screen.getByRole('combobox'));
+  });
+
   it('still runs the caller’s own onClick', () => {
     const onClick = jest.fn();
     render(<Label onClick={onClick}>Plain</Label>);

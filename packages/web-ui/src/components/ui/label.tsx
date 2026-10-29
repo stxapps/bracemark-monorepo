@@ -79,19 +79,49 @@ const labelVariants = cva(
   },
 );
 
+//
+// A label on an OPEN popup trigger closes it, the way the trigger itself does.
+// The label lies outside the popup, so the press dismisses it (Radix's
+// outside-pointerdown), and the click that follows then reached the trigger,
+// through the browser's activation or the forwarding above, and opened it again.
+// The result was a flicker that also reset the picker's search, and it caught
+// people who clicked what looked like empty space to dismiss the popup. So the
+// target's `aria-expanded` is read at PRESS time, before the dismissal re-renders
+// it, and a press that began open ends at focus with no activation. It is
+// `aria-expanded`, not a picker-specific prop, so any future popup trigger with
+// a label behaves the same way.
 function Label({
   className,
   density,
   onClick,
+  onPointerDown,
   ...props
 }: React.ComponentProps<typeof LabelPrimitive.Root> & VariantProps<typeof labelVariants>) {
+  const expandedAtPress = React.useRef(false);
+
+  const onLabelPointerDown = (event: React.PointerEvent<HTMLLabelElement>) => {
+    onPointerDown?.(event);
+    const target = props.htmlFor === undefined ? null : document.getElementById(props.htmlFor);
+    expandedAtPress.current = target?.getAttribute('aria-expanded') === 'true';
+  };
+
   const onLabelClick = (event: React.MouseEvent<HTMLLabelElement>) => {
+    const wasExpanded = expandedAtPress.current;
+    expandedAtPress.current = false;
     onClick?.(event);
     if (event.defaultPrevented || props.htmlFor === undefined) return;
 
     const target = document.getElementById(props.htmlFor);
-    if (target === null || LABELABLE.has(target.tagName)) return;
+    if (target === null) return;
     if (event.target instanceof Node && target.contains(event.target)) return;
+
+    if (wasExpanded) {
+      // Also cancels the browser's own activation of a labelable target.
+      event.preventDefault();
+      target.focus();
+      return;
+    }
+    if (LABELABLE.has(target.tagName)) return;
 
     target.focus();
     target.click();
@@ -102,6 +132,7 @@ function Label({
       data-slot="label"
       className={cn(labelVariants({ density }), className)}
       {...props}
+      onPointerDown={onLabelPointerDown}
       onClick={onLabelClick}
     />
   );
