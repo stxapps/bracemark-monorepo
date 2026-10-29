@@ -153,9 +153,25 @@ export default function Page() {
             We cannot read your saved links. They are encrypted on your device with a key your
             password unlocks, and the password never reaches us.
           </li>
+          {/* TWO BULLETS, AND BOTH ARE ABOUT US. This was one bullet whose
+              Nos were absolutes about the product — "there is no … tracker"
+              — on the page that, further down, says Paddle's script loads on
+              one screen; the FAQ (_trackers_) already keeps its Nos to what we
+              ship and set, because what Paddle's script does inside its own
+              checkout is not ours to vouch for. And it said nothing of the
+              counting, so a reader who stops at the short version left
+              believing we look at nothing. We do, as totals, and we use them
+              to run the business: the second bullet says so up front rather
+              than leaving it to be found under _How we use what we collect_.
+              "For anyone else's marketing", not "for marketing": we market
+              Bracemark, with our own totals in hand. */}
           <li>
-            We do not ask for your email address, and there is no advertising, no analytics product,
-            no tracker, and no data sold or shared for marketing.
+            We do not ask for your email address. We ship no advertising or analytics code and no
+            tracker, and we do not sell your data or share it for anyone else’s marketing.
+          </li>
+          <li>
+            We count how Bracemark is used and paid for, only as totals that name nobody, and use
+            them to decide what to build and how to reach more people.
           </li>
           <li>We make money one way: the optional subscription.</li>
           {/* NOT "delete everything", which this page disproves twice below it —
@@ -247,11 +263,21 @@ export default function Page() {
           identifier for your subscription and customer, the plan, its status, and the dates it runs
           between. It is linked to your account so the app knows which features to unlock.
         </p>
+        {/* "SHOWS US", BECAUSE IT DOES. "Which the provider collects and holds"
+            stopped there for a stretch, and a reader took it to mean the
+            identity stays with the provider. It does not, on the web: Paddle's
+            dashboard shows the vendor each customer's name and email, and the
+            customer id on our row finds them. We do not copy them anywhere, but
+            "we could look" is the true state, and this paragraph is where a
+            reader decides whether paying is worth it. Apple's purchases carry no
+            identity to us; Google's are not described here because what its
+            console shows a developer was not checked. */}
         <p>
           Subscribing is the one thing in Bracemark that attaches a real identity to you, and we
           would rather state it than let you find it at checkout. Charging a card requires a name,
-          an email address, and payment details, which the provider collects and holds; the record
-          above is the link between that customer and your account. It costs you anonymity, not
+          an email address, and payment details, which the provider collects and holds. For a web
+          purchase, Paddle also shows us the name and email address in its dashboard, and the record
+          above is what links that customer to your account. It costs you anonymity, not
           confidentiality — your library is encrypted exactly as before, so we can tell that an
           account pays and still cannot read anything in it. The free plan requires no payment, so
           none of this arises.
@@ -328,9 +354,8 @@ export default function Page() {
         <p>
           That data lives in <strong>Cloudflare</strong>’s, <strong>Amazon Web Services</strong>’,
           and, for the status page, <strong>GitHub</strong>’s own logs, under their retention
-          periods rather than any we set, and we read it to diagnose a fault or an attack. We run no
-          analytics over it, we do not join it to your account, and we keep no separate copy of our
-          own.
+          periods rather than any we set, and we read it only to diagnose a fault or an attack. We
+          do not join it to your account, and we keep no separate copy of our own.
         </p>
         <p>
           Two of the choices that decide what reaches those logs are ours rather than theirs, and we
@@ -454,13 +479,25 @@ export default function Page() {
           runs on your device.
         </p>
 
-        <h3>What Apple and Google tell us</h3>
+        {/* THE STORES, ALL FOUR, AND WHAT WE ACTUALLY READ FROM THEM. This was
+            "What Apple and Google tell us" and covered the mobile apps only,
+            while we also read the Chrome Web Store's and Firefox Add-ons'
+            dashboards for the browser extension, and every store's count of
+            how often our listing is seen — figures we use to decide where to
+            put our effort. Sales are deliberately NOT in this list: a store's
+            payment reports are order records, not counts, and the
+            subscription section above is where a payment is accounted for.
+            Reviews are not either: they are public, under the reviewer's own
+            name, and nothing here describes them as anonymous. */}
+        <h3>What the stores tell us</h3>
         <p>
-          As the publisher of the mobile apps we can see the figures Apple and Google compile for
-          us: installs, which versions are in use, and the crash and performance reports their
-          operating systems collect. They arrive as counts and anonymous reports — they carry no
-          account, and we cannot connect one to a person. Neither app ships an analytics or
-          crash-reporting library of ours.
+          As the publisher of the mobile apps and the browser extension, we can see the figures the
+          App Store, Google Play, the Chrome Web Store, and Firefox Add-ons compile for us: how
+          often our store pages are seen, installs and uninstalls, which versions are in use, and
+          the crash and performance reports the operating systems collect. They arrive as counts and
+          anonymous reports — they carry no account, and we cannot connect one to a person. None of
+          our apps, the browser extension included, ships an analytics or crash-reporting library of
+          ours.
         </p>
 
         <h3>How link previews are fetched</h3>
@@ -560,36 +597,68 @@ export default function Page() {
             To answer you when you write to us, and to turn the questions people ask into help pages
             and fixes — keeping the question, not who asked it.
           </li>
-          <li>To count, as totals, how many people use Bracemark and how many pay for it.</li>
+          <li>
+            To count, as totals, how many people use Bracemark and how many pay for it, and to
+            decide from those totals what to build and how to reach more people.
+          </li>
           <li>To meet legal, tax, and accounting obligations.</li>
         </ul>
-        {/* THE TOTALS ARE AN INVENTORY, AND IT CLOSES. Each item is read from a
-            record this page already lists above — usernames' created/deleted
-            dates, sessions' last_seen_at (docs/sessions.md: it moves on any
-            authenticated request, background sync included, so "signed in or
-            synced" and never "opened the app"), subscription rows, and the
-            paths of the encrypted files (docs/local-first-sync.md, _crypto
-            boundary & what the server still learns_). A new item is a change
-            to this paragraph first, and the paths are counted per namespace,
-            never opened.
+        {/* THE TOTALS ARE BOUNDED BY WHAT THEY ARE MADE FROM, NOT BY A LIST.
+            For a stretch this paragraph was a closed list of figures, and every
+            new total was an edit to this page and a deploy before it could be
+            read. A list like that goes stale silently, which is the failure
+            this whole page is written against. What closes now is three
+            things, and they are what make "no individual tracking" checkable:
 
-            "NOTHING FINER" IS WHAT THE COUNT KEEPS, NOT WHAT IT TOUCHES. A
-            per-account figure exists in memory while a range is being filled
-            and is never written down; a range holding too few accounts to name
-            nobody is reported only as "fewer than five". That is why the verb
-            is "keep".
+            THE INPUTS. Only records this page already lists: usernames'
+            created and deleted dates; sessions (docs/sessions.md —
+            last_seen_at moves on any authenticated request, background sync
+            included, so "signed in or synced" and never "opened the app"; two
+            or more live sessions is "more than one device", which a reinstall
+            can make read a little high, never low); subscription rows; and the
+            paths of the encrypted files, counted per namespace and never opened
+            (docs/local-first-sync.md, _crypto boundary & what the server still
+            learns_). Paddle's checkout totals are Paddle's record, not ours,
+            which is why they get a clause of their own after "nothing is
+            collected for them" rather than a place in the list it closes.
+
+            THE FORM. "Nothing finer" is what the count KEEPS, not what it
+            touches: a per-account value exists in memory while a range or a
+            group is being filled and is never written down, and a range or
+            group too small to name nobody is reported only as "fewer than
+            five", or not broken down at all. That is why the verb is "keep".
+
+            THE NOES, SCOPED TO WHAT COUNTING DOES. "To count them we add no
+            event tracking", not "we record no events": a session row's last_seen_at is a record
+            of activity, and so is the request log Cloudflare and AWS keep (see
+            _Technical and security data_), so the absolute would be refuted on
+            this page. The claim is that the counting adds none. "None of it
+            comes from inside your library, which we cannot open" holds because
+            a path and a count are the envelope, not the contents — and it is
+            "cannot", by the brand-assets test, because the verb is about
+            reaching the library.
+
+            A new total from the same inputs, kept in the same form, needs no
+            edit here. A new input does, first — a file's size in bytes, a
+            timestamp per file, another provider's record, anything per person.
+            The examples in the first sentence are a sample; the FAQ (_trackers_)
+            points here for "those records and what we keep of them".
 
             This is "Analytics" in Apple's App Privacy sense ("measure audience
             size") and Play's Data safety sense, so the store declarations must
             carry that purpose too, and every "no analytics" line on the property is
             scoped to code we ship (docs/brand-assets.md, _terminology_). */}
         <p>
-          Those totals are how many accounts there are, how many were created or deleted, how many
-          signed in or synced in the last week or month, how many subscribe, and how many links the
-          libraries hold, counted in ranges rather than per account. They come from the records
-          described above — the account and session records, the subscription record, and the paths
-          of the encrypted files — so nothing is collected for them. We keep the totals and nothing
-          finer: no figure about one account, and no list of who was counted.
+          Those totals describe Bracemark as a whole: how many accounts there are and how that
+          changes, how many signed in or synced in the last week or month and on how many devices,
+          how many subscribe, and how large the libraries are, counted in ranges. Each comes from
+          the records described above — the account and session records, the subscription record,
+          and the paths of the encrypted files — so nothing is collected for them. From Paddle,
+          which runs the checkout, we read the same kind of totals about checkouts. We keep the
+          totals and nothing finer: no figure about one account, no list of who was counted, and no
+          breakdown of a group too small to name nobody. To count them we add no event tracking, no
+          record of the screens you open, and no analytics product, and none of it comes from inside
+          your library, which we cannot open.
         </p>
         <p>
           We do not use your information for advertising, we do not sell or rent it, and we do not
@@ -615,7 +684,7 @@ export default function Page() {
             The same interest covers working out, from the questions people send us, which parts of
             Bracemark need fixing or explaining better, and counting the totals under{' '}
             <em>How we use what we collect</em>: knowing how many people use Bracemark and pay for
-            it, answered by a count that names nobody.
+            it, so we can run it as a business, answered by a count that names nobody.
           </li>
           <li>
             <strong>Your consent</strong> — the one optional thing, the {PLAN_LABELS.plus} setting

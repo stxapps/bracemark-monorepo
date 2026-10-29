@@ -2061,9 +2061,13 @@ decision, not an accident.
 
 We read the counts back, and only as totals: how many `links/` files the
 libraries hold, counted per account into ranges that are reported only when
-they hold enough accounts to name nobody. /privacy lists it under _How we use
-what we collect_. A new reading of the paths — sizes per account, timestamps,
-another namespace — is a change to that paragraph first.
+they hold enough accounts to name nobody, and the same ranges for each month's
+new accounts as a group, which is not broken down at all when the group is
+that small. /privacy, _How we use what we collect_, bounds this by its input
+rather than listing each figure: the paths, counted per namespace and never
+opened. So another namespace counted the same way stays inside it, and any other
+part of the envelope — a size in bytes, a timestamp per file — is a change to
+that paragraph first.
 
 ### authorization & quota
 

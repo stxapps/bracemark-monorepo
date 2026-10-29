@@ -44,8 +44,8 @@ These aren't vulnerabilities, and the reasoning for each is in `docs/`:
   browse; Generate all covers the full library. The extractor holds no key, never
   sees your account, and stores no URL or page content. Its rate limiter briefly
   holds the IP addresses it needs.
-- **Subscribing identifies you to the payment provider.** It costs anonymity, not
-  confidentiality.
+- **Subscribing identifies you to the payment provider**, and on the web, through
+  Paddle's dashboard, to us. It costs anonymity, not confidentiality.
 
 ## Scope
 

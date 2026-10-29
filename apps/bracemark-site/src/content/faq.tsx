@@ -351,8 +351,9 @@ export const FAQ_GROUPS: FaqGroup[] = [
             path, a size, and the time it last changed. If you subscribe, a subscription record too.
             Not one title, address, tag, or note is kept in readable form, and there is no search
             index over any of it. The opt-in preview service is handed an address to fetch and
-            stores none. The full inventory is in the{' '}
-            <PageLink href="/privacy">privacy policy</PageLink>.
+            stores none. Like any web service, they also see the IP address each request comes from,
+            which our hosts keep in their own logs and we keep no copy of. The full inventory is in
+            the <PageLink href="/privacy">privacy policy</PageLink>.
           </>
         ),
       },
@@ -367,16 +368,23 @@ export const FAQ_GROUPS: FaqGroup[] = [
         // purpose (docs/iap.md, _privacy note_): bracemark-api stores the provider's
         // subscription id against the account and nothing else, which is what makes
         // the last sentence here something the code can back.
+        // "SHOWS US", AND NO "THAT IS THE WHOLE OF IT". The answer said the
+        // payment identifies you to the provider and closed with "that is the
+        // whole of it", which a reader took as "and not to Bracemark". On the
+        // web it does reach us: Paddle's dashboard shows the vendor the name and
+        // email, and the customer id we store finds them. /privacy (_If you
+        // subscribe_) says the same and moves with this.
         id: 'paying-identity',
         q: 'Doesn’t paying you identify me?',
         a: (
           <>
             It identifies you to the payment provider, yes — it needs a name, an email address, and
-            a way to charge you, and it holds those under its own privacy policy. What reaches us is
-            its identifier for your subscription, stored against your account so the app knows which
-            features to unlock. That is the whole of it, and none of it touches the encryption: we
-            can tell that an account pays, and still cannot read one link inside it. The free plan
-            asks for no card, so it never crosses that line at all.
+            a way to charge you, and it holds those under its own privacy policy. On the web that
+            provider is Paddle, which also shows us your name and email address in its dashboard.
+            What we store is its identifiers for your subscription and for you as its customer,
+            against your account so the app knows which features to unlock. None of it touches the
+            encryption: we can tell that an account pays, and still cannot read one link inside it.
+            The free plan asks for no card, so it never crosses that line at all.
           </>
         ),
       },
@@ -402,13 +410,20 @@ export const FAQ_GROUPS: FaqGroup[] = [
         // claims more than we can check.
         //
         // "WE RUN NO ANALYTICS" WAS RETIRED WHEN WE STARTED COUNTING TOTALS.
-        // /privacy, _How we use what we collect_, now says we count accounts,
-        // recent sign-ins and syncs, subscriptions, and library sizes in ranges
-        // — which is analytics by any reader's definition and by Apple's
+        // /privacy, _How we use what we collect_, now says we count totals —
+        // accounts, sign-ins and syncs, devices, subscriptions, library sizes in
+        // ranges — which is analytics by any reader's definition and by Apple's
         // ("measure audience size"). So the No is scoped to code we SHIP, and
         // the counting is named here rather than left for the reader to find
-        // there. The dash list is a sample; "lists all of it" points at the
-        // closed inventory, which is why it must not grow into a second copy.
+        // there. The dash list is a sample, and so is /privacy's: what that
+        // page closes is what the totals are MADE FROM, the form they are kept
+        // in, and what counting never adds. Hence "names those records and
+        // what we keep of them" rather than "lists all of it", which pointed at a closed list
+        // of figures the page no longer keeps. It must not grow into a second
+        // copy of that paragraph either way.
+        // "ALREADY KEPT TO RUN THE SERVICE", not "the service already keeps":
+        // the counting also reads Paddle's checkout totals, which are Paddle's
+        // record rather than ours, and the old subject made that one false.
         //
         // "MUST LOAD", not "loads": the script is a condition of the screen
         // rather than something we chose to add, and it arrives WITH the screen
@@ -423,14 +438,15 @@ export const FAQ_GROUPS: FaqGroup[] = [
         a: (
           <>
             We ship no analytics or advertising code, fingerprint nothing, and set no cookies of our
-            own, anywhere in Bracemark. What we do count comes from records the service already
-            keeps, and only as totals — how many accounts there are, how many signed in lately, how
-            many subscribe — and the privacy policy lists all of it. One screen loads code that
-            isn’t ours: opening Settings → Subscription must load Paddle’s script, to show your
-            price in your own currency and to run the checkout if you subscribe. That script is the
-            only third-party code in Bracemark, and the cookies it sets are the only cookies. Even
-            the fonts come from us rather than from a font provider. Bracemark does keep data in
-            your browser, but it is your library, kept there so it works offline.
+            own, anywhere in Bracemark. What we do count comes from records already kept to run the
+            service, and only as totals — how many accounts there are, how many signed in lately,
+            how many subscribe — and the privacy policy names those records and what we keep of
+            them. One screen loads code that isn’t ours: opening Settings → Subscription must load
+            Paddle’s script, to show your price in your own currency and to run the checkout if you
+            subscribe. That script is the only third-party code in Bracemark, and the cookies it
+            sets are the only cookies. Even the fonts come from us rather than from a font provider.
+            Bracemark does keep data in your browser, but it is your library, kept there so it works
+            offline.
           </>
         ),
       },
