@@ -183,7 +183,7 @@ export const PLAY = {
   title: APP_STORE.name,
 
   /** Indexed, and the only copy most visitors read. */
-  shortDescription: 'Your links are encrypted on your device before they ever sync.',
+  shortDescription: 'A bookmark manager that encrypts links on your device before they ever sync.',
 
   /**
    * Store settings → Manage tags. Picked from Google's fixed list, not typed — so

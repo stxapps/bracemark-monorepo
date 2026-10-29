@@ -1,7 +1,7 @@
 {
   "short_name": "Bracemark",
   "name": "Bracemark",
-  "description": "Your links are encrypted on your device before they ever sync.",
+  "description": "A bookmark manager that encrypts links on your device before they ever sync.",
   "icons": [
     {
       "src": "logo512-maskable.png",

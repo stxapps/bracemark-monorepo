@@ -82,14 +82,14 @@
       "pixels": "1170x2532",
       "sha256": "53a22d856b2f6d2b7306b1ffb9dc0ccdbdd14edfe3556855ba431a5f7f0fc8b0",
       "inputs": {
-        "listing.pwaDescription": "Your links are encrypted on your device before they ever sync."
+        "listing.pwaDescription": "A bookmark manager that encrypts links on your device before they ever sync."
       }
     },
     "apps/bracemark-web/public/ss-narrow-2.png": {
       "pixels": "1170x2532",
       "sha256": "977fb6e2f9d498c3fec95325d4b45428f73e819ecf12fdb229f5e3bc410a33f2",
       "inputs": {
-        "listing.pwaDescription": "Your links are encrypted on your device before they ever sync."
+        "listing.pwaDescription": "A bookmark manager that encrypts links on your device before they ever sync."
       }
     },
     "apps/bracemark-web/public/ss-wide-1.png": {
@@ -98,7 +98,7 @@
       "inputs": {
         "brand.name": "Bracemark",
         "icon.d": "M254.101 0L382.101 128C385.101 168 360.1 223.5 324.101 241C458.6 248.001 466.6 502.499 324.101 512H48C21.4903 512 0 490.51 0 464V48C0 21.4903 21.4903 0 48 0H254.101ZM103.101 443H286.101C328.074 443 362.101 408.973 362.101 367C362.101 325.027 328.074 291 286.101 291H103.101V443ZM103.101 198H245.101C280.447 198 309.101 169.346 309.101 134C309.101 98.6539 280.447 70.0003 245.101 70H103.101V198Z",
-        "listing.pwaDescription": "Your links are encrypted on your device before they ever sync."
+        "listing.pwaDescription": "A bookmark manager that encrypts links on your device before they ever sync."
       }
     },
     "apps/bracemark-web/public/ss-wide-2.png": {
@@ -107,7 +107,7 @@
       "inputs": {
         "brand.name": "Bracemark",
         "icon.d": "M254.101 0L382.101 128C385.101 168 360.1 223.5 324.101 241C458.6 248.001 466.6 502.499 324.101 512H48C21.4903 512 0 490.51 0 464V48C0 21.4903 21.4903 0 48 0H254.101ZM103.101 443H286.101C328.074 443 362.101 408.973 362.101 367C362.101 325.027 328.074 291 286.101 291H103.101V443ZM103.101 198H245.101C280.447 198 309.101 169.346 309.101 134C309.101 98.6539 280.447 70.0003 245.101 70H103.101V198Z",
-        "listing.pwaDescription": "Your links are encrypted on your device before they ever sync."
+        "listing.pwaDescription": "A bookmark manager that encrypts links on your device before they ever sync."
       }
     },
     "apps/bracemark-web/src/app/opengraph-image.png": {
