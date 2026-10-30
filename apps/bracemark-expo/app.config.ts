@@ -30,7 +30,7 @@ const config: ExpoConfig = {
   // read "0.0.0 (1)" to the user. The platform overrides are gone so there is
   // one number to bump. `buildNumber`/`versionCode` stay per-platform because
   // they are genuinely different concepts. → docs/expo-build.md, _versions_.
-  version: '1.1.0',
+  version: '1.2.0',
   // Every orientation, on every device — not portrait with tablets excepted.
   // iPadOS requires all four for Split View / Stage Manager unless the app
   // opts out of multitasking (`UIRequiresFullScreen`), Android 16 ignores a
@@ -67,7 +67,7 @@ const config: ExpoConfig = {
     },
     edgeToEdgeEnabled: true,
     package: 'com.bracemark.app',
-    versionCode: 3,
+    versionCode: 4,
     // The local store holds decrypted data. The manifest-policy plugin also
     // excludes device transfer, which allowBackup alone does not always stop.
     allowBackup: false,
