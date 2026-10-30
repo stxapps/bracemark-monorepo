@@ -323,6 +323,18 @@ pinned the same way — `check-release-notes.test.mjs` beside it:
 npm run test:check-release-notes
 ```
 
+`tools/scripts/clean-local.mjs` is the fourth, and the only one here that deletes
+things ([e2e.md](./e2e.md), _cleaning local state_), so what it must not delete is
+what `clean-local.test.mjs` pins, against a fixture of real WAL-mode databases:
+
+```bash
+npm run test:clean-local
+```
+
+That fixture is this script's reading of Miniflare's layout, so it cannot notice the
+layout moving under a wrangler bump. The refusals exist for that, each with a
+passing control.
+
 **Lint does reach them, by a script rather than a target.** `tools/` and the
 root-level config files (`eslint.config.mjs`, the `jest.*` files) belong to no Nx
 project, so no `lint` target covers them and for a long time nothing did: a

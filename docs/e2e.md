@@ -1487,8 +1487,9 @@ batch, so the one content chunk lands and the links behind it are refused. The
 case asserts the Data card's storage-full sentence and the ⋯ trigger's "storage
 full" name, that neither turns into "Sync failed" after a retry, and that an
 independent profile never receives the refused links. It ends by deleting all
-data, which is the only thing that gives the local R2 its 110 MiB back — a run
-that FAILS before that line leaves them in `apps/bracemark-api/.wrangler/`.
+data, which is what gives the local R2 its 110 MiB back — a run that FAILS before
+that line leaves them in `apps/bracemark-api/.wrangler/` until
+`npm run clean:local` (_cleaning local state_, below).
 Writing the size map directly, or a test-only ceiling, would prove the UI
 against a state the server never reached.
 
@@ -2803,9 +2804,47 @@ native evidence live below the run directory printed by the wrapper. Test
 passwords and recovery codes are not persisted, so a failed throwaway account
 is intentionally not reusable.
 
-Local api state lives in `apps/bracemark-api/.wrangler/`. Nothing resets it, on
+Local api state lives in `apps/bracemark-api/.wrangler/`. No run resets it, on
 purpose: a throwaway account per worker is cheaper and less brittle than clearing
 that directory, and it means two runs never contend for the same rows.
+
+#### cleaning local state
+
+So that directory only grows, and fast: the local R2 keeps each object in its own
+file, so a 200-byte link costs a whole 4 KiB block, and two weeks of runs reached
+696,300 files — 2.7 GiB on disk for 168 MiB of rows. `npm run clean:local` is the
+way back, per clone, and a dry run until it is given `--apply`:
+
+```sh
+npm run clean:local                                 # dry run: runs, accounts
+npm run clean:local -- --apply                      # do it
+npm run clean:local -- gradle --apply               # the Android output, by name
+```
+
+| part       | removes                                                                 | keeps                                                                  |
+| ---------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `runs`     | passing runs under `.artifacts/runs/`                                   | failures, whatever a `latest-*.json` names, the rest of `.artifacts`   |
+| `accounts` | `e2e_<12 hex>` accounts: D1 rows, R2 objects and blobs, Durable Objects | every other account and its sessions: signed-in devices stay signed in |
+| `gradle`   | `android/build` and `.cxx`: `node_modules`, native modules, the app     | sources and `build.gradle`; nothing else in the app's `android/`       |
+
+`gradle` is opt-in because it is not free: everything in it regenerates, but the
+next Android build recompiles every native library.
+
+`accounts` is why this is a script and not a line in this file, and it carries the
+one rule worth knowing before changing it. **It goes behind wrangler, into
+Miniflare's private storage**, because no public door fits: the delete-account
+route needs a password nobody kept, and local R2 has no bulk delete. So its layout
+(the `_mf_objects` table, one file per blob, one database per Durable Object) is an
+assumption a wrangler bump can break. Every assumption is checked before the first
+write, and a failed check **refuses that part** rather than guessing. A refusal is
+not an emergency: this is test data, so the reset under _six things that will
+surprise you_ below is always there.
+
+⚠ **Never read this state with `?immutable=1`.** Every database here is in WAL
+mode, and a `wrangler dev` stopped by a signal can leave committed rows in the
+`-wal`, which an immutable read ignores: the row count looks right and is not. The
+stack has to be stopped to do this at all, so a plain read-only open is both safe
+and correct. A Durable Object's `-wal` and `-shm` belong to it, and go with it.
 
 ### seeding a dev account
 
