@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { View } from 'react-native';
 import { useSafeAreaFrame, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Portal } from '@rn-primitives/portal';
@@ -31,7 +32,14 @@ import { Text } from './text';
 // is an acceptable only way in here, where it is not for bulk-edit's "Select".
 //
 // Placed above the row so the finger holding it doesn't cover it, and below
-// when the row is too near the top of the window to fit two lines over it.
+// when the bubble doesn't fit between the row and the top inset — failing both,
+// on whichever side has more room. That takes the bubble's own HEIGHT, which
+// only a layout pass knows: the title wraps as far as it needs to (that is the
+// point), and a limit-length name on a phone's drawer is five lines. A fixed
+// two-line allowance placed that one over the row and up under the status bar
+// (Pixel 8 AVD, a row 90dp below it). So the first frame lays the bubble out
+// invisibly, `onLayout` reports its height, and the next places it. The height
+// is kept per label and width, so holding the same row again skips that frame.
 // Starts at the row's left edge and may run across the list to the window's
 // right inset. Coordinates are the row's `measure` PAGE offsets, relative to the
 // root view — the box the PortalHost fills — Split View and freeform windows
@@ -45,8 +53,6 @@ export type PeekAnchor = { x: number; y: number; width: number; height: number }
 
 const GAP = 4;
 const EDGE = 8;
-// Room for the title and its detail line above a row, at the capped font scale.
-const ABOVE_MIN = 88;
 
 export function Peek({
   anchor,
@@ -62,21 +68,39 @@ export function Peek({
   const covered = useAppCovered();
   const frame = useSafeAreaFrame();
   const insets = useSafeAreaInsets();
+  const [measured, setMeasured] = useState<{ key: string; height: number } | null>(null);
   if (!anchor || covered) return null;
 
   const left = Math.max(anchor.x, insets.left + EDGE);
   const maxWidth = Math.max(0, frame.width - left - insets.right - EDGE);
-  const vertical =
-    anchor.y - insets.top >= ABOVE_MIN
-      ? { bottom: frame.height - anchor.y + GAP }
-      : { top: anchor.y + anchor.height + GAP };
+  // Everything the height depends on. Also the View's key, so a new label
+  // remounts it and `onLayout` fires even when its size happens not to change.
+  const key = `${maxWidth}\n${title}\n${detail ?? ''}`;
+  const height = measured?.key === key ? measured.height : null;
+
+  const roomAbove = anchor.y - GAP - insets.top - EDGE;
+  const roomBelow = frame.height - insets.bottom - EDGE - (anchor.y + anchor.height + GAP);
+  const above =
+    height === null || height <= roomAbove || (height > roomBelow && roomAbove >= roomBelow);
+  const vertical = above
+    ? { bottom: frame.height - anchor.y + GAP }
+    : { top: anchor.y + anchor.height + GAP };
 
   return (
     <Portal name="peek">
       <View
+        key={key}
+        onLayout={(e) => setMeasured({ key, height: e.nativeEvent.layout.height })}
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
-        style={{ position: 'absolute', left, maxWidth, pointerEvents: 'none', ...vertical }}
+        style={{
+          position: 'absolute',
+          left,
+          maxWidth,
+          pointerEvents: 'none',
+          opacity: height === null ? 0 : 1,
+          ...vertical,
+        }}
         className="rounded-lg border border-border bg-popover px-3 py-2 shadow-lg shadow-black/5"
       >
         <Text className="text-sm text-popover-foreground">{title}</Text>
