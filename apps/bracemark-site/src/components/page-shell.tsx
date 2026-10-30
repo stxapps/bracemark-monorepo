@@ -10,9 +10,9 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 //   lede     the one sentence that says what the page is for, set larger
 //   meta     the "Last updated" line the two policies carry
 //
-// `width` exists for the two legal documents: a policy read at the same 3xl
-// measure as a support page becomes a wall, so they get a narrower column and the
-// slightly smaller type `.legal-prose` sets.
+// `width` is the reading measure. A long document read top to bottom — the two
+// legal documents, a blog post — becomes a wall at the 3xl measure a support page
+// uses, so it gets the narrower `document` column.
 export function PageShell({
   eyebrow,
   title,

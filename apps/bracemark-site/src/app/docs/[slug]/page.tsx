@@ -51,7 +51,12 @@ export default async function Page({ params }: Props) {
         <div className={cn('grid gap-10 lg:grid-cols-12 lg:gap-16')}>
           <DocsNav current={slug} className={cn('lg:col-span-3')} />
 
-          <article className={cn('min-w-0 lg:col-span-9 xl:col-span-7')}>
+          {/* Capped, not just spanned: the grid column is ~600px only at xl. At
+              lg the "On this page" column is gone and it grows to ~700, and
+              below lg it is the whole page — 90+ characters of 16px a line.
+              36rem holds ~77 at every width; the header and the divider are
+              capped with the prose so the rule still spans the text it opens. */}
+          <article className={cn('max-w-[36rem] min-w-0 lg:col-span-9 xl:col-span-7')}>
             <header>
               <p className={cn('eyebrow')}>{group.title}</p>
               <h1

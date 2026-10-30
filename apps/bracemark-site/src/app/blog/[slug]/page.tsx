@@ -40,6 +40,7 @@ export default async function Page({ params }: Props) {
         eyebrow="Blog"
         title={post.title}
         lede={post.description}
+        width="document"
         meta={
           <>
             {'By Bracemark · '}
@@ -53,7 +54,7 @@ export default async function Page({ params }: Props) {
           </>
         }
       >
-        <div className={cn('mdx-prose [&>h2:first-child]:mt-0')}>
+        <div className={cn('mdx-prose blog-prose [&>h2:first-child]:mt-0')}>
           <Content components={MDX_COMPONENTS} />
         </div>
         <Link

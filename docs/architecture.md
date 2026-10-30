@@ -244,7 +244,10 @@ blog manifest supplies slugs, titles, summaries, and publication/update times to
 the index, static article paths, metadata, sitemap, and RSS feed. An article's
 visible date, `BlogPosting` JSON-LD, and feed date therefore come from one value.
 The article page reuses the docs component map and prose rules, without the docs
-sidebar. The post source imports nothing. `content/blog/blog.spec.ts` checks its
+sidebar, and sets them a step larger in a narrower column: `.blog-prose` on top
+of `.mdx-prose` (17/18px in `--color-prose`, against docs' muted 16px) inside
+PageShell's `document` width, because a post is read top to bottom and a docs
+page is scanned. The post source imports nothing. `content/blog/blog.spec.ts` checks its
 file/manifest parity, mapped components, date format, and internal links, since
 MDX is outside the TypeScript and ESLint passes described above.
 

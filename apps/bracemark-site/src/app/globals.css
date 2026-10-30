@@ -94,6 +94,18 @@
   --color-signal-strong: oklch(0.36 0.062 205);
   --color-signal-soft: oklch(0.968 0.014 205);
   --color-signal-line: oklch(0.9 0.028 205);
+
+  /*
+   * The ink of a blog post's running text — between web-ui's two, on purpose.
+   * `--foreground` (0.145, ~18:1) is right for a heading and too heavy for a
+   * page of body copy; `--muted-foreground` (0.54) is solved as the LOWEST value
+   * clearing AA on its worst surface (docs/theme.md, _contrast_), a floor for
+   * asides rather than something to read for minutes. 0.37 (~10:1 on white) is
+   * where long-form text conventionally sits, and it leaves headings and
+   * `<strong>` a visible step darker than the body. One value only, because the
+   * site is light-only (docs/theme.md, _per-app wiring_).
+   */
+  --color-prose: oklch(0.37 0 0);
 }
 
 @layer components {
@@ -177,20 +189,27 @@
   /*
    * /docs pages and /blog posts — the same move as .legal-prose, for the same
    * reason: they are MDX, edited as documents, so the markup stays plain
-   * h2/p/ol/table and the styling lives here. Differences from the legal pages: `text-body` like the
-   * support pages rather than their smaller type, numbered steps (not (a)/(b)
-   * clauses), tables for "which file" choices, inline code for file names, and a
-   * scroll margin on every heading so an "On this page" jump clears the sticky
-   * header (65px, site-header.tsx).
+   * h2/p/ol/table and the styling lives here. Differences from the legal pages:
+   * numbered steps (not (a)/(b) clauses), tables for "which file" choices,
+   * inline code for file names, and a scroll margin on every heading so an "On
+   * this page" jump clears the sticky header (65px, site-header.tsx).
+   *
+   * The size is the legal pages' 16/28, NOT the site's 15px `text-body`: that
+   * step is for blurbs read in passing, and these are pages read for minutes. A
+   * docs page is scanned for the step you need more than read top to bottom, so
+   * it sits at the long-form floor, in a column capped at 36rem (~77 characters
+   * a line; docs/[slug]/page.tsx). A blog post IS read top to bottom and goes a
+   * step up — `.blog-prose`, below. h3 is a step above the body it heads, and
+   * inline code is in `em` so it follows whichever size.
    */
   .mdx-prose {
-    @apply text-body text-muted-foreground;
+    @apply text-base leading-7 text-muted-foreground;
   }
   .mdx-prose h2 {
     @apply mt-12 scroll-mt-24 font-display text-2xl font-semibold tracking-tight text-foreground;
   }
   .mdx-prose h3 {
-    @apply mt-8 scroll-mt-24 text-base font-semibold text-foreground;
+    @apply mt-8 scroll-mt-24 text-lg font-semibold text-foreground;
   }
   .mdx-prose p {
     @apply mt-4;
@@ -215,7 +234,7 @@
     @apply font-semibold text-foreground;
   }
   .mdx-prose code {
-    @apply rounded-sm bg-muted px-1 py-0.5 font-mono text-[0.8125rem] text-foreground;
+    @apply rounded-sm bg-muted px-1 py-0.5 font-mono text-[0.9em] text-foreground;
   }
   .mdx-prose table {
     @apply mt-6 w-full border-collapse text-left text-sm leading-6;
@@ -232,7 +251,7 @@
    * `<SignaturePanel />`'s own paragraphs took the prose top margin wherever
    * they set none, its specimen title inherited the muted ink, and every line
    * that sets a size without a leading (the chip, the tags) inherited
-   * `text-body`'s 28px one. `.mdx-embed` on the component's wrapper hands all
+   * the prose's 28px one. `.mdx-embed` on the component's wrapper hands all
    * three back — `text-base` is the page default the panel was drawn against.
    * It only has to out-specify this block — the component's own utilities are
    * a later layer and win regardless.
@@ -245,6 +264,28 @@
   }
   .mdx-prose a {
     @apply rounded-sm text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none;
+  }
+
+  /*
+   * A /blog post, worn beside `.mdx-prose`: the one page on this site read top
+   * to bottom in a sitting, so it is set the way long-form reading is — 17px on
+   * a phone, 18px from `md` up, a ~1.65 leading, and `--color-prose` rather
+   * than the muted ink, which is a rank for asides and stops being one when it
+   * is the whole page. The measure is the other half: the post sits in PageShell's
+   * `document` column (max-w-2xl), under 80 characters a line at 18px, where
+   * 15px in the default 3xl column ran past 100.
+   *
+   * These win over `.mdx-prose` by ORDER at equal specificity, so they stay
+   * below it. `.mdx-embed` still out-specifies both and keeps its own size.
+   */
+  .blog-prose {
+    @apply text-[1.0625rem] leading-7 text-prose md:text-lg md:leading-7.5;
+  }
+  .blog-prose p {
+    @apply mt-5;
+  }
+  .blog-prose h3 {
+    @apply text-xl;
   }
 }
 
