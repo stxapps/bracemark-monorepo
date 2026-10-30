@@ -97,8 +97,8 @@ function SignedOut() {
         </>
       ) : (
         <p className={cn('mx-auto mt-1.5 max-w-sm text-sm leading-6 text-muted-foreground')}>
-          Click the Bracemark icon in your browser toolbar and sign in there. Your account and
-          theme settings appear on this page afterwards.
+          Click the Bracemark icon in your browser toolbar and sign in there. Your account and theme
+          settings appear on this page afterwards.
         </p>
       )}
     </div>

@@ -50,7 +50,9 @@ function bubbleStyle(title = TITLE) {
 
 // What a device's layout pass would report for the bubble.
 function layout(height: number, title = TITLE) {
-  fireEvent(bubble(title), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 200, height } } });
+  fireEvent(bubble(title), 'layout', {
+    nativeEvent: { layout: { x: 0, y: 0, width: 200, height } },
+  });
 }
 
 it('renders nothing while no row is held', () => {
