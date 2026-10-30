@@ -2,7 +2,7 @@
   "name": "@stxapps/bracemark-extension",
   "description": "manifest.json description",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "type": "module",
   "nx": {
     "tags": [
