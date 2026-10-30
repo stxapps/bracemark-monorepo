@@ -337,6 +337,25 @@ the shared sign-in form with the username locked. What it can still open with
 the server gone is in [offline-mode.md](./offline-mode.md), _the browser
 extension_.
 
+**The sign-in is the popup's alone.** The options page has none of its own. Its
+signed-out screen (`options/App.tsx`, `SignedOut`) is usually reached by signing
+out on that page, and its "Sign in" button opens the toolbar popup with
+`action.openPopup()`. When the popup signs in, the session broadcast
+(`session-store.ts`, over a `BroadcastChannel`) switches the options page to the
+signed-in view with no reload. A second sign-in form there was considered and
+dropped. It would need its own `setArgon2Runner('main')` (only `popup/main.tsx`
+sets it, and the worker path is stubbed out of the bundle, so a sign-in on the
+options page would throw), its own create-account link and resume view, all
+inside a host's options dialog. Two constraints on the button, neither of which
+fails a test:
+
+- **`openPopup` is Chrome 127+, and the floor is 111.** It is feature-detected.
+  Where it is missing, or the call is rejected, the screen falls back to "click
+  the Bracemark icon in your browser toolbar".
+- **Firefox only honours it inside a user gesture.** The call has to be the
+  first thing the click handler does. An `await` ahead of it loses the gesture,
+  and the button falls back to the text instead.
+
 ### opening bracemark-web — the tab keeps the page's Firefox container
 
 The popup sends the user to bracemark-web for what it doesn't do itself: "Open

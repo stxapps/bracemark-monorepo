@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 
 import { useAuth } from '@stxapps/web-react';
 import { BracemarkIcon } from '@stxapps/web-ui/components/icons/bracemark-icon';
+import { Button } from '@stxapps/web-ui/components/ui/button';
 import { SignOutProvider } from '@stxapps/web-ui/contexts/sign-out-provider';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
@@ -55,12 +57,22 @@ function App() {
   );
 }
 
-// The signed-out screen. It replaced a bare sentence for the usual reason an empty
-// state gets rewritten: it named the requirement ("sign in from the toolbar popup")
-// without pointing at the thing to click, on a page that has no sign-in of its own
-// and can't grow one — the popup owns the extension's sign-in, and this tab has no
-// way to open a popup for the user.
+// The signed-out screen. The usual way here is signing out on this very page (the
+// popup's gear only shows once signed in), so it hands the user straight back to a
+// sign-in rather than naming one somewhere else. The sign-in stays the popup's: this
+// page doesn't grow a second one (its own Argon2 runner, create-account link and
+// resume view, inside a host's options dialog). "Sign in" opens the toolbar popup
+// with `action.openPopup()`, and when the popup signs in, the session broadcast
+// (web-react's session-store) flips this page to the signed-in view with no reload.
+//
+// `openPopup` is Chrome 127+, under the 111 floor, so it is feature-detected. Where
+// it's missing, or the call is refused, the page falls back to pointing at the
+// toolbar icon. Firefox only honours it inside a user gesture, so it must be the
+// first thing the click handler does, with no `await` ahead of it.
 function SignedOut() {
+  const [popupRefused, setPopupRefused] = useState(false);
+  const canOpenPopup = typeof browser.action?.openPopup === 'function' && !popupRefused;
+
   return (
     <div className={cn('mt-8 rounded-xl border border-border px-6 py-12 text-center')}>
       <BracemarkIcon
@@ -68,10 +80,27 @@ function SignedOut() {
         aria-hidden="true"
       />
       <p className={cn('mt-5 text-base font-medium')}>Not signed in</p>
-      <p className={cn('mx-auto mt-1.5 max-w-sm text-sm leading-6 text-muted-foreground')}>
-        Click the Bracemark icon in your browser toolbar and sign in there. Your account and theme
-        settings appear on this page afterwards.
-      </p>
+      {canOpenPopup ? (
+        <>
+          <p className={cn('mx-auto mt-1.5 max-w-sm text-sm leading-6 text-muted-foreground')}>
+            Sign in to see your account and theme settings here.
+          </p>
+          <Button
+            size="sm"
+            className={cn('mt-5')}
+            onClick={() => {
+              browser.action.openPopup().catch(() => setPopupRefused(true));
+            }}
+          >
+            Sign in
+          </Button>
+        </>
+      ) : (
+        <p className={cn('mx-auto mt-1.5 max-w-sm text-sm leading-6 text-muted-foreground')}>
+          Click the Bracemark icon in your browser toolbar and sign in there. Your account and
+          theme settings appear on this page afterwards.
+        </p>
+      )}
     </div>
   );
 }

@@ -51,6 +51,10 @@ export interface FakeBrowser {
       listener: MessageListener | null;
     };
   };
+  action: {
+    /** Chrome 127+ and Firefox. A spec sets it to `undefined` to stand in for Chrome 111–126. */
+    openPopup: jest.Mock<Promise<void>, []> | undefined;
+  };
   tabs: {
     query: jest.Mock<Promise<FakeTab[]>, [unknown]>;
     create: jest.Mock;
@@ -152,6 +156,9 @@ export function createFakeBrowser(): FakeBrowser {
         }),
         listener: null,
       },
+    },
+    action: {
+      openPopup: jest.fn(async () => undefined),
     },
     tabs: {
       query: jest.fn(async (_query: unknown) => [] as FakeTab[]),

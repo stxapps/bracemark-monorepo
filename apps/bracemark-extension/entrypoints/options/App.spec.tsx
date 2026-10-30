@@ -9,9 +9,10 @@ import App from './App';
 // row that carries the extension's ONLY way out of a session.
 //
 // The signed-out state is the one with a rule behind it. This page has no sign-in
-// and cannot grow one — the popup owns it, and a tab cannot open a popup for the
-// user — so the empty state has to point at the toolbar icon rather than report a
-// requirement. `ThemeSection` is covered in its own spec; here it is only asked
+// of its own — the popup owns it — so the empty state hands the user to the popup
+// (`action.openPopup()`), and where the browser can't open it (Chrome 111–126, or a
+// refused call) points at the toolbar icon instead. Either way it never just reports
+// a requirement. `ThemeSection` is covered in its own spec; here it is only asked
 // whether it appears at all.
 
 const mockUseAuth = jest.fn();
@@ -86,15 +87,44 @@ describe('the three states', () => {
     expect(screen.queryByText('Account')).toBeNull();
   });
 
-  it('points a signed-out visitor at the toolbar icon, since this page has no sign-in', () => {
+  it('hands a signed-out visitor to the popup, which owns the sign-in', () => {
     mockUseAuth.mockReturnValue({ status: 'unauthenticated' });
 
     render(<App />);
 
     expect(screen.getByText('Not signed in')).toBeTruthy();
-    expect(body()).toContain('Click the Bracemark icon in your browser toolbar');
     expect(screen.queryByText('Account')).toBeNull();
     expect(screen.queryByText('Theme')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    expect(fake.action.openPopup).toHaveBeenCalledTimes(1);
+  });
+
+  it('points at the toolbar icon where the browser cannot open the popup', () => {
+    // Chrome 111–126: under the floor's reach, but before action.openPopup shipped.
+    fake.action.openPopup = undefined;
+    mockUseAuth.mockReturnValue({ status: 'unauthenticated' });
+
+    render(<App />);
+
+    expect(screen.queryByRole('button', { name: 'Sign in' })).toBeNull();
+    expect(body()).toContain('Click the Bracemark icon in your browser toolbar');
+  });
+
+  it('falls back to the toolbar icon when the browser refuses to open the popup', async () => {
+    fake.action.openPopup = jest.fn(async () => {
+      throw new Error('openPopup requires a user gesture');
+    });
+    mockUseAuth.mockReturnValue({ status: 'unauthenticated' });
+    render(<App />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    });
+
+    expect(screen.queryByRole('button', { name: 'Sign in' })).toBeNull();
+    expect(body()).toContain('Click the Bracemark icon in your browser toolbar');
   });
 
   it('shows account and theme once there is a session', () => {
