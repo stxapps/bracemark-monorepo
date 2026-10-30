@@ -124,7 +124,7 @@ export function ShareListPicker({
   }, [trimmed, onCreateName, onDone]);
 
   return (
-    <ShareSheet screen="list-picker" holdSwipe>
+    <ShareSheet memoryLabel="list-picker" holdSwipe>
       <ShareHeader back={{ title: 'Choose list', onPress: onDone }} />
 
       <Input

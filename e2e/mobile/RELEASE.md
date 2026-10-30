@@ -103,7 +103,7 @@ Release run from Xcode), signed into an account with a few dozen lists and tags:
 6. Record the headroom, not only the verdict, so the next release has a number
    to compare with rather than a second "it passed". With the phone streaming in
    Console.app (on the Mac, select the phone, _Start streaming_), filter on
-   `share-memory`: every screen logs `share-memory <screen>: footprint … MB,
+   `share-memory`: every screen logs `share-memory <memoryLabel>: footprint … MB,
 available … MB` as it mounts. Note the lowest `available` across the laps,
    and the screen it was on (docs/share-sheet.md, _the share extension has almost
    no memory to spare_).

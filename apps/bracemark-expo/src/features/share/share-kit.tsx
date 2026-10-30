@@ -186,19 +186,19 @@ const INITIAL_METRICS = {
 // (share-swipe-guard.tsx); the compose screen leaves it unset and keeps the
 // platform's gesture. A no-op on Android, which has no such gesture.
 //
-// `screen` names the screen for the share extension's memory log: each one
+// `memoryLabel` names the screen for the share extension's memory log: each one
 // marks the process's footprint and headroom as it mounts (share-memory.ts).
 // Required, so a new screen cannot join the sheet without showing up there.
 export function ShareSheet({
   children,
-  screen,
+  memoryLabel,
   holdSwipe = false,
 }: {
   children: ReactNode;
-  screen: string;
+  memoryLabel: string;
   holdSwipe?: boolean;
 }) {
-  useEffect(() => markShareMemory(screen), [screen]);
+  useEffect(() => markShareMemory(memoryLabel), [memoryLabel]);
 
   return (
     <SafeAreaProvider initialMetrics={INITIAL_METRICS}>
@@ -540,7 +540,7 @@ export function ShareNotice({
   children: ReactNode;
 }) {
   return (
-    <ShareSheet screen={testID}>
+    <ShareSheet memoryLabel={testID}>
       <ShareHeader dismissible={false} />
       <View testID={testID} className="items-center gap-3 py-6">
         <View className="size-11 items-center justify-center rounded-full bg-muted">

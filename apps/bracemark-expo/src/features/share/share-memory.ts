@@ -17,6 +17,6 @@ type ShareMemoryModule = { mark: (label: string) => void };
 
 const shareMemory = requireOptionalNativeModule<ShareMemoryModule>('BracemarkShareMemory');
 
-export function markShareMemory(screen: string): void {
-  shareMemory?.mark(screen);
+export function markShareMemory(label: string): void {
+  shareMemory?.mark(label);
 }
