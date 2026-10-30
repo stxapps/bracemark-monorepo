@@ -41,7 +41,8 @@ function mount(anchor: PeekAnchor | null, insets = NO_INSETS, detail?: string) {
 function bubble(title = TITLE) {
   let node: ReturnType<typeof screen.getByText> | null = screen.getByText(title, hidden);
   while (node && StyleSheet.flatten(node.props.style)?.position !== 'absolute') node = node.parent;
-  return node!;
+  if (node === null) throw new Error('title has no absolutely placed ancestor');
+  return node;
 }
 
 function bubbleStyle(title = TITLE) {
