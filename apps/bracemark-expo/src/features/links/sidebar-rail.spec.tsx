@@ -35,8 +35,8 @@ let mockWide = true;
 const UPRIGHT_11 = { shape: 'portrait', width: 280, steps: [240, 280, 320] };
 let mockRail: { shape: string; width: number; steps: readonly number[] } = UPRIGHT_11;
 jest.mock('../../lib/window-class', () => ({ useWideWindow: () => mockWide }));
-jest.mock('../../lib/rail-width', () => ({
-  ...jest.requireActual('../../lib/rail-width'),
+jest.mock('./sidebar-rail-width', () => ({
+  ...jest.requireActual('./sidebar-rail-width'),
   useRailWidth: () => mockRail,
 }));
 jest.mock('@stxapps/expo-react', () => ({
@@ -143,6 +143,62 @@ describe('the width grip', () => {
     mountGrip();
     expect(screen.getByRole('adjustable', { name: 'Sidebar width' })).toBe(grip());
     expect(grip().props.accessibilityValue).toEqual({ text: 'Narrow' });
+  });
+
+  // Centred on the rail's edge, wherever that is: the grip is drawn over the Drawer
+  // (Android gives a child of the rail no touch past the rail's own edge), so
+  // nothing but this offset keeps it on the edge, mid-drag included. A grip left
+  // behind a snap is a pill floating in the list and an edge with no grip.
+  it('sits across the edge, and stays on it through a drag', () => {
+    let rail: ReturnType<typeof useSidebarRail> | undefined;
+    function Reader() {
+      rail = useSidebarRail();
+      return null;
+    }
+    render(
+      <SidebarRailProvider>
+        <Reader />
+        <RailWidthHandle />
+      </SidebarRailProvider>,
+    );
+    expect(grip().props.style).toEqual({ left: 256, width: 48 });
+
+    act(() => rail?.setDragTarget(320));
+    expect(grip().props.style).toEqual({ left: 296, width: 48 });
+  });
+
+  // Lit from the touch itself, and out again on every way a touch ends: on iOS a
+  // press that never moved ends with no call from the pan, so a pill lit through
+  // the gesture stays lit. A drag cancels the touch, and has to keep it lit.
+  it('lights on touch and goes out however the touch ends', () => {
+    let rail: ReturnType<typeof useSidebarRail> | undefined;
+    function Reader() {
+      rail = useSidebarRail();
+      return null;
+    }
+    render(
+      <SidebarRailProvider>
+        <Reader />
+        <RailWidthHandle />
+      </SidebarRailProvider>,
+    );
+    const lit = () => {
+      const [pill] = grip().children as unknown as { props: { className: string } }[];
+      return pill.props.className.includes('bg-ring');
+    };
+    expect(lit()).toBe(false);
+
+    fireEvent(grip(), 'touchStart');
+    expect(lit()).toBe(true);
+    fireEvent(grip(), 'touchEnd');
+    expect(lit()).toBe(false);
+
+    fireEvent(grip(), 'touchStart');
+    act(() => rail?.setDragTarget(320));
+    fireEvent(grip(), 'touchCancel');
+    expect(lit()).toBe(true);
+    act(() => rail?.setDragTarget(null));
+    expect(lit()).toBe(false);
   });
 
   // Written under the window's OWN shape, so the other shape keeps its width.

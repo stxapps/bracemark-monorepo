@@ -201,7 +201,8 @@ describe('the docked rail widths', () => {
 
   // A non-number, a non-positive one, or an unknown shape — another
   // build's, or a corrupt one — reads as unset. In-range is the rail's to check
-  // (lib/rail-width.ts snaps on read), so an out-of-range number passes here.
+  // (features/links/sidebar-rail-width.ts snaps on read), so an out-of-range
+  // number passes here.
   it('keeps only finite positive widths under known shapes', () => {
     seedRawValue({
       collapsedIds: [],

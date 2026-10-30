@@ -27,7 +27,7 @@
 //    commits on release. Past half the narrowest it collapses on release, like web's drag
 //    shut; a double-tap returns the shape's default. Screen readers get the same
 //    steps as an adjustable control. The steps, the per-shape memory and the
-//    per-window limit are lib/rail-width.ts's (`useRailWidth`).
+//    per-window limit are sidebar-rail-width.ts's (`useRailWidth`).
 //  - NO SHORTCUT. Web's ⌘\ needs a hardware keyboard; on an iPad with one, the
 //    two buttons are reachable by Full Keyboard Access like any control.
 //
@@ -58,15 +58,15 @@ import {
 
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
+import { cn } from '../../lib/utils';
+import { useWideWindow } from '../../lib/window-class';
 import {
   railDragRelease,
   railDragTarget,
   railWidthLabel,
   useRailWidth,
   type WindowShape,
-} from '../../lib/rail-width';
-import { cn } from '../../lib/utils';
-import { useWideWindow } from '../../lib/window-class';
+} from './sidebar-rail-width';
 
 type FocusTarget = 'show' | 'hide';
 
@@ -79,7 +79,7 @@ type SidebarRail = {
   // The docked width as drawn: the step a drag is over, else `settledWidth`.
   width: number;
   // The stored width for this window's shape, resolved against the window
-  // (lib/rail-width.ts) — what the rail rests at, drag or no drag.
+  // (sidebar-rail-width.ts) — what the rail rests at, drag or no drag.
   settledWidth: number;
   // The widths this window offers, narrowest first.
   steps: readonly number[];
@@ -230,24 +230,37 @@ export function ShowRailButton() {
 }
 
 // The docked rail's right edge: a grip that steps the width (see the header).
-// Rendered by the links layout beside the Sidebar while docked, and kept INSIDE
-// the rail's box — react-native-drawer-layout puts the rail in its own view, and
-// Android delivers no touch to a child outside its parent's bounds, so a grip
-// straddling the edge would be half dead. The grip paints over the Sidebar's
-// own `border-r`, so at rest it reads as a thickening of the hairline — and
-// in the focus-ring colour while a drag is under way.
+// Rendered by the links layout OVER the Drawer rather than inside it, so that it
+// can sit ACROSS the edge, its pill centred on the hairline: react-native-drawer-layout puts
+// the rail in its own view, and Android delivers no touch to a child outside its
+// parent's bounds. Inside that view the touch area stopped at the edge with the
+// pill flush against it, so a finger aimed at the pill landed past it about as
+// often as on it, and no `hitSlop` reaches across for the same reason. The pill
+// paints over the Sidebar's own `border-r`, so at rest it reads as a thickening
+// of the hairline.
+//
+// It answers on touch-down, not at the drag's first 8 of travel: a press that
+// shows nothing reads as a press that missed. Thicker as well as in the
+// focus-ring colour, because the finger is on top of it. The View's own touch
+// events carry this rather than the pan's `onBegin` and `onFinalize`: on iOS a
+// press that never moved began and did not finalize, and the pill stayed lit.
+// A pan that activates cancels the View's touch, so `dragTarget` takes over.
 //
 // The drag is measured in WINDOW coordinates (`absoluteX`) from where it began:
 // the grip moves with the rail on every snap, so a translation read against the
 // grip itself would jump each time it did.
 //
-// Horizontal only: `activeOffsetX` waits for 8 of sideways travel, and
-// `failOffsetY` gives a vertical one back to the rail's scroller, so a scroll
-// that starts on the grip still scrolls.
+// Horizontal only: `activeOffsetX` waits for 8 of sideways travel, and vertical
+// travel on the way there is ignored rather than failing the drag — a thumb
+// arcs, and the grip is not in the rail's scroller, so there is nothing to hand
+// a vertical drag back to.
 //
 // Taps on the grip are spent on it — a row's "Lock list" button underneath, at
-// the grip's height, loses its right-hand quarter. Accepted, for the grip
-// being the one thing at that spot that LOOKS like a control.
+// the grip's height, loses its right-hand quarter, and a link row in the pane its
+// first 24. Accepted, for the grip being the one thing at that spot that LOOKS
+// like a control.
+const GRIP_WIDTH = 48; // links/topbar.tsx's touch floor; half of it each side.
+
 export function RailWidthHandle() {
   const { width, settledWidth, steps, setWidth, dragTarget, setDragTarget, setCollapsed } =
     useSidebarRail();
@@ -255,6 +268,7 @@ export function RailWidthHandle() {
   // the rail's current state through a ref rather than closing over a render's.
   const start = useRef({ x: 0, width: 0 });
   const target = useRef<number | 'collapse' | null>(null);
+  const [touched, setTouched] = useState(false);
   const current = useRef({ width, settledWidth, steps, setWidth, setDragTarget, setCollapsed });
   current.current = { width, settledWidth, steps, setWidth, setDragTarget, setCollapsed };
 
@@ -262,7 +276,6 @@ export function RailWidthHandle() {
     const pan = Gesture.Pan()
       .runOnJS(true)
       .activeOffsetX([-8, 8])
-      .failOffsetY([-12, 12])
       .onStart((e) => {
         start.current = { x: e.absoluteX, width: current.current.width };
         target.current = null;
@@ -298,6 +311,7 @@ export function RailWidthHandle() {
     return Gesture.Race(pan, reset);
   }, []);
 
+  const pressed = touched || dragTarget !== null;
   const index = steps.indexOf(settledWidth);
   const stepBy = (delta: number) => {
     const next = steps[index + delta];
@@ -308,6 +322,9 @@ export function RailWidthHandle() {
     <GestureDetector gesture={gesture}>
       <View
         testID="sidebar-rail-width"
+        onTouchStart={() => setTouched(true)}
+        onTouchEnd={() => setTouched(false)}
+        onTouchCancel={() => setTouched(false)}
         // A screen reader's form of the drag: swipe up / down to step it. The
         // collapse stays the Hide button's, which is already in reach.
         // `accessibilityRole`, not `role`: RN's `role` takes the ARIA set, which has
@@ -324,12 +341,16 @@ export function RailWidthHandle() {
           { name: 'decrement', label: 'Narrower' },
         ]}
         onAccessibilityAction={(e) => stepBy(e.nativeEvent.actionName === 'increment' ? 1 : -1)}
-        className="absolute top-1/2 right-0 -mt-7 h-14 w-6 items-end justify-center"
+        style={{ left: width - GRIP_WIDTH / 2, width: GRIP_WIDTH }}
+        className="absolute top-1/2 -mt-7 h-14 items-center justify-center"
       >
+        {/* `-ml-px` is half a point, not one: a margin on a centred child moves it by
+            half. Half a point is the centre of the rail's 1pt `border-r`, which ends
+            at the edge the box is centred on. */}
         <View
           className={cn(
-            'h-10 w-1 rounded-full',
-            dragTarget === null ? 'bg-muted-foreground/40' : 'bg-ring',
+            '-ml-px h-10 rounded-full',
+            pressed ? 'w-1.5 bg-ring' : 'w-1 bg-muted-foreground/40',
           )}
         />
       </View>

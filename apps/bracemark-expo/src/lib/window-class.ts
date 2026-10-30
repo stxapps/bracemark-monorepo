@@ -25,8 +25,9 @@ import { useWindowDimensions } from 'react-native';
 // glued to it.
 export const WIDE_MIN_WIDTH = 768;
 
-// The docked rails' WIDTH is not here but in lib/rail-width.ts: it reads a
-// store, and this file is imported by the iOS share extension's tree
+// The docked links rail's WIDTH is not here but in
+// features/links/sidebar-rail-width.ts: it reads a store, and this file is
+// imported by the iOS share extension's tree
 // (features/share/share-kit.tsx), which must not pull `@stxapps/expo-react` in
 // (docs/share-sheet.md). Keep this file free of imports beyond react-native.
 

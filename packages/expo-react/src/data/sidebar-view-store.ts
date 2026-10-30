@@ -90,14 +90,13 @@ export function writeSidebarRailCollapsed(railCollapsed: boolean): void {
   writeValue({ railCollapsed });
 }
 
-// --- The docked rail's width, one per window shape ---
+// --- The docked links rail's width, one per window shape ---
 //
-// Read by TWO layouts that must agree — the links rail and the settings rail,
-// which docks at the same width so crossing between them moves nothing — so this
-// half is an external store (subscribe + snapshot) for `useSyncExternalStore`,
-// like web-react's `getSidebarRail`, rather than a read each caller makes on
-// mount: a width changed in the links rail has to reach a settings layout
-// already mounted under it in the stack.
+// An external store (subscribe + snapshot) for `useSyncExternalStore`, like
+// web-react's `getSidebarRail`, rather than a read the caller makes on mount:
+// the rail's first paint has to be the stored width, and a step taken at its grip
+// has to reach the rail and the card grid beside it. The settings rail doesn't
+// read this; its width is fixed (bracemark-expo `(app)/settings/_layout.tsx`).
 //
 // The snapshot is held in memory, not re-read per call: `getSnapshot` runs on
 // every render of every reader, and here that is a sqlite query. It is loaded on

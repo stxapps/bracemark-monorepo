@@ -6,7 +6,8 @@
 # of it. Then the two things only a device can say about the rail's long-press
 # and its width grip: that holding a row selects nothing, and that the grip's
 # drag activates inside the drawer's own view and its release commits. Which
-# step a given drag lands on is jest's (lib/rail-width.spec.ts); the name bubble
+# step a given drag lands on is jest's
+# (features/links/sidebar-rail-width.spec.ts); the name bubble
 # is hidden from the accessibility tree a flow reads. Settings docks its own rail, which has no button to open
 # it and stays beside each section it opens.
 #
@@ -107,7 +108,7 @@ tags: [RAIL-WIDE-001, full, online, ios, android]
 # _a Maestro double tap on iOS is two slow taps_). Not a swipe in to collapse: a swipe ends ~10%
 # from the screen's edge, inside the collapse zone on the upright iPad and
 # outside it on the tablet on its side, so that step would pass or fail by device
-# (lib/rail-width.spec.ts pins the collapse instead).
+# (features/links/sidebar-rail-width.spec.ts pins the collapse instead).
 - swipe:
     from:
       id: 'sidebar-rail-width'

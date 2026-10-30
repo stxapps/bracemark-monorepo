@@ -7,14 +7,14 @@ import {
   subscribeSidebarRailWidths,
 } from '@stxapps/expo-react';
 
-// The docked rails' width: five widths 40 apart, not a continuous drag, and
+// The docked links rail's width: five widths 40 apart, not a continuous drag, and
 // remembered per window SHAPE (docs/safe-area.md, _wide windows on native_).
 // Docked means at or above WIDE_MIN_WIDTH (lib/window-class.ts) — kept apart
 // from that file because this one reads a store and that one is on the iOS share
 // extension's import path, which must not reach `@stxapps/expo-react`
-// (docs/share-sheet.md). The links rail is the user's to step
-// (features/links/sidebar-rail.tsx, its edge grip); the settings rail follows
-// whatever the links rail resolves to, so crossing between the two moves nothing.
+// (docs/share-sheet.md). The rail is the user's to step (sidebar-rail.tsx, its
+// edge grip). The settings rail is none of this: it has a fixed width of its own
+// ((app)/settings/_layout.tsx).
 //
 // - Steps, because a touch screen has neither the hover that finds web's
 //   splitter nor the precision to land a pixel, and because the rail's width
@@ -156,10 +156,9 @@ export function railDragRelease(
 }
 
 /**
- * The docked rails' width on this window — the stored width for its shape,
- * resolved against it. Reactive to the store (a step taken in the links rail
- * reaches the settings layout under it) and to the window (rotation, a Split
- * View drag).
+ * The docked links rail's width on this window — the stored width for its shape,
+ * resolved against it. Reactive to the store (a step taken at the grip) and to
+ * the window (rotation, a Split View drag).
  */
 export function useRailWidth(): { shape: WindowShape; width: number; steps: readonly number[] } {
   const { width, height } = useWindowDimensions();

@@ -36,8 +36,9 @@ import { usePausedWhileCovered } from '../../../features/links/use-paused-while-
 // dimmed over the collapse zone — and takes back the hairline react-navigation
 // draws on a permanent drawer in the stock theme's fixed light grey: the Sidebar
 // draws its own `border-r` in the token (see its root), and two edges would show
-// in dark. The edge's grip (RailWidthHandle) is drawn beside the Sidebar rather
-// than in it, since the overlay drawer has no width to step.
+// in dark. The edge's grip (RailWidthHandle) is drawn over the Drawer rather than
+// in it, so it can sit across the rail's edge, and only while docked, since the
+// overlay drawer has no width to step. Inside SheetCovered, so a sheet covers it.
 //
 // LiveReadPause stops the section's live reads while another screen covers it
 // (features/links/use-paused-while-covered.ts), so a write made from Settings
@@ -81,23 +82,23 @@ export default function LinksLayout() {
 function LinksDrawer() {
   const { docked, width, dragTarget } = useSidebarRail();
   return (
-    <Drawer
-      drawerContent={(props) => (
-        <>
+    <>
+      <Drawer
+        drawerContent={(props) => (
           <Sidebar
             closeDrawer={() => props.navigation.closeDrawer()}
             headerAction={docked ? <HideRailButton /> : undefined}
           />
-          {docked && <RailWidthHandle />}
-        </>
-      )}
-      screenOptions={{
-        headerShown: false,
-        drawerType: docked ? 'permanent' : 'front',
-        drawerStyle: docked
-          ? { width, borderRightWidth: 0, opacity: dragTarget === 'collapse' ? 0.5 : 1 }
-          : undefined,
-      }}
-    />
+        )}
+        screenOptions={{
+          headerShown: false,
+          drawerType: docked ? 'permanent' : 'front',
+          drawerStyle: docked
+            ? { width, borderRightWidth: 0, opacity: dragTarget === 'collapse' ? 0.5 : 1 }
+            : undefined,
+        }}
+      />
+      {docked && <RailWidthHandle />}
+    </>
   );
 }

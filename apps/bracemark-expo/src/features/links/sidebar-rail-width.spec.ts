@@ -1,5 +1,5 @@
-// The docked rails' width, resolved from a stored width, the window's shape and
-// its width (rail-width.ts). Pure arithmetic, but the one place a wrong answer is
+// The docked links rail's width, resolved from a stored width, the window's shape and
+// its width (sidebar-rail-width.ts). Pure arithmetic, but the one place a wrong answer is
 // silent: the rail docks at whatever comes back, the card grid subtracts it, and
 // nothing renders an error — a 400 rail on an upright 11" iPad just leaves the
 // list a phone's width.
@@ -13,7 +13,7 @@ import {
   resolveRailWidth,
   snapRailWidth,
   windowShape,
-} from './rail-width';
+} from './sidebar-rail-width';
 
 // The module's hook reads the store; these cases never call it.
 jest.mock('@stxapps/expo-react', () => ({}));

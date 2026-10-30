@@ -434,7 +434,7 @@ breakpoint math.
 
 From `md` up, bracemark-web's links rail (`(app)/links/_panes/sidebar.tsx`) is the
 user's to size and to put away; below `md` it is the drawer either way. Only that
-rail does this — the settings rail is six short destinations with nothing to
+rail does this — the settings rail is eight short destinations with nothing to
 truncate. bracemark-expo's docked links rail can be put away too, and stepped
 between five widths rather than dragged free (_wide windows on native_, below).
 The state is
@@ -505,10 +505,14 @@ Uniwind's `md` — and at nothing else.**
 - **The rails dock by turning the same Drawer `permanent`** (`(app)/links/_layout.tsx`,
   `(app)/settings/_layout.tsx`), so the identical Sidebar component is both
   hosts, the way web renders one `SidebarBody` in a rail and a sheet. A row press
-  still calls `closeDrawer`, which a permanent drawer ignores. Both rails dock at
-  the width `useRailWidth()` resolves (`lib/rail-width.ts`, below) — the settings rail
-  follows the links rail's step and has none of its own — so crossing between
-  the two moves nothing; the overlay drawer keeps react-navigation's own width.
+  still calls `closeDrawer`, which a permanent drawer ignores. The links rail docks
+  at the width `useRailWidth()` resolves (`features/links/sidebar-rail-width.ts`,
+  below); the settings rail docks at a fixed 240 (`SETTINGS_RAIL_WIDTH`,
+  `(app)/settings/_layout.tsx`), web's `w-60`, and follows nothing. It used to
+  follow the links rail's step so that crossing between the two moved nothing,
+  which gave every settings pane the bill for a long list name, on a surface with
+  no grip to undo it. Web has always taken that jump; ours is 40 at the landscape
+  default. The overlay drawer keeps react-navigation's own width.
 - **The links rail can be put away; the settings rail cannot** — web's split.
   Collapsed, the links Drawer goes back to `front`: the list takes the full width,
   the topbar's leading slot docks it again ("Show sidebar"), and an edge swipe
@@ -523,14 +527,27 @@ Uniwind's `md` — and at nothing else.**
   splitter is found by hover and dragged by a pointer; a touch screen has
   neither the hover nor the precision, and the rail's width feeds the card
   grid's column count, so a free drag would re-compose it per frame. So the rail
-  docks at 240, 280, 320, 360 or 400 (`RAIL_STEPS`, `lib/rail-width.ts`), and
-  its right edge carries a grip (`RailWidthHandle`,
-  `features/links/sidebar-rail.tsx`) whose drag **snaps** — the rail jumps as
+  docks at 240, 280, 320, 360 or 400 (`RAIL_STEPS`,
+  `features/links/sidebar-rail-width.ts`), and its right edge carries a grip
+  (`RailWidthHandle`, `features/links/sidebar-rail.tsx`) whose drag **snaps** — the rail jumps as
   the finger crosses a midpoint, re-composing the grid once per snap, and
   commits on release. Past half the narrowest it collapses on release, like
   web's drag shut; a double-tap returns the default. The grip is an
   `adjustable` control, so VoiceOver and TalkBack step it with a swipe, hearing
   Narrowest … Widest rather than a point count; Hide stays the way to collapse.
+  - **The grip sits across the rail's edge, over the Drawer, not in it.** 48
+    wide, 24 each side, its pill centred on the hairline, and drawn as a sibling of
+    the `Drawer` in `(app)/links/_layout.tsx`, inside `SheetCovered` so a sheet
+    still covers it. Android gives a child of the rail no touch past the rail's
+    edge, and the drawer library clips the rail's view there
+    (`removeClippedSubviews`), so inside it the touch area stopped at the edge
+    with the pill flush against it, and a finger aimed at the pill often missed.
+    `hitSlop` can't cross that edge either; inward it would only cover the rows'
+    "Lock list" buttons. The pill answers on touch-down, because a press that
+    shows nothing reads as a press that missed, and from the View's own touch
+    events: on iOS a pan that never activated does not finalize, so a pill lit
+    through the gesture stays lit after a plain press. Its cost: a tap in the
+    first 24 of a link row, at the grip's height, goes to the grip.
   - **Why 40 apart, and why five.** The grip is dragged until the rail looks
     right, not picked from a list, so a finer grid costs nothing — one grid
     re-composition per snap — and 40 is still a change the eye takes in at each.
@@ -561,8 +578,8 @@ Uniwind's `md` — and at nothing else.**
   - **No auto-fit to the names**: a rename synced from another device would move
     the rail and re-compose the grid under the user, and one long name would pin
     it wide for good.
-  - **`lib/rail-width.ts` is its own file, not part of `window-class.ts`,**
-    because it reads the expo-react store and `window-class.ts` is on the iOS
+  - **`features/links/sidebar-rail-width.ts` is its own file, not part of
+    `window-class.ts`,** because it reads the expo-react store and `window-class.ts` is on the iOS
     share extension's import path (`share-kit.tsx`), which must not reach the
     expo-react barrel ([share-sheet.md](./share-sheet.md)). Nothing lints a
     transitive import: the share fence only sees the file that writes it.

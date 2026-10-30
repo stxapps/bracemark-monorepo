@@ -1,7 +1,6 @@
 import { Drawer } from 'expo-router/drawer';
 
 import { Sidebar } from '../../../features/settings/sidebar';
-import { useRailWidth } from '../../../lib/rail-width';
 import { useWideWindow } from '../../../lib/window-class';
 
 // The settings section's frame — the expo analogue of bracemark-web's
@@ -18,22 +17,26 @@ import { useWideWindow } from '../../../lib/window-class';
 //
 // On a WIDE window (lib/window-class.ts) the Drawer is `permanent` — the section
 // menu docked beside the pane, web's two-pane settings frame. Unlike the links
-// rail it cannot be put away: web's settings rail can't either, being seven short
+// rail it cannot be put away: web's settings rail can't either, being eight short
 // destinations with nothing to truncate (docs/safe-area.md). Nor can it be
-// stepped: it takes whatever width the links rail resolves to on this window
-// (`useRailWidth`), so crossing between the two surfaces moves nothing, and the same
-// `borderRightWidth: 0` for the reason the links layout gives — the Sidebar
-// draws its own edge in the token.
+// stepped, for the same reason, and it does not follow the links rail's step:
+// room a long list name needed there would come out of every settings pane, with
+// nothing here to undo it. `borderRightWidth: 0` is for the reason the links
+// layout gives — the Sidebar draws its own edge in the token.
+
+// Web's `w-60`. Also the links rail's narrowest step, which every wide window can
+// give.
+const SETTINGS_RAIL_WIDTH = 240;
+
 export default function SettingsLayout() {
   const wide = useWideWindow();
-  const { width } = useRailWidth();
   return (
     <Drawer
       drawerContent={(props) => <Sidebar closeDrawer={() => props.navigation.closeDrawer()} />}
       screenOptions={{
         headerShown: false,
         drawerType: wide ? 'permanent' : 'front',
-        drawerStyle: wide ? { width, borderRightWidth: 0 } : undefined,
+        drawerStyle: wide ? { width: SETTINGS_RAIL_WIDTH, borderRightWidth: 0 } : undefined,
       }}
     />
   );

@@ -307,8 +307,9 @@ export interface SidebarViewValue {
   // portrait-shaped window and a landscape-shaped one remember their own).
   // Validated here as a finite positive number and nothing more: the steps it
   // snaps to and the per-window limit are the rail's design measure, so they
-  // live with the rail (bracemark-expo `lib/rail-width.ts`) and are applied on
-  // every read — a width stored before the steps moved is snapped, not trusted
+  // live with the rail (bracemark-expo `features/links/sidebar-rail-width.ts`)
+  // and are applied on every read — a width stored before the steps moved is
+  // snapped, not trusted
   // (web's `SidebarRail.width`, the same split). Optional, and each key too:
   // absent == that shape's default.
   railWidths?: SidebarRailWidths;

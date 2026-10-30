@@ -83,7 +83,7 @@ const VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 0, minimumViewTime: 25
 // there gives it ~274. So the grid is one column on every phone held upright
 // (two needs 648pt of outer width), two on most phones on their side, and up to
 // four on a tablet — one fewer, often, while the rail is docked beside it,
-// which takes 240–400 of the width (lib/rail-width.ts, the user's step). That is where web lands
+// which takes 240–400 of the width (sidebar-rail-width.ts, the user's step). That is where web lands
 // at those same widths, a 390px browser window included.
 const MIN_CARD_WIDTH = 300;
 // The pane's content padding in card layout: pairs with each card's own p-2
