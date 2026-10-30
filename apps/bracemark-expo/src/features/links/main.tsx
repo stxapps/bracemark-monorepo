@@ -45,7 +45,7 @@ import { type LinkSortOn } from '@stxapps/shared';
 import { LockPane } from '../../components/lock-pane';
 import { BulkEditBar } from './bulk-edit-bar';
 import { CARD_H_CHROME, LinkCard } from './link-card';
-import { hasKnownTags, LinkRow, rowItemWidth } from './link-row';
+import { bucketRowWidth, hasKnownTags, LinkRow } from './link-row';
 import { useLinksPage } from './page-provider';
 import { EmptyState, type LinkItemProps, RefreshPill, useTagMap } from './shared';
 import { useSidebarRail } from './sidebar-rail';
@@ -114,7 +114,7 @@ type LayoutConfig = {
   itemType?: (link: LinkView, tagsById: Map<string, string>) => string;
   columns: (paneWidth: number) => number;
   // What this layout's item is told of its cell's width — only as much as it
-  // draws from (link-row.tsx, rowItemWidth). It is a prop of every mounted item,
+  // draws from (link-row.tsx, bucketRowWidth). It is a prop of every mounted item,
   // so whatever moves here re-renders all of them.
   itemWidth: (cellWidth: number) => number;
   contentPadding: number;
@@ -125,7 +125,7 @@ const LIST_LAYOUT: LayoutConfig = {
   Item: LinkRow,
   itemType: (link, tagsById) => (hasKnownTags(link, tagsById) ? 'tagged' : 'bare'),
   columns: () => 1,
-  itemWidth: rowItemWidth,
+  itemWidth: bucketRowWidth,
   contentPadding: 0,
 };
 const CARD_LAYOUT: LayoutConfig = {
@@ -327,8 +327,8 @@ function UnlockedMain() {
   // change — no longer reach the items; only a change in here does: a selection
   // toggle (new map identity), a tag rename (tagsById — renames must repaint
   // immediately, see useTagMap), a sort change (the row's date column), a
-  // rotation or rail toggle that moves what an item draws (itemWidth — snapped
-  // per layout, so a row only hears of its date breakpoint). Even then only the
+  // rotation or rail toggle that moves what an item draws (itemWidth — bucketed
+  // for the row, so it only hears of its date breakpoint). Even then only the
   // items whose own props moved render: every cell re-runs renderItem, but the
   // items are React.memo (LinkItemProps' header), so a selection tap renders the
   // one item it toggled.

@@ -270,7 +270,7 @@ test('each locked list gets a pane of its own', () => {
 // mounted item — so a new one there re-renders every row on screen at once,
 // which is what the toggle used to cost (docs/e2e.md, _the render leg_). A row
 // draws nothing from its width but which side of the date breakpoint it is on
-// (link-row.tsx, rowItemWidth), so across a toggle that leaves it on the same
+// (link-row.tsx, bucketRowWidth), so across a toggle that leaves it on the same
 // side the list must be handed the SAME object. The card's banner is sized off
 // its width, so for the card it must not be — the control that the first case
 // isn't passing merely because nothing reaches `extraData` at all.

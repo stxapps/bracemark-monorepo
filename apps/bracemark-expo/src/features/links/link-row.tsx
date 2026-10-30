@@ -38,11 +38,11 @@ const RELATIVE_TIME_MIN_ROW_WIDTH = 576;
 // width would re-render every row on any change to the pane — and docking or
 // putting away the rail (features/links/sidebar-rail.tsx) changes it by the
 // rail's 240–400 on a tap, and each snap of its width grip by 40, while
-// the rows draw exactly what they drew before. Snapped, a rail toggle or step
+// the rows draw exactly what they drew before. Bucketed, a rail toggle or step
 // re-renders no row unless the date column actually comes or goes. The row's
 // text still re-wraps and FlashList still re-measures; that is native layout,
 // not React work. The card is told its full width: its banner is sized off it.
-export const rowItemWidth = (cellWidth: number) =>
+export const bucketRowWidth = (cellWidth: number) =>
   cellWidth >= RELATIVE_TIME_MIN_ROW_WIDTH ? RELATIVE_TIME_MIN_ROW_WIDTH : 0;
 
 // Whether this row renders a chip strip, and so which of its two shapes it

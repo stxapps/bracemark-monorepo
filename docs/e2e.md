@@ -3994,7 +3994,7 @@ production bundle on the debug shell, 1,000 links, 8 flings / 5 toggles,
 median of 3. _Before_ is HEAD, _after_ is the three row fixes in
 [client-queries.md](./client-queries.md), _the expo port_: rows read through
 the shared keyed cache, `readLinks` shares unchanged rows, and the row's
-`itemWidth` is snapped.
+`itemWidth` is bucketed.
 
 | leg         | dropped frames | longest stall | blocking         |
 | ----------- | -------------- | ------------- | ---------------- |

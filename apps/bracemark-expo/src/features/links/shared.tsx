@@ -65,7 +65,7 @@ export type LinkItemProps = {
   // The width FlashList gives one cell — the pane's usable width over its
   // column count (main.tsx) — as far as the item reads it. The card gets all of
   // it, for its capped banner geometry; the row only which side of its
-  // relative-time breakpoint it is on (link-row.tsx, rowItemWidth), so a pane
+  // relative-time breakpoint it is on (link-row.tsx, bucketRowWidth), so a pane
   // resize that changes nothing a row draws re-renders no row. LinkTagChips
   // measures its own actual flex width instead of reconstructing either item's
   // chrome.

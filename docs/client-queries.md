@@ -795,9 +795,9 @@ changes is mechanical, and only the substrate forces it:
   (`queries.ts`, `viewOf`), so a link whose records didn't change comes back as
   the same object. Before that, every page growth, sync landing or write to any
   link re-rendered every mounted item, which was the list layout's longest
-  scroll stall. And `itemWidth` is **snapped per layout** (`LayoutConfig.itemWidth`):
+  scroll stall. And `itemWidth` is **bucketed for the row** (`LayoutConfig.itemWidth`):
   a row is told only which side of its date breakpoint it is on
-  (`link-row.tsx`, `rowItemWidth`). The card gets its whole width for its banner.
+  (`link-row.tsx`, `bucketRowWidth`). The card gets its whole width for its banner.
   Otherwise a rail toggle, which changes the pane's width by the rail's (240–400), re-rendered
   every row while every row drew the same. `queries.view-identity.spec.ts` and
   `main.spec.tsx` pin the two. The other half is context: an item, its
