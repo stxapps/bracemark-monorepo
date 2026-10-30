@@ -410,8 +410,14 @@ test.describe('pwa', () => {
           await addLink(other, added);
           await expect(linkRow(other, added)).toBeVisible();
 
-          await page.getByRole('button', { name: 'Reload' }).click();
-          await page.waitForLoadState('load');
+          // Reload waits for local writes before it reloads, so the click returns
+          // with the old document still up: its `load` long past, so
+          // `waitForLoadState` waits for nothing, and `added` already on screen,
+          // from the shared database. Only the NEXT `load` is the reloaded page.
+          await Promise.all([
+            page.waitForEvent('load'),
+            page.getByRole('button', { name: 'Reload' }).click(),
+          ]);
           await expect(linkRow(page, added)).toBeVisible({ timeout: 30_000 });
           expect(await controllingBuild(page)).toBe(b.id);
           await expect(pill(page)).toHaveCount(0);
