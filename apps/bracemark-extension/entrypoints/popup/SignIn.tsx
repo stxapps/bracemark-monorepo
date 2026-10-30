@@ -5,7 +5,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { PopupBody, PopupShell, PopupTitle } from './Shell';
 
-import { WEB_APP_URL } from '@/utils/web-app-url';
+import { openWebApp } from '@/utils/open-web-app';
 
 // Signed-out popup: the SAME presentational sign-in form bracemark-web uses (shared
 // from web-ui; its submit hook posts through this extension's own api client),
@@ -96,7 +96,7 @@ export function SignIn() {
               'hover:decoration-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
             )}
             onClick={() => {
-              void browser.tabs.create({ url: `${WEB_APP_URL}/create-account` });
+              void openWebApp('/create-account');
             }}
           >
             Create an account

@@ -337,6 +337,36 @@ the shared sign-in form with the username locked. What it can still open with
 the server gone is in [offline-mode.md](./offline-mode.md), _the browser
 extension_.
 
+### opening bracemark-web — the tab keeps the page's Firefox container
+
+The popup sends the user to bracemark-web for what it doesn't do itself: "Open
+Bracemark" on the complete page, "Upgrade to Plus" when the library is full, and
+"Create an account" on sign-in. Because the session doesn't carry across (above),
+what the new tab shows depends on bracemark-web's session **in that tab's cookie
+store**. In Firefox that store is per container, and a tab an extension creates
+opens in the **default** container unless it asks for another. So someone signed
+in to bracemark-web only inside "Personal" would click "Open Bracemark" and land on
+the sign-in page, and a click on "Upgrade" would send them to sign in before they
+could pay. All three buttons therefore go through `utils/open-web-app.ts`. It reads
+the active tab's `cookieStoreId` when the button is clicked and passes it to
+`tabs.create`.
+
+- **The permission is Firefox-only.** Reading `Tab.cookieStoreId` needs nothing,
+  but creating a tab with it needs `cookies`. That permission shows no install or
+  update prompt in Firefox, so existing users update silently.
+  `wxt.config.ts` adds it to the Firefox build only. Chrome has no containers, and
+  it would be an unused permission there.
+- **Pass it only when it's present.** Chrome tabs have no `cookieStoreId`, and
+  Chrome's `tabs.create` rejects an option it doesn't know. If the container has
+  gone by the time of the click (deleted, or containers switched off), the helper
+  retries without it rather than leave the button doing nothing.
+- **Not for the options page.** Its "Open Bracemark" keeps a plain `tabs.create`,
+  because it is embedded in about:addons, which `openOptionsPage()` opens in the
+  default container. There is no container there to copy.
+
+Nothing fails when this regresses. The tab still opens, only on bracemark-web's
+sign-in page, and only for Firefox users who use containers.
+
 ### the functional E2E target and the toolbar boundary
 
 `npx nx e2e-extension @stxapps/e2e` drives the development MV3 build in

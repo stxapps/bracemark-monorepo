@@ -108,6 +108,9 @@ function Footer() {
             'focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
           )}
           onClick={() => {
+            // Not openWebApp: its point is to copy the Firefox container of the page
+            // under the popup, and this page has none to copy. It's embedded in
+            // about:addons, which openOptionsPage() opens in the default container.
             void browser.tabs.create({ url: `${WEB_APP_URL}/links` });
           }}
         >

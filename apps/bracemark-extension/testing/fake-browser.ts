@@ -36,6 +36,8 @@ export interface FakeTab {
   url?: string;
   title?: string;
   favIconUrl?: string;
+  /** Firefox only: the tab's container (`firefox-default`, `firefox-container-N`). */
+  cookieStoreId?: string;
 }
 
 export interface FakeBrowser {

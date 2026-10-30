@@ -213,6 +213,13 @@ export default defineConfig({
         // required to call scripting.executeScript (page-copy serializer
         // injection in background.ts); activeTab only grants host access
         'scripting',
+        // FIREFOX ONLY: what lets `tabs.create` take a `cookieStoreId`, so a bracemark-web
+        // tab opened from the popup lands in the same container as the page the user is
+        // on, and so in the same bracemark-web session (utils/open-web-app.ts). It grants
+        // the cookies API too, which nothing here calls, and gives no install or update
+        // warning in Firefox. Chrome has no containers, and an unused permission is
+        // exactly what its store review rejects, so it stays out of the Chrome build.
+        ...(isFirefox ? ['cookies'] : []),
       ],
       // MV3 locks the extension-page CSP to a tiny allow-list ('self', 'none',
       // 'wasm-unsafe-eval', dev-only localhost); hashes/nonces/'unsafe-inline' are all

@@ -16,7 +16,7 @@ import { PageSpecimen } from './PageSpecimen';
 import { PopupBody, PopupTitle } from './Shell';
 
 import { sendMessage } from '@/utils/messages';
-import { WEB_APP_URL } from '@/utils/web-app-url';
+import { openWebApp } from '@/utils/open-web-app';
 
 // Signed-in, not-yet-saved: a popup-sized link editor for the active tab. The
 // page itself is the PageSpecimen at the top — the same object the complete
@@ -120,7 +120,7 @@ export function Editor({
               size="sm"
               className={cn('self-end')}
               onClick={() => {
-                void browser.tabs.create({ url: `${WEB_APP_URL}/settings/subscription` });
+                void openWebApp('/settings/subscription');
               }}
             >
               Upgrade to {PLAN_LABELS.plus}

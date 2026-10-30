@@ -17,7 +17,7 @@ import { type ActiveTab } from './App';
 import { PageSpecimen } from './PageSpecimen';
 import { PopupBody, PopupTitle } from './Shell';
 
-import { WEB_APP_URL } from '@/utils/web-app-url';
+import { openWebApp } from '@/utils/open-web-app';
 
 // The complete screen — shown right after a save AND when the active tab is already
 // saved (the revisit / bonus path). It is the same PageSpecimen the editor showed,
@@ -90,7 +90,7 @@ export function Complete({ link, tab }: { link: LinkItem; tab?: ActiveTab }) {
       <Button
         variant="outline"
         onClick={() => {
-          void browser.tabs.create({ url: `${WEB_APP_URL}/links` });
+          void openWebApp('/links');
         }}
       >
         Open Bracemark

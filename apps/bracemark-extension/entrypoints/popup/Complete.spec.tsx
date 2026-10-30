@@ -181,8 +181,25 @@ describe('the way out', () => {
   it('opens the library in a tab — the popup cannot navigate itself there', async () => {
     await show();
 
-    fireEvent.click(screen.getByRole('button', { name: /Open Bracemark/ }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Open Bracemark/ }));
+    });
 
     expect(fake.tabs.create).toHaveBeenCalledWith({ url: 'http://localhost:3000/links' });
+  });
+
+  it("opens it in the page's Firefox container, where the web session is", async () => {
+    // The rules are utils/open-web-app.spec.ts's; this pins that the button uses it.
+    fake.tabs.query.mockResolvedValue([{ id: 1, cookieStoreId: 'firefox-container-3' }]);
+    await show();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Open Bracemark/ }));
+    });
+
+    expect(fake.tabs.create).toHaveBeenCalledWith({
+      url: 'http://localhost:3000/links',
+      cookieStoreId: 'firefox-container-3',
+    });
   });
 });
