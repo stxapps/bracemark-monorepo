@@ -9,7 +9,7 @@
 
 import { DB_NAME } from './db';
 import { createKeyedLiveCache } from './keyed-live-cache';
-import { holdLiveReads } from './live-read-invalidation';
+import { holdLiveReads, invalidateLiveReads } from './live-read-invalidation';
 
 // Every `mock`-prefixed binding is closed over by a jest.mock factory below.
 const mockListeners = new Set<(event: { databaseFilePath: string; tableName: string }) => void>();
@@ -189,5 +189,130 @@ describe('the last watcher leaving', () => {
     off();
     expect(mockListeners.size).toBe(0);
     expect(cache.peek('a')).toBeUndefined();
+  });
+});
+
+// The sign-out wipe deletes whole tables, which SQLite does by truncation — no
+// update hook, so no change event at all. clearData announces it instead
+// (invalidateLiveReads), and a cache that only heard the sqlite listener would
+// go on serving the previous account's favicons and image uris to the next one.
+describe('an invalidation with no change event', () => {
+  it('re-reads the watched keys for a table it reads, and ignores the rest', async () => {
+    const { values, batches, cache } = storeOf({ a: 'A' });
+    const off = cache.subscribe('a', () => undefined);
+    await settle();
+    batches.length = 0;
+
+    invalidateLiveReads(['favicons']);
+    await settle();
+    expect(batches).toHaveLength(0);
+
+    values.delete('a');
+    invalidateLiveReads(['items']);
+    await settle();
+    expect(batches).toEqual([['a']]);
+    expect(cache.peek('a')?.value).toBeNull();
+    off();
+  });
+});
+
+// A read built by hand, so a spec can hold it open and decide when it lands.
+function deferredStore() {
+  const reads: { keys: string[]; resolve: (values: Record<string, string>) => void }[] = [];
+  const cache = createKeyedLiveCache<string, string>({
+    tables: ['items'],
+    readMany: (keys) =>
+      new Promise((resolve) => {
+        reads.push({
+          keys: [...keys].sort(),
+          resolve: (values) => resolve(new Map(keys.map((key) => [key, values[key] ?? '']))),
+        });
+      }),
+  });
+  return { reads, cache };
+}
+
+describe('a read in flight', () => {
+  // One batch at a time: a write's re-read waits for the batch already out, so
+  // the older answer can never land on top of the newer one.
+  it('runs a write’s re-read after it, never beside it, and ends on the newer value', async () => {
+    const { reads, cache } = deferredStore();
+    const off = cache.subscribe('a', () => undefined);
+    await settle();
+    expect(reads).toHaveLength(1);
+
+    emit('items');
+    await settle();
+    expect(reads).toHaveLength(1);
+
+    reads[0].resolve({ a: 'old' });
+    await settle();
+    expect(reads).toHaveLength(2);
+    reads[1].resolve({ a: 'new' });
+    await settle();
+
+    expect(cache.peek('a')?.value).toBe('new');
+    off();
+  });
+
+  // Every watcher gone before the read landed: the listener is down, so nothing
+  // would keep that answer current — it is dropped, not cached stale.
+  it('drops an answer that lands after the last watcher left', async () => {
+    const { reads, cache } = deferredStore();
+    const off = cache.subscribe('a', () => undefined);
+    await settle();
+    expect(reads).toHaveLength(1);
+    off();
+
+    reads[0].resolve({ a: 'A' });
+    await settle();
+    expect(cache.peek('a')).toBeUndefined();
+  });
+
+  // …but a row that comes back for the key while it is still being read is
+  // answered by that read, not left waiting for one nobody will queue.
+  it('answers a key re-watched while its read is still out', async () => {
+    const { reads, cache } = deferredStore();
+    const first = cache.subscribe('a', () => undefined);
+    await settle();
+    expect(reads).toHaveLength(1);
+    // The only watcher leaves mid-read (the cache tears down) and another
+    // arrives (it starts again) before the answer does — a recycle in a list
+    // with one row in it.
+    first();
+    const onChange = jest.fn();
+    const off = cache.subscribe('a', onChange);
+    await settle();
+    expect(reads).toHaveLength(1);
+
+    reads[0].resolve({ a: 'A' });
+    await settle();
+    expect(cache.peek('a')?.value).toBe('A');
+    expect(onChange).toHaveBeenCalledTimes(1);
+    off();
+  });
+});
+
+describe('a read that fails', () => {
+  // A closing store or a signed-out account: the key stays unread rather than
+  // being cached as empty, and the next change reads it again.
+  it('leaves the key unread, and reads it again on the next change', async () => {
+    let fail = true;
+    const cache = createKeyedLiveCache<string, string>({
+      tables: ['items'],
+      readMany: async (keys) => {
+        if (fail) throw new Error('database is closed');
+        return new Map(keys.map((key) => [key, key.toUpperCase()]));
+      },
+    });
+    const off = cache.subscribe('a', () => undefined);
+    await settle();
+    expect(cache.peek('a')).toBeUndefined();
+
+    fail = false;
+    emit('items');
+    await settle();
+    expect(cache.peek('a')?.value).toBe('A');
+    off();
   });
 });

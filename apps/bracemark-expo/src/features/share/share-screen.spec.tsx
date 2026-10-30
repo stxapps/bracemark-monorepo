@@ -15,6 +15,7 @@ import {
 } from '@stxapps/shared';
 
 import { apiClient } from '../../lib/api-client';
+import { touchClaim } from '../../testing/scroll-claim';
 import { ShareScreen } from './share-screen';
 
 // The store seam is mocked whole — the sheet's data exchange is share-store's
@@ -392,4 +393,25 @@ test('labels a filtered list with its path, cut past the row bound', async () =>
   fireEvent.changeText(getByTestId('share-list-input'), `L${depth - 1}`);
   expect(getByText(`${[...names, TREE_PATH_CUT].join(' / ')} / `)).toBeTruthy();
   expect(getByTestId(`share-list-deep-${depth - 1}`)).toBeTruthy();
+});
+
+// Both pickers' scrollers sit inside the share sheet's frame, which claims the
+// touches its children leave — so each claims them first from inside, or on
+// iOS a drag that starts on the empty text (or any gap between rows) does not
+// scroll (components/ui/scroll-claim.tsx). jest cannot drag; this pins where
+// the touch is claimed.
+test('claims a touch on the list picker’s plain text inside its scroller', async () => {
+  loadShareTaxonomyMock.mockResolvedValue({ ...TAXONOMY, lists: [] });
+  const { findByTestId, getByText } = render(<ShareScreen url="https://example.com/s1" />);
+  fireEvent.press(await findByTestId('share-list-row'));
+
+  expect(touchClaim(getByText('No lists found.'))).toBe('inside');
+});
+
+test('claims a touch on the tag picker’s plain text inside its scroller', async () => {
+  loadShareTaxonomyMock.mockResolvedValue({ ...TAXONOMY, tags: [] });
+  const { findByTestId, getByText } = render(<ShareScreen url="https://example.com/s2" />);
+  fireEvent.press(await findByTestId('share-tags-row'));
+
+  expect(touchClaim(getByText('No tags yet. Type a name to make one.'))).toBe('inside');
 });
