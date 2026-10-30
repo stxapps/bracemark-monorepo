@@ -435,8 +435,9 @@ breakpoint math.
 From `md` up, bracemark-web's links rail (`(app)/links/_panes/sidebar.tsx`) is the
 user's to size and to put away; below `md` it is the drawer either way. Only that
 rail does this — the settings rail is six short destinations with nothing to
-truncate. bracemark-expo's docked links rail can be put away but not resized
-(_wide windows on native_, below). The state is
+truncate. bracemark-expo's docked links rail can be put away too, and stepped
+between five widths rather than dragged free (_wide windows on native_, below).
+The state is
 device-local (`sidebar-view-store.ts` in web-react: `localStorage`, wiped by the
 sign-out teardown with the collapsed ids, kept by delete-all-data like
 `localSettings`); the measure and the toggles are
@@ -504,9 +505,10 @@ Uniwind's `md` — and at nothing else.**
 - **The rails dock by turning the same Drawer `permanent`** (`(app)/links/_layout.tsx`,
   `(app)/settings/_layout.tsx`), so the identical Sidebar component is both
   hosts, the way web renders one `SidebarBody` in a rail and a sheet. A row press
-  still calls `closeDrawer`, which a permanent drawer ignores. Both rails are
-  `RAIL_WIDTH` (280, same file) so crossing between the two moves nothing; the
-  overlay drawer keeps react-navigation's own width.
+  still calls `closeDrawer`, which a permanent drawer ignores. Both rails dock at
+  the width `useRailWidth()` resolves (`lib/rail-width.ts`, below) — the settings rail
+  follows the links rail's step and has none of its own — so crossing between
+  the two moves nothing; the overlay drawer keeps react-navigation's own width.
 - **The links rail can be put away; the settings rail cannot** — web's split.
   Collapsed, the links Drawer goes back to `front`: the list takes the full width,
   the topbar's leading slot docks it again ("Show sidebar"), and an edge swipe
@@ -517,23 +519,75 @@ Uniwind's `md` — and at nothing else.**
   in `features/links/sidebar-rail.tsx` for web's reason. Each toggle unmounts the
   button that was pressed, so accessibility focus is handed to its counterpart as
   it mounts.
-- **No resize, no shortcut.** Web's splitter is found by hover and dragged by a
-  pointer; a touch screen has neither, and the rail's width feeds the card grid's
-  column count, so a drag would re-compose it per frame. ⌘\ needs a hardware
-  keyboard; both buttons are reachable by Full Keyboard Access instead.
+- **The links rail steps between five widths; it is not dragged free.** Web's
+  splitter is found by hover and dragged by a pointer; a touch screen has
+  neither the hover nor the precision, and the rail's width feeds the card
+  grid's column count, so a free drag would re-compose it per frame. So the rail
+  docks at 240, 280, 320, 360 or 400 (`RAIL_STEPS`, `lib/rail-width.ts`), and
+  its right edge carries a grip (`RailWidthHandle`,
+  `features/links/sidebar-rail.tsx`) whose drag **snaps** — the rail jumps as
+  the finger crosses a midpoint, re-composing the grid once per snap, and
+  commits on release. Past half the narrowest it collapses on release, like
+  web's drag shut; a double-tap returns the default. The grip is an
+  `adjustable` control, so VoiceOver and TalkBack step it with a swipe, hearing
+  Narrowest … Widest rather than a point count; Hide stays the way to collapse.
+  - **Why 40 apart, and why five.** The grip is dragged until the rail looks
+    right, not picked from a list, so a finer grid costs nothing — one grid
+    re-composition per snap — and 40 is still a change the eye takes in at each.
+    240 is web's default (the floor: touch rows, a 32pt lock button on each),
+    280 the width the rail was fixed at.
+  - **Why it stops at 400**, not 480: it is web's ceiling, for web's reason (a
+    wider rail stops buying label and starts costing the list), and the 13"
+    iPad on its side (1366) keeps three card columns only while the rail is at
+    most 402. Most landscape iPads couldn't reach 480 anyway — the 11" (1180)
+    is limited to 472 below. A name longer than ~40 characters is what holding
+    the row is for (below), not a wider rail.
+  - **One width per window SHAPE** (`sidebar_view.railWidths`, `portrait` and
+    `landscape`, in points), and the shape is the window's (`width >= height`),
+    not the device's orientation: Split View, Stage Manager and freeform windows
+    hand a landscape iPad an upright window (a ⅔ split is 981×1024), and the
+    window is what the rail shares. Defaults: 240 upright, 280 landscape — on
+    the upright 11" (820) only 240 leaves the link rows the 576 their date
+    column needs (`link-row.tsx`).
+  - **A width is snapped and limited on read, never rewritten.** What is stored
+    is validated as a positive number and nothing more (expo-react's store);
+    `resolveRailWidth` snaps it to the grid — a width stored before the grid
+    moved lands on the nearest step — then limits it to 40% of the window, web's
+    `max-w-[40vw]`: 768 tops out at 280, the upright 11" iPads (820, 834) at
+    320, the 13" upright and every landscape iPad at 400. A width the window
+    can't give resolves down and is **not** written back, so it returns on a
+    wider window; a drag let go where it began writes nothing for the same
+    reason. At the 768 threshold the list keeps at least 488 whatever is stored.
+  - **No auto-fit to the names**: a rename synced from another device would move
+    the rail and re-compose the grid under the user, and one long name would pin
+    it wide for good.
+  - **`lib/rail-width.ts` is its own file, not part of `window-class.ts`,**
+    because it reads the expo-react store and `window-class.ts` is on the iOS
+    share extension's import path (`share-kit.tsx`), which must not reach the
+    expo-react barrel ([share-sheet.md](./share-sheet.md)). Nothing lints a
+    transitive import: the share fence only sees the file that writes it.
+  - **A truncated row is read by holding it**: a long-press shows the full name,
+    and a nested row's path, in a bubble (`components/ui/peek.tsx`) that goes
+    when the finger lifts. Rows stay one line — mixed one- and two-line rows break
+    the rhythm a tree is scanned by — and never scroll sideways.
+- **No shortcut.** ⌘\ needs a hardware keyboard; both buttons are reachable by
+  Full Keyboard Access instead.
 
 Eight things nothing would flag:
 
 - **The card grid's width is computed, not measured, so the rail has to be
   subtracted by hand** (`features/links/main.tsx`). And it replaces the LEFT
-  safe-area inset rather than adding to it: docked, the screen starts 280 in,
-  past any notch, so its own `SafeAreaView` measures a left inset of 0 — the
-  rail's `SafeAreaView` paid it out of the rail's 280. `useSafeAreaInsets()` is
-  the window's and would still report 59 on a notched iPhone on its side.
-  Forget the rail and the grid lays out columns for a pane 280 wider than it
-  has, every card under `MIN_CARD_WIDTH`; subtract the window's left inset as
-  well and a column drops up to 59 early, with the tag strip's budget short by
-  the same. No test runs at either width; the cards just look wrong.
+  safe-area inset rather than adding to it: docked, the screen starts the rail's
+  width in, past any notch, so its own `SafeAreaView` measures a left inset of 0
+  — the rail's `SafeAreaView` paid it out of the rail's own width.
+  `useSafeAreaInsets()` is the window's and would still report 59 on a notched
+  iPhone on its side. Forget the rail and the grid lays out columns for a pane
+  240–400 wider than it has, every card under `MIN_CARD_WIDTH`; subtract the
+  window's left inset as well and a column drops up to 59 early, with the tag
+  strip's budget short by the same. And subtract `useSidebarRail().width` — the
+  step this window resolved, or the one a drag is over — never a constant: a
+  fixed 280 lays out the wrong grid beside every other step. No test runs
+  on a device at these widths; the cards just look wrong.
 - **A permanent drawer brings its own edge.** react-navigation draws a hairline
   `borderRight` on a `permanent` drawer in the navigation theme's `colors.border`
   — the stock light grey, since `src/app/_layout.tsx` overrides only

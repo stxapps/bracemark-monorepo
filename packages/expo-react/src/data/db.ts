@@ -278,6 +278,11 @@ export const favicons = sqliteTable('favicons', {
   fetchedAt: integer('fetched_at').notNull(),
 });
 
+// The two window shapes the docked links rail remembers a width for, and those
+// widths in points (SidebarViewValue.railWidths below).
+export type SidebarRailWindowShape = 'portrait' | 'landscape';
+export type SidebarRailWidths = Partial<Record<SidebarRailWindowShape, number>>;
+
 // Device-local links-drawer VIEW state — which nav sections/rows are currently
 // collapsed. Kept OUT of `local_settings` ON PURPOSE, mirroring web: bracemark-web's
 // sidebar keeps this in localStorage, deliberately separate from its device
@@ -298,6 +303,15 @@ export interface SidebarViewValue {
   // (bracemark-expo `features/links/sidebar-rail.tsx`; web's `SidebarRail.collapsed`).
   // Optional because rows written before it existed lack it: absent == shown.
   railCollapsed?: boolean;
+  // The docked rail's chosen width in points, one per window shape (a
+  // portrait-shaped window and a landscape-shaped one remember their own).
+  // Validated here as a finite positive number and nothing more: the steps it
+  // snaps to and the per-window limit are the rail's design measure, so they
+  // live with the rail (bracemark-expo `lib/rail-width.ts`) and are applied on
+  // every read — a width stored before the steps moved is snapped, not trusted
+  // (web's `SidebarRail.width`, the same split). Optional, and each key too:
+  // absent == that shape's default.
+  railWidths?: SidebarRailWidths;
 }
 // `sidebar_view` is the LINKS sidebar's, unscoped on purpose (the settings rail
 // keeps no view state; web-react sidebar-view-store has the same note), and a

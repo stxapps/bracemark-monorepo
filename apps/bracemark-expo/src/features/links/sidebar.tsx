@@ -13,7 +13,9 @@
 // sidebar-view-store — expo's home for what web keeps in localStorage), the
 // same as web: loaded once after mount, written on every toggle, never synced.
 // The one intentional divergence left is native affordances (no hover, so the
-// "Lock now" action is always shown; the row press also closes the drawer).
+// "Lock now" action is always shown; the row press also closes the drawer; and
+// no `title` tooltip to read a truncated name by, so a long-press shows it —
+// `Peek`, below).
 
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Keyboard, Platform, Pressable, ScrollView, View } from 'react-native';
@@ -65,6 +67,7 @@ import { TreeLevelMarker } from '../../components/links/tree-level-marker';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
+import { Peek, type PeekAnchor } from '../../components/ui/peek';
 import { Text } from '../../components/ui/text';
 import { useProgressiveCount } from '../../lib/use-progressive-count';
 import { cn } from '../../lib/utils';
@@ -162,6 +165,30 @@ function navTestID(selection: Selection): string {
 // memo below.
 type NavKind = 'list' | 'tag' | 'all';
 
+// A row's long-press: what it is, its full label, and its view to measure.
+type PeekHandler = (kind: NavKind, id: string | undefined, label: string, row: View | null) => void;
+
+// How many ancestors a peek names before it elides the rest — a chain can run as
+// deep as a restored backup made it (@stxapps/shared sync/tree.ts), and the
+// nearest few are the ones that place a row.
+const PEEK_PATH_LEVELS = 3;
+
+// A nested row's place in its tree, for the peek's second line: its ancestors'
+// names, root first, the far end elided past PEEK_PATH_LEVELS. Undefined for a
+// top-level row. Past TREE_INDENT_MAX_LEVELS_NARROW the indent stops saying
+// where a row sits, and a filter match is shown flat, so this is often the only
+// place the rail says it.
+function peekPath<T extends TreeItem & { name: string }>(
+  nodes: TreeNode<T>[],
+  id: string,
+): string | undefined {
+  const ids = ancestorIds(nodes, id);
+  if (ids.length === 0) return undefined;
+  const names = new Map(flattenTree(nodes).map((n) => [n.item.id, n.item.name]));
+  const shown = ids.slice(-PEEK_PATH_LEVELS).map((a) => names.get(a) ?? '');
+  return [...(ids.length > PEEK_PATH_LEVELS ? ['…'] : []), ...shown].join(' › ');
+}
+
 function selectionOf(kind: NavKind, id: string | undefined): Selection {
   return kind === 'all' ? { kind } : { kind, id: id ?? '' };
 }
@@ -192,6 +219,8 @@ const NavItem = memo(function NavItem({
   showSlot = false,
   badge,
   action,
+  onPeek,
+  onPeekEnd,
 }: {
   icon: LucideIcon;
   label: string;
@@ -222,8 +251,16 @@ const NavItem = memo(function NavItem({
   // the left chevron. The list rows' "Lock now". No hover on native, so it's
   // always shown when present.
   action?: ReactNode;
+  // Hold-to-read the whole label (components/ui/peek.tsx): a long-press hands the
+  // row's own view up to be measured, the press-out ends it. Both stable — see
+  // the memo note above. Absent on Show All, whose label never truncates.
+  // Setting `onLongPress` is also what keeps a hold from SELECTING: RN skips
+  // `onPress` on the release of a press its long-press fired on.
+  onPeek?: PeekHandler;
+  onPeekEnd?: () => void;
 }) {
   const selection = selectionOf(kind, id);
+  const rowRef = useRef<View>(null);
 
   // No `gap` on the row: the 4px that used to sit BETWEEN the chevron slot and
   // the row is an `ml-1` BEFORE the slot instead (web twin, same move). The icon
@@ -274,9 +311,12 @@ const NavItem = memo(function NavItem({
         <View className="ml-1 size-8 shrink-0" />
       ) : null}
       <Pressable
+        ref={rowRef}
         role="button"
         testID={navTestID(selection)}
         onPress={() => onSelect(selection)}
+        onLongPress={onPeek ? () => onPeek(kind, id, label, rowRef.current) : undefined}
+        onPressOut={onPeekEnd}
         // `accessibilityState`, not the web twin's `aria-current` — RN doesn't
         // declare that prop, so it announced nothing. See the twin comment in
         // features/settings/sidebar.tsx.
@@ -332,6 +372,8 @@ function NavTree<T extends TreeItem & { name: string }>({
   onToggle,
   badgeFor,
   actionFor,
+  onPeek,
+  onPeekEnd,
 }: {
   nodes: TreeNode<T>[];
   kind: 'list' | 'tag';
@@ -342,6 +384,8 @@ function NavTree<T extends TreeItem & { name: string }>({
   onToggle: (id: string) => void;
   badgeFor?: (id: string) => ReactNode;
   actionFor?: (id: string) => ReactNode;
+  onPeek: PeekHandler;
+  onPeekEnd: () => void;
 }) {
   const rows = useMemo(() => flattenToRows(nodes, collapsed), [nodes, collapsed]);
   const shown = useProgressiveCount(rows.length);
@@ -365,6 +409,8 @@ function NavTree<T extends TreeItem & { name: string }>({
           showSlot
           badge={badgeFor?.(item.id)}
           action={actionFor?.(item.id)}
+          onPeek={onPeek}
+          onPeekEnd={onPeekEnd}
         />
       ))}
     </>
@@ -491,6 +537,40 @@ export function Sidebar({
   const { hiddenListIds, listLocks, lockList } = useLocks();
   const { collapsed, toggle, expand } = useCollapsedIds();
   const [filter, setFilter] = useState('');
+
+  // The held row's peek (components/ui/peek.tsx). The row's box comes back from
+  // `measure` asynchronously, and a finger can lift before it does — so
+  // each hold takes a token, the press-out spends it, and a measurement that
+  // arrives for a spent token is dropped rather than opening a bubble nothing
+  // will close. The trees are read through refs so both handlers stay stable
+  // for NavItem's memo.
+  const [peek, setPeek] = useState<{
+    anchor: PeekAnchor;
+    title: string;
+    detail?: string;
+  } | null>(null);
+  const peekToken = useRef(0);
+  const trees = useRef({ lists, tags });
+  trees.current = { lists, tags };
+  const showPeek = useCallback<PeekHandler>((kind, id, label, row) => {
+    const token = ++peekToken.current;
+    const detail =
+      id === undefined || kind === 'all'
+        ? undefined
+        : peekPath<TreeItem & { name: string }>(
+            kind === 'list' ? trees.current.lists : trees.current.tags,
+            id,
+          );
+    // Page offsets, not `measureInWindow` — see components/ui/peek.tsx.
+    row?.measure((_x, _y, width, height, pageX, pageY) => {
+      if (token === peekToken.current)
+        setPeek({ anchor: { x: pageX, y: pageY, width, height }, title: label, detail });
+    });
+  }, []);
+  const endPeek = useCallback(() => {
+    peekToken.current++;
+    setPeek(null);
+  }, []);
 
   // What the Lists section actually renders: the tree minus the hidden lists
   // (locked + hideList — lock-provider's closure set, so a hidden parent takes
@@ -684,6 +764,8 @@ export function Sidebar({
                   onSelect={select}
                   badge={listBadge(node.item.id)}
                   action={listAction(node.item.id)}
+                  onPeek={showPeek}
+                  onPeekEnd={endPeek}
                 />
               ))
             ) : (
@@ -712,6 +794,8 @@ export function Sidebar({
               onToggle={toggle}
               badgeFor={listBadge}
               actionFor={listAction}
+              onPeek={showPeek}
+              onPeekEnd={endPeek}
             />
           )}
         </Section>
@@ -737,6 +821,8 @@ export function Sidebar({
                   id={node.item.id}
                   active={node.item.id === activeTagId}
                   onSelect={select}
+                  onPeek={showPeek}
+                  onPeekEnd={endPeek}
                 />
               ))
             ) : (
@@ -753,6 +839,8 @@ export function Sidebar({
               onSelect={select}
               collapsed={collapsed}
               onToggle={toggle}
+              onPeek={showPeek}
+              onPeekEnd={endPeek}
             />
           )}
         </Section>
@@ -786,6 +874,7 @@ export function Sidebar({
           </View>
         )}
       </ScrollView>
+      <Peek anchor={peek?.anchor ?? null} title={peek?.title ?? ''} detail={peek?.detail} />
     </StyledSafeAreaView>
   );
 }

@@ -10,11 +10,11 @@ import { AdvancedSearchHost } from '../../../features/links/search-bar';
 import { Sidebar } from '../../../features/links/sidebar';
 import {
   HideRailButton,
+  RailWidthHandle,
   SidebarRailProvider,
   useSidebarRail,
 } from '../../../features/links/sidebar-rail';
 import { usePausedWhileCovered } from '../../../features/links/use-paused-while-covered';
-import { RAIL_WIDTH } from '../../../lib/window-class';
 
 // The links section's frame — the expo analogue of bracemark-web's two-pane links
 // page (`(app)/links/page.tsx`): on a phone-width window web's sidebar becomes a
@@ -31,10 +31,13 @@ import { RAIL_WIDTH } from '../../../lib/window-class';
 // the expo form of web's two-pane frame — unless the user put it away
 // (features/links/sidebar-rail.tsx owns that state, and the provider wraps the
 // navigator for the reason LinksPageProvider does: the drawer content and the
-// screen both read it). `drawerStyle` for the docked rail sets its width and
-// takes back the hairline react-navigation draws on a permanent drawer in the
-// stock theme's fixed light grey: the Sidebar draws its own `border-r` in the
-// token (see its root), and two edges would show in dark.
+// screen both read it). `drawerStyle` for the docked rail sets its width — the
+// user's step for this window's shape, or the step a drag on its edge is over,
+// dimmed over the collapse zone — and takes back the hairline react-navigation
+// draws on a permanent drawer in the stock theme's fixed light grey: the Sidebar
+// draws its own `border-r` in the token (see its root), and two edges would show
+// in dark. The edge's grip (RailWidthHandle) is drawn beside the Sidebar rather
+// than in it, since the overlay drawer has no width to step.
 //
 // LiveReadPause stops the section's live reads while another screen covers it
 // (features/links/use-paused-while-covered.ts), so a write made from Settings
@@ -76,19 +79,24 @@ export default function LinksLayout() {
 }
 
 function LinksDrawer() {
-  const { docked } = useSidebarRail();
+  const { docked, width, dragTarget } = useSidebarRail();
   return (
     <Drawer
       drawerContent={(props) => (
-        <Sidebar
-          closeDrawer={() => props.navigation.closeDrawer()}
-          headerAction={docked ? <HideRailButton /> : undefined}
-        />
+        <>
+          <Sidebar
+            closeDrawer={() => props.navigation.closeDrawer()}
+            headerAction={docked ? <HideRailButton /> : undefined}
+          />
+          {docked && <RailWidthHandle />}
+        </>
       )}
       screenOptions={{
         headerShown: false,
         drawerType: docked ? 'permanent' : 'front',
-        drawerStyle: docked ? { width: RAIL_WIDTH, borderRightWidth: 0 } : undefined,
+        drawerStyle: docked
+          ? { width, borderRightWidth: 0, opacity: dragTarget === 'collapse' ? 0.5 : 1 }
+          : undefined,
       }}
     />
   );

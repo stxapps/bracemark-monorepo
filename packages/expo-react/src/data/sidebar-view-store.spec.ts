@@ -17,10 +17,14 @@ import { sql } from 'drizzle-orm';
 
 import * as db from './db';
 import {
+  forgetSidebarRailWidths,
+  getSidebarRailWidths,
   readSidebarCollapsedIds,
   readSidebarRailCollapsed,
+  subscribeSidebarRailWidths,
   writeSidebarCollapsedIds,
   writeSidebarRailCollapsed,
+  writeSidebarRailWidth,
 } from './sidebar-view-store';
 
 jest.mock('expo-sqlite', () => require('../testing/node-sqlite'));
@@ -37,6 +41,8 @@ function seedRawValue(value: unknown): void {
 beforeEach(() => {
   jest.restoreAllMocks();
   db.getDb().run(sql`DELETE FROM sidebar_view`);
+  // The rail widths are cached in memory; the row just went, so the cache must too.
+  forgetSidebarRailWidths();
 });
 
 describe('readSidebarCollapsedIds', () => {
@@ -148,5 +154,93 @@ describe('the docked rail flag', () => {
 
     expect(readSidebarRailCollapsed()).toBe(false);
     expect(() => writeSidebarRailCollapsed(true)).not.toThrow();
+  });
+});
+
+describe('the docked rail widths', () => {
+  it('is empty — every shape at its default — when nothing has been stored', () => {
+    expect(getSidebarRailWidths()).toEqual({});
+  });
+
+  // Each shape remembers its own, and setting one leaves the other alone.
+  it('keeps a width per window shape', () => {
+    writeSidebarRailWidth('landscape', 360);
+    writeSidebarRailWidth('portrait', 240);
+
+    forgetSidebarRailWidths();
+    expect(getSidebarRailWidths()).toEqual({ landscape: 360, portrait: 240 });
+  });
+
+  it('clears one shape back to its default with null', () => {
+    writeSidebarRailWidth('landscape', 360);
+    writeSidebarRailWidth('portrait', 240);
+    writeSidebarRailWidth('landscape', null);
+
+    forgetSidebarRailWidths();
+    expect(getSidebarRailWidths()).toEqual({ portrait: 240 });
+  });
+
+  // `useSyncExternalStore` loops on a snapshot that is a fresh object per read.
+  it('hands back the same snapshot until something is written', () => {
+    writeSidebarRailWidth('portrait', 280);
+
+    expect(getSidebarRailWidths()).toBe(getSidebarRailWidths());
+  });
+
+  it('tells subscribers about a write and about the sign-out drop', () => {
+    const listener = jest.fn();
+    const unsubscribe = subscribeSidebarRailWidths(listener);
+
+    writeSidebarRailWidth('portrait', 360);
+    forgetSidebarRailWidths();
+    unsubscribe();
+    writeSidebarRailWidth('portrait', 240);
+
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  // A non-number, a non-positive one, or an unknown shape — another
+  // build's, or a corrupt one — reads as unset. In-range is the rail's to check
+  // (lib/rail-width.ts snaps on read), so an out-of-range number passes here.
+  it('keeps only finite positive widths under known shapes', () => {
+    seedRawValue({
+      collapsedIds: [],
+      railWidths: { portrait: 'wide', landscape: 360, square: 240 },
+    });
+    expect(getSidebarRailWidths()).toEqual({ landscape: 360 });
+
+    seedRawValue({ collapsedIds: [], railWidths: { portrait: -40, landscape: 0 } });
+    forgetSidebarRailWidths();
+    expect(getSidebarRailWidths()).toEqual({});
+
+    seedRawValue({ collapsedIds: [], railWidths: 360 });
+    forgetSidebarRailWidths();
+    expect(getSidebarRailWidths()).toEqual({});
+  });
+
+  // The regression this half was added with: the row's writer rebuilt the bag from the
+  // fields it knew, so every collapse toggle would have erased the widths.
+  it('survives a collapse toggle and a rail hide, and keeps both when written', () => {
+    writeSidebarCollapsedIds(['lists']);
+    writeSidebarRailCollapsed(true);
+    writeSidebarRailWidth('landscape', 360);
+
+    writeSidebarCollapsedIds(['tags']);
+    writeSidebarRailCollapsed(false);
+
+    forgetSidebarRailWidths();
+    expect(getSidebarRailWidths()).toEqual({ landscape: 360 });
+    expect(readSidebarCollapsedIds()).toEqual(['tags']);
+    expect(readSidebarRailCollapsed()).toBe(false);
+  });
+
+  // The rail keeps the width for the session even when it can't be remembered.
+  it('holds a write in memory, and never throws, when the store is unavailable', () => {
+    jest.spyOn(db, 'getDb').mockImplementation(() => {
+      throw new Error('database is locked');
+    });
+
+    expect(() => writeSidebarRailWidth('portrait', 360)).not.toThrow();
+    expect(getSidebarRailWidths()).toEqual({ portrait: 360 });
   });
 });

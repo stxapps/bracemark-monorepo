@@ -12,9 +12,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from './dropdown-menu';
+import { Peek } from './peek';
 import { Text } from './text';
 
-// The kit's three portaled surfaces against a relock (docs/locks.md, _overlays
+// The kit's portaled surfaces against a relock (docs/locks.md, _overlays
 // over a relock_). They portal OUT of AppLockGate's `display: none` subtree, so
 // on a device an overlay left open when the auto-relock lands stays painted and
 // tappable over the lock pane — measured on both platforms, and invisible to
@@ -26,7 +27,7 @@ import { Text } from './text';
 // positive control that makes the "gone" half mean anything.
 //
 // SURFACES is the whole set, not a sample: a new portaled kit component (a
-// Popover, a Select) reads `useAppCovered()` the way these three do and adds
+// Popover, a Select) reads `useAppCovered()` the way these do and adds
 // its row here. Lint already routes every overlay through the kit; this table
 // is what checks the kit then honours the flag.
 
@@ -84,6 +85,13 @@ const SURFACES: Surface[] = [
       </DropdownMenu>
     ),
   },
+  {
+    // Shown only while a row is held, so a relock landing mid-hold is a narrow
+    // window — but the bubble names a list, which is what a lock hides.
+    name: 'Peek',
+    content: 'Reading list',
+    tree: <Peek anchor={{ x: 0, y: 200, width: 100, height: 36 }} title="Reading list" />,
+  },
 ];
 
 const withCover = (covered: boolean, tree: React.ReactNode) => (
@@ -93,17 +101,21 @@ const withCover = (covered: boolean, tree: React.ReactNode) => (
   </>
 );
 
+// Hidden elements included: the Peek is hidden from screen readers by design, and
+// "gone" has to mean gone from the tree, not merely from the accessibility tree.
+const all = { includeHiddenElements: true };
+
 test.each(SURFACES)(
   "$name's content leaves while a relock covers the app, and returns on unlock",
   ({ content, open, tree }) => {
     const view = render(withCover(false, tree));
     open?.();
-    expect(screen.getByText(content)).toBeTruthy();
+    expect(screen.getByText(content, all)).toBeTruthy();
 
     view.rerender(withCover(true, tree));
-    expect(screen.queryByText(content)).toBeNull();
+    expect(screen.queryByText(content, all)).toBeNull();
 
     view.rerender(withCover(false, tree));
-    expect(screen.getByText(content)).toBeTruthy();
+    expect(screen.getByText(content, all)).toBeTruthy();
   },
 );

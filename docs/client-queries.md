@@ -798,7 +798,7 @@ changes is mechanical, and only the substrate forces it:
   scroll stall. And `itemWidth` is **snapped per layout** (`LayoutConfig.itemWidth`):
   a row is told only which side of its date breakpoint it is on
   (`link-row.tsx`, `rowItemWidth`). The card gets its whole width for its banner.
-  Otherwise a rail toggle, which changes the pane's width by 280, re-rendered
+  Otherwise a rail toggle, which changes the pane's width by the rail's (240–400), re-rendered
   every row while every row drew the same. `queries.view-identity.spec.ts` and
   `main.spec.tsx` pin the two. The other half is context: an item, its
   row menu and its chip strip read `useLinksViewActions` (the setters, a value

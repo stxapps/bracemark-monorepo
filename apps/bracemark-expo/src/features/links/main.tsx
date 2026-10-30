@@ -43,7 +43,6 @@ import { LOCK_COPY } from '@stxapps/react';
 import { type LinkSortOn } from '@stxapps/shared';
 
 import { LockPane } from '../../components/lock-pane';
-import { RAIL_WIDTH } from '../../lib/window-class';
 import { BulkEditBar } from './bulk-edit-bar';
 import { CARD_H_CHROME, LinkCard } from './link-card';
 import { hasKnownTags, LinkRow, rowItemWidth } from './link-row';
@@ -84,7 +83,7 @@ const VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 0, minimumViewTime: 25
 // there gives it ~274. So the grid is one column on every phone held upright
 // (two needs 648pt of outer width), two on most phones on their side, and up to
 // four on a tablet — one fewer, often, while the rail is docked beside it,
-// which takes 280 of the width (lib/window-class.ts). That is where web lands
+// which takes 240–400 of the width (lib/rail-width.ts, the user's step). That is where web lands
 // at those same widths, a 390px browser window included.
 const MIN_CARD_WIDTH = 300;
 // The pane's content padding in card layout: pairs with each card's own p-2
@@ -303,14 +302,16 @@ function UnlockedMain() {
   // The rail and the LEFT inset are one or the other, never both. The insets
   // are side insets in landscape (44–59 on a notched iPhone) and the screen's
   // SafeAreaView measures its own natively, against where the view actually
-  // sits: docked, the screen starts RAIL_WIDTH in, past any left inset, so its
-  // own left inset is 0 — the rail's SafeAreaView already paid it out of the
-  // rail's 280. `useSafeAreaInsets()` is the WINDOW's, so subtracting its left
+  // sits: docked, the screen starts the rail's width in, past any left inset, so
+  // its own left inset is 0 — the rail's SafeAreaView already paid it out of the
+  // rail's own width. That width is the user's step, resolved per window, and
+  // mid-drag the step the edge is over: `useSidebarRail().width` is the one the
+  // Drawer is laid out at, so it is the one to subtract, never a constant. `useSafeAreaInsets()` is the WINDOW's, so subtracting its left
   // while docked would take the notch off a pane that never touches it.
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const { docked } = useSidebarRail();
-  const paneWidth = width - (docked ? RAIL_WIDTH : insets.left) - insets.right - contentPadding * 2;
+  const { docked, width: railWidth } = useSidebarRail();
+  const paneWidth = width - (docked ? railWidth : insets.left) - insets.right - contentPadding * 2;
   const numColumns = columns(paneWidth);
   // One cell's width, as far as this layout's item reads it — the card's banner,
   // the row's date breakpoint (LayoutConfig.itemWidth). Derived here because

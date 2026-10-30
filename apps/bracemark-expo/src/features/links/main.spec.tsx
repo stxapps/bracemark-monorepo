@@ -33,6 +33,7 @@ let mockLockedByHand = new Set<string>();
 // docked, and every `extraData` the list was handed, in order.
 let mockLayout = 'list';
 let mockDocked = false;
+let mockRailWidth = 280;
 const mockExtraData: unknown[] = [];
 
 jest.mock('@shopify/flash-list', () => {
@@ -79,7 +80,9 @@ jest.mock('./page-provider', () => ({
 }));
 // A phone-width window by default: the rail is a drawer, so the pane keeps the
 // window. The rail-toggle cases dock it.
-jest.mock('./sidebar-rail', () => ({ useSidebarRail: () => ({ docked: mockDocked }) }));
+jest.mock('./sidebar-rail', () => ({
+  useSidebarRail: () => ({ docked: mockDocked, width: mockRailWidth }),
+}));
 // Stable across renders, as the real provider's values are: a fresh map or
 // setter per render would hand the list a new `extraData` every time, and the
 // rail-toggle cases below could never see one held.
@@ -120,6 +123,7 @@ beforeEach(() => {
   mockLockedByHand = new Set();
   mockLayout = 'list';
   mockDocked = false;
+  mockRailWidth = 280;
   mockExtraData.length = 0;
 });
 
@@ -261,8 +265,8 @@ test('each locked list gets a pane of its own', () => {
 
 // --- the rail toggle: what reaches the mounted items ---------------------------
 //
-// Docking or putting away the rail changes the pane's width by RAIL_WIDTH on one
-// tap, and everything the list's `extraData` carries is a memo'd prop of every
+// Docking or putting away the rail changes the pane's width by the rail's width on
+// one tap, and everything the list's `extraData` carries is a memo'd prop of every
 // mounted item — so a new one there re-renders every row on screen at once,
 // which is what the toggle used to cost (docs/e2e.md, _the render leg_). A row
 // draws nothing from its width but which side of the date breakpoint it is on
@@ -307,5 +311,23 @@ describe('a rail toggle on a wide window', () => {
     expect((away as { itemWidth: number }).itemWidth).not.toBe(
       (docked as { itemWidth: number }).itemWidth,
     );
+  });
+  // The pane is the window less the rail's RESOLVED width, not a constant: at
+  // 1180 a Wide rail leaves 1180 − 360 − 16 = 804 for two columns of 402, a
+  // Narrow one 924 for two of 462. Subtract a fixed 280 and both get 442.
+  test("lays the cards out against the rail's stepped width", () => {
+    mockLayout = 'card';
+    mockLinks = [link];
+    mockSelection = { kind: 'none' };
+    mockDocked = true;
+    mockRailWidth = 360;
+    const view = render(<Main />);
+    const wide = mockExtraData.at(-1) as { itemWidth: number };
+    mockRailWidth = 240;
+    view.rerender(<Main />);
+    const narrow = mockExtraData.at(-1) as { itemWidth: number };
+
+    expect(wide.itemWidth).toBe(402);
+    expect(narrow.itemWidth).toBe(462);
   });
 });

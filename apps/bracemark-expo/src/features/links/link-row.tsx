@@ -36,8 +36,9 @@ const RELATIVE_TIME_MIN_ROW_WIDTH = 576;
 // of the date breakpoint it is on, and nothing finer, because that is all it
 // draws from. `itemWidth` is a memo'd prop of every mounted item, so the exact
 // width would re-render every row on any change to the pane — and docking or
-// putting away the rail (features/links/sidebar-rail.tsx) changes it by 280 on a
-// tap, while the rows draw exactly what they drew before. Snapped, a rail toggle
+// putting away the rail (features/links/sidebar-rail.tsx) changes it by the
+// rail's 240–400 on a tap, and each snap of its width grip by 40, while
+// the rows draw exactly what they drew before. Snapped, a rail toggle or step
 // re-renders no row unless the date column actually comes or goes. The row's
 // text still re-wraps and FlashList still re-measures; that is native layout,
 // not React work. The card is told its full width: its banner is sized off it.

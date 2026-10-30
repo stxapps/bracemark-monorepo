@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { StyleSheet } from 'react-native';
-import { fireEvent, render, screen, within } from '@testing-library/react-native';
+import { StyleSheet, View } from 'react-native';
+import { PortalHost } from '@rn-primitives/portal';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 
 import {
   readSidebarCollapsedIds,
@@ -381,5 +382,112 @@ describe('Sidebar — a chain deeper than React can nest', () => {
       level(all[TREE_INDENT_MAX_LEVELS_NARROW + 1], TREE_INDENT_MAX_LEVELS_NARROW + 2),
     ).not.toBeNull();
     expect(level(last, DEPTH)).not.toBeNull();
+  });
+});
+
+// --- the long-press peek ------------------------------------------------------
+//
+// A row is one line, so a long name truncates and a nested one loses its place
+// once the indent caps out; a hold shows both (components/ui/peek.tsx). What can
+// go wrong unseen: a hold that ALSO selects (RN fires onPress on release unless a
+// long-press handler is set), and a bubble that outlives the finger because the
+// row's measurement came back after it lifted. The bubble is hidden from screen
+// readers, so the queries here have to ask for hidden elements.
+describe('holding a row', () => {
+  const hidden = { includeHiddenElements: true };
+  type Measured = (
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    pageX: number,
+    pageY: number,
+  ) => void;
+  let measured: Measured | undefined;
+
+  beforeEach(() => {
+    measured = undefined;
+    jest.spyOn(View.prototype, 'measure').mockImplementation((callback) => {
+      measured = callback;
+    });
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  const mountWithHost = () =>
+    render(
+      <>
+        <Sidebar closeDrawer={jest.fn()} />
+        <PortalHost />
+      </>,
+    );
+  const hold = (id: string) => {
+    fireEvent(screen.getByTestId(`links-nav-list-${id}`), 'longPress');
+    act(() => measured?.(0, 0, 200, 36, 16, 300));
+  };
+  const release = (id: string) => fireEvent(screen.getByTestId(`links-nav-list-${id}`), 'pressOut');
+
+  it("shows a nested row's whole name and its path while held, and selects nothing", () => {
+    mountWithHost();
+    hold('recipes');
+
+    expect(screen.getAllByText('Recipes', hidden)).toHaveLength(2);
+    expect(screen.getByText('Work › Cooking', hidden)).toBeTruthy();
+    expect(mockSetSimpleQuery).not.toHaveBeenCalled();
+
+    release('recipes');
+    expect(screen.getAllByText('Recipes', hidden)).toHaveLength(1);
+  });
+
+  // Placed from the row's PAGE offsets — the root view's frame, which is the
+  // portal's — and never the local x/y `measure` also hands back, nor
+  // `measureInWindow`, which on Android starts below the status bar and stood the
+  // bubble 24dp above its row on the tablet (components/ui/peek.tsx). The mocked
+  // frame is 320×640: above a row at page y 300, the bubble's bottom sits at
+  // 640 − 300 + 4.
+  it("anchors the bubble to the row's page offsets", () => {
+    mountWithHost();
+    fireEvent(screen.getByTestId('links-nav-list-recipes'), 'longPress');
+    act(() => measured?.(99, 99, 200, 36, 16, 300));
+
+    // The bubble is the absolutely placed box around the text.
+    let bubble: Rendered | null = screen.getByText('Work › Cooking', hidden);
+    while (bubble && StyleSheet.flatten(bubble.props.style)?.position !== 'absolute') {
+      bubble = bubble.parent;
+    }
+    expect(StyleSheet.flatten(bubble?.props.style)).toMatchObject({ left: 16, bottom: 344 });
+  });
+
+  it('names no path for a top-level row', () => {
+    mountWithHost();
+    hold('work');
+
+    expect(screen.getAllByText('Work', hidden)).toHaveLength(2);
+    expect(screen.queryByText(/›/, hidden)).toBeNull();
+  });
+
+  // The finger lifted before the row's box came back: nothing may open, since
+  // nothing would ever close it.
+  it('opens nothing for a measurement that lands after the release', () => {
+    mountWithHost();
+    fireEvent(screen.getByTestId('links-nav-list-recipes'), 'longPress');
+    release('recipes');
+    act(() => measured?.(0, 0, 200, 36, 16, 300));
+
+    expect(screen.getAllByText('Recipes', hidden)).toHaveLength(1);
+  });
+
+  // The nearest ancestors place a row; a deep chain's far end is elided.
+  it('elides the far end of a deep path', () => {
+    setLists([
+      list('a', 'A'),
+      list('b', 'B', 'a'),
+      list('c', 'C', 'b'),
+      list('d', 'D', 'c'),
+      list('e', 'E', 'd'),
+    ]);
+    mountWithHost();
+    hold('e');
+
+    expect(screen.getByText('… › B › C › D', hidden)).toBeTruthy();
   });
 });

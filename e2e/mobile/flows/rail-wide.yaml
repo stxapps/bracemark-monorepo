@@ -3,8 +3,12 @@
 # navigates and leaves the rail where it is, the links rail put away and brought
 # back, and the put-away surviving a cold start — the flag is read on the
 # mounting render (features/links/sidebar-rail.tsx), so a relaunch is the test
-# of it. Settings docks its own rail, which has no button to open it and stays
-# beside each section it opens.
+# of it. Then the two things only a device can say about the rail's long-press
+# and its width grip: that holding a row selects nothing, and that the grip's
+# drag activates inside the drawer's own view and its release commits. Which
+# step a given drag lands on is jest's (lib/rail-width.spec.ts); the name bubble
+# is hidden from the accessibility tree a flow reads. Settings docks its own rail, which has no button to open
+# it and stays beside each section it opens.
 #
 # A wide run only (`widths` in cases.json): on a phone these are drawers.
 #
@@ -78,6 +82,63 @@ tags: [RAIL-WIDE-001, full, online, ios, android]
     timeout: 10000
 - assertVisible:
     id: 'sidebar-rail-hide'
+
+# Holding a row shows its whole name and selects nothing. React Native fires
+# onPress on the release of a hold unless a long-press handler is set, so this
+# is the half jest can't see: Trash, held, must leave the page on My List.
+- longPressOn:
+    id: 'links-nav-list-trash'
+- waitForAnimationToEnd
+- assertNotVisible:
+    id: 'links-title'
+    text: 'Trash'
+- assertVisible:
+    id: 'links-title'
+    text: 'My List'
+
+# The width grip, read back through what it announces ("Sidebar width,
+# Narrowest" … "Widest" — the grip is an adjustable control). A swipe right
+# snaps the rail to the widest step this window offers, which is never one of
+# the two narrow ones on a wide window (Medium on the upright iPad, Widest on the
+# tablet on its side); a cold start still shows it, so the release committed and
+# the width is read back on the mounting render; a double-tap returns the
+# default, one of the narrow two — on Android only: Maestro's iOS double tap
+# spaces its taps past the 500 ms a double tap is allowed (docs/app-drivers.md,
+# _a Maestro double tap on iOS is two slow taps_). Not a swipe in to collapse: a swipe ends ~10%
+# from the screen's edge, inside the collapse zone on the upright iPad and
+# outside it on the tablet on its side, so that step would pass or fail by device
+# (lib/rail-width.spec.ts pins the collapse instead).
+- swipe:
+    from:
+      id: 'sidebar-rail-width'
+    direction: RIGHT
+- extendedWaitUntil:
+    visible:
+      id: 'sidebar-rail-width'
+      text: '.*(Medium|Wide|Widest)'
+    timeout: 10000
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 30000
+- extendedWaitUntil:
+    visible:
+      id: 'sidebar-rail-width'
+      text: '.*(Medium|Wide|Widest)'
+    timeout: 10000
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - doubleTapOn:
+          id: 'sidebar-rail-width'
+      - extendedWaitUntil:
+          visible:
+            id: 'sidebar-rail-width'
+            text: '.*Narrow(est)?'
+          timeout: 10000
 
 # Settings: its menu docked beside the pane, no button to open it, and still
 # there after a section is chosen from it.

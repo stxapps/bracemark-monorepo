@@ -577,6 +577,22 @@ field told it — the low nibble of `imeOptions` is the action (`2` go, `3` sear
 `returnKeyType` changed under a field that keeps its focus shows the old label
 until the next focus; refocus before reading it.
 
+#### ⚠ a Maestro double tap on iOS is two slow taps
+
+**`doubleTapOn` on the iOS simulator lands its two taps further apart than a
+double tap is allowed to be**, so a gesture-handler `Tap().numberOfTaps(2)` at its
+default 500 ms `maxDelay` never fires — and `tapOn` with `repeat: 2` and `delay:
+150` is no faster. Measured on the iPad (A16) against the links rail's width
+grip (`features/links/sidebar-rail.tsx`): both left it on Medium; the same
+`doubleTapOn` with the gesture's `maxDelay` raised to 3000 reset it to
+Narrowest, so the touches arrive and the gesture is wired — only the spacing
+fails. On Android, `adb`-driven taps are fast enough and the default passes.
+
+Don't widen `maxDelay` to suit the driver: 500 ms is what a person's double tap
+is held to, and on a control that also answers a single tap, a wider window is
+how long that tap waits. Run the step on Android only (`runFlow: when: platform: Android`, as
+`flows/rail-wide.yaml` does) and keep the double tap's logic in a spec.
+
 #### ⚠ a text match can resolve to a node under the drawer
 
 **Android's hierarchy contains views an overlay covers, so a `tapOn` by text can

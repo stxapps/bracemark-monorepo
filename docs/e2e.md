@@ -1196,6 +1196,7 @@ All of them are in the app:
 | `links-open-navigation`       | `src/features/links/topbar.tsx`                                                                 |
 | `sidebar-rail-hide`           | `src/features/links/sidebar-rail.tsx` — puts the docked rail away (wide windows only)           |
 | `sidebar-rail-show`           | ” — docks it again, in the topbar's leading slot                                                |
+| `sidebar-rail-width`          | ” — the docked rail's width grip, an adjustable whose text ends in its step's name              |
 | `links-nav-list-<id>`         | `src/features/links/sidebar.tsx` — a drawer row                                                 |
 | `links-nav-tag-<id>`          | ” — the tag rows                                                                                |
 | `links-nav-all`               | ” — Show All                                                                                    |
@@ -1952,7 +1953,8 @@ imports an app — keep the two in step.
 ones.** Both clear 768 upright, so a tablet in portrait is the wide layout, not a
 phone's: the rails dock and the forms are dialogs either way round. What turns
 with the device is the room inside that layout. Portrait gives the narrowest
-pane beside the rail (the iPad's 820 − 280 = 540pt: the card grid's columns, the
+pane beside the rail (the iPad's 820 − 240 = 580pt at the upright default width,
+down to 500 at the 320 it can be stepped to: the card grid's columns, the
 bulk bar's overflow, a long name's truncation). Landscape gives the least height,
 and with the keyboard up the least of all: the tablet AVD on its side leaves
 about 250dp for a sheet (`flows/link-close-guard.yaml`), and that is where a
@@ -3113,7 +3115,7 @@ iPad must be the iPad Pro 11-inch**, its own 2420×1668 on its side, and the
 tablet AVD must give its 1920×1200. Not the 13" iPad, although the App Store's
 required iPad slot is 13": the slot fixes the uploaded file's size, not the
 screen it shows, and on the 11" the same layout is 1210pt wide instead of 1376 —
-beside the fixed 280pt rail the type lands about 14% larger and the lists fill
+beside the 280pt rail (the landscape default step) the type lands about 14% larger and the lists fill
 the pane, where the 13" left rows of empty width and a half-empty pane. The two
 were compared side by side (`verifyTablet`, `shot/mobile.ts`). Do the iPad
 simulator's setup on it ([app-drivers.md](./app-drivers.md), _the iPad

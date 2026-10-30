@@ -42,6 +42,7 @@ import { clearFaviconFiles } from './favicon-store';
 import { clearDataFiles } from './file-store';
 import { invalidateLiveReads } from './live-read-invalidation';
 import { clearShareData } from './share-store';
+import { forgetSidebarRailWidths } from './sidebar-view-store';
 
 export async function clearData(): Promise<void> {
   getDb().transaction((tx) => {
@@ -94,6 +95,10 @@ export async function clearData(): Promise<void> {
     'sidebar_view',
     'review_prompt',
   ]);
+  // The one store that caches its `sidebar_view` read in memory (the rail's
+  // widths, which two layouts share) — the same "next account in this
+  // process" hole the invalidation above closes for the live reads.
+  forgetSidebarRailWidths();
   // The deletes above only unlink pages: the decrypted rows are still in the
   // database FILE until it is rebuilt (db.ts, scrubFreedPages).
   scrubFreedPages();
