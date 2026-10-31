@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { ReaderPage } from './reader-page';
 
@@ -20,6 +20,7 @@ let mockExtraction: object | undefined;
 let mockLocked = false;
 let mockKeptCopies = false;
 const mockShowPaywall = jest.fn();
+const mockRemoveCopy = jest.fn(async (_link: unknown, _facet: string) => true);
 
 jest.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams('link=l1'),
@@ -39,6 +40,7 @@ jest.mock('@stxapps/web-react', () => ({
   readExtraction: async () => mockExtraction,
   useEntitlements: () => ({ entitlements: { keptCopies: mockKeptCopies } }),
   useImageFileUrl: (id: string | undefined) => (id ? `blob:${id}` : undefined),
+  useKeptCopyMutations: () => ({ removeCopy: mockRemoveCopy }),
   useLocks: () => ({
     status: 'ready',
     isListLocked: () => mockLocked,
@@ -71,6 +73,7 @@ beforeEach(() => {
   mockLocked = false;
   mockKeptCopies = false;
   mockShowPaywall.mockClear();
+  mockRemoveCopy.mockClear();
 });
 
 test('a link in a locked list shows the unlock pane and none of the copy', async () => {
@@ -139,4 +142,18 @@ test('a link that is not in the library says so', async () => {
   render(<ReaderPage />);
 
   expect(await screen.findByText(/isn’t in your library/)).not.toBeNull();
+});
+
+test('deleting a copy asks first, then removes that copy of this link', async () => {
+  mockExtraction = { readModeId: 'r1', facets: {} };
+
+  render(<ReaderPage />);
+
+  fireEvent.click(await screen.findByRole('button', { name: /delete this read-mode copy/i }));
+  expect(mockRemoveCopy).not.toHaveBeenCalled();
+
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+  });
+  expect(mockRemoveCopy).toHaveBeenCalledWith(LINK, 'readMode');
 });

@@ -36,6 +36,10 @@ the row can't keep. The ✕ returns to the links view the user left
   swaps in the unlock pane before reading the copy — and drops the _Open page_
   link, since the host is contents too ([locks.md](./locks.md), _the two enforcement
   edges_). Otherwise a `/read?link=` URL in the history would be a way round a lock.
+- **Deleting a copy.** Under each copy, _Delete this read-mode copy_ / _Delete this
+  screenshot_, behind a confirmation ([link-extraction-keep.md](./link-extraction-keep.md),
+  _removal, cleanup, export_). Bulk edit's _Delete copies_ does the same for a
+  selection. Like reading, never gated.
 - **Reading is never gated.** A copy that exists is shown on every plan; only the
   empty state reads `keptCopies`, to offer Plus beside the way a copy is taken (open
   the page, save it with the browser extension) — iap/plans.ts, the `keptCopies` note.

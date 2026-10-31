@@ -2,21 +2,34 @@
 
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowUpRight, BookOpen, Image as ImageIcon, X } from 'lucide-react';
+import { ArrowUpRight, BookOpen, Image as ImageIcon, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
 import { LOCK_COPY } from '@stxapps/react';
 import { hostFromText, openableUrl } from '@stxapps/shared';
 import {
+  type KeptCopyFacet,
+  type LinkItem,
   readExtraction,
   readLinkById,
   useEntitlements,
   useImageFileUrl,
+  useKeptCopyMutations,
   useLocks,
   useReaderDoc,
 } from '@stxapps/web-react';
 import { ReaderArticle } from '@stxapps/web-ui/components/reader/reader-article';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@stxapps/web-ui/components/ui/alert-dialog';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@stxapps/web-ui/components/ui/tabs';
 import { cn } from '@stxapps/web-ui/lib/utils';
@@ -144,6 +157,66 @@ function ScreenshotTab({ fileId, title }: { fileId: string; title: string }) {
   );
 }
 
+// "Delete this copy" — under each copy, behind a confirmation, because it can't be
+// undone: the copy was taken from the page as it was, and keeping a new one means
+// opening the page again (which may have changed, or be gone). Removal clears the
+// copy on every device and marks it removed, so nothing automatic takes it again
+// (removeKeptCopy). Never gated on the plan, like reading.
+const COPY_NAMES: Record<KeptCopyFacet, string> = {
+  readMode: 'read-mode copy',
+  screenshot: 'screenshot',
+};
+
+function DeleteCopy({ link, facet }: { link: LinkItem; facet: KeptCopyFacet }) {
+  const { removeCopy } = useKeptCopyMutations();
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const name = COPY_NAMES[facet];
+
+  const remove = () => {
+    setError(null);
+    void removeCopy(link, facet).catch((e: unknown) =>
+      setError(e instanceof Error ? e.message : String(e)),
+    );
+  };
+
+  return (
+    <div className={cn('mt-10 flex flex-col items-start gap-2 border-t border-border pt-6')}>
+      <Button
+        variant="ghost"
+        size="sm"
+        className={cn('text-destructive')}
+        onClick={() => setOpen(true)}
+      >
+        <Trash2 data-icon="inline-start" />
+        Delete this {name}
+      </Button>
+      {error ? (
+        <p role="alert" className={cn('text-sm text-destructive')}>
+          {error}
+        </p>
+      ) : null}
+      <AlertDialog open={open} onOpenChange={setOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader className="place-items-start text-left">
+            <AlertDialogTitle>Delete this {name}?</AlertDialogTitle>
+            <AlertDialogDescription className="text-pretty">
+              It’s removed from all your devices. The link stays. To keep a new one, open the page
+              and take it again with the browser extension — if the page still shows the same thing.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep it</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={remove}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
 function EmptyCopies({ href }: { href: string | undefined }) {
   const { entitlements } = useEntitlements();
   const paywall = usePaywall();
@@ -232,16 +305,28 @@ export function ReaderPage() {
         </TabsList>
         <TabsContent value="read">
           <ReadModeTab fileId={readModeId} title={title} host={host} />
+          <DeleteCopy link={link} facet="readMode" />
         </TabsContent>
         <TabsContent value="screenshot">
           <ScreenshotTab fileId={screenshotId} title={title} />
+          <DeleteCopy link={link} facet="screenshot" />
         </TabsContent>
       </Tabs>
     );
   } else if (readModeId) {
-    body = <ReadModeTab fileId={readModeId} title={title} host={host} />;
+    body = (
+      <>
+        <ReadModeTab fileId={readModeId} title={title} host={host} />
+        <DeleteCopy link={link} facet="readMode" />
+      </>
+    );
   } else if (screenshotId) {
-    body = <ScreenshotTab fileId={screenshotId} title={title} />;
+    body = (
+      <>
+        <ScreenshotTab fileId={screenshotId} title={title} />
+        <DeleteCopy link={link} facet="screenshot" />
+      </>
+    );
   } else {
     body = <EmptyCopies href={href} />;
   }
