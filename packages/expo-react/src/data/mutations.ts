@@ -491,6 +491,55 @@ export async function writeExtraction(
   for (const fileId of replaced) await deleteFile(username, fileId);
 }
 
+// The kept copies a user can remove one at a time — web-react mutations.ts's
+// `KeptCopyFacet` / `removeKeptCopy`, ported. See there for why the facet stays
+// `done` with a `removedAt` marker rather than being deleted, and why a copy that is
+// already gone ABORTS the write instead of writing the extraction back.
+export type KeptCopyFacet = 'readMode' | 'screenshot';
+const KEPT_COPY_FIELD = { readMode: 'readModeId', screenshot: 'screenshotId' } as const;
+const NOTHING_TO_REMOVE = Symbol('nothing to remove');
+
+export async function removeKeptCopy(
+  username: string,
+  linkId: string,
+  facet: KeptCopyFacet,
+): Promise<boolean> {
+  const field = KEPT_COPY_FIELD[facet];
+  const path = pathFromId(linkId, EXTRACTIONS_PREFIX);
+  const now = Date.now();
+  let removed: string[] = [];
+  try {
+    writeEntityWith(username, path, (existing) => {
+      const current = parseBlob(existing?.data ?? undefined, extractionSchema);
+      if (!current?.[field]) throw NOTHING_TO_REMOVE;
+      const prior = current.facets[facet];
+      const next: Extraction = {
+        ...current,
+        [field]: undefined,
+        facets: {
+          ...current.facets,
+          [facet]: {
+            ...(prior ?? { status: 'done', attempts: 0 }),
+            status: 'done',
+            removedAt: now,
+          },
+        },
+        updatedAt: now,
+      };
+      if (!extractionSchema.safeParse(next).success) {
+        throw new Error(`removeKeptCopy: invalid extraction ${linkId}`);
+      }
+      removed = replacedExtractionFileIds(current, next);
+      return next;
+    });
+  } catch (err) {
+    if (err === NOTHING_TO_REMOVE) return false;
+    throw err;
+  }
+  for (const fileId of removed) await deleteFile(username, fileId);
+  return removed.length > 0;
+}
+
 // Delete one link's `extractions/{id}.enc` — the machine half's counterpart of
 // deleteLink, keyed by the link's id like writeExtraction. The `files/` blobs
 // the extraction references are the caller's concern (same split as
