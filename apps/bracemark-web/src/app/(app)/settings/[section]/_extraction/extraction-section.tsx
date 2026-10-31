@@ -47,6 +47,7 @@ import {
   SettingsPane,
   SettingsRow,
 } from '../../_components/settings-kit';
+import { KeptCopiesGroup } from './kept-copies-group';
 
 // One labelled count in a bordered tile.
 function Stat({ label, value }: { label: string; value: number }) {
@@ -168,6 +169,7 @@ export function ExtractionSection() {
             </Button>
           }
         />
+        <KeptCopiesGroup />
       </SettingsPane>
     );
   }
@@ -315,6 +317,8 @@ export function ExtractionSection() {
           </div>
         </div>
       ) : null}
+
+      <KeptCopiesGroup />
     </SettingsPane>
   );
 }

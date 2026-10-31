@@ -25,6 +25,8 @@ import { Editor } from './Editor';
 
 const mockUseLinkMutations = jest.fn();
 const mockUseLinkQuota = jest.fn();
+let mockKeptCopies = false;
+const mockReadSettingsGeneral = jest.fn<Promise<object | undefined>, []>();
 const mockSendMessage = jest.fn(async () => ({ ok: true }));
 
 jest.mock('@stxapps/web-react', () => ({
@@ -34,6 +36,8 @@ jest.mock('@stxapps/web-react', () => ({
   get useLinkQuota() {
     return mockUseLinkQuota;
   },
+  useEntitlements: () => ({ entitlements: { keptCopies: mockKeptCopies } }),
+  readSettingsGeneral: () => mockReadSettingsGeneral(),
   linkIdOf: (link: { url: string }) => `id-of:${link.url}`,
 }));
 jest.mock('@/utils/messages', () => ({
@@ -140,8 +144,69 @@ describe('saving a new page', () => {
       linkId: `id-of:${URL_}`,
       facet: 'titleImage',
     });
-    // The heavy facets stay manual on the complete screen.
+    // Without `keptCopies` nothing else is asked for.
     expect(mockSendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  describe('the kept copies a save asks for', () => {
+    // The synced save setting, read from the STORE at the save (not a render's copy,
+    // which answers the defaults until the blob loads), and only on a plan with
+    // `keptCopies`. Each copy is its own message, so a page with no article costs the
+    // title and the screenshot nothing.
+    const facets = () =>
+      (mockSendMessage.mock.calls as unknown as [{ facet: string }][]).map(([m]) => m.facet);
+
+    beforeEach(() => {
+      mockKeptCopies = true;
+      mockReadSettingsGeneral.mockReset().mockResolvedValue(undefined);
+    });
+    afterEach(() => {
+      mockKeptCopies = false;
+    });
+
+    it('takes read mode by default, and not the screenshot', async () => {
+      renderEditor();
+      await press('Save');
+
+      expect(facets()).toEqual(['titleImage', 'readMode']);
+      expect(onSaved).toHaveBeenCalledWith({ url: URL_ }, { readMode: true, screenshot: false });
+    });
+
+    it('follows the setting: screenshot on, read mode off', async () => {
+      mockReadSettingsGeneral.mockResolvedValue({
+        keepReadModeOnSave: false,
+        keepScreenshotOnSave: true,
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      renderEditor();
+      await press('Save');
+
+      expect(facets()).toEqual(['titleImage', 'screenshot']);
+    });
+
+    it('keeps nothing when the settings read fails — the save still lands', async () => {
+      mockReadSettingsGeneral.mockRejectedValue(new Error('store closed'));
+      renderEditor();
+      await press('Save');
+
+      expect(facets()).toEqual(['titleImage']);
+      expect(onSaved).toHaveBeenCalledWith({ url: URL_ }, { readMode: false, screenshot: false });
+    });
+
+    it('asks for nothing without the plan, whatever the setting says', async () => {
+      mockKeptCopies = false;
+      mockReadSettingsGeneral.mockResolvedValue({
+        keepScreenshotOnSave: true,
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      renderEditor();
+      await press('Save');
+
+      expect(facets()).toEqual(['titleImage']);
+      expect(mockReadSettingsGeneral).not.toHaveBeenCalled();
+    });
   });
 
   it('hands the created link up so the popup flips without waiting on the live query', async () => {
@@ -149,7 +214,7 @@ describe('saving a new page', () => {
 
     await press('Save');
 
-    expect(onSaved).toHaveBeenCalledWith({ url: URL_ });
+    expect(onSaved).toHaveBeenCalledWith({ url: URL_ }, { readMode: false, screenshot: false });
   });
 
   it('shows progress and refuses a second press while the write is in flight', async () => {
@@ -240,11 +305,14 @@ describe('restoring a page that is in Trash', () => {
 
     await press('Restore');
 
-    expect(onSaved).toHaveBeenCalledWith({
-      ...TRASHED,
-      listId: 'reading',
-      tagIds: ['old-tag', 'new-tag'],
-    });
+    expect(onSaved).toHaveBeenCalledWith(
+      {
+        ...TRASHED,
+        listId: 'reading',
+        tagIds: ['old-tag', 'new-tag'],
+      },
+      expect.anything(),
+    );
   });
 
   it('refreshes the extraction too — we are standing on the live page either way', async () => {

@@ -30,7 +30,7 @@ import { resizeImage } from './resize-image';
 // capture, so its `extractedBy` is `server` (the lowest tier — `tierOf` → 1) and a
 // later active-page sighting can UPGRADE it.
 //
-// BATCHED for latency (docs/link-extraction.md "server extraction"): one `extractMany`
+// BATCHED for latency (docs/link-extraction-server.md): one `extractMany`
 // returns every link's title + imageUrl in ~one round trip — the server resolves the
 // URLs CONCURRENTLY — instead of N sequential single-URL calls. We then write TITLES
 // FIRST (the page fills with real titles immediately) and fill IMAGES after, through the

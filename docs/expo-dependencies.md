@@ -64,7 +64,7 @@ is the usual reason to reach for it:
   content-sniffed rather than extension-driven (the favicon cache writes
   extension-less files, so that matters). This is what lets the icon sniff accept
   `<link rel="icon" type="image/svg+xml">` at all; see
-  [link-extraction.md](./link-extraction.md) — _favicons_.
+  [link-extraction-favicons.md](./link-extraction-favicons.md).
 
 What did **not** buy it: remote fetching, disk caching, placeholders,
 transitions. Every source here is a local plaintext `file://` path this app
@@ -191,6 +191,45 @@ Four things that aren't in its README:
   `ios/Podfile` should list it in the `BracemarkShareExtension` target's
   `exclude` array, and `ExpoStoreReview` should appear only in
   `Pods-Bracemark`'s xcconfigs.
+
+#### react-native-webview
+
+The embedded browser view the **capture screen** is built on
+(`features/capture/capture-screen.tsx`, `/capture?link=<id>`): the saved page,
+open, with _Keep read mode_ under it — the browser extension's popup rebuilt for a
+phone ([link-extraction-keep.md](./link-extraction-keep.md), _expo_). `13.15.0` at
+root, the version `expo/bundledNativeModules.json` names for SDK 54, `*` in the
+app. **No config plugin**; native, so `npx expo prebuild` before it exists on a
+device.
+
+**Why a WebView and not an in-app browser** (`expo-web-browser`: Safari View
+Controller on iOS, Chrome Custom Tabs on Android). Taking a copy means running the
+read-mode converter INSIDE the page, and neither in-app browser can be scripted —
+by design, they are the system browser's, not the app's. They also behave
+differently on the one thing they'd offer: Custom Tabs share Chrome's cookies, but
+Safari View Controller stopped sharing Safari's in iOS 11. A WebView is
+scriptable (`injectJavaScript`, `window.ReactNativeWebView.postMessage`) and
+keeps a cookie store of its own, persistent across launches
+(`sharedCookiesEnabled` / `thirdPartyCookiesEnabled`) — so a site behind a
+sign-in is signed in to once, here. The script it injects is generated
+(`tools/scripts/generate-reader-capture.ts` →
+`features/capture/reader-capture-script.generated.ts`), the same converter the
+browser extension and the iOS Safari share run.
+
+⚠ **It stays LINKED in the iOS share extension**, which never uses it. It
+registers a Fabric component (`RNCWebView`), and
+`plugins/with-share-extension-native-links.js` explains why such a library can't
+be dropped from that target: the shared component provider would insert a nil class
+and the share extension would die before its first screen. So it is NOT on that
+plugin's list, and not in `app.config.ts`'s `excludedPackages` (which is Expo
+modules only). Linked is not instantiated — nothing in the sheet creates a WebView
+— but re-check the share extension's memory on a device after the first prebuild
+with it ([share-sheet.md](./share-sheet.md), _the share extension has almost no
+memory to spare_).
+
+**No screenshot from it.** A WebView can't photograph its own content; that is
+`react-native-view-shot`, a second native dependency deliberately not taken with
+this one.
 
 #### @react-native-community/datetimepicker
 

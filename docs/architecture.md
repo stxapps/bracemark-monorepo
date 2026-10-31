@@ -92,7 +92,7 @@ bounded; the worker is terminated if conversion takes too long.
   (a stateless, stream-don't-store image proxy). All arbitrary-URL fetches go through
   one `safeFetch` choke point — SSRF guard re-validated on every redirect hop,
   per-response byte ceiling, timeout, content-type allowlist. See
-  [link-extraction.md](./link-extraction.md) — _server extraction_.
+  [link-extraction-server.md](./link-extraction-server.md).
 - **bracemark-expo** — Expo mobile app. The crypto/account layer is
   `@stxapps/expo-crypto` below; the RN-specific React logic — including the
   local-first data layer (write edge, sync engine, and read edge) — lives in
@@ -333,7 +333,7 @@ they are read by the same components, not because it is one of them.
   (`link-quota-banner`), and `host-monogram`, the deterministic letter-on-hue
   tile that fills an icon-less host's **preview slot** (not the chip beside its
   host line, which falls back to a plate so the row escalates once — see
-  [link-extraction.md](./link-extraction.md), _favicons_). A piece lands here the
+  [link-extraction-favicons.md](./link-extraction-favicons.md)). A piece lands here the
   moment a SECOND surface draws it: the monogram moved out of bracemark-web's
   `link-media.tsx` when bracemark-extension's popup specimen became its second
   consumer, because "same site, same tile" has to hold across the popup and the
@@ -879,13 +879,15 @@ startup on a bundle that holds all of it anyway. In the **iOS share extension**
 it is paid per share, for code that process will never call. So a handful of
 files carry **explicit subpath exports** beside the `"."` entry:
 
-| package                | subpath                    | who names it, and why                                                            |
-| ---------------------- | -------------------------- | -------------------------------------------------------------------------------- |
-| `@stxapps/expo-react`  | `./data/share-store`       | the share sheet's data seam — the alternative is the whole package               |
-| `@stxapps/expo-react`  | `./data/share-theme-store` | the sheet's pre-paint theme read, on the same cold path ([theme.md](./theme.md)) |
-| `@stxapps/expo-react`  | `./lib/auth-api-client`    | the app's `lib/api-client` binding, which the sheet threads into Save            |
-| `@stxapps/expo-crypto` | `./lib/ids`                | `newId` alone, without the AES + Argon2 stack behind the barrel                  |
-| `@stxapps/expo-crypto` | `./lib/shared-keychain`    | `session-store`'s three-function native wrapper, same reason                     |
+| package                | subpath                      | who names it, and why                                                                                                                                                                                                                             |
+| ---------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@stxapps/expo-react`  | `./data/share-store`         | the share sheet's data seam — the alternative is the whole package                                                                                                                                                                                |
+| `@stxapps/expo-react`  | `./data/share-theme-store`   | the sheet's pre-paint theme read, on the same cold path ([theme.md](./theme.md))                                                                                                                                                                  |
+| `@stxapps/expo-react`  | `./lib/auth-api-client`      | the app's `lib/api-client` binding, which the sheet threads into Save                                                                                                                                                                             |
+| `@stxapps/expo-crypto` | `./lib/ids`                  | `newId` alone, without the AES + Argon2 stack behind the barrel                                                                                                                                                                                   |
+| `@stxapps/expo-crypto` | `./lib/shared-keychain`      | `session-store`'s three-function native wrapper, same reason                                                                                                                                                                                      |
+| `@stxapps/shared`      | `./reader/reader-doc-core`   | the read-mode version, caps and link check without zod — what `reader-doc-from-page` takes, for the same in-page reason                                                                                                                           |
+| `@stxapps/web-react`   | `./lib/reader-doc-from-page` | the read-mode converter — bundled into scripts that run INSIDE a page (the browser extension's injected file, the iOS share preprocessing, expo's WebView capture), where the barrel would carry Dexie and the sync engine into a stranger's page |
 
 They are declared, not reached for: a deep import that isn't in `exports` fails
 to resolve. Add one only when a real cold-start path demands it, keep it out of

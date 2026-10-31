@@ -1,6 +1,6 @@
 // Cap a preview image's dimensions and re-encode it before it's stored — the
 // deferred CLIENT thumbnailing step the design assigns to the client, never the
-// server (docs/link-extraction.md "server extraction": `bracemark-extractor` never
+// server (docs/link-extraction-server.md: `bracemark-extractor` never
 // resizes/transcodes — that would force a full decode and risk the isolate OOMing,
 // and it belongs on the client anyway, to bound the per-user storage quota). It runs
 // at the byte-producing boundary of EVERY capture source so what lands in

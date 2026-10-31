@@ -1,5 +1,5 @@
 import { type FakeBrowser, installFakeBrowser } from '../testing/fake-browser';
-import { capturePageCopy, captureReadMode, captureScreenshot, captureTitleImage } from './capture';
+import { captureReadMode, captureScreenshot, captureTitleImage, READ_MODE_SCRIPT } from './capture';
 
 // The active-page capture tier. The interesting half of this file is code that never
 // runs in the extension's own bundle: `scripting.executeScript`'s `func` is
@@ -248,69 +248,48 @@ describe('captureTitleImage — when the image is not usable', () => {
 });
 
 describe('captureReadMode', () => {
-  const html = () => new TextDecoder().decode(captured);
-  let captured: Uint8Array;
-
-  const capture = async () => {
-    captured = await captureReadMode(1);
-    return html();
+  // The converter itself runs against jsdom in reader-doc-from-page.spec.ts. What is
+  // left here is the injection contract: the bundled FILE, by name, and a result that
+  // is parsed at the boundary rather than trusted.
+  const doc = {
+    version: 1,
+    capturedAt: 1,
+    blocks: [{ id: 'b0', kind: 'paragraph', runs: [{ text: 'hello' }] }],
   };
 
-  it('takes the article when there is one', async () => {
-    document.body.innerHTML = '<main><p>main copy</p></main><article><p>article copy</p></article>';
+  it('injects the read-mode script into the tab and returns its document', async () => {
+    fake.scripting.executeScript = jest.fn(async () => [{ result: doc }]);
 
-    await expect(capture()).resolves.toContain('article copy');
-    expect(html()).not.toContain('main copy');
+    await expect(captureReadMode(4)).resolves.toEqual(doc);
+    expect(fake.scripting.executeScript).toHaveBeenCalledWith({
+      target: { tabId: 4 },
+      files: [READ_MODE_SCRIPT],
+    });
   });
 
-  it('falls back to main, then to the whole body', async () => {
-    document.body.innerHTML = '<div><p>outer</p></div><main><p>main copy</p></main>';
-    await expect(capture()).resolves.toBe('<p>main copy</p>');
-
-    document.body.innerHTML = '<div><p>outer</p></div>';
-    await expect(capture()).resolves.toBe('<div><p>outer</p></div>');
+  it('answers undefined for a page that is not an article', async () => {
+    fake.scripting.executeScript = jest.fn(async () => [{ result: null }]);
+    await expect(captureReadMode(4)).resolves.toBeUndefined();
   });
 
-  it('strips the non-content elements', async () => {
-    document.body.innerHTML =
-      '<article><script>evil()</script><style>p{}</style><noscript>n</noscript>' +
-      '<iframe src="x"></iframe><svg></svg><p>kept</p></article>';
-
-    await expect(capture()).resolves.toBe('<p>kept</p>');
-  });
-
-  it('reads a CLONE, leaving the live page untouched', async () => {
-    // The injected func runs in the page the user is looking at; stripping the real
-    // DOM would visibly break it.
-    document.body.innerHTML = '<article><script>evil()</script><p>kept</p></article>';
-
-    await capture();
-
-    expect(document.querySelectorAll('script')).toHaveLength(1);
-  });
-});
-
-describe('capturePageCopy', () => {
-  it('serializes the live document as bytes', async () => {
-    document.body.innerHTML = '<p id="here">copy me</p>';
-
-    const bytes = await capturePageCopy(1);
-
-    const html = new TextDecoder().decode(bytes);
-    expect(html).toContain('<p id="here">copy me</p>');
-    // Whole document, not just the body — unlike read mode, nothing is stripped.
-    expect(html).toContain('<html');
+  it('refuses a result that is not a document rather than storing it', async () => {
+    fake.scripting.executeScript = jest.fn(async () => [{ result: '<p>html</p>' }]);
+    await expect(captureReadMode(4)).resolves.toBeUndefined();
   });
 });
 
 describe('captureScreenshot', () => {
-  it('decodes the PNG data URL the browser hands back', async () => {
-    const dataUrl = `data:image/png;base64,${Buffer.from(PNG).toString('base64')}`;
+  it('asks for a JPEG and decodes the data URL the browser hands back', async () => {
+    const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
+    const dataUrl = `data:image/jpeg;base64,${Buffer.from(JPEG).toString('base64')}`;
     fake.tabs.captureVisibleTab.mockResolvedValue(dataUrl);
 
-    await expect(captureScreenshot(7)).resolves.toEqual(PNG);
+    await expect(captureScreenshot(7)).resolves.toEqual(JPEG);
     // A WINDOW id, not a tab id — captureVisibleTab photographs whatever is
-    // frontmost in that window.
-    expect(fake.tabs.captureVisibleTab).toHaveBeenCalledWith(7, { format: 'png' });
+    // frontmost in that window. And JPEG: a PNG of a 2× viewport is several MB.
+    expect(fake.tabs.captureVisibleTab).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ format: 'jpeg' }),
+    );
   });
 });

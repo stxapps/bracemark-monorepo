@@ -17,6 +17,7 @@ import { File } from 'expo-file-system';
 
 import { newId } from '@stxapps/expo-crypto';
 import {
+  extractionFileIds,
   EXTRACTIONS_PREFIX,
   FILES_PREFIX,
   LINKS_PREFIX,
@@ -178,12 +179,9 @@ export function useLinkMutations(): LinkMutations {
       // extraction references. Content first, entities after — a briefly-dangling
       // ref reads as "no bytes" (readFileBytes → undefined), whereas deleting the
       // link first would orphan the blobs forever if interrupted.
-      const fileIds = [
-        current.customImageId,
-        extraction?.imageId,
-        extraction?.screenshotId,
-        extraction?.pageCopyId,
-      ].filter((fileId): fileId is string => typeof fileId === 'string');
+      const fileIds = [current.customImageId, ...extractionFileIds(extraction)].filter(
+        (fileId): fileId is string => typeof fileId === 'string',
+      );
       for (const fileId of fileIds) await deleteFile(username, fileId);
 
       // Satellites keyed by the link's id. Absent ones (never extracted, never
@@ -222,12 +220,9 @@ export function useLinkMutations(): LinkMutations {
       for (let i = 0; i < links.length; i++) {
         const link = current[i] ?? links[i];
         const extraction = extractions[i];
-        const fileIds = [
-          link.customImageId,
-          extraction?.imageId,
-          extraction?.screenshotId,
-          extraction?.pageCopyId,
-        ].filter((fileId): fileId is string => typeof fileId === 'string');
+        const fileIds = [link.customImageId, ...extractionFileIds(extraction)].filter(
+          (fileId): fileId is string => typeof fileId === 'string',
+        );
         for (const fileId of fileIds) paths.push(pathFromId(fileId, FILES_PREFIX));
         paths.push(pathFromId(ids[i], EXTRACTIONS_PREFIX));
         paths.push(pathFromId(ids[i], PINS_PREFIX));

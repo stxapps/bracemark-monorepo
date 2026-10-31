@@ -55,9 +55,9 @@
 // SHOWN, in two tiers keyed off the pane's own width — never off the selection,
 // so neither can shift mid-multi-select:
 //
-//   < COLLAPSE_WIDTH  — the secondary actions (Edit tags, Pin, Unpin, Archive)
-//                       collapse into a ⋯ overflow menu, leaving Copy, Move to
-//                       and the destructive Remove inline.
+//   < COLLAPSE_WIDTH  — the secondary actions (Edit tags, Pin, Unpin, Archive,
+//                       Delete copies) collapse into a ⋯ overflow menu, leaving
+//                       Copy, Move to and the destructive Remove inline.
 //   < ICON_WIDTH      — those three shed their labels and become square icon
 //                       buttons (name kept in `aria-label`/`title`, so nothing
 //                       is lost to a screen reader or a hover). This is what
@@ -78,6 +78,10 @@
 // a page-level modal instead of writing straight away — Move to, Edit tags,
 // Delete permanently — hand the selection to view-state-provider and let that
 // surface do both (it also exits the mode), so they carry no `busy` state here.
+// Delete copies confirms in place instead (its own AlertDialog below): it removes
+// the selection's kept copies — read mode and screenshot — on every device, which
+// can't be undone, and it is a write like Archive, so it carries `busy` and exits
+// the mode when done (docs/link-extraction-keep.md, _removal, cleanup, export_).
 // Move to used to be a `w-64` dropdown holding its own ListCommand, i.e. a
 // third copy of a picker the row menu and the Lists settings already embed; it
 // became a request for the same reason its two neighbours are ones.
@@ -87,6 +91,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Archive,
   ArchiveRestore,
+  BookX,
   Check,
   Copy,
   FolderInput,
@@ -104,9 +109,20 @@ import {
   linkIdOf,
   type LinkView,
   readPins,
+  useKeptCopyMutations,
   useLinkMutations,
   usePinMutations,
 } from '@stxapps/web-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@stxapps/web-ui/components/ui/alert-dialog';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
 import {
@@ -121,19 +137,21 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 import { useLinksPage } from '../_contexts/page-provider';
 import { useLinksViewState } from '../_contexts/view-state-provider';
 
-type BulkAction = 'restore' | 'pin' | 'unpin' | 'archive' | 'remove';
+type BulkAction = 'restore' | 'pin' | 'unpin' | 'archive' | 'copies' | 'remove';
 
 // Below this container width the secondary actions (Edit tags, Pin, Unpin,
-// Archive) collapse into a ⋯ overflow menu so the fixed button row never spills
+// Archive, Delete copies) collapse into a ⋯ overflow menu so the fixed button row never spills
 // off a narrow pane (the collapsible sidebar can widen the sidebar / shrink this
 // pane without a window resize, and the extension popup is narrower still).
 // Copy, Move to, and the destructive Remove stay inline at every width. Measured
 // via `useElementWidth` (not a CSS container query) so each action is declared
 // once and rendered as either a Button or a menu item — no duplicated markup.
-// Tuned to roughly where the widest inline set (the normal non-Trash view, seven
-// right-hand buttons) stops fitting; below the return we keep the full set inline
+// Tuned to roughly where the widest inline set (the normal non-Trash view, eight
+// right-hand buttons) stops fitting — 900 for seven, plus ~150 for Delete copies
+// (icon, a 13-character label, padding and the gap; estimated from the button's
+// metrics, not measured in a browser — re-measure if the row spills); below the return we keep the full set inline
 // until the first measurement lands (width 0), matching card-layout's approach.
-const COLLAPSE_WIDTH = 900;
+const COLLAPSE_WIDTH = 1050;
 // Below this the three surviving inline buttons drop their labels (see the
 // header). Tuned to where the widest labelled trio — Copy links / Move to /
 // Remove plus the ⋯ — stops fitting beside the left cluster's count.
@@ -188,7 +206,9 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
   } = useLinksViewState();
   const { updateMany } = useLinkMutations();
   const { pin, unpin } = usePinMutations();
+  const { removeAllCopies } = useKeptCopyMutations();
   const [busy, setBusy] = useState<BulkAction | null>(null);
+  const [confirmingCopies, setConfirmingCopies] = useState(false);
   // The "Copied" flash on Copy links; the timer is cleared on unmount so a
   // pending flash can't set state on an unmounted toolbar.
   const [copied, setCopied] = useState(false);
@@ -219,6 +239,9 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
   const toPin = actionable.filter((l) => !pinnedIds.has(linkIdOf(l)));
   const toUnpin = actionable.filter((l) => pinnedIds.has(linkIdOf(l)));
   const toArchive = actionable.filter((l) => l.listId !== ARCHIVE_ID);
+  // Every selected link with a kept copy — Trash included: a copy is the user's to
+  // delete wherever its link sits.
+  const withCopies = selected.filter((l) => l.readModeId || l.screenshotId);
 
   // The busy/exit wrapper every bulk action shares. `run` performs the WHOLE
   // action in one call rather than being applied per link, because the list moves
@@ -329,6 +352,13 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
           disabled: disabled || toArchive.length === 0,
           run: () => void runMove('archive', toArchive, ARCHIVE_ID),
         },
+    {
+      key: 'copies',
+      icon: <BookX data-icon="inline-start" className="size-4" />,
+      label: busy === 'copies' ? 'Deleting…' : 'Delete copies',
+      disabled: disabled || withCopies.length === 0,
+      run: () => setConfirmingCopies(true),
+    },
   ];
 
   return (
@@ -459,6 +489,34 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
           </>
         )}
       </div>
+      <AlertDialog open={confirmingCopies} onOpenChange={setConfirmingCopies}>
+        <AlertDialogContent>
+          <AlertDialogHeader className="place-items-start text-left">
+            <AlertDialogTitle>
+              Delete the kept copies of {withCopies.length} link
+              {withCopies.length === 1 ? '' : 's'}?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-pretty">
+              Their read-mode copies and screenshots are removed from all your devices. The links
+              stay. A new copy can only be taken from the page itself, if it still shows the same
+              thing.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep them</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() =>
+                void runBulk('copies', async () => {
+                  await removeAllCopies(withCopies);
+                })
+              }
+            >
+              Delete copies
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

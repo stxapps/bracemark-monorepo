@@ -50,6 +50,8 @@ jest.mock('@stxapps/web-ui/components/links/list-command', () => ({
   },
 }));
 jest.mock('dexie-react-hooks', () => require('../../testing/live-query'));
+// The kept-copies row has its own spec (KeptCopies.spec.tsx); here it is a seam.
+jest.mock('./KeptCopies', () => ({ KeptCopies: () => null }));
 
 const LINK = {
   url: 'https://example.com/post',

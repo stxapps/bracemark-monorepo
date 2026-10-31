@@ -36,6 +36,7 @@ import {
   settingsGeneralSchema,
   tagSchema,
 } from '../sync/entities';
+import { extractionFileIds } from '../sync/extraction';
 import {
   ENC_SUFFIX,
   EXTRACTIONS_PREFIX,
@@ -426,10 +427,7 @@ export function referencedFileIds(entries: BundleEntry[]): Set<string> {
       const { customImageId } = entry.data as Link;
       if (customImageId !== undefined) ids.add(customImageId);
     } else if (entry.kind === 'extraction') {
-      const { imageId, pageCopyId, screenshotId } = entry.data as Extraction;
-      if (imageId !== undefined) ids.add(imageId);
-      if (pageCopyId !== undefined) ids.add(pageCopyId);
-      if (screenshotId !== undefined) ids.add(screenshotId);
+      for (const id of extractionFileIds(entry.data as Extraction)) ids.add(id);
     }
   }
   return ids;

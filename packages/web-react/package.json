@@ -17,9 +17,15 @@
       "import": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./lib/reader-doc-from-page": {
+      "types": "./src/lib/reader-doc-from-page.ts",
+      "import": "./src/lib/reader-doc-from-page.ts",
+      "default": "./src/lib/reader-doc-from-page.ts"
+    },
     "./package.json": "./package.json"
   },
   "dependencies": {
+    "@mozilla/readability": "^0.6.0",
     "@stxapps/react": "*",
     "@stxapps/shared": "*",
     "@stxapps/web-crypto": "*",

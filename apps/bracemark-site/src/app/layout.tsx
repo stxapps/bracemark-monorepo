@@ -89,8 +89,8 @@ export const viewport = {
 //     the same error one step subtler: it is a claim about what we SEE, and
 //     `bracemark-extractor` sees a plaintext URL by construction. A server that
 //     fetches a page on your behalf has to be told which page, so the opt-in Plus
-//     path hands ours the address in the clear (docs/link-extraction.md, _server
-//     extraction_). The clause was true of `bracemark-api` and false of us.
+//     path hands ours the address in the clear (docs/link-extraction-server.md). The clause was
+//     true of `bracemark-api` and false of us.
 //
 //
 //   - "we hold your username, your plan, and ciphertext" — the version this one

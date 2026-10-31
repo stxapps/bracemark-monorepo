@@ -179,7 +179,10 @@ silent visual regression, so they're written down:
   the turned-down page corner — performed on the thing the user just kept. It is
   **not** the whole "saved" signal, though both specimens' headers said so for a
   long time: `Complete.tsx` sets the `PopupTitle` to "Saved", names the list, and
-  replaces the form with "Open Bracemark", and the share sheet does the same. The
+  replaces the form with "Open Bracemark", and the share sheet does the same.
+  Between the list row and that button sits _Keep a copy_ (`KeptCopies.tsx`): read
+  mode and a screenshot of this tab, the only place the extension can take either
+  ([link-extraction-keep.md](./link-extraction-keep.md), _per client_). The
   words carry the state; the fold is the part of the confirmation that happens to
   the OBJECT, which is why the specimen doesn't move across the save. The two clip
   paths are 5-point polygons with matching vertex counts so the change can
@@ -359,8 +362,9 @@ fails a test:
 ### opening bracemark-web — the tab keeps the page's Firefox container
 
 The popup sends the user to bracemark-web for what it doesn't do itself: "Open
-Bracemark" on the complete page, "Upgrade to Plus" when the library is full, and
-"Create an account" on sign-in. Because the session doesn't carry across (above),
+Bracemark" on the complete page, a kept copy's reader (`/read?link=`) and the
+Subscription section from _Keep a copy_, "Upgrade to Plus" when the library is
+full, and "Create an account" on sign-in. Because the session doesn't carry across (above),
 what the new tab shows depends on bracemark-web's session **in that tab's cookie
 store**. In Firefox that store is per container, and a tab an extension creates
 opens in the **default** container unless it asks for another. So someone signed

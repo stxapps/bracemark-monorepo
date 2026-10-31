@@ -77,7 +77,7 @@ const TITLE = `${BRAND.name} — ${BRAND.tagline}`;
 //   - "never a link" — which this sentence used to end on, and which
 //     `bracemark-extractor` falsifies by construction: a server that fetches a page
 //     for you has to be told which page, so the opt-in Plus path hands it a
-//     PLAINTEXT URL (docs/link-extraction.md, _server extraction_). What is true
+//     PLAINTEXT URL (docs/link-extraction-server.md). What is true
 //     whatever that setting says is that what we STORE of the library is
 //     ciphertext.
 //

@@ -1,13 +1,16 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 
 import {
   drainShareOutbox,
+  readSettingsGeneral,
   refreshShareTaxonomy,
   takeShareHandoffs,
+  useEntitlements,
   useExtraction,
   useSync,
 } from '@stxapps/expo-react';
+import { keepOnSaveOf } from '@stxapps/shared';
 
 // The MAIN APP's half of the share sheet (docs/share-sheet.md), as a renderless
 // component mounted inside <SyncProvider> (it reads useSync): keeps the two App
@@ -47,10 +50,22 @@ import {
 // writes and reads the store live), the handoff one on iOS. All of it is
 // failure-tolerant: this bridge must never take the app tree down over a share
 // artifact — a missed pass self-heals on the next signal.
+// The synced kept-copies setting's read-mode half, from the store.
+async function readModeOnSave(): Promise<boolean> {
+  try {
+    return keepOnSaveOf(await readSettingsGeneral()).readMode;
+  } catch {
+    return false;
+  }
+}
+
 export function ShareBridge() {
   const { storeStatus, lastSyncAt, localWriteNonce, requestSync } = useSync();
   const { extractNow } = useExtraction();
   const ready = storeStatus === 'ready';
+  const { entitlements } = useEntitlements();
+  const entitledRef = useRef(entitlements.keptCopies);
+  entitledRef.current = entitlements.keptCopies;
 
   useEffect(() => {
     const pass = () => {
@@ -78,7 +93,18 @@ export function ShareBridge() {
         //
         // The snapshot is NOT held back: its existence is what tells the sheet
         // there is a session at all (share-store's loadShareTaxonomy).
-        const applied = ready ? [...(await drainShareOutbox()), ...takeShareHandoffs()] : [];
+        //
+        // A draft from Safari can carry the page's read-mode copy. Whether it is
+        // kept is the account's call, made HERE at the drain: the plan
+        // (`keptCopies`, from the entitlement hook's last-known copy, read through a
+        // ref so a status change doesn't re-run the drain) and the synced save
+        // setting, read from the STORE now rather than a render's copy that answers
+        // the defaults until it loads (docs/link-extraction-keep.md, the
+        // read-at-the-save tripwire). A read that fails keeps nothing.
+        const keepReadMode = ready && entitledRef.current && (await readModeOnSave());
+        const applied = ready
+          ? [...(await drainShareOutbox({ keepReadMode })), ...takeShareHandoffs()]
+          : [];
         await refreshShareTaxonomy();
         if (applied.length > 0) {
           requestSync();

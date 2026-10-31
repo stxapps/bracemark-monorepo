@@ -42,7 +42,15 @@ presents. Four formats, one deliberate asymmetry:
 - **bracemark** — the complete backup: a zip of `manifest.json` + `items.jsonl`
   (raw `{path, data}` entities) + `files/{id}` (raw decrypted blob bytes). The
   **only format that round-trips**, and the only one that includes Trash — a
-  backup that silently drops data isn't one.
+  backup that silently drops data isn't one. The blobs it carries are the
+  referenced ones: each link's `customImageId` and every id its extraction names
+  through `extractionFileIds` (`sync/extraction.ts`) — the preview, and the kept
+  copies, read mode and screenshot today ([link-extraction-keep.md](./link-extraction-keep.md)).
+  The read-mode copy was once named only by a facet passthrough this walk didn't
+  read, and so travelled in no backup; reading the one list is what closed that,
+  on export, on restore and in the restore's id gate alike. The interop formats
+  carry no kept copy; a Markdown export of read mode with its highlights is the
+  planned interop answer ([reader.md](./reader.md)).
 - **netscape** (browsers, Karakeep), **csv** (Raindrop.io),
   **text** (URL per line) — the interop formats. Trash is excluded here:
   importing deleted-pending links into a browser as live bookmarks is never
@@ -1218,7 +1226,7 @@ which is why each one shipped.
   their own transaction, ahead of the file write — and `FaviconProvider`'s drain
   ends when the provider unmounts, where it used to run on through the queue,
   one request per host to the signed-out account's saved sites
-  ([link-extraction.md](./link-extraction.md), _favicons_). The **export** holds
+  ([link-extraction-favicons.md](./link-extraction-favicons.md)). The **export** holds
   the gathered library in memory for minutes, so its one write is fenced the
   same way: a sign-out midway used to end with the backup written after the
   sweep.
@@ -1336,8 +1344,7 @@ that reason or a near one (two more, further down, for a different one):
   so work in flight at the wipe is the same hazard there that it is on expo.
   The favicon queue is the instance that existed: `FaviconProvider`'s drain now
   ends when it unmounts, and `putFavicon` / `putFaviconNone` are fenced on the
-  account's ownership row ([link-extraction.md](./link-extraction.md),
-  _favicons_).
+  account's ownership row ([link-extraction-favicons.md](./link-extraction-favicons.md)).
 
 Two more places are out of its reach for a different reason: they are **the
 browser's storage, not the app's**, so no teardown can clear them and the only

@@ -1,6 +1,6 @@
 // SSRF guard — the load-bearing security check for an endpoint whose entire job is
-// to `fetch` arbitrary, user-supplied URLs. See docs/link-extraction.md ("server
-// extraction"): the guard's teeth are REDIRECT HANDLING (re-validate every hop),
+// to `fetch` arbitrary, user-supplied URLs. See docs/link-extraction-server.md: the guard's
+// teeth are REDIRECT HANDLING (re-validate every hop),
 // not just the host check — a public URL can 30x → 127.0.0.1 / 169.254.169.254, and
 // decimal/hex/octal-encoded IPs or non-http(s) schemes slip naive checks.
 //

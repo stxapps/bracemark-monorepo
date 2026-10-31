@@ -3,7 +3,22 @@
 How bracemark fills in a saved link's **title, image, read-mode text, screenshot,
 and saved page copy** — the metadata a bare URL doesn't carry. (The **favicon**
 is deliberately absent from that list — a device-local, per-host cache, never a
-facet and never synced; see _favicons_ below.) See
+facet and never synced; see _favicons_ below.)
+
+This is the hub of four files. It holds what every facet shares: who may fetch,
+the capability tiers, the writer-split data model, the extraction entity, the
+queue and its drains, imports. Each sibling is one concern on top of it:
+
+- [link-extraction-favicons.md](./link-extraction-favicons.md) — the per-host
+  icon cache, and why it is not a facet;
+- [link-extraction-server.md](./link-extraction-server.md) — `bracemark-extractor`,
+  the opt-in server path;
+- [link-extraction-keep.md](./link-extraction-keep.md) — the kept copies: read
+  mode, screenshot, page copy — when they're taken, their formats, their gate;
+- [reader.md](./reader.md) — reading a kept copy, and the user's highlights and
+  notes on it (planned).
+
+See
 [local-first-sync.md](./local-first-sync.md) for the encrypted-file data path
 this rides on (one entity per `*.enc` blob, file-level LWW), the `pins/`
 precedent for the LWW-isolation move repeated here, and the `links/` vs `files/`
@@ -112,15 +127,19 @@ Fetching a URL is easy wherever there's no CORS; **screenshots and page copies a
 the hard part, and only an _active page context_ does them well.** This
 asymmetry drives the whole result/queue design.
 
-| client / mode                          | title + image      | read mode   | screenshot             | page copy |
-| -------------------------------------- | ------------------ | ----------- | ---------------------- | --------- |
-| extension — **icon click, active tab** | ✅ live DOM        | ✅ live DOM | ✅ `captureVisibleTab` | ✅        |
-| ~~extension — background, queued URL~~ | —                  | —           | —                      | —         |
-| mobile — **share sheet**               | ⚠️ host-provided   | ❌          | ❌                     | ❌        |
-| mobile — **foreground**                | ✅                 | ✅ WebView  | ✅                     | ✅        |
-| mobile — **background queue**          | ⚠️ best-effort     | ⚠️          | ❌                     | ❌        |
-| `bracemark-extractor` Worker           | ✅                 | ✅          | ❌ needs Browser Rndr. | ❌        |
-| import                                 | ⚠️ export-provided | ❌          | ❌                     | ❌        |
+| client / mode                          | title + image      | read mode          | screenshot                       | page copy   |
+| -------------------------------------- | ------------------ | ------------------ | -------------------------------- | ----------- |
+| extension — **icon click, active tab** | ✅ live DOM        | ✅ Readability     | ✅ `captureVisibleTab`, the fold | ▹ not built |
+| ~~extension — background, queued URL~~ | —                  | —                  | —                                | —           |
+| mobile — **share sheet**               | ⚠️ host-provided   | ▹ Safari, iOS only | ❌                               | ❌          |
+| mobile — **foreground**                | ✅                 | ▹ WebView          | ▹ WebView                        | ▹ not built |
+| mobile — **background queue**          | ⚠️ best-effort     | ⚠️                 | ❌                               | ❌          |
+| `bracemark-extractor` Worker           | ✅                 | ▹ raw HTML         | ❌                               | ❌          |
+| import                                 | ⚠️ export-provided | ❌                 | ❌                               | ❌          |
+
+▹ marks a cell designed but not built; the read-mode, screenshot and page-copy
+columns are [link-extraction-keep.md](./link-extraction-keep.md)'s subject, cell by
+cell. The title + image column is this file's.
 
 The struck row is the **decision below**: the extension _could_ bg-fetch queued
 URLs with an `<all_urls>` host grant, but we **don't** — that capability moves to
@@ -132,11 +151,16 @@ WebView to render, fetch, or screenshot — so it captures only **host-provided
 metadata** (a title the originating app hands it) as a **provisional
 `extraction.title`** and leaves the actual extraction to the queue; it is a save
 context, not an extractor (the same provisional-seed pattern a Brace.to import
-uses for its extractor's title — see _imported links_ — so it emits **no `extractedBy` tier of its own**, and the
+uses for its extractor's title — see _imported links_ — so it emits **no
+`extractedBy` tier of its own**, and the
 `extractedBy` enum stays `expo:fg | expo:bg`, no share-sheet value). The
 **foreground** (the full app open) is mobile's true active-context tier: native
-fetch / a controllable WebView give it title+image, read-mode, screenshot, and
-page copy — the `expo:fg` active-page tier, peer to the extension's active tab.
+fetch / a controllable WebView give it title+image, and are what its read mode and
+screenshot are designed on — the `expo:fg` active-page tier, peer to the extension's
+active tab. (The share sheet's one planned exception is iOS read mode: Safari runs
+the extension's preprocessing JS inside the live page, so a Readability pass there
+costs the share extension nothing but the string it hands on —
+[link-extraction-keep.md](./link-extraction-keep.md), _expo_.)
 
 The **`import`** row is the same shape one step further out: a bulk import does
 **no fetch of its own** — it seeds a provisional `extraction.title` from the
@@ -150,11 +174,13 @@ extractors** — the ✅ rows are the contexts that actually fetch.
 
 Two consequences baked into the design:
 
-- **Background queue processing (where it exists) is metadata + read-mode only.**
-  A queued URL has no open tab, so it can't be screenshotted without opening one
-  (heavy, flaky). On mobile, background time is a few unreliable seconds. So:
-  **screenshot/page-copy are best-effort, captured only from the active context**
-  (icon click / foreground share). Don't fight the platforms to background them.
+- **Background queue processing (where it exists) is metadata only.** A queued
+  URL has no open tab, so it can't be screenshotted without opening one (heavy,
+  flaky). On mobile, background time is a few unreliable seconds. So:
+  **the kept copies are captured from an active context** (icon click, the
+  foreground app, a share from Safari); the one exception is a raw-HTML read mode
+  on an explicit job, at a tier anything live outranks. Don't fight the platforms
+  to background them.
 - A link extracted at a **low tier** (background raw-HTML, no screenshot) should
   be **upgradable** when a **higher-tier** client later sees it — which means the
   system must record _who_ produced the current result (`extractedBy`, from which the
@@ -316,7 +342,7 @@ The split is **by writer**, and getting the axis right is the whole game:
    (save, edit, tag, move, annotate). Nothing a background actor produces touches
    this file.
 2. **`extractions/{id}.enc` — everything a machine derives.** Both the **display
-   result** (`title`, `imageId`, `pageCopyId`, `screenshotId`) _and_ the
+   result** (`title`, `imageId`, `readModeId`, `screenshotId`, `pageCopyId`) _and_ the
    **coordination/provenance** bookkeeping (the per-facet who/when/quality/retry
    map). `{id}` repeats the link's id; one file per link, shadowing `links/{id}.enc`.
 
@@ -395,6 +421,15 @@ the sweep then deletes that link's extraction and its `files/` for every device:
 If a sweep races an edit-vs-delete link resurrection, the loss is the machine
 half only: the link re-queues as pending and re-extracts.
 
+**A replaced blob is reclaimed by the writer.** A re-capture or a tier upgrade mints a
+new file id, and the extraction's old ref goes with the merge. Every reader of blobs
+above works from the CURRENT refs, so the predecessor was unreachable the moment it
+was replaced — on every device, for as long as the account lived. `writeExtraction`
+(both platforms) now diffs the refs inside its read-merge (`replacedExtractionFileIds`)
+and deletes what the write dropped after the put lands, metadata before content. An
+interruption between the two leaves the blob orphaned, which is where every replaced
+blob used to end up anyway.
+
 The cost is a **render-time join**: drawing a row needs both files, co-keyed by the
 same `{id}` (the UI resolves `customTitle ?? extraction.title ?? host(url)` and
 `customImageId ?? extraction.imageId`). For the virtual-scrolled window that's a
@@ -408,13 +443,13 @@ The one real edge is **title search**, which now spans two stores — see
 > (`customTitle` in `links/`, `title` in `extractions/`), never copied across.
 
 **The write edge enforces that split, because nothing downstream would report a
-breach of it.** The join produces a `LinkView` — `title`, `imageId`, `pageCopyId`,
-`screenshotId` on top of the stored link — and that view is what every UI call
+breach of it.** The join produces a `LinkView` — `title`, `imageId`, `readModeId`,
+`screenshotId`, `pageCopyId` on top of the stored link — and that view is what every UI call
 site hands to a mutation whose signature says `LinkItem`. The two are assignable,
 so there is no type error; `linkSchema` is a `looseObject`, so the extra keys pass
 validation and are PRESERVED (that is what lets a newer client's field round-trip
 through an older one); the projector indexes none of those names; and `toView`
-overwrites all four on read. So a view written into `links/{id}.enc` is invisible
+overwrites every one of them on read. So a view written into `links/{id}.enc` is invisible
 on the device that wrote it while being encrypted and pushed to every other one,
 re-spread by each later write of that link — and it squats on names a future
 `linkSchema` could claim, `title` above all, since that name lived in this
@@ -476,237 +511,15 @@ because the placeholder _is_ the leak.
 
 ### favicons: a device-local host cache — never a facet, never synced
 
-The site icon a row renders beside its host is enrichment, but it deliberately
-sits **outside** everything above: not a facet, not in `extractions/`, no
-`files/` blob, not synced. It's a **device-local, per-host cache** — on web the
-`db.favicons` table (filled by web-react's `FaviconProvider`, read by
-`useFaviconUrl`), on expo the sqlite `favicons` table + on-disk icon files
-(expo-react's `FaviconProvider` / `useFaviconUri` — the row keeps the verdict,
-the render is a derived `file://` uri) — holding
-raw icon bytes, or a recorded `none` verdict (with a long retry TTL) so an
-iconless host doesn't re-buy its fetch on every reload. A row shows the cached
-icon where it has one; nothing ever waits on it. Where it doesn't, the row falls
-back **once**, in its preview slot, which fills with the **monogram** — the chip
-beside the host line goes to a quiet plate instead. Both boxes resolve the same
-host's favicon independently, so each used to escalate on its own and an
-image-less, icon-less row drew the same letter on the same hue twice, ~12px
-apart. Beside a host string the monogram is never the last identity left: its
-letter is the first letter of the text next to it. The escalation rule itself is
-unchanged, it is just applied per row rather than per component (bracemark-web
-`_layouts/shared/link-media.tsx`'s `Favicon`, bracemark-expo
-`features/links/link-media.tsx`). bracemark-extension's popup specimen keeps its
-own escalation — it prints no host chip, so its slot really does stand alone
-([browser-extension.md](./browser-extension.md), _the page specimen_). Three
-decisions, each deliberate:
-
-- **Not a facet — the axis is wrong.** Every `extractions/` field varies per
-  **link**; a favicon varies per **host**. A 5 000-link library resolves to a
-  few hundred distinct hosts, so a per-link `faviconId` would mint thousands of
-  synced, encrypted, quota-charged blobs to represent hundreds of ~1–2 KB icons —
-  and drag pure decoration through the facet lifecycle (tiers, backoff,
-  `permanent`), machinery that exists to coordinate work that's expensive to
-  redo and costly to get wrong. A favicon is cheap to redo and its failure mode
-  is a monogram.
-- **Not user data.** The bytes are public and re-fetchable, so they earn none of
-  the user-data machinery: no encryption, no op-log entry, no quota charge — a
-  fresh device just re-fetches. The genuinely private thing is the **set of
-  hosts** (the user's browsing shape), which is why the cache is still wiped on
-  sign-out / delete-all-data even though no single icon is anyone's secret.
-  That wipe needed two more things to actually hold, because the cache is
-  filled asynchronously by work that can outlive the account: both store writes
-  are **fenced on the account** (the table has no owner column to notice with),
-  and the provider's **drain ends when it unmounts** — it used to run on through
-  its queue after a sign-out, requesting the signed-out account's hosts and
-  writing them back. A third, for the account switch that does **not** unmount
-  the provider (on web, another tab signs in as someone else and this one
-  adopts the session in place): each queued host carries **the account signed
-  in when it was admitted**, stamped as it joins the queue. The queue's reset on a new username is
-  an effect, so it runs after the render that already changed the account, and
-  an owner read as a host _left_ the queue was the new account's — which the
-  store's fence accepts. A leftover entry is now dropped unfetched, and a fetch
-  already out is written under the name the fence refuses. The unmount half
-  holds on every client, though a browser tab never showed it:
-  sign-out there leaves the origin and the document goes with the queue, where
-  the installed app and expo both stay
-  ([data-lifecycle.md](./data-lifecycle.md), _what an empty table does not
-  mean_ and _what the wipe cannot reach — web_).
-- **Not synced.** This is the one enrichment where a capable client's work does
-  **not** reach other devices, and the asymmetry is accepted with eyes open. A
-  synced store would have to be **host-keyed** (per-link is ruled out above),
-  and a host-keyed namespace costs real machinery: paths are server-visible, so
-  `favicons/{host}.enc` — or any plainly-hashed host — hands the sync broker a
-  dictionary-attackable copy of the browsing shape, forcing HMAC-keyed paths
-  under a user-derived key; garbage collection has no owner (a favicon dangles
-  only when **no remaining link** references its host — a full host-set scan,
-  not the co-keyed `sweepDanglingExtractions` pattern); and the quota would
-  charge users for public bytes. All of that buys an icon instead of a monogram
-  for one narrow slice: a web user opted out of server extraction, who still
-  sees the synced `extraction.title` and preview image — the enrichment that
-  carries information. **Flip condition:** if favicons ever become load-bearing
-  (say, the primary visual of a layout), the successor design is a per-host
-  `favicons/{hmac(host)}.enc` namespace, written at extraction time by the
-  extracting client — split host-keyed, never a per-link facet. Don't pre-pay
-  it.
-
-**Who fetches, per client — riding each client's existing extraction opt-in,
-never a favicon-specific setting:**
-
-| client                  | source                                                                                                                     | gate                                                                          |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| **bracemark-web**       | `/favicon.ico` guess, bytes through the extractor's `POST /v1/fetch-image` proxy                                           | the `serverExtraction` opt-in                                                 |
-| **bracemark-expo**      | direct native fetch (no CORS); the real `<link rel="icon">` when it extracts the page anyway                               | `deviceExtractionMode` (`all` to guess; `saves` captures declared icons only) |
-| **bracemark-extension** | **never fetches** — `tab.favIconUrl` in the popup; Chrome's `_favicon` API if a browse UI ever exists; monogram on Firefox | none needed — zero network                                                    |
-
-The gates are the same trust decisions the user already made, so "off by
-default" falls out for free — a fresh install fetches no favicons anywhere, per
-_the stance_. Per-client notes:
-
-- **web** — the extractor already sees this user's **full URLs** under the same
-  opt-in, so per-host favicon requests add nothing to what that party learns.
-  The accepted residual vs. the og:image model: og:image pays its disclosure
-  **once**, at the extracting client, and every other device reads ciphertext;
-  the favicon cache pays **per device** (each device re-asks the extractor per
-  host). Host-only, behind the same opt-in — fixing it means the synced
-  namespace above, which a cosmetic payoff doesn't justify.
-- **expo** — the gate is `deviceExtractionMode` (see _expo drains in the
-  foreground_), and it's load-bearing, not ceremony: for a link saved on
-  another device, a **standalone** favicon fetch is a **new** disclosure of the
-  user's IP to that site (expo never fetched that page), so the host-keyed
-  **guess** (`https://{host}/favicon.ico`) needs `all`. The one
-  carve-out is the icon expo learns while extracting the page **itself**: it
-  already holds the HTML, and the icon URL it declares is on a host this device
-  contacted seconds ago in the same gesture — so capturing `<link rel="icon">`
-  there costs no disclosure the extraction didn't already pay, and beats the
-  `/favicon.ico` guess on accuracy. That capture is therefore allowed exactly
-  where its extraction was (a gestured save, or an `all` drain); it is never
-  a licence for the host-keyed cache to go fetch on its own. Two limits keep the
-  carve-out honest at `saves`, where the licence is one save rather than a
-  standing opt-in: a **cross-origin** icon href (a CDN the gesture never implied)
-  is skipped, and the guess is fired for the saved link's **own** host only —
-  `extractNow` hands those hosts to the queue directly, so the same save that
-  buys the page buys its icon, and a link saved here isn't left with a title, a
-  picture, and a monogram.
-- **two fillers, one cache (expo only).** The guess and the capture write the same
-  per-host rows without coordinating, and neither is a superset: only the guess
-  serves a host expo never extracts a page for (synced/imported links, links
-  settled `permanent`, a settled library being scrolled), and only the capture
-  serves a host that ships no `/favicon.ico` at all. So both stay, ordered by one
-  rule — **`ok` is never downgraded; `none` is only ever the floor** — which makes
-  either interleaving converge on the bytes. Without it the two lose the icon in
-  _both_ orders: a late-landing guess-miss would delete a captured icon and stamp
-  a `none` that stands for `FAVICON_RETRY_MS`, and a guess-miss that lands first
-  would (if the capture deferred to staleness rather than to `ok`) block the more
-  accurate source for the same week.
-- **what counts as an icon is WIDER than what counts as a preview — and it's the
-  CLIENT's call on every platform.** A fetched icon is accepted on a **byte
-  sniff**, not on anyone's content-type, and that sniff deliberately takes raster
-  formats **plus SVG**, because `<link rel="icon" type="image/svg+xml">` is common
-  enough that refusing it left those hosts on the monogram permanently, and
-  because an icon is only ever RENDERED — never measured, capped or re-encoded.
-  The stored-preview sniff keeps refusing SVG for exactly that reason:
-  `probeImageSize`/`resizeImage` are raster-only, so an SVG accepted there would
-  sail past the 1024px cap and land whole in the user's quota. Sniffing text needs
-  an anchor a magic-byte check doesn't: the root tag must be the document's FIRST
-  tag, or the HTML error page a misconfigured host serves at `/favicon.ico` would
-  pass on an inline `<svg>` somewhere in its body. The renderer has to hold up its
-  end, which is why bracemark-expo's link media is **expo-image** (expo-dependencies.md —
-  _expo-image_).
-
-  Both sniffs are `@stxapps/shared` `image/sniff.ts` (`sniffImageMime` +
-  `isSvgBytes` — pure byte shapes, no decoder behind them) and the icon verdict
-  combining them with the **512 KB cap** is `extract/favicon.ts`
-  (`isRenderableIconBytes` / `sniffIconMime`). ONE definition for all three
-  fillers — expo's guess, expo's declared-icon capture, and web's proxied guess —
-  so no platform can drift on what an icon is. **Web needs it most**, which is why
-  it isn't expo's to own: nothing upstream of web's write bounds an icon. The
-  proxy's `image/*` check is a passthrough of the site's own declared type (an
-  HTML 404 served as `image/x-icon` sails through), and its `MAX_IMAGE_BYTES` is
-  the **10 MB og:image** ceiling shared with the preview path — not a statement
-  about icons. Either would otherwise land as an `ok` row that never expires
-  (`FAVICON_RETRY_MS` ages only `none`), charged to the origin's storage quota.
-  Web's render path also has to declare what it decodes: an `<img>` content-sniffs
-  raster bytes from a typeless object-URL blob but will NOT sniff SVG, so
-  `use-favicon-url.ts` stamps `sniffIconMime`'s result onto the `Blob` — derived
-  from the bytes at render time rather than stored on the row.
-
-- **extension** — fetching would be pointless: with no synced store the result
-  could feed only its own UI, and the browser already has better sources. The
-  save popup renders the current tab's `favIconUrl` (an icon the page the user
-  is looking at already loaded), and a future browse UI on Chrome can read the
-  browser's own favicon cache via the MV3 `favicon` permission
-  (`chrome-extension://<id>/_favicon/?pageUrl=…`) — zero requests, zero new
-  party. Firefox has no `_favicon` API, so outside the current tab it shows the
-  monogram; acceptable for decoration.
-
-**The `_favicon` bridge — the one upgrade for the opted-out web user
-(deferred, with the presence bridge).** A bracemark-web user who declines server
-extraction has exhausted every network-shaped source (proxy opted out, direct
-fetch rejected below, third parties rejected below, no synced store) — so the
-designed answer is the monogram. The single invariant-respecting upgrade is
-icons that are **already on the device**: when a same-browser extension is
-present, the web app can ask over the **content-script presence bridge** (see
-_who extracts and what wakes it_) for a host's icon, and the extension answers with bytes from
-the **browser's own favicon cache** (the same MV3 `_favicon` read as above),
-which land in `db.favicons` like any other fill. Zero network, zero new party
-— the only favicon source strictly more private than the proxy. No new trust
-boundary either: the extension eagerly syncs `links/`, so it already knows
-every host in the library; the bridge's "never the URL, never the save" rule
-is about not routing saves through it, and a favicon reply carries no user
-data. Honest limits — why it's an upgrade, not the baseline: coverage is only
-hosts the user visited in that browser (synced-from-phone hosts miss →
-monogram), it's Chrome-family only, and it needs the `favicon` permission (a
-mild "read the icons of the websites you visit" line, nothing like
-`<all_urls>`). Rides machinery the bridge needs anyway; don't build it before
-the bridge. (Also rejected for this user: a bundled top-N-sites icon pack —
-no leak, but bundle weight that goes stale, favoring exactly the sites whose
-monograms are most recognizable.)
-
-**Rejected alternatives** — both are versions of "render the remote URL", the
-per-paint leak _the preview image is a downloaded blob_ forbids:
-
-- **A third-party favicon service** (Google's `s2/favicons`, DuckDuckGo icons).
-  Leaks the host set to a **new party** — the _no third-party extraction
-  service_ rejection from _the stance_, replayed at host granularity. Worse, it
-  can't even be cached: the service sends no CORS headers, so the bytes are
-  unreadable and the only integration is a raw `<img src>` — beaconing every
-  rendered host to Google on every paint, on every device, forever. An
-  unofficial endpoint that can vanish, behind a settings toggle nobody should
-  turn on, is not worth its settings surface.
-- **Direct `https://host/favicon.ico` from the web app — including as an
-  opt-in settings toggle.** An `<img>` would render it, but the response is
-  opaque (CORS / tainted canvas), so the bytes can't land in IndexedDB — no
-  cache, hence the per-paint leak again, this time to every saved site. On expo
-  the same URL is fine: native fetch reads the bytes, caches them, and pays the
-  disclosure once per host. The toggle variant ("if no cached icon, render
-  direct") has come up more than once and stays rejected; the reasoning is
-  non-obvious, so recording it:
-  - **"The user already visited that site, so the icon is cached" is false.**
-    Browser HTTP caches are **partitioned by top-level site** (Chrome 86+,
-    Firefox, Safari): an icon cached while browsing `github.com` lives in a
-    different partition than a request from the app's origin, so bracemark-web
-    fetches every host cold, on every device, regardless of browsing history.
-    (The intuition itself is sound — and the `_favicon` bridge above is its
-    correct realization: it reads the icon that actual visit cached, from the
-    right cache, with zero requests.)
-  - **The hybrid degenerates.** A direct `<img>` can never populate the store
-    (opaque bytes), and a miss can never record `none` — so with the extractor
-    off, "direct only as fallback" is direct **always**, and iconless hosts
-    re-request indefinitely (404s aren't cached). The `ok`/`none`-with-TTL
-    model this section is built on is exactly what this path cannot have.
-  - **What each request discloses is more than a visit.** By default it
-    carries `Referer: app.bracemark.com`, so every saved site learns "this IP saved
-    me in bracemark and is viewing their library right now", on a recurring cadence
-    that maps usage rhythm — a per-host tracking beacon
-    (`referrerpolicy="no-referrer"` trims the referer; IP + timing remain).
-    The one honest point in its favor — disclosure goes to the saved site
-    itself, not a new party, and no single party sees the whole library —
-    doesn't outweigh a recurring, uncacheable beacon bought for decoration,
-    and "we never render remote URLs, except this toggle" would gut the
-    invariant's teachability.
-
-The accuracy upgrade — `POST /v1/extract` returning the page's declared
-`faviconUrl` so the web app fetches the real icon instead of guessing
-`/favicon.ico` — is deferred; see _deferred / open_.
+The site icon beside a row's host is enrichment that deliberately sits **outside**
+everything in this file: not a facet, not in `extractions/`, no `files/` blob, not
+synced. It is a per-host cache on each device (`db.favicons` on web, the sqlite
+`favicons` table plus icon files on expo), filled under each client's existing
+extraction opt-in and wiped with the account. The whole design — why the axis is
+host rather than link, the two expo fillers and their ordering rule, the one icon
+verdict all three fillers share, the `_favicon` bridge, and the sources rejected
+(a third-party favicon service; a direct `<img>` from the web app) — is
+[link-extraction-favicons.md](./link-extraction-favicons.md).
 
 ### manual overrides: `customTitle` / `customImageId`
 
@@ -825,8 +638,9 @@ export const extractionSchema = z.looseObject({
   // display (the user-written half, customTitle/customImageId, is on linkSchema):
   title: z.string().max(LINK_TITLE_MAX).optional(), // discovered/provisional og:title (or a Brace.to import's)
   imageId: z.string().optional(), // og:image preview — a files/{id}.enc ref, never the remote URL
+  readModeId: z.string().optional(), // read-mode copy — files/{id}.enc, a gzipped ReaderDoc, from `readMode`
   pageCopyId: z.string().optional(), // saved page copy — files/{id}.enc, from the `pageCopy` facet
-  screenshotId: z.string().optional(), // full-page screenshot — files/{id}.enc, from `screenshot`
+  screenshotId: z.string().optional(), // above-the-fold screenshot — files/{id}.enc, from `screenshot`
   // bookkeeping — partialRecord: a missing facet key = pending (not yet done):
   facets: z.partialRecord(
     z.enum([
@@ -997,9 +811,21 @@ axis), never link-first. Don't pre-pay it.
 Wire it the standard three-step (see `paths.ts` header — _adding a namespace_):
 add `EXTRACTIONS_PREFIX = 'extractions/'` to `paths.ts`, add it to
 `ID_KEYED_PREFIXES`, add `extractionSchema` here — with the **display fields**
-(`title?`, `imageId?`, `pageCopyId?`, `screenshotId?`, all `files/{id}.enc` refs
-except the inline `title`, same plaintext-typing rule — see
+(`title?`, `imageId?`, `readModeId?`, `screenshotId?`, `pageCopyId?`, all
+`files/{id}.enc` refs except the inline `title`, same plaintext-typing rule — see
 [local-first-sync.md](./local-first-sync.md) _plaintext typing_) alongside `facets`.
+
+⚠ **A blob a facet produces is named by a display field, and the field joins
+`EXTRACTION_FILE_REF_FIELDS`** (`sync/extraction.ts`). That list is how every reader
+of blobs finds them — the backup's referenced-files walk and its restore gate, both
+exporters, both destroy paths, the dangling-extraction sweep, and `writeExtraction`'s
+reclaim of a replaced blob — through `extractionFileIds`. The read-mode copy was first
+written as a facet passthrough (`facets.readMode.fileId`), which the `looseObject`
+round-tripped without complaint and none of those knew about: no export carried it, no
+restore brought it back, and every delete left it in R2 against the quota. Nothing
+reported it — no type error, no failing test, no symptom until a byte count.
+`extraction.spec.ts` now compares the list against the schema's string fields, which
+catches a new field left off it, not a ref kept somewhere else.
 `linkSchema` keeps only the **user-authored** fields, including the manual overrides
 `customTitle?` / `customImageId?` (see _manual overrides_); it carries **none** of
 the extracted display fields — that's the writer-split (see _the data model_).
@@ -1071,15 +897,17 @@ There is still
 **no separate queue object**: a client's extraction work loop is a query over
 synced state:
 
-- **default tier (title + image, read-mode):** a link with no `extractions/` file
-  (absence _is_ pending), or a facet whose `status` is `failed` and now past its
-  backoff (`now >= extractedAt + backoff(attempts)`). A `permanent` facet is
-  skipped; there's no lease to check.
-- **best-effort tier (screenshot/page-copy):** an _active-context_ save extracts
-  immediately and writes the `files/` blob + the `extractions/` ref; the background
-  loop's only job is to spot links **missing** those refs (`extraction.screenshotId`
-  / `extraction.pageCopyId` absent) that this client's tier can satisfy — the
-  absence _is_ the pending signal, no explicit field needed.
+- **title + image:** a link with no `extractions/` file (absence _is_ pending), or
+  a `titleImage` facet whose `status` is `failed` and now past its backoff
+  (`now >= extractedAt + backoff(attempts)`). A `permanent` facet is skipped;
+  there's no lease to check. This is the only facet any drain works **on its own**.
+- **the kept copies (read mode, screenshot, page copy):** never drained
+  incidentally. Absence still means "not taken", but not "owed": a library where
+  every link lacks a screenshot is the normal state, not a backlog. Each is taken
+  on a gesture (the save that asked for it, a per-link action) or by an explicit,
+  scoped bulk job that reuses this loop's cursor and the same pending test over
+  its own facet — [link-extraction-keep.md](./link-extraction-keep.md), _when a
+  copy is taken_.
 
 The loop: **extract** → **write back** (the result _and_ bookkeeping into
 `extractions/`, heavy bytes into `files/` — never `links/`, which the extractor
@@ -1524,182 +1352,15 @@ selective sync only changes which blobs get downloaded, not how the cursor moves
 
 ### server extraction: a separate `bracemark-extractor`, anonymous
 
-The escape hatch from _the stance_ — letting a server fetch URLs when no capable
-client is installed — is the **second, explicit opt-in**, never the default. It is
-**necessary, not deferred**: once the extension went active-context only (no
-background bg-fetch — see _the extension is active-context only_), `bracemark-extractor`
-became the **only** bulk-enrichment path for `bracemark-web`/desktop users and the
-realistic one for large imports, so it's a committed app to build, not a someday.
-"Necessary to build" is **not** "on by default", though — server extraction stays
-the second opt-in below. Its clients are the **web/desktop** ones: `bracemark-expo`
-never calls it — that would be a strict downgrade from a client that fetches
-natively (see _expo drains in the foreground_) — so everything here is about the
-browser that can't fetch for itself. It is a **separate app**, not a route in
-`bracemark-api`:
-
-- **A new nx app, `bracemark-extractor` (`type:app`, `platform:worker`), on its own
-  origin `extractor.bracemark.com`** — distinct from the blind sync broker on
-  `api.bracemark.com`. The two have **opposite trust and egress postures**: the broker
-  only ever touches D1/R2 and ideally reaches nothing outbound; the extractor must
-  `fetch` arbitrary, user-supplied URLs. Separate apps let each hold only the
-  bindings it needs, keep "`api.bracemark.com` never sees your library in plaintext" a clean,
-  code-provable claim, and give server extraction an independent kill switch /
-  opt-in / jurisdiction. Workers is a _good_ fit precisely because its sandbox
-  can't reach your private network or cloud IMDS (`169.254.169.254`), which
-  neutralizes the classic server-side-fetch SSRF.
-- **Pure function, never a writer.** `bracemark-extractor` takes
-  `POST { urls } → [{ url, ok, title?, image?, readMode?, error? }]` — a **per-URL
-  result array** (partial success, never all-or-nothing, so each link's facet records
-  its own `done` / `failed` / `permanent`) — **plaintext**, and returns it to
-  the requesting client. The **client** (which holds the data key) does the E2E
-  write-back into `links` / `files` / `extraction`. The extractor **holds no key,
-  persists nothing, writes no blob** — so what it can leak is transient (a URL it
-  saw mid-fetch), not stored. Results it produces carry `extractedBy: 'server'`
-  (`tierOf` → server, the lowest quality, above nothing), so any active-page client can
-  later **upgrade** them.
-- **The preview image is streamed through, never stored.** The metadata response
-  carries the og:image as a **URL string** (`{ title, image: url, readMode }`), not
-  bytes. That string is enough for an extension/mobile client (it fetches the image
-  itself, no CORS), but **not** for the web app — the same wall that sends it to
-  `bracemark-extractor` for the HTML also stops JS reading cross-origin image bytes
-  (an `<img>` would _render_ the URL but tainted-canvas / opaque-response block
-  reading it into an encryptable blob — and rendering the remote URL _is_ the
-  per-paint leak _the preview image is a downloaded blob_ forbids). So
-  `bracemark-extractor` doubles as a **stateless image proxy**: a single interactive
-  save **inlines** the image bytes in the extraction response (one round trip); a
-  bulk import gets URLs only and the client pulls each image from
-  `POST /v1/fetch-image`, which **streams the remote bytes through and
-  buffers/persists nothing**. The
-  client encrypts the streamed bytes into `files/{id}.enc` itself. ⚠ "Persists
-  nothing" has to hold on the **receiving** side too, and for a while it did not:
-  the proxy answered `Cache-Control: public, max-age=86400, immutable`, on the
-  argument that the browser's cache would serve a re-view. No client re-views —
-  each reads the bytes once and stores them itself — so what that header bought
-  was a second, readable copy in the browser's HTTP cache, keyed by a URL that
-  named the image or the saved site's `favicon.ico` (the proxy was a GET then,
-  the address in its query string), and outliving a sign-out
-  (measured in Chrome: one cache entry per proxied image). Every response of this
-  Worker is `no-store` now, by one middleware in its `app.ts`, as bracemark-api's
-  is ([api-contracts.md](./api-contracts.md), _no response is cacheable_). The
-  cost is the dedupe the cache did by accident: two links sharing one preview
-  image are two proxy fetches. We deliberately
-  **don't** have the extractor store the image in R2 and return a signed URL: for a
-  one-shot, single-reader download that adds a plaintext-at-rest object, a
-  lifecycle/cleanup burden, and _more_ hops
-  (fetch→store→GET→re-encrypt→re-upload) — strictly worse than streaming it through
-  once (R2's free-egress / CDN benefit needs repeated reads, which this isn't). The
-  image fetch is an arbitrary-URL fetch like the HTML, so it carries the **same SSRF
-  guard + size/time/`content-type: image/*` caps**. The extractor **never resizes or
-  transcodes** — that would force a full-image decode (real CPU + the 128 MB isolate,
-  risking OOM) and kill the streaming-is-free property that makes the proxy cheap; any
-  thumbnailing is a deferred **client** step done before encrypt, which is also where
-  it belongs to bound the storage quota (a capped-dimension re-encode, not the
-  full-res original).
-- **Anonymous, not session-bound.** Requiring a logged-in session id would
-  convert the leak from "the server saw this URL" into "the server can tie this
-  URL to _this account_" — a **strictly worse** leak than the one this whole doc
-  is built to avoid. So v1 is **anonymous**: IP-based rate limiting (already in
-  place) plus an SSRF guard and strict size/time caps; the extractor never learns
-  _who_ is asking. The abuse-control upgrade that **preserves** anonymity is blind
-  capability tokens (Privacy Pass / VOPRF): `api.bracemark.com` issues unlinkable
-  tokens to real logged-in users, `extractor.bracemark.com` verifies validity without
-  learning which user — deferred, documented as the direction.
-- **Abuse caps are load-bearing, not a v2 nicety.** An anonymous endpoint that
-  fetches any URL and streams bytes is an **open proxy / DDoS reflector / bandwidth
-  amplifier** by default, and the binary image proxy widens that surface past the
-  HTML path. So the caps are part of v1, not hardening-later: a hard **per-response
-  byte ceiling** (abort the stream once exceeded — never relay a 4 GB file), a
-  **timeout**, a **`content-type` allowlist** (`text/html` for extraction, `image/*`
-  for the proxy), and a **per-IP egress budget**. IP rate-limiting alone is weak
-  (botnets, shared NAT) — which is the real argument for prioritizing the Privacy
-  Pass token path above, not deferring it forever. And the SSRF guard's teeth are
-  **redirect handling**, not just the sandbox: a public URL can `30x` →
-  `127.0.0.1` / `169.254.169.254`, and decimal/hex-encoded IPs or non-`http(s)`
-  schemes slip naive checks — so fetch with `redirect: 'manual'` and re-validate
-  **every hop**, on both the HTML fetch and the image proxy.
-- **Never log the URL.** The extractor's whole reason to exist is that the URL it
-  sees stays transient — so observability must be **aggregate-only** (counts,
-  latency, error rates), never the URL itself. It was a config footgun rather
-  than a code one for as long as the proxy was `GET /v1/image?url=…`: the address
-  landed in the request line, so default Cloudflare request logs / Logpush would
-  have **persisted** exactly the URLs the design promises not to retain.
-  **In the code now:** the proxy is `POST /v1/fetch-image { url }`, so — like
-  `/v1/extract` — it takes the address in the body, and no request line this
-  Worker receives names a page
-  ([api-contracts.md](./api-contracts.md#a-gets-query-string-reaches-the-request-log);
-  `routes/image.spec.ts` pins that no GET answers). **Configured, still:**
-  `wrangler.jsonc` sets `observability.logs.invocation_logs: false`,
-  which drops the automatic request-line log and keeps the deliberate ones (the
-  error handler and `extractOne` both log an error's **name** and nothing else —
-  the whole error would be one runtime message quoting its input away from
-  storing the URL; `lib/errors.spec.ts` pins the handler). The
-  zone's Logpush setting is the other half and lives outside this repo.
-  ⚠ **This setting is now published.** /privacy's _Technical and security data_
-  section cites it — that the one service handed a page address runs with the log
-  that would record its request line switched off — as the answer to "how long do
-  you keep request logs", in place of a retention period we do not control and
-  could not keep true. So flipping `invocation_logs` back on here falsifies a
-  live sentence in the privacy policy whatever the request line holds, and
-  nothing connects the two: no lint rule, no type error, and no test in either
-  runner reads a `wrangler.jsonc` against a page. (The sentence used to end
-  "because that line is where the address would appear"; the clause went when
-  the proxy became a POST, and the page claims nothing about the body.)
-  (`bracemark-api` is the other way round and equally published:
-  its invocation log is **on**, and the same section of /privacy says so and
-  says no address it logs contains a username —
-  [api-contracts.md](./api-contracts.md#a-gets-query-string-reaches-the-request-log).
-  What would falsify the page on _either_ Worker is `logpush`, or tracing: both
-  `wrangler.jsonc` files pin `observability.traces.enabled` to `false`, because
-  a trace is a second stored record with a span per outbound fetch, and here
-  that fetch is the saved address.) The claim on that page is scoped to
-  **our settings** on purpose and must stay that way — the zone-level channel
-  above is exactly what a widened "we do no request logging" would be wrong
-  about.
-- **It identifies itself, and the address it gives has to answer.** Every fetch
-  carries `bracemark-extractor/1.0 (+https://bracemark.com/extractor)` — honest,
-  never a spoofed browser (`lib/safe-fetch.ts`), because a service that fetches
-  strangers' sites anonymously and won't say who it is has picked the wrong side
-  of its own argument. The consequence is that the UA **publishes a URL into the
-  access log of every site this opt-in service fetches**, so `/extractor` is a
-  route the marketing site owes them: what it is, why it came, the caps, and how
-  to block it (`apps/bracemark-site/src/app/extractor/page.tsx`). Two things that
-  page pins, neither of which anything can check for you:
-  - **Its numbers are these constants.** The timeout, redirect cap, HTML ceiling,
-    image ceiling and batch cap are printed as prose on a public page, and
-    `bracemark-site` does not depend on `bracemark-extractor` — so moving
-    `FETCH_TIMEOUT_MS`, `MAX_REDIRECTS`, `MAX_HTML_BYTES`, `MAX_IMAGE_BYTES` or
-    `MAX_EXTRACT_URLS` silently turns a published commitment into a false one,
-    with no failing test. Move the page in the same change.
-  - **Its blocking advice is `verdictForStatus`.** The page tells an operator to
-    answer `403` because that is what the retry ladder settles as `permanent`;
-    `429`/`5xx` stay transient forever by design (`extract/retry.ts`). Change that
-    mapping and the advice quietly stops working for the people who took it.
-  - **The backlog is disclosed too, and that disclosure depends on the CLIENT.**
-    _It is a fetcher, not a crawler_ used to open "there is no queue, no schedule
-    and no index behind it" — true of the service, and read by the audience it was
-    written for as a claim about volume, which it cannot carry: a drained import
-    sends one site as many requests as that person saved pages of it, together. The
-    page now says whose queue it is and what bounds a burst (`BATCH` =
-    `MAX_EXTRACT_URLS` per request, one request in flight per drain —
-    web-react `contexts/extraction-provider.tsx`), which pins it to the web drain's
-    SHAPE and not just to a constant: give the drain concurrent batches, or let a
-    second surface call the extractor on its own, and the page describes a politeness
-    the code no longer keeps. Nothing checks it — `bracemark-site` can't see either
-    file.
-  - **robots.txt is disclosed, not obeyed.** The extractor does not fetch it —
-    these are one-shot fetches a person asked for, the same posture as a chat
-    app's link unfurl — and the page says so in those words rather than implying
-    compliance. If it ever does read robots.txt, that section becomes a promise
-    and has to be rewritten; until then it must not read as one.
-    Network-abuse reports land at `abuse@bracemark.com` (`ABUSE_EMAIL`,
-    `apps/bracemark-site/src/lib/site.ts`), an address that exists for this service
-    specifically — nothing else in the product generates a reason to write to it.
-
-The **app is committed** (a necessary build, see above) and so are the invariants
-(separate app, separate origin, anonymous, plaintext-return-only, stream-don't-store,
-never-log-the-URL, honest-UA-with-a-page-behind-it); what stays
-**off by default** is the _feature_ — server extraction never runs until the user
-takes the second, explicit opt-in.
+The escape hatch from _the stance_: a separate Worker on its own origin
+(`extractor.bracemark.com`) that fetches a page for a client that can't, returns
+plaintext to that client, and keeps nothing. It is the **second, explicit opt-in**
+(`serverExtraction`), never the default, and only the web/desktop clients call it —
+`bracemark-expo` never does (_expo drains in the foreground_). Its invariants
+(anonymous, plaintext-return-only, stream-don't-store, never-log-the-URL, an honest
+user agent with a public page behind it), the image proxy, the abuse caps and the
+published constants that tie it to `/extractor` are
+[link-extraction-server.md](./link-extraction-server.md).
 
 ### the web-only gap (a conscious stance)
 
@@ -1729,80 +1390,25 @@ that opt-in.
 
 ### deferred / open
 
-- **Read-mode quality on JS-rendered pages.** Raw-HTML extraction (background
-  fetch, or a Worker if ever enabled) is good on server-rendered articles, poor
-  on SPAs. Active-tab/WebView extraction (live DOM) is the high-quality path;
-  background is best-effort. No fix beyond the tier model — just don't promise
-  read-mode parity across tiers.
-- **Non-HTML & JS-rendered targets (`bracemark-extractor`).** Saved URLs aren't all
-  server-rendered HTML: PDFs, a direct image (which _is_ the preview), and
-  oEmbed-only sites (YouTube/Twitter) each need their own handling, and a JS-shell
-  SPA may carry no server-side og tags at all (the extractor runs no JS — `server`
-  tier is raw-HTML only). v1 should **detect `content-type` and degrade gracefully**
-  (fall back to `title = host`) rather than return garbage; richer per-type handling
-  (PDF title, oEmbed, eventual Browser-Rendering JS execution) is the open scope
-  call.
-- **Does server-side read-mode honour `robots.txt`?** Open, and it wants settling
-  BEFORE read-mode ships on this tier rather than after: it is a fetch-path change
-  (a second request per host, plus somewhere to cache the verdict — the extractor
-  is stateless and has no KV, so that means the Workers `caches` API or nothing),
-  and it is cheaper designed in than bolted on. Today the extractor does not read
-  the file, and `/extractor` **discloses** that rather than claiming compliance
-  (`apps/bracemark-site/src/app/extractor/page.tsx`). The disclosure's argument is
-  written to the axis that read-mode does not move — one person chose one address,
-  one request went out, the result went only to them — so read-mode needs it
-  re-checked, not rewritten. What read-mode does change is the OBJECTION: a title
-  is promotional and a publisher usually wants it in the unfurl, while the article
-  body is the thing they sell, so the population with a reason to complain is
-  different from the population `robots.txt` was aimed at. Three ways to land it:
-  read the file and honour it for every facet (simplest to explain; blanket
-  `User-agent: *` rules aimed at crawlers would start costing users titles on sites
-  that never meant to block an unfurl); honour it for `readMode` only and still
-  return `titleImage` (defensible, and the split matches the objection); or honour
-  only a rule that names **this** UA — treating a deliberate `bracemark-extractor`
-  block as authoritative while ignoring blanket ones — which is the current
-  disclosure's own distinction made mechanical, and the only option that turns that
-  section of the page from a disclosure into a claim. Whichever wins, the page
-  changes in the same release.
 - **Re-extract / upgrade UX.** The derived tier (`tierOf(extractedBy)`) _enables_
   upgrading a low-tier result, but the trigger (automatic on a higher-tier sighting vs. a manual
   "re-extract" button) is an open product call.
-- **Page copy on background tier.** Capturing a full page copy without an open
-  page is the weak spot (offscreen/hidden-tab rendering is heavy and flaky). For
-  now the page copy is active-context-only; a headless background capturer is
-  deferred.
 - **expo beyond `titleImage`/foreground.** Two separate follow-ons to the
   foreground drain (_expo drains in the foreground_), neither blocking it: the
   **`expo:bg` sweep** (`BGAppRefreshTask` / WorkManager — best-effort, metadata
   only, and the one place per-host pacing really matters), and the app's
-  **active-page facets** — read-mode, screenshot, and page copy off a controllable
-  WebView, which is what makes `expo:fg` a true peer of the extension's active tab
-  rather than just a better-placed bg-fetch.
+  **active-page facets** — read mode and screenshot off its own WebView and the
+  iOS share extension's Safari preprocessing, which is what makes `expo:fg` a true
+  peer of the extension's active tab rather than just a better-placed bg-fetch
+  ([link-extraction-keep.md](./link-extraction-keep.md), _expo_).
 - **Manual capture.** A user-facing "fetch metadata / capture now" action for
   links that auto-extraction missed (a `failed` link, or a web-only user who
   installs the extension later) — the loop already supports re-running; this just
   exposes a trigger.
-- **Favicon accuracy — a two-step ladder, in order.** Step 2 (after the shipped
-  `/favicon.ico` guess): **`faviconUrl` in the extract contract.** The
-  extractor's HTMLRewriter already scans `link` tags; returning the page's
-  declared `rel="icon"` URL from `POST /v1/extract` lets the web app fetch the
-  real icon through the image proxy in the same breath as the metadata —
-  accuracy up over the guess, zero extra disclosure (that request already
-  carried the full URL). It lands in the same device-local per-host cache (see
-  _favicons_); nothing else changes, and it covers every path where the web app
-  calls `/v1/extract` (web saves, _enrich all_). Step 3, **only if** monograms
-  on synced-from-elsewhere links prove visibly common after step 2: a dedicated
-  **`POST /v1/fetch-favicon { host }`** endpoint (a POST: the host is a saved
-  site's, so it stays out of the URL) whose cascade is `/favicon.ico` → fetch
-  `https://host/` and scan `link[rel~="icon"]` — the residual it serves is
-  hosts that arrive via sync (no extract call on this device) _and_ don't serve
-  `/favicon.ico`, a small slice whose failure mode is a monogram, which is why
-  it's sequenced last. Two rejections that hold even server-side: **never
-  Google's favicon service** (forwarding hosts to a third party adds a new
-  party to the privacy story — the _no third-party extraction service_
-  rejection applies at the server hop too, even though linkability is weaker
-  there — to cover a residual the HTML-scan cascade covers anyway), and **no
-  edge-caching of favicon responses by host** (tempting, since favicons are
-  public and shared across users, but it trades away _persists nothing_ — the
-  extractor would start retaining which hosts its users save; don't spend that
-  invariant on icons).
+- **Read mode, screenshot and page copy** — when each is captured, by which
+  client, in what format, and what is deliberately not built yet:
+  [link-extraction-keep.md](./link-extraction-keep.md), _deferred_. The server
+  path's own open questions (non-HTML targets, `robots.txt` before read mode
+  ships there) are [link-extraction-server.md](./link-extraction-server.md),
+  _deferred / open_; favicon accuracy is
+  [link-extraction-favicons.md](./link-extraction-favicons.md), _deferred_.

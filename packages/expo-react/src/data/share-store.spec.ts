@@ -205,6 +205,7 @@ jest.mock('./mutations', () => ({
 // The post-Add kicks — iOS's encrypt + PUT, Android's sync cycle — as bare
 // spies: saveSharedDraft's only job toward them is whether to call at all.
 jest.mock('./share-upload', () => ({ uploadShareDraft: jest.fn(async () => undefined) }));
+jest.mock('./store-read-mode', () => ({ storeReadModeCopy: jest.fn(async () => true) }));
 jest.mock('../sync/engine', () => ({ runIncrementalSync: jest.fn(async () => undefined) }));
 
 const trashDefault = SYSTEM_LIST_DEFAULTS.find((def) => def.id === TRASH_ID);
@@ -392,6 +393,25 @@ describe('drainShareOutbox', () => {
     mockFiles.clear();
     mockDirs.clear();
     mockDirs.add(OUTBOX);
+  });
+
+  // The read-mode copy a Safari draft carries is stored only when the caller says the
+  // account keeps it (ShareBridge: the plan and the synced setting) — and either way
+  // the draft lands and its file goes.
+  it('stores a draft’s read-mode copy only when the caller keeps it', async () => {
+    const { storeReadModeCopy } =
+      jest.requireMock<typeof import('./store-read-mode')>('./store-read-mode');
+    const withCopy = { ...draft, readMode: { version: 1, capturedAt: 1, blocks: [] } };
+
+    jest.mocked(storeReadModeCopy).mockClear();
+    mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify(withCopy));
+    await expect(drainShareOutbox()).resolves.toEqual(['links/link-1.enc']);
+    expect(storeReadModeCopy).not.toHaveBeenCalled();
+
+    mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify(withCopy));
+    await expect(drainShareOutbox({ keepReadMode: true })).resolves.toEqual(['links/link-1.enc']);
+    expect(storeReadModeCopy).toHaveBeenCalledWith('alice', 'link-1', withCopy.readMode);
+    expect([...mockFiles.keys()]).toEqual([]);
   });
 
   it('applies a valid draft and deletes its file', async () => {

@@ -4,8 +4,13 @@ import {
   cleanTitle,
   EXTRACTION_BACKOFF_BASE_MS,
   EXTRACTION_BACKOFF_MAX_MS,
+  EXTRACTION_FILE_REF_FIELDS,
+  extractionFileIds,
   isFacetEligible,
+  KEEP_ON_SAVE_DEFAULTS,
+  keepOnSaveOf,
   newFacet,
+  replacedExtractionFileIds,
   tierOf,
 } from './extraction';
 
@@ -256,5 +261,52 @@ describe('newFacet', () => {
     for (const status of ['done', 'failed', 'permanent'] as const) {
       expect(facetSchema.safeParse(newFacet(status, 'server')).success).toBe(true);
     }
+  });
+});
+
+describe('extractionFileIds', () => {
+  it('names every display field the schema types as a files/ ref', () => {
+    // The schema's optional string fields, less the one that is inline text. A field
+    // added to extractionSchema that holds a blob id has to join the list, or no
+    // exporter, restore, destroy or sweep will ever find its blob.
+    const stringFields = Object.keys(extractionSchema.shape).filter(
+      (key) => !['id', 'title', 'facets', 'createdAt', 'updatedAt'].includes(key),
+    );
+    expect([...EXTRACTION_FILE_REF_FIELDS].sort()).toEqual(stringFields.sort());
+  });
+
+  it('collects the ids present, and nothing for an absent extraction', () => {
+    expect(extractionFileIds(undefined)).toEqual([]);
+    expect(extractionFileIds({ imageId: 'a', readModeId: 'b', pageCopyId: 'c' })).toEqual([
+      'a',
+      'b',
+      'c',
+    ]);
+  });
+
+  it('reports exactly the refs a write dropped or swapped', () => {
+    const prev = { imageId: 'img', screenshotId: 'shot-1', readModeId: 'read' };
+    // In EXTRACTION_FILE_REF_FIELDS order: readModeId before screenshotId.
+    expect(
+      replacedExtractionFileIds(prev, { ...prev, screenshotId: 'shot-2', readModeId: undefined }),
+    ).toEqual(['read', 'shot-1']);
+    expect(replacedExtractionFileIds(prev, prev)).toEqual([]);
+    expect(replacedExtractionFileIds(undefined, prev)).toEqual([]);
+  });
+});
+
+describe('keepOnSaveOf', () => {
+  it('defaults to read mode on and the screenshot off', () => {
+    // Not `?? false` for both: an absent setting must keep read mode, which is why
+    // every reader goes through this function.
+    expect(keepOnSaveOf(undefined)).toEqual({ readMode: true, screenshot: false });
+    expect(keepOnSaveOf({})).toEqual(KEEP_ON_SAVE_DEFAULTS);
+  });
+
+  it('honours an explicit choice either way', () => {
+    expect(keepOnSaveOf({ keepReadModeOnSave: false, keepScreenshotOnSave: true })).toEqual({
+      readMode: false,
+      screenshot: true,
+    });
   });
 });

@@ -110,6 +110,7 @@
     "react-native-svg": "*",
     "react-native-svg-transformer": "*",
     "react-native-web": "*",
+    "react-native-webview": "*",
     "react-native-worklets": "*",
     "tailwind-merge": "*",
     "tailwindcss": "^4.3.0",

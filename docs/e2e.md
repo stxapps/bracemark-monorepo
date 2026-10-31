@@ -3254,8 +3254,8 @@ equivalent: `simctl status_bar override` sets state, it does not build views.
 
 ⚠ **The mobile leg needs `deviceExtractionMode: 'all'`, and the reason is not
 extraction.** Favicons are the one enrichment that never syncs
-([link-extraction.md](./link-extraction.md), _favicons: a device-local host
-cache_), so the titles and covers the web run wrote reach the phone and the icons
+([link-extraction-favicons.md](./link-extraction-favicons.md)), so the titles and
+covers the web run wrote reach the phone and the icons
 do not — the device has to guess `https://{host}/favicon.ico` itself, and expo
 gates that guess on the mode reaching `all`. Every link on this account arrived by
 sync, so the shipped `saves` default does not cover them either: the captures ran
