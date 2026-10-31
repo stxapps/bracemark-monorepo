@@ -44,6 +44,7 @@ import {
   ArchiveRestore,
   ArrowDown,
   ArrowUp,
+  BookCopy,
   BookOpen,
   Copy,
   FolderInput,
@@ -112,6 +113,20 @@ export function LinkRowMenu({
       </DropdownMenuItem>
     ) : null;
 
+  // "Keep a copy" — opens the page in the capture screen to take its read-mode copy
+  // from the live page (features/capture/capture-screen.tsx, which gates on the
+  // plan). On every non-Trash row: a link that already has a copy can take a fresh
+  // one, and the screen says so.
+  const keepCopy = (
+    <DropdownMenuItem
+      testID="link-menu-keep-copy"
+      onPress={() => router.push(`/capture?link=${encodeURIComponent(linkIdOf(link))}`)}
+    >
+      <Icon as={BookCopy} className="size-4" />
+      <Text>Keep a copy</Text>
+    </DropdownMenuItem>
+  );
+
   const copyLink = (
     <DropdownMenuItem onPress={() => void Clipboard.setStringAsync(link.url)}>
       <Icon as={Copy} className="size-4" />
@@ -172,6 +187,7 @@ export function LinkRowMenu({
           ) : (
             <>
               {read}
+              {keepCopy}
               {copyLink}
               <DropdownMenuItem testID="link-menu-edit" onPress={() => openEditor()}>
                 <Icon as={Pencil} className="size-4" />

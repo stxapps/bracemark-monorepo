@@ -239,9 +239,17 @@ and Android's WebView has its own `CookieManager`, apart from Chrome's. So, in o
    beside its title. The share extension carries it on the draft untouched; the
    app's drain stores it at `expo:fg` when the plan and the save setting say so
    ([share-sheet.md](./share-sheet.md), _what the sheet does and doesn't do_).
-2. **An in-app browser screen**, opened from a link's menu, with _Keep read mode_ /
+2. **A capture screen — built for read mode** (`/capture?link=<id>`,
+   `features/capture/capture-screen.tsx`), opened from a link's menu (_Keep a
+   copy_): the page in a `react-native-webview` WebView with _Keep read mode_ under
+   it, injecting the same generated converter. It gates on the plan before loading
+   anything, keeps a locked list's page unloaded, takes a copy only while the
+   WebView is still on the link's own page (`canonicalUrlKey`), and accepts the
+   page's answer only while a capture awaits one. No screenshot yet — that needs
+   `react-native-view-shot` ([expo-dependencies.md](./expo-dependencies.md),
+   _react-native-webview_). The original plan for it: _Keep read mode_ /
    _Keep screenshot_ — the extension's popup, rebuilt around a WebView. Its cookie
-   store persists, so a user signs in to a site once. It can also run a **visible**
+   store persists, so a user signs in to a site once. _Planned_: a **visible**
    batch over a scoped selection, one page after another, with the screen on.
 3. **Later, a Safari Web Extension** in the iOS app: the browser extension itself,
    in Safari.
