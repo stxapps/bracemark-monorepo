@@ -231,14 +231,14 @@ session-bound_) and only on demand.
 `WKWebView` has its own cookie store, `SFSafariViewController` can't be scripted,
 and Android's WebView has its own `CookieManager`, apart from Chrome's. So, in order:
 
-1. **iOS, from Safari: the share extension's preprocessing JS.**
-   `share-extension/preprocessing.js` already runs inside the page the user is
-   sharing, signed in and past any paywall, to read its title. Bundling Readability
-   and the block walk into it gives read mode from the live DOM, in Safari's
-   process; the share extension only receives the resulting string and hands it to
-   the app through the App Group outbox, untouched — it has no memory to spare for
-   anything more ([share-sheet.md](./share-sheet.md), the memory note). The app
-   writes it as `expo:fg`: it came from a live page, the active-page tier.
+1. **iOS, from Safari: the share extension's preprocessing JS — built.**
+   `share-extension/preprocessing.js` runs inside the page the user is sharing,
+   signed in and past any paywall; it is now generated from the same converter the
+   browser extension injects (`@stxapps/web-react/lib/reader-doc-from-page`, by
+   `tools/scripts/generate-reader-capture.ts`), so it returns the page's `ReaderDoc`
+   beside its title. The share extension carries it on the draft untouched; the
+   app's drain stores it at `expo:fg` when the plan and the save setting say so
+   ([share-sheet.md](./share-sheet.md), _what the sheet does and doesn't do_).
 2. **An in-app browser screen**, opened from a link's menu, with _Keep read mode_ /
    _Keep screenshot_ — the extension's popup, rebuilt around a WebView. Its cookie
    store persists, so a user signs in to a site once. It can also run a **visible**

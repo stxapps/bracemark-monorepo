@@ -99,6 +99,7 @@ const mutations = (): typeof import('./mutations') => require('./mutations');
 const queries = (): typeof import('./queries') => require('./queries');
 const reviewPrompts = (): typeof import('./review-prompt-store') =>
   require('./review-prompt-store');
+const shareReadMode = (): typeof import('./share-read-mode') => require('./share-read-mode');
 const shareUpload = (): typeof import('./share-upload') => require('./share-upload');
 const subscriptions = (): typeof import('./subscription-store') => require('./subscription-store');
 
@@ -140,6 +141,12 @@ const shareDraftSchema = z.object({
   newTags: z.array(shareNewEntitySchema),
   newLists: z.array(shareNewEntitySchema),
   sharedAt: z.number().int(),
+  // The page's read-mode copy, from the iOS preprocessing file's run inside Safari —
+  // a `ReaderDoc`, carried as-is and validated where it is stored
+  // (share-read-mode.ts), so a copy that doesn't parse costs the copy and never the
+  // draft. Optional: absent for a share that isn't from Safari, or whose page has no
+  // article. The upload path ignores it — only the app's drain stores a copy.
+  readMode: z.unknown().optional(),
 });
 export type ShareDraft = z.infer<typeof shareDraftSchema>;
 
@@ -647,7 +654,12 @@ function quarantine(group: Directory, entry: File): void {
 // account signs out: the drain cannot tell whose it is.
 //
 // No-op when signed out (the drafts wait) or on Android (no outbox exists).
-export async function drainShareOutbox(): Promise<string[]> {
+// `keepReadMode` — whether a draft's read-mode copy is stored as it lands: the
+// caller's verdict on the plan (`keptCopies`) and the synced save setting, read at
+// the drain (ShareBridge). The draft is the gesture; the account decides what it keeps.
+export async function drainShareOutbox(
+  options: { keepReadMode?: boolean } = {},
+): Promise<string[]> {
   if (Platform.OS !== 'ios') return [];
   const session = getSession();
   if (!session) return [];
@@ -668,6 +680,9 @@ export async function drainShareOutbox(): Promise<string[]> {
       continue;
     }
     await applyShareDraft(session.username, draft);
+    if (options.keepReadMode && draft.readMode !== undefined) {
+      await shareReadMode().applyShareReadMode(session.username, draft.id, draft.readMode);
+    }
     applied.push(pathFromId(draft.id, LINKS_PREFIX));
     entry.delete();
   }

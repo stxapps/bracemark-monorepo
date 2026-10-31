@@ -26,6 +26,10 @@ export interface ShareInitialProps {
 export interface SharePayload {
   url: string | null;
   title?: string;
+  // The page's read-mode copy, when Safari's preprocessing found an article
+  // (share-extension/preprocessing.js). Opaque here — the app validates it where it
+  // stores it (expo-react share-read-mode.ts) — and carried through the draft only.
+  readMode?: unknown;
 }
 
 const URL_IN_TEXT_RE = /https?:\/\/\S+/i;
@@ -49,7 +53,7 @@ export function payloadFromInitialProps(props: ShareInitialProps): SharePayload 
   // host that never ran it), so field-check rather than assert.
   const pre =
     props.preprocessingResults && typeof props.preprocessingResults === 'object'
-      ? (props.preprocessingResults as { title?: unknown; url?: unknown })
+      ? (props.preprocessingResults as { title?: unknown; url?: unknown; readMode?: unknown })
       : {};
 
   // The URL attachment is the most deliberate source; the page's own location
@@ -60,5 +64,11 @@ export function payloadFromInitialProps(props: ShareInitialProps): SharePayload 
     urlFromSharedText(props.text);
 
   const title = cleanText(pre.title) ?? cleanText(props.subject);
-  return title === undefined ? { url } : { url, title };
+  const readMode =
+    pre.readMode !== null && typeof pre.readMode === 'object' ? pre.readMode : undefined;
+  return {
+    url,
+    ...(title !== undefined ? { title } : {}),
+    ...(readMode !== undefined ? { readMode } : {}),
+  };
 }

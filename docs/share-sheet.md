@@ -60,7 +60,7 @@ convention) — and both names resolve to the same `ShareRoot`
 side never references a component directly; it names a string the JS registers.
 On Android the intent payload is read in `ShareActivity`'s delegate
 (`getLaunchOptions`) and arrives as that root's initial props; on iOS the
-payload (plus `preprocessing.js`'s `{ title, url }`) arrives the same way,
+payload (plus `preprocessing.js`'s `{ title, url, readMode }`) arrives the same way,
 through the extension bundle. So the divergent native wiring converges before a
 single pixel is drawn.
 
@@ -918,6 +918,21 @@ available 51.1 MB`**, with no memory warning at any point. `saved` comes
   `customTitle` — the same rule as bulk import (entities.ts). The sheet **never
   fetches the page**; image/screenshot/page-copy fill in later through the
   normal extraction pipeline in the main app.
+- **Read mode (iOS, from Safari)**: the preprocessing file is GENERATED
+  (`tools/scripts/generate-reader-capture.ts` — never hand-edit it; web-react's
+  `reader-capture-generated.spec.ts` fails when it drifts) and also runs the
+  browser extension's read-mode converter inside the shared page, so the payload
+  can carry the page's `ReaderDoc` as `readMode`. Safari does that work in its own
+  process; the sheet only receives the result and puts it on the draft untouched
+  (`readMode`, `z.unknown()` — validated where it's stored, so a bad copy costs the
+  copy, never the draft). Only the **app's drain** stores it
+  (`share-read-mode.ts`), and only when ShareBridge says the account keeps it: the
+  plan's `keptCopies` and the synced save setting, read from the store at the
+  drain. The immediate upload ignores it. Written at `expo:fg` — a live page, the
+  user's own Safari session. ⚠ The bundle has to stay small: it runs in every
+  page shared from Safari, before the sheet opens. It imports its values from the
+  zod-free `@stxapps/shared/reader/reader-doc-core`; reaching for the barrel took it
+  from 40 KB to 368 KB, and nothing but the byte count shows it.
 - **URL**: Android's `EXTRA_TEXT` sometimes wraps the URL in prose (Chrome),
   so the first http(s) URL is extracted from the text; normalized with
   shared's `normalizeUrl` before storing.

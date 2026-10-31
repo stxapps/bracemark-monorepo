@@ -27,12 +27,16 @@ import { ShareBridge } from './share-bridge';
 let mockStoreStatus: StoreStatus = 'ready';
 const mockRequestSync = jest.fn();
 const mockExtractNow = jest.fn();
-const mockDrainShareOutbox = jest.fn<Promise<string[]>, []>();
+const mockDrainShareOutbox = jest.fn<Promise<string[]>, [{ keepReadMode?: boolean }?]>();
+let mockKeptCopies = false;
+const mockReadSettingsGeneral = jest.fn<Promise<object | undefined>, []>();
 const mockTakeShareHandoffs = jest.fn<string[], []>();
 const mockRefreshShareTaxonomy = jest.fn<Promise<void>, []>();
 
 jest.mock('@stxapps/expo-react', () => ({
-  drainShareOutbox: () => mockDrainShareOutbox(),
+  drainShareOutbox: (options?: { keepReadMode?: boolean }) => mockDrainShareOutbox(options),
+  readSettingsGeneral: () => mockReadSettingsGeneral(),
+  useEntitlements: () => ({ entitlements: { keptCopies: mockKeptCopies } }),
   takeShareHandoffs: () => mockTakeShareHandoffs(),
   refreshShareTaxonomy: () => mockRefreshShareTaxonomy(),
   useSync: () => ({
@@ -70,6 +74,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockStoreStatus = 'ready';
   mockDrainShareOutbox.mockResolvedValue([DRAFT_PATH]);
+  mockKeptCopies = false;
+  mockReadSettingsGeneral.mockResolvedValue(undefined);
   mockTakeShareHandoffs.mockReturnValue([]);
   mockRefreshShareTaxonomy.mockResolvedValue(undefined);
   listeners = new Set();
@@ -144,4 +150,36 @@ it('kicks nothing when the outbox was empty and nothing was handed off', async (
   expect(mockTakeShareHandoffs).toHaveBeenCalledTimes(1);
   expect(mockRequestSync).not.toHaveBeenCalled();
   expect(mockExtractNow).not.toHaveBeenCalled();
+});
+
+// A Safari share can carry the page's read-mode copy; whether it is kept is the
+// account's call at the drain — the plan and the synced setting, read from the store.
+describe('the read-mode copy a Safari draft carries', () => {
+  const keepAsked = () => mockDrainShareOutbox.mock.calls.at(-1)?.[0]?.keepReadMode;
+
+  test('kept on a plan with copies when the setting is at its default', async () => {
+    mockKeptCopies = true;
+    render(<ShareBridge />);
+    await settle();
+    expect(keepAsked()).toBe(true);
+  });
+
+  test('not kept when the user turned read mode off', async () => {
+    mockKeptCopies = true;
+    mockReadSettingsGeneral.mockResolvedValue({
+      keepReadModeOnSave: false,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    render(<ShareBridge />);
+    await settle();
+    expect(keepAsked()).toBe(false);
+  });
+
+  test('not kept without the plan, and the setting is not even read', async () => {
+    render(<ShareBridge />);
+    await settle();
+    expect(keepAsked()).toBe(false);
+    expect(mockReadSettingsGeneral).not.toHaveBeenCalled();
+  });
 });
