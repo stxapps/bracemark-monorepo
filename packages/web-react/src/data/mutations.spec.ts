@@ -30,6 +30,7 @@ import { db } from './db';
 import {
   bulkDeleteEntities,
   bulkWriteLinks,
+  removeKeptCopy,
   writeExtraction,
   writeFile,
   writeLink,
@@ -411,5 +412,48 @@ describe('bulkDeleteEntities', () => {
   it('is a no-op for an empty batch', async () => {
     await bulkDeleteEntities(USER, []);
     expect(await db.pendingOps.where('username').equals(USER).count()).toBe(0);
+  });
+});
+
+describe('removeKeptCopy', () => {
+  // A removed copy is GONE from storage, and MARKED rather than forgotten: an absent
+  // facet reads as "not taken yet", which a bulk job would take again.
+  const bytes = new Uint8Array([1, 2, 3]);
+
+  it('drops the ref, deletes the blob, and marks the facet removed — still done', async () => {
+    await writeFile(USER, 'read-1', bytes);
+    await writeFile(USER, 'shot-1', bytes);
+    await writeExtraction(USER, LINK_ID, {
+      fields: { readModeId: 'read-1', screenshotId: 'shot-1' },
+      facet: 'readMode',
+      state: newFacet('done', 'extension:fg'),
+    });
+
+    await expect(removeKeptCopy(USER, LINK_ID, 'readMode')).resolves.toBe(true);
+
+    const extraction = await readExtraction(LINK_ID);
+    expect(extraction?.readModeId).toBeUndefined();
+    expect(extraction?.facets.readMode).toMatchObject({
+      status: 'done',
+      extractedBy: 'extension:fg',
+      removedAt: expect.any(Number),
+    });
+    const read1 = pathFromId('read-1', FILES_PREFIX);
+    expect(await db.items.get(read1)).toBeUndefined();
+    expect(await pendingFor(read1)).toMatchObject({ op: 'delete' });
+    // The other copy is untouched.
+    expect(extraction?.screenshotId).toBe('shot-1');
+    expect(await db.items.get(pathFromId('shot-1', FILES_PREFIX))).toBeDefined();
+  });
+
+  it('writes nothing when there is no such copy — and never creates an extraction', async () => {
+    await expect(removeKeptCopy(USER, LINK_ID, 'screenshot')).resolves.toBe(false);
+    expect(await db.items.get(PATH)).toBeUndefined();
+    expect(await pendingFor(PATH)).toBeUndefined();
+
+    await writeExtraction(USER, LINK_ID, { fields: { title: 'Google' } });
+    await db.pendingOps.clear();
+    await expect(removeKeptCopy(USER, LINK_ID, 'screenshot')).resolves.toBe(false);
+    expect(await pendingFor(PATH)).toBeUndefined();
   });
 });

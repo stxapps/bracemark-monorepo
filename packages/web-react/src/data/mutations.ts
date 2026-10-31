@@ -588,6 +588,86 @@ export async function writeExtraction(
   for (const fileId of replaced) await deleteFile(username, fileId);
 }
 
+// The kept copies a user can remove one at a time, and the display field each one's
+// blob hangs off. Page copy joins when it exists.
+export type KeptCopyFacet = 'readMode' | 'screenshot';
+const KEPT_COPY_FIELD = { readMode: 'readModeId', screenshot: 'screenshotId' } as const;
+
+// Remove one kept copy of one link: drop its ref from `extractions/{id}.enc`, mark
+// the facet REMOVED, then delete the blob (metadata before content on the way down,
+// as writeExtraction does for a replaced one). docs/link-extraction-keep.md,
+// _removal, cleanup, export_.
+//
+// The facet stays `done` with a `removedAt` passthrough — it is NOT deleted. An
+// absent facet reads as "not taken yet", which a bulk job or a future drain would
+// take again; `done` with no ref reads as "taken, and the user threw it away", and
+// nothing automatic re-takes a `done` facet. An explicit ask still can (the browser
+// extension's saved screen keys "kept" on the ref, not the status). `removedAt`
+// rides the facet's looseObject, so an older client round-trips it, and it adds no
+// value to `facetSchema.status` — which is a z.enum an older client would fail on
+// (the keep doc's tripwire).
+//
+// Returns whether anything was removed: no extraction, or one without this copy, is
+// a no-op that writes nothing (a bulk removal over a selection is mostly these).
+export async function removeKeptCopy(
+  username: string,
+  linkId: string,
+  facet: KeptCopyFacet,
+): Promise<boolean> {
+  const field = KEPT_COPY_FIELD[facet];
+  const path = pathFromId(linkId, EXTRACTIONS_PREFIX);
+  const existing = await readExtractionRecord(path);
+  if (!existing?.[field]) return false;
+
+  const now = Date.now();
+  let removed: string[] = [];
+  try {
+    await writeEntityWith(username, path, (record) => {
+      const current = parseBlob(record?.data, extractionSchema);
+      // Re-checked inside the transaction: a sync may have landed between the read
+      // above and this write. Nothing to remove now — ABORT, never write back: the
+      // extraction may have been deleted meanwhile, and writing the earlier copy
+      // would resurrect it (the dangling-extraction race, made by us).
+      if (!current?.[field]) throw NOTHING_TO_REMOVE;
+      const prior = current.facets[facet];
+      const next: Extraction = {
+        ...current,
+        [field]: undefined,
+        facets: {
+          ...current.facets,
+          [facet]: {
+            ...(prior ?? { status: 'done', attempts: 0 }),
+            status: 'done',
+            removedAt: now,
+          },
+        },
+        updatedAt: now,
+      };
+      if (!extractionSchema.safeParse(next).success) {
+        throw new Error(`removeKeptCopy: invalid extraction ${linkId}`);
+      }
+      removed = replacedExtractionFileIds(current, next);
+      return next;
+    });
+  } catch (err) {
+    if (err === NOTHING_TO_REMOVE) return false;
+    throw err;
+  }
+  for (const fileId of removed) await deleteFile(username, fileId);
+  return removed.length > 0;
+}
+
+// Thrown inside removeKeptCopy's write to abort its transaction (rolling back the
+// pending op with it) when the copy is already gone.
+const NOTHING_TO_REMOVE = Symbol('nothing to remove');
+
+// The current extraction for a path, decoded, outside any transaction — the cheap
+// pre-check that lets removeKeptCopy skip a write when there is nothing to remove.
+async function readExtractionRecord(path: string): Promise<Extraction | undefined> {
+  const record = await db.items.get(path);
+  return parseBlob(record?.data, extractionSchema);
+}
+
 // Delete one link's `extractions/{id}.enc` — the machine half's counterpart of
 // deleteLink, keyed by the link's id like writeExtraction so callers never build
 // the path themselves. The `files/` blobs the extraction references are the

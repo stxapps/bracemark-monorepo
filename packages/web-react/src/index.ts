@@ -39,6 +39,7 @@ export * from './hooks/use-favicon-url';
 export * from './hooks/use-has-recovery-door';
 export * from './hooks/use-image-file-url';
 export * from './hooks/use-import-all-data';
+export * from './hooks/use-kept-copy-mutations';
 export * from './hooks/use-link-mutations';
 export * from './hooks/use-link-quota';
 export * from './hooks/use-list-mutations';

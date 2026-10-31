@@ -279,9 +279,17 @@ Two rules:
   ([link-extraction.md](./link-extraction.md), _the data model_).
 - **A replaced copy is reclaimed** by `writeExtraction` on both platforms
   ([link-extraction.md](./link-extraction.md), the replaced-blob paragraph).
-- **Removing one copy** (planned) — per link and in bulk edit: delete the blob,
-  clear the field, and leave the facet `done` with a passthrough `removedAt`. Not
-  absent: absence reads as "not taken", which a bulk job would take again.
+- **Removing a copy** — `removeKeptCopy` (web-react `data/mutations.ts`) clears the
+  field, leaves the facet `done` with a passthrough `removedAt`, then deletes the
+  blob, metadata before content. Not absent: absence reads as "not taken", which a
+  bulk job would take again; `done` with no ref is "taken and thrown away", which
+  nothing automatic re-takes, while the browser extension's saved screen keys "kept"
+  on the ref, so an explicit ask still works. Its write ABORTS (never writes back)
+  when the copy is already gone, since writing the earlier extraction back would
+  resurrect one deleted meanwhile. Reached from the web reader's _Delete this copy_
+  and bulk edit's _Delete copies_ (both confirm first — a copy can't be re-taken
+  from a page that changed), through `useKeptCopyMutations`. Never gated on the plan.
+  Not on expo yet: it shows no copies.
 - **An orphaned-file sweep** (planned) — `files/` paths no link or extraction
   references, beside `sweepDanglingExtractions` and under its conditions (a
   full-sync client, the end of a successful cycle, inside its lock, skipping the
