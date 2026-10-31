@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { parseAttachedAndroid, parseBootedSimulators, pickDevice } from './device';
+import {
+  isFullScreenApps,
+  parseAttachedAndroid,
+  parseBootedSimulators,
+  pickDevice,
+} from './device';
 
 const SIMULATORS = JSON.stringify({
   devices: {
@@ -42,6 +47,13 @@ test('a device is defaulted only when there is exactly one, and never chosen bet
     () => pickDevice('ios', undefined, two),
     /pass --device <id>[\s\S]*AAAA-2 {2}iPad Air/,
   );
+});
+
+test('only an iPad that has chosen Full Screen Apps counts as full screen', () => {
+  assert.equal(isFullScreenApps('0', '0'), true);
+  assert.equal(isFullScreenApps('1', '0'), false); // Windowed Apps
+  assert.equal(isFullScreenApps('0', '1'), false); // Stage Manager
+  assert.equal(isFullScreenApps('', ''), false); // as a simulator comes: Windowed Apps
 });
 
 test('a width picks the one device on its side of 768, and names what to boot when none is', () => {

@@ -347,7 +347,7 @@ upright. The store screenshots are the one leg that uses a different iPad, the
 **iPad Pro 11-inch**, for the size its type lands at in the listing
 ([e2e.md](./e2e.md), _the published screenshots_); everything below applies to it
 too. It needs the iPhone's keyboard settings (_the software keyboard_, below) and
-one of its own:
+two of its own:
 
 **⚠ AutoFill Passwords goes off, or no wide iOS flow gets past sign-in.** On a
 successful sign-in iOS offers to save the password. On the iPhone that sheet is
@@ -371,6 +371,30 @@ still showed the toggle off. A preflight reading it could pass a device with
 AutoFill on. The symptom above is the check.
 The iPhone keeps its default, so the AutoFill path `sign-in.yaml` handles still
 runs on every phone leg.
+
+**⚠ Multitasking goes to Full Screen Apps, or the iPad cannot be turned.** A
+simulator comes in Windowed Apps. Upright the app still fills the screen, so
+every portrait case passes, with a resize grip in the bottom-right corner as the
+only sign. Turned on its side, iPadOS gives the app a window of its own, 384pt
+wide on the iPad (A16). That window is below 768, so the app correctly drops to
+its narrow layout, and Maestro reports it at a wrong offset, taller than wide:
+`[435,548][820,1180]` for a window on a landscape screen. `WINDOW-ROTATE-IOS-001`
+then failed as `the window stayed portrait, turned landscape` with the simulator
+plainly on its side, and its cleanup, reading the same box, left it there.
+Measured on iOS 26.5, 2026-10-31. So the setting goes to _Full Screen Apps_ once,
+on the device:
+
+_Settings → Multitasking & Gestures → Full Screen Apps_
+
+It lives in the device's data, so it survives reboots and is lost to an erase.
+**The preflight checks this one** (`iosFullScreenApps`, `runner/device.ts`), and
+refuses a wide iOS run in seconds. Settings writes `SBMedusaMultitaskingEnabled`
+and `SBChamoisWindowingEnabled` in `com.apple.springboard`: `0`/`0` is Full Screen
+Apps, `1`/`0` Windowed Apps and `0`/`1` Stage Manager, each read back after
+choosing it in Settings. A simulator that has never been switched has neither
+default, and it is in Windowed Apps. These are read, never written: whether a
+`defaults write` moves the mode was not tried, and the AutoFill default above is
+the warning.
 
 #### ⚠ the software keyboard
 

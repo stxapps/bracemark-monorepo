@@ -5,7 +5,7 @@ import { E2E_ROOT, runArtifactDir } from '../paths';
 import { API_URL, EXTRACTOR_URL, SITE_URL, WEB_URL } from '../web/fixtures/env';
 import { type NativeCliOptions, type NativePlatform } from './cli';
 import { assertInstalledDevBuild } from './dev-build';
-import { deviceWidth, resolveDevice } from './device';
+import { deviceWidth, iosFullScreenApps, resolveDevice } from './device';
 import { lostDriverToStatusBarRace } from './driver-loss';
 import { E2E_ENVIRONMENT, IS_STAGING } from './environment';
 import {
@@ -484,6 +484,15 @@ export async function prepareNativeRun(
       `${identity.device.name} (${deviceId}) is ${width}, and this is a ${options.width} run: ` +
         `use ${WIDTH_DEVICES[options.platform][options.width]}, or the ${width} script ` +
         '(docs/e2e.md, _narrow and wide_)',
+    );
+  }
+  // An iPad in Windowed Apps fills the screen upright and shrinks to a window of
+  // its own when turned, so the failure would surface half an hour in, as a
+  // rotation that did not happen.
+  if (options.platform === 'ios' && width === 'wide' && !(await iosFullScreenApps(deviceId))) {
+    throw new Error(
+      `${identity.device.name} (${deviceId}) is not in Full Screen Apps: set it in Settings → ` +
+        'Multitasking & Gestures (docs/app-drivers.md, _the iPad simulator_)',
     );
   }
   if (!IS_STAGING) {

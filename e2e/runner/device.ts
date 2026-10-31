@@ -131,6 +131,25 @@ export async function deviceWidth(platform: NativePlatform, deviceId: string): P
   return iosWidth(listed.deviceTypeIdentifier, await iosDeviceTypes());
 }
 
+// iPadOS's multitasking mode, from the two SpringBoard defaults Settings writes
+// (docs/app-drivers.md, _the iPad simulator_): Full Screen Apps is both 0. A
+// default that is missing has never been written, which is how a simulator comes,
+// and that simulator is in Windowed Apps.
+export function isFullScreenApps(medusa: string, chamois: string): boolean {
+  return medusa === '0' && chamois === '0';
+}
+
+export async function iosFullScreenApps(deviceId: string): Promise<boolean> {
+  const read = async (key: string) => {
+    const defaults = ['spawn', deviceId, 'defaults', 'read', 'com.apple.springboard', key];
+    return (await capture('xcrun', ['simctl', ...defaults], { allowFailure: true })).stdout.trim();
+  };
+  return isFullScreenApps(
+    await read('SBMedusaMultitaskingEnabled'),
+    await read('SBChamoisWindowingEnabled'),
+  );
+}
+
 export async function resolveDevice(
   platform: NativePlatform,
   requested: string | undefined,
