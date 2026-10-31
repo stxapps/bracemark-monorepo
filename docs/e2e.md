@@ -2640,7 +2640,10 @@ npm run e2e:android:phone -- --from TAXONOMY-DND-002
 ```
 
 `--from <case-id>` picks a native run back up where one failed: it drops every
-selected case ahead of the named one and runs that case and the rest. It is
+selected case ahead of the named one and runs that case and the rest. The id is
+the registry's, not the flow name Maestro prints: the runner prints
+`<case-id>: <flow>` above each flow and names the failed case as a failed run
+ends. It is
 applied last, to what the other filters left, and refuses an id they dropped
 rather than run everything (`runner/registry.ts`). The unit is the **case**, not
 the flow: a case the runner drives as a chain — `taxonomy-dnd.yaml`, a host-side

@@ -619,6 +619,8 @@ export async function prepareNativeRun(
           ),
           environmentKeys: command.environmentKeys,
         });
+        // Maestro's own lines name only the flow, and `--from` takes the case.
+        console.log(`\n${testCase.id}: ${flow}`);
         await maestro(flow, maestroOptions);
       };
 
@@ -682,7 +684,7 @@ export async function prepareNativeRun(
       delete result.error;
       await writeJson(manifestPath, manifest);
       console.warn(
-        `${testCase.id}: Maestro's iOS driver died in its status-bar fetch, so this attempt ` +
+        `${testCase.id}: Maestro’s iOS driver died in its status-bar fetch, so this attempt ` +
           `has no verdict. Running the case once more (docs/app-drivers.md, _the status-bar race_).`,
       );
       return true;
@@ -692,6 +694,10 @@ export async function prepareNativeRun(
       manifest.finishedAt = new Date().toISOString();
       await writeJson(manifestPath, manifest);
       console.log(`native E2E artifacts: ${runDir}`);
+      const failed = manifest.cases.find((candidate) => candidate.status === 'failed');
+      if (failed && kind !== 'visual') {
+        console.log(`failed case: ${failed.id} (resume with --from ${failed.id})`);
+      }
     },
   };
 }
