@@ -1,11 +1,12 @@
-import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { join, relative } from 'node:path';
 
 import { E2E_ROOT, runArtifactDir } from '../paths';
 import { API_URL, EXTRACTOR_URL, SITE_URL, WEB_URL } from '../web/fixtures/env';
 import { type NativeCliOptions, type NativePlatform } from './cli';
 import { assertInstalledDevBuild } from './dev-build';
 import { deviceWidth, resolveDevice } from './device';
+import { lostDriverToStatusBarRace } from './driver-loss';
 import { E2E_ENVIRONMENT, IS_STAGING } from './environment';
 import {
   createRunId,
@@ -55,6 +56,9 @@ interface CaseResult {
   finishedAt?: string;
   durationMs?: number;
   error?: string;
+  // Set when the first attempt never got a verdict because Maestro's driver died
+  // under it; the fields above then describe the second attempt.
+  driverLost?: { error: string; artifacts: string };
 }
 
 interface RunManifest {
@@ -132,6 +136,10 @@ export interface NativeRun {
     secretValues?: string[],
     steps?: CaseStep[],
   ): Promise<void>;
+  // True when a failed case lost its driver to the iOS status-bar race and has not
+  // yet been given its one more attempt: its evidence is moved aside, and the
+  // caller owes it a fresh run with a fresh account.
+  setAsideLostDriver(testCase: E2ECase): Promise<boolean>;
   finish(status: 'passed' | 'failed'): Promise<void>;
 }
 
@@ -660,6 +668,24 @@ export async function prepareNativeRun(
         }
         await writeJson(manifestPath, manifest);
       }
+    },
+    async setAsideLostDriver(testCase) {
+      const result = manifest.cases.find((candidate) => candidate.id === testCase.id);
+      if (!result?.error || result.driverLost) return false;
+      const caseDir = join(runDir, 'cases', testCase.id);
+      if (!(await lostDriverToStatusBarRace(caseDir))) return false;
+
+      const artifacts = `${caseDir}-driver-lost`;
+      await rename(caseDir, artifacts);
+      result.driverLost = { error: result.error, artifacts: relative(runDir, artifacts) };
+      result.status = 'pending';
+      delete result.error;
+      await writeJson(manifestPath, manifest);
+      console.warn(
+        `${testCase.id}: Maestro's iOS driver died in its status-bar fetch, so this attempt ` +
+          `has no verdict. Running the case once more (docs/app-drivers.md, _the status-bar race_).`,
+      );
+      return true;
     },
     async finish(statusValue) {
       manifest.status = statusValue;

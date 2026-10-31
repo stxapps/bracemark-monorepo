@@ -756,6 +756,52 @@ the app deep in a navigation stack. The failure looks exactly like the batch-mod
 driver bug and is not one. Write flows to be state-independent, or reset with
 `clearState`.
 
+#### ⚠ the status-bar race
+
+A flow can fail in a few seconds with `maestro.DeviceUnreachableException`,
+`Connection refused` on `127.0.0.1`, on a screen with nothing wrong with it. That
+is Maestro's iOS driver dying, not the app or the flow, and the JUnit report alone
+cannot tell you so: the evidence is in `xctest_runner_*.log`.
+
+```
+[ViewHierarchyHandler] Fetch status bar hierarchy - start
+  Get all elements bound by index for: Descendants matching type StatusBar
+error: … testHttpServer] : Failed to resolve query: Failed to resolve remote element
+  AX element pid: 21570 … kAXErrorInvalidUIElement
+Restarting after unexpected exit, crash, or test timeout
+```
+
+The driver is one XCTest method serving HTTP. On every hierarchy request it walks
+SpringBoard's status bars, and that tree reaches the keyboard's window in the
+`InputUI` process — the pid in the error, which the simulator log names. If InputUI
+drops the window mid-walk, XCTest records a failure no `try?` can catch, the method
+unwinds, and the server goes with it. It is upstream's
+[#3538](https://github.com/mobile-dev-inc/maestro/issues/3538), still open, and the
+driver's view-hierarchy and entry files are byte-identical from 2.8.0 to 2.12.0, with
+reports on 2.11.0 — **upgrading Maestro does not fix it.**
+
+What decides it, measured across the nine cases of the iPhone run that hit it
+(Maestro 2.8.0, iOS 26.5, iPhone 17 Pro, 2026-10-31):
+
+- **The race is common and almost always harmless.** That run tore the keyboard down
+  33 times. Three cases logged the same AX error as `Ignoring failure to get
+hierarchy`, which XCTest absorbs; only the cached-element re-resolve above is
+  fatal. Grepping for `kAXErrorInvalidUIElement` therefore proves nothing.
+- **Every cold launch stands on it.** `KeyboardProvider` defaults to `preload`, which
+  focuses a hidden text field on mount to speed up the first real keyboard, so the
+  landing screen brings InputUI up with no field in sight. InputUI tears down 4.2–4.4s
+  later, every time. With `cold-launch.yaml`'s two bounded `Open` lookups in front,
+  that fell within a second of the `Sign in` assert in all nine cases, and in the one
+  that died it was 0.17s after it.
+- **`preload={false}` is not the answer.** It removes nine of the 33 teardowns and
+  leaves every keyboard a flow really opens, and it slows the first keyboard for
+  real users to dodge a test driver's bug.
+
+So the runner absorbs it instead. `runner/driver-loss.ts` recognises exactly this
+death, and `runner/mobile.ts` runs that case once more
+([e2e.md](./e2e.md), _artifacts and retries_). Only the mobile leg does this:
+the contract and visual runners can hit the same race and still fail red on it.
+
 #### measured: the cross-app share flow
 
 The caveat that used to sit here — that "Maestro is weak at iOS cross-app flows"

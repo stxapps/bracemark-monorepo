@@ -81,7 +81,9 @@ Every invocation writes to a unique `.artifacts/runs/<run-id>/`. Web keeps its
 HTML report, failure screenshots, and traces there. Native keeps a redacted run
 manifest, per-case JUnit, Maestro command/log/screenshot output, named stable
 checkpoints, and a hierarchy dump on failure. A pass that needed Playwright's
-retry exits non-zero.
+retry exits non-zero. A native case re-run because Maestro's iOS driver died
+under it is recorded as `driverLost` in the manifest, with the lost attempt in
+`cases/<id>-driver-lost/` (`docs/e2e.md`, _artifacts and retries_).
 
 The six run-it targets also have root scripts: `npm run e2e:web`,
 `e2e:extension`, `e2e:pwa`, and — carrying the platform the other three need —

@@ -663,7 +663,9 @@ async function main(): Promise<void> {
   const run = await prepareNativeRun('mobile', options, selected);
 
   try {
-    for (const testCase of selected) {
+    // Iterated live: a case that lost its driver goes back in right behind itself.
+    const queue = [...selected];
+    for (const testCase of queue) {
       // Every flow gets a fresh account. This makes destructive and ordering-
       // sensitive cases independent, and keeps a failed flow from poisoning the
       // state observed by the next one.
@@ -1974,6 +1976,9 @@ async function main(): Promise<void> {
           [account.password, account.recoveryCode ?? '', env.LOCK_PASSWORD ?? ''],
           steps,
         );
+      } catch (error) {
+        if (!(await run.setAsideLostDriver(testCase))) throw error;
+        queue.splice(queue.indexOf(testCase) + 1, 0, testCase);
       } finally {
         for (const cleanup of cleanupActions.reverse()) await cleanup();
       }

@@ -2793,7 +2793,18 @@ the platform, device/model/OS, Maestro, installed app build, Metro URL, stack
 origins, checkout commit, selected cases, and timings.
 
 Playwright still retries once to retain diagnostic evidence, but
-`failOnFlakyTests` makes a pass-after-retry exit red. Videos remain off until a
+`failOnFlakyTests` makes a pass-after-retry exit red. Native flows do not retry,
+with one exception that is not a retry of a verdict: when Maestro's iOS driver dies
+in the status-bar race ([app-drivers.md](./app-drivers.md), _the status-bar race_),
+the attempt never judged the app, and a suite that stops at its first failure would
+lose every case after it to a keyboard animation. `runner/driver-loss.ts` matches
+that death and nothing else — the fatal resolve inside the status-bar fetch, which
+walks SpringBoard and not the app, paired with `DeviceUnreachableException` in the
+same step's report. A match moves the case's artifacts to
+`cases/<id>-driver-lost/`, records it as `driverLost` in `run.json`, and runs the
+case once more from the top on a fresh account, because the first attempt may have
+stopped anywhere and left anything on the server. A second loss in one case is red,
+as is every other failure. Read `driverLost` before calling a run clean. Videos remain off until a
 case specifically owns motion or system chrome. Passing local artifacts are
 disposable; keep failures until resolved. Never upload environment dumps or
 shell history, and inspect native screenshots before uploading a run because a
