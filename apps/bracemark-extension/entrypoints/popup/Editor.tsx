@@ -2,7 +2,13 @@ import { useState } from 'react';
 import { TriangleAlert } from 'lucide-react';
 
 import { DEFAULT_LIST_ID, LINK_NOTE_MAX, PLAN_LABELS, TRASH_ID } from '@stxapps/shared';
-import { linkIdOf, type LinkItem, useLinkMutations, useLinkQuota } from '@stxapps/web-react';
+import {
+  linkIdOf,
+  type LinkItem,
+  useEntitlements,
+  useLinkMutations,
+  useLinkQuota,
+} from '@stxapps/web-react';
 import { LinkQuotaBanner } from '@stxapps/web-ui/components/links/link-quota-banner';
 import { ListSelect } from '@stxapps/web-ui/components/links/list-select';
 import { TagsField } from '@stxapps/web-ui/components/links/tags-field';
@@ -24,8 +30,9 @@ import { openWebApp } from '@/utils/open-web-app';
 // another. Below it the shared ListSelect / TagsField pickers (web-ui — the same
 // pieces bracemark-web's quick-add popover and edit dialog render) and an optional
 // note. Save writes one `links/{id}.enc`, kicks the cheap active-tab titleImage
-// extraction (fire-and-forget), and hands the created link up so the
-// popup shows the complete page.
+// extraction (fire-and-forget) — and, on a plan with `keptCopies`, the read-mode
+// copy beside it — and hands the created link up so the popup shows the complete
+// page.
 //
 // There is no URL FIELD, and that's the difference between this editor and
 // bracemark-web's quick-add: the URL isn't something the user types here, it's the
@@ -59,6 +66,7 @@ export function Editor({
 }) {
   const linkMutations = useLinkMutations();
   const { count, max, atLimit } = useLinkQuota();
+  const { entitlements } = useEntitlements();
 
   const [listId, setListId] = useState<string>(DEFAULT_LIST_ID);
   const [tagIds, setTagIds] = useState<string[]>([]);
@@ -95,12 +103,20 @@ export function Editor({
         setSaving(false);
         return;
       }
-      // Auto-run the cheap facet off the live DOM, fire-and-forget (the kept copies —
-      // read mode, screenshot — are asked for separately; see link-extraction-keep.md). A
-      // restore takes this path too: we're standing on the live page either way, and
-      // refreshing the title/image of a link you're re-adding is the point.
+      // Auto-run the cheap facet off the live DOM, fire-and-forget. A restore takes
+      // this path too: we're standing on the live page either way, and refreshing the
+      // title/image of a link you're re-adding is the point.
       const id = linkIdOf(link);
       void sendMessage({ type: 'EXTRACT', linkId: id, facet: 'titleImage' });
+      // And the read-mode copy, on a plan that keeps copies: the save is the gesture
+      // that asks for it, and this tab is the only place it can be taken
+      // (docs/link-extraction-keep.md, _when a copy is taken_). Its own message, so a
+      // page with no article costs the title nothing. The screenshot is never
+      // automatic — Complete offers it as one tap. Planned: a synced setting to turn
+      // this off; until then it follows the plan.
+      if (entitlements.keptCopies) {
+        void sendMessage({ type: 'EXTRACT', linkId: id, facet: 'readMode' });
+      }
 
       onSaved(link);
     } catch {

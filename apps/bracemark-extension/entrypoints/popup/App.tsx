@@ -179,7 +179,9 @@ function SaveFlow() {
   // and readLinkByUrlKey (a `.first()` on the index) would then return an arbitrary
   // one of the two. So the editor takes the match and offers Restore instead.
   const link = justSaved ?? existing;
-  if (link && link.listId !== TRASH_ID) return <Complete link={link} tab={tab} />;
+  if (link && link.listId !== TRASH_ID) {
+    return <Complete link={link} tab={tab} justSaved={justSaved !== null} />;
+  }
   return (
     <Editor
       tab={tab}

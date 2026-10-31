@@ -25,6 +25,7 @@ import { Editor } from './Editor';
 
 const mockUseLinkMutations = jest.fn();
 const mockUseLinkQuota = jest.fn();
+let mockKeptCopies = false;
 const mockSendMessage = jest.fn(async () => ({ ok: true }));
 
 jest.mock('@stxapps/web-react', () => ({
@@ -34,6 +35,7 @@ jest.mock('@stxapps/web-react', () => ({
   get useLinkQuota() {
     return mockUseLinkQuota;
   },
+  useEntitlements: () => ({ entitlements: { keptCopies: mockKeptCopies } }),
   linkIdOf: (link: { url: string }) => `id-of:${link.url}`,
 }));
 jest.mock('@/utils/messages', () => ({
@@ -140,8 +142,25 @@ describe('saving a new page', () => {
       linkId: `id-of:${URL_}`,
       facet: 'titleImage',
     });
-    // The heavy facets stay manual on the complete screen.
+    // Without `keptCopies` nothing else is asked for.
     expect(mockSendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks for the read-mode copy beside it on a plan that keeps copies — never the screenshot', async () => {
+    // The save is the gesture, and this tab the only place a copy can be taken; the
+    // screenshot is ten times the bytes and stays a tap on the complete screen.
+    mockKeptCopies = true;
+    try {
+      renderEditor();
+
+      await press('Save');
+
+      expect(
+        (mockSendMessage.mock.calls as unknown as [{ facet: string }][]).map(([m]) => m.facet),
+      ).toEqual(['titleImage', 'readMode']);
+    } finally {
+      mockKeptCopies = false;
+    }
   });
 
   it('hands the created link up so the popup flips without waiting on the live query', async () => {

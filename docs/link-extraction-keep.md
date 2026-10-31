@@ -12,12 +12,14 @@ a kept copy and the highlights and notes made on it; [data-lifecycle.md](./data-
 and [data-limits.md](./data-limits.md) carry the export and limit rows for these
 blobs.
 
-**State today.** The browser extension captures read mode and an above-the-fold
-screenshot from the active tab (`apps/bracemark-extension/utils/capture.ts`,
-`extraction-worker.ts`), and nothing in any client asks it to yet — the popup sends
-only `titleImage`. No reader exists, no plan gates the facets, and no other client
-captures them. Page copy is not built anywhere. Everything below marked _planned_
-is the design those pieces are built to.
+**State today.** Built end to end on desktop: the browser extension takes read mode
+automatically on a save when the plan has `keptCopies`, and offers read mode and a
+screenshot as taps on its saved screen (`popup/Editor.tsx`, `popup/KeptCopies.tsx`;
+captures in `utils/capture.ts`, `extraction-worker.ts`); bracemark-web reads both at
+`/read?link=<id>` ([reader.md](./reader.md), _the web reader_). Not built: the synced
+save setting (the save follows the plan for now), the per-link and bulk actions,
+removal and the orphan sweep, expo, server read mode, and page copy anywhere.
+Everything below marked _planned_ is the design those pieces are built to.
 
 **Naming.** "Page copy", never "archive" — the word is the Archive system list's
 ([link-extraction.md](./link-extraction.md), the opening note). "Read mode" in prose,
@@ -128,13 +130,19 @@ names from the saved site. A real one needs:
 
 Three triggers, and deliberately not a fourth:
 
-1. **The save that asks for it.** One synced account setting — _when I save, also
-   keep: read mode / screenshot_ — applied only to saves made **on the page**: the
-   browser extension's active tab and expo's in-app browser (and, for read mode, an
-   iOS share from Safari). Read mode defaults on for a plan that has it; screenshot
-   defaults off, because it is ten times the bytes and only some pages want it. The
-   extension's saved screen also offers **Screenshot** as one tap, and suggests it
-   when read mode came back "not an article" — that is the page it is for.
+1. **The save that asks for it.** Built in the browser extension: a save on a plan
+   with `keptCopies` asks for read mode beside `titleImage`, as its own message so a
+   page with no article costs the title nothing (`popup/Editor.tsx`). The saved
+   screen then offers both copies as taps (`popup/KeptCopies.tsx`) — "Keeping…"
+   until a facet newer than the ask lands, "Try again" when the background refused
+   without writing anything (the tab moved on), and a line suggesting the screenshot
+   when read mode came back "not an article", the page a screenshot is for. A free
+   account sees the same buttons marked Plus, and a tap opens the web app's
+   Subscription section. _Planned_: one synced account setting — _when I save, also
+   keep: read mode / screenshot_ — applied only to saves made **on the page** (the
+   browser extension's active tab, expo's in-app browser, and for read mode an iOS
+   share from Safari); read mode on by default, screenshot off, because it is ten
+   times the bytes and only some pages want it.
 2. **A per-link action**: _Keep read mode_ / _Keep screenshot_ from a link's menu
    and from the reader. On a client that can't capture that link right now, the
    action says what can (open it in the extension, open it in the app).
@@ -231,17 +239,23 @@ mode is the extractor's, under `serverExtraction`, and it has no screenshot or p
 copy of its own. A link saved in the web app gets a live-page copy when the user
 opens it with the extension or the app.
 
-### the gate (planned)
+### the gate — `entitlements.keptCopies`
 
-The kept copies are a paid feature, enforced in the client like every per-feature
-gate (`iap/plans.ts`, the header: the server can't tell one `files/` blob from
-another); the byte and file ceilings stay the server-hard backstop. Two rules:
+The kept copies are a Plus feature, `keptCopies` in `iap/plans.ts`, enforced in the
+client like every per-feature gate (the server can't tell one `files/` blob from
+another); the byte and file ceilings stay the server-hard backstop. It is checked
+where a capture is asked for — the browser extension's save and its saved screen —
+and the upgrade dialog's words are `PAYWALL_COPY.keptCopies` (`@stxapps/react`).
+Two rules:
 
 - **Reading is never gated.** A copy taken while entitled stays readable, exported
   and deletable after a downgrade; only new captures stop. Hiding someone's own data
   behind a lapsed plan reads as holding it hostage.
-- **The upgrade card names only what ships**, per `plans.ts`'s copy rule — read mode
-  and the screenshot when they reach a user, page copy not before it exists.
+- **The upgrade card names only what ships**, per `plans.ts`'s copy rule. Read mode
+  and the screenshot now ship on desktop, but the plan cards, /pricing and the store
+  listings don't name them yet — adding them is a copy change for those surfaces
+  (with the brand review it needs), not something this gate implies. Page copy not
+  before it exists.
 
 ### removal, cleanup, export
 

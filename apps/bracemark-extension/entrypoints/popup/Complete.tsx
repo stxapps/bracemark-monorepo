@@ -14,6 +14,7 @@ import { Button } from '@stxapps/web-ui/components/ui/button';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { type ActiveTab } from './App';
+import { KeptCopies } from './KeptCopies';
 import { PageSpecimen } from './PageSpecimen';
 import { PopupBody, PopupTitle } from './Shell';
 
@@ -37,10 +38,22 @@ import { openWebApp } from '@/utils/open-web-app';
 // whose whole organising idea is lists, and the user picked one a second ago —
 // echoing it back is what confirms the pick took.
 //
+// Below the list row, KeptCopies: the page's read-mode text and a screenshot, both
+// taken from this tab — the only place the browser extension can take them.
+// `justSaved` tells it read mode is already on its way (Editor asks for it on save).
+//
 // The footer button reads "Open Bracemark" (navigation), not "view this link": the
 // extension's session doesn't cross origins (docs/browser-extension.md), so a user
 // who never signed in to bracemark-web lands on its sign-in page first.
-export function Complete({ link, tab }: { link: LinkItem; tab?: ActiveTab }) {
+export function Complete({
+  link,
+  tab,
+  justSaved = false,
+}: {
+  link: LinkItem;
+  tab?: ActiveTab;
+  justSaved?: boolean;
+}) {
   const id = linkIdOf(link);
   // Re-read the link + extraction live so background backfills/captures show up. The
   // display title/image are the override-wins join of the two (the user's `custom*` on
@@ -86,6 +99,8 @@ export function Complete({ link, tab }: { link: LinkItem; tab?: ActiveTab }) {
           </span>
         </p>
       )}
+
+      <KeptCopies linkId={id} extraction={extraction} readModeRequested={justSaved} />
 
       <Button
         variant="outline"
