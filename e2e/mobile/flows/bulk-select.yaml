@@ -46,10 +46,21 @@ tags: [BULK-002, full, online, destructive, scale, ios, android]
     text: '2 selected'
 
 # --- far down: new rows, recycled cells ------------------------------------------------
+# The row to press has to stop between the topbar and the bulk bar, and
+# `centerElement` does not promise that: measured on iOS, it read row-045 at
+# y 603, one point short of passing, swiped once more, and left it at y 98 under
+# the topbar — where the press opened the drawer and selected nothing. So this
+# stops on the row BELOW the one pressed, as soon as that row clears the bar's
+# count. `above` compares top edges and the count sits inside the bar, so row-046
+# itself may still be under the bar; row-045, a row higher, is not. One swipe
+# (505–524 of the 874 tall screen) is too short to carry row-045 from there up to
+# the topbar (docs/e2e.md, _`centerElement` is one-sided_).
 - scrollUntilVisible:
-    element: 'Select .*${HOST}/row-045(,.*)?'
+    element:
+      text: 'Select .*${HOST}/row-046(,.*)?'
+      above:
+        id: 'bulk-count'
     direction: DOWN
-    centerElement: true
     timeout: 60000
 # A press while the list is still decelerating lands on whatever moved under it.
 - waitForAnimationToEnd:

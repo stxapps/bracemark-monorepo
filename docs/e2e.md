@@ -749,6 +749,22 @@ The repo-specific gotchas:
   with `scrollUntilVisible: centerElement: true` before pressing it
   (`flows/search-advanced.yaml`); the one field that cannot be centred, the first,
   is filled before anything scrolls.
+- **`centerElement` is one-sided, so it can park a row under the header.** It
+  stops once the element has reached the far side of a line 20% of the screen past
+  the middle (`UiElement.isElementNearScreenCenter`) — scrolling down, any centre
+  above y 611 on an 874-tall screen, right up to the top — and it gets there with
+  a whole swipe (505–524 measured on the iPhone), not a correction. `BULK-002` read
+  a row's centre at exactly 611 and stopped at y 98 under the links topbar: the
+  press reported COMPLETED, opened the drawer, and the failure surfaced as the next
+  assertion, on a tree the drawer had emptied. It flakes rather than failing
+  outright because the same fixture and the same swipes bring the row back to
+  nearly the same place, right at that line: three repeats centred it at 104, 122
+  and 142 against a topbar ending at 117, so a few points of jitter decide the run.
+  A flow that presses a row far down a long list stops on the row below it with
+  `above: { id: bulk-count }` instead (`flows/bulk-select.yaml`); ⚠ `above` and
+  `below` compare top edges only, so anchoring on the pressed row itself would
+  allow it under the bar. `subflows/select-row.yaml` still centres, so a row it
+  scrolls is exposed to the same overshoot.
 - **Maestro's text regex is case-insensitive.** `.*<url>.*Pinned.*` matched a url
   whose slug said "bulk-pinned-first" before any pin existed, and every pin wait in
   the flow passed on it. Anchor on what only the state adds — `, Pinned` with its
