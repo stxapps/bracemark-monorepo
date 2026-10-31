@@ -26,6 +26,7 @@ export * from './data/session-store';
 export * from './data/sidebar-view-store';
 export * from './data/subscription-store';
 export * from './data/sweep-dangling-extractions';
+export * from './data/sweep-orphan-files';
 export * from './data/sync-store';
 export * from './data/update-required';
 export * from './hooks/use-change-password';

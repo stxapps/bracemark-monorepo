@@ -77,6 +77,11 @@ export interface SyncMetaRecord {
   // row whole along with wiping the items. Optional, and not indexed, so adding it
   // needed no schema version.
   unreadablePaths?: string[];
+  // When the orphaned-file sweep last ran to the end for this account on this device
+  // (data/sweep-orphan-files.ts) — its weekly throttle. Device-local bookkeeping, gone
+  // with the row on sign-out and with delete-all-data's rewrite. Optional and not
+  // indexed, so it needed no schema version, like `unreadablePaths`.
+  lastOrphanSweepAt?: number;
 }
 
 // One decrypted entity, keyed by its per-file path — the generic local store the

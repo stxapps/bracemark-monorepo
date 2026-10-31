@@ -290,11 +290,33 @@ Two rules:
   and bulk edit's _Delete copies_ (both confirm first — a copy can't be re-taken
   from a page that changed), through `useKeptCopyMutations`. Never gated on the plan.
   Not on expo yet: it shows no copies.
-- **An orphaned-file sweep** (planned) — `files/` paths no link or extraction
-  references, beside `sweepDanglingExtractions` and under its conditions (a
-  full-sync client, the end of a successful cycle, inside its lock, skipping the
-  pull's unreadable paths) plus an **age grace**: content is written before its
-  reference, so a fresh blob with no ref yet is normal.
+- ⚠ **The orphaned-file sweep** — `sweepOrphanFiles` (web-react
+  `data/sweep-orphan-files.ts`), run by bracemark-web after the dangling sweep in
+  the same `afterCycle` slot (`components/sync-provider-with-sweep.tsx`). It
+  reclaims `files/` blobs nothing references: a capture race that LWW settled
+  against one device, a blob pushed by a device that stalled before its extraction,
+  and builds from before the replaced-blob reclaim. **It deletes user data on every
+  device when it is wrong**, so it is stricter than the dangling sweep on every
+  axis, and each rule is silent if dropped:
+  - the dangling sweep's conditions (a full-sync client, a successful cycle, inside
+    its lock), and **no recorded unreadable path at all** — it can't tell which
+    blob a skipped entity named;
+  - **any string in any entity is a reference** — not just the fields this build
+    knows (`EXTRACTION_FILE_REF_FIELDS`, `customImageId`), because a newer client's
+    field or namespace may name a blob, and an older device would otherwise delete
+    it for everyone. A record that won't decode, or has no bytes, stops the run;
+  - never a blob with a **pending op** (a local unpushed write carries `updatedAt:
+0`, so age alone can't exclude it), never one younger than **30 days** by its
+    server stamp (`ORPHAN_GRACE_MS` — content is written before its reference, and
+    a stalled device gets that long to push the rest), and **nothing written during
+    the scan** (an entity put queued while it yields aborts the run);
+  - at most **weekly** per account per device (`SyncMetaRecord.lastOrphanSweepAt`)
+    and **500 deletes** a run.
+
+  The dangling sweep's known gaps (a store missing an entity the server holds) apply
+  and cost more here: a blob only that entity names would go. Accepted for the same
+  reason, but it is why none of the rules above may be loosened casually.
+
 - **Export.** The Bracemark backup carries every kept copy, because it walks
   `extractionFileIds`; the interop formats carry none. A Markdown export of read
   mode with its highlights is the planned interop answer ([reader.md](./reader.md)).
