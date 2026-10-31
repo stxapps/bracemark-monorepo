@@ -1,4 +1,4 @@
-import { cutToLength, type Facet, LINK_TITLE_MAX } from './entities';
+import { cutToLength, type Extraction, type Facet, LINK_TITLE_MAX } from './entities';
 
 // The shared extraction OUTCOME rules — title normalization, quality ranking, retry pacing,
 // and (re)extraction eligibility — that every client must agree on. They operate on the
@@ -82,12 +82,59 @@ export function cleanTitle(raw: string | undefined): string | undefined {
 //     across repeated failures); a `done` write resets to 0; `permanent` never retries so it's
 //     irrelevant. The writer owns the number because only its read-merge sees the prior value.
 // `extractedBy` is the caller's `platform:env` tier string (`tierOf` ranks quality from it).
-// `extra` carries any tier-specific looseObject passthrough (e.g. the extension's read-mode
-// `fileId`) — round-tripped by `facetSchema`'s `looseObject`.
+// `extra` carries any tier-specific looseObject passthrough — round-tripped by
+// `facetSchema`'s `looseObject`. Never a file ref: a blob a facet produces is named by a
+// display field in EXTRACTION_FILE_REF_FIELDS, or nothing exports, restores or deletes it.
 export function newFacet(
   status: Facet['status'],
   extractedBy: string,
   extra?: Record<string, unknown>,
 ): Facet {
   return { status, extractedBy, extractedAt: Date.now(), attempts: 0, ...extra };
+}
+
+// Every display field on an extraction that names a `files/{id}.enc` blob. THE list —
+// every place that has to find an extraction's blobs reads it through
+// `extractionFileIds`: the backup's referenced-files walk (data/backup.ts, which also
+// gates each id to the path grammar on restore), both platforms' exporters, the link
+// destroy paths, and the dangling-extraction sweep. Spelling the fields out at each site
+// is how the read-mode copy came to be written as a facet passthrough (`fileId`) that
+// none of them knew about: exported by nobody, restored by nobody, and orphaned in R2 by
+// every delete. A new blob-producing facet adds its field here and to `extractionSchema`,
+// and nowhere else.
+export const EXTRACTION_FILE_REF_FIELDS = [
+  'imageId',
+  'readModeId',
+  'screenshotId',
+  'pageCopyId',
+] as const satisfies readonly (keyof Extraction)[];
+export type ExtractionFileRefField = (typeof EXTRACTION_FILE_REF_FIELDS)[number];
+
+// The `files/` ids an extraction references, in EXTRACTION_FILE_REF_FIELDS order. Takes a
+// partial so a caller holding `undefined` (a link with no extraction yet) or a view that
+// carries only some of the fields can pass it straight through. The fields are typed, but
+// a non-string is skipped rather than turned into a path — the guard costs nothing.
+export function extractionFileIds(
+  extraction: Partial<Pick<Extraction, ExtractionFileRefField>> | undefined,
+): string[] {
+  if (!extraction) return [];
+  const ids: string[] = [];
+  for (const field of EXTRACTION_FILE_REF_FIELDS) {
+    const id = extraction[field];
+    if (typeof id === 'string') ids.push(id);
+  }
+  return ids;
+}
+
+// The ids `next` no longer references that `prev` did — the blobs a write-back REPLACED
+// (a re-capture minting a new screenshot id, a tier upgrade minting a new preview). The
+// writer deletes these after the new ref is stored (metadata before content on the way
+// down), so a re-capture doesn't leave its predecessor counting against the quota with
+// nothing pointing at it.
+export function replacedExtractionFileIds(
+  prev: Partial<Pick<Extraction, ExtractionFileRefField>> | undefined,
+  next: Partial<Pick<Extraction, ExtractionFileRefField>> | undefined,
+): string[] {
+  const kept = new Set(extractionFileIds(next));
+  return extractionFileIds(prev).filter((id) => !kept.has(id));
 }

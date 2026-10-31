@@ -49,6 +49,7 @@ import {
   type Pin,
   PINS_PREFIX,
   pinSchema,
+  replacedExtractionFileIds,
   SETTINGS_GENERAL_PATH,
   type SettingsGeneral,
   settingsGeneralSchema,
@@ -436,7 +437,7 @@ export async function deletePin(username: string, linkId: string): Promise<void>
 // write-back's payload — web-react mutations.ts's types, verbatim.
 export type ExtractionFacet = keyof Extraction['facets'];
 export type ExtractionFields = Partial<
-  Pick<Extraction, 'title' | 'imageId' | 'pageCopyId' | 'screenshotId'>
+  Pick<Extraction, 'title' | 'imageId' | 'readModeId' | 'screenshotId' | 'pageCopyId'>
 >;
 export interface ExtractionPatch {
   fields?: ExtractionFields;
@@ -455,6 +456,8 @@ export async function writeExtraction(
 ): Promise<void> {
   const now = Date.now();
   const path = pathFromId(linkId, EXTRACTIONS_PREFIX);
+  // The `files/` blobs this write stops referencing — see web-react's writeExtraction.
+  let replaced: string[] = [];
   writeEntityWith(username, path, (existing) => {
     const current: Extraction = parseBlob(existing?.data ?? undefined, extractionSchema) ?? {
       id: linkId,
@@ -482,8 +485,10 @@ export async function writeExtraction(
     if (!extractionSchema.safeParse(next).success) {
       throw new Error(`writeExtraction: invalid extraction ${linkId}`);
     }
+    replaced = replacedExtractionFileIds(current, next);
     return next;
   });
+  for (const fileId of replaced) await deleteFile(username, fileId);
 }
 
 // Delete one link's `extractions/{id}.enc` — the machine half's counterpart of

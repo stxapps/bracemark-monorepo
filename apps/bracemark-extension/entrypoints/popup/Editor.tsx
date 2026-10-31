@@ -95,8 +95,8 @@ export function Editor({
         setSaving(false);
         return;
       }
-      // Auto-run the cheap facets off the live DOM, fire-and-forget (heavy screenshot
-      // / page copy stay manual on the complete page — see link-extraction.md). A
+      // Auto-run the cheap facet off the live DOM, fire-and-forget (the kept copies —
+      // read mode, screenshot — are asked for separately; see link-extraction-keep.md). A
       // restore takes this path too: we're standing on the live page either way, and
       // refreshing the title/image of a link you're re-adding is the point.
       const id = linkIdOf(link);

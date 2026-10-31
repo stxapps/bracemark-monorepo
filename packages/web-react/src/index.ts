@@ -57,6 +57,7 @@ export * from './hooks/use-tags';
 export * from './hooks/use-unsaved-draft';
 export * from './hooks/use-update-required';
 export * from './lib/auth-api-client';
+export * from './lib/reader-doc-bytes';
 export * from './lib/resize-image';
 export * from './lib/server-extraction';
 export * from './sync/engine';

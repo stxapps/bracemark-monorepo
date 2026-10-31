@@ -67,7 +67,13 @@
 
 import Dexie from 'dexie';
 
-import { EXTRACTIONS_PREFIX, idFromPath, LINKS_PREFIX, rekey } from '@stxapps/shared';
+import {
+  extractionFileIds,
+  EXTRACTIONS_PREFIX,
+  idFromPath,
+  LINKS_PREFIX,
+  rekey,
+} from '@stxapps/shared';
 
 import { db } from './db';
 import { deleteExtraction, deleteFile } from './mutations';
@@ -97,10 +103,7 @@ export async function sweepDanglingExtractions(username: string): Promise<number
     // customImageId was the destroyer's job), then tear down content-before-entity.
     const linkId = idFromPath(exPaths[i], EXTRACTIONS_PREFIX);
     const extraction = await readExtraction(linkId);
-    const fileIds = [extraction?.imageId, extraction?.screenshotId, extraction?.pageCopyId].filter(
-      (fileId): fileId is string => typeof fileId === 'string',
-    );
-    for (const fileId of fileIds) await deleteFile(username, fileId);
+    for (const fileId of extractionFileIds(extraction)) await deleteFile(username, fileId);
     await deleteExtraction(username, linkId);
     swept += 1;
   }

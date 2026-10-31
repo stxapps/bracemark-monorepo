@@ -12,8 +12,7 @@ import { FETCH_IMAGE_TIMEOUT_MS, MAX_EXTRACT_URLS } from './endpoints';
 //     worst, defeating the streaming proxy the batch path exists to use.
 //   - ANONYMITY. No bearer token ever rides these requests. Attaching one converts
 //     the leak from "the server saw this URL" into "the server tied this URL to this
-//     account" — the strictly-worse one the design forbids (docs/link-extraction.md,
-//     _server extraction_).
+//     account" — the strictly-worse one the design forbids (docs/link-extraction-server.md).
 //   - THE HAND-BUILT PROXY REQUEST. `fetchImage` can't ride `callEndpoint` (the
 //     success body is a binary stream, not JSON), so it re-implements the URL build,
 //     the front SSRF gate, the ApiError throw and the deadline. Each is a place the

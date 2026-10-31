@@ -32,6 +32,7 @@ import {
   type Pin,
   PINS_PREFIX,
   pinSchema,
+  replacedExtractionFileIds,
   SETTINGS_GENERAL_PATH,
   type SettingsGeneral,
   settingsGeneralSchema,
@@ -503,7 +504,7 @@ export type ExtractionFacet = keyof Extraction['facets'];
 // The machine-written display fields on `extractions/{id}.enc` — the extracted
 // counterparts of the user's `customTitle`/`customImageId` on the link.
 export type ExtractionFields = Partial<
-  Pick<Extraction, 'title' | 'imageId' | 'pageCopyId' | 'screenshotId'>
+  Pick<Extraction, 'title' | 'imageId' | 'readModeId' | 'screenshotId' | 'pageCopyId'>
 >;
 
 // What one extraction write-back carries: an optional display-field patch and/or one
@@ -533,6 +534,10 @@ export async function writeExtraction(
 ): Promise<void> {
   const now = Date.now();
   const path = pathFromId(linkId, EXTRACTIONS_PREFIX);
+  // The `files/` blobs this write stops referencing — a re-capture's predecessor, a tier
+  // upgrade's old preview. Collected inside the merge (the only place `current` is the
+  // committed value) and deleted after the put, metadata before content on the way down.
+  let replaced: string[] = [];
   await writeEntityWith(username, path, (existing) => {
     const current: Extraction = parseBlob(existing?.data, extractionSchema) ?? {
       id: linkId,
@@ -571,8 +576,14 @@ export async function writeExtraction(
     if (!extractionSchema.safeParse(next).success) {
       throw new Error(`writeExtraction: invalid extraction ${linkId}`);
     }
+    replaced = replacedExtractionFileIds(current, next);
     return next;
   });
+  // Nothing else would ever reclaim these: the sweep and the destroy paths find blobs
+  // through the extraction's CURRENT refs, so a replaced one counted against the quota on
+  // every device for as long as the account lived. If this is interrupted the blob stays
+  // orphaned, which is where every replaced blob used to end up anyway.
+  for (const fileId of replaced) await deleteFile(username, fileId);
 }
 
 // Delete one link's `extractions/{id}.enc` — the machine half's counterpart of

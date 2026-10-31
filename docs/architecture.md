@@ -92,7 +92,7 @@ bounded; the worker is terminated if conversion takes too long.
   (a stateless, stream-don't-store image proxy). All arbitrary-URL fetches go through
   one `safeFetch` choke point — SSRF guard re-validated on every redirect hop,
   per-response byte ceiling, timeout, content-type allowlist. See
-  [link-extraction.md](./link-extraction.md) — _server extraction_.
+  [link-extraction-server.md](./link-extraction-server.md).
 - **bracemark-expo** — Expo mobile app. The crypto/account layer is
   `@stxapps/expo-crypto` below; the RN-specific React logic — including the
   local-first data layer (write edge, sync engine, and read edge) — lives in
@@ -333,7 +333,7 @@ they are read by the same components, not because it is one of them.
   (`link-quota-banner`), and `host-monogram`, the deterministic letter-on-hue
   tile that fills an icon-less host's **preview slot** (not the chip beside its
   host line, which falls back to a plate so the row escalates once — see
-  [link-extraction.md](./link-extraction.md), _favicons_). A piece lands here the
+  [link-extraction-favicons.md](./link-extraction-favicons.md)). A piece lands here the
   moment a SECOND surface draws it: the monogram moved out of bracemark-web's
   `link-media.tsx` when bracemark-extension's popup specimen became its second
   consumer, because "same site, same tile" has to hold across the popup and the

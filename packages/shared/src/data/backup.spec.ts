@@ -247,14 +247,15 @@ describe('classifyBundleLine', () => {
   });
 
   // The ids INSIDE the data, which the path check above never sees. Each of these
-  // four fields names a `files/{id}.enc` blob, so a restore turns it into a path
+  // five fields names a `files/{id}.enc` blob, so a restore turns it into a path
   // and a queued put — and any later delete of the link turns it into a queued
-  // delete — with the archive's string in the middle. Listed by hand: this is
-  // where a fifth ref field has to be added, though the gate asks
-  // referencedFileIds and so cannot fall behind the importers on its own.
+  // delete — with the archive's string in the middle. Listed by hand, not read
+  // from EXTRACTION_FILE_REF_FIELDS: a test that iterates the list it checks
+  // cannot notice a field missing from it. A new ref field is added here too.
   const FILE_REFS = [
     ['link', 'customImageId'],
     ['extraction', 'imageId'],
+    ['extraction', 'readModeId'],
     ['extraction', 'pageCopyId'],
     ['extraction', 'screenshotId'],
   ] as const;

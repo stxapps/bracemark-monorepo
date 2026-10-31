@@ -43,22 +43,32 @@ mutation hooks, an import — and that is where a new one goes.
 
 ### what is bounded
 
-| value                 | limit                               | made by: editors                                 | made by: interop import | made by: backup restore | carried: sync, store, screens, exports |
-| --------------------- | ----------------------------------- | ------------------------------------------------ | ----------------------- | ----------------------- | -------------------------------------- |
-| list / tag tree depth | `TREE_MAX_DEPTH` 100 levels         | a move past it is refused                        | placed at it, counted   | placed at it, counted   | accepted; exports place it, see below  |
-| link title            | `LINK_TITLE_MAX` 300                | field `maxLength`                                | cut (`cleanTitle`)      | schema (line refused)   | schema                                 |
-| link note             | `LINK_NOTE_MAX` 500                 | field `maxLength`                                | cut                     | schema (line refused)   | schema                                 |
-| list / tag name       | `LIST_NAME_MAX`, `TAG_NAME_MAX` 200 | create field `maxLength`; the mutation hooks cut | cut, matched as cut     | as written              | accepted                               |
-| tags on one link      | `LINK_TAGS_MAX` 100                 | not gated                                        | the row's first 100     | as written              | accepted                               |
-| url                   | none                                | —                                                | —                       | —                       | —                                      |
-| links                 | the plan's `maxLinks`               | the add form gives way to `LinkQuotaBanner`      | the over-cap prompt     | refused whole           | —                                      |
-| bytes and files       | the plan's `maxBytes`, `maxFiles`   | server, at `files/sign`                          | server                  | server                  | server                                 |
+| value                 | limit                                                                   | made by: editors                                 | made by: interop import | made by: backup restore | carried: sync, store, screens, exports |
+| --------------------- | ----------------------------------------------------------------------- | ------------------------------------------------ | ----------------------- | ----------------------- | -------------------------------------- |
+| list / tag tree depth | `TREE_MAX_DEPTH` 100 levels                                             | a move past it is refused                        | placed at it, counted   | placed at it, counted   | accepted; exports place it, see below  |
+| link title            | `LINK_TITLE_MAX` 300                                                    | field `maxLength`                                | cut (`cleanTitle`)      | schema (line refused)   | schema                                 |
+| link note             | `LINK_NOTE_MAX` 500                                                     | field `maxLength`                                | cut                     | schema (line refused)   | schema                                 |
+| list / tag name       | `LIST_NAME_MAX`, `TAG_NAME_MAX` 200                                     | create field `maxLength`; the mutation hooks cut | cut, matched as cut     | as written              | accepted                               |
+| tags on one link      | `LINK_TAGS_MAX` 100                                                     | not gated                                        | the row's first 100     | as written              | accepted                               |
+| url                   | none                                                                    | —                                                | —                       | —                       | —                                      |
+| a read-mode copy      | `READER_DOC_MAX_BLOCKS` 10,000 blocks, `READER_DOC_MAX_CHARS` 1,000,000 | the capture stops at the block that crossed it   | —                       | as written              | accepted (no schema cap)               |
+| a screenshot          | `SCREENSHOT_MAX_DIMENSION` 1600 px                                      | the capture resizes before storing               | —                       | as written              | accepted                               |
+| links                 | the plan's `maxLinks`                                                   | the add form gives way to `LinkQuotaBanner`      | the over-cap prompt     | refused whole           | —                                      |
+| bytes and files       | the plan's `maxBytes`, `maxFiles`                                       | server, at `files/sign`                          | server                  | server                  | server                                 |
 
 **Counts: none per kind.** Every link, list, tag, pin and extraction is one
 `.enc` file, so the server's `maxFiles` and `maxBytes` ([iap.md](./iap.md),
 _enforcement_) already bound all of them — a per-kind count would bound nothing
 those don't, and would add a limit sync then has to carry. `maxLinks` is the one
 count, a plan lever rather than a safety bound, and it is client-side.
+
+**The kept copies are bounded at their one door, the capture.** No editor makes a
+read-mode copy or a screenshot; the capture does, so that is where both caps live
+(`reader/reader-doc.ts`, `image/preview.ts`, both `@stxapps/shared`). The read-mode
+caps are sized far past any article, so they only ever bind on a page that isn't one
+— an endless feed Readability took for content. `readerDocSchema` carries no `.max()`
+for the reason this file's tripwire gives: it parses stored copies, and a cap there
+would silently empty one written before it ([link-extraction-keep.md](./link-extraction-keep.md)).
 
 **The url is uncapped on purpose.** It is the link's identity: a cut url is a
 different link. The byte quota is its only backstop (`entities.ts`). What a row

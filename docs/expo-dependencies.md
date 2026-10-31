@@ -64,7 +64,7 @@ is the usual reason to reach for it:
   content-sniffed rather than extension-driven (the favicon cache writes
   extension-less files, so that matters). This is what lets the icon sniff accept
   `<link rel="icon" type="image/svg+xml">` at all; see
-  [link-extraction.md](./link-extraction.md) — _favicons_.
+  [link-extraction-favicons.md](./link-extraction-favicons.md).
 
 What did **not** buy it: remote fetching, disk caching, placeholders,
 transitions. Every source here is a local plaintext `file://` path this app

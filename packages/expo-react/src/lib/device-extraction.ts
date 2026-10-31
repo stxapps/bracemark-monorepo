@@ -368,7 +368,7 @@ async function loadImage(imageUrl: string | undefined): Promise<ImageOutcome> {
 
 // The page's declared `<link rel="icon">`, cached for the host — the accuracy upgrade over
 // favicon-provider's `/favicon.ico` guess, allowed here because this device just fetched
-// the page (docs/link-extraction.md — _favicons_, the expo carve-out). Never records
+// the page (docs/link-extraction-favicons.md, the expo carve-out). Never records
 // `none` on failure: "this page's declared icon didn't load" is not "this host has no
 // icon", and writing `none` would poison the guess path that might still succeed.
 //

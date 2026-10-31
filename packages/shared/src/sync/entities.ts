@@ -202,8 +202,9 @@ export type Pin = z.infer<typeof pinSchema>;
 // carries two kinds of machine state, both written by the SAME writer (the extractor),
 // so LWW races between them are self-healing (re-extract is idempotent):
 //   1. the DISPLAY RESULT — `title` (the discovered/provisional og:title), `imageId`
-//      (og:image preview), `pageCopyId`, `screenshotId` (heavy `files/{id}.enc`
-//      refs). The UI resolves `customTitle ?? title ?? host(url)` and
+//      (og:image preview), `readModeId`, `screenshotId`, `pageCopyId` (the kept
+//      copies — `files/{id}.enc` refs; the full list is EXTRACTION_FILE_REF_FIELDS in
+//      sync/extraction.ts). The UI resolves `customTitle ?? title ?? host(url)` and
 //      `customImageId ?? imageId` (the `custom*` halves live in `linkSchema`).
 //   2. the BOOKKEEPING — the per-facet who/when/quality/retry map (`facets`).
 // A bulk import seeds the provisional `title` here only with what the SOURCE's own
@@ -265,8 +266,8 @@ export type Facet = z.infer<typeof facetSchema>;
 // `z.record`, because the latter over an enum key infers an EXHAUSTIVE `Record` (all 8
 // required) — which neither matches reality nor parses a real one-facet extraction. The
 // display fields are the results of specific facets: `title`/`imageId` from `titleImage`,
-// `pageCopyId` from `pageCopy`, `screenshotId` from `screenshot`; each is absent until
-// its facet lands. All but the inline `title` are `files/{id}.enc` refs — "a field name
+// `readModeId` from `readMode`, `screenshotId` from `screenshot`, `pageCopyId` from
+// `pageCopy`; each is absent until its facet lands. All but the inline `title` are `files/{id}.enc` refs — "a field name
 // types its blob" (see docs/local-first-sync.md "plaintext typing").
 export const extractionSchema = z.looseObject({
   id: z.string(), // = the link's id (the `{id}` of `links/{id}.enc`)
@@ -278,13 +279,18 @@ export const extractionSchema = z.looseObject({
   // encrypted by the extracting client, NEVER the remote URL (see the doc's "the preview
   // image is a downloaded blob"). Shown as `customImageId ?? imageId`.
   imageId: z.string().optional(),
+  // The read-mode copy (`files/{id}.enc`), from the `readMode` facet — the page's article
+  // text as a gzipped `ReaderDoc` (reader/reader-doc.ts): sanitized blocks, never HTML, so
+  // nothing a page wrote can reach the app's origin as markup. See
+  // docs/link-extraction-keep.md.
+  readModeId: z.string().optional(),
   // The saved copy of the page's content (`files/{id}.enc`), from the `pageCopy` facet.
   // Named "page copy", never "archive": `archive` is the ARCHIVE_ID system list (a link
   // filed away), an unrelated concept — see sync/system-lists.ts.
   pageCopyId: z.string().optional(),
-  // The full-page screenshot (`files/{id}.enc`), from the `screenshot` facet — a rendered
-  // capture, distinct from the og:image `imageId`. Active-page tier only (the extension's
-  // `tabs.captureVisibleTab`).
+  // The screenshot (`files/{id}.enc`), from the `screenshot` facet — a rendered capture of
+  // what the page showed above the fold, distinct from the og:image `imageId`. Active-page
+  // tier only (the extension's `tabs.captureVisibleTab`), stored as a capped JPEG.
   screenshotId: z.string().optional(),
   facets: z.partialRecord(
     z.enum([

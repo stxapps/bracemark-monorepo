@@ -252,8 +252,8 @@ fi
 # deliberately tier-independent: support@/security@/abuse@bracemark.com, the
 # "bracemark.com and app.bracemark.com" scope lines in /terms and /privacy, and
 # the `https://bracemark.com/extractor` User-Agent that /extractor publishes to
-# the operators of sites we fetch (docs/link-extraction.md, _server
-# extraction_). None of that moves per tier, so a domain-keyed check rejects
+# the operators of sites we fetch (docs/link-extraction-server.md). None of that
+# moves per tier, so a domain-keyed check rejects
 # EVERY `deploy:site:staging` and no rebuild can fix it. An origin is specific
 # enough to miss all of it and still catch what a mis-tiered bundle actually
 # carries: the other tier's baked `https://api.*` / `https://app.*` values.

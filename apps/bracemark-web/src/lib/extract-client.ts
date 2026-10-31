@@ -5,7 +5,7 @@ import { createExtractClient, type ExtractClient } from '@stxapps/shared';
 // DIFFERENT origin from bracemark-api's `NEXT_PUBLIC_API_URL` (lib/api-client.ts) on purpose:
 // the extractor is the one component that fetches arbitrary user URLs, kept apart
 // from the sync broker so "api.bracemark.com never sees your library in plaintext"
-// stays code-provable (docs/link-extraction.md "server extraction"). Spelled that way
+// stays code-provable (docs/link-extraction-server.md). Spelled that way
 // deliberately: the api is one Worker that also serves auth and billing, so "only ever
 // sees ciphertext" is false of it — the library is the part that is ciphertext-only.
 // It's anonymous — no

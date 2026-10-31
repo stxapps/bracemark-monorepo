@@ -13,7 +13,7 @@ import { FaviconProvider, useFavicon } from './favicon-provider';
 // THE PRIVACY GATE, on both providers that hold it: no URL leaves the browser unless
 // the `serverExtraction` opt-in is on AND an extractor origin is configured. Server
 // extraction is opt-in and off by default, and `bracemark-extractor` is handed a
-// PLAINTEXT URL by construction (docs/link-extraction.md, _server extraction_) — so
+// PLAINTEXT URL by construction (docs/link-extraction-server.md) — so
 // a gate that opens early doesn't corrupt data or throw, it just quietly starts
 // telling one of our servers which pages this user saved.
 //
