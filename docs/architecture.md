@@ -879,13 +879,14 @@ startup on a bundle that holds all of it anyway. In the **iOS share extension**
 it is paid per share, for code that process will never call. So a handful of
 files carry **explicit subpath exports** beside the `"."` entry:
 
-| package                | subpath                    | who names it, and why                                                            |
-| ---------------------- | -------------------------- | -------------------------------------------------------------------------------- |
-| `@stxapps/expo-react`  | `./data/share-store`       | the share sheet's data seam — the alternative is the whole package               |
-| `@stxapps/expo-react`  | `./data/share-theme-store` | the sheet's pre-paint theme read, on the same cold path ([theme.md](./theme.md)) |
-| `@stxapps/expo-react`  | `./lib/auth-api-client`    | the app's `lib/api-client` binding, which the sheet threads into Save            |
-| `@stxapps/expo-crypto` | `./lib/ids`                | `newId` alone, without the AES + Argon2 stack behind the barrel                  |
-| `@stxapps/expo-crypto` | `./lib/shared-keychain`    | `session-store`'s three-function native wrapper, same reason                     |
+| package                | subpath                      | who names it, and why                                                                                                                                                                                                                             |
+| ---------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@stxapps/expo-react`  | `./data/share-store`         | the share sheet's data seam — the alternative is the whole package                                                                                                                                                                                |
+| `@stxapps/expo-react`  | `./data/share-theme-store`   | the sheet's pre-paint theme read, on the same cold path ([theme.md](./theme.md))                                                                                                                                                                  |
+| `@stxapps/expo-react`  | `./lib/auth-api-client`      | the app's `lib/api-client` binding, which the sheet threads into Save                                                                                                                                                                             |
+| `@stxapps/expo-crypto` | `./lib/ids`                  | `newId` alone, without the AES + Argon2 stack behind the barrel                                                                                                                                                                                   |
+| `@stxapps/expo-crypto` | `./lib/shared-keychain`      | `session-store`'s three-function native wrapper, same reason                                                                                                                                                                                      |
+| `@stxapps/web-react`   | `./lib/reader-doc-from-page` | the read-mode converter — bundled into scripts that run INSIDE a page (the browser extension's injected file, the iOS share preprocessing, expo's WebView capture), where the barrel would carry Dexie and the sync engine into a stranger's page |
 
 They are declared, not reached for: a deep import that isn't in `exports` fails
 to resolve. Add one only when a real cold-start path demands it, keep it out of

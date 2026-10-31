@@ -1,4 +1,4 @@
-import { readerDocFromPage } from '@/utils/reader-doc-from-page';
+import { readerDocFromPage } from '@stxapps/web-react/lib/reader-doc-from-page';
 
 // The read-mode capture, as a file the background injects into the active tab
 // (`captureReadMode` in utils/capture.ts: `scripting.executeScript({ files:

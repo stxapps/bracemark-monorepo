@@ -1,3 +1,6 @@
+/**
+ * @jest-environment jsdom
+ */
 import { readerDocFromPage } from './reader-doc-from-page';
 
 // The read-mode converter, against jsdom as the page — the same DOM Readability's own
