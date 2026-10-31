@@ -6,8 +6,8 @@ import { emptyQuery } from '@stxapps/shared';
 
 import { useLinks } from './use-links';
 
-const mockQuery = emptyQuery();
-const mockLocked = new Set<string>();
+let mockQuery = emptyQuery();
+let mockLocked = new Set<string>();
 let mockNonce = 0;
 let mockRows: LinkItem[] = [];
 let mockRefresh: () => Promise<void>;
@@ -44,6 +44,8 @@ const rows = (title: string) => [
 
 beforeEach(() => {
   jest.useFakeTimers();
+  mockQuery = emptyQuery();
+  mockLocked = new Set();
   mockNonce = 0;
   mockRows = rows('Original');
   mockBlockRead = undefined;
@@ -105,4 +107,59 @@ it('does not acknowledge an edit with a read that started before it', async () =
   await act(async () => mockRefresh());
   expect(result.current.links[0].customTitle).toBe('Edited');
   expect(result.current.hasPending).toBe(false);
+});
+
+// The row key's namespace (main.tsx, above `keyExtractor`): FlashList anchors on
+// that key, so `viewId` has to change in the very commit that swaps the rows for
+// another view's, and in no other. Early, and the old rows lose their anchor
+// under a reader for the length of the read; late, the new rows anchor on the
+// old view's row and the list jumps; and a change for anything short of a new
+// view takes away the position the anchor is there to hold.
+describe('viewId', () => {
+  it("moves with the new view's rows, not with the request for them", async () => {
+    const { result, rerender } = await mount();
+    const before = result.current.viewId;
+
+    let finish!: () => void;
+    mockBlockRead = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    mockQuery = emptyQuery();
+    mockRows = rows('Next view');
+    rerender(undefined);
+    await act(async () => undefined);
+    expect(result.current.links[0].customTitle).toBe('Original');
+    expect(result.current.viewId).toBe(before);
+
+    await act(async () => {
+      finish();
+      await mockBlockRead;
+    });
+    await act(async () => undefined);
+    expect(result.current.links[0].customTitle).toBe('Next view');
+    expect(result.current.viewId).not.toBe(before);
+  });
+
+  it('holds across a page of Show more', async () => {
+    const { result } = await mount();
+    const before = result.current.viewId;
+
+    mockRows = rows('Longer page');
+    await act(async () => result.current.showMore());
+    await act(async () => undefined);
+    expect(result.current.links[0].customTitle).toBe('Longer page');
+    expect(result.current.viewId).toBe(before);
+  });
+
+  it('holds when a list locks, which re-reads the same view', async () => {
+    const { result, rerender } = await mount();
+    const before = result.current.viewId;
+
+    mockLocked = new Set(['seed-list-00']);
+    mockRows = rows('Fewer rows');
+    rerender(undefined);
+    await act(async () => undefined);
+    expect(result.current.links[0].customTitle).toBe('Fewer rows');
+    expect(result.current.viewId).toBe(before);
+  });
 });

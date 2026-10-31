@@ -242,7 +242,8 @@ function UnlockedMain() {
   // the same context the reads run through and hand it to the date column.
   const { query } = useLinksPage();
   const { linksLayout } = useSettings();
-  const { links, pinnedCount, hasMore, showMore, isLoading, hasPending, applyPending } = useLinks();
+  const { links, viewId, pinnedCount, hasMore, showMore, isLoading, hasPending, applyPending } =
+    useLinks();
   const { bulkEditing, selectedLinks } = useLinksViewState();
   const { setScrolled, toggleSelected } = useLinksViewActions();
   const { bgSyncStatus, requestSync } = useSync();
@@ -429,6 +430,8 @@ function UnlockedMain() {
   // `setScrolled(false)` rides along for the same reason the mount effect above
   // resets it. While the view is empty the FlashList is unmounted behind
   // EmptyState, so the ref is null and the call no-ops — it re-mounts at 0.
+  // This fires before the new rows land; what keeps the list at 0 when they do
+  // is `keyExtractor`, below.
   const prevQueryRef = useRef(query);
   useEffect(() => {
     if (prevQueryRef.current === query) return;
@@ -504,7 +507,18 @@ function UnlockedMain() {
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
             contentContainerStyle={contentPadding ? { padding: contentPadding } : undefined}
-            keyExtractor={(link) => link.path}
+            // Namespaced by view, because the key is what FlashList anchors on:
+            // the same link in the view being left and the one arriving would
+            // otherwise be "the first visible row, keep it put", and a drawer
+            // pick would jump to wherever that row sits in the new order. The
+            // reset above cannot prevent it, it runs before the rows do. At the
+            // top of the old list that jump then comes back through the
+            // threshold's smooth scroll, which on Android any later correction
+            // cancels — it parked Show All 7 times in 8 at 850–3800px, its pins
+            // above the viewport, with a page loaded nobody scrolled to
+            // (docs/client-queries.md, _pagination_). Anchoring WITHIN a view is
+            // untouched: the id only moves with the rows of a new one.
+            keyExtractor={(link) => `${viewId}:${link.path}`}
             getItemType={itemType ? (link) => itemType(link, tagsById) : undefined}
             renderItem={renderItem}
             onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > SCROLL_TOP_THRESHOLD)}

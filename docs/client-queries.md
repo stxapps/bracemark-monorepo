@@ -325,6 +325,27 @@ The reset runs a tick before the new page is promoted, so the frame it shows is 
 top of the _old_ list; the alternative is the old list sitting at its old offset
 until the read lands.
 
+⚠ **On expo that reset is not enough: the row key has to be per view.** It runs
+before the rows do, so when they commit FlashList looks for its tracked first
+visible row in the new data, and a link both views share is that row. My List's
+first link sits at index 50 of Show All, so the drawer pick jumped to it
+(`y≈5100` of a 5,900px list) — which brought the end into reach and paged 50 rows
+nobody scrolled to — and then relied on `autoscrollToTopThreshold` to come back.
+That return is a smooth scroll on Android (`reactSmoothScrollTo`), and the next
+anchor correction cancels it (`scrollToPreservingMomentum` →
+`recreateFlingAnimation`), so the row measurements the jump itself caused stopped
+it partway. Measured on the Pixel 8 AVD: 7 of 8 picks parked between 850 and
+3,800px with the pins above the viewport, nothing on screen to say so, and no way
+for a selector to tell from the rows alone (`SCALE-ANDROID-001`). So `useLinks`
+returns a `viewId` stamped on each read, and `main.tsx`'s `keyExtractor` puts it in
+the key: across views there is nothing to anchor on, 8 of 8 stayed at 0 without one
+scroll event, and on the right page depth. It counts the **URL's** query, not the
+lock-adjusted one the read runs, because a list locking is the same view with
+rows gone and the reader keeps their place; and it travels with the rows
+(`displayed`), because a key that moved at the request would drop the anchor from
+under the old rows for the whole read. Rows within a view keep their keys, so
+everything below that depends on the anchor is untouched. Web has no anchor.
+
 Per-history-entry scroll **restore** (Back returns you to where you were) is
 deliberately not built: it is unreachable while a view change resets `limit`, since
 a view you had paged 400 rows deep re-reads only 50 and there is nothing to restore
@@ -779,7 +800,10 @@ changes is mechanical, and only the substrate forces it:
   `main.tsx` sets `maintainVisibleContentPosition.autoscrollToTopThreshold` to
   the same 8-point boundary used for `scrolled`: an at-top pane follows the new
   row to offset 0, while a pane the user actually scrolled keeps its reading
-  position and stages incoming results behind the refresh pill.
+  position and stages incoming results behind the refresh pill. ⚠ On Android
+  that follow is an animation any later correction cancels, so it only suits a
+  one-row prepend; a view change must not get here at all — _pagination_, the row
+  key.
 - **Mounted items re-render off `extraData` and nothing else.** A FlashList v2
   cell is a `React.memo` that re-renders when its item, index or layout moves, or
   when `extraData` or `renderItem` changes identity. So `main.tsx`'s `renderItem`

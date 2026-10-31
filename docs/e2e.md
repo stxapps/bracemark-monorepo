@@ -1528,7 +1528,10 @@ every 24 links, so a flow can only scroll to a row that prints its (unique)
 address: the runner picks deep pins whose upper neighbour is such a row, and
 reads the two neighbours' bounds back to back (`assertClosedOver`). Breaking the
 exclusion (`readRest` handed no pinned paths) fails the web case on its first
-pin, counted twice.
+pin, counted twice. The native case's first wait, `PIN_0` straight after the
+drawer pick, is also the only thing that sees a pick land away from the top: the
+rows it arrives at look right, and the failure reads as a missing pin
+([client-queries.md](./client-queries.md), _the row key_ under pagination).
 
 **The web first read, held** (`SKELETON-WEB-001`). The skeleton exists only
 until the links page's first `readLinks` answers — tens of milliseconds — so a

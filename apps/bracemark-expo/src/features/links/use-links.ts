@@ -33,11 +33,15 @@ const PAGE_SIZE = 50;
 // both re-runs the edit triggers (optimistic write, then its sync cycle).
 const LOCAL_WRITE_GRACE_MS = 1500;
 
-type ObservedLinks = LinksResult & { localWriteNonce: number };
+type ObservedLinks = LinksResult & { localWriteNonce: number; viewId: number };
 
 // Web's UseLinksResult, verbatim — see there for each field's contract.
 export interface UseLinksResult {
   links: LinkItem[];
+  // Which view `links` belongs to — it moves in the commit that shows the new
+  // view's rows, not the one that asks for them. No web twin: it exists for
+  // FlashList's anchor, see the note above `keyExtractor` in main.tsx.
+  viewId: number;
   pinnedCount: number;
   total?: number;
   hasMore: boolean;
@@ -93,6 +97,12 @@ export function useLinks(): UseLinksResult {
     setLimit(PAGE_SIZE);
   }
 
+  // Counts the VIEWS this pane has shown, for `viewId`. Off the URL's query, not
+  // the `query` above: a list locking or unlocking changes that one too, and it
+  // is the same view with a row or two gone, so the reader keeps their place.
+  const [view, setView] = useState({ query: urlQuery, id: 0 });
+  if (urlQuery !== view.query) setView({ query: urlQuery, id: view.id + 1 });
+
   // The always-current result. Kept flowing; we choose WHEN to show it.
   const writeNonceRef = useRef(localWriteNonce);
   writeNonceRef.current = localWriteNonce;
@@ -101,7 +111,7 @@ export function useLinks(): UseLinksResult {
       // Capture BEFORE the read: an older in-flight result cannot acknowledge
       // a write that happened while it was awaiting the database.
       const readNonce = writeNonceRef.current;
-      return { ...(await readLinks(query, limit)), localWriteNonce: readNonce };
+      return { ...(await readLinks(query, limit)), localWriteNonce: readNonce, viewId: view.id };
     },
     [query, limit],
     ['items', 'item_tag_ids'],
@@ -154,6 +164,7 @@ export function useLinks(): UseLinksResult {
 
   return {
     links: displayed?.links ?? [],
+    viewId: displayed?.viewId ?? 0,
     pinnedCount: displayed?.pinnedCount ?? 0,
     total: displayed?.total,
     hasMore: displayed?.hasMore ?? false,

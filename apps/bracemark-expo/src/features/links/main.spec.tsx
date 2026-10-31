@@ -35,6 +35,8 @@ let mockLayout = 'list';
 let mockDocked = false;
 let mockRailWidth = 280;
 const mockExtraData: unknown[] = [];
+let mockViewId = 0;
+let mockKeyExtractor: ((item: LinkView) => string) | undefined;
 
 jest.mock('@shopify/flash-list', () => {
   const { ScrollView } = jest.requireActual('react-native');
@@ -44,8 +46,10 @@ jest.mock('@shopify/flash-list', () => {
       keyboardShouldPersistTaps,
       keyboardDismissMode,
       extraData,
-    }: ScrollViewProps & { extraData: unknown }) => {
+      keyExtractor,
+    }: ScrollViewProps & { extraData: unknown; keyExtractor: (item: LinkView) => string }) => {
       mockExtraData.push(extraData);
+      mockKeyExtractor = keyExtractor;
       return (
         <ScrollView
           testID={testID}
@@ -94,6 +98,7 @@ jest.mock('./view-state-provider', () => {
 jest.mock('./use-links', () => ({
   useLinks: () => ({
     links: mockLinks,
+    viewId: mockViewId,
     pinnedCount: 0,
     hasMore: false,
     showMore: jest.fn(),
@@ -125,6 +130,8 @@ beforeEach(() => {
   mockDocked = false;
   mockRailWidth = 280;
   mockExtraData.length = 0;
+  mockViewId = 0;
+  mockKeyExtractor = undefined;
 });
 
 const link = { path: 'links/a.enc', url: 'https://example.com', tagIds: [] } as unknown as LinkView;
@@ -261,6 +268,31 @@ test('each locked list gets a pane of its own', () => {
   view.rerender(<Main />);
 
   expect(paneSays()).toBe('asks');
+});
+
+// --- the row key: what FlashList anchors on --------------------------------------
+//
+// A row that keeps its key across two views is the anchor FlashList holds still,
+// so a drawer pick jumps to wherever that link sits in the new order (the note
+// above `keyExtractor`; docs/client-queries.md). The same key across two renders
+// of ONE view is what the refresh pill and a local save rely on, hence both ways.
+describe('the row key', () => {
+  const keyInView = (viewId: number) => {
+    mockViewId = viewId;
+    mockLinks = [link];
+    mockSelection = { kind: 'none' };
+    render(<Main />);
+    cleanup();
+    return mockKeyExtractor?.(link);
+  };
+
+  it('differs for the same link in another view, so nothing anchors across the change', () => {
+    expect(keyInView(1)).not.toBe(keyInView(2));
+  });
+
+  it('holds within a view, so a re-read keeps its anchor', () => {
+    expect(keyInView(1)).toBe(keyInView(1));
+  });
 });
 
 // --- the rail toggle: what reaches the mounted items ---------------------------
