@@ -28,7 +28,7 @@ export interface SharePayload {
   title?: string;
   // The page's read-mode copy, when Safari's preprocessing found an article
   // (share-extension/preprocessing.js). Opaque here — the app validates it where it
-  // stores it (expo-react share-read-mode.ts) — and carried through the draft only.
+  // stores it (expo-react store-read-mode.ts) — and carried through the draft only.
   readMode?: unknown;
 }
 

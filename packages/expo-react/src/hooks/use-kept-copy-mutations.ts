@@ -4,13 +4,20 @@ import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
 import { type KeptCopyFacet, removeKeptCopy } from '../data/mutations';
 import { linkIdOf, type LinkItem } from '../data/queries';
+import { storeReadModeCopy } from '../data/store-read-mode';
 
-// Removing kept copies — web-react's useKeptCopyMutations, on expo's store. Never
-// gated on the plan, like reading.
+// Keeping and removing copies on expo. Removal is web-react's useKeptCopyMutations
+// on expo's store — never gated on the plan, like reading. Keeping (`keepReadMode`)
+// is the capture screen's write: the copy its WebView took from the live page,
+// stored at the active-page tier (data/store-read-mode.ts). THAT is plan-gated, and
+// by the caller — the screen checks `keptCopies` before it captures.
 
 const ALL_KEPT_COPIES: readonly KeptCopyFacet[] = ['readMode', 'screenshot'];
 
 export interface KeptCopyMutations {
+  // Store a read-mode copy taken from a live page on this device. Resolves whether
+  // it was stored (false for a payload that isn't a ReaderDoc).
+  keepReadMode: (link: LinkItem, doc: unknown) => Promise<boolean>;
   removeCopy: (link: LinkItem, facet: KeptCopyFacet) => Promise<boolean>;
   removeAllCopies: (links: readonly LinkItem[]) => Promise<number>;
 }
@@ -44,5 +51,18 @@ export function useKeptCopyMutations(): KeptCopyMutations {
     [username, requestSync],
   );
 
-  return useMemo(() => ({ removeCopy, removeAllCopies }), [removeCopy, removeAllCopies]);
+  const keepReadMode = useCallback(
+    async (link: LinkItem, doc: unknown) => {
+      if (!username) throw new Error('useKeptCopyMutations: no active account');
+      const stored = await storeReadModeCopy(username, linkIdOf(link), doc);
+      if (stored) requestSync();
+      return stored;
+    },
+    [username, requestSync],
+  );
+
+  return useMemo(
+    () => ({ keepReadMode, removeCopy, removeAllCopies }),
+    [keepReadMode, removeCopy, removeAllCopies],
+  );
 }

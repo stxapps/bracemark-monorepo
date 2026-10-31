@@ -6,11 +6,12 @@ import { readFileBytes, resetFileSystem } from '../testing/memory-file-system';
 import { getDb, items } from './db';
 import { dataFileFor } from './file-store';
 import { readExtraction } from './queries';
-import { applyShareReadMode } from './share-read-mode';
+import { storeReadModeCopy } from './store-read-mode';
 import { seedNewAccount } from './sync-store';
 
-// Storing the read-mode copy a Safari share carried. The copy is the share
-// extension's output read back off disk, so it is validated here; once valid it is
+// Storing a read-mode copy taken from a live page (a Safari share, the capture
+// screen's WebView). The copy crossed a process or context boundary, so it is
+// validated here; once valid it is
 // written as the browser extension's are — gzipped, at the active-page tier.
 
 jest.mock('expo-sqlite', () => require('../testing/node-sqlite'));
@@ -32,7 +33,7 @@ beforeEach(async () => {
 });
 
 it('stores the copy gzipped and records it at the active-page tier', async () => {
-  await expect(applyShareReadMode(USER, 'l1', DOC)).resolves.toBe(true);
+  await expect(storeReadModeCopy(USER, 'l1', DOC)).resolves.toBe(true);
 
   const extraction = await readExtraction('l1');
   expect(extraction?.readModeId).toBe('copy-1');
@@ -43,6 +44,6 @@ it('stores the copy gzipped and records it at the active-page tier', async () =>
 });
 
 it('stores nothing for a copy that is not a ReaderDoc', async () => {
-  await expect(applyShareReadMode(USER, 'l1', { html: '<p>x</p>' })).resolves.toBe(false);
+  await expect(storeReadModeCopy(USER, 'l1', { html: '<p>x</p>' })).resolves.toBe(false);
   expect(await readExtraction('l1')).toBeUndefined();
 });

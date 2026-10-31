@@ -926,7 +926,7 @@ available 51.1 MB`**, with no memory warning at any point. `saved` comes
   process; the sheet only receives the result and puts it on the draft untouched
   (`readMode`, `z.unknown()` — validated where it's stored, so a bad copy costs the
   copy, never the draft). Only the **app's drain** stores it
-  (`share-read-mode.ts`), and only when ShareBridge says the account keeps it: the
+  (`store-read-mode.ts`), and only when ShareBridge says the account keeps it: the
   plan's `keptCopies` and the synced save setting, read from the store at the
   drain. The immediate upload ignores it. Written at `expo:fg` — a live page, the
   user's own Safari session. ⚠ The bundle has to stay small: it runs in every

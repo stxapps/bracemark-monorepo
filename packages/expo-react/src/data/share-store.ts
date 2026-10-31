@@ -99,7 +99,7 @@ const mutations = (): typeof import('./mutations') => require('./mutations');
 const queries = (): typeof import('./queries') => require('./queries');
 const reviewPrompts = (): typeof import('./review-prompt-store') =>
   require('./review-prompt-store');
-const shareReadMode = (): typeof import('./share-read-mode') => require('./share-read-mode');
+const storeReadMode = (): typeof import('./store-read-mode') => require('./store-read-mode');
 const shareUpload = (): typeof import('./share-upload') => require('./share-upload');
 const subscriptions = (): typeof import('./subscription-store') => require('./subscription-store');
 
@@ -143,7 +143,7 @@ const shareDraftSchema = z.object({
   sharedAt: z.number().int(),
   // The page's read-mode copy, from the iOS preprocessing file's run inside Safari —
   // a `ReaderDoc`, carried as-is and validated where it is stored
-  // (share-read-mode.ts), so a copy that doesn't parse costs the copy and never the
+  // (store-read-mode.ts), so a copy that doesn't parse costs the copy and never the
   // draft. Optional: absent for a share that isn't from Safari, or whose page has no
   // article. The upload path ignores it — only the app's drain stores a copy.
   readMode: z.unknown().optional(),
@@ -681,7 +681,7 @@ export async function drainShareOutbox(
     }
     await applyShareDraft(session.username, draft);
     if (options.keepReadMode && draft.readMode !== undefined) {
-      await shareReadMode().applyShareReadMode(session.username, draft.id, draft.readMode);
+      await storeReadMode().storeReadModeCopy(session.username, draft.id, draft.readMode);
     }
     applied.push(pathFromId(draft.id, LINKS_PREFIX));
     entry.delete();
