@@ -1,5 +1,12 @@
 import { z } from '../zod';
 
+export {
+  isReaderHref,
+  READER_DOC_MAX_BLOCKS,
+  READER_DOC_MAX_CHARS,
+  READER_DOC_VERSION,
+} from './reader-doc-core';
+
 // The read-mode copy of a page — what `extraction.readModeId` names. A `files/{id}.enc`
 // blob whose plaintext is this document as gzipped UTF-8 JSON (web-react
 // `lib/reader-doc-bytes.ts` is the codec). See docs/link-extraction-keep.md.
@@ -20,9 +27,7 @@ import { z } from '../zod';
 // know. And, as in entities.ts, no `.max()` anywhere: this schema parses stored bytes,
 // so a cap here is a reader cap that silently empties a copy written before it
 // (docs/data-limits.md — the tripwire). The caps live at the one writer, the capture
-// (READER_DOC_MAX_BLOCKS / READER_DOC_MAX_CHARS below).
-
-export const READER_DOC_VERSION = 1;
+// (READER_DOC_MAX_BLOCKS / READER_DOC_MAX_CHARS, in reader-doc-core.ts).
 
 // The block kinds this version writes. A reader's switch is over these; anything else
 // is a future kind and is skipped.
@@ -80,26 +85,6 @@ export const readerDocSchema = z.looseObject({
   blocks: z.array(readerBlockSchema),
 });
 export type ReaderDoc = z.infer<typeof readerDocSchema>;
-
-// The writer's ceilings — enforced by the capture, never by the schema (above). Sized
-// far past any article (a long-read is a few hundred blocks and ~100k characters) so
-// they only ever bind on a page that isn't one: an endless feed Readability took for
-// content. Past either, the capture stops at the block that crossed it.
-export const READER_DOC_MAX_BLOCKS = 10_000;
-export const READER_DOC_MAX_CHARS = 1_000_000;
-
-// Is this a link target a reader may render as a link? Absolute http(s) only: no
-// `javascript:`, no `data:`, nothing relative (there is no base to resolve against in
-// the app). Used by the capture to drop a target and by a renderer to refuse one.
-export function isReaderHref(href: string | undefined): href is string {
-  if (!href) return false;
-  try {
-    const { protocol } = new URL(href);
-    return protocol === 'http:' || protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
 
 // The document's text in reading order, one block per line — what search would index
 // and what a word count reads. Unknown kinds contribute what text they carry.

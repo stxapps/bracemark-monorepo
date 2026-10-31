@@ -1,14 +1,15 @@
 import { isProbablyReaderable, Readability } from '@mozilla/readability';
 
+import type { ReaderBlock, ReaderDoc, ReaderRun } from '@stxapps/shared';
+// Values from the zod-free subpath, types from the barrel (erased at build): this file
+// is bundled into scripts that run inside a page, and the barrel would carry zod and
+// every schema in the package with it (reader-doc-core.ts says so too).
 import {
   isReaderHref,
   READER_DOC_MAX_BLOCKS,
   READER_DOC_MAX_CHARS,
   READER_DOC_VERSION,
-  type ReaderBlock,
-  type ReaderDoc,
-  type ReaderRun,
-} from '@stxapps/shared';
+} from '@stxapps/shared/reader/reader-doc-core';
 
 // The read-mode capture — ONE converter for every client that captures from a live
 // page, run INSIDE that page, because Readability needs a DOM:
