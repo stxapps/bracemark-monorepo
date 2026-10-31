@@ -1,8 +1,10 @@
 ## reader — reading a kept copy, highlights and notes
 
 The screen that shows a link's read-mode copy, and what the user adds to it:
-highlights, a note on a highlight, a quote taken from it. **Planned — nothing here
-is built.** The copy it reads, and when one is taken, is
+highlights, a note on a highlight, a quote taken from it.
+
+**State today.** bracemark-web's reader is built: _the web reader_ below. Highlights,
+notes, quotes, the Markdown export and the expo reader are planned. The copy it reads, and when one is taken, is
 [link-extraction-keep.md](./link-extraction-keep.md); the encrypted-file data path
 the highlights ride is [local-first-sync.md](./local-first-sync.md); the editors'
 conventions this screen should follow are [editors.md](./editors.md); and what
@@ -17,13 +19,42 @@ does not exist inside the expo app at all. The reader is what turns the read-mod
 facet from bytes into something a person opens; the highlights are what make a copy
 _theirs_ rather than a cache.
 
+### the web reader — `/read?link=<id>`
+
+`apps/bracemark-web/src/app/(app)/read/`. One route, one link, a tab per kept copy it
+has (Read mode, Screenshot) and no tabs for one. Reached from the link row menu's
+**Read**, which appears only on a link that has a copy (`link-row-menu.tsx`) — the
+reader has nothing else to show, and an item leading to an empty page is a promise
+the row can't keep. The ✕ returns to the links view the user left
+(`lib/links-return.ts`, as Settings' does).
+
+- **A query parameter, not a segment.** A static export can't build a page per id;
+  the one exported `/read` answers every link, and the service worker's precache
+  ignores query strings, so the reader opens offline for any copy this device holds
+  ([offline-mode.md](./offline-mode.md)). The id is a random token, never the URL.
+- **Locks come first.** A link in a locked list is that list's contents, so the page
+  swaps in the unlock pane before reading the copy — and drops the _Open page_
+  link, since the host is contents too ([locks.md](./locks.md), _the two enforcement
+  edges_). Otherwise a `/read?link=` URL in the history would be a way round a lock.
+- **Reading is never gated.** A copy that exists is shown on every plan; only the
+  empty state reads `keptCopies`, to offer Plus beside the way a copy is taken (open
+  the page, save it with the browser extension) — iap/plans.ts, the `keptCopies` note.
+- **Bytes on demand.** `useReaderDoc` (web-react) asks `FileContentProvider` for the
+  blob at once — no settle delay, the reader is a deliberate open — then gunzips and
+  parses it; bytes that aren't a copy settle as "can't be read", never a throw. A copy
+  this device never downloaded, opened offline, says so after a few seconds instead
+  of spinning.
+
 ### rendering — text nodes only
 
 A `ReaderDoc` is blocks of plain strings (`@stxapps/shared` `reader/reader-doc.ts`),
 and the renderer's whole job is to keep it that way:
 
-- **web**: one React component per block kind, strings as children. Never
-  `dangerouslySetInnerHTML`, never an iframe's `srcdoc`.
+- **web**: one React component per block kind, strings as children — web-ui's
+  `components/reader/reader-article.tsx`, whose spec pins that markup in a copy is
+  printed, not parsed. Never `dangerouslySetInnerHTML`, never an iframe's `srcdoc`.
+  The page's `<h1>` is the article title, so the copy's own headings shift down a
+  level; consecutive list items become one real `<ul>`/`<ol>`.
 - **expo**: native `<Text>` per block — selectable, scaled by the system font size,
   no WebView.
 - **an unknown `kind`** renders nothing, and the rest of the document renders: a
@@ -116,8 +147,9 @@ the copies needs them downloaded, and `files/` is lazy — see
 
 ### open
 
-- Where the reader sits in each app's routing, and how it is reached from a row
-  (a menu item, the row itself when a copy exists).
+- On expo: where the reader sits in the router, and whether a row with a copy
+  opens it directly. (On web it is the row menu's _Read_; a row's own click stays
+  the page itself.)
 - Highlight colours: one, a few, or user-defined.
 - Whether a quote can be a highlight's own share target on expo (the share sheet
   going the other way).

@@ -46,6 +46,7 @@ export * from './hooks/use-lists';
 export * from './hooks/use-object-url';
 export * from './hooks/use-pending-changes-count';
 export * from './hooks/use-pin-mutations';
+export * from './hooks/use-reader-doc';
 export * from './hooks/use-recovery-code';
 export * from './hooks/use-setting-mutations';
 export * from './hooks/use-settings';
