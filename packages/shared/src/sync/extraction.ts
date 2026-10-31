@@ -1,4 +1,10 @@
-import { cutToLength, type Extraction, type Facet, LINK_TITLE_MAX } from './entities';
+import {
+  cutToLength,
+  type Extraction,
+  type Facet,
+  LINK_TITLE_MAX,
+  type SettingsGeneral,
+} from './entities';
 
 // The shared extraction OUTCOME rules — title normalization, quality ranking, retry pacing,
 // and (re)extraction eligibility — that every client must agree on. They operate on the
@@ -137,4 +143,24 @@ export function replacedExtractionFileIds(
 ): string[] {
   const kept = new Set(extractionFileIds(next));
   return extractionFileIds(prev).filter((id) => !kept.has(id));
+}
+
+// Which kept copies a save made on the page also takes — the synced save setting
+// (`keepReadModeOnSave` / `keepScreenshotOnSave`, entities.ts), resolved to its
+// defaults. ONE resolver because the defaults differ: read mode ON (a gzipped copy is
+// smaller than the preview every link already stores, and it is the copy people come
+// back for), the screenshot OFF (ten times the bytes, and only some pages want one —
+// it stays one tap on the saved screen). An absent blob, an absent field and a
+// malformed one (the schema's `.catch`) all land on the default. This answers what
+// the user ASKED for; whether the plan allows a capture is `keptCopies`, checked
+// separately by the caller. docs/link-extraction-keep.md, _when a copy is taken_.
+export const KEEP_ON_SAVE_DEFAULTS = { readMode: true, screenshot: false } as const;
+
+export function keepOnSaveOf(
+  settings: Pick<SettingsGeneral, 'keepReadModeOnSave' | 'keepScreenshotOnSave'> | undefined,
+): { readMode: boolean; screenshot: boolean } {
+  return {
+    readMode: settings?.keepReadModeOnSave ?? KEEP_ON_SAVE_DEFAULTS.readMode,
+    screenshot: settings?.keepScreenshotOnSave ?? KEEP_ON_SAVE_DEFAULTS.screenshot,
+  };
 }

@@ -489,12 +489,23 @@ export type SyncedThemeState = z.infer<typeof themeStateSchema>;
 // metered-connection qualifier, if ever wanted, is a device-local companion, not a
 // second copy of this. Round-tripped by `looseObject` on clients that don't model it
 // (bracemark-web/the extension never read it).
+//
+// `keepReadModeOnSave` / `keepScreenshotOnSave` are the KEPT-COPIES save setting
+// (docs/link-extraction-keep.md, _when a copy is taken_): which copies a save made ON
+// THE PAGE also takes. Two booleans, not one enum, because they are independent —
+// read mode alone, the screenshot alone, both, neither. SYNCED: it is what the user
+// wants kept, and a second browser should inherit it. Absent means the DEFAULT, and
+// the defaults are not both false — read mode on, screenshot off — so every reader
+// resolves them through `keepOnSaveOf` (sync/extraction.ts) rather than `?? false`.
+// They only ever ask; the plan's `keptCopies` still decides whether a capture runs.
 export const settingsGeneralSchema = z.looseObject({
   linksLayout: z.string().optional().catch(undefined),
   serverExtraction: z.boolean().optional().catch(undefined),
   // A free `z.string()`, narrowed by `coerceDeviceExtractionMode` at the read edge —
   // see DEVICE_EXTRACTION_MODES for why the tolerant parse matters here.
   deviceExtractionMode: z.string().optional().catch(undefined),
+  keepReadModeOnSave: z.boolean().optional().catch(undefined),
+  keepScreenshotOnSave: z.boolean().optional().catch(undefined),
   // The SYNCED links sort — the two orthogonal axes (see LINK_SORT_ONS /
   // LINK_SORT_ORDERS above): `sortOn` the field (date modified vs. added),
   // `sortOrder` the direction. Global-only (no device split, unlike `linksLayout`):

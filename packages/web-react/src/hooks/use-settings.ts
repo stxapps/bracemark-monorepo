@@ -23,6 +23,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import {
   coerceThemeState,
   DEFAULT_THEME,
+  keepOnSaveOf,
   type LinksLayout,
   type ThemeState,
 } from '@stxapps/shared';
@@ -63,6 +64,11 @@ export interface Settings {
   // OFF BY DEFAULT — `false` until the user turns it on; gates whether a web client
   // sends a saved URL to `bracemark-extractor` (see docs/link-extraction.md).
   serverExtraction: boolean;
+  // The synced kept-copies save setting, RESOLVED (`keepOnSaveOf`: read mode on,
+  // screenshot off by default). For DISPLAY: a capture decided at a save reads the
+  // store at that moment instead (the browser extension's Editor), because this is a
+  // render's copy and answers the defaults until the blob's read lands.
+  keepOnSave: { readMode: boolean; screenshot: boolean };
   // The SYNCED links sort — global-only (no device split), so the synced value IS
   // the applied one. Typed `string` for the same forward-compat reason as
   // `linksLayout`: a newer client's value round-trips and reaches the Settings UI
@@ -98,6 +104,12 @@ export function useSettings(): Settings {
   const linksLayout = linksLayoutSource === 'local' ? localLinksLayout : syncLinksLayout;
   // Off by default: absent (older client / never toggled) reads as opted-out.
   const serverExtraction = general?.serverExtraction ?? false;
+  const keepReadModeOnSave = general?.keepReadModeOnSave;
+  const keepScreenshotOnSave = general?.keepScreenshotOnSave;
+  const keepOnSave = useMemo(
+    () => keepOnSaveOf({ keepReadModeOnSave, keepScreenshotOnSave }),
+    [keepReadModeOnSave, keepScreenshotOnSave],
+  );
 
   // Global-only: the synced value is the applied one (no source resolution like
   // layout/theme). Passed through raw (`string`) so an unknown future value reaches
@@ -131,6 +143,7 @@ export function useSettings(): Settings {
     syncLinksLayout,
     localLinksLayout,
     serverExtraction,
+    keepOnSave,
     sortOn,
     sortOrder,
     theme,

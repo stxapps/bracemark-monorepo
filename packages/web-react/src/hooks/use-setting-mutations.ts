@@ -6,7 +6,7 @@
 //   - setLinksLayoutSource / setLocalLinksLayout / setThemeSource / setLocalTheme /
 //     dismissPreviewsPrompt → the DEVICE-LOCAL `localSettings` store (no account, no
 //     sync — see local-settings-store.ts);
-//   - setSyncLinksLayout / setServerExtraction / setSyncTheme → the SYNCED
+//   - setSyncLinksLayout / setServerExtraction / setKeepOnSave / setSyncTheme → the SYNCED
 //     `settings/general.enc` blob via writeSettingsGeneral, then a sync kick, exactly
 //     like useListMutations writes a list and requests sync.
 //
@@ -33,6 +33,8 @@ export interface SettingMutations {
   // Toggle the SYNCED server-extraction opt-in (the second, explicit opt-in); writes
   // settings/general.enc + syncs, so every device honors the same choice.
   setServerExtraction: (enabled: boolean) => Promise<void>;
+  // The synced kept-copies save setting — either half, or both.
+  setKeepOnSave: (patch: { readMode?: boolean; screenshot?: boolean }) => Promise<void>;
   // Set the SYNCED links sort field / direction; writes settings/general.enc + syncs.
   // Global-only (no device variant), so no "Sync"/"Local" split like layout/theme.
   setSortOn: (sortOn: LinkSortOn) => Promise<void>;
@@ -75,6 +77,18 @@ export function useSettingMutations(): SettingMutations {
     async (enabled: boolean) => {
       if (!username) throw new Error('useSettingMutations: no active account');
       await writeSettingsGeneral(username, { serverExtraction: enabled });
+      requestSync();
+    },
+    [username, requestSync],
+  );
+
+  const setKeepOnSave = useCallback(
+    async (patch: { readMode?: boolean; screenshot?: boolean }) => {
+      if (!username) throw new Error('useSettingMutations: no active account');
+      await writeSettingsGeneral(username, {
+        ...(patch.readMode !== undefined ? { keepReadModeOnSave: patch.readMode } : {}),
+        ...(patch.screenshot !== undefined ? { keepScreenshotOnSave: patch.screenshot } : {}),
+      });
       requestSync();
     },
     [username, requestSync],
@@ -125,6 +139,7 @@ export function useSettingMutations(): SettingMutations {
       setSyncLinksLayout,
       setLocalLinksLayout,
       setServerExtraction,
+      setKeepOnSave,
       setSortOn,
       setSortOrder,
       setThemeSource,
@@ -137,6 +152,7 @@ export function useSettingMutations(): SettingMutations {
       setSyncLinksLayout,
       setLocalLinksLayout,
       setServerExtraction,
+      setKeepOnSave,
       setSortOn,
       setSortOrder,
       setThemeSource,

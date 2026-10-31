@@ -7,6 +7,8 @@ import {
   EXTRACTION_FILE_REF_FIELDS,
   extractionFileIds,
   isFacetEligible,
+  KEEP_ON_SAVE_DEFAULTS,
+  keepOnSaveOf,
   newFacet,
   replacedExtractionFileIds,
   tierOf,
@@ -290,5 +292,21 @@ describe('extractionFileIds', () => {
     ).toEqual(['read', 'shot-1']);
     expect(replacedExtractionFileIds(prev, prev)).toEqual([]);
     expect(replacedExtractionFileIds(undefined, prev)).toEqual([]);
+  });
+});
+
+describe('keepOnSaveOf', () => {
+  it('defaults to read mode on and the screenshot off', () => {
+    // Not `?? false` for both: an absent setting must keep read mode, which is why
+    // every reader goes through this function.
+    expect(keepOnSaveOf(undefined)).toEqual({ readMode: true, screenshot: false });
+    expect(keepOnSaveOf({})).toEqual(KEEP_ON_SAVE_DEFAULTS);
+  });
+
+  it('honours an explicit choice either way', () => {
+    expect(keepOnSaveOf({ keepReadModeOnSave: false, keepScreenshotOnSave: true })).toEqual({
+      readMode: false,
+      screenshot: true,
+    });
   });
 });

@@ -472,6 +472,8 @@ export async function writeSettingsGeneral(
   patch: {
     linksLayout?: LinksLayout;
     serverExtraction?: boolean;
+    keepReadModeOnSave?: boolean;
+    keepScreenshotOnSave?: boolean;
     theme?: ThemeState;
     sortOn?: LinkSortOn;
     sortOrder?: LinkSortOrder;
