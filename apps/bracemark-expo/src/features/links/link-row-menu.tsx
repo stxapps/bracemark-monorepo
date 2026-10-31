@@ -38,11 +38,13 @@
 // the item (web needed the trigger outside the row's <a> instead).
 
 import * as Clipboard from 'expo-clipboard';
+import { router } from 'expo-router';
 import {
   Archive,
   ArchiveRestore,
   ArrowDown,
   ArrowUp,
+  BookOpen,
   Copy,
   FolderInput,
   MoreHorizontal,
@@ -96,6 +98,19 @@ export function LinkRowMenu({
   // The editor is LinkEditHost's sheet at every width (link-edit-panel.tsx).
   const { openEdit } = useLinkEdit();
   const openEditor = (focus?: 'tags' | 'note') => openEdit({ linkId: linkIdOf(link), focus });
+
+  // "Read" — only on a link with a kept copy, as on web (link-row-menu.tsx there):
+  // the reader has nothing else to open. docs/reader.md.
+  const read =
+    link.readModeId || link.screenshotId ? (
+      <DropdownMenuItem
+        testID="link-menu-read"
+        onPress={() => router.push(`/read?link=${encodeURIComponent(linkIdOf(link))}`)}
+      >
+        <Icon as={BookOpen} className="size-4" />
+        <Text>Read</Text>
+      </DropdownMenuItem>
+    ) : null;
 
   const copyLink = (
     <DropdownMenuItem onPress={() => void Clipboard.setStringAsync(link.url)}>
@@ -156,6 +171,7 @@ export function LinkRowMenu({
             </>
           ) : (
             <>
+              {read}
               {copyLink}
               <DropdownMenuItem testID="link-menu-edit" onPress={() => openEditor()}>
                 <Icon as={Pencil} className="size-4" />

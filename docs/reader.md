@@ -3,8 +3,8 @@
 The screen that shows a link's read-mode copy, and what the user adds to it:
 highlights, a note on a highlight, a quote taken from it.
 
-**State today.** bracemark-web's reader is built: _the web reader_ below. Highlights,
-notes, quotes, the Markdown export and the expo reader are planned. The copy it reads, and when one is taken, is
+**State today.** Both apps' readers are built — _the web reader_ and _the expo reader_
+below. Highlights, notes, quotes and the Markdown export are planned. The copy it reads, and when one is taken, is
 [link-extraction-keep.md](./link-extraction-keep.md); the encrypted-file data path
 the highlights ride is [local-first-sync.md](./local-first-sync.md); the editors'
 conventions this screen should follow are [editors.md](./editors.md); and what
@@ -49,6 +49,19 @@ the row can't keep. The ✕ returns to the links view the user left
   this device never downloaded, opened offline, says so after a few seconds instead
   of spinning.
 
+### the expo reader — `/read?link=<id>`
+
+`apps/bracemark-expo/src/app/(app)/read.tsx` over `features/reader/reader-screen.tsx`:
+the same address as web's, a pushed Stack screen behind the (app) gates, reached from
+the row menu's **Read** under the same rule (only on a link with a copy). Same three
+rules as web — locks first, reading and deleting never gated, text only — and the same
+states, read through expo-react's `useReaderDoc`, which reads the decrypted file off
+disk and gunzips it with fflate (Hermes has no DecompressionStream). The screenshot is
+expo-image over the same file. Unlike web it has no empty-state upsell: a link only
+reaches the screen with a copy, and this app can't take one yet
+([link-extraction-keep.md](./link-extraction-keep.md), _expo_), so there would be
+nothing to offer.
+
 ### rendering — text nodes only
 
 A `ReaderDoc` is blocks of plain strings (`@stxapps/shared` `reader/reader-doc.ts`),
@@ -60,7 +73,9 @@ and the renderer's whole job is to keep it that way:
   The page's `<h1>` is the article title, so the copy's own headings shift down a
   level; consecutive list items become one real `<ul>`/`<ol>`.
 - **expo**: native `<Text>` per block — selectable, scaled by the system font size,
-  no WebView.
+  no WebView (`features/reader/reader-article.tsx`). Ordered items are counted per
+  run, since there is no `<ol>` to number them, and the list markers are hidden from
+  VoiceOver/TalkBack, the item's text carrying the content.
 - **an unknown `kind`** renders nothing, and the rest of the document renders: a
   newer client's block must not blank an older client's screen.
 - **links** open only through `isReaderHref` (absolute http(s)), as an ordinary
@@ -151,9 +166,9 @@ the copies needs them downloaded, and `files/` is lazy — see
 
 ### open
 
-- On expo: where the reader sits in the router, and whether a row with a copy
-  opens it directly. (On web it is the row menu's _Read_; a row's own click stays
-  the page itself.)
+- On expo: whether a row with a copy should open the reader on its own press. Today
+  both apps keep a row's press for the page itself and reach the reader through the
+  menu.
 - Highlight colours: one, a few, or user-defined.
 - Whether a quote can be a highlight's own share target on expo (the share sheet
   going the other way).
