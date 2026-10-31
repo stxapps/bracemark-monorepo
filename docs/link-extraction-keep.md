@@ -16,8 +16,9 @@ blobs.
 automatically on a save when the plan has `keptCopies`, and offers read mode and a
 screenshot as taps on its saved screen (`popup/Editor.tsx`, `popup/KeptCopies.tsx`;
 captures in `utils/capture.ts`, `extraction-worker.ts`); bracemark-web reads both at
-`/read?link=<id>` ([reader.md](./reader.md), _the web reader_). Not built: the synced
-save setting (the save follows the plan for now), the per-link and bulk actions,
+`/read?link=<id>` ([reader.md](./reader.md), _the web reader_), and the synced save
+setting chooses what a save keeps (Settings → Link previews → Kept copies). Not
+built: the per-link and bulk actions,
 removal and the orphan sweep, expo, server read mode, and page copy anywhere.
 Everything below marked _planned_ is the design those pieces are built to.
 
@@ -126,23 +127,37 @@ names from the saved site. A real one needs:
 - **Its meter.** `entitlements.maxPageCopies` exists (`iap/plans.ts`) and is
   enforced by nothing; it is client-side when it is, the byte quota its backstop.
 
-### when a copy is taken (planned)
+### when a copy is taken
 
 Three triggers, and deliberately not a fourth:
 
-1. **The save that asks for it.** Built in the browser extension: a save on a plan
-   with `keptCopies` asks for read mode beside `titleImage`, as its own message so a
-   page with no article costs the title nothing (`popup/Editor.tsx`). The saved
+1. **The save that asks for it.** Built in the browser extension, driven by the
+   synced save setting `keepReadModeOnSave` / `keepScreenshotOnSave` (entities.ts),
+   which every reader resolves through `keepOnSaveOf` (`sync/extraction.ts`) because
+   the defaults differ: **read mode on, screenshot off** — the screenshot is ten
+   times the bytes and only some pages want it. A save on a plan with `keptCopies`
+   asks for what the setting says beside `titleImage`, one message per facet so a
+   page with no article costs the title and the screenshot nothing
+   (`popup/Editor.tsx`). ⚠ **The setting is read from the store at the save**, not
+   from `useSettings`: that hook is a render's copy and answers the defaults until
+   the blob's read lands, so a save in the popup's first frames would keep read mode
+   for someone who turned it off — and nothing would show it, since the capture
+   succeeds. The same reason expo's `extractNow` reads its mode at the gesture; a
+   read that fails keeps nothing. The saved
    screen then offers both copies as taps (`popup/KeptCopies.tsx`) — "Keeping…"
    until a facet newer than the ask lands, "Try again" when the background refused
    without writing anything (the tab moved on), and a line suggesting the screenshot
    when read mode came back "not an article", the page a screenshot is for. A free
    account sees the same buttons marked Plus, and a tap opens the web app's
-   Subscription section. _Planned_: one synced account setting — _when I save, also
-   keep: read mode / screenshot_ — applied only to saves made **on the page** (the
-   browser extension's active tab, expo's in-app browser, and for read mode an iOS
-   share from Safari); read mode on by default, screenshot off, because it is ten
-   times the bytes and only some pages want it.
+   Subscription section. The setting itself is two switches in bracemark-web's
+   Settings → Link previews → _Kept copies_ (`_extraction/kept-copies-group.tsx`):
+   shown off and disabled on free beside the upgrade, with the stored value left
+   alone so a returning subscriber keeps their choice, and worded so it never claims
+   a save made in the web app keeps a copy — it can't, the page isn't open there. It
+   applies only to saves made **on the page**; expo's in-app browser and an iOS share
+   from Safari will read the same two fields when they capture (_planned_), and expo
+   renders no switch until then — a setting with no effect on the device holding it
+   is worse than none.
 2. **A per-link action**: _Keep read mode_ / _Keep screenshot_ from a link's menu
    and from the reader. On a client that can't capture that link right now, the
    action says what can (open it in the extension, open it in the app).

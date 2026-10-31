@@ -15,11 +15,11 @@ import { openWebApp } from '@/utils/open-web-app';
 // the only moment the browser extension can take either (docs/link-extraction-keep.md,
 // _when a copy is taken_).
 //
-// Read mode is usually already on its way: Editor asks for it on save when the plan
-// has `keptCopies`, so after a fresh save this row opens on "Keeping…" and settles
-// by itself. The screenshot is never automatic — ten times the bytes, and only some
-// pages want one — so it is one tap here. On the revisit path (an already-saved tab)
-// both are taps.
+// After a fresh save, the copies the synced save setting asked for are already on
+// their way (Editor reads the setting at the save: read mode on and the screenshot
+// off unless the user changed them, and only on a plan with `keptCopies`), so this row
+// opens on "Keeping…" for those and settles by itself. Anything the setting didn't
+// ask for is one tap here, and on the revisit path (an already-saved tab) both are.
 //
 // What each button says comes from the link's extraction, read live by Complete, so
 // it reflects what was actually stored — including by another popup or device —
@@ -33,6 +33,11 @@ import { openWebApp } from '@/utils/open-web-app';
 // a kept copy works on every plan.
 
 type CopyState = 'idle' | 'keeping' | 'kept' | 'failed' | 'noArticle';
+
+// Which copies a save already asked the background for (Editor, from the synced save
+// setting and the plan) — so this row opens on "Keeping…" for those.
+export type KeepRequest = { readMode: boolean; screenshot: boolean };
+export const NO_KEEP_REQUEST: KeepRequest = { readMode: false, screenshot: false };
 
 function stateOf(
   facet: ExtractionItem['facets'][ExtractionFacet],
@@ -107,12 +112,12 @@ function CopyButton({
 export function KeptCopies({
   linkId,
   extraction,
-  readModeRequested,
+  requested = NO_KEEP_REQUEST,
 }: {
   linkId: string;
   extraction: ExtractionItem | undefined;
-  // Editor asked for read mode as part of this popup's save.
-  readModeRequested: boolean;
+  // What Editor asked for as part of this popup's save.
+  requested?: KeepRequest;
 }) {
   const { entitlements } = useEntitlements();
   const entitled = entitlements.keptCopies;
@@ -121,7 +126,14 @@ export function KeptCopies({
   // first render, which is after Editor sent the message.
   const [requestedAt, setRequestedAt] = useState<
     Partial<Record<'readMode' | 'screenshot', number>>
-  >(() => (readModeRequested && entitled ? { readMode: Date.now() - 1 } : {}));
+  >(() => {
+    if (!entitled) return {};
+    const at = Date.now() - 1;
+    return {
+      ...(requested.readMode ? { readMode: at } : {}),
+      ...(requested.screenshot ? { screenshot: at } : {}),
+    };
+  });
 
   const [refused, setRefused] = useState<Partial<Record<'readMode' | 'screenshot', boolean>>>({});
 

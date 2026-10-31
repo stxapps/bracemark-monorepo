@@ -14,7 +14,7 @@ import { Button } from '@stxapps/web-ui/components/ui/button';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { type ActiveTab } from './App';
-import { KeptCopies } from './KeptCopies';
+import { type KeepRequest, KeptCopies } from './KeptCopies';
 import { PageSpecimen } from './PageSpecimen';
 import { PopupBody, PopupTitle } from './Shell';
 
@@ -40,7 +40,7 @@ import { openWebApp } from '@/utils/open-web-app';
 //
 // Below the list row, KeptCopies: the page's read-mode text and a screenshot, both
 // taken from this tab — the only place the browser extension can take them.
-// `justSaved` tells it read mode is already on its way (Editor asks for it on save).
+// `requested` tells it which copies this popup's save already asked for (Editor).
 //
 // The footer button reads "Open Bracemark" (navigation), not "view this link": the
 // extension's session doesn't cross origins (docs/browser-extension.md), so a user
@@ -48,11 +48,11 @@ import { openWebApp } from '@/utils/open-web-app';
 export function Complete({
   link,
   tab,
-  justSaved = false,
+  requested,
 }: {
   link: LinkItem;
   tab?: ActiveTab;
-  justSaved?: boolean;
+  requested?: KeepRequest;
 }) {
   const id = linkIdOf(link);
   // Re-read the link + extraction live so background backfills/captures show up. The
@@ -100,7 +100,7 @@ export function Complete({
         </p>
       )}
 
-      <KeptCopies linkId={id} extraction={extraction} readModeRequested={justSaved} />
+      <KeptCopies linkId={id} extraction={extraction} requested={requested} />
 
       <Button
         variant="outline"

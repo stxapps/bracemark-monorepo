@@ -40,8 +40,9 @@ const extraction = (patch: Partial<ExtractionItem> = {}): ExtractionItem =>
     ...patch,
   }) as ExtractionItem;
 
-const mount = (ex: ExtractionItem | undefined, readModeRequested = false) =>
-  render(<KeptCopies linkId="l1" extraction={ex} readModeRequested={readModeRequested} />);
+const READ_MODE_ASKED = { readMode: true, screenshot: false };
+const mount = (ex: ExtractionItem | undefined, requested?: typeof READ_MODE_ASKED) =>
+  render(<KeptCopies linkId="l1" extraction={ex} requested={requested} />);
 
 beforeEach(() => {
   mockKeptCopies = true;
@@ -50,13 +51,13 @@ beforeEach(() => {
 });
 
 test('a fresh save opens on “Keeping…” for read mode, and settles when the copy lands', () => {
-  const { rerender } = mount(extraction(), true);
+  const { rerender } = mount(extraction(), READ_MODE_ASKED);
   expect(screen.getByRole('button', { name: /keeping/i })).toHaveProperty('disabled', true);
 
   rerender(
     <KeptCopies
       linkId="l1"
-      readModeRequested
+      requested={READ_MODE_ASKED}
       extraction={extraction({
         readModeId: 'r1',
         facets: {
@@ -127,10 +128,15 @@ test('“not an article” explains itself and still lets the user ask', () => {
 
 test('free: a tap opens Subscription in the web app and captures nothing', () => {
   mockKeptCopies = false;
-  mount(extraction(), true);
+  mount(extraction(), READ_MODE_ASKED);
 
   // Not "Keeping…" — Editor sends nothing on free, so neither does this row assume it did.
   fireEvent.click(screen.getByRole('button', { name: /read mode — a plus feature/i }));
   expect(mockOpenWebApp).toHaveBeenCalledWith('/settings/subscription');
   expect(mockSendMessage).not.toHaveBeenCalled();
+});
+
+test('a save that asked for the screenshot too opens on “Keeping…” for both', () => {
+  mount(extraction(), { readMode: true, screenshot: true });
+  expect(screen.getAllByRole('button', { name: /keeping/i })).toHaveLength(2);
 });
