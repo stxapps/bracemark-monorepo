@@ -468,6 +468,34 @@ real performance. See [share-sheet.md](./share-sheet.md) and
 running — and which apps work on which of the five devices — is
 [device-testing.md](./device-testing.md).
 
+#### ⚠ the pasteboard
+
+**Simulator copies the Mac's clipboard onto the device, so a copy made by hand
+during a run can fail the run.** `BULK-COPY-001` reads the app's write back through
+the system Paste (`flows/bulk-copy.yaml`), which is the one honest reader, and it
+pastes whatever the device's pasteboard holds at that moment. A staging iOS run on
+2026-11-01 failed it with "Copied" asserted and an unrelated URL in the Note field:
+the Mac's clipboard had changed in the seconds between the flow's Copy and its
+Paste. The commit and the build were the same on the rerun, which passed, and a
+native run stops at its first failure, so one stray ⌘C ended the run.
+
+The setting is _Edit → Automatically Sync Pasteboard_, stored as the single global
+key `PasteboardAutomaticSync` in `com.apple.iphonesimulator`.
+`e2e/runner/native-run.ts` refuses an iOS run unless the key reads `0`. Like the
+keyboard key, Simulator reads it only at launch: measured on iOS 26.5, a Mac copy
+still reached the device after the `defaults write`, and stopped after a restart.
+The check cannot see a Simulator that has not been restarted. Quitting Simulator
+also shut the booted iPad down, and relaunching it booted the iPhone instead, so
+boot the device you want again afterwards.
+
+```sh
+defaults write com.apple.iphonesimulator PasteboardAutomaticSync -bool false
+```
+
+The cost is that copy and paste between the Mac and a simulator stop working for
+hand testing too. Android's emulator has clipboard sharing of its own, which no
+run has been seen to trip and which the runner does not check.
+
 #### ⚠ `adb shell` has no argv
 
 **Everything after `shell` is joined with spaces and re-split by the device's

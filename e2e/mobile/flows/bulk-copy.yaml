@@ -8,6 +8,10 @@
 # landed, in display order, and that the mode survived it (docs/editors.md, _bulk
 # edit_ — Copy is the one action that does not exit).
 #
+# That reader also takes whatever else reached the pasteboard: a Mac copy made
+# mid-run lands here unless Simulator's sync is off, which the iOS preflight
+# requires (docs/app-drivers.md, _the pasteboard_).
+#
 # The "Copied" flash is asserted on iOS only. It lasts 1.5s, and measured on the
 # Pixel 8 AVD a Maestro tap returns about six seconds after it presses, so the
 # label has reverted before any assertion can run there. "Copy" / "Copied" is

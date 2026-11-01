@@ -280,8 +280,31 @@ async function assertIosSoftwareKeyboard(deviceId: string): Promise<void> {
   }
 }
 
+// Simulator copies the Mac's clipboard onto the device, so text copied by hand
+// mid-run replaces what the app wrote. `BULK-COPY-001` reads the app's write back
+// through the system Paste, so it pastes that text and fails as if the app had
+// written the wrong thing, and a native run stops at its first failure. Like the
+// keyboard key above this is one Simulator.app-wide key, read only at Simulator
+// launch: a `defaults write` without a restart passes this check and keeps syncing.
+async function assertIosPasteboardIsolated(): Promise<void> {
+  const result = await capture(
+    'defaults',
+    ['read', 'com.apple.iphonesimulator', 'PasteboardAutomaticSync'],
+    { allowFailure: true },
+  );
+  if (result.stdout.trim() !== '0') {
+    throw new Error(
+      'Automatically Sync Pasteboard is on in Simulator, so anything copied on this Mac mid-run ' +
+        'lands on the device. Run `defaults write com.apple.iphonesimulator ' +
+        'PasteboardAutomaticSync -bool false`, restart Simulator, and boot the device again ' +
+        '(docs/app-drivers.md, _the pasteboard_).',
+    );
+  }
+}
+
 async function iosDevice(deviceId: string): Promise<{ device: DeviceIdentity; app: AppIdentity }> {
   await assertIosSoftwareKeyboard(deviceId);
+  await assertIosPasteboardIsolated();
   const result = await capture('xcrun', ['simctl', 'list', 'devices', 'booted', '--json']);
   const parsed = JSON.parse(result.stdout) as {
     devices: Record<
