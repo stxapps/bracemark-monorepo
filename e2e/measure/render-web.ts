@@ -13,6 +13,7 @@ import { stageLocalWebExport } from '../runner/web-export';
 import { waitForSync } from '../seed/steps';
 import { API_URL, CHROME_PATH, WEB_URL } from '../web/fixtures/env';
 import { launchApp } from '../web/fixtures/launch';
+import { openSidebarItem } from '../web/fixtures/links';
 import { grantPlusAndLoad } from '../web/fixtures/plan';
 import { writeBackupLibrary, writeWorstBackup } from './library';
 import { calibrate, type Calibration, instrument, type LegResult, measureLeg } from './main-thread';
@@ -35,10 +36,12 @@ import { printTable } from './native';
 // gives; the same instrument (main-thread.ts), with its positive control first.
 //
 // One fresh Plus account, restored from a `plus-full`-shaped backup WITH its
-// preview images and left to sync to rest, then per layout:
+// preview images and left to sync to rest, then per layout, on Show All, because
+// `/links` opens on My List and that is 31 links of the 1,000:
 //
 //   scroll    a fast wheel scroll down the list and back up, over the list's
-//             own scroller (a wheel goes to the scroller under the pointer).
+//             own scroller (a wheel goes to the scroller under the pointer),
+//             each run from the top of the first page.
 //   rail      TOGGLES hide/show pairs of the docked rail. Each changes the list
 //             pane's width, which re-measures every virtualized row.
 //
@@ -343,8 +346,17 @@ async function measureLayout(
   const runs: RenderRun[] = [];
   const measure = (leg: string, run: number) =>
     measureOptions(options, runDir, `${leg}-${layout}`, run);
+  // Through another view, because the change is the reset: back to the top and
+  // the first page (`_layouts/shared/hooks.ts`), which makes the runs one run.
+  // Then its own reads out of the window's way.
+  const openShowAll = async () => {
+    await openSidebarItem(page, 'My List');
+    await openSidebarItem(page, 'Show All');
+    await page.waitForTimeout(3000);
+  };
   for (let run = 1; run <= options.repeat && options.legs.includes('scroll'); run++) {
     console.log(`\nscroll, ${layout} layout, run ${run}/${options.repeat}`);
+    await openShowAll();
     const { x, y } = await scroller(page);
     await page.mouse.move(x, y);
     runs.push(
@@ -355,11 +367,16 @@ async function measureLayout(
             await page.waitForTimeout(WHEEL_INTERVAL_MS);
           }
           // The positive control: a clean reading is only news if the list
-          // moved. A wheel over the wrong element scrolls nothing and reads 0.
+          // moved. A wheel over the wrong element scrolls nothing and reads 0, and
+          // a short list stops the wheel at its end, which reads nearly as well:
+          // My List took 2,329 px of the 12,000 asked for. Half has to land.
           if (direction === 1) {
             const reached = (await scroller(page)).top;
-            if (reached < WHEEL_PX * 10) {
-              throw new Error(`the wheel scrolled the list only ${reached} px — it is not over it`);
+            if (reached < (WHEEL_PX * options.wheels) / 2) {
+              throw new Error(
+                `the wheel scrolled the list only ${reached} px of ` +
+                  `${WHEEL_PX * options.wheels} — it is not over it, or the list is too short`,
+              );
             }
             console.log(`  (scrolled ${reached} px down)`);
           }
@@ -369,6 +386,7 @@ async function measureLayout(
       }),
     );
   }
+  if (options.legs.includes('rail')) await openShowAll();
   for (let run = 1; run <= options.repeat && options.legs.includes('rail'); run++) {
     console.log(`\nrail, ${layout} layout, run ${run}/${options.repeat}`);
     runs.push(

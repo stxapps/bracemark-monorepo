@@ -5,7 +5,8 @@ import { pathToFileURL } from 'node:url';
 import { MEASURE_OUTPUT, profileDir } from '../paths';
 import { type NativePlatform } from '../runner/cli';
 import { deviceWidth, resolveDevice } from '../runner/device';
-import { createRunId, writeJson } from '../runner/lib';
+import { boxOf, findNodes, parseHierarchy } from '../runner/hierarchy';
+import { createRunId, maestroHierarchy, writeJson } from '../runner/lib';
 import { assertOriginOwnedByRepo } from '../runner/stack';
 import { type E2EWidth } from '../runner/width';
 import { API_URL, WEB_URL } from '../web/fixtures/env';
@@ -56,9 +57,11 @@ import {
 // of what a row costs to mount, so a library without them would under-read the
 // list — then pulled by the device and left to come to rest before anything is
 // measured: a sync still running writes `items` rows the whole time, and every
-// live read on screen re-runs on them. Then per layout:
+// live read on screen re-runs on them. Then per layout, on Show All, because the
+// links screen opens on My List and that is 31 links of the 1,000:
 //
-//   scroll    FLINGS flings down the list and as many back up, under the probe.
+//   scroll    FLINGS flings down the list and as many back up, under the probe,
+//             each run from the top of the first page (flows/render-show-all.yaml).
 //             The headline is DROPPED FRAMES: a scroll's jank is a run of blocks
 //             each under the 50 ms a stall needs (lib/stall-probe.ts), which the
 //             stall count reads as a clean run.
@@ -284,16 +287,54 @@ async function measureLayout(
   const runs: RenderRun[] = [];
   for (let run = 1; run <= options.repeat && options.legs.includes('scroll'); run++) {
     console.log(`\nscroll, ${layout} layout, run ${run}/${options.repeat}`);
-    await flow('render-scroll.yaml', options, { FLINGS: String(options.flings) });
+    await openShowAll(width, options);
+    await flow('render-scroll.yaml', options, {
+      FLINGS: String(options.flings),
+      TOP_ROW: await topRow(options),
+    });
     runs.push({ leg: 'scroll', layout, run, ...(await readProbe(options, 'scroll')) });
   }
   if (width !== 'wide') return runs;
+  if (options.legs.includes('rail')) await openShowAll(width, options);
   for (let run = 1; run <= options.repeat && options.legs.includes('rail'); run++) {
     console.log(`\nrail, ${layout} layout, run ${run}/${options.repeat}`);
     await flow('render-rail.yaml', options, { TOGGLES: String(options.toggles) });
     runs.push({ leg: 'rail', layout, run, ...(await readProbe(options, 'rail')) });
   }
   return runs;
+}
+
+// The whole library, at the top of its first page, with the view change's own
+// reads out of the first window's way (flows/render-show-all.yaml).
+async function openShowAll(width: E2EWidth, options: Options): Promise<void> {
+  const rows = FIRST_ROWS[options.library];
+  await flow('render-show-all.yaml', options, {
+    LIST_ROW: rows.list,
+    TAG_ROW: rows.tag,
+    E2E_WIDTH: width,
+  });
+  await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
+}
+
+// The row at the top of the list, as a pattern for the scroll flow's positive
+// control. Its whole label, because the seed repeats a title every 24 links
+// (docs/e2e.md, _scale, loading and offline_): a title alone can be on screen
+// again at the turn, and the control would fail on a list that had moved.
+async function topRow(options: Options): Promise<string> {
+  const root = parseHierarchy(await maestroHierarchy(options));
+  const [list] = findNodes(root, (attributes) => attributes['resource-id'] === 'links-list');
+  if (!list) throw new Error('no links-list on screen to take the top row from');
+  const labelled = findNodes(list, (attributes) =>
+    /\.\w+/.test(attributes.accessibilityText || attributes.text || ''),
+  );
+  const [top] = labelled.sort((a, b) => boxOf(a).top - boxOf(b).top);
+  const label = top?.attributes?.accessibilityText || top?.attributes?.text;
+  if (!label) throw new Error('no link row in links-list to take the top row from');
+  console.log(`  (top row: ${label.replaceAll('\n', ' ')})`);
+  // Up to the relative time, which can tick over between this read and the assert:
+  // a pattern that no longer matches would pass on a list that never moved.
+  const stable = label.replace(/, Updated .*$/s, '');
+  return `${stable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replaceAll('\n', '.*')}.*`;
 }
 
 // The tree legs, once each, after the layouts — no layout changes what they

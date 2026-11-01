@@ -1,7 +1,8 @@
 # The render leg's scroll window (e2e/measure/render-mobile.ts): open the
 # probe's `scroll` window, fling the links list down FLINGS times and back up as
 # many, close the window, and stop on the reading. Starts on the links screen at
-# the top of the list.
+# the top of Show All, on its first page (flows/render-show-all.yaml), and ends
+# wherever the flings left it.
 #
 # The swipes run between 30% and 75% of the screen's height down its middle:
 # below the topbar and the search bar, above the measurement controls in the
@@ -11,9 +12,17 @@
 # that outruns the render. A swipe that lands mid-momentum catches and re-flings
 # the list, which is harsher still; nothing waits for the list to rest.
 #
-# Parameters: FLINGS — swipes each way.
+# The assert between the two directions is the leg's positive control, web's
+# `reached` check by another route: a quiet reading is only news if the list
+# moved, and swipes over something that does not scroll read 0 dropped frames.
+# It is a read of the screen at the turn, so it holds no JS-thread work. The first
+# assert proves the second: a pattern that matched no row would call any list gone.
+#
+# Parameters: FLINGS — swipes each way; TOP_ROW — a pattern for the row at the top
+# before the first swipe, which has to be gone by the turn.
 appId: com.bracemark.app
 ---
+- assertVisible: '${TOP_ROW}'
 - tapOn:
     id: 'measure-begin-scroll'
 - repeat:
@@ -23,6 +32,7 @@ appId: com.bracemark.app
           start: 50%, 75%
           end: 50%, 30%
           duration: 150
+- assertNotVisible: '${TOP_ROW}'
 - repeat:
     times: ${FLINGS}
     commands:

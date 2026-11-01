@@ -52,7 +52,9 @@ export function StallReadout({ className }: { className?: string }) {
 // bottom-leading corner: on the links screen that is clear of the FAB
 // (trailing) and of the swipe path down the middle, so no gesture the leg makes
 // lands on them. `pointerEvents="box-none"` lets a touch beside the controls
-// reach what is under them.
+// reach what is under them, and the readout takes none at all: on an iPhone's
+// Export screen it wraps over the submit button, and the data leg's tap landed on
+// the text and the export never started.
 export function RenderMeasureControls({
   windows = LINKS_WINDOWS,
 }: {
@@ -62,7 +64,9 @@ export function RenderMeasureControls({
   if (probe === null) return null;
   return (
     <View pointerEvents="box-none" className="absolute bottom-2 left-2 max-w-[45%] gap-1">
-      <StallReadout className="bg-background text-[8px]" />
+      <View pointerEvents="none">
+        <StallReadout className="bg-background text-[8px]" />
+      </View>
       <View className="flex-row gap-1">
         {windows.map((label) => (
           <Pressable

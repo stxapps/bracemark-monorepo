@@ -3967,6 +3967,30 @@ runs it.
   only, so on native it needs a tablet simulator or the `bracemark-tablet` AVD.
   On a phone the rail is a drawer and the leg is skipped.
 
+⚠ **Both run on Show All, not on the view the app opens on.** The links screen
+opens on My List, and a 1,000-link `plus-full` library spreads its links over 24
+lists: My List holds 31. The legs ran there until 2026-11-01, which meant 31 rows
+in a run that said 1,000. The wheel took 2,329 of the 12,000 px asked for, the
+flings hit the end and bounced, nothing paged, and the list never outran the
+render, which is the case the leg exists for. A short list reads as a fast one and
+no check said otherwise.
+
+- **Each scroll run reaches Show All through another view.** The change is the
+  reset: both apps put the list at the top and back to its first page when the
+  view changes, so three runs are one run. Without it, runs 2 and 3 would start
+  wherever the flings stopped, with every page already loaded.
+- **`flows/render-show-all.yaml` collapses sections rather than scrolling to the
+  row.** Show All sits below the rail's fold at this size, and on a wide window
+  `scrollUntilVisible` swipes down the screen's middle, which is the list. It
+  opens both sections again, because the sidebar leg needs them open and the rail
+  at its top.
+- **Both legs now have a positive control.** Web requires half the wheel's distance
+  to land. Native requires the row that was at the top to be gone at the turn: an
+  assert between the two directions, on the row's whole label up to its relative
+  time, because a title repeats every 24 links and the time can tick over. The
+  same pattern is asserted visible before the window opens, since a pattern that
+  matched nothing would call any list gone.
+
 Then, once and in whatever layout was picked last, the tree legs:
 
 - **sidebar**: `--toggles` collapse/expand pairs of the links sidebar's Lists
@@ -4009,6 +4033,12 @@ and the median. Why it is built the way it is:
   accept the previous switch's reading. With Settings up there are two readouts
   in the tree, the covered links screen's and Settings', so `readProbe` takes the
   one with the leg's label.
+- **⚠ The floating readout takes no touches.** It wraps as a reading grows, and
+  on an iPhone's Export screen it came to cover the submit button's centre, so the
+  data leg's tap landed on the text. The flow reported the tap as done and waited
+  30 minutes for a share sheet from an export that never started. Anything added
+  to `RenderMeasureControls` draws over every Settings view, so it needs the same
+  `pointerEvents="none"` unless it is a control.
 - **An expand is the first load, made repeatable.** The links sidebar mounts
   with the links screen, as drawer content always does, and Settings is a modal
   over that screen, so nothing unmounts it within a session. Expanding a section
@@ -4070,7 +4100,8 @@ and the median. Why it is built the way it is:
   Mac's speed, so compare runs with runs on one device, and use a physical
   Android phone for phone numbers.
 
-**Readings — expo, 2026-10-27**, iPad (A16) simulator (iOS 26.5),
+**Readings — expo, 2026-10-27**, measured on **My List, 31 rows** (⚠ above), so
+compare them with nothing since. iPad (A16) simulator (iOS 26.5),
 production bundle on the debug shell, 1,000 links, 8 flings / 5 toggles,
 median of 3. _Before_ is HEAD, _after_ is the three row fixes in
 [client-queries.md](./client-queries.md), _the expo port_: rows read through
@@ -4085,6 +4116,26 @@ the shared keyed cache, `readLinks` shares unchanged rows, and the row's
 | rail card   | 197 → 178      | 374 → 355 ms  | 2,464 → 2,138 ms |
 
 What is left is the per-scroll commit described under ⚠ above, not row work.
+
+**Readings — on Show All, 2026-11-01**, the first on the whole library and the
+baseline from here on. Production bundle on the debug shell, 1,000 links, 8 flings
+/ 5 toggles, median of 3, from `327f944` plus this change. Web is the production
+export at 4× CPU on Chrome 156, every run landing all 12,000 px. Each cell is
+dropped frames / longest stall / blocking. The rail is wide-only.
+
+| leg         | iPad (A16), iOS 26.5 | Pixel 8 AVD, Android 16 | web              |
+| ----------- | -------------------- | ----------------------- | ---------------- |
+| scroll list | 390 / 231 / 2,676 ms | 649 / 142 / 92 ms       | 2 / no long task |
+| scroll card | 80 / 58 / 20 ms      | 590 / 71 / 21 ms        | 2 / no long task |
+| rail list   | 60 / 107 / 233 ms    | —                       | 0 / no long task |
+| rail card   | 105 / 186 / 797 ms   | —                       | 0 / no long task |
+
+**The iPad's list layout is the outlier, and it is not explained.** It blocks for
+2.7 s where its card layout blocks for 20 ms, and where the Pixel 8's list blocks
+for 92 ms. Both layouts take the same flings, and a card is taller, so the card
+runs cross fewer rows; how much of the gap is paging and how much is the row has
+not been profiled. A `--profile` covers only the tree legs, so a Hermes profile
+of this window is by hand (_finding what owns a native stall_).
 
 **Readings — the tree legs, 2026-10-28**, iOS 26.5 simulators and a Pixel 8
 emulator (Android 16), production bundle on the debug shell, `plus-worst` (109

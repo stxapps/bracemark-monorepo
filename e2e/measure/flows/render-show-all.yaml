@@ -1,0 +1,85 @@
+# The render leg's view (e2e/measure/render-mobile.ts): open Show All from
+# another view, so the scroll and rail legs run on the whole library. The links
+# screen opens on My List, which holds 31 of a 1,000-link `plus-full` library, and
+# a list that short never pages and is at its end after a few flings.
+#
+# Run before every scroll window, because the view CHANGE is the reset: it puts
+# the list back at the top and back to its first page (features/links/main.tsx),
+# which is what makes three runs the same run. Pressing Show All from Show All
+# changes nothing, hence the tag first.
+#
+# Sections are collapsed on the way, not scrolled past: with a library this size
+# Show All is below the rail's fold, and on a wide window `scrollUntilVisible`
+# swipes down the middle of the screen, which is the list. With both sections
+# shut it is in reach at every width. They are opened again before the flow ends,
+# because the sidebar leg starts with both expanded and the rail at its top.
+#
+# Parameters: LIST_ROW, TAG_ROW — each section's first row, by id; E2E_WIDTH —
+# `wide` or `narrow`, for open-links-navigation.yaml's branch.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../../mobile/flows/subflows/open-links-navigation.yaml
+- extendedWaitUntil:
+    visible:
+      id: 'links-nav-section-lists'
+    timeout: 10000
+- tapOn:
+    id: 'links-nav-section-lists'
+- extendedWaitUntil:
+    notVisible:
+      id: 'links-nav-list-${LIST_ROW}'
+    timeout: 10000
+- tapOn:
+    id: 'links-nav-tag-${TAG_ROW}'
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- runFlow:
+    file: ../../mobile/flows/subflows/open-links-navigation.yaml
+- extendedWaitUntil:
+    visible:
+      id: 'links-nav-section-tags'
+    timeout: 10000
+- tapOn:
+    id: 'links-nav-section-tags'
+- extendedWaitUntil:
+    notVisible:
+      id: 'links-nav-tag-${TAG_ROW}'
+    timeout: 10000
+- tapOn:
+    id: 'links-nav-all'
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- runFlow:
+    file: ../../mobile/flows/subflows/open-links-navigation.yaml
+- extendedWaitUntil:
+    visible:
+      id: 'links-nav-section-tags'
+    timeout: 10000
+- tapOn:
+    id: 'links-nav-section-tags'
+- extendedWaitUntil:
+    visible:
+      id: 'links-nav-tag-${TAG_ROW}'
+    timeout: 10000
+- tapOn:
+    id: 'links-nav-section-lists'
+- extendedWaitUntil:
+    visible:
+      id: 'links-nav-list-${LIST_ROW}'
+    timeout: 10000
+- runFlow:
+    when:
+      true: ${E2E_WIDTH !== 'wide'}
+    commands:
+      # The scrim, right of the drawer: a tap there closes it.
+      - tapOn:
+          point: 95%, 50%
+- extendedWaitUntil:
+    visible:
+      id: 'measure-begin-scroll'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
