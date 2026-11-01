@@ -444,6 +444,16 @@ easily edited out by someone tidying.
 - **The rule**: any surface long enough to make the case must also say what the
   architecture costs — no password reset, search that runs on the device, no
   shared or public lists. Not relegated to /faq.
+- **On a surface too short for that** — a social post, a caption — one test
+  decides: a cost goes in only if the line would mislead without it, or the
+  reader will meet it by doing what the line says. "Turn off your connection"
+  brings "opening a link's live page still needs one", because the first tap
+  fails; a claim that the library outlasts us on the web brings "a browser can
+  clear that copy". Any other cost waits for the page the post links to, or for
+  a post of its own. Short excuses the cost from that line, not from being said.
+- **Scope is not a cost.** "On a signed-in device" and "the links it has synced"
+  are what make a sentence true, so they stay at any length. Narrow the claim
+  before adding a caveat: a tighter claim often needs none.
 
 **Second person, present tense, ordinary words.**
 
