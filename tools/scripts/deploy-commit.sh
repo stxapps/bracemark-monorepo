@@ -38,12 +38,20 @@
 # clone. What only a tag can answer — what was live before, what to roll back to,
 # what is not out yet — are production questions.
 #
+# tools/scripts/store-release.sh sources this too, for `tag_deploy` and
+# `push_deploy_tags` alone: a store tag is a different record with its own name
+# and its own refusals, but it reaches a public repo under the same rule.
+#
 # Expects from the caller: REPO_ROOT, APP, TIER, DRY_RUN, ALLOW_DIRTY, PUSH_TAGS,
 # and the `die` / `warn` / `note` helpers.
 
-# Every deploy tag there is, whichever script made it: the two static apps and
-# the two Workers. A tag matching one of these is taken to be a production deploy.
-readonly DEPLOY_TAG_PATTERNS=('web/*' 'site/*' 'api/*' 'extractor/*')
+# Every tag these scripts make: the two static apps and the two Workers, then the
+# four stores. A tag matching one of the first four is taken to be a production
+# deploy, and one matching the last four a store release.
+readonly DEPLOY_TAG_PATTERNS=(
+  'web/*' 'site/*' 'api/*' 'extractor/*'
+  'ios/*' 'android/*' 'chrome/*' 'firefox/*'
+)
 
 # Sets DEPLOY_COMMIT (the full sha), DEPLOY_STAMP (twelve characters of it, plus
 # `-dirty` when the tree is) and DEPLOY_DIRTY.
@@ -147,10 +155,10 @@ tag_deploy() {
 # without a fetch: they are as fresh as the last push or fetch made here, and a
 # stale one only holds a tag back.
 #
-# That is also why this pushes EVERY such tag of the four apps and not just the
-# new one: a tag held back because its commit was not out yet, or because a push
-# failed, goes out with the next production deploy of anything. Pushing a tag
-# `origin` already has is a no-op.
+# That is also why this pushes EVERY such tag in DEPLOY_TAG_PATTERNS and not just
+# the new one: a tag held back because its commit was not out yet, or because a
+# push failed, goes out with the next production deploy or store tag of anything.
+# Pushing a tag `origin` already has is a no-op.
 #
 # GIT_TERMINAL_PROMPT=0: a missing credential fails here rather than asking for
 # one at the end of a deploy.
@@ -159,7 +167,7 @@ push_deploy_tags() {
   local -a refspecs=()
   [ -n "$DEPLOY_TAG" ] || return 0
   if [ "$PUSH_TAGS" = false ]; then
-    note "not pushed (--no-push) — the next production deploy pushes it, or:"
+    note "not pushed (--no-push) — the next production deploy or store tag pushes it, or:"
     note "  git push origin $DEPLOY_TAG"
     return 0
   fi
@@ -182,7 +190,7 @@ push_deploy_tags() {
   if [ "$mine" = false ] \
     && git -C "$REPO_ROOT" rev-parse --verify --quiet "refs/tags/$DEPLOY_TAG" >/dev/null; then
     note "not pushed: origin does not have $DEPLOY_STAMP yet, and the tag would publish it."
-    note "  the next production deploy pushes it once the commit is there, or:"
+    note "  the next production deploy or store tag pushes it once the commit is there, or:"
     note "  git push origin $DEPLOY_TAG"
   fi
   [ "$count" -gt 0 ] || return 0
@@ -195,10 +203,10 @@ push_deploy_tags() {
       printf '%s\n' "$new" | while IFS= read -r tag; do note "pushed: $tag → origin"; done
     fi
   else
-    warn "could not push the deploy tags to origin. The deploy itself succeeded."
+    warn "could not push the tags to origin. What they record has already shipped."
     printf '%s\n' "$out" | sed -n '1,5s/^/       /p' >&2
     if [ "$mine" = true ]; then
-      note "the next production deploy retries, or: git push origin $DEPLOY_TAG"
+      note "the next production deploy or store tag retries, or: git push origin $DEPLOY_TAG"
     fi
   fi
 }

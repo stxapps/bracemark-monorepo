@@ -62,7 +62,8 @@ scripts** in
 | `android`                 | `expo run:android`                                      | dev build → device                                   |
 | `android:release`         | `expo run:android --variant release`                    | release build → device (R8, no Metro) — production   |
 | `android:release:staging` | ” with staging origins + `BRACEMARK_NONPROD_RELEASE=1`  | ” — against dryrunbase.com                           |
-| `android:bundle`          | `gradlew bundleRelease`, then the bundle check          | **the Play Store `.aab`**                            |
+| `android:bundle`          | prebuild → versionCode check → bundle → bundle check    | **the Play Store `.aab`**, in `build/` (gitignored)  |
+| `android:tag`             | tags the recorded commit, pushes the tag                | **after releasing on Play**                          |
 | `android:reverse`         | `adb reverse` ×3 (8081, 8787, 8788)                     | once per emulator boot, before anything hits the api |
 | `android:open`            | `am start` on the dev-client link                       | open the installed dev build, every time             |
 | `ios`                     | `expo run:ios`                                          | quick simulator run without opening Xcode            |
@@ -72,6 +73,7 @@ scripts** in
 | `ios:release:staging`     | ” with staging origins + `BRACEMARK_NONPROD_RELEASE=1`  | ” — against dryrunbase.com                           |
 | `ios:bundle`              | prebuild → build-number check → archive → bundle check  | **the App Store archive**, in `build/` (gitignored)  |
 | `ios:upload`              | the bundle check, then `asc xcode export --wait`        | **sign it for the App Store and upload it**          |
+| `ios:tag`                 | tags the recorded commit, pushes the tag                | **after releasing on the App Store**                 |
 | `ios:check-archive`       | the bundle check, on the newest `Bracemark.app` archive | only for an archive made in Xcode (Archive)          |
 
 The `start:*` and `*:release:staging` scripts pick the domain for that one
@@ -122,9 +124,12 @@ phone, and nothing says so. `< /dev/null` gets the non-interactive behaviour
 without it. A Metro on :8081 from any other directory gets a "use port 8082
 instead?" prompt instead, and yes starts a second Metro on the env files.
 
-**The store builds are `android:bundle` and `ios:bundle` → `ios:upload`.** The
-`.aab` goes to Play Console by hand (drag and drop); an iOS build cannot — App
-Store Connect's website takes no binaries — so `ios:upload` sends it through
+**The store builds are `android:bundle` and `ios:bundle` → `ios:upload`.** Both
+start from a freshly prebuilt native project, because a change to a plugin, the
+manifest policy or R8 reaches `android/` and `ios/` only through a prebuild, and a
+stale one builds and uploads without a word. The `.aab`, `build/Bracemark.aab`,
+goes to Play Console by hand (drag and drop); an iOS build cannot — App Store
+Connect's website takes no binaries — so `ios:upload` sends it through
 Xcode, driven by `asc` (_ios release_ below). Together they are Xcode's Archive
 → Organizer → Distribute, from the shell (`tools/scripts/ios-bundle.sh`,
 `ios-upload.sh`):
@@ -142,6 +147,15 @@ Xcode, driven by `asc` (_ios release_ below). Together they are Xcode's Archive
    App Store export options with `destination=upload`, so `-exportArchive`
    re-signs and uploads in one pass, then waits for App Store Connect's
    processing. Submitting for review stays in App Store Connect.
+
+Both `:bundle` scripts run inside `tools/scripts/store-release.sh`, which records
+the commit the build came from, so `android:tag` and `ios:tag` can tag that commit
+after the release, however far `HEAD` has moved, and warns on release notes that
+need attention. `ios:upload` refuses a build that could not be tagged. Calling
+`android-bundle.sh` or `ios-bundle.sh` directly records nothing, so `ios:upload`
+then refuses that archive too
+([hosting.md](./hosting.md#which-build-is-in-a-store--store-tags), _which build is
+in a store_).
 
 ⚠ **There is no local App Store `.ipa` step, on purpose.** An `-exportArchive`
 with method `app-store-connect` is not offline even with `destination=export`:
@@ -342,9 +356,13 @@ on demand instead of carrying it forever:
     npm run prebuild
     diff -ru /tmp/ios-before apps/bracemark-expo/ios
 
-For a store `.aab`: `npm run android:bundle` from `apps/bracemark-expo`, which
-runs gradle's `bundleRelease` and then checks the bundle inside it (needs a real release keystore — the prebuild template signs
-`release` with the debug config, which is fine for `run-android:release` on a
+For a store `.aab`: `npm run android:bundle` from `apps/bracemark-expo`
+(`tools/scripts/android-bundle.sh`), which prebuilds `android/`, checks
+`versionCode` against the released `android/*` tags, runs gradle's `bundleRelease`,
+checks the bundle inside it, and copies it to `build/Bracemark.aab`, outside the
+folder the next prebuild deletes (needs a real release keystore — the prebuild
+template signs `release` with the debug config, which is fine for
+`run-android:release` on a
 device but not for the Play Store). Its bundle step fails if `.env.local` or the
 shell points the build anywhere but production — `metro.config.js`'s production
 guard ([env-files.md](./env-files.md), _bracemark-expo_).
@@ -986,8 +1004,7 @@ itself the bug. Both failure modes surface identically, as a keystore-password e
 says nothing about where the value came from.
 
 Store build: `npm run android:bundle` from `apps/bracemark-expo`. Verify what
-actually signed it — `keytool -printcert -jarfile
-app/build/outputs/bundle/release/app-release.aab`, or ask gradle before building
+actually signed it — `keytool -printcert -jarfile build/Bracemark.aab`, or ask gradle before building
 with `./gradlew :app:signingReport` (its `Variant: release` block prints the
 store path, alias, and fingerprint). `CN=Android Debug` means the Groovy guard
 fell through — one of the four properties is missing from

@@ -4,9 +4,11 @@
 # Connect — Organizer's Distribute, from the shell. Reached as `npm run
 # ios:upload` from apps/bracemark-expo. docs/expo-build.md, _the npm scripts_.
 #
-#   1. tools/scripts/check-native-bundle.mjs on the archive again — the file
+#   1. tools/scripts/store-release.sh check ios — a dirty build could never be
+#      tagged, and finding that out after the release is too late.
+#   2. tools/scripts/check-native-bundle.mjs on the archive again — the file
 #      about to leave this Mac, however long ago it was built.
-#   2. `asc xcode export --wait`: generates App Store Connect export options
+#   3. `asc xcode export --wait`: generates App Store Connect export options
 #      with destination=upload, so xcodebuild's -exportArchive re-signs for the
 #      App Store and uploads in one pass — one build-number reservation, as
 #      Organizer makes — then polls until App Store Connect has processed the
@@ -35,6 +37,9 @@ command -v asc >/dev/null || die "the asc CLI is not installed (brew install asc
 VERSION="$(plutil -extract CFBundleShortVersionString raw "$PLIST")"
 BUILD="$(plutil -extract CFBundleVersion raw "$PLIST")"
 
+step "commit record: Bracemark $VERSION ($BUILD)"
+bash "$APP_ROOT/../../tools/scripts/store-release.sh" check ios
+
 step "bundle check: Bracemark $VERSION ($BUILD)"
 node "$CHECK" "$ARCHIVE"
 
@@ -47,3 +52,4 @@ asc xcode export \
 
 step "done"
 echo "Bracemark $VERSION ($BUILD) is on App Store Connect — submit it for review there"
+echo "once it is released: npm run ios:tag"

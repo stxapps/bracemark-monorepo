@@ -14,14 +14,16 @@
     "android:open": "adb shell am start -a android.intent.action.VIEW -d bracemark://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081%2F%3FdisableOnboarding%3D1",
     "android:release": "rm -rf android/app/build/generated/assets/createBundleReleaseJsAndAssets && expo run:android --variant release",
     "android:release:staging": "rm -rf android/app/build/generated/assets/createBundleReleaseJsAndAssets && BRACEMARK_NONPROD_RELEASE=1 EXPO_PUBLIC_API_URL=https://api.dryrunbase.com EXPO_PUBLIC_SITE_URL=https://dryrunbase.com expo run:android --variant release",
-    "android:bundle": "cd android && ./gradlew :app:createBundleReleaseJsAndAssets --rerun :app:bundleRelease && node ../../../tools/scripts/check-native-bundle.mjs app/build/outputs/bundle/release/app-release.aab",
+    "android:bundle": "bash ../../tools/scripts/store-release.sh build android -- bash ../../tools/scripts/android-bundle.sh",
+    "android:tag": "bash ../../tools/scripts/store-release.sh tag android",
     "ios": "expo run:ios",
     "ios:lan": "EXPO_PUBLIC_API_URL=http://$(scutil --get LocalHostName).local:8787 EXPO_PUBLIC_SITE_URL=http://$(scutil --get LocalHostName).local:3001 expo run:ios --device",
     "ios:open": "xcrun simctl openurl booted bracemark://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081%2F%3FdisableOnboarding%3D1",
     "ios:release": "expo run:ios --configuration Release --device",
     "ios:release:staging": "BRACEMARK_NONPROD_RELEASE=1 EXPO_PUBLIC_API_URL=https://api.dryrunbase.com EXPO_PUBLIC_SITE_URL=https://dryrunbase.com expo run:ios --configuration Release --device",
-    "ios:bundle": "bash ../../tools/scripts/ios-bundle.sh",
+    "ios:bundle": "bash ../../tools/scripts/store-release.sh build ios -- bash ../../tools/scripts/ios-bundle.sh",
     "ios:upload": "bash ../../tools/scripts/ios-upload.sh",
+    "ios:tag": "bash ../../tools/scripts/store-release.sh tag ios",
     "ios:check-archive": "node ../../tools/scripts/check-native-bundle.mjs --latest-archive"
   },
   "nx": {

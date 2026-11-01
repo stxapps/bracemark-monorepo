@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # Build bracemark-expo's App Store archive without opening Xcode — the iOS twin of
-# `android:bundle`. Reached as `npm run ios:bundle` from apps/bracemark-expo;
+# `android:bundle`. Reached as `npm run ios:bundle` from apps/bracemark-expo, which
+# runs this inside tools/scripts/store-release.sh so the commit is recorded;
 # `npm run ios:upload` (tools/scripts/ios-upload.sh) then signs it for the App
 # Store and sends it. docs/expo-build.md, _the npm scripts_.
 #

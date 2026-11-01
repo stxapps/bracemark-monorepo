@@ -52,7 +52,9 @@ const RELEASES_DIR = `${ARTIFACTS_DIR}/releases`;
 const THROWAWAY_USERNAME = /^e2e_[0-9a-f]{12}$/;
 
 // In delete order: `usernames` last, `account_keys` before the `users` it references.
-const D1_TABLES = [
+// A test holds this against the migrations, so a new table of user rows cannot be
+// forgotten here.
+export const D1_TABLES = [
   { table: 'account_keys', column: 'user_id' },
   { table: 'users', column: 'id' },
   { table: 'sessions', column: 'user_id' },
@@ -97,6 +99,10 @@ function readJson(file) {
   }
 }
 
+function removeAll(dirs) {
+  for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
+}
+
 function pinnedRuns(artifacts) {
   const pinned = new Set();
   for (const name of readdirSync(artifacts)) {
@@ -114,18 +120,15 @@ function planRuns(root) {
   if (!existsSync(runs)) return { summary: 'no e2e runs', bytes: 0 };
 
   const pinned = pinnedRuns(artifacts);
-  const all = readdirSync(runs, { withFileTypes: true }).filter((entry) => entry.isDirectory());
+  const all = subdirectories(runs);
   const doomed = all
-    .filter(({ name }) => !pinned.has(name))
-    .filter(({ name }) => readJson(path.join(runs, name, 'run.json'))?.status === 'passed')
-    .map(({ name }) => path.join(runs, name));
+    .filter((dir) => !pinned.has(path.basename(dir)))
+    .filter((dir) => readJson(path.join(dir, 'run.json'))?.status === 'passed');
 
   return {
     summary: `${doomed.length} passing e2e runs (${all.length - doomed.length} kept)`,
     bytes: diskBytes(doomed),
-    apply() {
-      for (const dir of doomed) rmSync(dir, { recursive: true, force: true });
-    },
+    apply: () => removeAll(doomed),
   };
 }
 
@@ -156,9 +159,7 @@ function planReleases(root, isRunning) {
   return {
     summary: `${doomed.length} older or unfinished release builds (${kept.size} kept)`,
     bytes: diskBytes(doomed),
-    apply() {
-      for (const dir of doomed) rmSync(dir, { recursive: true, force: true });
-    },
+    apply: () => removeAll(doomed),
   };
 }
 
@@ -204,9 +205,7 @@ function planGradle(root, isRunning) {
     summary: `${doomed.length} Gradle output directories`,
     bytes: diskBytes(doomed),
     note: 'the next Android build recompiles every native library',
-    apply() {
-      for (const dir of doomed) rmSync(dir, { recursive: true, force: true });
-    },
+    apply: () => removeAll(doomed),
   };
 }
 
@@ -256,6 +255,12 @@ function readUsers(root) {
 }
 
 // `users/{uid}/…` is the only key shape the api writes (bracemark-api, `r2/keys.ts`).
+//
+// A row's blob has to be where BLOBS_DIR says, or deleting the row orphans the file with
+// nothing left to name it. No blob anywhere means the directory moved: the bucket's name
+// is in wrangler.jsonc and the layout is Miniflare's. One missing blob proves nothing,
+// because a run that died partway removed its files before its rows. So this reads every
+// row, not only the doomed ones, and a seed account's blob is what answers.
 function readObjects(root, doomedUsers) {
   const dir = path.join(root, R2_DIR);
   if (sqliteFiles(dir).length === 0) return { file: undefined, keys: [], blobs: [], bytes: 0 };
@@ -266,14 +271,21 @@ function readObjects(root, doomedUsers) {
     if (parts.count > 0) throw new Refusal('R2 holds multipart objects, which this cannot follow');
 
     const objects = { file, keys: [], blobs: [], bytes: 0 };
+    let rowCount = 0;
+    let blobFound = false;
     for (const { key, blob_id: blob, size } of db
       .prepare('select key, blob_id, size from _mf_objects')
       .iterate()) {
+      rowCount += 1;
+      blobFound ||= Boolean(blob) && existsSync(path.join(root, BLOBS_DIR, blob));
       if (!doomedUsers.has(key.slice('users/'.length, key.indexOf('/', 'users/'.length)))) continue;
       if (!blob) throw new Refusal(`R2 object ${key} has no blob`);
       objects.keys.push(key);
       objects.blobs.push(blob);
       objects.bytes += Math.ceil(size / BLOCK_BYTES) * BLOCK_BYTES;
+    }
+    if (rowCount > 0 && !blobFound) {
+      throw new Refusal(`none of ${rowCount} R2 objects has its blob in ${BLOBS_DIR}`);
     }
     return objects;
   });
@@ -381,6 +393,9 @@ export function plan(root, parts, isRunning = processRunning) {
       return { part, ...PLANNERS[part](root, isRunning) };
     } catch (error) {
       if (error instanceof Refusal) return { part, refused: error.message };
+      // A database without the shape this reads. Only reads run here, so nothing has been
+      // written, and a table a wrangler bump renamed is a refusal like any other.
+      if (error.code === 'ERR_SQLITE_ERROR') return { part, refused: error.message };
       throw error;
     }
   });

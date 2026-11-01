@@ -335,6 +335,18 @@ That fixture is this script's reading of Miniflare's layout, so it cannot notice
 layout moving under a wrangler bump. The refusals exist for that, each with a
 passing control.
 
+`tools/scripts/store-release.sh` is the fifth, and the only one here that is a
+shell script. Its failure is a public tag on the wrong commit, which nothing would
+report and which cannot be taken back, so `store-release.test.mjs` runs the real
+script in a throwaway repo with a real bare `origin`, and reads the answer back
+out of git. `android-bundle.sh` and `ios-upload.sh` run there too, with `npx`,
+Gradle and `asc` stood in for: what is pinned is what they refuse and in what
+order, not that a real build succeeds.
+
+```bash
+npm run test:store-release
+```
+
 **Lint does reach them, by a script rather than a target.** `tools/` and the
 root-level config files (`eslint.config.mjs`, the `jest.*` files) belong to no Nx
 project, so no `lint` target covers them and for a long time nothing did: a

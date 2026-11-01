@@ -1193,7 +1193,8 @@ The name is short on purpose — it is read in a git client's ref column, where 
 long one is cut off — so it says neither "deploy" nor "production". A tag under
 `web/`, `site/`, `api/` or `extractor/` **is** a production deploy, by this
 convention and nothing else: keep every other tag out of those four namespaces.
-The time is UTC, to the second — a Worker deploys in under a minute, and two
+(`ios/`, `android/`, `chrome/` and `firefox/` are the store releases:
+[below](#which-build-is-in-a-store--store-tags).) The time is UTC, to the second — a Worker deploys in under a minute, and two
 deploys of one app must not want the same name.
 
 The tag is created when the deploy becomes real — after the S3 syncs, after
@@ -1282,6 +1283,93 @@ about the bytes served beside it, so it does not move the boundary in
   additive by rule, which is precisely what leaves the older code safe against
   the newer schema. A rollback done this way creates no tag: tag the commit by
   hand if the history should show it.
+
+### which build is in a store — store tags
+
+The commit that bumps a version is not the commit that ships: a bump is followed
+by testing and fixes, and the build comes from wherever that ends. So the bump
+commit records when the number moved, and a tag records what went out, in
+`tools/scripts/store-release.sh`:
+
+| store            | tag                               | build            | after releasing       |
+| ---------------- | --------------------------------- | ---------------- | --------------------- |
+| App Store        | `ios/<version>-<buildNumber>`     | `ios:bundle`     | `npm run ios:tag`     |
+| Google Play      | `android/<version>-<versionCode>` | `android:bundle` | `npm run android:tag` |
+| Chrome Web Store | `chrome/<version>`                | `zip`            | `npm run tag:chrome`  |
+| Firefox Add-ons  | `firefox/<version>`               | `zip:firefox`    | `npm run tag:firefox` |
+
+The first two run from `apps/bracemark-expo`, the last two from
+`apps/bracemark-extension`.
+
+```bash
+git log firefox/1.1.0..firefox/1.2.0 -- apps packages   # what a release contained
+git diff ios/1.2.0-1 HEAD -- apps packages              # what is not out yet
+```
+
+The name is the store's own number rather than a time, because that is what a
+bug report, the console and Settings → About all print, and a store refuses a
+reused number, so the name cannot collide. Each store has its own namespace
+because each gets its own artifact on its own schedule: an iOS build 2 can carry
+a fix Android never needed. Two tags on one commit is normal.
+
+**A tag here means released**, because the command is run after releasing. A
+build a store rejects never gets one. Whether a build is live _now_ is still a
+question for the console.
+
+**The commit is recorded at build time, not read at tag time.** A deploy can tag
+`HEAD` because it builds and ships in one run. A store release cannot, since the
+upload is a separate step and review takes days, so `HEAD` at tag time is usually
+some later commit, and a tag on it would be wrong with nothing to say so. Each
+build command therefore wraps its build and writes a gitignored
+`<store>.store-build` beside the artifact, holding the tag, the commit and the
+time. The tag command reads that, however much later it runs. The version and
+build number are read back from the native project or archive the build used,
+not from `app.config.ts`, so the tag names what the artifact carries.
+
+**Run the tag command before the next build of a different version.** The record
+holds the last successful build, and is the only place its commit is written
+down. A build that replaces an untagged release warns, and prints the `git tag`
+line that records it by hand. A failed build leaves the record alone.
+
+**It holds the last build, not the last upload**, so a rebuild under the same
+number after uploading points the record at the wrong commit. That is why the
+command shows the commit, its subject and how far behind `HEAD` it is, and asks,
+unless `--yes` is passed.
+
+**What refuses, and when.** A dirty tree, or a tree that changed during the build,
+is a warning at build time, because a trial build is a normal thing to want, and
+a refusal at tag time, because no commit then holds what shipped. The fix is to
+commit, rebuild, and release that build. Unlike a production deploy there is no
+`--allow-dirty`. The tag command also refuses a tag that already exists and a
+commit no longer in the branch's history, meaning it was amended or rebased.
+
+A refusal at tag time comes after the build is live, so `ios:upload` makes the
+same check first, with `store-release.sh check ios`. It also refuses an archive
+that does not match the record, which is one built without `ios:bundle`. The other
+three uploads are by hand, so nothing stands between the build and the console, and
+the warning at the end of the build is the last word: read it before uploading.
+
+**A store build also warns on release notes** that `npm run check:release-notes`
+would reject, as a warning rather than a stop: a trial build needs no notes, and a
+notes commit made after the build changes nothing that ships.
+
+⚠ **`zip` and `zip:firefox` are not cached by Nx, and must stay that way.** The
+record depends on git state, which Nx does not hash. With caching on, a cache hit
+would restore the zip and an old record together: build on a dirty tree, commit
+those same files, and the next `nx zip` replays the refusal for a tree that is now
+clean. A zip takes seconds, and a store artifact is the last thing to want
+replayed from a cache.
+
+The push follows the rules of the deploy tags above, in the same code:
+`tag_deploy` and `push_deploy_tags` in `tools/scripts/deploy-commit.sh`, with the
+four store namespaces added to `DEPLOY_TAG_PATTERNS`. A tag whose commit `origin`
+does not have yet stays local, and goes out with the next production deploy or
+store tag. A pushed tag is just as public and permanent, and just as much the
+operator's record rather than a claim about the bytes in a store.
+
+**Releases from before this script have no record**, and the command says so. Tag
+one by hand only when its commit is known for certain; a guessed tag is worse
+than none.
 
 ### cors & frontend↔backend wiring
 

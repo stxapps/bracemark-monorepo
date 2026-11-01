@@ -51,7 +51,7 @@ for the object, and no plan names, prices or limits.
 npm run check:release-notes
 ```
 
-It fails on a file over a store’s character budget, a straight `'` or `"`, an
+Every store build runs it too, as a warning. It fails on a file over a store’s character budget, a straight `'` or `"`, an
 exclamation mark, a bare “extension”, a missing or unknown store section, and
 an app whose current version has no notes file yet. The budgets are in
 `tools/scripts/check-release-notes.mjs`. The rest of the voice is a judgement

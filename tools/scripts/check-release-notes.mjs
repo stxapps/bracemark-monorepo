@@ -20,7 +20,8 @@
 //   - no straight ' or ", no "!", and no bare "extension".
 // And per app: that its CURRENT version has a notes file, so a version bump
 // without notes is caught before the build is uploaded rather than in the
-// console's empty "What's New" field.
+// console's empty "What's New" field: tools/scripts/store-release.sh runs this at
+// the end of every store build, as a warning.
 //
 // WHAT IT CANNOT CHECK: everything in the voice that is a judgement — British
 // spelling, the serial comma, "link" vs "bookmark", "tap" vs "click", and

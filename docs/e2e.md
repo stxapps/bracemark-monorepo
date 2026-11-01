@@ -2861,6 +2861,9 @@ npm run clean:local -- gradle --apply               # the Android output, by nam
 | `accounts` | `e2e_<12 hex>` accounts: D1 rows, R2 objects and blobs, Durable Objects | every other account and its sessions: signed-in devices stay signed in |
 | `gradle`   | `android/build` and `.cxx`: `node_modules`, native modules, the app     | sources and `build.gradle`; nothing else in the app's `android/`       |
 
+A new D1 table holding a row per user goes in `D1_TABLES`; `clean-local.test.mjs`
+reads the migrations and fails until it does.
+
 `gradle` is opt-in because it is not free: everything in it regenerates, but the
 next Android build recompiles every native library.
 
@@ -2878,8 +2881,10 @@ Miniflare's private storage**, because no public door fits: the delete-account
 route needs a password nobody kept, and local R2 has no bulk delete. So its layout
 (the `_mf_objects` table, one file per blob, one database per Durable Object) is an
 assumption a wrangler bump can break. Every assumption is checked before the first
-write, and a failed check **refuses that part** rather than guessing. A refusal is
-not an emergency: this is test data, so the reset under _six things that will
+write, and a failed check **refuses that part** rather than guessing, including a
+database that has lost a table and a blob directory that has moved: a row deleted
+while its blob sits elsewhere would orphan the file with nothing left to name it. A
+refusal is not an emergency: this is test data, so the reset under _six things that will
 surprise you_ below is always there.
 
 ⚠ **Never read this state with `?immutable=1`.** Every database here is in WAL

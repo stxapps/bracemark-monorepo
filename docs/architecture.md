@@ -598,7 +598,10 @@ the Chrome Web Store and AMO for the browser extension, App Store Connect and
 Play for the app, whose `ios.buildNumber` and `android.versionCode` move
 separately from its `version` ([expo-build.md](./expo-build.md), _versions — one
 key, three consumers_). The two do not track each other: different stores,
-different cadences.
+different cadences. The bump commit says when a number moved, not what shipped;
+that is a tag per store,
+[hosting.md](./hosting.md#which-build-is-in-a-store--store-tags), _which build is
+in a store_.
 
 **The four deployed apps are unversioned on purpose.** Nobody is ever "on" an old
 bracemark-web — every visitor gets the last deploy — so a number there would have

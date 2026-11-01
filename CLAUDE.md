@@ -103,6 +103,7 @@ that reading comes _before_ the edit; nothing downstream will tell you.
 | env vars, per app and per mode; where a credential goes instead                | `env-files.md` ⚠                |
 | **testing on a real phone/tablet** — what connects, secure contexts, HTTPS     | `device-testing.md` ⚠           |
 | **deploying a Worker; applying a D1 migration**                                | `hosting.md` ⚠                  |
+| **a store release** — which commit shipped, the `ios/`-style tags              | `hosting.md` ⚠                  |
 | which host each app answers, the CSP, `nx start` preview                       | `hosting.md`                    |
 | **the status page** — its own repo; **a `/health` route**, the status `CNAME`  | `hosting.md` ⚠                  |
 | **turning on any CloudFront/S3 request log** — /privacy says we keep no copy   | `hosting.md` ⚠                  |

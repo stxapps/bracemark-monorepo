@@ -21,16 +21,18 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { after, describe, it } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
-import { plan } from './clean-local.mjs';
+import { D1_TABLES, plan } from './clean-local.mjs';
 
 const STATE = 'apps/bracemark-api/.wrangler/state/v3';
 const D1 = `${STATE}/d1/miniflare-D1DatabaseObject`;
@@ -318,6 +320,80 @@ describe('accounts', () => {
 
     assert.match(one(root, 'accounts').refused, /multipart/);
   });
+
+  it('refuses when no R2 object has its blob, before a row is touched', () => {
+    const root = stateFixture();
+    renameSync(join(root, `${STATE}/r2/bracemark-user-files-dev`), join(root, `${STATE}/r2/moved`));
+
+    const entry = one(root, 'accounts');
+
+    assert.match(entry.refused, /none of 3 R2 objects has its blob/);
+    assert.equal(rows(root, `${R2}/bucket.sqlite`, 'select key from _mf_objects').length, 3);
+  });
+
+  it('does not ask for a blob when the bucket is empty', () => {
+    const root = stateFixture();
+    const db = new DatabaseSync(join(root, `${R2}/bucket.sqlite`));
+    db.exec('delete from _mf_objects');
+    db.close();
+    rmSync(join(root, `${STATE}/r2/bracemark-user-files-dev`), { recursive: true });
+
+    assert.ok(!one(root, 'accounts').refused);
+  });
+
+  it('refuses a table it reads and cannot find', () => {
+    const root = stateFixture();
+    const db = new DatabaseSync(join(root, `${R2}/bucket.sqlite`));
+    db.exec('drop table _mf_multipart_parts');
+    db.close();
+
+    assert.match(one(root, 'accounts').refused, /_mf_multipart_parts/);
+  });
+});
+
+describe('D1_TABLES', () => {
+  const migrations = resolve(
+    fileURLToPath(import.meta.url),
+    '../../../apps/bracemark-api/src/db/migrations',
+  );
+
+  // Comments first: they are prose, and may name a column or hold a semicolon.
+  const statements = readdirSync(migrations, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .flatMap(({ name }) =>
+      readdirSync(join(migrations, name))
+        .filter((file) => file.endsWith('.sql'))
+        .map((file) => readFileSync(join(migrations, name, file), 'utf8')),
+    )
+    .flatMap((sql) => sql.replace(/--.*$/gm, '').split(';'));
+
+  const tableOf = (statement) =>
+    statement.match(/create\s+table\s+(?:if\s+not\s+exists\s+)?(\w+)/i)?.[1] ??
+    statement.match(/alter\s+table\s+(\w+)/i)?.[1];
+
+  it('names every table that holds a row per user', () => {
+    const holding = statements
+      .filter((statement) => /\buser_id\b/i.test(statement))
+      .map(tableOf)
+      .filter(Boolean);
+
+    assert.ok(holding.length > 0, 'the migrations were not read');
+    const listed = D1_TABLES.map(({ table }) => table);
+    assert.deepEqual(
+      [...new Set(holding)].filter((table) => !listed.includes(table)),
+      [],
+    );
+  });
+
+  it('names no table the migrations do not create', () => {
+    const created = statements
+      .filter((statement) => /create\s+table/i.test(statement))
+      .map(tableOf);
+    assert.deepEqual(
+      D1_TABLES.map(({ table }) => table).filter((table) => !created.includes(table)),
+      [],
+    );
+  });
 });
 
 describe('runs', () => {
@@ -545,6 +621,19 @@ describe('plan', () => {
     const [accounts, runs] = plan(root, ['accounts', 'runs'], () => true);
 
     assert.match(accounts.refused, /stack is running/);
+    assert.equal(runs.summary, '1 passing e2e runs (0 kept)');
+  });
+
+  it('keeps a database surprise from taking the others with it', () => {
+    const root = stateFixture();
+    write(root, 'e2e/.artifacts/runs/web/run.json', JSON.stringify({ status: 'passed' }));
+    const db = new DatabaseSync(join(root, `${R2}/bucket.sqlite`));
+    db.exec('drop table _mf_multipart_parts');
+    db.close();
+
+    const [accounts, runs] = plan(root, ['accounts', 'runs'], idle);
+
+    assert.ok(accounts.refused);
     assert.equal(runs.summary, '1 passing e2e runs (0 kept)');
   });
 });

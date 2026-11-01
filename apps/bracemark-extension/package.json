@@ -61,25 +61,10 @@
         ]
       },
       "zip": {
-        "cache": true,
-        "inputs": [
-          "production",
-          "^production"
-        ],
-        "outputs": [
-          "{projectRoot}/.output/*-chrome.zip"
-        ]
+        "cache": false
       },
       "zip:firefox": {
-        "cache": true,
-        "inputs": [
-          "production",
-          "^production"
-        ],
-        "outputs": [
-          "{projectRoot}/.output/*-firefox.zip",
-          "{projectRoot}/.output/*-sources.zip"
-        ]
+        "cache": false
       }
     }
   },
@@ -91,8 +76,10 @@
     "build:staging:firefox": "wxt build -b firefox --mode staging",
     "build": "wxt build",
     "build:firefox": "wxt build -b firefox",
-    "zip": "wxt zip",
-    "zip:firefox": "wxt zip -b firefox",
+    "zip": "bash ../../tools/scripts/store-release.sh build chrome -- wxt zip",
+    "zip:firefox": "bash ../../tools/scripts/store-release.sh build firefox -- wxt zip -b firefox",
+    "tag:chrome": "bash ../../tools/scripts/store-release.sh tag chrome",
+    "tag:firefox": "bash ../../tools/scripts/store-release.sh tag firefox",
     "typecheck": "tsc --noEmit",
     "postinstall": "wxt prepare"
   },

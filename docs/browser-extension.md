@@ -504,3 +504,13 @@ drawn an unstyled popup. Set each floor at the true minimum, and move it only
 when a dependency's own floor moves. `npx web-ext lint --source-dir
 .output/firefox-mv3` is the check on the Firefox side: it flags any manifest key
 newer than the declared minimum (`KEY_FIREFOX_*UNSUPPORTED_BY_MIN_VERSION`).
+
+### releasing to the stores
+
+`npm run zip` and `npm run zip:firefox` from `apps/bracemark-extension` build the
+Chrome Web Store and Firefox Add-ons packages, and record the commit each came
+from. Uploads are by hand. After releasing, `npm run tag:chrome` and
+`npm run tag:firefox` tag that commit, however far `HEAD` has moved
+([hosting.md](./hosting.md#which-build-is-in-a-store--store-tags), _which build is
+in a store_). Plain `wxt zip` records nothing, and neither target may be cached by
+Nx, for the reason that section gives.
