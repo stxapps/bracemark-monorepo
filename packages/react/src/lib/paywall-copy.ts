@@ -24,7 +24,7 @@ import type { AvailablePaidPlan } from '@stxapps/shared';
 // A `Record` for misc-settings-copy.ts's reason — a new gate fails to typecheck
 // until it has words.
 
-export type PaywallFeature = 'searchEditor' | 'locks' | 'nestedLists';
+export type PaywallFeature = 'searchEditor' | 'locks' | 'nestedLists' | 'keptCopies';
 
 export const PAYWALL_COPY: Record<
   PaywallFeature,
@@ -61,5 +61,15 @@ export const PAYWALL_COPY: Record<
     title: 'Nested lists',
     description:
       'Nesting a list inside another is a Plus feature. Flat lists and tags stay free and fully usable.',
+  },
+  // Fired from the browser extension's saved screen (which opens the web app's
+  // Subscription section instead of rendering this dialog — it has no paywall of
+  // its own) and from the web reader's empty state. The second sentence is the
+  // promise iap/plans.ts's `keptCopies` note makes: only TAKING a copy is gated.
+  keptCopies: {
+    plan: 'plus',
+    title: 'Keep a copy',
+    description:
+      'Keeping the text of a page in read mode, and a screenshot of how it looked, is a Plus feature. Copies you have already kept stay readable on every plan.',
   },
 };

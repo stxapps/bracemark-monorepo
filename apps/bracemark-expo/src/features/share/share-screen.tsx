@@ -118,7 +118,7 @@ const SAVED_DISMISS_MS = 1200;
 // where the full set is seen and changed.
 const MAX_TAG_CHIPS = 6;
 
-export function ShareScreen({ url, title }: SharePayload) {
+export function ShareScreen({ url, title, readMode }: SharePayload) {
   // The link's id, minted ONCE for this sheet rather than per Save attempt.
   // "Idempotent by construction" (share-store's header) rests on the id being
   // stable across every path that can retry a draft — and a failed Save is one
@@ -288,6 +288,9 @@ export function ShareScreen({ url, title }: SharePayload) {
       // means it IS the destination — the guard is belt-and-bracemarks.
       newLists: newList && newList.id === listId ? [newList] : [],
       sharedAt: Date.now(),
+      // Safari's read-mode copy, carried to the app's drain, which decides whether
+      // the account keeps it (share-store's drainShareOutbox). Nothing here reads it.
+      ...(readMode !== undefined ? { readMode } : {}),
     };
     try {
       // The api client powers saveSharedDraft's un-awaited post-write kick
@@ -320,7 +323,7 @@ export function ShareScreen({ url, title }: SharePayload) {
       setPhase('ready');
       setError('Couldn’t save. Try again.');
     }
-  }, [linkId, taxonomy, url, title, listId, newList, selectedTagIds, newTags]);
+  }, [linkId, taxonomy, url, title, readMode, listId, newList, selectedTagIds, newTags]);
 
   // ── the screens ───────────────────────────────────────────────────────────
 

@@ -68,7 +68,7 @@ const SLOW_MS = 4_000;
 // The FAVICON pass, added when the mobile captures started needing icons — and it
 // is two departures from everything above, both deliberate.
 //
-// IT IS KEYED BY HOST, because a favicon is (docs/link-extraction.md, _favicons_).
+// IT IS KEYED BY HOST, because a favicon is (docs/link-extraction-favicons.md).
 // Twenty-six links resolve to six hosts, so this is six requests, and — more to
 // the point — it is a property the per-URL pass above structurally cannot see. A
 // host can serve every page and every og:image in this file perfectly and still

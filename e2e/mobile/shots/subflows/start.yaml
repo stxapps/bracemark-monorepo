@@ -21,7 +21,7 @@
 # and it reopens that one by itself.
 #
 # It is better for the pictures, not just faster. The favicon cache is
-# device-local (docs/link-extraction.md, _favicons_), so on a warm start the icons
+# device-local (docs/link-extraction-favicons.md), so on a warm start the icons
 # are already on disk and the one capture that could be photographed half-loaded
 # no longer can be — the failure docs/e2e.md records having shipped once. The
 # store flow's own settle step stays anyway, because it also covers a first run.

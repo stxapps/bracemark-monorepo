@@ -19,6 +19,7 @@ import {
   ARCHIVE_ID,
   DEFAULT_LIST_ID,
   EXTRACTIONS_PREFIX,
+  FILES_PREFIX,
   LINK_TITLE_MAX,
   LINKS_PREFIX,
   newFacet,
@@ -26,7 +27,14 @@ import {
 } from '@stxapps/shared';
 
 import { db } from './db';
-import { bulkDeleteEntities, bulkWriteLinks, writeExtraction, writeLink } from './mutations';
+import {
+  bulkDeleteEntities,
+  bulkWriteLinks,
+  removeKeptCopy,
+  writeExtraction,
+  writeFile,
+  writeLink,
+} from './mutations';
 import { type LinkItem, readExtraction, readLinkById } from './queries';
 import { seedNewAccount } from './sync-store';
 
@@ -98,6 +106,41 @@ describe('writeExtraction', () => {
     const extraction = await readExtraction(LINK_ID);
     expect(extraction?.title).toBe('Google');
     expect(extraction?.facets.titleImage?.status).toBe('done');
+  });
+
+  it('deletes the blob a re-capture replaced, and keeps the ones it did not', async () => {
+    // A re-capture mints a new file id. Before this, the old blob stayed in `files/`
+    // with nothing referencing it: the sweep and the destroy paths find blobs through
+    // the extraction's CURRENT refs, so it counted against the quota for good.
+    const bytes = new Uint8Array([1, 2, 3]);
+    await writeFile(USER, 'shot-1', bytes);
+    await writeFile(USER, 'read-1', bytes);
+    await writeExtraction(USER, LINK_ID, {
+      fields: { screenshotId: 'shot-1', readModeId: 'read-1' },
+    });
+
+    await writeFile(USER, 'shot-2', bytes);
+    await writeExtraction(USER, LINK_ID, { fields: { screenshotId: 'shot-2' } });
+
+    const shot1 = pathFromId('shot-1', FILES_PREFIX);
+    expect(await db.items.get(shot1)).toBeUndefined();
+    expect(await pendingFor(shot1)).toMatchObject({ op: 'delete' });
+    expect(await db.items.get(pathFromId('shot-2', FILES_PREFIX))).toBeDefined();
+    // A field the patch didn't touch keeps its blob.
+    expect(await db.items.get(pathFromId('read-1', FILES_PREFIX))).toBeDefined();
+  });
+
+  it('deletes nothing when a write re-states the same ref', async () => {
+    const bytes = new Uint8Array([1]);
+    await writeFile(USER, 'img-1', bytes);
+    await writeExtraction(USER, LINK_ID, { fields: { imageId: 'img-1' } });
+    await writeExtraction(USER, LINK_ID, {
+      fields: { imageId: 'img-1' },
+      facet: 'titleImage',
+      state: newFacet('done', 'extension:fg'),
+    });
+
+    expect(await db.items.get(pathFromId('img-1', FILES_PREFIX))).toBeDefined();
   });
 
   it('counts retries across writes, ignoring the caller-supplied placeholder', async () => {
@@ -369,5 +412,48 @@ describe('bulkDeleteEntities', () => {
   it('is a no-op for an empty batch', async () => {
     await bulkDeleteEntities(USER, []);
     expect(await db.pendingOps.where('username').equals(USER).count()).toBe(0);
+  });
+});
+
+describe('removeKeptCopy', () => {
+  // A removed copy is GONE from storage, and MARKED rather than forgotten: an absent
+  // facet reads as "not taken yet", which a bulk job would take again.
+  const bytes = new Uint8Array([1, 2, 3]);
+
+  it('drops the ref, deletes the blob, and marks the facet removed — still done', async () => {
+    await writeFile(USER, 'read-1', bytes);
+    await writeFile(USER, 'shot-1', bytes);
+    await writeExtraction(USER, LINK_ID, {
+      fields: { readModeId: 'read-1', screenshotId: 'shot-1' },
+      facet: 'readMode',
+      state: newFacet('done', 'extension:fg'),
+    });
+
+    await expect(removeKeptCopy(USER, LINK_ID, 'readMode')).resolves.toBe(true);
+
+    const extraction = await readExtraction(LINK_ID);
+    expect(extraction?.readModeId).toBeUndefined();
+    expect(extraction?.facets.readMode).toMatchObject({
+      status: 'done',
+      extractedBy: 'extension:fg',
+      removedAt: expect.any(Number),
+    });
+    const read1 = pathFromId('read-1', FILES_PREFIX);
+    expect(await db.items.get(read1)).toBeUndefined();
+    expect(await pendingFor(read1)).toMatchObject({ op: 'delete' });
+    // The other copy is untouched.
+    expect(extraction?.screenshotId).toBe('shot-1');
+    expect(await db.items.get(pathFromId('shot-1', FILES_PREFIX))).toBeDefined();
+  });
+
+  it('writes nothing when there is no such copy — and never creates an extraction', async () => {
+    await expect(removeKeptCopy(USER, LINK_ID, 'screenshot')).resolves.toBe(false);
+    expect(await db.items.get(PATH)).toBeUndefined();
+    expect(await pendingFor(PATH)).toBeUndefined();
+
+    await writeExtraction(USER, LINK_ID, { fields: { title: 'Google' } });
+    await db.pendingOps.clear();
+    await expect(removeKeptCopy(USER, LINK_ID, 'screenshot')).resolves.toBe(false);
+    expect(await pendingFor(PATH)).toBeUndefined();
   });
 });

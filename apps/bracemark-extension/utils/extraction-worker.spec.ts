@@ -9,7 +9,7 @@ import { runExtraction } from './extraction-worker';
 // invisible when broken:
 //
 //   - THE WRITER SPLIT. This never touches `links/{id}.enc`, the user's file. Title,
-//     image, screenshot and page-copy refs all land in `extractions/{id}.enc`
+//     image, read-mode and screenshot refs all land in `extractions/{id}.enc`
 //     alongside the facet's own done/failed state, so a capture can't clobber a
 //     concurrent user edit (docs/link-extraction.md).
 //   - CONTENT BEFORE METADATA. `writeFile` precedes the `extractions/` write that
@@ -29,11 +29,11 @@ const mockWriteExtraction = jest.fn<Promise<void>, unknown[]>();
 const mockWriteFile = jest.fn<Promise<void>, unknown[]>();
 const mockResizeImage = jest.fn<Promise<Uint8Array>, unknown[]>();
 const mockNewId = jest.fn<string, unknown[]>();
+const mockEncodeReaderDoc = jest.fn<Promise<Uint8Array>, unknown[]>();
 
 const mockCaptureTitleImage = jest.fn<Promise<unknown>, unknown[]>();
-const mockCaptureReadMode = jest.fn<Promise<Uint8Array>, unknown[]>();
+const mockCaptureReadMode = jest.fn<Promise<unknown>, unknown[]>();
 const mockCaptureScreenshot = jest.fn<Promise<Uint8Array>, unknown[]>();
-const mockCapturePageCopy = jest.fn<Promise<Uint8Array>, unknown[]>();
 
 // Each export is a GETTER over its spy rather than the spy itself. `jest.mock` is
 // hoisted above these `const`s and the module under test is imported at the top, so
@@ -53,6 +53,9 @@ jest.mock('@stxapps/web-react', () => ({
   get resizeImage() {
     return mockResizeImage;
   },
+  get encodeReaderDoc() {
+    return mockEncodeReaderDoc;
+  },
 }));
 jest.mock('@stxapps/web-crypto', () => ({
   get newId() {
@@ -69,14 +72,13 @@ jest.mock('./capture', () => ({
   get captureScreenshot() {
     return mockCaptureScreenshot;
   },
-  get capturePageCopy() {
-    return mockCapturePageCopy;
-  },
 }));
 
 const URL_ = 'https://example.com/post';
 const IMAGE = new Uint8Array([1, 2, 3]);
-const HTML = new Uint8Array([4, 5, 6]);
+const BYTES = new Uint8Array([4, 5, 6]);
+const GZIPPED = new Uint8Array([0x1f, 0x8b, 7]);
+const DOC = { version: 1, capturedAt: 1, blocks: [] };
 
 let fake: FakeBrowser;
 
@@ -107,9 +109,9 @@ beforeEach(() => {
   mockResizeImage.mockImplementation(async (bytes) => bytes as Uint8Array);
   mockNewId.mockReturnValue('new-file-id');
   mockCaptureTitleImage.mockResolvedValue({});
-  mockCaptureReadMode.mockResolvedValue(HTML);
-  mockCaptureScreenshot.mockResolvedValue(HTML);
-  mockCapturePageCopy.mockResolvedValue(HTML);
+  mockCaptureReadMode.mockResolvedValue(DOC);
+  mockEncodeReaderDoc.mockResolvedValue(GZIPPED);
+  mockCaptureScreenshot.mockResolvedValue(BYTES);
   onThePage();
 });
 
@@ -215,35 +217,57 @@ describe('titleImage', () => {
 });
 
 describe('the file-backed facets', () => {
-  it('stores read-mode HTML and records the file id on the facet, with no display field', async () => {
+  it('stores the read-mode document gzipped, under its own display field', async () => {
     await run('readMode');
 
-    expect(mockWriteFile).toHaveBeenCalledWith('alice', 'new-file-id', HTML);
-    // No display field references read mode yet; the id rides on the facet so a
-    // future reader can find it.
+    expect(mockEncodeReaderDoc).toHaveBeenCalledWith(DOC);
+    expect(mockWriteFile).toHaveBeenCalledWith('alice', 'new-file-id', GZIPPED);
+    // A display field, not a facet passthrough: the backup, the exporters, the
+    // destroy paths and the sweep find blobs through EXTRACTION_FILE_REF_FIELDS, and a
+    // ref anywhere else is a blob none of them knows exists.
     expect(writes()[0]).toEqual({
-      fields: undefined,
+      fields: { readModeId: 'new-file-id' },
       facet: 'readMode',
-      state: expect.objectContaining({ status: 'done', fileId: 'new-file-id' }),
+      state: expect.objectContaining({ status: 'done', extractedBy: 'extension:fg' }),
     });
+    expect(writes()[0].state).not.toHaveProperty('fileId');
   });
 
-  it('screenshots the WINDOW, not the tab', async () => {
+  it('settles a page that is not an article, storing nothing', async () => {
+    mockCaptureReadMode.mockResolvedValue(undefined);
+
+    await run('readMode');
+
+    expect(mockWriteFile).not.toHaveBeenCalled();
+    expect(writes()).toEqual([
+      {
+        facet: 'readMode',
+        state: expect.objectContaining({ status: 'permanent', reason: 'not-an-article' }),
+      },
+    ]);
+  });
+
+  it('screenshots the WINDOW, then caps it before storing', async () => {
     // captureVisibleTab takes a windowId — it photographs whatever is frontmost.
+    mockResizeImage.mockResolvedValue(IMAGE);
+
     await run('screenshot');
 
     expect(mockCaptureScreenshot).toHaveBeenCalledWith(99);
+    expect(mockResizeImage).toHaveBeenCalledWith(
+      BYTES,
+      expect.objectContaining({ maxDimension: expect.any(Number) }),
+    );
+    expect(mockWriteFile).toHaveBeenCalledWith('alice', 'new-file-id', IMAGE);
     expect(writes()[0]).toMatchObject({ fields: { screenshotId: 'new-file-id' } });
   });
 
-  it('stores the page copy under its own display field', async () => {
-    await run('pageCopy');
+  it('does not capture a page copy', async () => {
+    // A DOM serialized without its assets isn't a copy, and rendering it would fetch
+    // every resource it names (capture.ts). Refused like any facet this tier lacks.
+    await expect(run('pageCopy')).rejects.toThrow('not an active-page capture');
 
-    expect(mockCapturePageCopy).toHaveBeenCalledWith(11);
-    expect(writes()[0]).toMatchObject({
-      fields: { pageCopyId: 'new-file-id' },
-      facet: 'pageCopy',
-    });
+    expect(mockWriteFile).not.toHaveBeenCalled();
   });
 });
 

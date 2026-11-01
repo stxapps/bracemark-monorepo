@@ -1037,7 +1037,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
         // server extraction has to exist at all. Keep the actor the web PAGE:
         // same-origin binds the document running in the browser, not sites, and a
         // server fetching another site is exactly what the sentence goes on to
-        // sell (docs/link-extraction.md, _server extraction_).
+        // sell (docs/link-extraction-server.md).
         id: 'no-title-image',
         q: 'Why don’t some of my links show a title or image?',
         a: (

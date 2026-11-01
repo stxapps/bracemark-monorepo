@@ -7,7 +7,7 @@
 //
 //  - DIRECT, no extractor proxy. Web needs the proxy because a browser can't
 //    read cross-origin image bytes; native HTTP has no CORS, and the design is
-//    clients-do-the-work (docs/link-extraction.md — _favicons_, the bracemark-expo
+//    clients-do-the-work (docs/link-extraction-favicons.md, the bracemark-expo
 //    row).
 //  - Validity is a BYTE SNIFF, not a content-type: only bytes the render path
 //    can decode count, so an HTML error page served at the guessed path is a

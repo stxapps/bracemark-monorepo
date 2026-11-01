@@ -72,8 +72,7 @@ trips off the app — and it is exactly why sign-out is **not** one of them. See
 api. It `fetch`es arbitrary user-supplied URLs, and keeping it off `api.*` is
 what makes "`api.bracemark.com` never sees your library in plaintext" provable from the
 code rather than asserted in prose. It has no storage bindings at all — no D1, no
-R2, no Durable Objects. See [link-extraction.md](./link-extraction.md), _server
-extraction_.
+R2, no Durable Objects. See [link-extraction-server.md](./link-extraction-server.md).
 
 ### crossing an origin — `window.location`, never the router
 
@@ -950,7 +949,7 @@ _content_ names `bracemark.com` in prose that is deliberately tier-independent:
 `support@`/`security@`/`abuse@bracemark.com`, the "bracemark.com and
 app.bracemark.com" scope lines in /terms and /privacy, and the
 `https://bracemark.com/extractor` User-Agent that /extractor publishes to the
-operators of sites we fetch ([link-extraction.md](./link-extraction.md#server-extraction-a-separate-bracemark-extractor-anonymous)).
+operators of sites we fetch ([link-extraction-server.md](./link-extraction-server.md)).
 None of that moves per tier, so a domain-keyed check rejects **every**
 `deploy:site:staging` and no rebuild can fix it. An origin misses all of it and
 still catches what a mis-tiered bundle actually carries — the other tier's baked

@@ -281,7 +281,7 @@ const CAPTURE = [
     // surfaces and they now read as one voice. Keep the actor as the web PAGE:
     // the same-origin policy binds the document running in the browser, not
     // sites, and a server fetching another site is exactly what the rest of the
-    // sentence sells (docs/link-extraction.md, _server extraction_) — so
+    // sentence sells (docs/link-extraction-server.md) — so
     // "a web site can't fetch another web site" would refute its own next clause.
     body: `Paste a URL and it is saved. Browsers won’t let a web page fetch another site, so the title and image need help: turn on server previews on ${PLAN_LABELS.plus} and pending links fill in as you browse, or let a phone set to All links fill them in after sync.`,
   },
@@ -1100,9 +1100,9 @@ export default function Page() {
           Two of the four cards below — the web app and Import — reach
           `bracemark-extractor` when the opt-in Plus setting is on, and that
           request carries the URL in PLAINTEXT by construction: a server that
-          fetches a page for you has to be told which page (docs/link-extraction.md,
-          _server extraction_). The old universal ("whichever surface you use …
-          anything") was contradicted by the card sitting directly under it.
+          fetches a page for you has to be told which page
+          (docs/link-extraction-server.md). The old universal ("whichever
+          surface you use … anything") was contradicted by the card sitting directly under it.
           Encryption-before-sync is the claim the architecture actually supports,
           and it is the same scoping the hero, the footer and every store listing
           use.

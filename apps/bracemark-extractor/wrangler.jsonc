@@ -5,7 +5,7 @@
   // library in plaintext" stays code-provable: the extractor is the one component that
   // `fetch`es arbitrary, user-supplied URLs. NOT "only ever sees ciphertext" — that api
   // also serves auth and billing and holds a username, sessions and a purchases row in the
-  // clear. See docs/link-extraction.md ("server extraction") and docs/architecture.md.
+  // clear. See docs/link-extraction-server.md and docs/architecture.md.
   //
   // Note the deliberately MINIMAL binding set vs. bracemark-api: NO D1, NO R2, NO
   // Durable Objects. The extractor is a PURE FUNCTION — it holds no key, persists
@@ -180,7 +180,7 @@
       // this Worker DOES rather than what it was asked: tracing (a span per
       // outbound fetch — pinned off above) and a `console.*` call that prints a
       // request or an error whole. Logpush stays off for its own reason, also
-      // above. See docs/link-extraction.md ("Never log the URL").
+      // above. See docs/link-extraction-server.md ("Never log the URL").
     },
     "production": {
       "vars": {

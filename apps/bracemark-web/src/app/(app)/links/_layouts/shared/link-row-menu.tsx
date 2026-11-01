@@ -5,6 +5,7 @@ import {
   ArchiveRestore,
   ArrowDown,
   ArrowUp,
+  BookOpen,
   Copy,
   FolderInput,
   MoreHorizontal,
@@ -16,9 +17,11 @@ import {
   Trash2,
   Undo2,
 } from 'lucide-react';
+import Link from 'next/link';
 
 import { ARCHIVE_ID, DEFAULT_LIST_ID, TRASH_ID } from '@stxapps/shared';
 import {
+  linkIdOf,
   type LinkView,
   useLinkMutations,
   useListMutations,
@@ -47,9 +50,12 @@ const EXCLUDE_IDS = [TRASH_ID];
 
 // The per-row options menu — every row action lives here so each layout renders
 // one `<LinkRowMenu>` and the logic stays in one place. The shape follows the
-// menu convention: frequent actions first (Copy link / Edit / Move to / Edit
-// tags / Edit note / pin), destructive last behind a separator (Archive /
-// Remove). The
+// menu convention: frequent actions first (Read / Copy link / Edit / Move to /
+// Edit tags / Edit note / pin), destructive last behind a separator (Archive /
+// Remove). `Read` is the one CONDITIONAL item: it appears only on a link with a
+// kept copy (`readModeId` or `screenshotId`, docs/reader.md), because the reader
+// has nothing to open otherwise, and it is the menu's one route change (a
+// `<Link>` to `/read`). The
 // variant is keyed off the LINK's own `listId`, not the active view, so a
 // trashed/archived link gets the right menu in the All view and tag views too:
 //
@@ -119,6 +125,16 @@ export function LinkRowMenu({
   const inTrash = link.listId === TRASH_ID;
   const inArchive = link.listId === ARCHIVE_ID;
 
+  const hasCopy = Boolean(link.readModeId || link.screenshotId);
+  const read = hasCopy ? (
+    <DropdownMenuItem asChild>
+      <Link href={`/read?link=${encodeURIComponent(linkIdOf(link))}`}>
+        <BookOpen className="size-4" />
+        Read
+      </Link>
+    </DropdownMenuItem>
+  ) : null;
+
   const copyLink = (
     <DropdownMenuItem onSelect={() => void navigator.clipboard.writeText(link.url)}>
       <Copy className="size-4" />
@@ -170,6 +186,7 @@ export function LinkRowMenu({
           </>
         ) : (
           <>
+            {read}
             {copyLink}
             <DropdownMenuItem onSelect={() => openEditor(link)}>
               <Pencil className="size-4" />

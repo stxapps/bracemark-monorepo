@@ -35,10 +35,17 @@
 // user-visible, and the next session tries again. Resolving `true` when it swept
 // anything has the engine run the cycle once more, which pushes the tombstones so
 // other devices stop re-pulling the garbage.
+//
+// The ORPHANED-FILE sweep (sweepOrphanFiles) runs in the same slot, after the
+// dangling one — which may have just freed blobs of its own — for the same reasons
+// and under stricter ones of its own (its header: no unreadable paths at all, every
+// string in every entity counts as a reference, a month's grace, nothing queued, at
+// most weekly). It deletes user data on every device when it is wrong, which is why
+// it must stay here and nowhere a selective-sync client could inherit it.
 
 import { type ReactNode, useCallback, useRef } from 'react';
 
-import { sweepDanglingExtractions, SyncProvider } from '@stxapps/web-react';
+import { sweepDanglingExtractions, sweepOrphanFiles, SyncProvider } from '@stxapps/web-react';
 
 export function SyncProviderWithSweep({ children }: { children: ReactNode }) {
   // Per mount (= per signed-in session; sign-out unmounts the (app) tree), and keyed
@@ -48,7 +55,9 @@ export function SyncProviderWithSweep({ children }: { children: ReactNode }) {
   const afterCycle = useCallback(async (username: string): Promise<boolean> => {
     if (sweptForRef.current === username) return false;
     sweptForRef.current = username;
-    return (await sweepDanglingExtractions(username)) > 0;
+    const danglings = await sweepDanglingExtractions(username);
+    const orphans = await sweepOrphanFiles(username);
+    return danglings + orphans > 0;
   }, []);
 
   return <SyncProvider afterCycle={afterCycle}>{children}</SyncProvider>;

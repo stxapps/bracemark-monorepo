@@ -33,6 +33,7 @@ const mockSetMenuOpen = jest.fn();
 const mockRequestMove = jest.fn();
 
 jest.mock('@stxapps/web-react', () => ({
+  linkIdOf: (link: { path: string }) => link.path.replace(/^links\/|\.enc$/g, ''),
   useLists: jest.fn(),
   useListMutations: () => ({ createTopLevel: mockCreate }),
   useLinkMutations: () => ({ update: mockUpdate }),
@@ -219,4 +220,35 @@ test('moves once, into the new list, when a row is pressed while the create is l
   expect(mockUpdate).toHaveBeenCalledTimes(1);
   expect(mockUpdate).toHaveBeenCalledWith(LINK, { listId: 'person' });
   expect(screen.queryByRole('menu')).toBeNull();
+});
+
+// `Read` — the one conditional item. It is there only when the link HAS a kept copy:
+// the reader would otherwise open onto an empty state the row promised against.
+describe('Read', () => {
+  const mountWith = (extra: Partial<LinkView>) =>
+    render(
+      <LinkRowMenu
+        link={{ ...LINK, path: 'links/l1.enc', ...extra } as LinkView}
+        pinned={false}
+        pinnedAbove={undefined}
+        pinnedBelow={undefined}
+      />,
+    );
+
+  test('is absent on a link with no kept copy', () => {
+    mountWith({});
+    openMenu();
+    expect(screen.queryByRole('menuitem', { name: 'Read' })).toBeNull();
+  });
+
+  test.each([['readModeId'], ['screenshotId']])(
+    'opens the reader for this link when it has a %s',
+    (field) => {
+      mountWith({ [field]: 'file-1' });
+      openMenu();
+      expect(screen.getByRole('menuitem', { name: 'Read' }).getAttribute('href')).toBe(
+        '/read?link=l1',
+      );
+    },
+  );
 });

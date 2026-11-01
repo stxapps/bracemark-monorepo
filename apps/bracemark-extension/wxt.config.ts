@@ -276,8 +276,8 @@ export default defineConfig({
                 //     proof the password unlocks, to bracemark-api. Mozilla's definition covers "registration
                 //     information for extensions that offer account-based services".
                 //   browsingActivity   — the saved link's specific URL leaves the device.
-                //   websiteContent     — title, og:image bytes, the viewport screenshot,
-                //     read-mode HTML and page-copy HTML (utils/capture.ts).
+                //   websiteContent     — title, og:image bytes, the viewport screenshot
+                //     and the read-mode text (utils/capture.ts).
                 // Every byte of that is end-to-end encrypted before upload, which changes
                 // nothing here: Mozilla's test is transmission off the device, not whether
                 // we can read it. Adding a facet that sends something new to bracemark-api

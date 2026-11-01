@@ -97,7 +97,6 @@
     "postinstall": "wxt prepare"
   },
   "dependencies": {
-    "@mozilla/readability": "^0.6.0",
     "@stxapps/react": "*",
     "@stxapps/shared": "*",
     "@stxapps/web-crypto": "*",

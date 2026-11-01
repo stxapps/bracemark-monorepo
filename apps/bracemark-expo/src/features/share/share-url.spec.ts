@@ -32,6 +32,20 @@ describe('payloadFromInitialProps', () => {
     expect(payloadFromInitialProps({ text: 'https://c.example' }).url).toBe('https://c.example');
   });
 
+  it('carries Safari’s read-mode copy through untouched, and nothing that isn’t an object', () => {
+    const doc = { version: 1, capturedAt: 1, blocks: [] };
+    expect(
+      payloadFromInitialProps({ url: 'https://a.example', preprocessingResults: { readMode: doc } })
+        .readMode,
+    ).toBe(doc);
+    expect(
+      payloadFromInitialProps({
+        url: 'https://a.example',
+        preprocessingResults: { readMode: null },
+      }),
+    ).not.toHaveProperty('readMode');
+  });
+
   it('takes the title from preprocessing, else the Android subject', () => {
     expect(
       payloadFromInitialProps({

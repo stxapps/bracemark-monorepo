@@ -10,12 +10,21 @@
 // MEAN is `@stxapps/shared` extract/select.ts's call, shared with the other extracting
 // tiers — see captureTitleImage's header for why that survives the page/bundle split.
 //
-// READMODE NOTE: a compact inline reader for now (clone → strip non-content → take
-// the article/main/body HTML). The planned upgrade is @mozilla/readability (already
-// a dependency) injected as a bundled content-script file and run over the live DOM;
-// kept inline here so the scaffold needs no extra entrypoint.
+// READ MODE is the exception to "an injected func": it needs Readability, so it is a
+// bundled FILE (entrypoints/read-mode.ts) injected by name — see captureReadMode.
+//
+// There is no page-copy capture. A serialized DOM without its stylesheets, images and
+// fonts isn't a copy of anything offline, and rendering it would request every remote
+// resource it names from the saved site — the per-paint leak the preview image is a blob
+// to avoid. docs/link-extraction-keep.md has what a real one needs.
 
-import { type CollectedMeta, selectTitleImage, sniffImageMime, utf8 } from '@stxapps/shared';
+import {
+  type CollectedMeta,
+  type ReaderDoc,
+  readerDocSchema,
+  selectTitleImage,
+  sniffImageMime,
+} from '@stxapps/shared';
 
 // Ceiling on a preview image we'll carry back from the page. The in-page fetch has already
 // buffered the blob by the time we can measure it (same limitation the expo worker
@@ -186,44 +195,36 @@ export async function captureTitleImage(
 
 // --- readMode ----------------------------------------------------------------
 
-// Inject a compact reader over the live DOM and return the cleaned article HTML as
-// bytes (a `files/{id}.enc` blob).
-export async function captureReadMode(tabId: number): Promise<Uint8Array> {
+// Where WXT emits the unlisted script entrypoints/read-mode.ts — its name, at the root.
+export const READ_MODE_SCRIPT = '/read-mode.js';
+
+// Run the read-mode capture in the tab and return its document, or undefined when the
+// page isn't an article. The result crosses from the page's world, so it is parsed here
+// rather than trusted: a page can't reach the injected script's scope, but this is the
+// boundary where the bytes stop being the page's and start being the user's, and it
+// costs one schema pass.
+export async function captureReadMode(tabId: number): Promise<ReaderDoc | undefined> {
   const [injection] = await browser.scripting.executeScript({
     target: { tabId },
-    func: () => {
-      const clone = document.cloneNode(true) as Document;
-      clone
-        .querySelectorAll('script, style, noscript, iframe, svg, link, meta')
-        .forEach((el) => el.remove());
-      const article = clone.querySelector('article') ?? clone.querySelector('main') ?? clone.body;
-      return article ? article.innerHTML : '';
-    },
+    files: [READ_MODE_SCRIPT],
   });
-  const html = (injection?.result as string | undefined) ?? '';
-  return utf8(html);
+  const parsed = readerDocSchema.safeParse(injection?.result);
+  return parsed.success ? parsed.data : undefined;
 }
 
 // --- screenshot --------------------------------------------------------------
 
-// Capture the visible viewport of the focused window as PNG bytes (a `files/{id}.enc`
-// blob). The active tab is already focused at icon-click, so the capture reflects
-// what the user sees.
+// Capture the visible viewport of the focused window as JPEG bytes. The active tab is
+// already focused at icon-click, so the capture reflects what the user sees. JPEG, not
+// PNG: a PNG of a 2× viewport is several MB, and this is a per-link blob against the
+// byte quota. The worker then caps its size (SCREENSHOT_MAX_DIMENSION) — the browser
+// can't, it captures at device pixels.
+export const SCREENSHOT_CAPTURE_QUALITY = 90; // 0–100; the resize re-encodes lower
+
 export async function captureScreenshot(windowId: number): Promise<Uint8Array> {
-  const dataUrl = await browser.tabs.captureVisibleTab(windowId, { format: 'png' });
-  return dataUrlToBytes(dataUrl);
-}
-
-// --- page copy -----------------------------------------------------------------
-
-// Serialize the live DOM and return it as bytes (a `files/{id}.enc` blob). Starts
-// with the inline XMLSerializer; SingleFile-grade inlining (CSS/images/fonts) is a
-// later enhancement, per the plan.
-export async function capturePageCopy(tabId: number): Promise<Uint8Array> {
-  const [injection] = await browser.scripting.executeScript({
-    target: { tabId },
-    func: () => new XMLSerializer().serializeToString(document),
+  const dataUrl = await browser.tabs.captureVisibleTab(windowId, {
+    format: 'jpeg',
+    quality: SCREENSHOT_CAPTURE_QUALITY,
   });
-  const html = (injection?.result as string | undefined) ?? '';
-  return utf8(html);
+  return dataUrlToBytes(dataUrl);
 }

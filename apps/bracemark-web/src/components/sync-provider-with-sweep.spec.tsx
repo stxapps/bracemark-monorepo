@@ -12,6 +12,7 @@ import { SyncProviderWithSweep } from './sync-provider-with-sweep';
 
 let mockAfterCycle: ((username: string) => Promise<boolean>) | undefined;
 const mockSweep = jest.fn((_username: string) => Promise.resolve(0));
+const mockOrphanSweep = jest.fn((_username: string) => Promise.resolve(0));
 jest.mock('@stxapps/web-react', () => ({
   SyncProvider: ({
     children,
@@ -24,12 +25,15 @@ jest.mock('@stxapps/web-react', () => ({
     return children;
   },
   sweepDanglingExtractions: (username: string) => mockSweep(username),
+  sweepOrphanFiles: (username: string) => mockOrphanSweep(username),
 }));
 
 beforeEach(() => {
   mockAfterCycle = undefined;
   mockSweep.mockReset();
   mockSweep.mockResolvedValue(0);
+  mockOrphanSweep.mockReset();
+  mockOrphanSweep.mockResolvedValue(0);
 });
 
 it('sweeps after the first cycle only, not after every one', async () => {
@@ -68,4 +72,15 @@ it('sweeps again for another account in the same mount', async () => {
   await mockAfterCycle?.('bob');
 
   expect(mockSweep.mock.calls).toEqual([['alice'], ['bob']]);
+});
+
+test('runs the orphaned-file sweep in the same slot, and a cycle follows when it swept', async () => {
+  mockOrphanSweep.mockResolvedValue(3);
+  render(<SyncProviderWithSweep>child</SyncProviderWithSweep>);
+
+  await expect(mockAfterCycle?.('alice')).resolves.toBe(true);
+  expect(mockOrphanSweep).toHaveBeenCalledWith('alice');
+  // Once per session, like the dangling sweep.
+  await expect(mockAfterCycle?.('alice')).resolves.toBe(false);
+  expect(mockOrphanSweep).toHaveBeenCalledTimes(1);
 });

@@ -10,7 +10,7 @@
 //  - THE FETCH IS DIRECT — `https://{host}/favicon.ico` by native fetch, no
 //    extractor proxy. Web needs the proxy because a browser can't read
 //    cross-origin image bytes; native HTTP has no CORS, and the design is
-//    clients-do-the-work (docs/link-extraction.md — _favicons_, the bracemark-expo
+//    clients-do-the-work (docs/link-extraction-favicons.md, the bracemark-expo
 //    row: direct native fetch; the `<link rel="icon">` upgrade rides page
 //    extraction when that lands here). The fetch itself — and the byte-sniff
 //    verdict that decides whether what came back is an icon at all — is

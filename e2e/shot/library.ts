@@ -527,7 +527,7 @@ export function buildShotLibrary(now: number): SeedLibrary {
     // is decided by the store listings rather than by the site's figure.
     //
     // WHY THE PHONE NEEDS IT AT ALL. Favicons are the one enrichment that never
-    // syncs (docs/link-extraction.md, _favicons: a device-local host cache_): not
+    // syncs (docs/link-extraction-favicons.md): not
     // a facet, no `files/` blob, just a per-host cache on whichever device
     // fetched it. So the titles and covers the web run wrote DO reach the phone
     // and the icons do NOT — the phone has to guess `https://{host}/favicon.ico`

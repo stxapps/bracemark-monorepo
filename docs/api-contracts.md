@@ -106,8 +106,8 @@ api rather than a header per route, because the failure it prevents has no
 symptom on the server at all. **bracemark-extractor carries the same
 middleware**, for a sharper version of the same reason: every response it sends
 is about something the user saved, and its image proxy was for a while a GET
-whose URL _was_ that address ([link-extraction.md](./link-extraction.md),
-_server extraction_; a POST now, [below](#a-gets-query-string-reaches-the-request-log)).
+whose URL _was_ that address ([link-extraction-server.md](./link-extraction-server.md); a POST now,
+[below](#a-gets-query-string-reaches-the-request-log)).
 
 A response that says nothing about caching is one a client's HTTP cache may keep,
 and Android's did: React Native's OkHttp cache (`cache/http-cache/`) stored
@@ -282,8 +282,8 @@ things beside the rule that the same page now states:
 **The fourth was bracemark-extractor's image proxy**, the last GET that carried
 something a person saved: `GET /v1/image?url=…`, on the argument that an `<img>`
 can issue nothing else, and tolerated because that Worker runs with
-`invocation_logs: false` ([link-extraction.md](./link-extraction.md), _never log
-the URL_). Neither half held:
+`invocation_logs: false` ([link-extraction-server.md](./link-extraction-server.md),
+_never log the URL_). Neither half held:
 
 - **No `<img>` ever pointed at it.** Its one caller is
   `ExtractClient.fetchImage` (`extract/client.ts`), a `fetch` that reads the

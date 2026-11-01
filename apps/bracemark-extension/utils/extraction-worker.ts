@@ -1,6 +1,12 @@
-import { newFacet, normalizeUrl } from '@stxapps/shared';
+import {
+  newFacet,
+  normalizeUrl,
+  SCREENSHOT_JPEG_QUALITY,
+  SCREENSHOT_MAX_DIMENSION,
+} from '@stxapps/shared';
 import { newId } from '@stxapps/web-crypto';
 import {
+  encodeReaderDoc,
   type ExtractionFacet,
   type ExtractionFields,
   readLinkById,
@@ -9,7 +15,7 @@ import {
   writeFile,
 } from '@stxapps/web-react';
 
-import { capturePageCopy, captureReadMode, captureScreenshot, captureTitleImage } from './capture';
+import { captureReadMode, captureScreenshot, captureTitleImage } from './capture';
 
 // `extractedBy` is a `platform:env` string, NOT a device id (entities.ts): quality is
 // DERIVED from it by `tierOf()`, so there's no stored `tier` field. The extension only
@@ -23,7 +29,7 @@ const EXTRACTED_BY = 'extension:fg';
 // write back — the heavy bytes into `files/`, and BOTH the display refs and the
 // facet's done/failed bookkeeping into `extractions/{id}.enc`. The extractor NEVER
 // writes `links/{id}.enc` (the user's file): the writer-split keeps the machine half
-// (title/imageId/screenshotId/pageCopyId + facet state) in `extractions/`, so a
+// (title/imageId/readModeId/screenshotId + facet state) in `extractions/`, so a
 // background capture can't clobber a concurrent user edit (link-extraction.md). One
 // read-merge-write per completion carries the field + its facet status together. This
 // client's tier is `active-page`.
@@ -92,31 +98,39 @@ export async function runExtraction(
         break;
       }
       case 'readMode': {
-        const html = await captureReadMode(tabId);
+        const doc = await captureReadMode(tabId);
+        if (!doc) {
+          // Not an article — a product page, an app, a feed. That is the answer for this
+          // page, from the best tier there is, so it's settled rather than retried: a
+          // `failed` would have every drain re-ask it. The reason rides on the facet so a
+          // surface can say "no article here" rather than "it failed". A user who wants
+          // a copy anyway asks again, and an explicit ask is never gated on this.
+          await writeExtraction(username, linkId, {
+            facet,
+            state: newFacet('permanent', EXTRACTED_BY, { reason: 'not-an-article' }),
+          });
+          break;
+        }
 
-        const fileId = newId();
-        await writeFile(username, fileId, html);
-        // No display field references read-mode yet; the facet records its file id
-        // (looseObject round-trips it) so a future reader can find it.
-        await markDone(username, linkId, facet, { extra: { fileId } });
+        const readModeId = newId();
+        await writeFile(username, readModeId, await encodeReaderDoc(doc)); // content first
+        await markDone(username, linkId, facet, { fields: { readModeId } });
         break;
       }
       case 'screenshot': {
-        const png = await captureScreenshot(tab.windowId);
+        const captured = await captureScreenshot(tab.windowId);
+        const jpeg = await resizeImage(captured, {
+          maxDimension: SCREENSHOT_MAX_DIMENSION,
+          quality: SCREENSHOT_JPEG_QUALITY,
+        });
 
         const screenshotId = newId();
-        await writeFile(username, screenshotId, png);
+        await writeFile(username, screenshotId, jpeg);
         await markDone(username, linkId, facet, { fields: { screenshotId } });
         break;
       }
-      case 'pageCopy': {
-        const dom = await capturePageCopy(tabId);
-
-        const pageCopyId = newId();
-        await writeFile(username, pageCopyId, dom);
-        await markDone(username, linkId, facet, { fields: { pageCopyId } });
-        break;
-      }
+      // No `pageCopy`: it falls to the refusal below, like any facet this tier doesn't
+      // capture (capture.ts says why there is no page-copy capture).
       default:
         throw new Error(`runExtraction: facet "${facet}" is not an active-page capture`);
     }
@@ -134,8 +148,8 @@ function markDone(
   username: string,
   linkId: string,
   facet: ExtractionFacet,
-  opts: { fields?: ExtractionFields; extra?: Record<string, unknown> } = {},
+  opts: { fields?: ExtractionFields } = {},
 ): Promise<void> {
-  const state = newFacet('done', EXTRACTED_BY, opts.extra);
+  const state = newFacet('done', EXTRACTED_BY);
   return writeExtraction(username, linkId, { fields: opts.fields, facet, state });
 }

@@ -81,7 +81,11 @@ that reading comes _before_ the edit; nothing downstream will tell you.
 | server backups — D1 export, R2 replication, **an R2 lifecycle rule**, restores | `server-backups.md` ⚠           |
 | API endpoints (contract-first, typed once in `shared`); **a new GET**          | `api-contracts.md` ⚠            |
 | link editors, list/tag trees, bulk edit                                        | `editors.md`                    |
-| title/image/screenshot/page-copy capture, `bracemark-extractor`                | `link-extraction.md` ⚠          |
+| link extraction — who fetches, the facets, the queue; title/image capture      | `link-extraction.md` ⚠          |
+| favicons — the per-host icon cache                                             | `link-extraction-favicons.md` ⚠ |
+| `bracemark-extractor` — the server path, its published `/extractor` page       | `link-extraction-server.md` ⚠   |
+| **read mode, screenshot, page copy** — capture, the copy's format, removal     | `link-extraction-keep.md` ⚠     |
+| the reader view — highlights, notes, quotes (planned)                          | `reader.md`                     |
 | import/export, sign-out wipe, delete all data, delete account                  | `data-lifecycle.md` ⚠           |
 | **a limit** — tree depth, a name's length, tags per link; a new `.max()`       | `data-limits.md` ⚠              |
 | subscriptions — Paddle, store IAP, the entitlement fold                        | `iap.md`                        |

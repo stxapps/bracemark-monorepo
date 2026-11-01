@@ -30,7 +30,7 @@
 //   - COST-DEFENSIVE (maxLinks, maxPageCopies, maxFiles, maxBytes,
 //     serverExtraction) — protect real cost / the moat; server-hard where
 //     countable.
-//   - VALUE-CAPTURE (locks, nestedLists, searchEditor, smartLists,
+//   - VALUE-CAPTURE (locks, nestedLists, searchEditor, keptCopies, smartLists,
 //     savedSearches, aiTier) — pure willingness-to-pay for things that cost
 //     ~nothing to serve; all client-enforced. Their spine: Plus unlocks
 //     STRUCTURAL organization (nested lists today, plus the planned tag-hierarchy
@@ -167,6 +167,16 @@ export type Entitlements = {
   // then persists these queries as `savedSearches` — Basic → structure-by-hand
   // → automated mirrors the Free → Plus → Pro spine.
   searchEditor: boolean;
+  // Kept copies (Plus+) — CAPTURING a page's read-mode text and screenshot
+  // (`readMode` / `screenshot` facets, docs/link-extraction-keep.md). A
+  // value-capture gate, not a cost one: a gzipped read-mode copy is smaller than
+  // the preview image every plan already stores, and the byte ceiling above stays
+  // the backstop for the screenshot. It gates the CAPTURE only — reading,
+  // exporting and deleting a copy are never gated, so a copy taken while
+  // entitled stays the user's after a downgrade (the same no-hostage rule the
+  // quota ceilings follow). Page copy is metered separately (`maxPageCopies`)
+  // and not built.
+  keptCopies: boolean;
   // Smart lists & smart tags (Pro) — the "it organizes itself" half of the Pro
   // story. A saved RULE that auto-POPULATES from metadata the user already set
   // (domain, existing tags, dates): a smart list is a query promoted to the
@@ -212,6 +222,7 @@ const ENTITLEMENTS: Record<Plan, Entitlements> = {
     nestedLists: false,
     locks: false,
     searchEditor: false,
+    keptCopies: false,
     smartLists: false,
     savedSearches: false,
     aiTier: 'none',
@@ -240,6 +251,7 @@ const ENTITLEMENTS: Record<Plan, Entitlements> = {
     nestedLists: true,
     locks: true,
     searchEditor: true,
+    keptCopies: true,
     smartLists: false,
     savedSearches: false,
     aiTier: 'none',
@@ -254,6 +266,7 @@ const ENTITLEMENTS: Record<Plan, Entitlements> = {
     nestedLists: true,
     locks: true,
     searchEditor: true,
+    keptCopies: true,
     // Pro = automated / dynamic organization + intelligence (it arranges itself).
     smartLists: true,
     savedSearches: true,

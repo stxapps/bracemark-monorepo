@@ -7,8 +7,7 @@ import { z } from '../zod';
 // Defined once here in `shared` (the lowest, platform-agnostic layer), exactly
 // like the auth/sync contracts, so the `bracemark-extractor` Worker validates against
 // the same schema every client (bracemark-web, the future bracemark-expo) builds its typed
-// fetch from. See docs/api-contracts.md and docs/link-extraction.md ("server
-// extraction").
+// fetch from. See docs/api-contracts.md and docs/link-extraction-server.md.
 //
 // bracemark-extractor is a SEPARATE app on its OWN origin (extractor.bracemark.com), distinct
 // from the blind sync broker (api.bracemark.com) — so these endpoints are never mounted
