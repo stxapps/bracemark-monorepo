@@ -2849,7 +2849,7 @@ file, so a 200-byte link costs a whole 4 KiB block, and two weeks of runs reache
 way back, per clone, and a dry run until it is given `--apply`:
 
 ```sh
-npm run clean:local                                 # dry run: runs, accounts
+npm run clean:local                                 # dry run: runs, releases, accounts
 npm run clean:local -- --apply                      # do it
 npm run clean:local -- gradle --apply               # the Android output, by name
 ```
@@ -2857,11 +2857,20 @@ npm run clean:local -- gradle --apply               # the Android output, by nam
 | part       | removes                                                                 | keeps                                                                  |
 | ---------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | `runs`     | passing runs under `.artifacts/runs/`                                   | failures, whatever a `latest-*.json` names, the rest of `.artifacts`   |
+| `releases` | older and unfinished builds under `.artifacts/releases/`                | the newest build of each platform, by the receipt's `builtAt`          |
 | `accounts` | `e2e_<12 hex>` accounts: D1 rows, R2 objects and blobs, Durable Objects | every other account and its sessions: signed-in devices stay signed in |
 | `gradle`   | `android/build` and `.cxx`: `node_modules`, native modules, the app     | sources and `build.gradle`; nothing else in the app's `android/`       |
 
 `gradle` is opt-in because it is not free: everything in it regenerates, but the
 next Android build recompiles every native library.
+
+⚠ **Never prune the newest release build by hand.** A staging run re-hashes the
+artifact on disk against its receipt before it hashes the installed app
+(`readReleaseReceipt`, `runner/release-artifact.ts`), and on Android `mapping.txt`
+too. Delete either and the next staging run fails with the right app still
+installed. The refusal to delete a failed run is deliberate for a related reason:
+`runs` removes the passing runs that would prove a failure resolved, so a person
+reads each failure and deletes it by name.
 
 `accounts` is why this is a script and not a line in this file, and it carries the
 one rule worth knowing before changing it. **It goes behind wrangler, into

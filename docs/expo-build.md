@@ -29,6 +29,7 @@ entitlements and makes SecureStore fail with `-34018` during sign-in. It starts
 no Metro.
 Existing Android signing prerequisites apply. Outputs include the artifact,
 source/build receipt and Android mapping file under `e2e/.artifacts/releases/`.
+An iOS build keeps only `Bracemark.app` from its derived data.
 Install the printed artifact explicitly, then pass its receipt to the staging
 mobile/contract target. Hash comparison refuses an older installed binary;
 Android also refuses `DEBUGGABLE`. iOS hashes the whole simulator app, including

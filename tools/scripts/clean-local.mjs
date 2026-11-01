@@ -1,16 +1,19 @@
 // Reclaims disk from what THIS checkout has left behind. A dry run unless told
 // otherwise, and it only ever touches the clone it runs from.
 //
-//   npm run clean:local                                 # dry run: runs, accounts
+//   npm run clean:local                                 # dry run: runs, releases, accounts
 //   npm run clean:local -- --apply                      # do it
 //   npm run clean:local -- gradle                       # dry run of that part alone
-//   npm run clean:local -- runs accounts gradle --apply # everything
+//   npm run clean:local -- runs releases accounts gradle --apply # everything
 //
-// Three parts, because they are not the same risk (docs/e2e.md, _cleaning local
+// Four parts, because they are not the same risk (docs/e2e.md, _cleaning local
 // state_):
 //
 //   runs      passing e2e runs. Failures stay until they are resolved, and so does
 //             any run a `latest-*.json` pointer names: the report command opens it.
+//   releases  staging Release builds, except the newest of each platform: a staging
+//             run re-hashes that one on disk, so deleting it fails the next run even
+//             with the app still installed.
 //   accounts  the throwaway `e2e_*` accounts in local D1, R2 and Durable Objects.
 //             Their passwords are never persisted, so nothing can sign into one
 //             again. Every other account keeps its rows and its sessions.
@@ -42,6 +45,7 @@ const R2_DIR = `${STATE_DIR}/r2/miniflare-R2BucketObject`;
 const BLOBS_DIR = `${STATE_DIR}/r2/bracemark-user-files-dev/blobs`;
 const DO_DIR = `${STATE_DIR}/do/bracemark-api-development-UserDataDO`;
 const ARTIFACTS_DIR = 'e2e/.artifacts';
+const RELEASES_DIR = `${ARTIFACTS_DIR}/releases`;
 
 // The exact shape `e2e/web/fixtures/account.ts` mints, and deliberately not "every
 // name that isn't a seed": a hand-made account must survive this.
@@ -61,8 +65,8 @@ const D1_TABLES = [
 // is why the local bucket reads 2.7 GiB on disk while its rows sum to 168 MiB.
 const BLOCK_BYTES = 4096;
 
-const PARTS = ['runs', 'accounts', 'gradle'];
-const DEFAULT_PARTS = ['runs', 'accounts'];
+const PARTS = ['runs', 'releases', 'accounts', 'gradle'];
+const DEFAULT_PARTS = ['runs', 'releases', 'accounts'];
 
 class Refusal extends Error {}
 
@@ -118,6 +122,39 @@ function planRuns(root) {
 
   return {
     summary: `${doomed.length} passing e2e runs (${all.length - doomed.length} kept)`,
+    bytes: diskBytes(doomed),
+    apply() {
+      for (const dir of doomed) rmSync(dir, { recursive: true, force: true });
+    },
+  };
+}
+
+// "Newest" is the rule `latestReleaseReceipt` reads (e2e/runner/release-artifact.ts), so
+// what stays here is what a staging run picks up by default. A folder with no readable
+// receipt is a build that never finished, and nothing can select it.
+function planReleases(root, isRunning) {
+  const releases = path.join(root, RELEASES_DIR);
+  if (!existsSync(releases)) return { summary: 'no release builds', bytes: 0 };
+  // The receipt is written last, so a build in progress reads as one that died.
+  if (isRunning('release-build')) throw new Refusal('a staging Release build is running');
+
+  const builds = subdirectories(releases).map((dir) => ({
+    dir,
+    receipt: readJson(path.join(dir, 'release.json')),
+  }));
+  const newest = new Map();
+  for (const { dir, receipt } of builds) {
+    if (typeof receipt?.platform !== 'string' || typeof receipt.builtAt !== 'string') continue;
+    const held = newest.get(receipt.platform);
+    if (!held || receipt.builtAt > held.builtAt) {
+      newest.set(receipt.platform, { dir, builtAt: receipt.builtAt });
+    }
+  }
+  const kept = new Set([...newest.values()].map(({ dir }) => dir));
+  const doomed = builds.map(({ dir }) => dir).filter((dir) => !kept.has(dir));
+
+  return {
+    summary: `${doomed.length} older or unfinished release builds (${kept.size} kept)`,
     bytes: diskBytes(doomed),
     apply() {
       for (const dir of doomed) rmSync(dir, { recursive: true, force: true });
@@ -331,7 +368,12 @@ function planAccounts(root, isRunning) {
   };
 }
 
-const PLANNERS = { runs: planRuns, accounts: planAccounts, gradle: planGradle };
+const PLANNERS = {
+  runs: planRuns,
+  releases: planReleases,
+  accounts: planAccounts,
+  gradle: planGradle,
+};
 
 export function plan(root, parts, isRunning = processRunning) {
   return parts.map((part) => {

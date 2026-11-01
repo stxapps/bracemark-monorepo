@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { copyFile, mkdir, readFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, rename, rm } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -114,7 +114,14 @@ if (platform === 'android') {
     ],
     { cwd: appRoot, env },
   );
-  artifact = join(derivedData, 'Build/Products/Release-iphonesimulator/Bracemark.app');
+  // Keep the app and nothing else. Each build gets its own derived data, so no later
+  // build reuses it, and it is 7.5 GiB around a 141 MiB app. A rename leaves the
+  // signature and the hash alone. The retries are for Finder, which drops a .DS_Store
+  // into a folder it has open and so can make this delete report "not empty", and
+  // that must not cost a finished build its receipt.
+  artifact = join(output, 'Bracemark.app');
+  await rename(join(derivedData, 'Build/Products/Release-iphonesimulator/Bracemark.app'), artifact);
+  await rm(derivedData, { recursive: true, force: true, maxRetries: 3 });
   assertStagingBundle(await readFile(join(artifact, 'main.jsbundle')));
   await assertIosSimulatorSigning(artifact);
 }

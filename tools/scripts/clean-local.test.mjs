@@ -390,6 +390,88 @@ describe('runs', () => {
   });
 });
 
+describe('releases', () => {
+  const RELEASES = 'e2e/.artifacts/releases';
+
+  function build(root, name, platform, builtAt) {
+    write(root, `${RELEASES}/${name}/release.json`, JSON.stringify({ platform, builtAt }));
+    write(root, `${RELEASES}/${name}/artifact.bin`);
+  }
+
+  function survivors(root) {
+    return readdirSync(join(root, RELEASES)).sort();
+  }
+
+  it('keeps the newest build of each platform and removes the older ones', () => {
+    const root = bare();
+    build(root, 'ios-old', 'ios', '2026-10-01T00:00:00.000Z');
+    build(root, 'ios-new', 'ios', '2026-11-01T00:00:00.000Z');
+    build(root, 'android-only', 'android', '2026-09-01T00:00:00.000Z');
+
+    const entry = one(root, 'releases');
+    assert.equal(entry.summary, '1 older or unfinished release builds (2 kept)');
+    entry.apply();
+
+    assert.deepEqual(survivors(root), ['android-only', 'ios-new']);
+  });
+
+  it('reads newest from the receipt, not the folder name', () => {
+    const root = bare();
+    build(root, 'z-sorts-last', 'ios', '2026-10-01T00:00:00.000Z');
+    build(root, 'a-sorts-first', 'ios', '2026-11-01T00:00:00.000Z');
+
+    one(root, 'releases').apply();
+
+    assert.deepEqual(survivors(root), ['a-sorts-first']);
+  });
+
+  it('removes a build that never wrote a readable receipt', () => {
+    const root = bare();
+    build(root, 'ios-good', 'ios', '2026-11-01T00:00:00.000Z');
+    mkdirSync(join(root, `${RELEASES}/ios-empty`));
+    write(root, `${RELEASES}/ios-truncated/release.json`, '{ truncated');
+
+    one(root, 'releases').apply();
+
+    assert.deepEqual(survivors(root), ['ios-good']);
+  });
+
+  it('leaves the rest of .artifacts alone', () => {
+    const root = bare();
+    build(root, 'ios-old', 'ios', '2026-10-01T00:00:00.000Z');
+    build(root, 'ios-new', 'ios', '2026-11-01T00:00:00.000Z');
+    const baseline = write(root, 'e2e/.artifacts/visual/baselines/phone/home.png');
+
+    one(root, 'releases').apply();
+
+    assert.ok(existsSync(baseline));
+  });
+
+  it('changes nothing until apply is called', () => {
+    const root = bare();
+    build(root, 'ios-old', 'ios', '2026-10-01T00:00:00.000Z');
+    build(root, 'ios-new', 'ios', '2026-11-01T00:00:00.000Z');
+
+    one(root, 'releases');
+
+    assert.deepEqual(survivors(root), ['ios-new', 'ios-old']);
+  });
+
+  it('refuses during a build, whose folder has no receipt yet', () => {
+    const root = bare();
+    mkdirSync(join(root, `${RELEASES}/ios-building`), { recursive: true });
+
+    const building = one(root, 'releases', (pattern) => pattern === 'release-build');
+
+    assert.match(building.refused, /Release build is running/);
+    assert.ok(!one(root, 'releases').refused);
+  });
+
+  it('has nothing to do without builds', () => {
+    assert.equal(one(bare(), 'releases').summary, 'no release builds');
+  });
+});
+
 describe('gradle', () => {
   it('removes build output and leaves the sources beside it', () => {
     const root = bare();

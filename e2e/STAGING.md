@@ -206,9 +206,10 @@ credentials are added to the worktree.
 Each build prints the artifact, installation command, and `release.json` receipt
 under `.artifacts/releases/<build-run>/`. The receipt records build time, source
 commit/dirty status, platform, Release configuration, staging URLs and SHA-256.
-Android also retains and hashes `mapping.txt`, checks that R8 produced it, and
-checks the generated minification/resource-shrinking flags. Both platforms check
-the embedded JS/bytecode names staging and has no production/local API URL.
+iOS keeps only `Bracemark.app` from its derived data. Android also retains and
+hashes `mapping.txt`, checks that R8 produced it, and checks the generated
+minification/resource-shrinking flags. Both platforms check the embedded
+JS/bytecode names staging and has no production/local API URL.
 
 Boot the selected device and install the printed artifact explicitly:
 
