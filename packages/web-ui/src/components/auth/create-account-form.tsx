@@ -216,7 +216,7 @@ export function CreateAccountForm() {
         <StepHeader step="confirm" onBack={() => setStep('setup')} />
         <Field data-invalid={confirmError}>
           {/* The username was typed a step ago and its input is gone; what a
-              password manager finds on THIS step is one `new-password` and
+              password manager finds on THIS step is one password field and
               nothing else, and this is the field it saves from. On the default
               path it is the only password input in the whole ceremony — the
               generated passphrase is shown in an <output>, never typed on step
@@ -233,7 +233,13 @@ export function CreateAccountForm() {
           </FieldLabel>
           <PasswordInput
             id="confirm"
-            autoComplete="new-password"
+            // On the generated path, `new-password` had Safari offer its own strong
+            // password here, and taking it fails the match below. The password
+            // already exists by this step, which is what `current-password` says.
+            // The typed path keeps `new-password`: Safari offered nothing here, and
+            // a real iPhone saved the right password that way. Why the two paths
+            // differ is not known (accessibility.md, _iOS AutoFill, checked by hand_).
+            autoComplete={newPassword.mode === 'generated' ? 'current-password' : 'new-password'}
             autoFocus
             aria-invalid={confirmError}
             value={confirmInput}

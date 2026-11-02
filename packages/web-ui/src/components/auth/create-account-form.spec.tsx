@@ -28,10 +28,11 @@ import { CreateAccountForm } from './create-account-form';
 // Everything real except the two edges that leave the component: the account
 // mutation (real key derivation, real API) and the availability query (needs a
 // QueryClient and an api client, and its own ladder is pinned one layer down).
-// `usePasswordStrength` is stubbed for cost, not for behaviour — this spec takes
-// the GENERATED path, where the estimator is handed the empty string and answers
-// nothing, so the real one would dynamically import ~1.7 MB of dictionary per
-// mount to say `null`. The typed path it actually serves is covered beside this.
+// `usePasswordStrength` is stubbed for cost, not for behaviour — this spec mostly
+// takes the GENERATED path, where the estimator is handed the empty string and
+// answers nothing, so the real one would dynamically import ~1.7 MB of dictionary
+// per mount to say `null`. The typed path it actually serves is covered beside
+// this; the one case here that types sets `mockGuessesLog10` to open its gate.
 
 jest.mock('@stxapps/react', () => ({
   ...jest.requireActual('@stxapps/react'),
@@ -43,10 +44,12 @@ jest.mock('@stxapps/web-react', () => {
   return { UsernameTakenError, useCreateAccount: jest.fn() };
 });
 
+let mockGuessesLog10: number | null = null;
+
 jest.mock('@stxapps/web-ui/components/auth/password-strength', () => ({
   ...jest.requireActual('@stxapps/web-ui/components/auth/password-strength'),
   usePasswordStrength: () => ({
-    guessesLog10: null,
+    guessesLog10: mockGuessesLog10,
     displayScore: null,
     ready: true,
     failed: false,
@@ -63,6 +66,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  mockGuessesLog10 = null;
   createAccount = jest.fn().mockResolvedValue(undefined);
   (useCreateAccount as jest.Mock).mockReturnValue({ mutateAsync: createAccount, isPending: false });
   // A settled, CURRENT "free" answer — the only shape `usernameMessage` opens the
@@ -153,6 +157,39 @@ describe('CreateAccountForm — the confirm step', () => {
     expect(
       named && named.compareDocumentPosition(password) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  // Under `new-password`, Safari offered its own strong password on this field on
+  // the generated path, and accepting the offer can only fail the match above.
+  // Nothing on the page shows it: the offer sits on the iOS keyboard. On the typed
+  // path Safari offered nothing here and a real iPhone saved the right password, so
+  // that path keeps its token (accessibility.md, _iOS AutoFill, checked by hand_).
+  it('does not ask for a new password on the generated path', () => {
+    render(<CreateAccountForm />);
+
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: USERNAME } });
+    fireEvent.click(attestation());
+    fireEvent.click(continueButton());
+
+    expect(screen.getByLabelText('Confirm your password').getAttribute('autocomplete')).toBe(
+      'current-password',
+    );
+  });
+
+  it('keeps asking for a new password on the typed path', () => {
+    mockGuessesLog10 = 30;
+    render(<CreateAccountForm />);
+
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: USERNAME } });
+    fireEvent.click(screen.getByRole('button', { name: NEW_PASSWORD_COPY.create.chooseOwn }));
+    fireEvent.change(screen.getByLabelText(NEW_PASSWORD_COPY.create.label), {
+      target: { value: 'x7Kq2mVn9Rt4Lw8Zp3Hy6Bf1' },
+    });
+    fireEvent.click(continueButton());
+
+    expect(screen.getByLabelText('Confirm your password').getAttribute('autocomplete')).toBe(
+      'new-password',
+    );
   });
 });
 
