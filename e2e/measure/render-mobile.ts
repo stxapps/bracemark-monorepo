@@ -58,7 +58,9 @@ import {
 // list — then pulled by the device and left to come to rest before anything is
 // measured: a sync still running writes `items` rows the whole time, and every
 // live read on screen re-runs on them. Then per layout, on Show All, because the
-// links screen opens on My List and that is 31 links of the 1,000:
+// links screen opens on My List and that is 31 links of the 1,000. `--release`
+// drives an installed Release build instead of Metro's bundle (docs/e2e.md, _the
+// render leg_):
 //
 //   scroll    FLINGS flings down the list and as many back up, under the probe,
 //             each run from the top of the first page (flows/render-show-all.yaml).
@@ -121,10 +123,14 @@ interface Options {
   flings: number;
   toggles: number;
   repeat: number;
-  // A Hermes CPU profile around each tree-leg window, on an unminified bundle
+  // A Hermes CPU profile around each scroll and tree-leg window, on an unminified bundle
   // (hermes-profile.ts). The sampler costs time of its own, so a profiled run's
   // readings are for attribution, not for the record.
   profile: boolean;
+  // Drive an installed Release build instead of Metro's bundle on the development
+  // client: the only reading of absolute smoothness (docs/e2e.md, _the render
+  // leg_). The build has to carry the probe and the local api; no runner makes it.
+  release: boolean;
 }
 
 type ParsedOptions = Omit<Options, 'deviceId'> & { deviceId?: string };
@@ -151,6 +157,7 @@ function parseOptions(argv: string[]): ParsedOptions {
   let toggles = 5;
   let repeat = 3;
   let profile = false;
+  let release = false;
   const count = (arg: string, raw: string) => {
     const n = Number(raw.replaceAll('_', ''));
     if (!Number.isInteger(n) || n < 1) throw new Error(`${arg} takes a positive whole number`);
@@ -182,6 +189,7 @@ function parseOptions(argv: string[]): ParsedOptions {
     else if (arg === '--toggles') toggles = count(arg, value());
     else if (arg === '--repeat') repeat = count(arg, value());
     else if (arg === '--profile') profile = true;
+    else if (arg === '--release') release = true;
     else throw new Error(`unknown option ${arg}`);
   }
   if (!platform) {
@@ -191,7 +199,21 @@ function parseOptions(argv: string[]): ParsedOptions {
     );
   }
   assertLibraryLinks(library, linksGiven);
-  return { platform, deviceId, library, links, legs, layouts, flings, toggles, repeat, profile };
+  if (release && profile)
+    throw new Error('--profile needs Metro, which a --release run has none of');
+  return {
+    platform,
+    deviceId,
+    library,
+    links,
+    legs,
+    layouts,
+    flings,
+    toggles,
+    repeat,
+    profile,
+    release,
+  };
 }
 
 async function main(): Promise<void> {
@@ -213,13 +235,15 @@ async function main(): Promise<void> {
   const runDir = join(MEASURE_OUTPUT, runId);
   await mkdir(runDir, { recursive: true });
 
-  const metro = await startMetro(options.platform, runDir, { minify: !options.profile });
+  const metro = options.release
+    ? { stop: async () => undefined }
+    : await startMetro(options.platform, runDir, { minify: !options.profile });
   const runs: RenderRun[] = [];
   try {
     await restoreLibrary(runDir, width, options);
     if (options.legs.includes('scroll') || options.legs.includes('rail')) {
       for (const layout of options.layouts) {
-        runs.push(...(await measureLayout(layout, width, options)));
+        runs.push(...(await measureLayout(runDir, layout, width, options)));
       }
     }
     runs.push(...(await measureTrees(runDir, width, options)));
@@ -234,9 +258,11 @@ async function main(): Promise<void> {
     platform: options.platform,
     device,
     width,
-    bundle: options.profile
-      ? 'production (--no-dev, unminified) on the development client, PROFILED'
-      : 'production (--no-dev --minify) on the development client',
+    bundle: options.release
+      ? 'the Release build the device has installed'
+      : options.profile
+        ? 'production (--no-dev, unminified) on the development client, PROFILED'
+        : 'production (--no-dev --minify) on the development client',
     library: options.library,
     links: options.library === 'worst' ? null : options.links,
     flings: options.flings,
@@ -277,7 +303,21 @@ async function restoreLibrary(runDir: string, width: E2EWidth, options: Options)
   await flow('close-settings.yaml', options);
 }
 
+// A flow, under a CPU profile when the run asks for one.
+async function profiled(
+  runDir: string,
+  options: Options,
+  name: string,
+  run: () => Promise<void>,
+): Promise<void> {
+  if (!options.profile) return run();
+  const session = await startProfile();
+  await run();
+  printSummary(name, await session.stop(join(runDir, `${name}.cpuprofile`)));
+}
+
 async function measureLayout(
+  runDir: string,
   layout: Layout,
   width: E2EWidth,
   options: Options,
@@ -288,10 +328,12 @@ async function measureLayout(
   for (let run = 1; run <= options.repeat && options.legs.includes('scroll'); run++) {
     console.log(`\nscroll, ${layout} layout, run ${run}/${options.repeat}`);
     await openShowAll(width, options);
-    await flow('render-scroll.yaml', options, {
-      FLINGS: String(options.flings),
-      TOP_ROW: await topRow(options),
-    });
+    const scroll = async () =>
+      flow('render-scroll.yaml', options, {
+        FLINGS: String(options.flings),
+        TOP_ROW: await topRow(options),
+      });
+    await profiled(runDir, options, `scroll-${layout}-${run}`, scroll);
     runs.push({ leg: 'scroll', layout, run, ...(await readProbe(options, 'scroll')) });
   }
   if (width !== 'wide') return runs;
@@ -345,19 +387,12 @@ async function measureTrees(
   options: Options,
 ): Promise<RenderRun[]> {
   const runs: RenderRun[] = [];
-  // The flow, under a CPU profile when the run asks for one.
-  const profiled = async (name: string, run: () => Promise<void>) => {
-    if (!options.profile) return run();
-    const session = await startProfile();
-    await run();
-    printSummary(name, await session.stop(join(runDir, `${name}.cpuprofile`)));
-  };
 
   if (options.legs.includes('sidebar')) {
     const rows = FIRST_ROWS[options.library];
     for (let run = 1; run <= options.repeat; run++) {
       console.log(`\nsidebar, run ${run}/${options.repeat}`);
-      await profiled(`sidebar-${run}`, () =>
+      await profiled(runDir, options, `sidebar-${run}`, () =>
         flow('render-sidebar.yaml', options, {
           TOGGLES: String(options.toggles),
           LIST_ROW: rows.list,
@@ -378,7 +413,7 @@ async function measureTrees(
       const leg = `settings ${target.section}`;
       for (let run = 1; run <= options.repeat; run++) {
         console.log(`\n${leg}, run ${run}/${options.repeat}`);
-        await profiled(`settings-${target.section}-${run}`, () =>
+        await profiled(runDir, options, `settings-${target.section}-${run}`, () =>
           flow('render-settings.yaml', options, {
             SECTION: target.section,
             TITLE: target.title,

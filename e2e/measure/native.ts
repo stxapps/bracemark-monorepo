@@ -62,6 +62,9 @@ const SETTLED_POLLS = 3;
 export interface DeviceOptions {
   platform: NativePlatform;
   deviceId: string;
+  // An installed Release build: it embeds its bundle, so cold-launch.yaml launches
+  // it instead of opening the development client's link.
+  release?: boolean;
 }
 
 export interface StallReading {
@@ -88,7 +91,11 @@ export async function flow(
   await maestro(join(FLOWS, name), {
     platform: options.platform,
     deviceId: options.deviceId,
-    env: { EXPO_DEV_CLIENT_LINK: DEV_CLIENT_LINK, ...env },
+    env: {
+      EXPO_DEV_CLIENT_LINK: DEV_CLIENT_LINK,
+      ...(options.release ? { E2E_BUILD_VARIANT: 'release' } : {}),
+      ...env,
+    },
   });
 }
 

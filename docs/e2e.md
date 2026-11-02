@@ -3908,8 +3908,9 @@ window:
   the deployed api, so check the live `baseUrl`, not a substring.
 - **The render leg does all of this itself with `--profile`**
   (`measure/hermes-profile.ts`): an unminified bundle, a profile around each
-  tree-leg window written beside `results.json` as `<leg>-<run>.cpuprofile`, and
-  a summary printed per window. The summary splits Fabric's host calls from the
+  scroll and tree-leg window written beside `results.json` as
+  `scroll-<layout>-<run>.cpuprofile` or `<leg>-<run>.cpuprofile`, and a summary
+  printed per window. The summary splits Fabric's host calls from the
   JS, and lists the busiest functions inclusive, with React's own scheduler
   frames left out so the components show. `npx tsx measure/hermes-profile.ts
 <file> [top]` summarizes a saved profile again at any depth. The sampler costs
@@ -3958,6 +3959,7 @@ npm run measure:render:web -- --trace                # + a DevTools trace per ru
 npm run measure:render:ios -- --library worst --legs sidebar,settings
 npm run measure:render:web -- --library worst --legs sidebar,settings
 npm run measure:render:android -- --library worst --legs settings --repeat 1 --profile
+npm run measure:render:ios -- --device <udid> --legs scroll --release  # an installed Release build
 ```
 
 Each run restores one fresh Plus account from a `plus-full`-shaped backup of
@@ -4105,6 +4107,18 @@ and the median. Why it is built the way it is:
   scrolls, read 0. So what is left is FlashList's per-scroll commits, not
   anything a row does. Judge a row change by its delta between runs on one
   build, and judge absolute smoothness on a Release build.
+- **⚠ `--release` is the reading of absolute smoothness, and no runner builds
+  it.** It drives the Release build already on the device, with no Metro, and
+  refuses `--profile`, because that build has no inspector. The build has to carry
+  the probe and the local api, which no receipt checks here, so build it by hand
+  from `apps/bracemark-expo`: `xcodebuild` as in `runner/release-build.ts`, with
+  `NODE_ENV=production`, `BRACEMARK_NONPROD_RELEASE=1`,
+  `EXPO_PUBLIC_API_URL=http://localhost:8787`,
+  `EXPO_PUBLIC_SITE_URL=http://localhost:3001` and
+  `EXPO_PUBLIC_MEASURE_STALLS=1` in its environment. Then `simctl clone` a
+  simulator that is already set up and install on the clone. The clone keeps the
+  device's settings, and the original keeps its development build. A new simulator
+  fails at sign-in with AutoFill on ([app-drivers.md](./app-drivers.md)).
 - **Production bundle, calibrated.** It uses the same `measure/native.ts`
   harness as the data leg: production JS on the development client with the api
   pinned, plus the probe's calibration on every reading. A simulator runs at the
@@ -4141,12 +4155,46 @@ dropped frames / longest stall / blocking. The rail is wide-only.
 | rail list   | 60 / 107 / 233 ms    | —                       | 0 / no long task |
 | rail card   | 105 / 186 / 797 ms   | —                       | 0 / no long task |
 
-**The iPad's list layout is the outlier, and it is not explained.** It blocks for
-2.7 s where its card layout blocks for 20 ms, and where the Pixel 8's list blocks
-for 92 ms. Both layouts take the same flings, and a card is taller, so the card
-runs cross fewer rows; how much of the gap is paging and how much is the row has
-not been profiled. A `--profile` covers only the tree legs, so a Hermes profile
-of this window is by hand (_finding what owns a native stall_).
+**The iPad's list layout reads as the outlier above, and that reading is the
+debug shell's.** Measured on the same simulator 2026-11-02, from `f2dac08`, in a
+Release build. Each cell is dropped frames / longest stall / blocking, and every
+run took the same flings as the table above.
+
+| scroll, 1,000 links, Show All | list               | card           |
+| ----------------------------- | ------------------ | -------------- |
+| first pass, rows never seen   | 118 / 99 / 730 ms  | 15 / none / 0  |
+| later passes                  | 3 and 1 / none / 0 | 0–2 / none / 0 |
+
+The first card pass is a run with no list before it, on its own fresh account.
+This is still a simulator at the Mac's speed: nothing here measures a physical
+iPad.
+
+- **`blocking` overstates the gap.** It counts only what runs past 50 ms, so it
+  is not proportional to work. A profile of the debug runs had the list busy for
+  10.9–12.3 s and the card for 3.8–3.9 s, three times the work, where blocking
+  differs a hundredfold: the card's blocks sit just under the line and the list's
+  go over it. The list had 55–56 tasks over 50 ms, longest 298 ms. The card had 13–24,
+  longest 87 ms.
+- **The cost is cells per commit, not a function.** Those list tasks are the card's
+  tasks with more of everything: Fabric's commit, React's walk over the mounted
+  cells, and little of it named app code (`LinkRow`'s own render is 71–210 ms of
+  the whole window). `propagateParentContextChanges` tops the JS and is not a
+  changed context: React runs it on every bailout, walking the ancestors.
+- **The date column is not why.** It is the one thing only this layout at this
+  width draws (`link-row.tsx`), so it was the first suspect. Its formatting is
+  about 1 µs a row on the app's Hermes, and `RelativeTime` does not appear in the
+  profile.
+- **Paging is not why.** The async read path was 1,526 ms of the long tasks in the
+  first list run and 40 ms in the second, on the same flings. What the first pass
+  pays is first sight: the preview images' lazy fetch and the first reads of
+  tags, lists and pins.
+- **⚠ The leg's order hides that.** List runs first, so a card run after it reads
+  warm, with the images on disk. Compare layouts' first passes only across
+  separate `--layouts` runs.
+- **⚠ The debug shell is slow in JS too, not only in the commit.** The probe's
+  calibration, the same 15,000,000-iteration loop, takes 776–796 ms there and
+  436 ms in Release. A production bundle on the development client is production
+  JS on a slower engine.
 
 **Readings — the tree legs, 2026-10-28**, iOS 26.5 simulators and a Pixel 8
 emulator (Android 16), production bundle on the debug shell, `plus-worst` (109
