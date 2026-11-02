@@ -43,6 +43,22 @@ function Anchor({ href = '', children, ...rest }: React.ComponentProps<'a'>) {
   );
 }
 
+// A table can't wrap below its longest unbreakable line, and a table cell holding
+// `target="_blank"` is one, so /blog/connection-allowlists set the whole document
+// 371px wide on a 320 phone and every page of text beside it scrolled sideways. The
+// scroll belongs to the table, and it needs an element: `display: block` on the
+// <table> would do it in one line and cost the table its table role. Focusable and
+// named because a keyboard has no other way to reach what is scrolled out of view
+// (Safari doesn't make a scroller focusable on its own), which leaves a tab stop on
+// a table that happens to fit; a CSS-only page has no way to tell the two apart.
+function Table(props: React.ComponentProps<'table'>) {
+  return (
+    <div className={cn('mdx-table')} role="region" aria-label="Scrollable table" tabIndex={0}>
+      <table {...props} />
+    </div>
+  );
+}
+
 /**
  * A link into bracemark-web, e.g. `<AppLink path="/settings/data">Settings →
  * Data</AppLink>`. The origin differs per tier (APP_URL, lib/site.ts), which is
@@ -242,4 +258,5 @@ export const MDX_COMPONENTS: MDXComponents = {
   PlanName,
   SignaturePanel,
   StoreLink,
+  table: Table,
 };

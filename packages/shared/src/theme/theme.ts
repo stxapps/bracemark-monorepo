@@ -28,6 +28,19 @@ export const DEFAULT_THEME: ThemeState = {
 /** Key used in localStorage and browser.storage. */
 export const THEME_STORAGE_KEY = 'bracemark-theme';
 
+/**
+ * The browser chrome's `theme-color`, per RENDERED theme: web-ui's `--background`
+ * spelled in hex, because the tag takes a colour and not a custom property
+ * (oklch(1 0 0) and oklch(0.145 0 0)). One source for the two places that say it,
+ * `themeInitScript` and `ThemeProvider`. The dark value was a typed-in
+ * `rgb(17, 24, 39)`, gray-900: navy above a neutral page, the mismatch
+ * focused-page.tsx had already removed from the page itself.
+ */
+export const THEME_COLORS: Record<EffectiveTheme, string> = {
+  light: '#ffffff',
+  dark: '#0a0a0a',
+};
+
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 function toMinutes(hhmm: string): number {
@@ -93,11 +106,21 @@ export function coerceThemeState(value: unknown): ThemeState {
  * A self-contained IIFE (as a string) that sets the `.dark` class on <html>
  * before first paint. Inline it synchronously in <head>/top-of-<body> so the
  * page never flashes the wrong theme. Mirrors `resolveTheme` in plain ES5.
+ *
+ * It also creates the page's `theme-color` tag, for the resolved theme: a tag with
+ * a `media` query can only see the OS, and the user may have picked otherwise. It
+ * is created here rather than rendered and then edited because React owns what it
+ * renders. It finds a hoisted <meta> by its `content`, so one whose value changed
+ * reads as missing and React inserts a fresh copy holding the original colour, at
+ * hydration and again on a client-side navigation (docs/theme.md, _the browser
+ * chrome_). `ThemeProvider` keeps this same tag up to date.
  */
 export function themeInitScript(storageKey: string = THEME_STORAGE_KEY): string {
   const k = JSON.stringify(storageKey);
   const dl = JSON.stringify(DEFAULT_THEME.lightStart);
   const dd = JSON.stringify(DEFAULT_THEME.darkStart);
+  const cl = JSON.stringify(THEME_COLORS.light);
+  const cd = JSON.stringify(THEME_COLORS.dark);
   return (
     `(function(){try{` +
     `var raw=localStorage.getItem(${k});` +
@@ -114,6 +137,8 @@ export function themeInitScript(storageKey: string = THEME_STORAGE_KEY): string 
     `d=ls<=ds?(c>=ds||c<ls):(c>=ds&&c<ls);` +
     `}else{d=sd;}` +
     `document.documentElement.classList.toggle('dark',!!d);` +
+    `var t=document.createElement('meta');` +
+    `t.name='theme-color';t.content=d?${cd}:${cl};document.head.appendChild(t);` +
     `}catch(e){}})();`
   );
 }

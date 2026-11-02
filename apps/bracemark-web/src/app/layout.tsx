@@ -10,14 +10,14 @@ import './globals.css';
 
 const inter = Inter({ subsets: ['latin'], display: 'swap', variable: '--font-inter' });
 
+// NO `themeColor` here, and adding one back is a silent bug. It can only ask the OS,
+// and editing the tags it renders makes React re-insert them with their original
+// colour on the next client-side navigation. themeInitScript creates the tag instead
+// and ThemeProvider keeps it current (docs/theme.md, _the browser chrome_).
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: 'rgb(17, 24, 39)' },
-  ],
 };
 
 // This app's own origin, for the card metadata below. It has to be absolute:

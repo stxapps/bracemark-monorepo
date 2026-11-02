@@ -43,6 +43,7 @@ import {
   DropdownMenuTrigger,
 } from '@stxapps/web-ui/components/ui/dropdown-menu';
 import { Input } from '@stxapps/web-ui/components/ui/input';
+import { cn } from '@stxapps/web-ui/lib/utils';
 
 // One error slot plus the two ways these tables fire a mutation at it. Both
 // clear the slot first, so the notice always describes the latest attempt.
@@ -566,6 +567,18 @@ export function SortMenu({ disabled, onSort }: SortMenuProps) {
   );
 }
 
+// The hit target of a 32px button in a table row: `after:` slop, which draws
+// nothing. Vertically it runs to the row's edge, which a coarse pointer's row
+// (`TABLE_ROW_PADDING`) puts at 44; horizontally it takes half of `gap-1` and stops,
+// because the neighbours are a control a thumb must not be handed by accident. The
+// width can't come from a bigger box: the rename field is the row's only flexible
+// width, and it has already paid for the tree's indent. Each value is one more than
+// the slop it buys, because Button's 1px transparent border puts `after:`'s origin
+// inside the box: 36 wide, 40 tall, 44 under a coarse pointer.
+export const TABLE_ROW_BUTTON_TARGET =
+  'relative after:absolute after:-inset-x-[3px] after:-inset-y-[5px] pointer-coarse:after:-inset-y-[7px]';
+export const TABLE_ROW_PADDING = 'py-1 pointer-coarse:py-1.5';
+
 // The drag handle. Spread dnd-kit's `attributes` and `listeners` onto it — they
 // land after the defaults, which is where they were before, and the listeners
 // live only here so the rename input and the kebab stay clickable.
@@ -575,7 +588,7 @@ export function DragGrip(props: React.ComponentProps<typeof Button>) {
       variant="ghost"
       size="icon-sm"
       aria-label="Drag to reorder"
-      className="cursor-grab touch-none text-muted-foreground"
+      className={cn('cursor-grab touch-none text-muted-foreground', TABLE_ROW_BUTTON_TARGET)}
       {...props}
     >
       <GripVertical className="size-4" />

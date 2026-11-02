@@ -3,6 +3,7 @@ import {
   DEFAULT_THEME,
   msUntilNextThemeSwitch,
   resolveTheme,
+  THEME_COLORS,
   THEME_MODES,
   THEME_STORAGE_KEY,
   themeInitScript,
@@ -135,8 +136,9 @@ describe('themeInitScript', () => {
   const run = (
     script: string,
     env: { stored?: unknown; systemPrefersDark: boolean; now: Date; key?: string },
-  ): { dark: boolean | 'untouched' } => {
+  ): { dark: boolean | 'untouched'; themeColors: string[] } => {
     let dark: boolean | 'untouched' = 'untouched';
+    const themeColors: string[] = [];
     const localStorage = {
       getItem: (k: string) =>
         k === (env.key ?? THEME_STORAGE_KEY) && env.stored !== undefined
@@ -152,6 +154,12 @@ describe('themeInitScript', () => {
     };
     const document = {
       documentElement: { classList: { toggle: (_cls: string, on: boolean) => void (dark = on) } },
+      createElement: () => ({ name: '', content: '' }),
+      head: {
+        appendChild: (tag: { name: string; content: string }) => {
+          if (tag.name === 'theme-color') themeColors.push(tag.content);
+        },
+      },
     };
     class FakeDate {
       getHours() {
@@ -167,8 +175,25 @@ describe('themeInitScript', () => {
       document,
       FakeDate,
     );
-    return { dark };
+    return { dark, themeColors };
   };
+
+  it('paints the browser chrome the theme the app chose, not the one the OS prefers', () => {
+    // A tag's own `media` query can only see the OS, so this is the whole of the
+    // check for someone whose in-app choice differs from it: a dark app under a
+    // white address bar, with no error and nothing wrong on any page.
+    const script = themeInitScript();
+    for (const systemPrefersDark of [true, false]) {
+      for (const mode of ['light', 'dark'] as const) {
+        const { themeColors } = run(script, {
+          stored: { mode },
+          systemPrefersDark,
+          now: at(12),
+        });
+        expect(themeColors).toEqual([THEME_COLORS[mode]]);
+      }
+    }
+  });
 
   it('agrees with resolveTheme for every mode, hour and OS preference', () => {
     const script = themeInitScript();

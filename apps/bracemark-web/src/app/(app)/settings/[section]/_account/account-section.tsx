@@ -636,7 +636,7 @@ export function AccountSection() {
                 <button
                   type="button"
                   onClick={() => setView('recovery')}
-                  className="underline hover:text-foreground"
+                  className="relative underline after:absolute after:-inset-x-1 after:-inset-y-3 hover:text-foreground"
                 >
                   Set one up
                 </button>

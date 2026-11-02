@@ -280,7 +280,7 @@ export function CreateAccountForm() {
             <button
               type="button"
               onClick={regenerateRecovery}
-              className="inline-flex items-center gap-1.5 self-start text-sm text-muted-foreground hover:text-foreground"
+              className="relative inline-flex items-center gap-1.5 self-start text-sm text-muted-foreground after:absolute after:inset-x-0 after:-top-3 after:-bottom-1.5 hover:text-foreground"
             >
               <RefreshCw className="size-3.5" />
               Regenerate

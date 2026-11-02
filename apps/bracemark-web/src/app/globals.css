@@ -1,3 +1,43 @@
 @import '@stxapps/web-ui/styles.css';
 
 @source '../../../../packages/web-ui/src';
+
+/*
+ * PRESS FEEDBACK ON A TOUCH SCREEN. These two rules are one decision: the first
+ * removes the browser's tap flash, which reads as a web page and fights the row and
+ * button states, and the second is what stands in for it, on every control at once.
+ * Doing it per component is how this stops being true: the flash was the only
+ * feedback most of the app had, so a control that forgot its `active:` would just
+ * go quiet under a thumb, with no error and nothing to see at a mouse.
+ *
+ * `any-pointer`, not `pointer`: a laptop with a touchscreen reports a fine primary
+ * pointer and loses the flash all the same, since the first rule has no media query
+ * and can't sensibly have one.
+ *
+ * `transition-duration: 0s` is what makes it feel attached to the finger. Button is
+ * `transition-all`, so the dim would otherwise spend its 150ms easing in and a quick
+ * tap would be over before it showed; this way it lands on the press and only the
+ * release eases. Unlayered, so it outranks a utility's `opacity-*`. `:disabled` is
+ * excluded because that opacity is the disabled state's own signal.
+ *
+ * bracemark-web only, on purpose. Not in web-ui's sheet: the marketing site's links
+ * have no press state and a document can keep the browser's flash, and
+ * bracemark-extension is a desktop popup first. docs/accessibility.md, _press
+ * feedback_.
+ */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (any-pointer: coarse) {
+  a:active,
+  button:not(:disabled):active,
+  [role='button']:active,
+  [role='menuitem']:active,
+  [role='menuitemcheckbox']:active,
+  [role='menuitemradio']:active,
+  [role='option']:active {
+    opacity: 0.6;
+    transition-duration: 0s;
+  }
+}

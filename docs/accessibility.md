@@ -657,9 +657,7 @@ The only proof is a coordinate tap outside the box on a device:
 from a screenshot rather than a dump (an open drawer or dropdown does not show
 up in one).
 
-The web side needs none of this: at 36 its pointer targets clear WCAG 2.5.8's
-24px floor with room, and the `h-9` band is set by the search input they sit
-beside.
+The web has its own version of this, under the next heading; it is not exempt.
 
 **A picker ROW takes the floor as height, not as slop** — `min-h-11` on every
 row of `links/tag-picker-rows.tsx`, `links/list-command.tsx` and the share
@@ -672,6 +670,87 @@ last few px of one row's tap to the next). `py-2.5` around a one-line name
 reaches only 40, which is what the two list pickers carried until the rows were
 brought in line with the tag picker's. `min-h`, never `h`: a large font scale has
 to grow the row, not clip the name.
+
+### a web target on a touch screen
+
+This section used to be one sentence saying the web needed none of the above,
+because a 36px control clears WCAG 2.5.8's 24px floor with room. That was true of
+36px controls and was never true of the app: `bracemark-web` renders the same rows
+on a phone (below `md` the links rail is a drawer), and it held text buttons 20px
+tall, a 36x20 switch and footer links 18px tall, none of which any check reported,
+because an undersized target is a working button. **24 is the pass mark; 44 is the
+aim under a coarse pointer, the same floor as native.**
+
+**The lever is an `after:` pseudo-element**, the web's `hitSlop`: `relative
+after:absolute after:-inset-y-3`. It draws nothing, it costs no layout, and it is
+what `Checkbox`, `RadioGroupItem` and `LinkRowMenu` already did. Three things carry
+over from native and one does not:
+
+- **Never take more than half the gap to a pressable neighbour.** The rule above
+  applies unchanged, only the tiebreak differs: on the web the winner is paint
+  order, so a `relative` button's slop sits above a non-positioned sibling, and
+  of two positioned ones the later wins.
+- **Slop into a non-pressable neighbour is free.** The secret's box above
+  Regenerate takes no tap, so that side reaches all the way to it.
+- **A stacked row takes height, not slop**, for the reason picker rows do. On the
+  web that is `pointer-coarse:` padding, so a mouse keeps the dense table.
+- **`after:` measures from inside the border, and `Button` and `Switch` have one.**
+  A 1px transparent border puts the origin 1px in, so `after:-inset-1.5` on a 32px
+  `Button` is 42, not 44: every value there is one more than the slop it buys.
+  `LinkRowMenu` claimed 44 and measured 42 from the day it was written.
+- **Unlike `hitSlop`, an audit can see it.** `elementFromPoint` hits the host for
+  a point on its `::after`, so sampling outward from a control's centre measures the
+  real target, where `getBoundingClientRect` reports the drawn box. A deleted slop
+  shows up in that number and nowhere else.
+
+What each surface settled on, and why it stops there:
+
+| surface                                             | drawn | target             | what stops it                                                                               |
+| --------------------------------------------------- | ----- | ------------------ | ------------------------------------------------------------------------------------------- |
+| `Switch`                                            | 36x20 | 44x44              | nothing                                                                                     |
+| "Set one up" (account notice)                       | —x20  | 44 tall            | nothing; it sits in a sentence                                                              |
+| Regenerate, "Choose my own"                         | —x20  | 38 tall            | half the 12px gap to Copy below                                                             |
+| "Forgot your password", "Use your password instead" | —x20  | 38 tall            | half the 12px gap to Sign in above                                                          |
+| Lists and Tags table: grip, chevron, ⋯              | 32x32 | 36 x 40, 44 coarse | wide: half of `gap-1`, and the rename field is the only flexible width, so no box can grow  |
+| the links rail's and drawer's chevron and lock      | 24x24 | 32x32              | the row is 32 tall; wider gives a thumb "select" for "expand", which also closes the drawer |
+| the marketing site's header links                   | —x18  | 46 tall            | sideways: half of `gap-3`, and the row has 6px of slack at 360 (site-header.tsx)            |
+| the marketing site's footer links                   | —x18  | 36, 44 coarse      | nothing; padding replaced `space-y-3`, so a mouse's rows did not move                       |
+
+Still under 44 and left there: the Lists and Tags **rename field** (a 32px `Input`,
+and a pseudo-element can't hang off a void element), the settings **close** link
+(32), and the web **tag chips** (24), which have the adjacent-chip problem described
+for expo above. The drawer's rows themselves are 32. On the marketing site, three
+one-off text controls ("All posts", "Every other question", "Subscribe with RSS",
+"Try a sample file") are 20 and the bookmark converter's checkboxes are 16. None of these fails WCAG; they are
+the next place to look if a phone reports a mistap.
+
+### press feedback
+
+`bracemark-web` removes the browser's tap flash, and the two halves are one decision
+(`apps/bracemark-web/src/app/globals.css`). The flash was the only feedback most of
+the app had, so taking it away per component would leave any control that forgot an
+`active:` silently dead under a thumb; instead a single `(any-pointer: coarse)` rule
+dims every `a`, `button` and ARIA control while it is held, and a new control is
+covered by being one. On top of that, a link row and a card wash on a press of their
+own anchor:
+
+- **`has-[a:active]:bg-muted`, never `active:bg-muted`, on a row.** `:active` runs up
+  the ancestor chain, so a bare `active:` washes the row for a tap on its tag chip or
+  its ⋯, neither of which is the row's action. A row in bulk edit IS its own action,
+  so there it is plain `active:`.
+- **Not in web-ui's sheet.** The marketing site's links have no press state and a
+  document can keep the flash; `bracemark-extension` is a desktop popup first.
+- **Never `user-select: none` on an `a`, and never `-webkit-touch-callout: none`.**
+  Both are stock "feels native" advice and both are wrong here: a link's title and
+  URL are the product's content, and the long-press menu is how a phone opens one in
+  a new tab or copies it. `select-none` on `Button` is right because a button's label
+  is not content. A list row takes `select-none` only in bulk edit, where a drag
+  means "select these rows".
+
+⚠ **`:active` on iOS is unverified.** Everything here was driven in mobile-emulated
+Chromium with held touches. WebKit has historically applied `:active` only with a
+touch listener on an ancestor; React's root listener should satisfy that, but nobody
+has confirmed it on an iPhone, and if it fails the app goes quiet rather than wrong.
 
 ### modality — an overlay that covers the screen must also cover the a11y tree
 
@@ -913,6 +992,7 @@ the place to say what the role came from. Both `create-account-form`s carry one.
 | `apps/bracemark-expo/src/features/settings/settings-kit.tsx`             | expo `SettingsNotice`, ditto                                                     |
 | `apps/bracemark-expo/src/lib/font-scale.ts`                              | the 1.3 ceiling and `useCappedFontScale`                                         |
 | `apps/bracemark-expo/src/components/ui/text.tsx`                         | heading roles + `aria-level`; one of the two font-scale chokepoints              |
+| `apps/bracemark-web/src/app/globals.css`                                 | press feedback, and why it is one rule                                           |
 | `apps/bracemark-expo/src/features/links/topbar.tsx`                      | the `hitSlop` rule and the glyph-rung divergence the boxes are derived from      |
 | `apps/bracemark-expo/src/components/ui/sheet.tsx`                        | modality on an in-tree overlay: what iOS honours and what Android drops          |
 | `packages/web-ui/src/components/auth/create-account-form.tsx`            | the live-verdict vs. error distinction, worked through in comments               |

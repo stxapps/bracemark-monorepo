@@ -1,6 +1,6 @@
 import { act, render, screen } from '@testing-library/react';
 
-import { THEME_STORAGE_KEY, type ThemeState } from '@stxapps/shared';
+import { THEME_COLORS, THEME_STORAGE_KEY, type ThemeState } from '@stxapps/shared';
 import { useSettings } from '@stxapps/web-react';
 
 import { ThemeProvider, useTheme } from './theme-provider';
@@ -8,7 +8,7 @@ import { ThemeProvider, useTheme } from './theme-provider';
 // The READ/APPLY half of the theme. The preference itself is owned by the
 // settings data layer and the light/dark ARITHMETIC by `@stxapps/shared` (whose
 // `theme.spec.ts` pins `resolveTheme` and `msUntilNextThemeSwitch` exhaustively).
-// What is only true here is the three things this provider does with that
+// What is only true here is the four things this provider does with that
 // arithmetic's answer, and each of them fails quietly:
 //
 //   - it toggles `dark` on <html>, which is what every Tailwind `dark:` utility
@@ -17,6 +17,8 @@ import { ThemeProvider, useTheme } from './theme-provider';
 //     the synchronous pre-paint FOUC script can read — the real value lives
 //     encrypted in IndexedDB and cannot be reached before paint, so a missing
 //     mirror costs every visitor a flash of the wrong theme on every load;
+//   - it keeps the `theme-color` tag on the resolved theme, because the browser's
+//     chrome is the one surface that stays wrong on a page that looks right;
 //   - it re-resolves on the trigger each mode depends on — the OS preference for
 //     `system`, a timer for `custom`. Drop either and the theme is simply correct
 //     at mount and then frozen, which nobody notices until they watch a sunset.
@@ -87,6 +89,56 @@ describe('ThemeProvider', () => {
 
     expect(htmlIsDark()).toBe(dark);
     expect(effective()).toBe(dark ? 'dark' : 'light');
+  });
+
+  describe('the theme-color tag', () => {
+    const tags = () => [...document.querySelectorAll('meta[name="theme-color"]')];
+    const tagColors = () => tags().map((tag) => tag.getAttribute('content'));
+
+    afterEach(() => {
+      tags().forEach((tag) => tag.remove());
+    });
+
+    it('takes the chosen theme over the OS one', () => {
+      systemPrefersDark = false;
+      setTheme({ ...CUSTOM, mode: 'dark' });
+
+      renderProvider();
+
+      expect(tagColors()).toEqual([THEME_COLORS.dark]);
+    });
+
+    // A second tag would not be a harmless duplicate: the browser takes the first
+    // one in the document, so the later of the two would never be the one read.
+    it('reuses the tag the pre-paint script created', () => {
+      const tag = document.createElement('meta');
+      tag.name = 'theme-color';
+      tag.content = THEME_COLORS.light;
+      document.head.append(tag);
+      setTheme({ ...CUSTOM, mode: 'dark' });
+
+      renderProvider();
+
+      expect(tagColors()).toEqual([THEME_COLORS.dark]);
+    });
+
+    // `custom` crosses over with no reload, so the pre-paint script has already
+    // run and only this path can move the tag.
+    it('moves at a custom crossover', () => {
+      jest.useFakeTimers();
+      try {
+        jest.setSystemTime(new Date(2026, 0, 1, 18, 59, 0));
+        setTheme(CUSTOM);
+        renderProvider();
+        expect(tagColors()).toEqual([THEME_COLORS.light]);
+
+        act(() => jest.advanceTimersByTime(61_000));
+
+        expect(tagColors()).toEqual([THEME_COLORS.dark]);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 
   // The mirror is the FOUC script's only source. Nothing reads it back in this

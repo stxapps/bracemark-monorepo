@@ -149,7 +149,7 @@ current.
 | `src/lib/mdx/headings.ts`           | the heading-id rule and the rehype plugin that stamps it — the "On this page" column                                                                                                            |
 | `src/components/mdx-components.tsx` | everything a page may use beyond Markdown: `<AppLink path=…>`, `<StoreLink store=…>`, `<FreeLinks />`, `<DemoClip />`, `<Figure name=…>`, `<SignaturePanel />`, and on-site links via next/link |
 | `src/content/figures.ts`            | the pictures `<Figure>` may show — each one's files (`public/figures/`), size, alt text and caption                                                                                             |
-| `.mdx-prose` (`globals.css`)        | the styling, as `.legal-prose` does for /terms and /privacy — so a page stays plain Markdown                                                                                                    |
+| `.mdx-prose` (`globals.css`)        | the styling, as `.legal-prose` does for /terms and /privacy — so a page stays plain Markdown; a table scrolls in `.mdx-table`, so it can't widen a phone's page                                 |
 
 The last five rows are shared with `/blog` (next section), which is why they are
 named for MDX rather than for docs; what only docs uses — `components/docs-nav.tsx`

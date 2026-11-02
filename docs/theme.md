@@ -151,6 +151,40 @@ The pre-paint script is generated once from **`themeInitScript()`**
 (`@stxapps/shared`), a self-contained ES5 IIFE that mirrors `resolveTheme` in
 plain JS. Single source, no hand-copied duplicate of the resolver.
 
+### the browser chrome — `theme-color`
+
+The one surface the `.dark` class can't reach is the browser's own: the address bar
+and, in an installed PWA, the status bar. ⚠ **`bracemark-web`'s `viewport` export
+deliberately has no `themeColor`, and adding one back is a silent bug.** There is one
+`<meta name="theme-color">` on the page, React never renders it, and two things write
+it: `themeInitScript` creates it before first paint, and `ThemeProvider` keeps it on
+the resolved theme, creating it if a storage failure stopped the script early. Both
+take the colour from `THEME_COLORS` (`@stxapps/shared`), which is `--background`
+spelled in hex.
+
+A pair of `media`-scoped tags, the way Next and every guide spell it, can only ask
+the OS, so it is wrong for anyone whose mode isn't `system`: a dark app on a
+light-mode phone sits under a white bar, and `custom` changes the page at its
+crossover and leaves the bar behind. The obvious repair is to keep Next's pair and
+overwrite their `content`, and **that was tried and it fails by a route nothing
+reports**. React identifies a hoisted `<meta>` by its `content`, so a tag whose value
+changed reads as missing and React inserts a fresh copy holding the original colour,
+once at hydration and again on a client-side navigation. The specimen: with both the
+OS and the app on light, the script rewrote the dark tag to `#ffffff`, and after
+sign-in the head held three tags, the newest a dark one back at its raw colour.
+Reverse the themes and the raw tag is the matching one, so the wrong bar returns on
+the first navigation. No unit test sees it; only a head read after a navigation does.
+So the tag stays outside React, and there is nothing for it to reconcile.
+
+Two things this does not reach, and neither is fixable from here. The **web app
+manifest**'s `theme_color` and `background_color` (`src/app/manifest.json`) are one
+fixed value, read before any script runs, so an installed PWA's splash is white for
+everyone until the page takes over. And the **marketing site** keeps its plain
+single `themeColor`: it is light-only (_per-app wiring_, below) and has no
+`themeInitScript`, so nothing edits its tag and the trap doesn't apply.
+`bracemark-extension`'s pages run the same script and get the same tag, which a
+toolbar popup ignores.
+
 ### per-app wiring
 
 - **bracemark-web** — `layout.tsx` inlines `themeInitScript()` in `<head>` as a

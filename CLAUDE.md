@@ -86,7 +86,7 @@ that reading comes _before_ the edit; nothing downstream will tell you.
 | **a limit** — tree depth, a name's length, tags per link; a new `.max()`       | `data-limits.md` ⚠              |
 | subscriptions — Paddle, store IAP, the entitlement fold                        | `iap.md`                        |
 | app lock + list locks                                                          | `locks.md`                      |
-| **error messages, labels, roles, font scaling**                                | `accessibility.md` ⚠            |
+| **error messages, labels, roles, font scaling; a tap target, press feedback**  | `accessibility.md` ⚠            |
 | light/dark theme; a Tailwind class, a `data-*` variant, a `--color-*` token    | `theme.md` ⚠                    |
 | safe-area insets, viewport sizing, popup positioning; the links rail's width   | `safe-area.md` ⚠                |
 | **an expo screen on a wide window** — tablets, foldables, rotation, the rails  | `safe-area.md` ⚠                |

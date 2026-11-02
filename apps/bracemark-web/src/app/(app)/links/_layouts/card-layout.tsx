@@ -282,7 +282,9 @@ export function CardLayout({
                       // range-selecting cards would drag highlight across their
                       // titles.
                       className={`relative mx-auto flex w-full max-w-105 flex-col overflow-hidden rounded-lg border border-border ${
-                        selected ? 'bg-muted ring-1 ring-muted-foreground' : 'hover:bg-muted/50'
+                        selected
+                          ? 'bg-muted ring-1 ring-muted-foreground'
+                          : 'hover:bg-muted/50 has-[a:active]:bg-muted'
                       } ${bulkEditing ? 'select-none' : ''}`}
                     >
                       {/* The selection checkbox floats over the banner's

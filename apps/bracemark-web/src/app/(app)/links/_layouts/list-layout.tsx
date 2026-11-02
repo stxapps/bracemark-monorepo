@@ -265,9 +265,14 @@ export function ListLayout({
                 // click, so range-selecting rows paints highlight across every
                 // title and host it passes. A drag that means "select these rows"
                 // shouldn't leave text selected instead.
+                //
+                // `has-[a:active]`, not `active:`: a press anywhere inside lights
+                // `:active` up the whole ancestor chain, so a bare `active:` would
+                // wash the row for a tap on its tag chip or its ⋯ menu, which are
+                // not this row's action. In bulk edit the row IS the action.
                 className={`absolute inset-x-0 flex items-center gap-3 border-b border-border py-3.5 pr-2 pl-4 ${
-                  selected ? 'bg-muted' : 'hover:bg-muted/50'
-                } ${bulkEditing ? 'cursor-pointer select-none' : ''}`}
+                  selected ? 'bg-muted' : 'hover:bg-muted/50 has-[a:active]:bg-muted'
+                } ${bulkEditing ? 'cursor-pointer select-none active:bg-muted' : ''}`}
                 style={{ transform: `translateY(${row.start}px)` }}
                 onClick={onRowClick}
               >

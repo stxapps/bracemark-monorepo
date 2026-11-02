@@ -74,14 +74,20 @@ export function SiteHeader() {
 
             The slack at 360 is 6px, which is thin — so re-measure if a label is
             renamed, a fifth is added, or the display face changes. Nothing here
-            fails a build or a test; it just overflows. */}
+            fails a build or a test; it just overflows.
+
+            The links' targets are `after:` slop for the same reason: it costs none
+            of that width. 18px tall as drawn on a phone, on every page; the bar is
+            64 with nothing above or below, so height is free, and sideways they
+            take half of `gap-3` (docs/accessibility.md, _a web target on a touch
+            screen_). */}
         <nav className={cn('ml-auto flex items-center gap-3 sm:gap-6')} aria-label="Main">
           <ul className={cn('flex items-center gap-3 sm:gap-6')}>
             {HEADER_LINKS.map((link, i) => (
               <li key={link.href} className={cn(i === 0 && 'max-[359px]:hidden')}>
                 <Link
                   className={cn(
-                    'rounded-sm text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:outline-none',
+                    'relative rounded-sm text-sm font-medium text-muted-foreground transition-colors after:absolute after:-inset-x-1.5 after:-inset-y-3.5 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:outline-none',
                   )}
                   href={link.href}
                 >

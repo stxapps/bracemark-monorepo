@@ -89,10 +89,11 @@ export function SignInForm({
 
 // The door to the other mode. Muted and underlined in both tiers; only the step
 // moves, so it stays level with the labels above it rather than becoming the
-// loudest secondary line on a dense surface.
+// loudest secondary line on a dense surface. The `after:` slop is its target: half
+// the 12px gap up to Sign in, and into the open space below.
 function modeSwitchClass(density: 'standard' | 'dense') {
   return cn(
-    'mt-1 text-muted-foreground underline hover:text-foreground',
+    'relative mt-1 text-muted-foreground underline after:absolute after:inset-x-0 after:-top-1.5 after:-bottom-3 hover:text-foreground',
     density === 'dense' ? 'text-xs' : 'text-sm',
   );
 }

@@ -16,6 +16,14 @@ import { MailLink } from './mail-link';
 // contested tap. It belongs here and NOT on the <body> — the min-h-dvh column in
 // layout.tsx is body's child, so padding one level up adds to that column instead
 // of insetting it (docs/safe-area.md, _applying safe area_).
+//
+// EVERY LINK IS ITS OWN ROW, NOT A LINE OF TEXT IN ONE. As `text-sm` inline anchors
+// under `space-y-3` they were 18px tall on a 36px pitch: half of each column was a
+// gap that took no tap, so a phone's thumb could land between two links and get
+// nothing, and these sit on every page. The padding replaces the gap, so at a mouse
+// the rows stay exactly where they were and only the target grows; a coarse pointer
+// goes to the 44 floor (docs/accessibility.md, _a web target on a touch screen_).
+// The list's negative margin hands back what the first and last rows' padding adds.
 export function SiteFooter() {
   return (
     <footer className={cn('band mt-24 px-safe pb-safe')}>
@@ -36,7 +44,7 @@ export function SiteFooter() {
               address={SUPPORT_EMAIL}
               variant="specimen"
               className={cn(
-                'mt-4 inline-block text-sm underline-offset-4 focus-visible:ring-offset-2',
+                'relative mt-4 inline-block text-sm underline-offset-4 after:absolute after:-inset-y-3 after:inset-x-0 focus-visible:ring-offset-2',
               )}
             />
           </div>
@@ -44,13 +52,13 @@ export function SiteFooter() {
           {FOOTER_LINKS.map((group) => (
             <div key={group.heading}>
               <h2 className={cn('eyebrow')}>{group.heading}</h2>
-              <ul className={cn('mt-4 space-y-3')}>
+              <ul className={cn('mt-2.5 -mb-1.5 pointer-coarse:mt-1.5 pointer-coarse:-mb-2.5')}>
                 {group.links.map((link) => {
                   const className = cn(
-                    'text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 rounded-sm text-sm transition-colors focus-visible:ring-3 focus-visible:ring-offset-2 focus-visible:outline-none',
+                    'text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 rounded-sm py-1.5 text-sm leading-6 transition-colors pointer-coarse:py-2.5 focus-visible:ring-3 focus-visible:ring-offset-2 focus-visible:outline-none',
                   );
                   return (
-                    <li key={link.href}>
+                    <li key={link.href} className={cn('flex')}>
                       {/* An off-origin link is a plain <a>: next/link would
                           prefetch a route that isn't ours and client-navigate
                           into a hard load anyway. Same choice the CTAs make for

@@ -130,8 +130,10 @@ export function LinkRowMenu({
     <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         {/* 32px box, 44px target. The `after:` pseudo-element is an invisible hit
-            expansion (-6px on every edge), the same trick Checkbox and RadioGroupItem
+            expansion (6px on every edge), the same trick Checkbox and RadioGroupItem
             use — it needs the `relative` beside it, since Button's base has none.
+            It is spelled 7 because `after:` measures from inside Button's 1px
+            transparent border; at `-inset-1.5` this measured 42.
             Deleting it looks like removing a rule that draws nothing: the button
             still works, and nothing lints or fails. It matters most on a narrow
             pane, where the sorted-date column is hidden (@xl) and the trigger's
@@ -141,7 +143,7 @@ export function LinkRowMenu({
         <Button
           variant="ghost"
           size="icon-sm"
-          className="relative shrink-0 text-muted-foreground after:absolute after:-inset-1.5"
+          className="relative shrink-0 text-muted-foreground after:absolute after:-inset-[7px]"
           aria-label="Link options"
         >
           {/* 20, not 16 — the same optical correction the topbar's overflow

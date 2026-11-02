@@ -201,7 +201,9 @@ export function NewPasswordField({
           // panel's `actions` slot — directly under the value, above Copy. Regenerate
           // also clears the saved checkbox further down; sitting above it is what
           // makes that reset look like cause and effect rather than the box emptying
-          // itself.
+          // itself. Each is a 20px line of text, so an `after:` slop gives it a target:
+          // up to the value above, which takes no tap, and half the 12px gap to Copy
+          // below (docs/accessibility.md, _a web target on a touch screen_).
           actions={
             <div className="flex items-center justify-between">
               <button
@@ -211,7 +213,7 @@ export function NewPasswordField({
                   regenerate();
                   onEdit?.();
                 }}
-                className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+                className="relative inline-flex items-center gap-1.5 text-sm text-muted-foreground after:absolute after:inset-x-0 after:-top-3 after:-bottom-1.5 hover:text-foreground disabled:opacity-50"
               >
                 <RefreshCw className="size-3.5" />
                 {copy.regenerate}
@@ -222,7 +224,7 @@ export function NewPasswordField({
                   setMode('own');
                   onEdit?.();
                 }}
-                className="text-sm text-muted-foreground underline hover:text-foreground"
+                className="relative text-sm text-muted-foreground underline after:absolute after:inset-x-0 after:-top-3 after:-bottom-1.5 hover:text-foreground"
               >
                 {copy.chooseOwn}
               </button>

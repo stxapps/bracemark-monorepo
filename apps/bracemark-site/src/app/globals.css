@@ -236,8 +236,13 @@
   .mdx-prose code {
     @apply rounded-sm bg-muted px-1 py-0.5 font-mono text-[0.9em] text-foreground;
   }
+  /* The wrapper mdx-components.tsx's `Table` puts around every table: on a narrow
+     phone the scroll stops here instead of widening the page. */
+  .mdx-prose .mdx-table {
+    @apply mt-6 overflow-x-auto rounded-sm focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none;
+  }
   .mdx-prose table {
-    @apply mt-6 w-full border-collapse text-left text-sm leading-6;
+    @apply w-full border-collapse text-left text-sm leading-6;
   }
   .mdx-prose th {
     @apply border-b border-border py-2 pr-4 align-bottom font-semibold text-foreground;

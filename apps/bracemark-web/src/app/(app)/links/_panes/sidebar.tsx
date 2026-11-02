@@ -150,6 +150,13 @@ export const SidebarNavigateContext = createContext<(() => void) | undefined>(un
 // keyboard walks the two surfaces through identical highlights.
 const FOCUS_RING = 'focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none';
 
+// A row's 24px chevron and lock, in the drawer as well as the rail, so under a thumb.
+// `after:` slop to the full 32 of the row, which is as far as it can go: it reaches
+// the row button's own leading padding and no further, and past that a thumb meant
+// for "expand" would pick the row and close the drawer. `relative` also puts the
+// slop above that button, which isn't positioned.
+const ROW_ICON_TARGET = 'relative after:absolute after:-inset-1';
+
 // The filter box is chrome that only earns its keep past a handful of entries.
 // Below this combined count (lists + tags) the whole tree fits at a glance, so
 // we hide the box entirely — it reads as noise (or worse, as link search) when
@@ -286,6 +293,7 @@ function NavItem({
           aria-label={expanded ? 'Collapse' : 'Expand'}
           className={cn(
             'ml-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+            ROW_ICON_TARGET,
             FOCUS_RING,
           )}
         >
@@ -520,6 +528,7 @@ export function SidebarBody({
           'ml-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition',
           'opacity-0 group-hover/navitem:opacity-100 hover:bg-muted hover:text-foreground',
           'focus-visible:opacity-100 pointer-coarse:opacity-100',
+          ROW_ICON_TARGET,
           FOCUS_RING,
         )}
       >

@@ -47,6 +47,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@stxapps/web-ui/components/ui/dropdown-menu';
+import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { SettingsHeader, SettingsNotice, SettingsPane } from '../../_components/settings-kit';
 import {
@@ -55,6 +56,8 @@ import {
   DragGrip,
   RenameField,
   SortMenu,
+  TABLE_ROW_BUTTON_TARGET,
+  TABLE_ROW_PADDING,
   useDestroyRequest,
   useDropHold,
   useOpRunner,
@@ -96,7 +99,7 @@ function RowActions({
           ref={triggerRef}
           variant="ghost"
           size="icon-sm"
-          className="text-muted-foreground"
+          className={cn('text-muted-foreground', TABLE_ROW_BUTTON_TARGET)}
           aria-label="Tag actions"
         >
           {/* 20 in a 32px box and muted at rest — the same trigger the link rows
@@ -159,7 +162,7 @@ function SortableRow({
   return (
     <li
       ref={setNodeRef}
-      className={`flex items-center gap-1 px-1 py-1 not-last:border-b not-last:border-border/60 ${isDragging ? 'opacity-50' : ''}`}
+      className={`flex items-center gap-1 px-1 ${TABLE_ROW_PADDING} not-last:border-b not-last:border-border/60 ${isDragging ? 'opacity-50' : ''}`}
       style={{ transform: CSS.Translate.toString(transform), transition }}
     >
       <DragGrip {...attributes} {...listeners} />

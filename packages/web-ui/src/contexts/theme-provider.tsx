@@ -5,6 +5,7 @@ import {
   type EffectiveTheme,
   msUntilNextThemeSwitch,
   resolveTheme,
+  THEME_COLORS,
   THEME_STORAGE_KEY,
 } from '@stxapps/shared';
 import { useSettings } from '@stxapps/web-react';
@@ -23,6 +24,13 @@ import { useSettings } from '@stxapps/web-react';
 // @stxapps/shared): the synced value lives encrypted in IndexedDB and can't be read
 // before paint, so localStorage stays the synchronous cache no matter which source
 // is active.
+//
+// And it keeps the page's one `theme-color` tag on the resolved theme, the one
+// surface the `.dark` class can't reach: the browser's own chrome. The tag is never
+// rendered by React, on purpose; `themeInitScript` says why. Without this, `custom`
+// mode changes the page at its crossover and leaves the bar behind, and so does a
+// pick in Settings. If the pre-paint script didn't get to create the tag (a storage
+// failure stops it early), this does.
 
 interface ThemeContextValue {
   /** What's actually rendered right now (light | dark). */
@@ -33,6 +41,16 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function systemPrefersDark(): boolean {
   return typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+function setThemeColor(color: string) {
+  let tag = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  if (!tag) {
+    tag = document.createElement('meta');
+    tag.name = 'theme-color';
+    document.head.append(tag);
+  }
+  tag.content = color;
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -57,6 +75,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         systemPrefersDark: systemPrefersDark(),
       });
       document.documentElement.classList.toggle('dark', next === 'dark');
+      setThemeColor(THEME_COLORS[next]);
       setEffectiveTheme(next);
     };
     apply();

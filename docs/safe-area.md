@@ -76,6 +76,23 @@ export const viewport = { width: 'device-width', initialScale: 1, viewportFit: '
 
 Without it, none of the `safe-area` utilities or `useWindowInsets` do anything.
 
+**Two things that look like the next line of this tag and must stay out of it.**
+`maximum-scale=1` and `user-scalable=no` stop the input zoom by disabling pinch-zoom
+for everyone, which is the accessibility failure; the zoom's real cause is a field
+under 16px, and input.tsx's control type step removes it. `interactive-widget=resizes-content`
+makes Android Chrome shrink the layout viewport for the keyboard, and everything
+under _`useWindowSize` vs `useVisualViewport`_ below is built on the opposite
+assumption: the keyboard moves the visual viewport and the layout one holds still.
+Setting it would resize every `h-dvh` frame on one platform only.
+
+**Pull-to-refresh is left on, and that is an open decision rather than a bug.**
+Nothing here sets `overscroll-behavior`, so on Android Chrome a pull past the top of
+the links pane can chain to the page and reload it. In a local-first app that costs
+a re-open, not data, and a browser tab's refresh gesture is a reasonable thing to
+keep; `overscroll-y-contain` on the panes is the lever if a device says otherwise.
+It has not been tried on one. Never `html { overscroll-behavior: none }`: the
+marketing site and the `min-h-dvh` screens are documents.
+
 ### what's provided
 
 **CSS** (`@stxapps/web-ui/styles.css`)
