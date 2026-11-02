@@ -120,6 +120,12 @@ export const DOC_GROUPS: DocGroup[] = [
     title: 'Account and security',
     pages: [
       {
+        slug: 'where-to-keep-your-password',
+        title: 'Where to keep your password',
+        description:
+          'Choose a place for your password that outlasts a lost phone, keep your recovery code somewhere else, and check that your saved copy works.',
+      },
+      {
         slug: 'lost-password',
         title: 'Lost your password',
         description:

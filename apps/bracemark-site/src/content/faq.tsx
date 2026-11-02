@@ -727,7 +727,11 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             A password manager is the best answer. A notes app that locks, or paper somewhere only
             you would look, both work. Don’t keep it on a site you don’t trust: anyone with it has
-            your library.
+            your library.{' '}
+            <PageLink href="/docs/where-to-keep-your-password">
+              Where to keep your password
+            </PageLink>{' '}
+            has the details.
           </>
         ),
       },
