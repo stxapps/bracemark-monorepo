@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   account_db_id TEXT NOT NULL,           -- routing: the user's accounts shard (e.g. '1'), from the directory
   created_at    INTEGER NOT NULL,
   expires_at    INTEGER NOT NULL,        -- idle deadline; slid forward by the guard (middleware/auth.ts)
-  last_seen_at  INTEGER NOT NULL,        -- moves with each renewal; for a future devices list
+  last_seen_at  INTEGER NOT NULL,        -- set at sign-in, then moves with each renewal (at most daily); read as totals
   revoked_at    INTEGER                  -- NULL, or when it was explicitly revoked (0002)
 );
 

@@ -18,7 +18,7 @@ that a revocation runs, and _delete account_), [local-first-sync.md](./local-fir
 sign-in), [offline-mode.md](./offline-mode.md) (the other half of the
 dead-server promise: whether the library can still be opened).
 
-> **STATUS — built, not yet deployed.** The api answers the three session codes
+> **STATUS — built, and in production.** The api answers the three session codes
 > and slides the idle window (`middleware/auth.ts`, `services/session.ts`),
 > revocation is a retained marker (`sessions` migration `0002_revoked_at.sql`),
 > cleanup runs from a daily cron (`worker.ts` `scheduled`), and every client —
@@ -28,13 +28,11 @@ dead-server promise: whether the library can still be opened).
 > replaced](#what-this-replaced). The marketing site's pages that describe this
 > design (/privacy _How long we keep it_, /delete-account _What is deleted_ and
 > _What is kept_, the _Sign out_ help page, the FAQ's _Can I change my
-> password?_) are now true of the code. **The database and bracemark-api are
-> already deployed**, so the order at the next deploy matters: apply
-> `0002_revoked_at.sql` to `SESSIONS_DB` before the Worker that reads
-> `revoked_at` goes out ([hosting.md](./hosting.md), _deploying the workers_;
-> `tools/scripts/deploy-worker.sh` applies migrations first), and the cron
-> trigger ships with that deploy. Server schema changes stay append-only
-> ([local-first-sync.md](./local-first-sync.md), _schema changes_).
+> password?_) are true of the code. Server schema changes stay append-only
+> ([local-first-sync.md](./local-first-sync.md), _schema changes_), and a
+> migration goes out before the Worker that reads it
+> ([hosting.md](./hosting.md), _deploying the workers_;
+> `tools/scripts/deploy-worker.sh` applies migrations first).
 
 ### the promise, and the rule that carries it
 
@@ -43,8 +41,8 @@ library does not need us to be reachable in order to open." That sentence is
 only true if nothing on the device ever decides by itself that the user's data
 has to go. Three things could:
 
-1. **the client's clock**, which today wipes 30 days after sign-in whether or
-   not the server is alive;
+1. **the client's clock**, which once wiped 30 days after sign-in whether or
+   not the server was alive;
 2. **a 401 from something that isn't us**, such as a proxy, a gateway error
    page, or whoever holds the domain after we are gone;
 3. **a 401 from us that means "sign in again"** rather than "this device must
@@ -66,7 +64,7 @@ not proof that the device was signed out.
 This rule is silent. Break it and no lint, type or test failure follows. The
 cost only shows up when the server is unreachable for good and a user's only
 copy erases itself on the next launch. The one specimen is the code this design
-replaces: a `s.expiresAt > Date.now()` check at hydrate time that looked like
+replaced: a `s.expiresAt > Date.now()` check at hydrate time that looked like
 tidy housekeeping and was actually a timed delete of every user's library.
 
 ### lifetime — sliding, idle-based, decided by the server
@@ -109,15 +107,24 @@ this in `requireAuth`, `middleware/auth.ts`, through `renewSession`
   while the session remains valid; a failure near expiry can require sign-in.
   Where there is no execution context (`app.request()` in the specs) the
   renewal is awaited inline instead.
-- **`last_seen_at` moves with it.** The column already exists and was waiting
-  for this. It will serve a future sessions/devices list. It is also read, as a
-  total only, for how many accounts signed in or synced in the last week or
-  month, how many hold two or more live sessions (the "how many devices" of
-  /privacy), and how many of each month's new accounts still sign in or sync
-  (/privacy, _How we use what we collect_). Since background sync renews it,
-  that count is API activity, not a person opening the app. And since a
-  reinstall or a cleared browser mints a new session while the old one idles
-  toward expiry, the device count can read a little high, never low.
+- **`last_seen_at` moves with it.** Sign-in sets it, and `sessionsRepo.renew`
+  moves it in the same `UPDATE` as `expires_at`; nothing else writes it. So it
+  records the last renewal, not the last request, and inherits the
+  throttle: up to a day behind the latest request even when writes succeed,
+  further if a renewal fails. It is read, as a total only, for how many accounts
+  signed in or synced in the last week or month, how many hold two or more live
+  sessions (the "how many devices" of /privacy), and how many of each month's
+  new accounts still sign in or sync (/privacy, _How we use what we collect_).
+  Since background sync renews it, that count is API activity, not a person
+  opening the app. And since a reinstall or a cleared browser mints a new session
+  while the old one idles toward expiry, the device count can read a little high,
+  never low.
+- **A sessions/devices list isn't built, and this column is only half of it.**
+  `last_seen_at` could already say "active today", though not "active 5 minutes
+  ago" without a tighter write throttle. What it can't say is which device a row
+  is: nothing stores a label, so that needs a new column (the user-agent captured
+  at sign-in, say). That is a schema addition and a field /privacy doesn't
+  describe, so /privacy changes first.
 
 **Sliding alone needs no new columns.** `expires_at`, `last_seen_at` and
 `idx_sessions_expires_at` already existed. The explicit revocation marker below
@@ -162,11 +169,10 @@ The same module turns a response into a verdict (`sessionVerdictFromResponse`:
 `session_revoked` → `revoked`; `session_expired` and `session_unknown` →
 `expired`; anything else, including a codeless or foreign 401, → `null`).
 
-**Why a marker, and not "no row means wipe"?** Deleting the row already revokes
-API access: today's guard rejects both missing and expired rows with
-`401 unauthorized`. What a deletion can't do is say _why_ the row is gone. A
-missing row is the absence of a message, not a message, and rows go missing
-when nobody chose it:
+**Why a marker, and not "no row means wipe"?** Deleting the row would end API
+access on its own: a token with no row can't authenticate. What a deletion can't
+do is say _why_ the row is gone. A missing row is the absence of a message, not a
+message, and rows go missing when nobody chose it:
 
 - **cleanup**: under "no row means wipe", an expired row could never be
   deleted, or a device idle past cleanup would get the clock wipe back with a
@@ -444,9 +450,10 @@ cannot let an old completion overwrite the paused state.
 
 Expo applies the same generation rule to requests in the main process. Update
 the shared-Keychain mirror with the state; retain the outbox's existing account
-boundary. The exact
-cross-context locking and notification mechanism is implementation work, but
-these races are acceptance requirements, not optional follow-up hardening.
+boundary. Its lifecycle lock needs no cross-context notification: one JS runtime
+owns the lifecycle there, so `withSessionLock` (`session-store.ts`) is an
+in-process queue. These races are acceptance requirements, not optional
+follow-up hardening.
 
 ### one record per run
 

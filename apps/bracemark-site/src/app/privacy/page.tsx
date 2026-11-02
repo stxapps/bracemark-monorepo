@@ -658,8 +658,9 @@ export default function Page() {
 
             THE INPUTS: WHAT THIS PAGE ALREADY DESCRIBES. Our own records
             (usernames' created and deleted dates; sessions — docs/sessions.md,
-            last_seen_at moves on any authenticated request, background sync
-            included, so "signed in or synced" and never "opened the app";
+            last_seen_at moves when a session renews, at most daily, and any
+            authenticated request can renew it, background sync included, so
+            "signed in or synced" and never "opened the app";
             subscription rows; the paths of the encrypted files, counted per
             namespace and never opened, docs/local-first-sync.md), the request
             data under _Technical and security data_ as our hosts' dashboards

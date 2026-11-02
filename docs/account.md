@@ -184,8 +184,10 @@ context not already carried by the KEK, so it is the whole AAD. (Defined once as
 | **door rotation** | change password, add/remove recovery, revoke device | re-derive that one KEK; re-wrap or **delete** that blob                                                   | **unchanged**    |
 | **DEK rotation**  | DEK believed exposed                                | new DEK; re-derive keypair (**publicKey changes**) + enc key; **re-encrypt all data**; re-wrap every door | changes — rare   |
 
-Revoking a device is just deleting that door's wrapped blob (plus its `sessions`
-row) — no re-encryption, as long as the DEK itself wasn't exposed.
+Revoking a device is just deleting that door's wrapped blob (plus revoking its
+session, a retained marker on the `sessions` row, never a delete:
+[sessions.md](./sessions.md)) — no re-encryption, as long as the DEK itself wasn't
+exposed.
 
 > **STATUS — door rotation ✅ built; DEK rotation not.** Change-password and
 > generate/regenerate-recovery are wired as tier-1 rotations: prove an existing
@@ -1110,7 +1112,8 @@ CREATE TABLE account_keys (
   wrapped_dek BLOB NOT NULL,             -- AES-256-GCM(KEK, DEK), aad = doorType
   iv          BLOB NOT NULL,             -- GCM nonce for this wrap
   version     INTEGER NOT NULL,          -- bumped on each re-wrap (audit/debug)
-  created_at  INTEGER NOT NULL,
+  created_at  INTEGER NOT NULL,          -- door first created (stable across re-wraps)
+  updated_at  INTEGER NOT NULL,          -- last re-wrap; = created_at at insert
   PRIMARY KEY (user_id, door_type)
 );
 
@@ -1125,10 +1128,12 @@ CREATE TABLE sessions (
   account_db_id TEXT NOT NULL,
   created_at    INTEGER NOT NULL,
   expires_at    INTEGER NOT NULL,
-  last_seen_at  INTEGER NOT NULL
+  last_seen_at  INTEGER NOT NULL,
+  revoked_at    INTEGER                  -- NULL, or when it was explicitly revoked
 );
 CREATE INDEX idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX idx_sessions_revoked_at ON sessions(revoked_at);
 ```
 
 **Create-account is cross-DB (claim-then-write).** Because the directory and the
@@ -1163,8 +1168,9 @@ unreachable account carrying wrapped DEKs.
    place, atomically. Time Travel is the safety net if a bad write slips through
    — no manual versioned-blob dance needed (that complexity only existed to
    paper over R2's lack of versioning).
-3. **Revoke = delete the door's row**, deliberately (plus its `sessions` row).
-   The DEK is unchanged, so the other doors keep working — no re-encryption.
+3. **Revoke = delete the door's row**, deliberately (its session is revoked by a
+   marker, not deleted: [sessions.md](./sessions.md)). The DEK is unchanged, so
+   the other doors keep working — no re-encryption.
 
 #### backups & replication
 
