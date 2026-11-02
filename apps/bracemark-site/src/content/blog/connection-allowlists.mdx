@@ -1,0 +1,42 @@
+## What the header does
+
+Chrome 152 added [Connection Allowlists](https://developer.chrome.com/blog/connection-allowlist-announcement). A site sends a `Connection-Allowlist` response header naming the URL patterns a page or worker may connect to. The browser checks each destination before it connects and refuses anything off the list.
+
+It isn’t part of Content Security Policy, which is what we use today. CSP has a separate rule for each kind of request, and it leaves some connections out, such as WebRTC, DNS prefetch, and navigations. An allowlist is one list for all of them, and everything is refused unless the list allows it.
+
+## Why we wanted it
+
+Our web app keeps the key that encrypts your library in the browser, so a script that got into the page could read it. Keeping that script from sending anything out is a large part of what our CSP is for. The app is a static export and can’t issue a fresh nonce per request, so the policy allows inline scripts. That leaves `connect-src` doing much of the work. It names the app, our API, our extractor, our storage host, and Paddle, which runs checkout.
+
+One list covering every connection sounded like the missing piece, so we tested it before adding it.
+
+## What we tested
+
+We used Chrome 156 and a local test page, not Bracemark itself. The page sent `Connection-Allowlist: (response-origin)`, which allows only the page’s own origin, and tried to reach a second origin in four ways. A test script drove the browser, and both link tests were real clicks. We then repeated the run with no header, and with the `Connection-Allowlist-Report-Only` version.
+
+| From the page                       | No header | Enforced | Report-only |
+| ----------------------------------- | --------- | -------- | ----------- |
+| `fetch`                             | reached   | blocked  | reached     |
+| A click on a `target="_blank"` link | reached   | blocked  | reached     |
+| A click on a same-tab link          | reached   | blocked  | reached     |
+| `window.open` with `noopener`       | reached   | blocked  | reached     |
+
+The first row is what we wanted. The next three are why we aren’t using it.
+
+## Why that rules it out
+
+A saved link can point anywhere, and opening one is what a bookmark manager is for. No list can name those destinations in advance, and a pattern broad enough to match them would match everything else too.
+
+The header has no setting that exempts navigations. Beyond the patterns, it takes only `redirects`, `webrtc`, and `report-to`. [The explainer](https://github.com/WICG/connection-allowlists) floats a way to split navigations out and asks for use cases, so this may change.
+
+Report-only wasn’t a useful halfway step for us. It blocked nothing, and it printed nothing to the console in our test, so it needs a reporting endpoint to tell you anything. For us that would be new collection, to learn what this test already showed.
+
+This isn’t a flaw in the header. It suits a page that knows where it connects. Ours is unusual because you choose the destinations, not us.
+
+## What this leaves
+
+We’re keeping the CSP as it is, and that has a cost. A navigation can still carry data out of the page. If a script got into the app, `connect-src` wouldn’t stop it sending the browser somewhere else with data in the address. Allowing inline scripts is the larger half of that risk, and replacing that allowance with build-time hashes would address it more directly than a connection list. We haven’t done that, and it would mean regenerating the policy on every deploy.
+
+Connection Allowlists also run only in Chromium browsers for now, while the CSP applies everywhere.
+
+Both headers are ones we send, so you can read them in your browser’s network inspector. They show what we ask your browser to enforce, not what our servers do. Our [hosting notes](https://github.com/stxapps/bracemark-monorepo/blob/main/docs/hosting.md) record this result and when we’d look at it again.

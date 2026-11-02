@@ -39,6 +39,20 @@ export const BLOG_POSTS: BlogPost[] = [
       'How we built the iOS and Android share sheet: a smaller startup path, shared sign-in, searchable lists and tags, and room for the keyboard.',
     publishedAt: '2026-10-28T00:00:00Z',
   },
+  {
+    slug: 'if-our-servers-go-away',
+    title: 'What happens to your links if our servers go away',
+    description:
+      'In the web and mobile apps, a signed-in device can still open, search, edit, and export the links it has synced if our servers stop. Here’s where that ends.',
+    publishedAt: '2026-11-03T00:00:00Z',
+  },
+  {
+    slug: 'connection-allowlists',
+    title: 'Why we aren’t using Chrome’s Connection Allowlists',
+    description:
+      'Chrome’s new header lets the browser refuse a page’s off-list connections. We tested it, and it also blocks a click on a saved link.',
+    publishedAt: '2026-11-05T00:00:00Z',
+  },
 ];
 
 export function findBlogPost(slug: string): BlogPost | undefined {

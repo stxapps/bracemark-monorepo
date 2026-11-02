@@ -1,0 +1,73 @@
+## The short answer
+
+A bookmark collection can take years to build, and any service that holds one can stop. So it’s fair to ask what happens to your links if our servers go away.
+
+On a signed-in device, in the web or mobile app, you can still open, search, edit, and export the links that device has synced. Sync and sign-in stop. That’s what local-first means in Bracemark. This post covers how it works, how we test it, and where it ends.
+
+You can try it now. Turn off your connection and open Bracemark on a device where you’re signed in. Your links load, search works, and edits wait until you reconnect. Export works too. Following a link to its live page still needs a connection.
+
+## What local-first means here
+
+Each browser or app holds its own copy of your library, and every screen reads from that copy. Sync runs behind it, sending your changes as encrypted files and bringing in changes from your other devices. When sync can’t reach our API — the service behind sign-in, sync, and billing — it tries again later, and the screens carry on reading the same copy.
+
+Encryption makes this necessary as well as convenient. Your links reach our storage as encrypted files, and we hold no key to open them. A server that cannot read your links cannot search them for you either, so search has to run on your device, over a copy your device has decrypted. That copy sits decrypted on the device, which is the cost of having it there.
+
+The first sync on a device downloads every link, with its address, title, tags, and note. Preview images are separate files, so a device holds only the ones it has already downloaded.
+
+Having a copy isn’t enough on its own. The app also has to open with no server behind it, and nothing on the device can be allowed to erase that copy by itself.
+
+## Opening the app with no server
+
+A mobile app’s code comes with the install. A web app usually gets its code from a server, so offline it would have nothing to run. After you sign in, our web app installs a service worker, a small script your browser keeps, which stores the app’s own files on your device. This works in an ordinary tab as well as an installed app. The worker stores code and pages, and never anything from our API. Those files came to about 2 MB compressed when we measured them in September. They download in the background during your first session, so if you close the tab straight after signing in, a later online visit finishes the job.
+
+A server that’s gone is the easy case, because the request fails at once. The harder case is a server that accepts the connection and never answers, which is also what a Wi-Fi sign-in page or a bad train connection can look like. The open-source tool we build the worker with waited on that response with no limit, and in our test the app still hadn’t opened after five minutes. Page loads now go through our own handler, which gives the network three seconds and then opens from the files on your device. In the same test, the app opened in about 3.1 seconds on each of five launches.
+
+## Nothing on the device decides to erase it
+
+Before our first release, a device could lose its library by itself. The app erased its local copy 30 days after sign-in, by the device’s own clock, whether or not our server was alive. An “unauthorised” response could do the same, although it might come from a proxy rather than from us, or mean only that you needed to sign in again. If our servers were gone, either one would have emptied a library that could no longer be downloaded.
+
+We removed both. Session handling now erases a device’s copy in two cases: you sign out there, or our API explicitly says that session was revoked, as it does after Sign out other devices. An expired session or a token the API doesn’t recognise keeps your library. It still opens, searches, edits, and exports, and sync pauses until you sign in again.
+
+## Testing it without fooling ourselves
+
+Each kind of failure has its own test, because the app has to respond to each one differently.
+
+| What we break                                                                 | What the test requires                                                                                         |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Server stopped and browser offline, with the web app closed and then reopened | It opens, the library loads, and a link added there reaches another browser once the server and network return |
+| The same, with the device clock two years ahead                               | It reaches the export screen, and the file holds a synced link and one added offline                           |
+| A server that accepts connections and never answers                           | The web app opens within seconds                                                                               |
+| Our API answering every request with an error (500, then 404)                 | A reload keeps the library, export works, and queued changes reach another browser once the API returns        |
+| Our API frozen on iOS, and refusing connections on Android                    | The app starts with no connection, and a change made there reaches another device afterwards                   |
+
+These tests have caught real mistakes, including one of their own. A browser’s offline emulation covers the page but not the requests a service worker makes itself. Our worker sends API requests to the network, so a page our tests marked as offline was still reaching our local API through it. The cases that said our API was gone were running with it up, and nothing failed to tell us. They now also block every request leaving the app’s origin.
+
+The first run of another offline test found an app bug: one click in the sidebar took the open links page to the browser’s error page, because changing the view depended on a network request. Changing the view now stays inside the page. A third problem was in export. An offline backup used to fail outright at the first preview image that wasn’t on the device. It now carries on and reports what it left out.
+
+These tests have limits. The service worker tests run in Chrome, against a local server rather than our production hosts. We haven’t automated them in Safari or Firefox.
+
+## Getting your links out
+
+Export reads the copy on your device, so it doesn’t need us. It checks with the server first, for changes your other devices have synced. If it can’t reach the server, it says so and exports what this device has, including changes that never synced.
+
+The Bracemark backup is a zip: one JSON line per item, with your preview images beside it as ordinary files, decrypted and readable in a text editor with nothing of ours installed. Formats other apps read are there too, and [export](/docs/export) is free on every plan.
+
+Anyone who gets an exported file can read it, so keep it somewhere you trust. Locked lists are left out of every export until you unlock them. A backup made offline can leave out preview images that device never downloaded, and the export tells you what it skipped.
+
+## Where this ends
+
+All of this depends on the copy staying on your device, and that copy has limits:
+
+- **No new devices.** Sign-in needs our API, so a device that wasn’t signed in when our servers stopped has no way to get your library.
+- **No more sync.** Your devices stop catching up with each other, and a change stays on the device where you made it. To keep those changes, export from each device that has them.
+- **A browser can clear its copy.** You can clear site data yourself, and the browser can remove it too. We ask for persistent storage after sign-in, but a browser can say no. Safari deletes a site’s stored data after 7 days of Safari use without a visit, unless you added the site to your Home Screen, and we haven’t measured whether persistent storage changes that. With our servers gone, a cleared browser can’t download anything back.
+- **Deleting a mobile app deletes its copy.** Reinstalling wouldn’t bring it back without a server to sync from.
+- **The browser extension has no export.** It keeps its own local data and has no library view. A link saved there and never synced may exist nowhere else.
+
+An exported file doesn’t depend on a browser’s storage, an app, or our servers, so it’s worth making one from time to time. [Sync, backup, and export](/docs/sync-backup-and-export) explains how the three copies differ.
+
+The wider tradeoffs apply as well. If two devices edit the same link before either syncs, the later committed edit wins. Search runs on each device’s synced copy, there are no shared lists, and we cannot reset your password; your recovery code is the second way into your account. [How encryption and search work](/docs/how-encryption-and-search-work) explains those choices.
+
+The code for the apps and our servers is in [a single GitHub repository](https://github.com/stxapps/bracemark-monorepo), along with [our offline design notes](https://github.com/stxapps/bracemark-monorepo/blob/main/docs/offline-mode.md). You can read what we do there, but it can’t prove which build you’re running. We don’t support self-hosting today, but the code doesn’t stop existing when a company does, and the [FAQ](/faq) says what running it would take.
+
+You can start on the free plan, and [get the apps](/docs/get-the-apps) has the entry points. Then turn off your connection and check for yourself.

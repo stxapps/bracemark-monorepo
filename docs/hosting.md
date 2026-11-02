@@ -359,6 +359,39 @@ wildcard that works throughout the CSP is invalid in it. COEP is not wanted — 
 buys cross-origin isolation for `SharedArrayBuffer`, which the Argon2 worker does
 not need.
 
+**`Connection-Allowlist` is deliberately absent, because it blocks the product.**
+It reads like the fix for the gap this section keeps circling: a
+[separate response header](https://github.com/WICG/connection-allowlists), not a
+CSP directive, that shipped in Chrome 152. It is deny-by-default over fetches,
+WebRTC, DNS prefetch and navigations, and `connect-src` covers only the first of
+those. Navigations are the catch. Tested
+2026-11-02 in Chrome 156, with a local page sending
+`Connection-Allowlist: (response-origin)`: a `fetch` to another origin, a real
+click on a `target="_blank"` link, a real click on a same-tab link, and
+`window.open(url, '_blank', 'noopener')` were all blocked, and all four reached
+the other origin without the header. A saved link can point anywhere, so no list
+can name the destinations, and opening one is what the app is for.
+
+- **There is nothing to carve out with.** Beyond the patterns the header takes
+  only `redirects`, `webrtc` and `report-to`. `"https://*/*"` would let links
+  through and let everything else through with them.
+- **Per-route doesn't rescue it.** `/sign-in` could carry a list, but the spec
+  warns that a same-origin context with a looser policy escapes a stricter one,
+  and the key lives in IndexedDB where every route can read it. A client-side
+  hop would also keep the first document's policy, which would then block links
+  on `/links`. That last part is reasoning, not a test.
+- **`-Report-Only` is not a harmless first step here.** In the same test it
+  blocked nothing and printed nothing to the console, so it needs a `report-to`
+  endpoint to say anything at all, which is new collection for /privacy to
+  describe, to learn what this paragraph already says.
+
+Reopen this if the header gains a way to exempt navigations. The explainer floats
+one (`allow-navigation={same-origin,same-site,cross-origin}`), and with it this
+would be worth adding on top of the CSP in Chromium browsers, whatever other
+vendors do. Until then the stronger move is the other half of the problem above:
+replacing `script-src 'unsafe-inline'` with a build-time hash union, which stops
+injected script instead of limiting where it can send things.
+
 **The marketing site gets its own, much smaller policy — do not reuse the app's.**
 The apex holds no credentials, runs no crypto and has no service worker, so it
 needs none of `wasm-unsafe-eval` or the Paddle allowances; checkout happens in
