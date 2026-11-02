@@ -1841,15 +1841,21 @@ release build's URL cache keeps is not measured by any run here**.
   cannot time a kill.
 - **Anything it did not seed**, and on iOS the username (above).
 
-⚠ **`OFFLINE-EXPORT-IOS-001` is red, and the product is why.** With the api
-frozen — connections accepted, never answered — the export sat on "Refreshing
-from the server…" for the flow's whole six-minute budget (measured on the
-iPhone 17 Pro simulator, iOS 26.5). The export's opening sync refresh has no
-timeout of its own, and neither does any api call under it, so a hung server
-blocks the export for as long as the platform's networking waits. A refusal
-(Android's removed route) or a 500/404 fails fast, which is why every other
-export case is green. The case is left as it is: it asserts exactly what a user
-needs, and goes green when the refresh is bounded.
+**`OFFLINE-EXPORT-IOS-001` is the case the call deadline answers.** With the api
+frozen — connections accepted, never answered — only a deadline ends the
+export's opening sync refresh. A refusal (Android's removed route) or a 500/404
+fails fast without one. When the case was written no api call had a deadline,
+and the export sat on "Refreshing from the server…" for the flow's whole
+six-minute budget. Every contract call now has one
+([api-contracts.md](./api-contracts.md), _deadlines_), so the refresh's first
+call fails the cycle after 60 s and the export carries on as this device's
+copy. Measured 2026-11-02 on the iPhone 17 Pro simulator (iOS 26.5): green, the
+leg from the save to the receipt taking 1m 16s.
+
+⚠ **Green here does not pin the single try.** `ApiTimeoutError` is deliberately
+not retried (`api/retry.ts`). Retrying it would cost `withRetry`'s four tries,
+about four minutes on the sync step, which still fits the flow's budget, so this
+case stays green. `retry.spec.ts` is what catches that.
 
 ### subscriptions
 

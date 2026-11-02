@@ -23,8 +23,8 @@ appId: com.bracemark.app
 # (measured on the Pixel 8 AVD, both orders). So wait for the sheet itself — the
 # run always presents it, which is also the claim that the file reached the OS —
 # then put it away. The budget is the export's: its opening sync refresh retries
-# an unreachable api before it gives up, and against a hung one each try waits
-# out the platform's own request timeout.
+# a refused api before it gives up, and against a hung one it waits out a single
+# call's deadline, which is not retried (docs/api-contracts.md, _deadlines_).
 #
 # Android's chooser is titled by what it carries ("Sharing 1 file"), and a back
 # press closes it. iOS's has no Close control: it is a popover, and iOS exposes
