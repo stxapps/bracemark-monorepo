@@ -543,6 +543,53 @@ and the condition under which they'll meet the other — "fewer if they carry lo
 notes". [data-lifecycle.md](./data-lifecycle.md), _the bookmark converter's
 limits_, has the measurement.
 
+#### what reads as generated
+
+**A few sentence shapes read as machine-written whatever the claim inside them,**
+and a property whose case rests on the reader believing its sentences can't
+afford that. The list starts from the [`tells`](https://github.com/ArchAstro/tells)
+study (MIT), which measured 75 essays from three models, all given one detailed
+style brief, against 50 essays by one writer. That is one writer and one brief,
+so a shape here is a reason to re-read the sentence and not proof of anything.
+There is no score to pass, and the tool itself isn't used here: it models one
+person's own writing, and this is a house voice.
+
+**The scope is running prose on a surface that argues**: the _argued and long_
+row of the table above, plus the blog. It doesn't reach the brand lines, the
+flat hero register, a specimen quoted in this section, the steps in `/docs`, or
+in-app strings and errors.
+
+| shape              | looks like                                     | stays when                                                                                             |
+| ------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| punchline fragment | "Every time." or "Not once." after a claim     | it answers a question, as the FAQ's "Yes." does; a fragment is never added for rhythm                  |
+| reframe            | "This isn't a sync tool. It's a promise."      | the negated half is something the reader actually believes, so the sentence corrects a real conclusion |
+| stacked commands   | "Skim it now, come back to it later."          | the reader is doing the task: a step, or a test they can run, such as "Turn off your connection"       |
+| colon label        | "The fix: …" or "Cost: …" opening a sentence   | the sentence reads straight through its colon: "The complete backup is a zip: one JSON line per item"  |
+| verbless opener    | "Pieces, state, invariants." opening a section | it is a bold lead-in on a list item, naming what the item says                                         |
+| rhythmic three     | parallel triples, paragraph after paragraph    | the facts supply the count: the API really does three jobs in "sign-in, sync, and billing"             |
+
+**The slogan is a reframe on purpose.** So is the tone table's "That is not a
+privacy policy. It is the architecture." Both pass the test, because the negated
+half is what a reader assumes of any company, and both are why the shape isn't
+for spending elsewhere. A scan of the blog on 2026-11-02 found one other reframe
+across six posts, so this row guards against a drift rather than cleaning one up.
+
+**Shorten by removing an idea, not by compressing what is left.** A compressed
+sentence keeps every idea and loses the small words that made it readable, which
+is how "bytes we hold no key **for**" (_the voice_, above) and the heading behind
+"a key derived from your password" (_terminology_, below) both shipped. A
+character budget is where this happens, in a store field or a social post: drop
+a clause's whole idea, and keep the "to", "so", and "because" in what remains.
+
+**Fix the finding and nothing near it, then re-read the paragraph.** Rewrites
+overcorrect: splitting a sentence to lose an "and" is how the first row of the
+table gets written. In the same study, "almost no em dashes" produced none at
+all, and "you more than I" produced almost no "I". A rewrite held to this page
+does the same thing, so every rule here is a boundary and not a quota. A clean
+review isn't evidence either: its authors tuned one draft until nothing was
+flagged, and a detector still scored it 91% AI. A person reading the page is the
+check, and nothing here replaces that.
+
 #### the mechanics
 
 Written down because they are already kept, not because they are being decided

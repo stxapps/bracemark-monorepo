@@ -23,14 +23,14 @@ license: Apache-2.0
 they are the source of truth and they are more specific than anything this skill
 could infer:
 
-| read                                         | for                                                                                         |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `docs/brand-assets.md` — _the voice_         | the four voice attributes, tone by surface, the error shape, the mechanics, the terminology |
-| `docs/brand-assets.md` — _the brand lines_   | descriptor / tagline / slogan / subtitle, and the rule that they are never substituted      |
-| `docs/brand-assets.md` — _the two nouns_     | bookmark vs. link, per surface; why "vault" and "library" are barred as labels              |
-| `docs/brand-assets.md` — _the source_        | the claim boundary: "see for yourself what we do", never "verify what you are running"      |
-| `packages/shared/src/stores/listing-copy.ts` | the shipped strings, their character budgets, and the copy rule (only promise what ships)   |
-| `docs/accessibility.md`                      | whether an error string needs `role="alert"` and which carrier provides it                  |
+| read                                         | for                                                                                                                  |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `docs/brand-assets.md` — _the voice_         | the four voice attributes, tone by surface, the error shape, what reads as generated, the mechanics, the terminology |
+| `docs/brand-assets.md` — _the brand lines_   | descriptor / tagline / slogan / subtitle, and the rule that they are never substituted                               |
+| `docs/brand-assets.md` — _the two nouns_     | bookmark vs. link, per surface; why "vault" and "library" are barred as labels                                       |
+| `docs/brand-assets.md` — _the source_        | the claim boundary: "see for yourself what we do", never "verify what you are running"                               |
+| `packages/shared/src/stores/listing-copy.ts` | the shipped strings, their character budgets, and the copy rule (only promise what ships)                            |
+| `docs/accessibility.md`                      | whether an error string needs `role="alert"` and which carrier provides it                                           |
 
 If the content under review is an in-app string, also read the doc that owns its
 area (`docs/editors.md`, `docs/account.md`, `docs/iap.md`, `docs/locks.md`) —
@@ -66,6 +66,10 @@ Against the four attributes in _the voice_. For each, the failure is the
   third-person "users", and passive constructions where the user is the actor.
 - **First person plural** — flag "Bracemark" as the subject of a sentence about a
   promise, a cost or a failure; that is a "we" sentence.
+
+Then, within the scope _what reads as generated_ sets, run its table. Flag a shape
+only when its "stays when" test fails, and never flag a brand line. One hit is low
+severity; a shape that repeats on the page is medium.
 
 ### 2. Tone against the surface
 
@@ -145,6 +149,11 @@ rather than restating it, so the user can check the call against the file.
 For the top three to five findings, the original line and a replacement. Write the
 replacement in the voice — do not hedge it into neutrality, which is the usual way
 a rewrite loses the thing that made the copy Bracemark's.
+
+Make the smallest change that clears the finding, then re-read the whole paragraph;
+a fix that creates another finding isn't a fix. If the problem is length, cut a whole
+idea rather than compressing the sentence. Say that a clean review means nothing was
+found, not that the copy reads well (_what reads as generated_).
 
 ### Where it also has to change
 
