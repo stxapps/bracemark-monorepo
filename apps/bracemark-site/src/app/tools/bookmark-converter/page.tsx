@@ -12,7 +12,7 @@ export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise
   return pageMetadata(parent, {
     title: 'Bookmark converter — HTML, CSV, JSON, ZIP, and text',
     description:
-      'Convert bookmark exports to browser HTML, CSV, or URL text in your browser. Read exports from Raindrop.io, Pocket, LinkWarden, Brace.to, and Bracemark backups. No upload or account needed.',
+      'Convert bookmark exports from Raindrop.io, Pocket, LinkWarden, Brace.to, and Bracemark backups to HTML, CSV, or URL text. No upload or account needed.',
     path: '/tools/bookmark-converter',
   });
 }

@@ -786,6 +786,9 @@ not). Three things to know:
   Every docs page and blog post shipped with no card image for that reason.
   `pageMetadata` carries the images through from the parent metadata, so a page
   should never set `openGraph` or `twitter` by hand.
+- **Its description fits in 160 characters**, held by the same spec for every
+  listed page, because a search result cuts a longer one off mid-sentence. `/`
+  has none of its own and takes the root layout's.
 
 `/feed.xml` is a static GET route compiled from the blog manifest at build time.
 The CloudFront clean-URL function passes the dotted path through. The deploy

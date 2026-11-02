@@ -114,4 +114,12 @@ describe('/sitemap.xml', () => {
       expect(metadata.openGraph?.url).toBe(`${SITE_URL}${path}`);
     }
   });
+
+  // Search results cut a description off near this length. The /docs and /blog
+  // specs hold their own manifests to it, which left the top-level pages and the
+  // converter uncapped. `/` declares none: it inherits the root layout's.
+  it.each(LISTED)('%s keeps its description inside the meta-description budget', async (path) => {
+    const metadata = await metadataOf(path);
+    expect(metadata.description?.length ?? 0).toBeLessThanOrEqual(160);
+  });
 });

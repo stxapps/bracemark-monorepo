@@ -6,7 +6,7 @@ It isn’t part of Content Security Policy, which is what we use today. CSP has 
 
 ## Why we wanted it
 
-Our web app keeps the key that encrypts your library in the browser, so a script that got into the page could read it. Keeping that script from sending anything out is a large part of what our CSP is for. The app is a static export and can’t issue a fresh nonce per request, so the policy allows inline scripts. That leaves `connect-src` doing much of the work. It names the app, our API, our extractor, our storage host, and Paddle, which runs checkout.
+Our web app keeps [the key that encrypts your library](/docs/how-encryption-and-search-work) in the browser, so a script that got into the page could read it. Keeping that script from sending anything out is a large part of what our CSP is for. The app is a static export and can’t issue a fresh nonce per request, so the policy allows inline scripts. That leaves `connect-src` doing much of the work. It names the app, our API, our extractor, our storage host, and Paddle, which runs checkout.
 
 One list covering every connection sounded like the missing piece, so we tested it before adding it.
 
