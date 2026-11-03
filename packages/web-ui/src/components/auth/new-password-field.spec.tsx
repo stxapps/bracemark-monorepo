@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 import { installJsdomStubs } from '../../testing/jsdom-stubs';
 import { NewPasswordField, useNewPassword } from './new-password-field';
+import { loadPasswordScorer } from './password-strength';
 
 // `useNewPassword` is THE GATE on a new password, at create-account and at Settings →
 // change password alike: one field that starts out holding generated words and ends up
@@ -34,29 +35,48 @@ function probe(username: string | undefined = 'wit_e2e', currentPassword?: strin
 const field = () => screen.getByLabelText(LABEL) as HTMLInputElement;
 const type = (value: string) => fireEvent.change(field(), { target: { value } });
 
+// How a test ends when its assertions never wait for the estimator. Mounting starts the
+// import (`usePasswordStrength` loads on mount), and a synchronous test that returns
+// before it lands leaves the hook's `setScoreFn` to fire in the gap before RTL's cleanup
+// unmounts the probe: outside `act`, so React warns, on the runs where the import wins
+// that race (docs/testing.md, _an update that lands after `act()` returns_). Waiting at
+// the END, not in `probe`, keeps those tests about the state BEFORE an estimate exists,
+// which is the point of the generated-words ones: the gate must not need it.
+//
+// A second load inside `act` covers the probe's own: both read the same cached modules
+// through the same number of steps, and the probe's started first, so it lands first.
+const estimatorLanded = () =>
+  act(async () => {
+    await loadPasswordScorer();
+  });
+
 beforeAll(() => {
   installJsdomStubs();
 });
 
 describe('useNewPassword — the generated default', () => {
-  it('starts the field on generated words, with the gate open', () => {
+  it('starts the field on generated words, with the gate open', async () => {
     const view = probe();
 
     expect(field().value).toBe(view.current.password);
     expect(view.current.password.split('-')).toHaveLength(7);
     expect(view.current.generated).toBe(true);
     expect(view.current.ok).toBe(true);
+
+    await estimatorLanded();
   });
 
   // The field a manager reads. Masked, it has to be a real password input.
-  it('is a masked new-password input', () => {
+  it('is a masked new-password input', async () => {
     probe();
 
     expect(field().type).toBe('password');
     expect(field().autocomplete).toBe('new-password');
+
+    await estimatorLanded();
   });
 
-  it('replaces the words on Regenerate, and still needs nothing ticked', () => {
+  it('replaces the words on Regenerate, and still needs nothing ticked', async () => {
     const view = probe();
     const first = view.current.password;
 
@@ -64,6 +84,8 @@ describe('useNewPassword — the generated default', () => {
 
     expect(view.current.password).not.toBe(first);
     expect(view.current.ok).toBe(true);
+
+    await estimatorLanded();
   });
 });
 
@@ -166,11 +188,13 @@ describe('useNewPassword — the current password', () => {
     expect(view.current.ok).toBe(false);
   }, 30_000);
 
-  it('passes the generated words, which are not the current password', () => {
+  it('passes the generated words, which are not the current password', async () => {
     const view = probe(undefined, 'Qx7-vT2m_pR9wLd4Zk1B-nH6');
 
     expect(view.current.generated).toBe(true);
     expect(view.current.ok).toBe(true);
+
+    await estimatorLanded();
   });
 });
 
@@ -179,7 +203,7 @@ describe('NewPasswordField — showing the words', () => {
 
   // Seven words do not fit a one-line input on a phone, and this is the one string the
   // user is here to write down: the box under the field shows all of it.
-  it('shows the whole password under the field, and hides it again', () => {
+  it('shows the whole password under the field, and hides it again', async () => {
     const view = probe();
     const box = () => screen.queryByText(view.current.password, { selector: 'div' });
 
@@ -189,22 +213,26 @@ describe('NewPasswordField — showing the words', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Hide password' }));
     expect(box()).toBeNull();
+
+    await estimatorLanded();
   });
 
-  it('keeps the box on the password as it is edited', () => {
+  it('keeps the box on the password as it is edited', async () => {
     probe();
     show();
 
     type('x7Kq2mVn9Rt4Lw8Zp3Hy6Bf1');
 
     expect(screen.getByText('x7Kq2mVn9Rt4Lw8Zp3Hy6Bf1', { selector: 'div' })).toBeTruthy();
+
+    await estimatorLanded();
   });
 
   // ⚠ The reveal only flips `type`. It used to swap in a <textarea>, which unmounted a
   // filled password field on every press of the eye — a manager can read that as a
   // submission, and iOS did, to the native twin (password-input.tsx). Only a real
   // browser would show the prompt; this pins the element that avoids it.
-  it('stays the same <input> through a reveal', () => {
+  it('stays the same <input> through a reveal', async () => {
     probe();
     const input = field();
 
@@ -215,6 +243,8 @@ describe('NewPasswordField — showing the words', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Hide password' }));
     expect(field()).toBe(input);
     expect(input.type).toBe('password');
+
+    await estimatorLanded();
   });
 });
 
@@ -232,7 +262,7 @@ describe('NewPasswordField — a manager fills the field', () => {
   // focus stays in it, with Save & Fill under the same thumb, and a second accept mints
   // a second password. Only a real iPhone or simulator shows the sheet; this pins the
   // move that stops it.
-  it('leaves the field, so iOS does not offer again', () => {
+  it('leaves the field, so iOS does not offer again', async () => {
     probe();
     const input = field();
     input.focus();
@@ -244,9 +274,11 @@ describe('NewPasswordField — a manager fills the field', () => {
     });
 
     expect(document.activeElement).not.toBe(input);
+
+    await estimatorLanded();
   });
 
-  it('stays put for someone typing', () => {
+  it('stays put for someone typing', async () => {
     probe();
     const input = field();
     input.focus();
@@ -258,6 +290,8 @@ describe('NewPasswordField — a manager fills the field', () => {
     });
 
     expect(document.activeElement).toBe(input);
+
+    await estimatorLanded();
   });
 });
 

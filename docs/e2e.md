@@ -2516,6 +2516,20 @@ it**:
 npm run dev # api :8787, web :3000, extractor :8788
 ```
 
+⚠ **No saves during a run.** `next dev` watches the tree, and each save sends
+connected pages a Fast Refresh rebuild that can reload them. A reload during a slow
+submit discards the form. Change password and the recovery code are the slow ones:
+an Argon2id derivation, then the api. `WEB-ACCOUNT-006` and `-008` then time out on
+a confirmation that never renders, on retry too. Nothing in the failure names the
+cause; only the trace's console shows `[Fast Refresh] rebuilding`. The run record's
+`checkout.dirty` does not tell you either, since a tree can be dirty and still. Any
+writer in this checkout counts: your editor's format-on-save, or an agent session.
+(Another clone can't trigger it: the preflight refuses a stack from another checkout.)
+If the tree has to change during a run, run
+against the production export, which has no watcher. Staging is not the fix: these
+cases are not admitted there, and the failure is not a difference in environment.
+[app-drivers.md](./app-drivers.md) has the native twin of this rule.
+
 `e2e-web` and `e2e-visual` require all three legs, `e2e-extension` web and api,
 `e2e-pwa` the api alone, and the native and contract runners all three for any
 `online` case — frozen vectors are the exception because they have no account or
@@ -4314,12 +4328,16 @@ eight as expected, so the parse the notes above read on Chrome 155 still holds. 
 (`nx build -c development`, served with `serve out`), after the reveal stopped
 swapping its input for a textarea and change password moved to the visible field:
 all eight as expected, every change-password flow taking `cp-new-password` as the new
-password. Under `next dev` the same run could not finish: starting the Argon2 worker
-made Turbopack compile it and reload the page mid-submit, at create-account and at
-change password alike, which is a dev-server artifact the production build does not
-have. It is not only the measurement: `WEB-ACCOUNT-006` and `-008` fail the same way
-under `next dev` (the trace shows `[Fast Refresh] rebuilding` and the page reloading
-mid-submit, on retry too), and pass against the export. Run once more the same day
+password. Under `next dev` the same run could not finish: the page reloaded
+mid-submit, at create-account and at change password alike. That was put down to
+Turbopack compiling the Argon2 worker on first use, and **that was wrong: the cause
+was files saved during the run** (_running it_, ⚠ _no saves during a run_).
+`WEB-ACCOUNT-006` and `-008` failed the same way at the time, in a dirty checkout,
+with `[Fast Refresh] rebuilding` in the traces, retries included. Re-tested later the
+same day on a freshly started `next dev`, so the worker had not been compiled yet:
+both passed, first try. Then, with a file in the settings page's import graph
+rewritten every 3s: both failed, retries included, with the same errors and 30–87
+rebuilds per trace. The export has no watcher, which is all its passes showed. Run once more the same day
 with the four flows added after it: all twelve as expected; and again after
 create-account became one step with the welcome after it, on the eleven flows above:
 all eleven as expected. ⚠ On that run

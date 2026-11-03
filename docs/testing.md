@@ -159,7 +159,7 @@ actually localizes it.
 
 _"An update to X inside a test was not wrapped in act(...)"_ is a `console.error`,
 not a failure. The spec stays green, and because it is often a race, a rerun can
-come out clean. Three shapes have produced it here:
+come out clean. Four shapes have produced it here:
 
 - **A synchronous `act()` around an event that starts async work.** Web's
   `contexts/auth-provider.spec.tsx`, _asks again on return to the foreground_,
@@ -190,6 +190,16 @@ come out clean. Three shapes have produced it here:
   toggle on a wide window_, restored `Dimensions` there, and the pane's
   `useWindowDimensions` re-rendered on every run. This one is not a race. Call
   `cleanup()` first in that hook, then restore.
+- **A synchronous test over a hook that loads on mount.** `usePasswordStrength`
+  starts its dynamic import when it mounts, and the nine tests in web's
+  `new-password-field.spec.tsx` that never wait for it (the generated-words ones
+  assert the state _before_ an estimate, on purpose) returned with the import
+  still pending. It landed in the microtask gap between the test and the
+  auto-`cleanup`, but only under load: run alone, the spec never warned; in
+  twelve concurrent runs, most tests warned. An `afterEach` can't help, because
+  the gap comes before it. End such a test with an `await act(…)` that outlasts the load. There,
+  a second `loadPasswordScorer()` call does it (`estimatorLanded`), and the
+  assertions stay where they are.
 
 **The Nx cache makes a race look permanent.** A warning captured once is
 replayed on every `npm run test` until that project's inputs change. So "it
