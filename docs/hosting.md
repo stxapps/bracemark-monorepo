@@ -616,9 +616,12 @@ section has only what binds the two repos together.
 service run on Cloudflare; the marketing site and the web app are served by
 CloudFront. A status page on either provider shares a failure with half of what
 it reports on — Cloudflare Pages was rejected for exactly that. GitHub Actions
-runs the checks (cron every 15 minutes, off the hour; minutes are free in a
-public repo) and GitHub Pages serves the result, so neither the checker nor the
-page depends on what it watches. Production only — staging has no status page. The marketing site links to it
+runs the checks (every 15 minutes, off the hour; minutes are free in a public
+repo) and GitHub Pages serves the result, so neither the checker nor the page
+depends on what it watches. GitHub's own cron skips most of the runs it is asked
+for, so a Google Cloud Scheduler job starts each run through `workflow_dispatch`,
+and the cron line stays as the fallback and as the clock that notices if the
+dispatches stop. Production only — staging has no status page. The marketing site links to it
 from the footer's Company column, /support and the FAQ's `status` answer, and
 both apps link to it from Settings → About — all through `STATUS` in
 `packages/shared/src/brand/brand.ts`. Not from a sync error: the same message
@@ -645,6 +648,12 @@ Note what `/health` does **not** prove: it answers from the Worker without
 touching D1, R2 or the Durable Object, so "up" means the Worker answers, not that
 sync works. A deeper probe is a change to the route, made here, with its cost
 (each check would then read storage) weighed here.
+
+⚠ **What starts the checks can't live on Cloudflare or AWS either.** A cron
+trigger on a Worker in this repo is the obvious, convenient home for that
+dispatch, and the wrong one: it would stop along with the API, on the one day
+the page is needed. The trigger is on Google because Google is neither. The
+token, the job and the fallback are in the status repo's README.
 
 ⚠ **The `CNAME` is DNS only — grey cloud, never proxied.** The record is
 `status → stxapps.github.io` in the `bracemark.com` zone. Proxied, the page would
