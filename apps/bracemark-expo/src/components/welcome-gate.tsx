@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { CircleCheck } from 'lucide-react-native';
 
-import { useAuth, useRecoveryCode } from '@stxapps/expo-react';
+import { UnconfirmedSaveError, useAuth, useRecoveryCode } from '@stxapps/expo-react';
 import {
   CREATE_ACCOUNT_COPY,
   endWelcome,
@@ -116,8 +116,12 @@ function RecoveryStep({ welcome, onDone }: { welcome: Welcome; onDone: () => voi
       setCode(result.recoveryCode);
       queryClient.setQueryData([...hasRecoveryDoorQueryKey, welcome.username], true);
       void queryClient.invalidateQueries({ queryKey: hasRecoveryDoorQueryKey });
-    } catch {
-      setError(WELCOME_COPY.recoveryFailed);
+    } catch (err) {
+      setError(
+        err instanceof UnconfirmedSaveError
+          ? WELCOME_COPY.recoveryUnconfirmed
+          : WELCOME_COPY.recoveryFailed,
+      );
     }
   };
 

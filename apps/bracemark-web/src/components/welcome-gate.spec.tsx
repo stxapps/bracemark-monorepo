@@ -31,6 +31,7 @@ const mockMintRecovery = jest.fn();
 const mockChangePassword = jest.fn();
 let mockUsername: string | null = 'wit_e2e';
 jest.mock('@stxapps/web-react', () => ({
+  UnconfirmedSaveError: class UnconfirmedSaveError extends Error {},
   useAuth: () => ({ username: mockUsername }),
   useRecoveryCode: () => ({ mutateAsync: mockMintRecovery, isPending: false }),
   useChangePassword: () => ({ mutateAsync: mockChangePassword, isPending: false }),
@@ -166,6 +167,20 @@ describe('WelcomeGate — the recovery code', () => {
     });
     expect(screen.getByRole('alert').textContent).toBe(WELCOME_COPY.recoveryFailed);
     expect(button(WELCOME_COPY.skipRecovery)).toBeTruthy();
+  });
+
+  // A mint that got no answer may have landed: a live code nobody saw, which Settings
+  // would read as "has a recovery code". So no "later in Settings" for this one.
+  it('says a mint that got no answer may have landed, and to make another now', async () => {
+    const { UnconfirmedSaveError } = jest.requireMock<{ UnconfirmedSaveError: typeof Error }>(
+      '@stxapps/web-react',
+    );
+    mockMintRecovery.mockRejectedValue(new UnconfirmedSaveError());
+    renderGate();
+    await act(async () => {
+      fireEvent.click(button(WELCOME_COPY.createRecovery));
+    });
+    expect(screen.getByRole('alert').textContent).toBe(WELCOME_COPY.recoveryUnconfirmed);
   });
 });
 

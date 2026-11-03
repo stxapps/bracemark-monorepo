@@ -1,0 +1,30 @@
+# Settings → Recovery code, opened while the account's code lookup is still in
+# flight — NATIVE-ACCOUNT-004, the native twin of WEB-ACCOUNT-010. The account
+# is provisioned WITH a recovery code, so the answer the lookup will give is
+# "there is one", and replacing it is the act the screen must warn about.
+#
+# The view needs that answer for two things: the warning before Generate, and the
+# receipt after it, which says the previous code stopped working. It used to
+# capture the answer when it opened, where "not answered yet" read as "none": no
+# warning, then "set up" over the code it had just replaced. Only staging's
+# latency showed it; locally the lookup always answers first, so the runner holds
+# it (runner/api-pause.ts) between this flow and the parts:
+#
+#   this flow                         sign in, and stop on the links screen;
+#   (runner freezes the api)
+#   parts/recovery-code-held.yaml     open the view, warned; press Generate, which
+#                                     waits on the lookup and mints nothing;
+#   (runner thaws the api)
+#   parts/recovery-code-released.yaml the receipt says the old code was retired.
+#
+# The freeze must stay well under the api client's 60 s deadline: a lookup that
+# timed out is read as "had one" too (the safe side of a guess), which would pass
+# the receipt for the wrong reason. The held part is a few taps, about 20-40 s.
+# docs/account.md, _a recovery code in Settings_.
+#
+#   maestro test mobile/flows/recovery-code-held.yaml -e USERNAME=… -e PASSWORD=…
+appId: com.bracemark.app
+tags: [NATIVE-ACCOUNT-004, full, online, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml

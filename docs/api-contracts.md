@@ -449,7 +449,14 @@ call rejects with `ApiTimeoutError` and the fetch is aborted.
   ([account.md](./account.md), _why the wrapped DEK is served pre-auth_). **A new
   recovery code cannot be settled that way** — the code that may have landed was
   never shown — so its hook throws `UnconfirmedSaveError` and Settings says to
-  generate another now.
+  generate another now; so does the welcome, where skipping past a code that
+  landed unseen would also silence Settings' "no recovery code" nudge. A password
+  change settled by the door never reaches the server again, so the server
+  expires the other sessions BEFORE it writes the door
+  ([sessions.md](./sessions.md), _the expiry is written before the door_).
+  `WEB-ACCOUNT-009` and `-011` drop these answers at the browser, before and
+  after the save lands ([e2e.md](./e2e.md), _a door rotation whose answer is
+  lost_).
   A failure earlier in those flows (the door fetch, the Argon2 run) wrote nothing,
   and a reply from the server, a 500 included, is an answer, so both keep their
   ordinary error (`use-change-password.ts` on both platforms; its spec holds that

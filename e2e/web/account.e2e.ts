@@ -1,8 +1,14 @@
-import { type Page } from '@playwright/test';
+import { type Page, type Route } from '@playwright/test';
 
 import { profileDir } from '../paths';
 import { IS_STAGING } from '../runner/environment';
-import { createAccount, type Credentials, newCredentials, signIn } from './fixtures/account';
+import {
+  createAccount,
+  type Credentials,
+  newCredentials,
+  signIn,
+  submitCreateAccount,
+} from './fixtures/account';
 import { expect, test } from './fixtures/app';
 import { unique, unresolvableUrl } from './fixtures/data';
 import { API_URL, SITE_URL } from './fixtures/env';
@@ -905,6 +911,206 @@ test.describe('account', () => {
 
       await signOutToSite(page, site);
       await signIn(page, { username: credentials.username, password: words });
+    },
+  );
+
+  // THE TWO DOOR ROTATIONS WHEN AN ANSWER IS LOST (docs/api-contracts.md, _a timeout
+  // does not mean nothing happened_). The deadline is the client giving up, not the
+  // server, so a save that got no answer may have landed. Each case below drops an
+  // answer at the browser, and the network log says which half of "lost" it was:
+  // a save that never reached the server, or one that did and whose reply was cut.
+  // Local only, as every interception schedule is (e2e/STAGING.md).
+
+  // A password change settles a lost answer by asking the door, not the user: the new
+  // password opens it (landed: done) or does not (nothing changed: try again). Both
+  // halves, in that order, on one form. And a change settled that way never reaches
+  // the server again, so the other device must already be cut off by the save that
+  // landed (docs/sessions.md, _the expiry is written before the door_).
+  test(
+    'a password change whose answer is lost is settled by the door, and still cuts off the other device',
+    { tag: ['@WEB-ACCOUNT-009', '@full', '@online', '@destructive'] },
+    async ({ isolatedApp: app }, testInfo) => {
+      // The account, the other device's sign-in, two changes each with a door test.
+      test.setTimeout(4 * 60 * 1000);
+      const { page, credentials } = app;
+      const site = await stubMarketingSite(page);
+      const other = await launchApp(profileDir(`lost-answer-other-w${testInfo.workerIndex}`), {
+        existing: credentials,
+      });
+      try {
+        // The status of every save that reached the server; none for one that didn't.
+        const reached: number[] = [];
+        let attempts = 0;
+        await page.route('**/v1/auth/change-password', async (route) => {
+          attempts += 1;
+          if (attempts === 1) {
+            await route.abort('failed');
+            return;
+          }
+          reached.push((await route.fetch()).status());
+          await route.abort('failed');
+        });
+
+        await page.goto('/settings/account');
+        await page.getByRole('button', { name: /^Change password/ }).click();
+        await page.locator('#cp-current').fill(credentials.password);
+        const words = await page.locator('#cp-new-password').inputValue();
+        expect(words).not.toBe('');
+        const submit = page.getByRole('button', { name: 'Change password', exact: true });
+
+        // Never sent: the door still takes the old password, so "try again" is true.
+        await submit.click();
+        await expect(
+          page
+            .getByRole('alert')
+            .filter({ hasText: 'Could not change your password. Please try again.' }),
+        ).toBeVisible({ timeout: 60_000 });
+        expect(reached).toEqual([]);
+
+        // Landed, answer cut: the door takes the new password, so it is done.
+        await submit.click();
+        await expect(page.getByText(/^Your password has been changed\./)).toBeVisible({
+          timeout: 60_000,
+        });
+        expect(reached).toEqual([200]);
+        await page.unroute('**/v1/auth/change-password');
+        await page.getByRole('button', { name: 'Show my new password' }).click();
+        await expect(page.getByLabel('Your new password')).toHaveText(words);
+
+        // The other device learns it on its next request, which a load of the page
+        // makes on its own.
+        await other.page.goto('/links');
+        await expect(pausedNotice(other.page)).toBeVisible({ timeout: 60_000 });
+
+        await signOutToSite(page, site);
+        await signIn(page, { username: credentials.username, password: words });
+      } finally {
+        await other.close();
+      }
+    },
+  );
+
+  // Settings' recovery code needs to know whether the account already had one: it
+  // warns before replacing, and its receipt says the old one died. The lookup can
+  // still be in flight when the view opens, and "not answered yet" once read as
+  // "none" — no warning, then "set up" over the code it had just replaced. Only
+  // staging's latency showed it, so this holds the lookup by hand (docs/account.md,
+  // _a recovery code in Settings_).
+  test(
+    'Settings’ recovery code, opened before the code lookup answers, warns, waits for it, and says the old code stopped working',
+    { tag: ['@WEB-ACCOUNT-010', '@full', '@online', '@destructive'] },
+    async ({ layout }, testInfo) => {
+      const app = await launchApp(profileDir(`recovery-held-w${testInfo.workerIndex}`), {
+        withRecovery: true,
+        viewport: WEB_VIEWPORTS[layout],
+      });
+      try {
+        const { page, credentials } = app;
+        // Every lookup is held until released; the order of what follows is the
+        // proof that the mint waited for one.
+        const held: Route[] = [];
+        let holding = true;
+        await page.route('**/v1/auth/read-recovery-door', async (route) => {
+          if (holding) held.push(route);
+          else await route.continue();
+        });
+        const order: string[] = [];
+        page.on('request', (request) => {
+          if (request.url().endsWith('/v1/auth/read-password-door')) order.push('mint');
+        });
+
+        await page.goto('/settings/account');
+        await expect.poll(() => held.length).toBeGreaterThan(0);
+        // Unknown is treated as "has one": the overview row and the view both warn.
+        await page.getByRole('button', { name: /^Recovery code/ }).click();
+        await expect(
+          page.getByText('Generate a new recovery code. Your previous code will stop working.'),
+        ).toBeVisible();
+        await page.locator('#rc-current').fill(credentials.password);
+        await page.getByRole('button', { name: 'Generate new code' }).click();
+        await expect(page.getByRole('button', { name: /Generating/ })).toBeDisabled();
+
+        order.push('released');
+        holding = false;
+        for (const route of held.splice(0)) await route.continue();
+
+        await expect(
+          page.getByText(
+            'Your new recovery code is active, and your previous one has stopped working.',
+          ),
+        ).toBeVisible({ timeout: 60_000 });
+        await expect(page.getByText('Your recovery code is set up.')).toHaveCount(0);
+        // The mint began only once the lookup had answered.
+        expect(order).toEqual(['released', 'mint']);
+      } finally {
+        await app.close();
+      }
+    },
+  );
+
+  // The welcome's first step, when the mint's answer is lost after it landed: a code
+  // nobody saw may now be live, and Settings would read the account as having one and
+  // drop its nudge. So the message says to make another now (no "later in Settings"),
+  // and the next press shows the code that is actually live — proved by signing in
+  // with it.
+  test(
+    'the welcome’s recovery code whose answer is lost says one may be live unseen, and the next press shows the live one',
+    { tag: ['@WEB-ACCOUNT-011', '@full', '@online', '@destructive'] },
+    async ({ layout }, testInfo) => {
+      const app = await launchApp(profileDir(`welcome-lost-w${testInfo.workerIndex}`), {
+        signedOut: true,
+        viewport: WEB_VIEWPORTS[layout],
+      });
+      try {
+        // A page of its own, as in WEB-ACCOUNT-007: Firefox aborts a `goto` that lands
+        // mid-redirect from the fixture's first page.
+        const { credentials } = app;
+        const page = await app.context.newPage();
+        const site = await stubMarketingSite(page);
+        const reached: number[] = [];
+        await page.route('**/v1/auth/put-recovery-door', async (route) => {
+          if (reached.length > 0) {
+            await route.continue();
+            return;
+          }
+          reached.push((await route.fetch()).status());
+          await route.abort('failed');
+        });
+
+        await submitCreateAccount(page, credentials);
+        const create = page.getByRole('button', { name: 'Create recovery code' });
+        await create.click();
+        await expect(
+          page.getByRole('alert').filter({ hasText: /^We didn’t get an answer/ }),
+        ).toHaveText(
+          'We didn’t get an answer, so a code you haven’t seen may already be set up. Create one again now to get one you can save.',
+          { timeout: 60_000 },
+        );
+        // It had landed: that is the case the message is for.
+        expect(reached).toEqual([200]);
+
+        await create.click();
+        const shown = page.getByLabel('Your recovery code');
+        await expect(shown).toBeVisible({ timeout: 60_000 });
+        const code = (await shown.innerText()).trim();
+        expect(code).not.toBe('');
+        await page.getByRole('button', { name: 'Continue', exact: true }).click();
+        await page.getByRole('button', { name: 'Skip', exact: true }).click();
+        await page.getByRole('button', { name: 'Start using Bracemark' }).click();
+        await expect(page).toHaveURL(/\/links/);
+
+        await signOutToSite(page, site);
+        await page.goto('/sign-in');
+        await page
+          .getByRole('button', { name: 'Forgot your password? Use a recovery code' })
+          .click();
+        await page.locator('#rec-username').fill(credentials.username);
+        await page.locator('#rec-code').fill(code);
+        await page.getByRole('button', { name: 'Sign in with recovery code' }).click();
+        await expect(page).toHaveURL(/\/links/, { timeout: 60_000 });
+      } finally {
+        await app.close();
+      }
     },
   );
 });

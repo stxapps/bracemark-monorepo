@@ -63,6 +63,11 @@ export const WELCOME_COPY = {
   // Settings wording is for a screen with its own back link).
   recoveryReady: 'Your recovery code is set up. Save it somewhere safe, apart from your password.',
   recoveryFailed: 'Could not create a recovery code. Try again, or set one up later in Settings.',
+  // The save went out and no answer came back (UnconfirmedSaveError), so a code may
+  // be live that nobody saw. No "later in Settings" here: Settings would then read
+  // the account as having a code and drop its nudge, so the time is now.
+  recoveryUnconfirmed:
+    'We didn’t get an answer, so a code you haven’t seen may already be set up. Create one again now to get one you can save.',
 
   // Step 2, the check. ⚠ TWO OF THESE ARE LOAD-BEARING. `signIn` and `showPassword` are
   // what make Safari read this step as a login rather than a sign-up

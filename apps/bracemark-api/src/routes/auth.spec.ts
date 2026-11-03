@@ -793,6 +793,33 @@ describe('auth routes', () => {
       expect(await verdict(acct.token)).toBe('ok');
     });
 
+    // The order is the guarantee (services/account.ts, changePasswordDoor): a client
+    // whose save got no answer settles it by testing the door and never re-sends, so
+    // a new door must mean the other sessions are already gone. A request cut off
+    // between the two writes has to leave the harmless half, which this provokes by
+    // failing the door write.
+    it('expires the other sessions before it writes the door', async () => {
+      const acct = await seedSessioned('pworder');
+      const other = await issueSession(env, { id: acct.userId, accountDbId: '1' });
+      const req = await signedReq(acct.keyPair, payload('pworder', acct.publicKey));
+
+      // Moved aside, not dropped: the shard outlives this test.
+      await env.ACCOUNTS_DB_1.exec('ALTER TABLE account_keys RENAME TO account_keys_aside');
+      let res;
+      try {
+        res = await app.request(
+          changePasswordEndpoint.path,
+          { ...req, headers: { ...req.headers, ...acct.auth } },
+          env,
+        );
+      } finally {
+        await env.ACCOUNTS_DB_1.exec('ALTER TABLE account_keys_aside RENAME TO account_keys');
+      }
+
+      expect(res.status).toBe(500);
+      expect(await verdict(other.token)).toBe(SESSION_ERROR.expired);
+    });
+
     it('rejects without a bearer token (session-only is never enough)', async () => {
       const acct = await seedSessioned('pwnobearer');
       const req = await signedReq(acct.keyPair, payload('pwnobearer', acct.publicKey));

@@ -1292,6 +1292,12 @@ All of them are in the app:
 | `change-password-show-new`    | ” — the done screen's "Show my new password"                                                     |
 | `change-password-shown-new`   | ” — the new password that opens, as text                                                         |
 | `change-password-done`        | ” — the done screen's Done                                                                       |
+| `recovery-code-open`          | `src/features/settings/account-section.tsx` — the Account row                                    |
+| `recovery-code-current`       | ” — the current-password proof                                                                   |
+| `recovery-code-submit`        | ” — Generate (its label is the state: "Generate new code", "Generating…")                        |
+| `recovery-code-minted`        | ” — the done screen's ✓ line, whose words say whether a previous code was retired                |
+| `recovery-code-shown`         | ” — the code, as text (`ShowOnceSecret`'s `testID`)                                              |
+| `recovery-code-done`          | ” — the done screen's Done                                                                       |
 | `create-account-username`     | `src/features/auth/create-account-form.tsx` — the one step                                       |
 | `create-account-password`     | ” — the password (`NewPasswordField`); its revealed box is `create-account-password-shown`       |
 | `create-account-submit`       | ” — Create account                                                                               |
@@ -1735,6 +1741,28 @@ them differently:
   wrapper adds, passes every unit spec. Admitted to staging, where it is also
   the deploy gate for that sentence: a tier still running the GET lookups never
   sends the POSTs the positive controls wait for.
+- **A door rotation whose answer is lost** ([api-contracts.md](./api-contracts.md),
+  _a timeout does not mean nothing happened_). Each drops an answer at the browser
+  with `page.route`, and records whether the save reached the server, which is
+  the half of "lost" the case is about. `WEB-ACCOUNT-009` changes the password
+  twice on one form: a save that never arrived ends on "Please try again", and
+  one that landed with its reply cut ends on the done screen, settled by the door
+  test. A second profile signed in beforehand is then expired, and the new words
+  sign in. `WEB-ACCOUNT-011` cuts the reply to the welcome's first mint after it
+  landed, requires the "create one again now" message, and signs in with the
+  code the next press shows, which proves that code is the live one.
+  `WEB-ACCOUNT-010` holds Settings' recovery-code lookup instead, then opens the
+  view and presses Generate. The warning must show while the answer is unknown,
+  the mint's first request must come after the release (request order, not a
+  timer), and the receipt must say the old code was retired. Before the fix only
+  staging's latency showed this (`WEB-ACCOUNT-008`), so it is held locally now.
+  `NATIVE-ACCOUNT-004` is its twin on a device: the runner freezes the api
+  between the sign-in and the view (`runner/api-pause.ts`) and thaws it once
+  Generate waits. The freeze stays under the api client's 60 s deadline, because
+  a timed-out lookup is also read as "had one" and would pass for the wrong
+  reason. 010, 011 and `NATIVE-ACCOUNT-004` were each run against the code
+  before their fix, and fail on the assertion they exist for. All four are local
+  only, as every interception schedule is.
 - **A newer build takes the database.** `VERSION-SKEW-WEB-001`/`002` open each
   local database one version up from a second tab, under an open editor with a
   typed title: the upgrade must not block, the old tab shows the update-required
@@ -2529,8 +2557,8 @@ cause; only the trace's console shows `[Fast Refresh] rebuilding`. The run recor
 writer in this checkout counts: your editor's format-on-save, or an agent session.
 (Another clone can't trigger it: the preflight refuses a stack from another checkout.)
 If the tree has to change during a run, run
-against the production export, which has no watcher. Staging is not the fix: these
-cases are not admitted there, and the failure is not a difference in environment.
+against the production export, which has no watcher. Staging, where both are
+admitted too, is not the fix: the failure is not a difference in environment.
 [app-drivers.md](./app-drivers.md) has the native twin of this rule.
 
 `e2e-web` and `e2e-visual` require all three legs, `e2e-extension` web and api,

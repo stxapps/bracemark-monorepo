@@ -18,6 +18,7 @@ jest.mock('expo-router', () => ({ router: { push: (href: string) => mockPush(hre
 const mockMintRecovery = jest.fn();
 let mockUsername: string | null = 'wit_e2e';
 jest.mock('@stxapps/expo-react', () => ({
+  UnconfirmedSaveError: class UnconfirmedSaveError extends Error {},
   useAuth: () => ({ username: mockUsername }),
   useRecoveryCode: () => ({ mutateAsync: mockMintRecovery, isPending: false }),
 }));
@@ -93,6 +94,20 @@ describe('WelcomeGate (native)', () => {
     });
     expect(screen.getByTestId('welcome-recovery-code')).toHaveTextContent('ABCDE-FGHIJ-KLMNO');
     expect(mockSetQueryData).toHaveBeenCalledWith(['recovery-door-exists', USERNAME], true);
+  });
+
+  // A mint that got no answer may have landed unseen, which Settings would read as
+  // "has a recovery code": so it says to make another now, not later in Settings.
+  it('says a mint that got no answer may have landed, and to make another now', async () => {
+    const { UnconfirmedSaveError } = jest.requireMock<{ UnconfirmedSaveError: typeof Error }>(
+      '@stxapps/expo-react',
+    );
+    mockMintRecovery.mockRejectedValue(new UnconfirmedSaveError());
+    renderGate();
+    await act(async () => {
+      tap('welcome-create-recovery');
+    });
+    expect(screen.getByText(WELCOME_COPY.recoveryUnconfirmed)).toBeTruthy();
   });
 
   it('mints nothing on Skip', () => {

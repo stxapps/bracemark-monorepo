@@ -17,7 +17,12 @@ import {
   WELCOME_COPY,
 } from '@stxapps/react';
 import { canonicalizePassword, NEW_PASSWORD_MIN_LENGTH } from '@stxapps/shared';
-import { useAuth, useChangePassword, useRecoveryCode } from '@stxapps/web-react';
+import {
+  UnconfirmedSaveError,
+  useAuth,
+  useChangePassword,
+  useRecoveryCode,
+} from '@stxapps/web-react';
 import { PasswordInput } from '@stxapps/web-ui/components/auth/password-input';
 import { usePasswordStrength } from '@stxapps/web-ui/components/auth/password-strength';
 import { ShowOnceSecret } from '@stxapps/web-ui/components/auth/show-once-secret';
@@ -116,8 +121,12 @@ function RecoveryStep({ welcome, onDone }: { welcome: Welcome; onDone: () => voi
       // The door exists now; Settings reads this to drop its nudge.
       queryClient.setQueryData([...hasRecoveryDoorQueryKey, welcome.username], true);
       void queryClient.invalidateQueries({ queryKey: hasRecoveryDoorQueryKey });
-    } catch {
-      setError(WELCOME_COPY.recoveryFailed);
+    } catch (err) {
+      setError(
+        err instanceof UnconfirmedSaveError
+          ? WELCOME_COPY.recoveryUnconfirmed
+          : WELCOME_COPY.recoveryFailed,
+      );
     }
   };
 

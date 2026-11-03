@@ -137,7 +137,8 @@
     "traits": ["online", "destructive"],
     "fixture": "empty",
     "path": "web/account.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "WEB-ACCOUNT-007",
@@ -149,7 +150,8 @@
     "path": "web/account.e2e.ts",
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
     "browsers": ["chrome", "firefox"],
-    "widths": ["wide", "narrow"]
+    "widths": ["wide", "narrow"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "WEB-ACCOUNT-008",
@@ -161,7 +163,41 @@
     "path": "web/account.e2e.ts",
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
     "browsers": ["chrome", "firefox"],
-    "widths": ["wide", "narrow"]
+    "widths": ["wide", "narrow"],
+    "environments": ["local", "staging"]
+  },
+  {
+    "id": "WEB-ACCOUNT-009",
+    "title": "A password change whose answer is lost is settled by the door: a save that never arrived says try again, one that landed ends on the done screen, and the other device is cut off",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "empty",
+    "path": "web/account.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "browsers": ["chrome", "firefox"]
+  },
+  {
+    "id": "WEB-ACCOUNT-010",
+    "title": "Settings’ recovery code, opened before the code lookup answers, warns, waits for the answer before minting, and says the old code stopped working",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "empty",
+    "path": "web/account.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "browsers": ["chrome", "firefox"]
+  },
+  {
+    "id": "WEB-ACCOUNT-011",
+    "title": "The welcome’s recovery code whose answer is lost after it landed says a code may be live unseen, and the next press shows the live one, which signs in",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "empty",
+    "path": "web/account.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "browsers": ["chrome", "firefox"]
   },
   {
     "id": "VERSION-SKEW-WEB-001",
@@ -1010,6 +1046,16 @@
     "path": "mobile/flows/create-account.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
     "widths": ["narrow", "wide"]
+  },
+  {
+    "id": "NATIVE-ACCOUNT-004",
+    "title": "Settings’ recovery code, opened while the code lookup is held, warns, waits for the answer before minting, and says the old code stopped working",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/recovery-code-held.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
   },
   {
     "id": "ACCOUNT-DELETE-002",

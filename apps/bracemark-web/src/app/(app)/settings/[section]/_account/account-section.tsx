@@ -31,9 +31,11 @@ import Link from 'next/link';
 
 import {
   hasRecoveryDoorQueryKey,
+  hasRecoveryDoorQueryOptions,
   NEW_PASSWORD_COPY,
   RECOVERY_CODE_COPY,
   SESSION_COPY,
+  useApiClient,
   useSignOutOthers,
 } from '@stxapps/react';
 import {
@@ -475,21 +477,38 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
 
 // Generate or regenerate the recovery door. Prove the current password, mint a new
 // code server-side, and show it ONCE. Regenerating invalidates any previous code.
-function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasRecovery: boolean }) {
+function RecoveryCodeView({
+  onBack,
+  hasRecovery,
+}: {
+  onBack: () => void;
+  // `undefined` while the lookup is in flight, which is not the same as `false`.
+  hasRecovery: boolean | undefined;
+}) {
   const recovery = useRecoveryCode();
   const { username } = useAuth();
   const queryClient = useQueryClient();
   const [currentPassword, setCurrentPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [code, setCode] = useState<string | null>(null);
-  // Frozen at mount: a successful mint invalidates the recovery-door query, which
-  // flips `hasRecovery` to true underneath us. The copy has to describe the account
-  // the user arrived with, not the one this view's own write just produced.
-  const [hadRecovery] = useState(hasRecovery);
+  const api = useApiClient();
+  // FROZEN AT THE MINT, NOT AT MOUNT. A successful mint sets the recovery-door query
+  // to true underneath us, and the copy has to describe the account as it was before
+  // this view's own write. But freezing at mount froze whatever the lookup had said
+  // by then, and on a slow network that was nothing yet, read as "no code": a user
+  // who opened this right after a load saw "Set up a recovery code" with no warning
+  // that their existing one would stop working, then "set up" instead of "replaced"
+  // (WEB-ACCOUNT-008, on staging; WEB-ACCOUNT-010 holds the lookup locally). So until
+  // a mint starts the copy follows the lookup, warning while it is unknown, and the
+  // submit waits for its answer.
+  const [hadAtMint, setHadAtMint] = useState<boolean | null>(null);
+  const [starting, setStarting] = useState(false);
+  const hadRecovery = hadAtMint ?? hasRecovery ?? true;
+  const busy = starting || recovery.isPending;
 
   const onSubmit = async (event: React.SubmitEvent) => {
     event.preventDefault();
-    if (recovery.isPending) return;
+    if (busy) return;
     // Empty answers out loud rather than holding the button down; the slot below
     // the button is the same one "Incorrect password." uses.
     if (currentPassword === '') {
@@ -497,6 +516,17 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
       return;
     }
     setError(null);
+    // The lookup's answer, waited for if it is still in flight (the same request, not
+    // a second one). A failed lookup is read as "had one": the warning is the safe
+    // side of a guess.
+    setStarting(true);
+    const had =
+      hasRecovery ??
+      (await queryClient
+        .ensureQueryData(hasRecoveryDoorQueryOptions(api, username))
+        .catch(() => true));
+    setHadAtMint(had);
+    setStarting(false);
     try {
       const result = await recovery.mutateAsync({
         proof: { kind: 'password', currentPassword },
@@ -514,6 +544,8 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
       // The save went out and nothing came back. If it landed, the old code is dead
       // and the new one was never shown, so the only safe act is another one.
       else if (err instanceof UnconfirmedSaveError) {
+        // It may have landed, so the door may exist now whatever the lookup said.
+        void queryClient.invalidateQueries({ queryKey: hasRecoveryDoorQueryKey });
         setError(
           'We didn’t get an answer, so your old recovery code may no longer work. Generate a new one now.',
         );
@@ -578,7 +610,7 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
             id="rc-current"
             autoComplete="current-password"
             value={currentPassword}
-            disabled={recovery.isPending}
+            disabled={busy}
             onChange={(e) => {
               setCurrentPassword(e.target.value);
               if (error) setError(null);
@@ -588,11 +620,11 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
         {/* Inside the button's wrapper, at 12 — see ChangePasswordView above for
             why nested rather than a margin on the flex item. */}
         <div>
-          <Button type="submit" disabled={recovery.isPending}>
-            {recovery.isPending ? (
+          <Button type="submit" disabled={busy}>
+            {busy ? (
               <Loader2 data-icon="inline-start" className="size-4 animate-spin" />
             ) : null}
-            {recovery.isPending
+            {busy
               ? 'Generating…'
               : hadRecovery
                 ? 'Generate new code'
@@ -745,7 +777,7 @@ export function AccountSection() {
       ) : view === 'recovery' ? (
         <RecoveryCodeView
           onBack={() => setView('overview')}
-          hasRecovery={hasRecovery.data === true}
+          hasRecovery={hasRecovery.data}
         />
       ) : view === 'sign-out-others' ? (
         <SignOutOtherDevicesView onBack={() => setView('overview')} />

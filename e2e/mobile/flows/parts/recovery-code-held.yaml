@@ -1,0 +1,32 @@
+# Part two of NATIVE-ACCOUNT-004: the api is frozen, so the code lookup Settings
+# → Account starts on arrival cannot answer while this runs.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../subflows/open-settings.yaml
+    env:
+      SECTION: account
+- tapOn:
+    id: 'recovery-code-open'
+# Unknown is treated as "has one": the warning, and the button that replaces.
+- extendedWaitUntil:
+    visible: '.*Your previous code will stop working\..*'
+    timeout: 10000
+- assertVisible:
+    id: 'recovery-code-submit'
+    text: 'Generate new code'
+- tapOn:
+    id: 'recovery-code-current'
+- inputText: ${PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: 'recovery-code-submit'
+# Waiting on the lookup's answer: busy, and nothing minted on a guess.
+- extendedWaitUntil:
+    visible:
+      id: 'recovery-code-submit'
+      text: 'Generating…'
+    timeout: 10000
+- assertNotVisible:
+    id: 'recovery-code-minted'
+- takeScreenshot: recovery-code-held

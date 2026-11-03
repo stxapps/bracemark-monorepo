@@ -983,6 +983,18 @@ while you still have your password." — forward-looking, so it covers leaving u
 a loss months later alike, and conditional, because minting needs the password the code
 exists to replace — and an always-live **Done** beside the usual back link.
 
+⚠ **Which of the two the screen says is decided when Generate is pressed, not when the
+view opens.** The view needs to know whether the account already had a code, and the
+lookup (`useHasRecoveryDoor`) can still be in flight when it opens: a reload, then a
+quick tap, on a slow network. Captured at mount, "not answered yet" read as "none", so
+the form left out the warning that the existing code would stop working, and the
+receipt said "set up" over a code it had just killed. Nothing caught it locally, where
+the lookup always answers first. Staging did (`WEB-ACCOUNT-008`), and `WEB-ACCOUNT-010`
+and `NATIVE-ACCOUNT-004` now hold the lookup locally ([e2e.md](./e2e.md), _a door
+rotation whose answer is lost_). So the copy follows
+the lookup until the press, warns while it is unknown, and the submit waits for the
+answer (the same request, not a second one) before it mints.
+
 **The two done screens are one shape**, because they do one job: the ✓ line (what is
 already true, where Sign out other devices puts its receipt too), one muted line of what
 to do, the secret, then **Done**, 24 below whatever precedes it. They differ in one place
@@ -996,9 +1008,9 @@ receipt and the back link are enough and it has no Done.
 It used to gate Done on "I've saved my recovery code" and drop the back link, as
 friction against leaving unsaved. That read as a confirm step: a user could take the
 code to count only once ticked and Done pressed. And leaving unsaved is a chore rather
-than a loss, because anyone who can still sign in mints another here. Create-account's
-recovery step keeps its checkbox: there nothing is committed yet, and it gates a choice
-between two ways on.
+than a loss, because anyone who can still sign in mints another here. The welcome's
+recovery step after create-account has no checkbox either, for the same reason
+(_the welcome_).
 
 ### sign-in with a recovery code
 

@@ -669,7 +669,8 @@ async function main(): Promise<void> {
       // Every flow gets a fresh account. This makes destructive and ordering-
       // sensitive cases independent, and keeps a failed flow from poisoning the
       // state observed by the next one.
-      const withRecovery = testCase.id === 'NATIVE-ACCOUNT-002';
+      const withRecovery =
+        testCase.id === 'NATIVE-ACCOUNT-002' || testCase.id === 'NATIVE-ACCOUNT-004';
       let pagedUrls: string[] = [];
       const conflictUrl = unresolvableUrl(`${run.runId}-conflict`);
       const offlineUrl = unresolvableUrl(`${run.runId}-offline-edited`);
@@ -1640,6 +1641,28 @@ async function main(): Promise<void> {
             'mobile/flows/parts/keyboard-share-dismissed.yaml',
           );
         }
+      }
+      if (testCase.id === 'NATIVE-ACCOUNT-004') {
+        // Settings → Recovery code opened while its lookup is held: frozen between
+        // the sign-in and the view, thawed once Generate is waiting on it
+        // (mobile/flows/recovery-code-held.yaml says why, and why the freeze must stay
+        // under the api client's deadline).
+        let api: ApiControl | undefined;
+        cleanupActions.push(async () => api?.resume());
+        steps = [
+          testCase.path,
+          async () => {
+            api = await controlApi();
+            api.pause();
+            return null;
+          },
+          'mobile/flows/parts/recovery-code-held.yaml',
+          async () => {
+            api?.resume();
+            return null;
+          },
+          'mobile/flows/parts/recovery-code-released.yaml',
+        ];
       }
       if (testCase.id === 'SKELETON-NATIVE-001') {
         let api: ApiControl | undefined;

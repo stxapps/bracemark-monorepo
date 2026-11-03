@@ -251,15 +251,24 @@ async function authorizeDoorRotation(
 // user's own devices erase edits they haven't synced yet, and the one device
 // that should forget (an attacker's) would never cooperate with a wipe anyway.
 // They get `session_expired`, keep their copy, and resume with the new password
-// (docs/sessions.md, _changing the password expires the other sessions_). The
-// upsert is the load-bearing mutation, so it lands first; the expiry is
-// idempotent hygiene after it.
+// (docs/sessions.md, _changing the password expires the other sessions_).
+//
+// ⚠ THE EXPIRY LANDS FIRST, BEFORE THE DOOR. The two writes are in different
+// databases (SESSIONS_DB, the shard), so nothing makes them one; the order decides
+// which half a cut-off request leaves behind. A client that times out disconnects,
+// which cancels this handler mid-way, and the client then settles the change by
+// testing the door, not by asking here again: if the new password opens it, the
+// change counts as done and nothing re-sends it (use-change-password.ts, both
+// platforms). So a new door must imply that the other sessions are already
+// expired. The other half alone is harmless: other devices sign in again with the
+// password that still works.
 export async function changePasswordDoor(
   env: Bindings,
   session: { id: string; userId: string; accountDbId: string },
   proof: { username: string; publicKey: string; door: { wrappedDek: Uint8Array; iv: Uint8Array } },
 ): Promise<void> {
   const shard = await authorizeDoorRotation(env, session, proof);
+  await expireOtherSessions(env, session);
   await accountKeysRepo(shard)
     .upsertStmt({
       userId: session.userId,
@@ -268,7 +277,6 @@ export async function changePasswordDoor(
       iv: proof.door.iv,
     })
     .run();
-  await expireOtherSessions(env, session);
 }
 
 // Generate/regenerate the recovery door (authed + fresh proof). Upsert: writes the

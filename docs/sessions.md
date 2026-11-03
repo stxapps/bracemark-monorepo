@@ -217,6 +217,16 @@ the expired state and resume with the new password; the DEK is unchanged, so
 resume is the ordinary path. _Sign out other devices_ stays a revocation: it
 is the control whose purpose is to make a lost device forget.
 
+⚠ **The expiry is written before the door, never after.** The two writes sit in
+different databases, so a request cut off between them (a client timeout
+disconnects, and that cancels the handler) leaves one half. The client settles a
+save that got no answer by testing the door, and once the new password opens it,
+nothing re-sends the change (`use-change-password.ts`, docs/api-contracts.md,
+_a timeout does not mean nothing happened_). With the door first, the surviving
+half was a new password with the old sessions still live, and the user was told
+it had changed. Expiry first leaves at worst expired devices that sign in again
+with the password that still works. `auth.spec.ts` pins the order.
+
 **Cleanup never turns inactivity into a wipe.** Delete unrevoked rows only when
 `expires_at < now - SESSION_PURGE_MS`, and revoked rows only when
 `revoked_at < now - SESSION_PURGE_MS`. A device returning after either purge

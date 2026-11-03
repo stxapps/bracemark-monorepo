@@ -1,0 +1,17 @@
+# Part three of NATIVE-ACCOUNT-004: the api is back, the lookup answers "there is
+# one", and only then is the new code minted — so the receipt says the previous
+# one stopped working, and never "set up".
+appId: com.bracemark.app
+---
+- extendedWaitUntil:
+    visible:
+      id: 'recovery-code-minted'
+      text: 'Your new recovery code is active, and your previous one has stopped working.'
+    timeout: 60000
+- assertVisible:
+    id: 'recovery-code-shown'
+- takeScreenshot: recovery-code-released
+- tapOn:
+    id: 'recovery-code-done'
+- assertVisible:
+    id: 'recovery-code-open'
