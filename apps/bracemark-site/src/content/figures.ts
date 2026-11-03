@@ -183,16 +183,17 @@ export const FIGURES = {
   // print a working door to an account; never swap one in.
   'recovery-code': {
     width: 373,
-    height: 725,
+    height: 707,
     widths: [373, 746, 1119],
     alt:
-      'Step 3 of 3 of creating an account in the web app, headed Recovery code. A box holds ' +
-      'a long code in groups of five characters, with Regenerate and Copy under it, then a ' +
-      'tick box that reads I’ve saved my recovery code somewhere safe. The Create account ' +
-      'button is greyed out, and under it is Create account without a recovery code.',
+      'Step 2 of 3 of creating an account in the web app, headed Recovery code. A box holds ' +
+      'a long code in groups of five characters, with Regenerate on the right under it and a ' +
+      'full-width Copy button below that, then a ' +
+      'tick box that reads I’ve saved my recovery code somewhere safe. The Continue button ' +
+      'is greyed out, and under it is Continue without a recovery code.',
     caption:
-      'The recovery step in the web app. Create account stays greyed out until you tick the ' +
-      'box. The code shown here is an example and opens no account.',
+      'The recovery step in the web app. Continue stays greyed out until you tick the box. ' +
+      'The code shown here is an example and opens no account.',
   },
 } satisfies Record<string, DocFigure>;
 

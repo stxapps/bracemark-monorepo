@@ -7,6 +7,7 @@ export * from './hooks/use-sign-out-others';
 export * from './hooks/use-stable-id';
 export * from './hooks/use-subscription-status';
 export * from './hooks/use-username-available';
+export * from './lib/create-account-copy';
 export * from './lib/field-messages';
 export * from './lib/lock-copy';
 export * from './lib/misc-settings-copy';

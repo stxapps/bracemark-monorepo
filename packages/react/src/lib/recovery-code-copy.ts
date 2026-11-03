@@ -1,7 +1,7 @@
 // The words the "here is your recovery code, save it" block prints — the second
 // door into an account whose only other key is a password that cannot be reset
 // (docs/account.md, _the recovery door_). It is rendered on FOUR surfaces:
-// create-account's third step and Settings → Account → recovery code, web and
+// create-account's recovery step and Settings → Account → recovery code, web and
 // native each. Those are two components per platform, so nothing but this file can
 // keep the four saying the same thing.
 //
@@ -20,32 +20,41 @@ export const RECOVERY_CODE_COPY = {
   title: 'Recovery code',
   /** On the secret box itself — it names its own contents, so the heading doesn't. */
   secretLabel: 'Your recovery code',
-  /** Beside the checkbox that gates the only exit. */
+  /** Beside create-account's checkbox, which gates its Continue. Settings has none. */
   confirmLabel: 'I’ve saved my recovery code somewhere safe.',
 
-  // Three descriptions, not one, because the moments differ in what is already
-  // true — and the differences are load-bearing, so they are kept apart here
-  // rather than folded into a stem with a swapped clause.
+  /**
+   * create-account, step two, under the heading. Says "this recovery code" because it
+   * is the first time the user has seen the words, and does NOT say "it won't be
+   * shown again": this step offers a regenerate control, and nothing is committed
+   * until the account is created.
+   */
   description: {
-    /**
-     * create-account, step three. Says "this recovery code" because it is the
-     * first time the user has seen the words, and does NOT say "it won't be shown
-     * again": this step offers a regenerate control, and nothing is committed
-     * until the account is created.
-     */
     create:
       'Save this recovery code somewhere safe. It’s the only way back into your account if you ever lose your password.',
-    /**
-     * Settings, first code. "Won't be shown again" is true here and load-bearing:
-     * the mint has landed, there is no back link, and Done is the only exit.
-     */
-    mint: 'Save this somewhere safe — it won’t be shown again. It’s your only way back into your account if you forget your password.',
-    /**
-     * Settings, replacing a code. The previous door is already dead server-side by
-     * the time this renders, which is the fact that earns its own string: a user
-     * who leaves without saving is stranded with a door they cannot open.
-     */
-    remint:
-      'Save this somewhere safe — it won’t be shown again. Your previous code has stopped working, so this is the only one that can get you back into your account.',
   },
+
+  /**
+   * Settings, once the mint has landed: the ✓ line every done screen in Account opens
+   * with (change password's, sign out other devices'). It states what is ALREADY true,
+   * because a screen that asked for a tick before "Done" read as one where the code
+   * would not count until it got one. Two strings, because replacing a code retires
+   * the previous one server-side, and that is the fact that earns its own sentence.
+   */
+  minted: {
+    first: 'Your recovery code is set up.',
+    replaced: 'Your new recovery code is active, and your previous one has stopped working.',
+  },
+  /** Settings, under the ✓ line: what to do with the code below it. */
+  saveIt: 'Save it somewhere safe, apart from your password.',
+  /**
+   * Settings, under the code. Leaving without saving it is a chore, not a loss: anyone
+   * who can still sign in can mint another here, which is why this screen no longer
+   * gates its way out. "If you lose it" rather than "if you didn't save it": it looks
+   * forward, so it covers leaving unsaved and losing it months later alike, and the
+   * code is still on screen as this is read. The condition is what keeps it true:
+   * minting needs the current password, and the code is for the day that is gone.
+   */
+  shownOnce:
+    'This is the only time it’s shown. If you lose it, generate a new one here while you still have your password.',
 } as const;

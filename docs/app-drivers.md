@@ -71,6 +71,115 @@ popover, list management, the cross-origin sign-out — live in
 `.claude/skills/verify/SKILL.md`, which is the operational companion to this
 section. Keep them there; this doc is the design record.
 
+### ⚠ driving real Safari on macOS
+
+**Use this only for what Safari alone shows**: AutoFill, Passwords, and the offers
+and prompts around them. Those belong to the Safari app rather than to WebKit, and
+they are browser chrome, so no spec and no scripted run sees them. The commands are
+in `.claude/skills/verify/SKILL.md`, _Drive real Safari on macOS_.
+
+| route                                       | status                          | use here                                                                                 |
+| ------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------- |
+| Playwright WebKit                           | installed                       | no: it is a separate engine build without Safari's AutoFill                              |
+| `safaridriver`                              | needs _Allow remote automation_ | not expected to help: it runs isolated automation windows. Never tried past that setting |
+| AppleScript, System Events, `screencapture` | needs the three grants below    | **yes**: it is the real app with the real Passwords                                      |
+
+**Three grants, all off by default**, and they go off again afterwards:
+
+- _Privacy & Security → Screen Recording_ for the app hosting the terminal (Visual
+  Studio Code here), then quit and reopen it. Without it `screencapture` fails with
+  `could not create image from display`.
+- _Privacy & Security → Accessibility_ for the same app, or System Events fails with
+  `osascript is not allowed assistive access`.
+- _Safari Settings → Developer → Allow JavaScript from Apple Events_.
+
+⚠ That is a real profile: signed-in tabs and real saved passwords, under control of
+whatever runs in that terminal. Stay on staging, in a new window. Test logins land in
+the real Passwords, deleting them needs Touch ID, and they sync if iCloud Keychain
+is on. Never press Safari's _Turn On iCloud Keychain_. A sign-out also moves every
+other window on that origin.
+
+**How it reads.** `do JavaScript` reads the page. Sheets are in the accessibility
+tree (`sheet 1 of window 1`, with named buttons), so Save and Update prompts can be
+read and pressed. **The AutoFill popup is not**: it appears as no window, so only a
+screenshot shows it.
+
+**⚠ A password field's menu has no fixed order.** Its rows depend on what Safari
+holds, and "Recently Generated Passwords" appears once anything has been generated.
+On 2026-11-02 the same two arrow presses picked "Suggest New Password" in one run and
+"Passwords…" in the next, which opened the Passwords lock screen, a window that
+wants Touch ID or the account password. Screenshot the menu before every key press.
+A System Events `click at` on a row reports success and does not pick it, so arrow
+keys and Return remain the way in. A row filled nothing if the field reads empty
+afterwards, so read the value back each time.
+
+**A control comes first.** Most of a search here returns "still offered", so every
+variant needs a known-good and a known-bad beside it. Edits to the live DOM do count:
+Safari re-reads the form on blur and refocus, proven by mounting the real sign-in
+form inside `/create-account` and getting the login treatment. That took a positive
+control to establish. Without one, a run of failed variants looked like a page-level
+decision, which was wrong. A variant changes one thing at a time for the same
+reason: one combined variant left which change mattered unknown.
+
+**What does not stand in for it:**
+
+- **A local page over HTTP.** `localhost` got different menus from staging.
+- **macOS for an iPhone.** Offers differ: iOS raised a sheet where macOS raised a menu.
+- **A form with saved logins nearby.** The menu changes with what is saved for the
+  site and for the username in the form.
+
+**To test a build, not staging's form.** A local HTTPS origin means a certificate
+warning here, and clicking through changes trust on the real profile. Instead read
+the rendered card's `innerHTML` from the local build with a headless script, and set it
+on staging's card with `do JavaScript`. That is enough for AutoFill's classification,
+which reads the DOM, and it is not a whole run: nothing behind the page is yours.
+
+**Page state that wastes a run:** a React-controlled input needs the native value
+setter plus an `input` event, and a Radix menu needs pointer events rather than
+`click()`. Sign-out takes several seconds. Navigating before it lands redirects to
+the signed-in app, and the next keystrokes go to the wrong page, so read
+`location.pathname` before typing.
+
+### ⚠ driving Safari in the iOS Simulator
+
+**The Simulator has real AutoFill.** Its Safari raises the **Use Strong Password?**
+sheet, Save Password prompts and Sign In → Fill Password, against its own Passwords
+store, so an iPhone's offers can be measured with nothing of the user's at risk. Use it
+before asking for a real device. It is still not a real iPhone, and nothing has yet
+compared the two on one form.
+
+**It can run a real build over HTTPS, without touching the Mac.** Install a throwaway
+CA in the Simulator's keychain only:
+
+```sh
+xcrun simctl keychain booted add-root-cert ca.pem   # the Simulator's own, gone with an erase
+```
+
+Then serve a name with public DNS that resolves to loopback (`*.localtest.me`) from a
+small TLS proxy on :443 that maps `app.` to :3000 and `api.` to :8787. Set the origins in
+the shell, never in a file: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_APP_URL` and
+`CORS_ORIGINS`, which `npm run dev` passes on ([device-testing.md](./device-testing.md)).
+Put the proxy, the key and the CA in a temp directory and delete them after. A trusted
+CA on the Mac itself is a real credential ([device-testing.md](./device-testing.md),
+_approach A_), and this needs none.
+
+**Driving it** is Maestro with `appId: com.apple.mobilesafari`, and `xcrun simctl pbpaste
+booted` reads what a Copy button copied. Things that wasted runs:
+
+- **⚠ `retryTapIfNoChange` tapped Save & Fill twice.** Maestro repeats a tap when the
+  screen looks unchanged, and a repeat on a sheet that has come back is a second accept.
+  Set it to `false` on any tap that answers an offer.
+- **Page-relative points move.** The keyboard scrolls the page, so a tap at `40%,53%`
+  lands elsewhere after typing. Screenshot first. `point` takes whole percentages only.
+- **Text under the keyboard still taps.** `tapOn: "Continue"` reports success on a
+  button the keyboard covers, and nothing happens. Dismiss with the ✓ first.
+- **A heading matches too.** `tapOn: "Sign in"` can hit the heading; use `index: 1`.
+- **Fill Password asks for a passcode.** `1234` passed. It is the Simulator's gate,
+  not a credential.
+- **⚠ Never save a file during a run.** Fast Refresh re-runs a mount effect, so an edit
+  while the form sat on step 1 regenerated the password under Safari's fill and read
+  exactly like a product bug.
+
 ### driving native Release builds
 
 Maestro controls the installed UI through platform automation; it does not need

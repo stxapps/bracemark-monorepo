@@ -1,6 +1,6 @@
 // WHOSE PASSWORD THIS IS, for a password manager — on a form that takes the
-// account's password and shows no username field. Four do: create-account's
-// confirm step, and Settings → change password, recovery code and delete account.
+// account's password and shows no username field. Three do: Settings → change
+// password, recovery code and delete account.
 // A manager reads a login as a PAIR, and a password field with no username beside
 // it leaves it guessing: it offers to save an entry with the name blank (Chrome
 // did, at the end of create-account), it cannot say which saved login an update

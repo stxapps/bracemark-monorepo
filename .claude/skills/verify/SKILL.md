@@ -1,6 +1,6 @@
 ---
 name: verify
-description: How to build, launch, and drive this repo's apps to verify a change end-to-end — bracemark-web via headless Chromium, bracemark-extension as an unpacked build, bracemark-expo on the iOS simulator or Android emulator. Also which Chrome to drive for which app. Use when the change has to be SEEN running; when a test, typecheck, or a read of the code can settle the question, do that instead.
+description: How to build, launch, and drive this repo's apps to verify a change end-to-end — bracemark-web via headless Chromium, bracemark-extension as an unpacked build, bracemark-expo on the iOS simulator or Android emulator. Also which Chrome to drive for which app, and real Safari on macOS or in the iOS Simulator for AutoFill and Passwords. Use when the change has to be SEEN running; when a test, typecheck, or a read of the code can settle the question, do that instead.
 ---
 
 # Verifying changes in this repo
@@ -319,11 +319,76 @@ chromium` (~550 MB into `~/Library/Caches/ms-playwright/`) if it is absent.
   `location.replace`, not a route change, so don't wait for a bracemark-web URL
   after it and expect the site dev server to be up. Sign-in is `/sign-in`. After
   sign-in, give the initial sync ~2s before asserting on content.
-- Creating an account headless: fill `#username`, press "Choose my own" (the
-  generated-password step gates Continue behind a saved-it checkbox), fill
-  `#signup-new-password`, Continue, fill `#confirm`, Continue, then "Create account without
-  a recovery code" on the recovery step (the primary there is disabled until the
-  saved-it checkbox is ticked). Argon2 makes the submit take a few seconds.
+- Creating an account headless: fill `#username`, replace `#signup-new-password`
+  with a known password (the field starts on generated words), Continue, "Continue
+  without a recovery code" on the recovery step (its primary is disabled until the
+  saved-it checkbox is ticked), fill `#password`, then "Sign in to finish". Nothing
+  exists until that passes. Argon2 makes the submit take a few seconds.
+
+## Drive real Safari on macOS
+
+Only for AutoFill, Passwords and their offers; the reasoning, the grants and the
+risks are in `docs/app-drivers.md`, _driving real Safari on macOS_. It is the user's
+real profile, so stay on staging (`https://app.dryrunbase.com`) in a new window, and
+check the grants first. Keep helper files in a temp directory, and delete them last.
+
+```sh
+screencapture -x /tmp/s.png                                                # Screen Recording
+osascript -e 'tell application "System Events" to tell process "Safari" to count windows'   # Accessibility
+osascript -e 'tell application "Safari" to do JavaScript "1+1" in front document'           # Apple Events
+```
+
+```sh
+# A new window, so nothing of the user's moves.
+osascript -e 'tell application "Safari"' -e 'activate' \
+  -e 'make new document with properties {URL:"https://app.dryrunbase.com/create-account"}' \
+  -e 'set bounds of front window to {60, 60, 1160, 860}' -e 'end tell'
+
+js()   { osascript -e 'on run argv' -e 'tell application "Safari" to do JavaScript (item 1 of argv) in front document' -e 'end run' "$1"; }
+key()  { osascript -e 'on run argv' -e 'tell application "System Events" to keystroke (item 1 of argv)' -e 'end run' "$1"; }
+code() { osascript -e "tell application \"System Events\" to key code $1"; }   # 36 return, 53 esc, 125 down, 51 delete
+sheet() { osascript -e 'tell application "System Events" to tell process "Safari" to get name of buttons of sheet 1 of window 1' 2>/dev/null; }
+press() { osascript -e "tell application \"System Events\" to tell process \"Safari\" to click button \"$1\" of sheet 1 of window 1"; }
+```
+
+- **Screenshots:** the display is 3840×2160 at 2×, so a screen point is a pixel ÷ 2.
+  Crop before reading, for example `sips -c 860 900 --cropOffset 380 800 s.png --out c.png`
+  (height, width; then y, x), and `montage` several variants into one picture.
+- **See the popup:** blur then focus the field and wait a second. It is in no
+  accessibility window, so only a screenshot shows it.
+- **Pick a menu row:** screenshot first, since the rows move. Press 125 per row, then
+  36, and read the field's value back. If `Passwords…` was picked, the Passwords lock
+  screen opens: type nothing, and run `osascript -e 'tell application "Passwords" to quit'`.
+- **Set a React field without keystrokes:**
+  `Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,v); e.dispatchEvent(new Event('input',{bubbles:true}))`
+- **Open the links page's ⋯ menu:** dispatch `pointerdown`, `mousedown`, `pointerup`,
+  `mouseup` and `click` on the `More options` button, then `.click()` the `Sign out`
+  menu item, and wait for `location.pathname` to leave `/links` before navigating.
+- **Test a build rather than staging's form:** read the card's `innerHTML` from the
+  local build headless, then set it on staging's `[data-slot=card-content]` with `js`.
+  That answers AutoFill's classification only.
+- **Finish:** close the window, delete the temp files, and tell the user which `e2e_`
+  logins and staging accounts remain and to turn the grants off.
+
+## Drive Safari in the iOS Simulator
+
+The Simulator's Safari has real AutoFill, with its own Passwords store, so try it
+before asking for a real iPhone. Staging works as it is. For a local build over HTTPS,
+the recipe and every trap are in `docs/app-drivers.md`, _driving Safari in the iOS
+Simulator_. Read those first, because a repeated tap or a saved file reads as a bug.
+
+```sh
+xcrun simctl openurl booted https://app.dryrunbase.com/create-account
+xcrun simctl pbpaste booted                 # what the page's Copy button copied
+```
+
+```yaml
+appId: com.apple.mobilesafari
+---
+- tapOn:
+    text: 'Save & Fill'
+    retryTapIfNoChange: false # a retry on a repeat sheet is a second accept
+```
 
 ## Drive bracemark-expo (native surface)
 

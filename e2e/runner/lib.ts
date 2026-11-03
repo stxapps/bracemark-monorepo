@@ -77,8 +77,8 @@ export async function requireLocalStack(legs: Array<keyof typeof STACK_LEGS>): P
 // extra coverage — the native form's own behaviour is jest's job.
 //
 // The password is generated here and handed to Maestro, which is the reason the
-// web fixture takes the "Choose my own" path rather than the generated
-// passphrase: a secret we chose can be passed along, one the app generated would
+// web fixture replaces the words create-account's password field starts on: a
+// secret we chose can be passed along, one the app generated would
 // have to be scraped off a screen.
 //
 // `withRecovery` is the one case where that preference has nothing to prefer —

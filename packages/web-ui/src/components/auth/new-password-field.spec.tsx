@@ -1,257 +1,293 @@
-import { act, render, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { installJsdomStubs } from '../../testing/jsdom-stubs';
 import { NewPasswordField, useNewPassword } from './new-password-field';
 
-// `useNewPassword` is THE GATE for choosing a new password, and both surfaces
-// that choose one — create-account's setup step and Settings → change password —
-// spell their submit's `disabled` as nothing but its `ok`. It is shared for a
-// reason: the two used to hand-roll this block near-verbatim and had already
-// drifted, with Settings scoring the password against no penalty terms while
-// create-account passed the username, so the same string passed the entropy floor
-// at rotation and failed it at signup (docs/account.md).
+// `useNewPassword` is THE GATE on a new password, at create-account and at Settings →
+// change password alike: one field that starts out holding generated words and ends up
+// holding whatever the user or their manager put there. Both callers spell their
+// submit's `disabled` as its `ok`, so everything below is about when that opens. None
+// of it is visible to lint or the type checker, and the e2e fixture types a known
+// password and so only ever sees the last case of the editing block.
 //
-// Everything below is about `ok` — when the gate opens and when it must not.
-// None of it is visible to lint or the type checker: `ok` is a boolean either
-// way, and every wrong version of it still renders a button.
-//
-// This drives the real estimator (a genuine ~1.7 MB dynamic import), so the
-// typed-path cases carry the same generous timeouts as the dictionary spec beside
-// them.
+// This drives the real estimator (a genuine ~1.7 MB dynamic import), so the cases that
+// type carry the same generous timeouts as the dictionary spec beside them.
 
-function probe(username?: string, currentPassword?: string) {
+const LABEL = 'New password';
+
+function probe(username: string | undefined = 'wit_e2e', currentPassword?: string) {
   const result = { current: null as ReturnType<typeof useNewPassword> | null };
   function Probe() {
-    result.current = useNewPassword({ username, currentPassword });
-    return null;
+    const control = useNewPassword({ username, currentPassword });
+    result.current = control;
+    return <NewPasswordField control={control} id="new-password" label={LABEL} />;
   }
   render(<Probe />);
-  const current = () => {
-    if (!result.current) throw new Error('the probe never rendered');
-    return result.current;
-  };
   return {
     get current() {
-      return current();
+      if (!result.current) throw new Error('the probe never rendered');
+      return result.current;
     },
-    /** Runs a control action and lets React settle. */
-    run: (action: (control: ReturnType<typeof useNewPassword>) => void) =>
-      act(() => action(current())),
   };
 }
 
-/** Types into the typed-your-own path and waits for the estimator's verdict. */
-const type = async (view: ReturnType<typeof probe>, password: string) => {
-  view.run((c) => c.setMode('own'));
-  view.run((c) => c.setOwnPassword(password));
-  await waitFor(() => expect(view.current.message.tone).not.toBe('muted'), { timeout: 30_000 });
-};
+const field = () => screen.getByLabelText(LABEL) as HTMLInputElement;
+const type = (value: string) => fireEvent.change(field(), { target: { value } });
 
-describe('useNewPassword — the generated path', () => {
-  // The passphrase is minted in an effect on MOUNT rather than in a lazy
-  // initializer, so that SSR and the first client render agree — a random value
-  // produced during render would hydrate-mismatch. The cost is one frame with no
-  // passphrase, and the gate has to be shut through it: an `ok` on an empty
-  // secret would mean a submit that encrypts the library under the empty string.
-  it('starts in generated mode with the gate shut, then mints a passphrase', async () => {
+beforeAll(() => {
+  installJsdomStubs();
+});
+
+describe('useNewPassword — the generated default', () => {
+  it('starts the field on generated words, with the gate open', () => {
     const view = probe();
 
-    expect(view.current.mode).toBe('generated');
-    expect(view.current.ok).toBe(false);
-
-    await waitFor(() => expect(view.current.passphrase).not.toBe(''));
-    // Still shut — a minted passphrase is not a saved one.
-    expect(view.current.ok).toBe(false);
-  });
-
-  it('opens only once the user confirms they saved it', async () => {
-    const view = probe();
-    await waitFor(() => expect(view.current.passphrase).not.toBe(''));
-
-    view.run((c) => c.setPassphraseSaved(true));
-
+    expect(field().value).toBe(view.current.password);
+    expect(view.current.password.split('-')).toHaveLength(7);
+    expect(view.current.generated).toBe(true);
     expect(view.current.ok).toBe(true);
-    expect(view.current.password).toBe(view.current.passphrase);
   });
 
-  // REGENERATE INVALIDATES THE CONFIRMATION. The checkbox attests to having saved
-  // a specific string; a new one makes that attestation false, and a gate left
-  // open would let the account be created under a passphrase the user never saw
-  // saved — irrecoverably, since there is no reset.
-  it('shuts the gate again when the passphrase is regenerated', async () => {
+  // The field a manager reads. Masked, it has to be a real password input.
+  it('is a masked new-password input', () => {
+    probe();
+
+    expect(field().type).toBe('password');
+    expect(field().autocomplete).toBe('new-password');
+  });
+
+  it('replaces the words on Regenerate, and still needs nothing ticked', () => {
     const view = probe();
-    await waitFor(() => expect(view.current.passphrase).not.toBe(''));
-    view.run((c) => c.setPassphraseSaved(true));
-    const first = view.current.passphrase;
+    const first = view.current.password;
 
-    view.run((c) => c.regenerate());
+    fireEvent.click(screen.getByRole('button', { name: /Regenerate/ }));
 
-    expect(view.current.passphrase).not.toBe(first);
-    expect(view.current.passphraseSaved).toBe(false);
-    expect(view.current.ok).toBe(false);
+    expect(view.current.password).not.toBe(first);
+    expect(view.current.ok).toBe(true);
   });
 });
 
-describe('useNewPassword — the typed-your-own path', () => {
-  // Switching modes must not carry the other mode's verdict across. The generated
-  // passphrase is ~77 bits by construction and its gate is a checkbox; the typed
-  // one is scored. An `ok` that survived the switch would let a saved-passphrase
-  // tick admit an empty typed password.
-  it('shuts the gate on switching to typed, however settled the generated path was', async () => {
+describe('useNewPassword — editing is choosing your own', () => {
+  it('shuts the gate the moment the words are edited down', async () => {
     const view = probe();
-    await waitFor(() => expect(view.current.passphrase).not.toBe(''));
-    view.run((c) => c.setPassphraseSaved(true));
-    expect(view.current.ok).toBe(true);
 
-    view.run((c) => c.setMode('own'));
+    type('short');
 
-    expect(view.current.ok).toBe(false);
-    expect(view.current.password).toBe('');
+    expect(view.current.generated).toBe(false);
+    await waitFor(() => expect(view.current.ok).toBe(false), { timeout: 30_000 });
   });
 
-  it('opens for a password that clears both floors', async () => {
+  it('holds an edit to the entropy floor, however long it is', async () => {
     const view = probe();
-    await type(view, 'Qx7-vT2m_pR9wLd4Zk1B-nH6');
 
-    expect(view.current.message.tone).toBe('ok');
-    expect(view.current.ok).toBe(true);
-    expect(view.current.password).toBe('Qx7-vT2m_pR9wLd4Zk1B-nH6');
-  }, 30_000);
+    type('password password password');
 
-  it('stays shut for a long-but-guessable password', async () => {
-    const view = probe();
-    await type(view, 'correcthorsebatterystaple');
-
+    await waitFor(() => expect(view.current.message.tone).toBe('error'), { timeout: 30_000 });
     expect(view.current.ok).toBe(false);
-  }, 30_000);
+  });
 
+  it('penalises a password built out of the username', async () => {
+    const view = probe('correcthorsebatterystaple');
+
+    type('correcthorsebatterystaple');
+
+    await waitFor(() => expect(view.current.message.tone).toBe('error'), { timeout: 30_000 });
+  });
+
+  it('opens for a password that clears both floors, and gets back to the words', async () => {
+    const view = probe();
+
+    type('x7Kq2mVn9Rt4Lw8Zp3Hy6Bf1');
+    await waitFor(() => expect(view.current.ok).toBe(true), { timeout: 30_000 });
+    expect(view.current.password).toBe('x7Kq2mVn9Rt4Lw8Zp3Hy6Bf1');
+
+    fireEvent.click(screen.getByRole('button', { name: /Regenerate/ }));
+    expect(view.current.generated).toBe(true);
+  });
+});
+
+// The floors an edited value meets, ported from the typed path the old Settings block
+// had. Settled = the estimator has answered, so `ok` is its verdict and not a wait.
+const settle = (view: ReturnType<typeof probe>) =>
+  waitFor(() => expect(view.current.message.tone).not.toBe('muted'), { timeout: 30_000 });
+
+describe('useNewPassword — what an edit is measured as', () => {
   it('stays shut below the length floor even at high entropy', async () => {
     const view = probe();
     // 19 chars of randomness: past the entropy floor, under the 20-char one.
-    await type(view, 'Qx7-vT2m_pR9wLd4Zk1');
+    type('Qx7-vT2m_pR9wLd4Zk1');
+    await settle(view);
 
     expect(view.current.ok).toBe(false);
   }, 30_000);
 
-  // THE DRIFT THIS HOOK EXISTS TO END. The username is fed to zxcvbn as a penalty
-  // term; omitting it (which is what Settings did while it had its own copy of
-  // this block) leaves a password built out of the account name clearing the gate.
-  // Both halves are asserted, because only the pair proves it is the penalty term
-  // doing it rather than the string being weak on its own.
-  it('penalises a password built out of the username', async () => {
-    const derived = 'qmvtkzrb-9Xf2-qmvtkzrb';
-
-    const withUsername = probe('qmvtkzrb');
-    await type(withUsername, derived);
-    expect(withUsername.current.ok).toBe(false);
-
-    const withoutUsername = probe();
-    await type(withoutUsername, derived);
-    expect(withoutUsername.current.ok).toBe(true);
-  }, 30_000);
-
-  // THE SCORER IS FED THE CANONICAL PASSWORD, and this is the case where that
-  // matters rather than being a tidiness point. `ilovemydogsomuchyess` scores
-  // ~10^17.6 on its own — under the 10^18 floor — but zxcvbn models two trailing
-  // spaces as ~10^19.6, because as far as it knows they are two more characters
-  // an attacker has to guess. The derivation TRIMS them (canonicalizePassword),
-  // so they are not part of the secret at all: score the raw string and the gate
-  // opens on a password that is below the floor the moment it is used. The length
-  // ladder does not save this one — the trimmed string is exactly 20 characters —
-  // so the scorer's input is the only thing standing between it and an account.
+  // THE SCORER IS FED THE CANONICAL PASSWORD. `ilovemydogsomuchyess` scores ~10^17.6,
+  // under the 10^18 floor, but zxcvbn models two trailing spaces as ~10^19.6. The
+  // derivation TRIMS them, so they are not part of the secret: score the raw string
+  // and the gate opens on a password that is below the floor the moment it is used.
   it('scores the canonical password, so trailing spaces buy no entropy', async () => {
     const view = probe();
-    await type(view, 'ilovemydogsomuchyess  ');
+    type('ilovemydogsomuchyess  ');
+    await settle(view);
 
     expect(view.current.ok).toBe(false);
   }, 30_000);
 
-  // The same shape, one step earlier: a password whose trimmed form is under the
-  // 20-character floor is refused however long the raw string is.
   it('measures the trimmed password against the length floor', async () => {
-    const padded = probe();
-    await type(padded, '  Qx7-vT2m_pR9wLd4Zk1  ');
+    const view = probe();
+    type('  Qx7-vT2m_pR9wLd4Zk1  ');
+    await settle(view);
 
-    expect(padded.current.ok).toBe(false);
+    expect(view.current.ok).toBe(false);
   }, 30_000);
 
-  // What is SUBMITTED stays exactly what was typed — canonicalization belongs to
-  // the derivation, which does it on both sides, so the field must not quietly
-  // rewrite the user's secret on its way out.
+  // What is SUBMITTED stays exactly what was typed: canonicalization belongs to the
+  // derivation, which does it on both sides.
   it('submits the password verbatim', async () => {
     const view = probe();
-    await type(view, '  Qx7-vT2m_pR9wLd4Zk1B-nH6  ');
+    type('  Qx7-vT2m_pR9wLd4Zk1B-nH6  ');
+    await settle(view);
 
     expect(view.current.ok).toBe(true);
     expect(view.current.password).toBe('  Qx7-vT2m_pR9wLd4Zk1B-nH6  ');
-  }, 30_000);
-
-  it('carries the typed value back on switching to generated, without losing it', async () => {
-    const view = probe();
-    await type(view, 'Qx7-vT2m_pR9wLd4Zk1B-nH6');
-
-    view.run((c) => c.setMode('generated'));
-
-    expect(view.current.password).toBe(view.current.passphrase);
-    expect(view.current.ownPassword).toBe('Qx7-vT2m_pR9wLd4Zk1B-nH6');
   }, 30_000);
 });
 
 describe('useNewPassword — the current password', () => {
   // Change password passes its proof field. A rotation to the same password would
-  // clear every other rung — it cleared them when it was set — so this is the one
+  // clear every other rung, since it cleared them when it was set, so this is the one
   // thing that keeps the gate shut on it.
   it('stays shut for the current password, compared canonical', async () => {
     const view = probe(undefined, 'Qx7-vT2m_pR9wLd4Zk1B-nH6');
-    await type(view, ' Qx7-vT2m_pR9wLd4Zk1B-nH6 ');
+    type(' Qx7-vT2m_pR9wLd4Zk1B-nH6 ');
+    await settle(view);
 
     expect(view.current.message.text).toBe('That’s your current password.');
     expect(view.current.ok).toBe(false);
   }, 30_000);
+
+  it('passes the generated words, which are not the current password', () => {
+    const view = probe(undefined, 'Qx7-vT2m_pR9wLd4Zk1B-nH6');
+
+    expect(view.current.generated).toBe(true);
+    expect(view.current.ok).toBe(true);
+  });
 });
 
-// THE FIELD A PASSWORD MANAGER SAVES FROM, on change password's generated path. The
-// passphrase is shown in an <output>, which no manager reads, so without this input
-// the form's only password field is the CURRENT one and Chrome offered to save the
-// old password. Nothing else reports its absence — it is invisible, and every flow
-// passes without it.
-describe('NewPasswordField — exposeGenerated', () => {
-  // ShowOnceSecret's Radix checkbox measures itself at mount.
-  beforeAll(installJsdomStubs);
+describe('NewPasswordField — showing the words', () => {
+  const show = () => fireEvent.click(screen.getByRole('button', { name: 'Show password' }));
 
-  function Field({ exposeGenerated }: { exposeGenerated?: boolean }) {
-    const control = useNewPassword();
-    return (
-      <form>
-        <NewPasswordField
-          control={control}
-          copy="change"
-          idPrefix="cp"
-          exposeGenerated={exposeGenerated}
-        />
-        <output data-testid="password">{control.password}</output>
-      </form>
-    );
-  }
+  // Seven words do not fit a one-line input on a phone, and this is the one string the
+  // user is here to write down: the box under the field shows all of it.
+  it('shows the whole password under the field, and hides it again', () => {
+    const view = probe();
+    const box = () => screen.queryByText(view.current.password, { selector: 'div' });
 
-  it('puts the generated passphrase in a new-password input', async () => {
-    const { container, getByTestId } = render(<Field exposeGenerated />);
-    await waitFor(() => expect(getByTestId('password').textContent).not.toBe(''));
+    expect(box()).toBeNull();
+    show();
+    expect(box()).not.toBeNull();
 
-    const input = container.querySelector<HTMLInputElement>('input[autocomplete="new-password"]');
-    expect(input?.type).toBe('password');
-    expect(input?.value).toBe(getByTestId('password').textContent);
-    // Out of the layout, the tab order and the a11y tree — the panel is what a
-    // person reads.
-    expect(input?.hidden).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Hide password' }));
+    expect(box()).toBeNull();
   });
 
-  // Off by default: on create-account's setup step it made Chrome prompt to save
-  // at Continue, before the account existed.
-  it('renders none unless asked', async () => {
-    const { container, getByTestId } = render(<Field />);
-    await waitFor(() => expect(getByTestId('password').textContent).not.toBe(''));
+  it('keeps the box on the password as it is edited', () => {
+    probe();
+    show();
 
-    expect(container.querySelector('input[type="password"]')).toBeNull();
+    type('x7Kq2mVn9Rt4Lw8Zp3Hy6Bf1');
+
+    expect(screen.getByText('x7Kq2mVn9Rt4Lw8Zp3Hy6Bf1', { selector: 'div' })).toBeTruthy();
+  });
+
+  // ⚠ The reveal only flips `type`. It used to swap in a <textarea>, which unmounted a
+  // filled password field on every press of the eye — a manager can read that as a
+  // submission, and iOS did, to the native twin (password-input.tsx). Only a real
+  // browser would show the prompt; this pins the element that avoids it.
+  it('stays the same <input> through a reveal', () => {
+    probe();
+    const input = field();
+
+    show();
+    expect(field()).toBe(input);
+    expect(input.type).toBe('text');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide password' }));
+    expect(field()).toBe(input);
+    expect(input.type).toBe('password');
+  });
+});
+
+describe('NewPasswordField — a manager fills the field', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  // Only `:autofill`, because Testing Library calls `matches` too.
+  const browserFilled = (input: HTMLInputElement, answer: boolean) => {
+    const real = input.matches.bind(input);
+    input.matches = (selector) => (selector === ':autofill' ? answer : real(selector));
+  };
+
+  // iOS re-presents its "Use Strong Password?" sheet over a prefilled field while the
+  // focus stays in it, with Save & Fill under the same thumb, and a second accept mints
+  // a second password. Only a real iPhone or simulator shows the sheet; this pins the
+  // move that stops it.
+  it('leaves the field, so iOS does not offer again', () => {
+    probe();
+    const input = field();
+    input.focus();
+    browserFilled(input, true);
+
+    type('gomvow-fYjdef-9wajpu');
+    act(() => {
+      jest.advanceTimersByTime(200);
+    });
+
+    expect(document.activeElement).not.toBe(input);
+  });
+
+  it('stays put for someone typing', () => {
+    probe();
+    const input = field();
+    input.focus();
+    browserFilled(input, false);
+
+    type('gomvow');
+    act(() => {
+      jest.advanceTimersByTime(200);
+    });
+
+    expect(document.activeElement).toBe(input);
+  });
+});
+
+// Step one's Copy is a text button beside Regenerate (docs/account.md, _creating an
+// account_), so the one thing that says a copy happened is its label, and Regenerate,
+// one row away, must take that back.
+describe('NewPasswordField — Copy beside Regenerate', () => {
+  let writeText: jest.Mock;
+  beforeEach(() => {
+    writeText = jest.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  });
+
+  it('copies the password in the field, and Regenerate takes "Copied" back', async () => {
+    const view = probe();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    await screen.findByRole('button', { name: 'Copied' });
+    expect(writeText).toHaveBeenCalledWith(view.current.password);
+
+    fireEvent.click(screen.getByRole('button', { name: /Regenerate/ }));
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeTruthy();
+  });
+
+  it('copies an edited password, not the words it replaced', async () => {
+    probe();
+    type('x7Kq2mVn9Rt4Lw8Zp3Hy6Bf1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    await screen.findByRole('button', { name: 'Copied' });
+    expect(writeText).toHaveBeenCalledWith('x7Kq2mVn9Rt4Lw8Zp3Hy6Bf1');
   });
 });

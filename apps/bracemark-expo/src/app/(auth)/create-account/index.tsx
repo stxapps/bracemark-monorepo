@@ -11,8 +11,8 @@ import { CreateAccountForm } from '../../../features/auth/create-account-form';
 //
 // NO `title`/`description`, and this is the one asymmetry with /sign-in, which
 // passes AuthScreen a static title. The form under this one advances
-// setup → confirm → recovery, and each step now replaces the heading with its own
-// ("Confirm your password", "Recovery code") — so the heading has to be rendered
+// setup → recovery → check, and each step now replaces the heading with its own
+// ("Recovery code", "Check your saved password") — so the heading has to be rendered
 // by the thing that knows the step. `step` is state local to CreateAccountForm,
 // and lifting it up here so this file could swap three words would be the tail
 // wagging the dog; the header moved down to the state instead. StepHeader in
@@ -28,9 +28,8 @@ import { CreateAccountForm } from '../../../features/auth/create-account-form';
 // The consent line stays on the SCREEN even though the header left, because the
 // reason differs: it has to hold at EVERY step, so it must not be step-aware. It
 // names the act, so it is true from the first step instead of being sprung on
-// someone three steps in, beside the one control ("Create account without a
-// recovery code") that most needs a clear head. Web's page carries the identical
-// placement and the longer argument.
+// someone three steps in. Web's page carries the identical placement and the longer
+// argument.
 export default function CreateAccountScreen() {
   return (
     <AuthScreen

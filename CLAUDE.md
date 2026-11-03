@@ -76,6 +76,7 @@ that reading comes _before_ the edit; nothing downstream will tell you.
 | the read edge — indexes, liveQuery, virtual scrolling, paging                  | `client-queries.md` ⚠           |
 | links-page search (the URL⇄`LinkQuery` grammar, the UI); expo route params     | `search.md` ⚠                   |
 | accounts — key derivation, username/password rules                             | `account.md` ⚠                  |
+| **the create-account form** — its steps; a password manager's offers           | `account.md` ⚠                  |
 | **sessions — lifetime, expiry, revocation; anything that wipes a device**      | `sessions.md` ⚠                 |
 | **the service worker — what it caches, when it registers, how it updates**     | `offline-mode.md` ⚠             |
 | server backups — D1 export, R2 replication, **an R2 lifecycle rule**, restores | `server-backups.md` ⚠           |
@@ -97,7 +98,7 @@ that reading comes _before_ the edit; nothing downstream will tell you.
 | prebuild, `app.config.ts`, the npm scripts, R8, signing, any native change     | `expo-build.md` ⚠               |
 | **tablet support, the OS minimums, the Play Console device catalog**           | `expo-build.md` ⚠               |
 | **writing or reviewing a spec**; test layers, jest vs vitest                   | `testing.md` ⚠                  |
-| driving an app to see it run — the browser, the AVD, Maestro, simctl/adb       | `app-drivers.md` ⚠              |
+| driving an app — the browser, real Safari, the AVD, Maestro, simctl/adb        | `app-drivers.md` ⚠              |
 | whole-flow e2e — `e2e/`, playwright, maestro, the contract runs                | `e2e.md` ⚠                      |
 | seeded dev accounts — a filled library, a paid plan, locally                   | `e2e.md` ⚠                      |
 | env vars, per app and per mode; where a credential goes instead                | `env-files.md` ⚠                |

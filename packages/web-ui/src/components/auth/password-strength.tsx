@@ -112,8 +112,8 @@ export function usePasswordStrength(
 
   // The load STARTS ON MOUNT, not on first keystroke, and the callers are what make
   // that worth saying: both spell `useNewPassword` at form level, above the step that
-  // renders this field, and both default to the GENERATED passphrase. So the fetch is
-  // already running while the user reads that panel and decides to type their own —
+  // renders this field, and both start it on the GENERATED words. So the fetch is
+  // already running while the user reads them and decides to type their own —
   // by which point the ~800 KB of gzipped dictionary is normally long since here, and
   // the loading rung below is never seen.
   React.useEffect(() => {

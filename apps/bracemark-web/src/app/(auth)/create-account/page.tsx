@@ -11,8 +11,8 @@ export const metadata: Metadata = { title: 'Create account' };
 
 // NO CardHeader, and this is the one asymmetry with /sign-in, whose title is a
 // static CardTitle at the page step. The form under this one advances
-// setup → confirm → recovery, and each step now replaces the heading with its own
-// ("Confirm your password", "Recovery code") — so the heading has to be rendered
+// setup → recovery → check, and each step now replaces the heading with its own
+// ("Recovery code", "Check your saved password") — so the heading has to be rendered
 // by the thing that knows the step. `step` is state local to CreateAccountForm,
 // three boundaries down (web-ui package → app → route), and lifting it up here so
 // this file could swap three words would be the tail wagging the dog. The header
@@ -34,11 +34,9 @@ export default function CreateAccountPage() {
         {/* The consent line, and it stays on the PAGE even though the header
             above it moved into the form, because the reason differs: this one
             has to hold at EVERY step, so it must not be step-aware. The form
-            advances setup → confirm → recovery, and only the last step's button
+            advances setup → recovery → check, and only the last step's button
             actually creates anything — but a line that appeared there would
-            spring the terms on someone three screens in, next to the one control
-            ("Create account without a recovery code") that most needs a clear
-            head. Naming the ACT rather
+            spring the terms on someone three screens in. Naming the ACT rather
             than the button lets it be true from the first screen, which is where
             a disclosure belongs.
 

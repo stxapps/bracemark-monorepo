@@ -679,18 +679,20 @@ test.describe('account', () => {
     },
   );
 
-  // Change password on its DEFAULT path, the generated passphrase — every other
-  // spec that rotates a password takes "Choose my own" (changePasswordElsewhere).
-  // On the way it holds the two things this form owes a password manager and the
-  // user, neither of which any other layer sees in a real browser:
+  // Change password on its DEFAULT path, the generated words already in the field —
+  // every other spec that rotates a password types its own over them
+  // (changePasswordElsewhere). On the way it holds what this form owes a password
+  // manager and the user, none of which any other layer sees in a real browser:
+  //   - the generated words are IN a visible `new-password` input, the field a
+  //     manager saves from. When they sat in an <output> instead, Chrome's save
+  //     prompt carried the CURRENT password, the old one (new-password-field.tsx).
+  //     The prompt itself is browser chrome, out of Playwright's reach; this asserts
+  //     the field it saves from;
   //   - the current password is refused as the new one (field-messages.ts);
-  //   - the generated passphrase is IN THE FORM as a `new-password` input. It is
-  //     shown in an <output>, which no manager reads, and without the input
-  //     Chrome's save prompt carried the CURRENT password — the old one
-  //     (new-password-field.tsx, `exposeGenerated`). The prompt itself is browser
-  //     chrome, out of Playwright's reach; this asserts the field it saves from.
-  // Then the passphrase has to actually sign in, or "the new password" is a string
-  // on a screen.
+  //   - the done screen shows the new password again, the safety net that replaced
+  //     the "I've saved it" checkbox, and its Done goes back to the overview.
+  // Then the words have to actually sign in, or "the new password" is a string on a
+  // screen.
   test(
     'change password on the generated path refuses the current one and signs in with the new',
     { tag: ['@WEB-ACCOUNT-006', '@full', '@online', '@destructive'] },
@@ -702,22 +704,30 @@ test.describe('account', () => {
       await page.getByRole('button', { name: /^Change password/ }).click();
       await page.locator('#cp-current').fill(credentials.password);
       const submit = page.getByRole('button', { name: 'Change password', exact: true });
+      const field = page.locator('#cp-new-password');
 
-      await page.getByRole('button', { name: 'Choose my own' }).click();
-      await page.locator('#cp-new-password').fill(credentials.password);
+      await expect(page.locator('form input[autocomplete="new-password"]')).toHaveCount(1);
+      await expect(field).toBeVisible();
+      await expect(field).not.toHaveValue('');
+
+      await field.fill(credentials.password);
       await expect(page.getByText('That’s your current password.')).toBeVisible();
       await expect(submit).toBeDisabled();
 
-      await page.getByRole('button', { name: 'Generate one instead' }).click();
-      const passphrase = (await page.getByLabel('Your new password').innerText()).trim();
+      await page.getByRole('button', { name: 'Regenerate' }).click();
+      const passphrase = await field.inputValue();
       expect(passphrase).not.toBe('');
-      await expect(page.locator('form input[autocomplete="new-password"]')).toHaveValue(passphrase);
+      expect(passphrase).not.toBe(credentials.password);
+      await expect(submit).toBeEnabled();
 
-      await page.getByLabel('I’ve saved my new password somewhere safe.').check();
       await submit.click();
       await expect(page.getByText(/^Your password has been changed\./)).toBeVisible({
         timeout: 60_000,
       });
+      await page.getByRole('button', { name: 'Show my new password' }).click();
+      await expect(page.getByLabel('Your new password')).toHaveText(passphrase);
+      await page.getByRole('button', { name: 'Done', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Account', level: 1 })).toBeVisible();
 
       await signOutToSite(page, site);
       await signIn(page, { username: credentials.username, password: passphrase });
@@ -813,7 +823,7 @@ async function changePasswordElsewhere(
     await other.page.goto('/settings/account');
     await other.page.getByRole('button', { name: /^Change password/ }).click();
     await other.page.locator('#cp-current').fill(credentials.password);
-    await other.page.getByRole('button', { name: /choose my own/i }).click();
+    // Typed over the generated words the field starts on.
     await other.page.locator('#cp-new-password').fill(newPassword);
     await other.page.getByRole('button', { name: 'Change password', exact: true }).click();
     await expect(other.page.getByText(/^Your password has been changed\./)).toBeVisible({

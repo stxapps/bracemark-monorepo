@@ -44,7 +44,7 @@ export function SiteFooter() {
               address={SUPPORT_EMAIL}
               variant="specimen"
               className={cn(
-                'relative mt-4 inline-block text-sm underline-offset-4 after:absolute after:-inset-y-3 after:inset-x-0 focus-visible:ring-offset-2',
+                'relative mt-4 inline-block text-sm underline-offset-4 after:absolute after:inset-x-0 after:-inset-y-3 focus-visible:ring-offset-2',
               )}
             />
           </div>

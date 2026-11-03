@@ -17,30 +17,45 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // toggling nothing (docs/account.md, _every field that takes a secret reveals it_).
 // forwardRef + full input-props passthrough so react-hook-form's register() (which
 // supplies ref/name/onChange/onBlur) works unchanged.
-export const PasswordInput = React.forwardRef<HTMLInputElement, React.ComponentProps<'input'>>(
-  function PasswordInput({ className, ...props }, ref) {
-    const [show, setShow] = React.useState(false);
-    return (
-      <div className="relative">
-        <Input
-          ref={ref}
-          type={show ? 'text' : 'password'}
-          className={cn('pr-10', className)}
-          {...props}
-        />
-        <button
-          type="button"
-          onClick={() => setShow((s) => !s)}
-          // tabIndex -1: keep it out of the tab order so Tab goes field→submit, not
-          // field→eye. aria-label + aria-pressed keep it accessible to SR users.
-          tabIndex={-1}
-          aria-label={show ? 'Hide password' : 'Show password'}
-          aria-pressed={show}
-          className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none"
-        >
-          {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-        </button>
-      </div>
-    );
-  },
-);
+//
+// `onShownChange` IS FOR A VALUE LONGER THAN THE FIELD: its host shows the whole thing
+// elsewhere. Seven generated words run to about 45 characters and the field shows
+// about 30 on a phone, so create-account shows them in a box under the field. ⚠ The
+// field itself must stay this one `<input>`, and the reveal only flips its `type`.
+// It used to become a `<textarea>` while shown, which unmounted a filled password
+// field on every press of the eye: focus and caret went, the layout jumped, the ref
+// went null, and a manager can read a filled password field going away as a
+// submission. iOS did exactly that to the native twin, raising "Save Password?"
+// before any account existed (docs/account.md, _every field that takes a secret
+// reveals it_).
+export const PasswordInput = React.forwardRef<
+  HTMLInputElement,
+  React.ComponentProps<'input'> & { onShownChange?: (shown: boolean) => void }
+>(function PasswordInput({ className, onShownChange, ...props }, ref) {
+  const [show, setShow] = React.useState(false);
+  return (
+    <div className="relative">
+      <Input
+        ref={ref}
+        type={show ? 'text' : 'password'}
+        className={cn('pr-10', className)}
+        {...props}
+      />
+      <button
+        type="button"
+        onClick={() => {
+          setShow(!show);
+          onShownChange?.(!show);
+        }}
+        // tabIndex -1: keep it out of the tab order so Tab goes field→submit, not
+        // field→eye. aria-label + aria-pressed keep it accessible to SR users.
+        tabIndex={-1}
+        aria-label={show ? 'Hide password' : 'Show password'}
+        aria-pressed={show}
+        className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none"
+      >
+        {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+      </button>
+    </div>
+  );
+});

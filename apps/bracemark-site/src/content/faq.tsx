@@ -633,8 +633,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
       {
         // Four surfaces described this code four ways, and /terms had the only
         // account that matches the build: the sign-up ceremony OFFERS it and the
-        // last step is labelled "Create account without a recovery code", so it is
-        // skippable (docs/account.md, _the create-account ceremony_), and
+        // step is labelled "Continue without a recovery code", so it is
+        // skippable (docs/account.md, _creating an account_), and
         // `regenerateRecoveryDoor` / `useRecoveryCode` mean it can be minted or
         // replaced later from Settings against an existing door. "Generated when
         // you sign up", full stop, was wrong at both ends.

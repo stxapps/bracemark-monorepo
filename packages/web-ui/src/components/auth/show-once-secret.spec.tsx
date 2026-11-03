@@ -2,10 +2,9 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { ShowOnceSecret } from './show-once-secret';
 
-// The wallet-style panel behind BOTH of the account's irrecoverable secrets — the
-// generated passphrase and the recovery code. There is no server-side reset, so
-// this ceremony is the only moment either exists in a form the user can save, and
-// the panel's whole job is getting it into a password manager.
+// The wallet-style panel behind the recovery code, at create-account and in Settings.
+// There is no server-side reset, so this is the only moment the code exists in a form
+// the user can save, and the panel's whole job is getting it somewhere safe.
 //
 // The load-bearing case is the SETTLE-BEFORE-COMMIT one: `actions` (Regenerate)
 // sits directly above Copy, and regenerating silently invalidates a copy already
@@ -29,15 +28,20 @@ beforeEach(() => {
   writeText.mockResolvedValue(undefined);
 });
 
+const onSavedChange = jest.fn();
+const confirm = (saved: boolean) => ({
+  id: 'saved',
+  saved,
+  onSavedChange,
+  label: 'I’ve saved my recovery code',
+});
+
 function renderPanel(overrides: Partial<React.ComponentProps<typeof ShowOnceSecret>> = {}) {
-  const onSavedChange = jest.fn();
+  onSavedChange.mockReset();
   const props: React.ComponentProps<typeof ShowOnceSecret> = {
-    id: 'saved',
     secret: 'ripe-anchor-velvet-quill-north-timber',
-    label: 'Your passphrase',
-    confirmLabel: 'I’ve saved my passphrase',
-    saved: false,
-    onSavedChange,
+    label: 'Your recovery code',
+    confirm: confirm(false),
     ...overrides,
   };
   const view = render(<ShowOnceSecret {...props} />);
@@ -60,7 +64,7 @@ describe('ShowOnceSecret', () => {
 
     const box = screen.getByRole('status');
     expect(box.textContent).toBe('ripe-anchor-velvet-quill-north-timber');
-    expect(box.getAttribute('aria-label')).toBe('Your passphrase');
+    expect(box.getAttribute('aria-label')).toBe('Your recovery code');
   });
 
   it('copies the secret and says so in words', async () => {
@@ -123,25 +127,34 @@ describe('ShowOnceSecret', () => {
     expect(copyButton().textContent).toBe('Copy');
   });
 
-  // The checkbox is the gate every caller spells its submit's `disabled` against.
+  // The checkbox is the gate create-account spells its Continue's `disabled` against.
   it('reports the confirmation up to the caller', () => {
-    const { onSavedChange } = renderPanel();
+    renderPanel();
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'I’ve saved my passphrase' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'I’ve saved my recovery code' }));
 
     expect(onSavedChange).toHaveBeenCalledWith(true);
   });
 
   it('reflects the caller’s saved state rather than keeping its own', () => {
-    const view = renderPanel({ saved: true });
+    const view = renderPanel({ confirm: confirm(true) });
     expect((screen.getByRole('checkbox') as HTMLInputElement).getAttribute('data-state')).toBe(
       'checked',
     );
 
-    view.rerender({ saved: false });
+    view.rerender({ confirm: confirm(false) });
     expect((screen.getByRole('checkbox') as HTMLInputElement).getAttribute('data-state')).toBe(
       'unchecked',
     );
+  });
+
+  // Settings shows a code that is already live, so it asks for no tick: one there read
+  // as the thing that would make the code count.
+  it('renders no checkbox for a caller that passes no confirmation', () => {
+    renderPanel({ confirm: undefined });
+
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(copyButton().textContent).toBe('Copy');
   });
 
   // `actions` are the controls that change WHICH secret you get, and they render

@@ -1,66 +1,50 @@
-// The words the "choose your new password" block prints — the block that offers a
-// generated passphrase by default with a typed-your-own escape hatch (docs/account.md,
-// _generated password_). It is rendered on FOUR surfaces: create-account and
-// Settings → change password, web and native each. Those are two components per
-// platform, so nothing but this file can keep the four saying the same thing; the
-// prose had already drifted once (Settings dropped "there is no way to reset it if
-// it's lost" from the typed-path paragraph, and nothing recorded whether that was
-// a decision).
+// The words the new-password field prints: ONE real field, already holding generated
+// words, which the user may edit into their own (docs/account.md, _generated
+// password_). It renders on create-account's first step and on Settings → change
+// password, web and native, so four places print these and only this file keeps them
+// saying the same thing. The prose had already drifted once (Settings dropped "there
+// is no way to reset it if it's lost" from the typed paragraph, and nothing recorded
+// whether that was a decision).
 //
 // Same reasoning as the message ladders next door (field-messages.ts): only the
-// WORDS live here. Layout, tone classes and the link/button an `ownHelp` sentence
-// ends with are per-platform.
+// WORDS live here. Layout and tone classes are per-platform.
 //
-// These are full paragraphs, not the one-line messages that file budgets to ~33
-// characters — they wrap on purpose and sit in a slot whose height doesn't cycle
-// with keystrokes, so the no-reflow rule that governs those doesn't reach here.
+// The help paragraphs wrap on purpose and sit in a slot whose height doesn't cycle with
+// keystrokes, so the ~33-character budget that file keeps for one-line messages
+// doesn't reach them.
 
 export type NewPasswordCopy = {
-  // The field label, in BOTH modes. Generated mode's label names the block rather
-  // than a control (the secret box carries its own `secretLabel`), which is why one
-  // string serves both — Settings already worked this way, and create-account's
-  // generated step said "Your password" over a box announcing the same three words.
+  // Settings' label. Create-account labels the same field "Password"
+  // (CREATE_ACCOUNT_COPY.passwordLabel): it is the account's first.
   label: string;
-  // Screen-reader label on the secret box itself.
-  secretLabel: string;
-  // Beside the "I've saved it" checkbox that gates whatever comes next.
-  confirmLabel: string;
+  // The message line while the field holds the generated words, untouched. The ladder
+  // has nothing to say about them: they are ~77 bits by construction.
+  generated: string;
+  // Under it, what to do about them.
   generatedHelp: string;
-  // Ends with the sentence the "generate one instead" control follows; the caller
-  // renders that control as the platform's own link/button and appends it.
+  // Under an edited value instead.
   ownHelp: string;
-  chooseOwn: string;
-  generateInstead: string;
   regenerate: string;
+  // Settings → change password, once the change has landed. A manager offers its
+  // update only after the submit, so this is where saving is asked for, not a
+  // checkbox before it.
+  afterChange: string;
+  // The control that shows the new password again on that screen, and the label of
+  // the box it opens.
+  showNew: string;
+  shownLabel: string;
 };
 
-// Everything that doesn't depend on whether this is a first password or a
-// replacement. The two help paragraphs both close on the same clause because it
-// stays true in both places: a rotated password has no reset either.
-const COMMON = {
+export const NEW_PASSWORD_COPY: NewPasswordCopy = {
+  label: 'New password',
+  generated: 'Generated for you.',
   generatedHelp:
-    'We generated a strong password for you. Save it in a password manager, or anywhere you’ll still have it later — there is no way to reset it if it’s lost.',
+    'Save it in a password manager, or anywhere you’ll still have it later — there is no way to reset it if it’s lost.',
   ownHelp:
     'A password of random words is stronger than most passwords you’d type. If you use your own, make it long and unique — there is no way to reset it if it’s lost.',
-  chooseOwn: 'Choose my own',
-  generateInstead: 'Generate one instead',
   regenerate: 'Regenerate',
-};
-
-// Keyed by which ceremony the block sits in rather than by the noun it prints, so a
-// call site reads as what it is ("this is the change-password one") and the strings
-// stay literal instead of being assembled from a stem.
-export const NEW_PASSWORD_COPY: Record<'create' | 'change', NewPasswordCopy> = {
-  create: {
-    ...COMMON,
-    label: 'Password',
-    secretLabel: 'Your password',
-    confirmLabel: 'I’ve saved my password somewhere safe.',
-  },
-  change: {
-    ...COMMON,
-    label: 'New password',
-    secretLabel: 'Your new password',
-    confirmLabel: 'I’ve saved my new password somewhere safe.',
-  },
+  afterChange:
+    'If your browser or password manager offers to update your saved password, accept it. Your old password no longer works.',
+  showNew: 'Show my new password',
+  shownLabel: 'Your new password',
 };

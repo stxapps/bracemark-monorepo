@@ -3,7 +3,13 @@ import { Pressable, type TextInput, View } from 'react-native';
 import { ChevronLeft, RefreshCw } from 'lucide-react-native';
 
 import { useCreateAccount, UsernameTakenError } from '@stxapps/expo-react';
-import { RECOVERY_CODE_COPY, usernameMessage, useUsernameAvailable } from '@stxapps/react';
+import {
+  CREATE_ACCOUNT_COPY,
+  NEW_PASSWORD_COPY,
+  RECOVERY_CODE_COPY,
+  usernameMessage,
+  useUsernameAvailable,
+} from '@stxapps/react';
 import { canonicalizePassword, canonicalizeUsername, generateRecoveryCode } from '@stxapps/shared';
 
 import { ErrorText } from '../../components/error-text';
@@ -16,34 +22,32 @@ import { cn } from '../../lib/utils';
 import { NewPasswordField, useNewPassword } from './new-password-field';
 import { PasswordInput } from './password-input';
 import { MESSAGE_TONE } from './password-strength';
-import { ShowOnceSecret } from './show-once-secret';
+import { SECRET_TEXT_ACTION, SECRET_TEXT_SLOP, ShowOnceSecret } from './show-once-secret';
 
 // The "Secure your account" ceremony — the native port of web-ui's
-// components/auth/create-account-form.tsx (see that file and docs/account.md
-// for the full rationale). Because the account is a password-unlocked wallet —
-// no email, no server-side reset — the safe path is the DEFAULT path: a
-// generated ~77-bit passphrase, shown once wallet-style, with a "type my own"
-// escape hatch gated by a zxcvbn strength floor. Three steps:
-//   1. setup    — username + choose a password (generated default | typed own)
-//   2. confirm  — re-enter it, verifying the user can reproduce it (no reset!)
-//   3. recovery — a generated recovery code (a second door), show-once, SKIPPABLE
-// then create the account (with the recovery door iff they set one up).
+// components/auth/create-account-form.tsx (see that file and docs/account.md,
+// _creating an account_, for the full rationale). Three steps:
+//   1. setup    — username + password, one real field for each
+//   2. recovery — a generated recovery code (a second door), show-once, SKIPPABLE
+//   3. check    — sign in with the saved copy, which creates the account
 //
-// Not react-hook-form: the multi-step secret ceremony (generate, reveal, confirm,
-// re-generate) is local UI state, and the only validated inputs are username
-// (usernameSchema) and password (newPasswordSchema + the zxcvbn gate), checked inline.
+// The order and the words match web even though the reason for them does not reach
+// here: this app gets no strong-password offer on iOS, and Safari's sign-up/login
+// heuristic reads web pages. One ceremony on both platforms is the point, and the two
+// load-bearing labels live in `CREATE_ACCOUNT_COPY` either way. Web's adopt branch has
+// no twin: React Native has no `:autofill`, so nothing here can tell a filled value
+// from a typed one, and offering to adopt a typo would undo the check.
 //
-// Every step opens with a StepHeader — the back link and "Step 2 of 3" over the
-// step's own title and description. That header is THE SCREEN'S heading, which is
-// why `(auth)/create-account/index.tsx` passes AuthScreen no `title`; see the note
-// on StepHeader for why it has to be the form that owns it.
+// Not react-hook-form, for web's reason. Every step opens with a StepHeader, which
+// is THE SCREEN'S heading: `(auth)/create-account/index.tsx` passes AuthScreen no
+// `title`; see the note on StepHeader.
 
-type Step = 'setup' | 'confirm' | 'recovery';
+type Step = 'setup' | 'recovery' | 'check';
 
 // Source of truth for the step COUNT as well as the order: StepHeader derives
 // "n of 3" by index, so adding a step to the ceremony renumbers the indicator
 // automatically instead of leaving a hardcoded "3" behind to go stale.
-const STEPS: readonly Step[] = ['setup', 'confirm', 'recovery'];
+const STEPS: readonly Step[] = ['setup', 'recovery', 'check'];
 
 // BOTH fields on the setup step keep a message line permanently, and every state
 // fills it. The ladders behind those messages — `usernameMessage` and
@@ -51,32 +55,16 @@ const STEPS: readonly Step[] = ['setup', 'confirm', 'recovery'];
 // SAME code the web twin runs, so the two platforms can't say different things about
 // the same input; that file carries the full reasoning. Only the tone→class map is
 // ours, and it comes from password-strength so a passing message is the same green as
-// a passing meter. Each ladder is also THE GATE for its field (`tone === 'ok'`). The
-// password half — the generated/typed choice, its meter, its message and its gate — is
-// `NewPasswordField`, shared with Settings → change password; only the username field
-// is this form's own.
+// a passing meter. Each ladder is also THE GATE for its field (`tone === 'ok'`).
 
-// The heading each step replaces the last one with. Step one's pair is the line
-// the screen header used to carry, and it is a disclosure rather than a caption:
-// both halves name a field this form will never show. There is no email address
-// and no reset link, not as omissions but because the account has neither
-// (docs/account.md — the secret IS the account), and that is what makes step
-// three hand the user a code it insists they save. Steps two and three then say
-// what THEY are for, which is the same warning arriving at the moment it bites.
+// The heading each step replaces the last one with: web's, from the same module.
 const STEP_HEADINGS: Record<Step, { title: string; description: string }> = {
-  setup: {
-    title: 'Create account',
-    description:
-      'No email address, no password reset — your password unlocks the key to your links.',
-  },
-  confirm: {
-    title: 'Confirm your password',
-    description: 'Re-enter it to make sure you have it saved correctly.',
-  },
+  setup: CREATE_ACCOUNT_COPY.heading.setup,
   recovery: {
     title: RECOVERY_CODE_COPY.title,
     description: RECOVERY_CODE_COPY.description.create,
   },
+  check: CREATE_ACCOUNT_COPY.heading.check,
 };
 
 export function CreateAccountForm() {
@@ -86,21 +74,21 @@ export function CreateAccountForm() {
   const [username, setUsername] = React.useState('');
   const [usernameTaken, setUsernameTaken] = React.useState(false);
 
-  // The generated/typed password choice, its meter, its message line and its gate —
-  // all of it, shared with Settings → change password. `username` is the zxcvbn
-  // penalty term.
-  const newPassword = useNewPassword({ username });
-  // Return on the username goes on to the password — when there is a password
-  // FIELD, which is typed mode only. The default is a generated passphrase, shown
-  // rather than entered, and there Return keeps its plain job of putting the
-  // keyboard away (lib/input-keyboard.ts).
+  // `username` is the zxcvbn penalty term.
+  const chosen = useNewPassword({ username });
+  const password = chosen.password;
+  // Return on the username goes on to the password (lib/input-keyboard.ts).
   const passwordRef = React.useRef<TextInput>(null);
-
-  const [confirmInput, setConfirmInput] = React.useState('');
-  const [confirmError, setConfirmError] = React.useState(false);
 
   const [recoveryCode, setRecoveryCode] = React.useState('');
   const [recoverySaved, setRecoverySaved] = React.useState(false);
+  const [withRecovery, setWithRecovery] = React.useState(false);
+
+  const [checkInput, setCheckInput] = React.useState('');
+  // Both name their message in CREATE_ACCOUNT_COPY. Web has two more, for its adopt
+  // branch, which has no twin here.
+  const [checkError, setCheckError] = React.useState<'empty' | 'mismatch' | null>(null);
+  const [showPassword, setShowPassword] = React.useState(false);
 
   const [submitError, setSubmitError] = React.useState<string | null>(null);
 
@@ -109,42 +97,41 @@ export function CreateAccountForm() {
     if (step === 'recovery' && !recoveryCode) setRecoveryCode(generateRecoveryCode());
   }, [step, recoveryCode]);
 
-  const password = newPassword.password;
-
   // Live username validation + availability (the hook debounces and gates on a valid
-  // format internally). Both fields work the same way from here: one ladder produces
-  // the message, and the message IS the gate — `tone === 'ok'` is the full pass, so
-  // Continue can't disagree with the sentence under the field it's blocked on. See
-  // usernameMessage for what "ok" costs (a settled, CURRENT answer, not a debounce-
-  // stale one).
+  // format internally). See usernameMessage for what "ok" costs (a settled, CURRENT
+  // answer, not a debounce-stale one).
   const availability = useUsernameAvailable(username);
   const usernameMsg = usernameMessage(username, availability, usernameTaken);
 
-  const canContinueSetup = usernameMsg.tone === 'ok' && newPassword.ok;
+  const canContinueSetup = usernameMsg.tone === 'ok' && chosen.ok;
 
   const regenerateRecovery = () => {
     setRecoveryCode(generateRecoveryCode());
     setRecoverySaved(false);
   };
 
-  const goConfirm = () => {
-    setConfirmInput('');
-    setConfirmError(false);
-    setStep('confirm');
+  const goCheck = (recovery: boolean) => {
+    setWithRecovery(recovery);
+    setCheckInput('');
+    setCheckError(null);
+    setShowPassword(false);
+    setSubmitError(null);
+    setStep('check');
   };
 
-  const goRecovery = () => {
+  const finish = async () => {
+    // Empty first, and canonical, so a few spaces count as nothing, as on web.
+    if (canonicalizePassword(checkInput) === '') {
+      setCheckError('empty');
+      return;
+    }
     // Compare the CANONICAL forms: derivation canonicalizes both, so encodings that
     // derive the same KEK (e.g. a trailing space) must count as a match here too —
     // otherwise we'd reject a re-entry that would actually sign in fine.
-    if (canonicalizePassword(confirmInput) !== canonicalizePassword(password)) {
-      setConfirmError(true);
+    if (canonicalizePassword(checkInput) !== canonicalizePassword(password)) {
+      setCheckError('mismatch');
       return;
     }
-    setStep('recovery');
-  };
-
-  const submit = async (withRecovery: boolean) => {
     setSubmitError(null);
     try {
       await createAccount.mutateAsync({
@@ -186,7 +173,7 @@ export function CreateAccountForm() {
               records for the link editor's `focus`: on native a focus summons
               the keyboard, which web's `focus()` never does, so the web twins
               keep theirs. A field that swaps in WITHIN this screen still
-              focuses — see the confirm step below. docs/soft-keyboard.md,
+              focuses — see the check step below. docs/soft-keyboard.md,
               _arrival_. */}
           <Input
             // RN has no <label for>: the Text above names nothing to a screen
@@ -199,7 +186,7 @@ export function CreateAccountForm() {
             autoComplete="username-new"
             textContentType="username"
             className={cn(usernameInvalid && 'border-destructive')}
-            {...(newPassword.mode === 'own' ? advanceTo(passwordRef) : null)}
+            {...advanceTo(passwordRef)}
             value={username}
             onChangeText={(text) => {
               setUsername(text);
@@ -215,50 +202,14 @@ export function CreateAccountForm() {
           </Text>
         </View>
 
-        <NewPasswordField control={newPassword} copy="create" inputRef={passwordRef} />
+        <NewPasswordField
+          control={chosen}
+          label={CREATE_ACCOUNT_COPY.passwordLabel}
+          shownLabel={CREATE_ACCOUNT_COPY.shownPasswordLabel}
+          inputRef={passwordRef}
+        />
 
-        <Button disabled={!canContinueSetup} onPress={goConfirm}>
-          <Text>Continue</Text>
-        </Button>
-      </View>
-    );
-  }
-
-  // --- step: confirm --------------------------------------------------------
-  if (step === 'confirm') {
-    return (
-      <View className="gap-6">
-        <StepHeader step="confirm" onBack={() => setStep('setup')} />
-        <View className="gap-2">
-          {/* The visible label for this input is the step's own title, up in the
-              StepHeader — but a heading is not a label, so the field would reach
-              a screen reader unnamed. RN has no <label for>, so name it directly.
-
-              This one KEEPS `autoFocus` where the setup step's username dropped
-              it: the step swaps in place on a screen that is already here, with
-              no transition to fight, and the press that got you here was the
-              intent to type the password again. */}
-          <PasswordInput
-            aria-label="Confirm your password"
-            autoComplete="new-password"
-            autoFocus
-            className={cn(confirmError && 'border-destructive')}
-            value={confirmInput}
-            onChangeText={(text) => {
-              setConfirmInput(text);
-              if (confirmError) setConfirmError(false);
-            }}
-          />
-          {/* ErrorText for both of this form's errors — it carries the
-              `role="alert"` that web gets from its twin's `FieldError`. Each one
-              arrives as the result of a press with nothing else changing on
-              screen, so without it TalkBack gets a button that silently
-              re-enables and no reason why. */}
-          {confirmError ? (
-            <ErrorText>That doesn’t match. Check what you saved and try again.</ErrorText>
-          ) : null}
-        </View>
-        <Button onPress={goRecovery}>
+        <Button disabled={!canContinueSetup} onPress={() => setStep('recovery')}>
           <Text>Continue</Text>
         </Button>
       </View>
@@ -266,79 +217,144 @@ export function CreateAccountForm() {
   }
 
   // --- step: recovery -------------------------------------------------------
+  if (step === 'recovery') {
+    return (
+      <View className="gap-6">
+        <StepHeader step="recovery" onBack={() => setStep('setup')} />
+        <View className="gap-2">
+          {/* No label here: this step has no input to name — ShowOnceSecret carries
+              its own `label` — so the step title in the StepHeader is the only
+              heading this content needs. */}
+          <ShowOnceSecret
+            secret={recoveryCode}
+            label={RECOVERY_CODE_COPY.secretLabel}
+            confirm={{
+              saved: recoverySaved,
+              onSavedChange: setRecoverySaved,
+              label: RECOVERY_CODE_COPY.confirmLabel,
+            }}
+            actions={
+              // Step one's look, on the panel's stack and on the right, as on web. The
+              // slop stops at 6
+              // below, half the 12 to Copy; 28 drawn makes 42.
+              <Pressable
+                role="button"
+                onPress={regenerateRecovery}
+                hitSlop={{ top: 8, bottom: 6, left: SECRET_TEXT_SLOP, right: SECRET_TEXT_SLOP }}
+                className={cn(SECRET_TEXT_ACTION, 'self-end')}
+              >
+                <Icon as={RefreshCw} className="size-3.5 text-muted-foreground" />
+                <Text className="text-sm text-muted-foreground">
+                  {NEW_PASSWORD_COPY.regenerate}
+                </Text>
+              </Pressable>
+            }
+          />
+        </View>
+
+        {/* TWO WAYS ON, and the second one has to say so — the web twin's note carries
+            the argument (why the outcome is the label rather than "Skip for now", why
+            ghost rather than outline or secondary, and why mandatory isn't the fix).
+            The native-specific half: `Button` at the default size is h-10 and already
+            handles the disabled dimming. `gap-2` matches the web Field this stack
+            mirrors (field.tsx's vertical variant — 8px, and the note there carries
+            why).
+
+            THE SECOND LABEL WRAPS, and its button grows with it instead of pinning
+            `h-10`: one Dynamic Type step up it no longer fits the narrowest phones.
+            Shortening it is not available — the label is the outcome, word for word
+            (docs/account.md) — and shrinking it is the fix docs/accessibility.md,
+            _font scaling_, rules out. So `min-h` rather than `h`. `py-2` is not the
+            padding ui/button.tsx removed: that rule is for a pinned box, and here two
+            `text-sm` lines are exactly the 40 minimum, so without it they would touch
+            both edges; a one-line label still lands on 40. The two break strategies
+            keep a lone "code" off the second line. */}
+        <View className="gap-2">
+          <Button disabled={!recoverySaved} onPress={() => goCheck(true)}>
+            <Text>Continue</Text>
+          </Button>
+          <Button variant="ghost" className="h-auto min-h-10 py-2" onPress={() => goCheck(false)}>
+            <Text
+              className="shrink text-center text-muted-foreground"
+              lineBreakStrategyIOS="push-out"
+              textBreakStrategy="balanced"
+            >
+              {CREATE_ACCOUNT_COPY.continueWithoutRecovery}
+            </Text>
+          </Button>
+        </View>
+      </View>
+    );
+  }
+
+  // --- step: check ----------------------------------------------------------
   return (
     <View className="gap-6">
-      <StepHeader step="recovery" onBack={() => setStep('confirm')} />
+      <StepHeader step="check" onBack={() => setStep('recovery')} />
       <View className="gap-2">
-        {/* No label here, unlike the confirm step: this step has no input to
-            name — ShowOnceSecret carries its own `label` — so the step title in
-            the StepHeader is the only heading this content needs. */}
-        <ShowOnceSecret
-          secret={recoveryCode}
-          label={RECOVERY_CODE_COPY.secretLabel}
-          saved={recoverySaved}
-          onSavedChange={setRecoverySaved}
-          confirmLabel={RECOVERY_CODE_COPY.confirmLabel}
-          actions={
-            <Pressable
-              role="button"
-              onPress={regenerateRecovery}
-              className="flex-row items-center gap-1.5 self-start py-1"
-            >
-              <Icon as={RefreshCw} className="size-3.5 text-muted-foreground" />
-              <Text className="text-sm text-muted-foreground">Regenerate</Text>
-            </Pressable>
-          }
+        <Text className="text-sm">Username</Text>
+        {/* `editable={false}` as the expired-session sign-in does it: readable and
+            focusable, and whose password this is, for a person and for a manager. */}
+        <Input
+          aria-label="Username"
+          autoComplete="username"
+          textContentType="username"
+          editable={false}
+          value={canonicalizeUsername(username)}
         />
       </View>
-
-      {/* TWO WAYS TO CREATE THE ACCOUNT, and the second one has to say so — the
-          web twin's note carries the argument (why the outcome is the label rather
-          than "Skip for now", why ghost rather than outline or secondary, and why
-          mandatory isn't the fix). The native-specific half: this was a bare
-          `Pressable` around a line of `text-sm`, a ~20pt target against Apple's
-          44pt floor, on the second-most-important control of the screen. `Button`
-          at the default size is h-10 and already handles the disabled dimming, so
-          the manual `opacity-50` goes with it. `gap-2` matches the web Field this
-          stack mirrors (field.tsx's vertical variant — 8px, and the note there
-          carries why); an earlier `gap-1` was compensating for the Pressable's own
-          `py-2`, which the Button doesn't need.
-
-          THE SECOND LABEL WRAPS, and its button grows with it instead of pinning
-          `h-10`. The label is 268 wide at 1× against the 276 a 390pt phone leaves
-          inside the card — it fits by 8, and stops fitting one Dynamic Type step
-          up (300 at 1.118×, 349 at the 1.3 cap, which the widest phone's 302
-          doesn't hold either). Inside a pinned height the second line was cut
-          off. Shortening it is not available — the label is the outcome, word
-          for word (docs/account.md) — and shrinking it is the fix
-          docs/accessibility.md, _font scaling_, rules out. So `min-h` rather
-          than `h`. `py-2` is not the padding ui/button.tsx removed: that rule
-          is for a pinned box, and here
-          two `text-sm` lines are exactly the 40 minimum, so without it they
-          would touch both edges; a one-line label still lands on 40. The two
-          break strategies keep a lone "code" off the second line. */}
       <View className="gap-2">
-        <Button disabled={!recoverySaved || pending} onPress={() => submit(true)}>
-          <Text>{pending ? 'Creating account…' : 'Create account'}</Text>
+        <Text className="text-sm">{CREATE_ACCOUNT_COPY.passwordLabel}</Text>
+        {/* This one KEEPS `autoFocus` where the setup step's username dropped it: the
+            step swaps in place on a screen that is already here, with no transition
+            to fight, and the press that got you here was the intent to type the
+            password again. */}
+        <PasswordInput
+          aria-label={CREATE_ACCOUNT_COPY.passwordLabel}
+          autoComplete="current-password"
+          autoFocus
+          returnKeyType="go"
+          onSubmitEditing={finish}
+          className={cn(checkError && 'border-destructive')}
+          value={checkInput}
+          onChangeText={(text) => {
+            setCheckInput(text);
+            if (checkError) setCheckError(null);
+          }}
+        />
+        {/* ErrorText for every error on this form — it carries the `role="alert"`
+            that web gets from its twin's `FieldError`. Each one arrives as the result
+            of a press with nothing else changing on screen, so without it TalkBack
+            gets a button that silently re-enables and no reason why. */}
+        {checkError ? <ErrorText>{CREATE_ACCOUNT_COPY[checkError]}</ErrorText> : null}
+      </View>
+      <View className="gap-2">
+        <Button disabled={pending} onPress={finish}>
+          <Text>{pending ? CREATE_ACCOUNT_COPY.creating : CREATE_ACCOUNT_COPY.signIn}</Text>
         </Button>
-        <Button
-          variant="ghost"
-          className="h-auto min-h-10 py-2"
-          disabled={pending}
-          onPress={() => submit(false)}
-        >
-          <Text
-            className="shrink text-center text-muted-foreground"
-            lineBreakStrategyIOS="push-out"
-            textBreakStrategy="balanced"
-          >
-            Create account without a recovery code
-          </Text>
-        </Button>
-        {/* Below the pair, matching web: the message is the RESULT of pressing one
-            of them, so putting it above would shift both buttons down under a
-            thumb that's about to retry. */}
+        {/* Below the button, matching web: the message is the RESULT of pressing it,
+            so putting it above would shift it under a thumb that's about to retry. */}
         {submitError ? <ErrorText>{submitError}</ErrorText> : null}
+        <Pressable
+          role="button"
+          aria-expanded={showPassword}
+          onPress={() => setShowPassword((shown) => !shown)}
+          className="items-center py-1"
+        >
+          <Text className="text-center text-sm text-muted-foreground underline">
+            {CREATE_ACCOUNT_COPY.showPassword}
+          </Text>
+        </Pressable>
+        {showPassword ? (
+          <View
+            aria-label={CREATE_ACCOUNT_COPY.shownPasswordLabel}
+            className="rounded-lg border border-border bg-muted/40 px-3 py-2.5"
+          >
+            <Text selectable className="font-mono text-sm">
+              {password}
+            </Text>
+          </View>
+        ) : null}
       </View>
     </View>
   );

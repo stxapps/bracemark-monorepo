@@ -21,11 +21,19 @@ import { cn } from '../../lib/utils';
 // while the value is shown (docs/editors.md, _typing assistance_). What the
 // reveal DOES change is the keyboard's view of the field, on Android — see
 // lib/input-keyboard.ts.
+//
+// `onShownChange` is for a value longer than the field: its host shows the whole thing
+// elsewhere, as web's does. ⚠ The field must not become `multiline` for that. That
+// swaps the native view, and iOS reads a filled secure field going away as a
+// submission: it raised "Save Password?" on the eye, before any account existed. Web
+// dropped its own version of the swap, a `<textarea>` while shown, for the same reason.
 export function PasswordInput({
   className,
   ref,
+  onShownChange,
   ...props
-}: React.ComponentProps<typeof Input> & React.RefAttributes<TextInput>) {
+}: React.ComponentProps<typeof Input> &
+  React.RefAttributes<TextInput> & { onShownChange?: (shown: boolean) => void }) {
   const [show, setShow] = React.useState(false);
   // THE KEYBOARD TYPE TRAILS THE REVEAL BY ONE COMMIT, and it has to. On Android
   // `secureTextEntry={false}` and `keyboardType="visible-password"` write the
@@ -53,7 +61,10 @@ export function PasswordInput({
       />
       <Pressable
         role="button"
-        onPress={() => setShow((s) => !s)}
+        onPress={() => {
+          setShow(!show);
+          onShownChange?.(!show);
+        }}
         aria-label={show ? 'Hide password' : 'Show password'}
         className="absolute inset-y-0 right-0 justify-center px-3"
       >

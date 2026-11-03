@@ -229,10 +229,10 @@ export function newPasswordMessage(
                 // and the app's own answer is broader anyway (the marketing site's FAQ,
                 // _where should I keep my password_: a manager is best, a notes app that
                 // locks or paper both work). It was also least apt HERE, since this rung only
-                // shows on the typed-your-own path; the generated path's helper text is where
+                // shows once the generated words are edited; their own helper text is where
                 // that advice belongs. "Somewhere safe" is the phrase the rest of the app
-                // already uses — both ShowOnceSecret confirm labels, all the recovery-code
-                // copy — so this stops being the one surface that says it differently.
+                // already uses — the recovery code's confirm label and all its copy — so
+                // this stops being the one surface that says it differently.
                 //
                 // The why is deliberately not repeated: this step's header ("no password
                 // reset — your password is the key to your links") and the helper paragraph

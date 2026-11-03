@@ -232,7 +232,7 @@ On the web, a bare `<button>` is a complete control: implicit ARIA role, keyboar
 activation, focus, `disabled` semantics. Reaching past `ui/button.tsx` for one
 costs you styling — the cva chrome, the focus ring, the `data-icon` edge-padding
 rule — and **nothing semantic**. That is why the auth forms use bare `<button>`s
-for their inline affordances (Regenerate, Choose my own, Forgot your password) and
+for their inline affordances (Regenerate, Forgot your password) and
 why that is not a lapse. The only web-specific catch is `type`: inside a `<form>`
 a button defaults to `submit`, and neither the bare element nor `<Button>` defaults
 it for you.
@@ -296,9 +296,8 @@ surfaces were already clean against every rule the packages had been held to.
 A control with no accessible name is announced as its type and nothing else
 ("button", "text field"). Three patterns, in order of preference:
 
-- **Keep the real label and hide it visually.** `sr-only`, not deletion. The
-  confirm step of `create-account-form` is the reference case: the visible label
-  for the input is the step's own title, up in the header — but **a heading is
+- **Keep the real label and hide it visually.** `sr-only`, not deletion. When a
+  field's visible label is a step's own title, up in the header, **a heading is
   not a label**, so the `<label htmlFor>` stays and goes `sr-only`. It is
   `position: absolute`, so it costs nothing in the layout **it sits in** — but
   see the overflow caveat below. Same reasoning in
@@ -705,16 +704,18 @@ over from native and one does not:
 
 What each surface settled on, and why it stops there:
 
-| surface                                             | drawn | target             | what stops it                                                                               |
-| --------------------------------------------------- | ----- | ------------------ | ------------------------------------------------------------------------------------------- |
-| `Switch`                                            | 36x20 | 44x44              | nothing                                                                                     |
-| "Set one up" (account notice)                       | —x20  | 44 tall            | nothing; it sits in a sentence                                                              |
-| Regenerate, "Choose my own"                         | —x20  | 38 tall            | half the 12px gap to Copy below                                                             |
-| "Forgot your password", "Use your password instead" | —x20  | 38 tall            | half the 12px gap to Sign in above                                                          |
-| Lists and Tags table: grip, chevron, ⋯              | 32x32 | 36 x 40, 44 coarse | wide: half of `gap-1`, and the rename field is the only flexible width, so no box can grow  |
-| the links rail's and drawer's chevron and lock      | 24x24 | 32x32              | the row is 32 tall; wider gives a thumb "select" for "expand", which also closes the drawer |
-| the marketing site's header links                   | —x18  | 46 tall            | sideways: half of `gap-3`, and the row has 6px of slack at 360 (site-header.tsx)            |
-| the marketing site's footer links                   | —x18  | 36, 44 coarse      | nothing; padding replaced `space-y-3`, so a mouse's rows did not move                       |
+| surface                                                                                      | drawn | target             | what stops it                                                                                                                                                               |
+| -------------------------------------------------------------------------------------------- | ----- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Switch`                                                                                     | 36x20 | 44x44              | nothing                                                                                                                                                                     |
+| "Set one up" (account notice)                                                                | —x20  | 44 tall            | nothing; it sits in a sentence                                                                                                                                              |
+| Regenerate (create account, recovery step; 42 on native)                                     | —x20  | 38 tall            | half the 12px gap to Copy below                                                                                                                                             |
+| Copy, Regenerate (the new-password field: create account step 1, Settings → change password) | —x20  | 44 tall            | nothing: help text above takes no tap, and the submit below (24 at create-account, 16 in Settings) has no slop of its own, so 12 reaches neither; the pair wraps at `gap-6` |
+| Show my new password (change password, done)                                                 | —x20  | 44 tall            | half the 24px gap to Done (or, once open, to the box, which takes no tap) below; text above                                                                                 |
+| "Forgot your password", "Use your password instead"                                          | —x20  | 38 tall            | half the 12px gap to Sign in above                                                                                                                                          |
+| Lists and Tags table: grip, chevron, ⋯                                                       | 32x32 | 36 x 40, 44 coarse | wide: half of `gap-1`, and the rename field is the only flexible width, so no box can grow                                                                                  |
+| the links rail's and drawer's chevron and lock                                               | 24x24 | 32x32              | the row is 32 tall; wider gives a thumb "select" for "expand", which also closes the drawer                                                                                 |
+| the marketing site's header links                                                            | —x18  | 46 tall            | sideways: half of `gap-3`, and the row has 6px of slack at 360 (site-header.tsx)                                                                                            |
+| the marketing site's footer links                                                            | —x18  | 36, 44 coarse      | nothing; padding replaced `space-y-3`, so a mouse's rows did not move                                                                                                       |
 
 Still under 44 and left there: the Lists and Tags **rename field** (a 32px `Input`,
 and a pseudo-element can't hang off a void element), the settings **close** link
@@ -839,7 +840,7 @@ right answers:
     tokens it knows into an iOS `textContentType`, and that one is not among
     them, so on iOS create-account's username said nothing and the OS guessed.
     It carries `textContentType="username"` beside the token.
-  - **web has four forms that take the account's password and show no
+  - **web has three forms that take the account's password and show no
     username.** A manager reads a login as a pair, so a password field with
     nothing beside it leaves it guessing — which saved login to fill, which one
     an update belongs to, and what to call the entry it offers to save. Each
@@ -847,24 +848,15 @@ right answers:
     ahead of its password field: a `hidden` text input with
     `autocomplete="username"` and the account's username as its value — a
     **text** input, not `type="hidden"`, which a manager skips.
-    - **create-account's confirm step** is the one a manager saves from. The
-      username is typed on step one and its input unmounts; on the default
-      path the generated passphrase is shown, not typed, so the confirm field
-      is the only password input in the ceremony. Chrome offered to save a
-      login with a blank username. The value is the canonical username, the
-      name the account is created under.
     - **Settings → change password** holds a `current-password` and a
       `new-password`, so a manager asked to update a saved login cannot tell
-      which one. ⚠ On its default path there was **no** `new-password`: the
-      generated passphrase is shown in an `<output>`, which no manager reads,
-      so the form's only password field was the current one and Chrome's save
-      prompt carried the **old** password. `NewPasswordField`'s
-      `exposeGenerated` puts the passphrase in a `hidden` `new-password` input
-      (Chrome 155 parses it as the form's new password beside a visible current
-      one, `hidden` and all). Change password only: on create-account's setup
-      step it made Chrome prompt at Continue, before the account existed — the
-      confirm step is the field that ceremony saves from. The prompt is browser
-      chrome, so no spec sees it: `npm run measure:password-manager` reads
+      which one. ⚠ The new password must be a **visible** `new-password`
+      input, which it is now on every path: the generated words sit in the
+      field. They once sat in an `<output>`, which no manager reads, so the
+      form's only password field was the current one and Chrome's save prompt
+      carried the **old** password; a `hidden` input set by script patched that
+      for Chrome 155 and went with the panel ([account.md](./account.md),
+      _generated password_). The prompt is browser chrome, so no spec sees it: `npm run measure:password-manager` reads
       which field Chrome took as which for every such form
       ([e2e.md](./e2e.md), _measuring the password manager_), and
       `WEB-ACCOUNT-006` pins the input it reads.
@@ -873,7 +865,9 @@ right answers:
       is the shape a manager reads as a login worth offering to save.
 
     Not the lock surfaces: a lock password is not this site's login, and naming
-    the account beside it would file it as one.
+    the account beside it would file it as one. Nor create-account, whose last step
+    is a real login with a visible read-only username, and is the form a manager
+    saves from ([account.md](./account.md), _creating an account_).
 - **A secret that is not this site's login says `one-time-code` (web).** The
   lock password is the one there is, on both of its surfaces —
   `LockPasswordDialog` (set/remove the app lock, lock/unlock/remove a list
@@ -941,6 +935,46 @@ primitives also declare those defaults: exact entry for `Input`, prose assistanc
 for `Textarea`, and explicit prose overrides for Title. The field-purpose table
 and exceptions live in [editors.md](./editors.md#typing-assistance). A revealed
 password keeps its exact-entry hints even after web switches to `type="text"`.
+
+#### iOS AutoFill, checked by hand
+
+`npm run measure:password-manager` reads Chrome and nothing else, so Safari is
+checked by hand. A wrong saved copy matters most here because the password has no
+reset ([account.md](./account.md), _creating an account_, carries the design and its
+results). What follows comes from a real iPhone with AutoFill on, Safari 26.5.2 for
+macOS and the iOS 26.5 Simulator, on 2026-11-02. Not every point was run on all three.
+
+- **Safari's strong password on a new-password field.** Focusing one offers a strong
+  password from the keyboard, or as a full sheet in the Simulator, even when the field
+  already holds a value. Accepting it and then editing the field left the **edited**
+  password in the Passwords app, and AutoFill signed in with it after a sign-out.
+- ⚠ **No token stops that offer.** On Safari 26.5.2 for macOS it survived
+  `current-password`, `new-password`, `off` and `one-time-code`, a renamed id, a real
+  `<form>`, a visible username, a changed URL, sign-up wording removed from the page,
+  and a `hidden`, visually hidden or visible `new-password` input holding the password.
+  One arrangement lost it: a visible `type="text"` input or a `<textarea>`, with
+  "password" gone from its label, id, heading and description and no username beside it.
+  A text field gives a manager nothing to save from, and is the shape rejected above
+  for the lock password.
+- **What decides it is whether Safari reads the form as a sign-up or a login**, and the
+  URL does not: the real sign-in form mounted inside `/create-account` got the login
+  treatment. A login takes **both** a submit button saying "Sign in" and a control
+  saying "Forgot your password?". Either alone brought the blue offer back. "Sign in to
+  finish" and "Forgot your password? Show it again" held, the heading was free to
+  change, and "Show my password again" without the word "Forgot" failed.
+- ⚠ **`:autofill` tells a filled value from a typed one.** After an accepted offer it
+  matched on macOS, through blur and through a failed submit, and one real keystroke
+  cleared it. Typed by hand it never matched. Safari's own
+  `:-webkit-autofill-strong-password-viewable` matched too, only while focused, so
+  `:autofill` is the one to read. It is the safety net under the labels. On iOS a check
+  in the event that reports the fill, or on the next frame, did not see it yet.
+- **Safari's save prompt depends on how the value got there.** On macOS, Continue
+  raises "Save Password?" for a password typed by hand, before the account exists,
+  and not for a value set by script.
+- **Safari and the iOS app are not linked.** With no shared web credentials
+  ([hosting.md](./hosting.md)), iOS shows bracemark-expo and the web app
+  separately, but the entry Safari saved can be chosen by hand to fill sign-in in
+  the iOS app. Android was not checked.
 
 ### user text takes its own direction
 

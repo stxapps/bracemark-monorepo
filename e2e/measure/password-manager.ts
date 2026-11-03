@@ -84,15 +84,18 @@ const ASK = 'ASK the user';
 
 const FLOWS: Flow[] = [
   {
+    // The generated words, untouched in the visible field: a value set by script,
+    // which is the case to watch. When they sat in an <output> with a hidden input
+    // beside it, Chrome took that input as the new password; now it is the field.
     name: 'change-generated',
-    what: 'Change password, current password, generated passphrase',
+    what: 'Change password, current password, generated words kept',
     launch: {},
     run: async ({ page, credentials }) => {
       await openChangePassword(page);
       await page.locator('#cp-current').fill(credentials.password);
       await submitGenerated(page);
     },
-    expected: [{ current: 'cp-current', next: 'cp-generated-password', decision: ASK }],
+    expected: [{ current: 'cp-current', next: 'cp-new-password', decision: ASK }],
   },
   {
     name: 'change-own',
@@ -101,7 +104,7 @@ const FLOWS: Flow[] = [
     run: async ({ page, credentials }) => {
       await openChangePassword(page);
       await page.locator('#cp-current').fill(credentials.password);
-      await page.getByRole('button', { name: 'Choose my own' }).click();
+      // Typed over the generated words the field starts on.
       await page.locator('#cp-new-password').fill(newCredentials().password);
       await submitChange(page);
     },
@@ -109,7 +112,7 @@ const FLOWS: Flow[] = [
   },
   {
     name: 'change-recovery',
-    what: 'Change password, recovery code, generated passphrase',
+    what: 'Change password, recovery code, generated words kept',
     launch: { withRecovery: true },
     run: async ({ page, recoveryCode }) => {
       if (!recoveryCode) throw new Error('the account was created without a recovery code');
@@ -118,7 +121,7 @@ const FLOWS: Flow[] = [
       await page.locator('#cp-recovery').fill(recoveryCode);
       await submitGenerated(page);
     },
-    expected: [{ current: '', next: 'cp-generated-password', decision: ASK }],
+    expected: [{ current: '', next: 'cp-new-password', decision: ASK }],
   },
   {
     // The recovery code is a second door, not the password: what Chrome should
@@ -137,9 +140,10 @@ const FLOWS: Flow[] = [
     expected: [{ current: 'rc-current', next: '', decision: ASK }],
   },
   {
-    // ONE submission, at the end. With the generated passphrase exposed on the
-    // setup step, Chrome took Continue for a submission — the username check's
-    // fetch counts as one — and offered to save before the account existed.
+    // The check reads as a login, a username beside a `current-password`, so that
+    // is what Chrome should save from: one submission, at the end, after the account
+    // exists. The password on step one stays a `new-password` field, which is where a
+    // manager's suggestion is welcome.
     name: 'create-account',
     what: 'Create account, generated passphrase, no recovery code',
     launch: { signedOut: true },
@@ -147,15 +151,38 @@ const FLOWS: Flow[] = [
       await page.goto('/create-account');
       await page.locator('#username').fill(credentials.username);
       await expect(page.getByText('Username is available')).toBeVisible();
-      const passphrase = (await page.getByLabel('Your password').innerText()).trim();
-      await page.locator('#signup-passphrase-saved').check();
-      await page.getByRole('button', { name: /continue/i }).click();
-      await page.locator('#confirm').fill(passphrase);
-      await page.getByRole('button', { name: /continue/i }).click();
+      const passphrase = await page.locator('#signup-new-password').inputValue();
+      // Showing the words only flips the field's `type` now, and a box under it holds
+      // the whole password. It used to swap the input for a textarea and back, and a
+      // filled password field going away is the shape a manager can read as a
+      // submission, so the round trip stays here to catch the swap coming back.
+      await page.getByRole('button', { name: 'Show password' }).click();
+      await page.getByRole('button', { name: 'Hide password' }).click();
+      await page.getByRole('button', { name: /^continue$/i }).click();
       await page.getByRole('button', { name: /without a recovery code/i }).click();
+      await page.locator('#password').fill(passphrase);
+      await page.getByRole('button', { name: 'Sign in to finish' }).click();
       await expect(page).toHaveURL(/\/links/, { timeout: 60_000 });
     },
-    expected: [{ current: '', next: 'confirm', decision: ASK }],
+    expected: [{ current: 'password', next: '', decision: ASK }],
+  },
+  {
+    // The same field, edited: this is the path that used to be a separate one.
+    name: 'create-account-own',
+    what: 'Create account, typed password, no recovery code',
+    launch: { signedOut: true },
+    run: async ({ page, credentials }) => {
+      await page.goto('/create-account');
+      await page.locator('#username').fill(credentials.username);
+      await expect(page.getByText('Username is available')).toBeVisible();
+      await page.locator('#signup-new-password').fill(credentials.password);
+      await page.getByRole('button', { name: /^continue$/i }).click();
+      await page.getByRole('button', { name: /without a recovery code/i }).click();
+      await page.locator('#password').fill(credentials.password);
+      await page.getByRole('button', { name: 'Sign in to finish' }).click();
+      await expect(page).toHaveURL(/\/links/, { timeout: 60_000 });
+    },
+    expected: [{ current: 'password', next: '', decision: ASK }],
   },
   {
     // NO submission, from either surface. The specimen came from a real profile
@@ -219,8 +246,7 @@ async function openChangePassword(page: Page): Promise<void> {
 }
 
 async function submitGenerated(page: Page): Promise<void> {
-  await expect(page.getByLabel('Your new password')).not.toBeEmpty();
-  await page.getByLabel('I’ve saved my new password somewhere safe.').check();
+  await expect(page.locator('#cp-new-password')).not.toHaveValue('');
   await submitChange(page);
 }
 

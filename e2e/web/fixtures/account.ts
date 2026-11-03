@@ -55,6 +55,7 @@ export async function createAccount(page: Page, credentials: Credentials): Promi
   // is ticked, so the secondary is the one an unattended run takes. An account
   // with no recovery code is a legitimate product state, not a test-only shortcut.
   await page.getByRole('button', { name: /without a recovery code/i }).click();
+  await finishCheck(page, credentials);
 
   // Argon2id runs here. The generous timeout is the derivation, not the network.
   await expect(page).toHaveURL(/\/links/, { timeout: 60_000 });
@@ -87,36 +88,38 @@ export async function createAccountWithRecovery(
   if (!code) throw new Error('create-account showed an empty recovery code');
 
   // `#recovery-saved` is the attestation checkbox that ungates the primary
-  // action. The anchored name keeps this off "Create account without a recovery
-  // code", which is the same button family one line apart.
+  // action. The anchored name keeps this off "Continue without a recovery code",
+  // which is the same button family one line apart.
   await page.locator('#recovery-saved').check();
-  await page.getByRole('button', { name: /^create account$/i }).click();
+  await page.getByRole('button', { name: /^continue$/i }).click();
+  await finishCheck(page, credentials);
 
   await expect(page).toHaveURL(/\/links/, { timeout: 60_000 });
   return code;
 }
 
-// Steps 1 and 2 of the ceremony — username, password, confirm — which both exits
-// share. Leaves the page on step 3, the recovery panel. Nothing has reached the
-// server's accounts when it returns: the account is made by whichever exit is
-// pressed next, which is what lets shot/ photograph step 3 and walk away.
+// Step 1 of the ceremony, which both exits share. Leaves the page on step 2, the
+// recovery panel. Nothing has reached the server's accounts when it returns, nor will
+// it until the check on step 3 passes, which is what lets shot/ photograph step 2 and
+// walk away.
 export async function fillCredentialSteps(page: Page, credentials: Credentials): Promise<void> {
   await page.goto('/create-account');
 
   await page.locator('#username').fill(credentials.username);
 
-  // The default path hands the user a generated passphrase and gates Continue
-  // behind a saved-it checkbox. We take the escape hatch instead: a generated
-  // password would have to be scraped off the screen and kept for the mobile
-  // half of the contract run, and scraping a secret out of the DOM is a worse
-  // dependency than typing a known one in.
-  await page.getByRole('button', { name: /choose my own/i }).click();
-
+  // The field starts on a generated passphrase, and editing it is choosing your own.
+  // We replace it: a generated password would have to be scraped off the screen and
+  // kept for the mobile half of the contract run, and scraping a secret out of the DOM
+  // is a worse dependency than typing a known one in.
   await page.locator('#signup-new-password').fill(credentials.password);
-  await page.getByRole('button', { name: /continue/i }).click();
+  await page.getByRole('button', { name: /^continue$/i }).click();
+}
 
-  await page.locator('#confirm').fill(credentials.password);
-  await page.getByRole('button', { name: /continue/i }).click();
+// Step 3: sign in with the saved copy, which creates the account. Exact name: step 3
+// has a second control mentioning a password.
+export async function finishCheck(page: Page, credentials: Credentials): Promise<void> {
+  await page.locator('#password').fill(credentials.password);
+  await page.getByRole('button', { name: 'Sign in to finish' }).click();
 }
 
 // Sign in an already-created account. Used by the contract runner's reverse leg,

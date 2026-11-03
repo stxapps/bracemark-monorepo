@@ -77,3 +77,21 @@ test('on iOS a reveal changes the masking and nothing else', () => {
     [false, undefined],
   ]);
 });
+
+// ⚠ A reveal must not change which native view this is. `multiline` does, and iOS read
+// a filled secure field going away as a submission: the eye raised "Save Password?"
+// before any account existed. Only an iPhone shows that prompt, so this pins the prop
+// that causes it, and the callback a host uses to show a long value elsewhere.
+test('stays one single-line field through a reveal, and reports it instead', () => {
+  const shown = jest.fn();
+  render(<PasswordInput aria-label="Password" onShownChange={shown} />);
+
+  fireEvent.press(screen.getByLabelText('Show password'));
+
+  expect(screen.getByLabelText('Password').props.multiline).toBeFalsy();
+  expect(shown).toHaveBeenLastCalledWith(true);
+
+  fireEvent.press(screen.getByLabelText('Hide password'));
+
+  expect(shown).toHaveBeenLastCalledWith(false);
+});

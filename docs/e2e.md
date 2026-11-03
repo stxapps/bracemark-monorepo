@@ -1153,9 +1153,9 @@ database while a statement runs is the whole reproduction.
 
 That is not a shortcut around native key derivation — signing in on the device
 runs the full Argon2id + HKDF path there, which is the thing under test. It is
-also why the web fixture takes create-account's "Choose my own" branch rather than
-the generated passphrase: a secret we chose can be passed along, one the app
-generated would have to be scraped off a screen.
+also why the web fixture replaces the generated passphrase in create-account's
+password field: a secret we chose can be passed along, one the app generated would
+have to be scraped off a screen.
 
 **The recovery code is the exception, and it has to be.** `recovery-sign-in.yaml`
 needs one, and a recovery code cannot be chosen — it is CSPRNG-minted by the
@@ -4239,10 +4239,10 @@ open.
 It exists because the save prompt is browser chrome, outside the page and out of
 Playwright's reach, and because every way of getting it wrong is **silent**: the
 field a manager saves from is invisible or missing, and every flow passes either
-way. The specimen is change password's generated path, where Chrome offered to
-save the **old** password ([accessibility.md](./accessibility.md), _what a field
-tells the browser_). `WEB-ACCOUNT-006` pins the input that fixed it; this is the
-measurement that showed Chrome actually reads that input, and the thing to re-run
+way. The specimen is change password's old generated panel, where Chrome offered
+to save the **old** password ([accessibility.md](./accessibility.md), _what a field
+tells the browser_). `WEB-ACCOUNT-006` pins the visible `new-password` field that
+replaced it; this is the measurement that shows Chrome actually reads it, and the thing to re-run
 when any form that takes a password changes shape. The second specimen runs the
 other way. The lock surfaces said `off`, which Chrome ignores on a password
 field, so setting a lock or unlocking one made Chrome offer to replace the saved
@@ -4251,15 +4251,15 @@ sign-in password with the lock password. They now say `one-time-code`
 
 ```sh
 npm run dev                                         # the api and the web app
-npm run measure:password-manager                    # all seven flows, about a minute
+npm run measure:password-manager                    # all eight flows, about a minute
 npm run measure:password-manager -- --flow change-generated,create-account
 npm run measure:password-manager -- --headed
 ```
 
-Seven flows, each on a fresh account in a fresh profile — change password
-(current password + generated, current password + typed, recovery code +
-generated), Settings → Recovery code, create-account on its generated path, and
-the two lock flows (`lock-app`: set the app lock, close Settings, unlock;
+Eight flows, each on a fresh account in a fresh profile — change password
+(current password + the generated words kept, current password + a password typed
+over them, recovery code + the words kept), Settings → Recovery code, create-account with the generated words and
+with a typed password, and the two lock flows (`lock-app`: set the app lock, close Settings, unlock;
 `lock-list`: lock a list, close Settings, unlock it in place) — each against the
 submissions it should produce: the fields, Chrome's decision, and how many. A
 lock flow's expected count is **zero**. Under `off` the app-lock flow logged two
@@ -4270,10 +4270,23 @@ password**, never the code: the code is a second door, and saved as this site's
 password it would fill sign-in. Create-account's is **one** submission, at the
 end: an exposed passphrase on its setup step made Chrome treat Continue as a
 submission (the username check's fetch counts as one) and offer to save before
-the account existed. It prints a ✓/✗ line per flow and exits non-zero on a
-difference, and writes each flow's raw log to `.artifacts/measure/<run>/`.
-Last run 2026-10-24 on Chrome 156.0.8078.47, from `72d1217`: all seven as
-expected, so the parse the notes above read on Chrome 155 still holds.
+the account existed. Its check field reads as the **current** password on both
+paths, because the check is a login and not a sign-up: on a `new-password` field
+there Safari offered its own password
+([accessibility.md](./accessibility.md), _iOS AutoFill, checked by hand_). Every
+change-password flow expects `cp-new-password` as the new password, the generated
+words included. It
+prints a ✓/✗ line per flow and exits non-zero on a difference, and writes each
+flow's raw log to `.artifacts/measure/<run>/`. Last run 2026-11-02 on Chrome
+156.0.8078.74, from `11c763e` with this token change in the working tree: all
+eight as expected, so the parse the notes above read on Chrome 155 still holds. Re-run 2026-11-03 on Chrome 156.0.8078.80 against a production-mode build
+(`nx build -c development`, served with `serve out`), after the reveal stopped
+swapping its input for a textarea and change password moved to the visible field:
+all eight as expected, every change-password flow taking `cp-new-password` as the new
+password. Under `next dev` the same run could not finish: starting the Argon2 worker
+made Turbopack compile it and reload the page mid-submit, at create-account and at
+change password alike, which is a dev-server artifact the production build does not
+have.
 
 **It is not a test, and it is in no suite.** The internals page is a debugging
 surface, not a contract, and the system Chrome auto-updates, so a suite gated on
@@ -4283,6 +4296,10 @@ reading anything into it.
 
 Its limits, which it cannot see past:
 
+- **It reads Chrome only.** Safari and iOS AutoFill need the real app. The results
+  so far are in [accessibility.md](./accessibility.md), _iOS AutoFill, checked by
+  hand_, and [app-drivers.md](./app-drivers.md), _driving real Safari on macOS_ and
+  _driving Safari in the iOS Simulator_, is how to reach it.
 - **The log names fields, never values.** "The prompt carries the new password"
   is inferred from which field Chrome took as the new one.
 - **Every profile is fresh, with no saved login**, so Chrome's offer is always

@@ -868,7 +868,10 @@ deploy, then click **Verify** there. It is a public verification file, not a
 credential, so it is committed.
 
 Not to be confused with `apple-app-site-association`, which is for universal links
-and shared web credentials — neither of which Bracemark uses.
+and shared web credentials — neither of which Bracemark uses. The visible cost is
+that iOS keeps a password saved in Safari apart from bracemark-expo, though it can
+still be chosen by hand ([accessibility.md](./accessibility.md), _iOS AutoFill,
+checked by hand_).
 
 Three things it depends on, none of which announces itself:
 

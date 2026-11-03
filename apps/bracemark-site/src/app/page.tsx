@@ -510,9 +510,9 @@ const TRADE: { aspect: string; hosted: string; ours: string }[] = [
     aspect: 'A forgotten password',
     hosted: 'They can mail you a reset, because they can read the library either way.',
     // "Generated at signup" overstated a step the app lets you decline: the
-    // create-account ceremony OFFERS the code and its last screen carries a
-    // second submit labelled "Create account without a recovery code"
-    // (docs/account.md, _the create-account ceremony_). /terms has always had the
+    // create-account ceremony OFFERS the code and its screen carries a second
+    // button labelled "Continue without a recovery code"
+    // (docs/account.md, _creating an account_). /terms has always had the
     // true account — offered at creation, and can be generated or replaced later
     // — and this row, the hero and /faq `recovery-code` now tell it the same way.
     ours: 'Your recovery code opens the account instead. The app offers you one when you create the account, and it is your other way in — like your password, a door only you hold. There is none we could open for you.',
@@ -878,9 +878,9 @@ export default function Page() {
                   to survive, and advice that puts them in one place defeats it.
 
                   "THE APP ASKS YOU TO SAVE BOTH", not "you save both". The
-                  recovery step is skippable by design — its second submit reads
-                  "Create account without a recovery code" (docs/account.md, _the
-                  create-account ceremony_) — so the old wording asserted a step
+                  recovery step is skippable by design — its second button reads
+                  "Continue without a recovery code" (docs/account.md, _creating
+                  an account_) — so the old wording asserted a step
                   the product lets you decline, on the one page whose rule is to
                   describe what the system does. The steer is preserved (the app
                   does ask) without claiming the outcome. Same correction in the

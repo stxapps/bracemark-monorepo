@@ -978,8 +978,9 @@ per-slice reference stability, `useMediaQuery`'s deliberately-blind `false`
 seed, `useElementWidth` keying on the element and not a ref), the announced-error
 carrier (`FieldError`'s `role="alert"`, the tripwire in
 [accessibility.md](./accessibility.md)), the auth ceremony's gate
-(`useNewPassword.ok` in both modes, including the username penalty term whose
-absence let the same password pass at signup and fail at rotation), and the
+(`useNewPassword.ok` on the generated words and on an edit, including the username
+penalty term whose absence let the same password pass at signup and fail at
+rotation), and the
 picker rules no single call site can see (`ListCommand`'s six surfaces, each
 opting in and out of a different row). Its `src/testing/jsdom-stubs.ts` supplies
 only the APIs jsdom omits and cmdk/Radix reach for at mount — a spec that cares

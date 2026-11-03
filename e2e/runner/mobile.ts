@@ -246,7 +246,7 @@ async function changePasswordElsewhere(
     await app.page.goto('/settings/account');
     await app.page.getByRole('button', { name: /^Change password/ }).click();
     await app.page.locator('#cp-current').fill(credentials.password);
-    await app.page.getByRole('button', { name: /choose my own/i }).click();
+    // Typed over the generated words the field starts on.
     await app.page.locator('#cp-new-password').fill(newPassword);
     await app.page.getByRole('button', { name: 'Change password', exact: true }).click();
     await expect(app.page.getByText(/^Your password has been changed\./)).toBeVisible({

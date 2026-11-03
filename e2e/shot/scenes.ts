@@ -447,8 +447,8 @@ async function editLinkWhole(page: Page): Promise<void> {
 //
 // ⚠ NO ACCOUNT IS MADE, and the code in the picture opens nothing. The client
 // mints the code when the step mounts and the server hears of neither it nor
-// the username until one of the step's two buttons is pressed
-// (`fillCredentialSteps`); the scene presses neither. So the string a reader
+// the username until the check after it passes (`fillCredentialSteps`); the
+// scene stops here. So the string a reader
 // sees is the right SHAPE and belongs to no account — which is the only kind
 // of recovery code a public page should print. Do not "finish" this ceremony
 // to tidy the run: that is what would make it a real one.
