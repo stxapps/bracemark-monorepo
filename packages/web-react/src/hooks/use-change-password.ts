@@ -6,6 +6,7 @@ import { useApiClient } from '@stxapps/react';
 import {
   type ApiClient,
   ApiError,
+  ApiTimeoutError,
   bytesToHex,
   changePasswordEndpoint,
   type ChangePasswordPayload,
@@ -74,6 +75,29 @@ export async function openerForProof(
   };
 }
 
+// The save itself went out and no answer came back — the call timed out, or the
+// connection dropped mid-flight. The server may have stored the new door anyway:
+// when the platform is slow, a call can outlast the client deadline
+// (DEFAULT_CALL_TIMEOUT_MS) while its write still lands. "Please try again" is the wrong
+// thing to say then. After a password change, the old password may already be
+// refused, so a retry fails as "Incorrect password." and looks like a lockout.
+// After a new recovery code, the old code may already be dead and the new one was
+// never shown. So this has its own type, and the form says what may have happened.
+// Thrown only for the FINAL save. A failure before it (the door fetch, the
+// Argon2 run) wrote nothing and stays the ordinary "please try again".
+export class UnconfirmedSaveError extends Error {
+  constructor(options?: { cause?: unknown }) {
+    super('The save was sent but no answer came back.', options);
+    this.name = 'UnconfirmedSaveError';
+  }
+}
+
+// No answer at all: our deadline, or fetch's TypeError for a dropped connection.
+// An ApiError is an answer — the server replied, so its handler ran to an end.
+export function isNoAnswer(err: unknown): boolean {
+  return err instanceof ApiTimeoutError || err instanceof TypeError;
+}
+
 // Map the web-crypto open failures (wrong password / wrong recovery code) to the
 // forms' typed misses; re-throw anything else (Argon2 worker failure, transport).
 export function mapOpenError(err: unknown): never {
@@ -129,6 +153,7 @@ export function useChangePassword() {
         await api.call(changePasswordEndpoint, { payload, signature });
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) throw new InvalidCredentialsError();
+        if (isNoAnswer(err)) throw new UnconfirmedSaveError({ cause: err });
         throw err;
       }
       // Nothing to persist locally: the DEK/publicKey/encryptionKey and the

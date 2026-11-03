@@ -11,7 +11,13 @@ import {
 } from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
-import { type DoorProofInput, mapOpenError, openerForProof } from './use-change-password';
+import {
+  type DoorProofInput,
+  isNoAnswer,
+  mapOpenError,
+  openerForProof,
+  UnconfirmedSaveError,
+} from './use-change-password';
 import { InvalidCredentialsError } from './use-sign-in';
 
 // The expo sibling of web-react's hooks/use-recovery-code.ts, verbatim in
@@ -58,6 +64,7 @@ export function useRecoveryCode() {
         await api.call(putRecoveryDoorEndpoint, { payload, signature });
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) throw new InvalidCredentialsError();
+        if (isNoAnswer(err)) throw new UnconfirmedSaveError({ cause: err });
         throw err;
       }
 

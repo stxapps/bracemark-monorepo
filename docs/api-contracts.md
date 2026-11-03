@@ -428,6 +428,19 @@ call rejects with `ApiTimeoutError` and the fetch is aborted.
   retrying would multiply that by `withRetry`'s `tries`. The caller's next attempt
   is the retry. Each retried attempt of any _other_ failure gets a fresh deadline,
   since each is its own `callEndpoint`.
+- **A timeout does not mean nothing happened.** The deadline is the client giving
+  up, and the server may still finish the write. For most writes that only means a
+  repeat, but for the two door rotations a write that landed unseen can lock the
+  user out. After a password change, the old password may already be refused, so a
+  retry fails as "Incorrect password." After a new recovery code, the old code may
+  already be dead, and the new one was never shown. So when the final save of
+  either gets no answer (`ApiTimeoutError`, or fetch's `TypeError` for a dropped
+  connection), the hook throws `UnconfirmedSaveError`. Settings then says the
+  change may have gone through and what to do next, instead of "Please try again."
+  A failure earlier in those flows (the door fetch, the Argon2 run) wrote nothing,
+  and a reply from the server, a 500 included, is an answer, so both keep their
+  ordinary error (`use-change-password.ts` on both platforms; its spec holds that
+  boundary).
 
 The sync engine is the caller that needed this most. Its single-flight cycle is
 shared by every later sync, so one hung call used to take all of sync down

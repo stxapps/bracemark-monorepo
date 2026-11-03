@@ -39,6 +39,7 @@ import {
   InvalidCredentialsError,
   InvalidRecoveryCodeError,
   SubscriptionActiveError,
+  UnconfirmedSaveError,
   useAuth,
   useChangePassword,
   useDeleteAccount,
@@ -284,7 +285,16 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
     } catch (err) {
       if (err instanceof InvalidCredentialsError) setError('Incorrect password.');
       else if (err instanceof InvalidRecoveryCodeError) setError('That recovery code didn’t work.');
-      else setError('Could not change your password. Please try again.');
+      // The save went out and nothing came back, so it may have landed. On the
+      // password path a retry proves with the CURRENT password, which may now be
+      // the new one; on the recovery path the code still opens, so a retry is safe.
+      else if (err instanceof UnconfirmedSaveError) {
+        setError(
+          useRecovery
+            ? 'We didn’t get an answer, so your password may have changed anyway. Try again to be sure.'
+            : 'We didn’t get an answer, so your password may have changed anyway. If you try again and your current password is refused, enter the new one instead.',
+        );
+      } else setError('Could not change your password. Please try again.');
     }
   };
 
@@ -449,7 +459,13 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
       void queryClient.invalidateQueries({ queryKey: hasRecoveryDoorQueryKey });
     } catch (err) {
       if (err instanceof InvalidCredentialsError) setError('Incorrect password.');
-      else setError('Could not generate a recovery code. Please try again.');
+      // The save went out and nothing came back. If it landed, the old code is dead
+      // and the new one was never shown, so the only safe act is another one.
+      else if (err instanceof UnconfirmedSaveError) {
+        setError(
+          'We didn’t get an answer, so your old recovery code may no longer work. Generate a new one now.',
+        );
+      } else setError('Could not generate a recovery code. Please try again.');
     }
   };
 
