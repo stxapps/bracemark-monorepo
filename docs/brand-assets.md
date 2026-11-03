@@ -1086,7 +1086,7 @@ below and the film's last frame are set in it); **a `SIGNATURE` string changes**
 (any picture that draws the hero's panel — the film does); the mark changes; a `--color-*` token moves; the links list layout changes shape; the browser extension's popup changes
 shape; the share sheet does; the Advanced search panel gains, loses or renames a field; the
 selection bar, the Sync row in Settings → Data, the import's over-limit question, the Edit link
-dialog or create-account's recovery step is reworded or rearranged; the free plan's link cap moves (the import figure prints it); or a screenshot
+dialog or the welcome's recovery step (after create-account) is reworded or rearranged; the free plan's link cap moves (the import figure prints it); or a screenshot
 shows a screen that no longer exists. Nothing else will
 tell you — that list _is_ the tripwire, and for the store pictures further down it
 is the _only_ thing there is, since those are not stamped. The same holds for the

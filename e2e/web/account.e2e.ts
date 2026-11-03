@@ -7,6 +7,7 @@ import { expect, test } from './fixtures/app';
 import { unique, unresolvableUrl } from './fixtures/data';
 import { API_URL, SITE_URL } from './fixtures/env';
 import { launchApp } from './fixtures/launch';
+import { WEB_VIEWPORTS } from './fixtures/layout';
 import { addLink, addLinkButton, linkRow } from './fixtures/links';
 import { countPendingOps, syncAndWait } from './fixtures/sync';
 
@@ -731,6 +732,179 @@ test.describe('account', () => {
 
       await signOutToSite(page, site);
       await signIn(page, { username: credentials.username, password: passphrase });
+    },
+  );
+
+  // Create-account on its DEFAULT path, which no other spec takes — every worker's
+  // account types a known password over the generated words and skips the welcome
+  // (fixtures/account.ts) — and then the whole welcome (docs/account.md, _creating an
+  // account_ and _the welcome_):
+  //   - one step: the field starts on the words, a `new-password` input, and the
+  //     button creates the account (the api stops calling the name available);
+  //   - the welcome covers the app, and mints a recovery code with the held password;
+  //   - its check refuses empty and wrong entries with their own messages, offers no
+  //     switch for a typed value, and shows the password again on request;
+  //   - "Start using Bracemark" uncovers the library;
+  // and then the words sign in, or "your password" was a string on a screen.
+  test(
+    'create account on the generated words in one step, then the welcome, then sign in',
+    { tag: ['@WEB-ACCOUNT-007', '@full', '@online', '@destructive'] },
+    async ({ layout }, testInfo) => {
+      const app = await launchApp(profileDir(`create-generated-w${testInfo.workerIndex}`), {
+        signedOut: true,
+        viewport: WEB_VIEWPORTS[layout],
+      });
+      try {
+        // A page of its own: the fixture's first page is still being sent on from `/`
+        // when it returns, and Firefox aborts a `goto` that lands mid-redirect
+        // (NS_BINDING_ABORTED).
+        const { credentials } = app;
+        const page = await app.context.newPage();
+        const site = await stubMarketingSite(page);
+        const available = async () => {
+          const response = await page.request.post(`${API_URL}/v1/auth/check-username`, {
+            data: { username: credentials.username },
+          });
+          expect(response.ok()).toBe(true);
+          return ((await response.json()) as { available: boolean }).available;
+        };
+
+        await page.goto('/create-account');
+        await page.locator('#username').fill(credentials.username);
+        await expect(page.getByText('Username is available')).toBeVisible();
+        const field = page.locator('#signup-new-password');
+        await expect(field).toHaveAttribute('autocomplete', 'new-password');
+        await expect(field).toHaveAttribute('type', 'password');
+        const words = await field.inputValue();
+        expect(words).toMatch(/^[a-z]+(-[a-z]+){6}$/);
+        await expect(page.getByText('Generated for you.')).toBeVisible();
+        expect(await available()).toBe(true);
+
+        await page.getByRole('button', { name: 'Create account', exact: true }).click();
+        await expect(page.getByRole('heading', { name: 'Your account is ready' })).toBeVisible({
+          timeout: 60_000,
+        });
+        expect(await available()).toBe(false);
+        await expect(page.getByRole('button', { name: /^More options/ })).toHaveCount(0);
+
+        // 1. A recovery code, minted with the held password: nothing to type.
+        await page.getByRole('button', { name: 'Create recovery code' }).click();
+        const code = page.getByLabel('Your recovery code');
+        await expect(code).toBeVisible({ timeout: 60_000 });
+        expect((await code.innerText()).trim()).toMatch(/^[0-9A-Z]{5}(-[0-9A-Z]{1,5})+$/);
+        await page.getByRole('button', { name: 'Continue', exact: true }).click();
+
+        // 2. The check.
+        await expect(
+          page.getByRole('heading', { name: 'Check your saved password' }),
+        ).toBeVisible();
+        const check = page.locator('#welcome-password');
+        await expect(check).toHaveAttribute('autocomplete', 'current-password');
+        await expect(page.locator('#welcome-username')).toHaveValue(credentials.username);
+        const checkButton = page.getByRole('button', { name: 'Sign in to check' });
+        await checkButton.click();
+        await expect(
+          page.getByRole('alert').filter({ hasText: 'Please enter a password' }),
+        ).toBeVisible();
+        await check.fill(`${words}x`);
+        await checkButton.click();
+        await expect(
+          page.getByRole('alert').filter({ hasText: 'That doesn’t match.' }),
+        ).toBeVisible();
+        // A value Playwright typed is not one the browser filled, so no switch offer.
+        await expect(page.getByRole('button', { name: 'Use this password instead' })).toHaveCount(
+          0,
+        );
+        await page.getByRole('button', { name: 'Forgot your password? Show it again' }).click();
+        await expect(page.getByLabel('Your password', { exact: true })).toHaveText(words);
+        await check.fill(words);
+        await checkButton.click();
+        await expect(page.getByText('Your saved password works.')).toBeVisible();
+        await page.getByRole('button', { name: 'Continue', exact: true }).click();
+
+        // 3. In.
+        await page.getByRole('button', { name: 'Start using Bracemark' }).click();
+        await expect(page.getByRole('button', { name: /^More options/ })).toBeVisible();
+
+        await signOutToSite(page, site);
+        await signIn(page, { username: credentials.username, password: words });
+      } finally {
+        await app.close();
+      }
+    },
+  );
+
+  // Settings → Recovery code, then the door it makes, used where it is meant to be:
+  // change password for someone who has lost theirs. The done screen is the new one
+  // (docs/account.md, _a recovery code in Settings_): no checkbox and no gated Done,
+  // a back link, and a ✓ line that says the code is ALREADY live — so leaving by Done
+  // must leave a working code. Regenerating then retires it at once, which is the
+  // fact the second ✓ line exists to say, and the old code is refused.
+  test(
+    'a recovery code from Settings is live on its done screen, changes the password, and dies when replaced',
+    { tag: ['@WEB-ACCOUNT-008', '@full', '@online', '@destructive'] },
+    async ({ isolatedApp: app }) => {
+      const { page, credentials } = app;
+      const site = await stubMarketingSite(page);
+
+      const mint = async () => {
+        await page.goto('/settings/account');
+        await page.getByRole('button', { name: /^Recovery code/ }).click();
+        await page.locator('#rc-current').fill(credentials.password);
+        await page.getByRole('button', { name: /^Generate/ }).click();
+        const shown = page.getByLabel('Your recovery code');
+        await expect(shown).toBeVisible({ timeout: 60_000 });
+        return (await shown.innerText()).trim();
+      };
+
+      const code = await mint();
+      await expect(page.getByText('Your recovery code is set up.')).toBeVisible();
+      await expect(page.getByRole('checkbox')).toHaveCount(0);
+      // The way out is an ordinary one now: the back link is there beside Done.
+      // Not a menu trigger: at the narrow width the section menu's is named Account too.
+      await expect(
+        page
+          .getByRole('button', { name: 'Account', exact: true })
+          .and(page.locator(':not([aria-haspopup])')),
+      ).toBeVisible();
+      await page.getByRole('button', { name: 'Done', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Account', level: 1 })).toBeVisible();
+
+      // Change the password with the code: the proof is the code, the new password the
+      // generated words, kept. The current password is not compared on this path.
+      await page.getByRole('button', { name: /^Change password/ }).click();
+      await page.getByRole('button', { name: /use my recovery code/i }).click();
+      await page.locator('#cp-recovery').fill(code);
+      const words = await page.locator('#cp-new-password').inputValue();
+      await page.getByRole('button', { name: 'Change password', exact: true }).click();
+      await expect(page.getByText(/^Your password has been changed\./)).toBeVisible({
+        timeout: 60_000,
+      });
+      await page.getByRole('button', { name: 'Show my new password' }).click();
+      await expect(page.getByLabel('Your new password')).toHaveText(words);
+      await page.getByRole('button', { name: 'Done', exact: true }).click();
+      credentials.password = words;
+
+      // A second code retires the first, and the screen says so.
+      await mint();
+      await expect(
+        page.getByText(
+          'Your new recovery code is active, and your previous one has stopped working.',
+        ),
+      ).toBeVisible();
+      await page.getByRole('button', { name: 'Done', exact: true }).click();
+      await page.getByRole('button', { name: /^Change password/ }).click();
+      await page.getByRole('button', { name: /use my recovery code/i }).click();
+      await page.locator('#cp-recovery').fill(code);
+      await page.getByRole('button', { name: 'Change password', exact: true }).click();
+      await expect(
+        page.getByRole('alert').filter({ hasText: 'That recovery code didn’t work.' }),
+      ).toBeVisible({
+        timeout: 60_000,
+      });
+
+      await signOutToSite(page, site);
+      await signIn(page, { username: credentials.username, password: words });
     },
   );
 });

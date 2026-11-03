@@ -873,15 +873,15 @@ single-line field has already blurred itself by then (1).
 a keyboard up are part of the typing, or have their own answer already:
 
 - the reveal eye in `password-input.tsx`, and the mode toggles that swap in a
-  field which then takes focus (sign-in's recovery door, create-account's
-  way into its check step) — the keyboard is about to be wanted again;
+  field which then takes focus (sign-in's recovery door, the welcome's way into
+  its check) — the keyboard is about to be wanted again;
 - the pickers that set `submitBehavior="submit"` to keep it for the next entry (1);
 - anything parked ON the keyboard — the add panel's Save (on the keys as the
   sheet, 8pt above them as the wide card), and every other `Sheet` footer's —
   where nothing can land behind it and the press closes the surface anyway;
 - a `Dialog`'s buttons: the avoider lifts the whole card, error slot included;
 - a submit whose error belongs to the FIELD and mounts above the button —
-  `lock-pane.tsx`, create-account's check step. It is visible by the geometry
+  `lock-pane.tsx`, the welcome's check. It is visible by the geometry
   above, and the user's next act is to retype.
 
 **A field that goes `editable={false}` while focused drops the keyboard on its
@@ -982,7 +982,7 @@ and whether the user arrived already committed to typing:
   on mount scrolls it away at the moment it is meant to land. The cost of dropping
   it is one tap on a field the user was going to type into anyway.
 - A field that swaps in **within** an already-visible screen keeps its focus: the
-  create-account check step, the sign-in recovery-code toggle and the toggle back
+  welcome's check, the sign-in recovery-code toggle and the toggle back
   to the password door (which, arrived at by a push, takes no focus). No transition
   to fight, and the press that got there was the intent to type.
 - The **web twins keep their `autoFocus`** (`packages/web-ui/src/components/auth/`)

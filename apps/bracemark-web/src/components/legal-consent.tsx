@@ -28,10 +28,10 @@ import { PRIVACY_URL, TERMS_URL } from '@/lib/site';
 // auth-alt-action), hover promotes the text to `--foreground`, and the settings
 // sections' own inline fine-print links already read exactly this way.
 //
-// NEW TAB IS LOAD-BEARING, not politeness. On /create-account the ceremony holds
-// a generated passphrase and a step counter in component state; a same-tab
-// navigation to the terms and a Back would hand the user a NEW passphrase and put
-// them on step one, having destroyed the one they may have just saved. In
+// NEW TAB IS LOAD-BEARING, not politeness. On /create-account the form holds a
+// generated passphrase in component state; a same-tab navigation to the terms and a
+// Back would hand the user a NEW passphrase, having destroyed the one they may have
+// just saved. In
 // Settings the same click would drop a live session behind a sync loop. Settings
 // → About makes this argument for its external rows too.
 const linkClass = cn(

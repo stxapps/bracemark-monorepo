@@ -68,15 +68,16 @@ export function Landing() {
           </Text>
 
           {/* Full-width buttons, stacked — the native idiom, and the one place
-              this screen has any weight at all. "Get started" rather than
-              "Create account" matches the marketing site's hero CTA, which is
-              this screen's counterpart; the alt-action rule (name the link for
-              the screen it opens) governs the doors BETWEEN the two auth
-              screens, not the conversion CTA into them. */}
+              this screen has any weight at all. "Create account", named for the
+              screen it opens and what pressing on gets you: that screen's title
+              and its button say the same words, the pair with "Sign in" reads as
+              the two doors it is, and the docs can say one thing for every
+              platform ("choose Create account"). It was "Get started", to match
+              the marketing site's hero, which says "Create your account". */}
           <View className="gap-3">
             <Link href="/create-account" asChild>
               <Button size="lg">
-                <Text>Get started</Text>
+                <Text>Create account</Text>
               </Button>
             </Link>
             <Link href="/sign-in" asChild>

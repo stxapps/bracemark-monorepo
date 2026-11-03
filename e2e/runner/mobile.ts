@@ -771,6 +771,14 @@ async function main(): Promise<void> {
       };
       if (account.recoveryCode) env.RECOVERY_CODE = account.recoveryCode;
 
+      if (testCase.id === 'NATIVE-ACCOUNT-003') {
+        // The flow creates its own account on the device, so it needs a name nobody
+        // has. The provisioned account above goes unused: every case gets one, and
+        // a special case here would buy back one browser ceremony at the cost of a
+        // second shape of the loop. Its secret is read off the screen, never handed
+        // over (mobile/flows/create-account.yaml).
+        env.NEW_USERNAME = newCredentials().username;
+      }
       if (testCase.id === 'NATIVE-LINK-001') {
         env.LINK_URL = unresolvableUrl(`${run.runId}-first-on-device`);
         env.LINK_URL_2 = unresolvableUrl(`${run.runId}-second-on-device`);

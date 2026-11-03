@@ -32,7 +32,8 @@ export const PASSPHRASE_DEFAULT_WORDS = 7;
 // quick-crypto's native CSPRNG) before any app code runs.
 //
 // Hyphen, not space: the string is a `password`, shown once and RE-TYPED at
-// create-account's check step and every sign-in. A space is a re-entry footgun there — the
+// the welcome's check after create-account and every sign-in. A space is a re-entry
+// footgun there — the
 // derivation path canonicalizes with trim + NFC (canonicalizePassword, params.ts)
 // and nothing more, so a stray INTERNAL double-space silently derives a different
 // KEK, and mobile keyboards auto-capitalize / autocorrect ". " after one. A hyphen

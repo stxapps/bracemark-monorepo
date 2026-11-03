@@ -115,8 +115,7 @@ export function SettingsHeader({ title, description, back }: SettingsHeaderProps
   // control sitting above it. Spelling both as gaps keeps each step readable as
   // the number it is — the `mb-3` this replaced sat INSIDE the `gap-1` column and
   // silently added to it, so the link was 16 from the title while the code said
-  // 12. web-ui's StepHeader (create-account-form.tsx) is the same shape at the
-  // same 12: same chevron, same `text-sm` link, same `text-xl` h1.
+  // 12.
   //
   // 12-then-4 also has to stay legible as two steps. At 8 the pair would read
   // 8-then-4, which is too fine a distinction to see — the link would look like

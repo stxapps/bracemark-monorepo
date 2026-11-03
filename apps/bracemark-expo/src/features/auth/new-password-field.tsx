@@ -93,6 +93,7 @@ export function NewPasswordField({
   // "Incorrect password." reset off this.
   onEdit,
   inputRef,
+  testID,
 }: {
   control: NewPasswordControl;
   label: string;
@@ -102,6 +103,9 @@ export function NewPasswordField({
   onEdit?: () => void;
   // For a host whose previous field hands Return on to this one (lib/input-keyboard.ts).
   inputRef?: React.Ref<TextInput>;
+  // The field's, for the e2e flows (docs/e2e.md, _the testID contract_); the box that
+  // shows the whole password takes it with `-shown`.
+  testID?: string;
 }) {
   const { password, setPassword, regenerate, generated, displayScore, message } = control;
   const invalid = message.tone === 'error';
@@ -114,6 +118,7 @@ export function NewPasswordField({
       <Text className="text-sm">{label}</Text>
       <PasswordInput
         ref={inputRef}
+        testID={testID}
         aria-label={label}
         aria-invalid={invalid}
         autoComplete="new-password"
@@ -142,7 +147,11 @@ export function NewPasswordField({
           <Text aria-hidden className="font-mono text-sm">
             {'​\n​'}
           </Text>
-          <Text selectable className="flex-1 font-mono text-sm">
+          <Text
+            testID={testID ? `${testID}-shown` : undefined}
+            selectable
+            className="flex-1 font-mono text-sm"
+          >
             {password}
           </Text>
         </View>

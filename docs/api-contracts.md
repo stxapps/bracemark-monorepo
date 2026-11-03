@@ -435,8 +435,21 @@ call rejects with `ApiTimeoutError` and the fetch is aborted.
   retry fails as "Incorrect password." After a new recovery code, the old code may
   already be dead, and the new one was never shown. So when the final save of
   either gets no answer (`ApiTimeoutError`, or fetch's `TypeError` for a dropped
-  connection), the hook throws `UnconfirmedSaveError`. Settings then says the
-  change may have gone through and what to do next, instead of "Please try again."
+  connection), the outcome is unknown, and the two settle it differently. **A
+  password change asks the door rather than the user**: it re-reads the password
+  door and tests the NEW password against it — it opens (the change landed: success,
+  the done screen) or it does not (nothing changed: the ordinary error, and "try
+  again" is true). Only when that read cannot reach the server either does it throw
+  `UnconfirmedSaveError`, and Settings says it cannot tell yet and to retry. The retry
+  is then safe on both proofs: a current password the door refuses is followed by
+  the same test, so a change that landed in between ends as success rather than
+  "Incorrect password." — which once sent people to type the new password as the
+  current one, into a field that refuses it ("That's your current password."). The
+  test tells nobody anything new: the door is served pre-auth by design
+  ([account.md](./account.md), _why the wrapped DEK is served pre-auth_). **A new
+  recovery code cannot be settled that way** — the code that may have landed was
+  never shown — so its hook throws `UnconfirmedSaveError` and Settings says to
+  generate another now.
   A failure earlier in those flows (the door fetch, the Argon2 run) wrote nothing,
   and a reply from the server, a 500 included, is an answer, so both keep their
   ordinary error (`use-change-password.ts` on both platforms; its spec holds that

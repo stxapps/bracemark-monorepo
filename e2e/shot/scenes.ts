@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { expect, type Locator, type Page } from '@playwright/test';
 
 import { SHOT_OUTPUT } from '../paths';
-import { fillCredentialSteps, newCredentials } from '../web/fixtures/account';
+import { newCredentials, submitCreateAccount } from '../web/fixtures/account';
 import { writeOverCapBookmarks } from '../web/fixtures/data-lifecycle';
 
 // WHAT to photograph. `web.ts` is the HOW, and the split is the point: the
@@ -442,28 +442,29 @@ async function editLinkWhole(page: Page): Promise<void> {
   await page.mouse.move(0, 0);
 }
 
-// Create-account's recovery step, for the figure on /docs/create-an-account —
-// the step that page asks a reader not to skip.
+// The welcome's recovery step, for the figure on /docs/create-an-account — the step
+// that page asks a reader not to skip.
 //
-// ⚠ NO ACCOUNT IS MADE, and the code in the picture opens nothing. The client
-// mints the code when the step mounts and the server hears of neither it nor
-// the username until the check after it passes (`fillCredentialSteps`); the
-// scene stops here. So the string a reader
-// sees is the right SHAPE and belongs to no account — which is the only kind
-// of recovery code a public page should print. Do not "finish" this ceremony
-// to tidy the run: that is what would make it a real one.
+// ⚠ AN ACCOUNT IS MADE, which the old scene never did. The recovery code used to be
+// minted on create-account's second step, before anything existed, so the picture
+// belonged to no account. Create-account is one step now and the code is offered
+// after it (docs/account.md, _the welcome_), so the scene stops BEFORE "Create
+// recovery code": the picture shows the offer, no secret, and the throwaway account
+// behind it has none. Do not press the button to make the picture richer: that would
+// print a live code on a public page.
 function recoveryStep(page: Page): Locator {
-  // The auth card, whole: the step is not a `<form>` of its own, and the consent
-  // line and the way back to Sign in under it are part of what this screen says.
-  return page.locator('[data-slot="card"]').filter({ has: page.getByLabel('Your recovery code') });
+  // The card, whole: the step and the way on are what this screen says.
+  return page
+    .locator('[data-slot="card"]')
+    .filter({ has: page.getByRole('button', { name: 'Create recovery code' }) });
 }
 
 async function reachRecoveryStep(page: Page): Promise<void> {
-  await fillCredentialSteps(page, newCredentials());
+  await submitCreateAccount(page, newCredentials());
 }
 
 async function recoveryCodeShown(page: Page): Promise<void> {
-  await expect(page.getByLabel('Your recovery code')).not.toBeEmpty();
+  await expect(page.getByRole('button', { name: 'Create recovery code' })).toBeVisible();
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.mouse.move(0, 0);
 }
@@ -655,10 +656,10 @@ export const SCENES: Scene[] = [
     frame: editLinkDialog,
   },
   {
-    // ⚠ A DOCS FIGURE — `recovery-code`, and the one scene with nobody signed
-    // in (see `recoveryStep`). `goto` is where `fillCredentialSteps` starts.
+    // ⚠ A DOCS FIGURE — `recovery-code`, and the one scene that starts signed out
+    // and makes its own throwaway account (see `recoveryStep`).
     id: 'recovery-code',
-    what: 'a docs figure — create-account’s recovery step, before either button',
+    what: 'a docs figure — the welcome’s recovery step, before either button',
     viewport: { width: 390, height: 844 },
     scale: 3,
     goto: '/create-account',

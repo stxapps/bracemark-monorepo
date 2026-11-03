@@ -1196,122 +1196,146 @@ a missing element rather than as anything that names the cause.
 
 All of them are in the app:
 
-| testID                        | where                                                                                           |
-| ----------------------------- | ----------------------------------------------------------------------------------------------- |
-| `sign-in-username`            | `src/features/auth/sign-in-form.tsx`                                                            |
-| `sign-in-password`            | `src/features/auth/sign-in-form.tsx`                                                            |
-| `sign-in-submit`              | `src/features/auth/sign-in-form.tsx`                                                            |
-| `sign-in-error`               | ” — the submit-level `root` error                                                               |
-| `sign-in-use-recovery`        | ” — the toggle into the recovery door                                                           |
-| `sign-in-recovery-username`   | ” — `RecoverySignIn`                                                                            |
-| `sign-in-recovery-code`       | ” — `RecoverySignIn`                                                                            |
-| `sign-in-recovery-submit`     | ” — `RecoverySignIn`                                                                            |
-| `sign-in-recovery-error`      | ” — `RecoverySignIn`                                                                            |
-| `sign-in-use-password`        | ” — the toggle back out                                                                         |
-| `links-screen`                | `src/app/(app)/links/index.tsx` (a root marker)                                                 |
-| `links-open-navigation`       | `src/features/links/topbar.tsx`                                                                 |
-| `sidebar-rail-hide`           | `src/features/links/sidebar-rail.tsx` — puts the docked rail away (wide windows only)           |
-| `sidebar-rail-show`           | ” — docks it again, in the topbar's leading slot                                                |
-| `sidebar-rail-width`          | ” — the docked rail's width grip, an adjustable whose text ends in its step's name              |
-| `links-nav-list-<id>`         | `src/features/links/sidebar.tsx` — a drawer row                                                 |
-| `links-nav-tag-<id>`          | ” — the tag rows                                                                                |
-| `links-nav-all`               | ” — Show All                                                                                    |
-| `links-nav-section-<section>` | ” — the `lists` and `tags` section headers (collapse/expand)                                    |
-| `links-more-options`          | `src/features/links/more-options-menu.tsx`                                                      |
-| `links-sync`                  | ” — the Sync menu item (`syncNow`)                                                              |
-| `links-open-settings`         | ” — the Settings menu item                                                                      |
-| `links-list`                  | `src/features/links/main.tsx` — the FlashList, the viewport bounds are read against             |
-| `links-refresh-pill`          | `src/features/links/shared.tsx` — the "New updates" pill                                        |
-| `links-empty`                 | ” — the settled empty state, never the loading bones; a scroller, its bounds are the empty pane |
-| `add-link-url`                | `src/features/links/link-add-panel.tsx`                                                         |
-| `add-link-save`               | ” — the submit, whose label flips Save→Confirm                                                  |
-| `add-link-optional`           | ” — the "List, tags & note" disclosure                                                          |
-| `add-link-list`               | ” — the optional fields, each named like its label                                              |
-| `add-link-tags`               | ”                                                                                               |
-| `add-link-note`               | ”                                                                                               |
-| `add-link-cancel`             | ” — the explicit discard                                                                        |
-| `edit-link-title`             | `src/features/links/link-edit-panel.tsx`                                                        |
-| `edit-link-list`              | ”                                                                                               |
-| `edit-link-tags`              | ”                                                                                               |
-| `edit-link-note`              | ”                                                                                               |
-| `edit-link-save`              | ”                                                                                               |
-| `edit-link-cancel`            | ” — the explicit discard                                                                        |
-| `list-picker-search`          | `src/components/links/list-command.tsx`                                                         |
-| `list-picker-create`          | ” — the Create row                                                                              |
-| `tag-picker-search`           | `src/components/links/tags-command.tsx`                                                         |
-| `tag-picker-create`           | ” — the Create row                                                                              |
-| `tag-picker-rows`             | ” — the rows' scroller, for `childOf`                                                           |
-| `tag-picker-done`             | `src/components/links/tags-field.tsx`                                                           |
-| `link-options`                | `src/features/links/link-row-menu.tsx` — a row's ⋯                                              |
-| `link-menu-<action>`          | ” — `edit` `pin` `unpin` `archive` `unarchive` `remove` `restore` `delete`                      |
-| `link-destroy-submit`         | `src/features/links/link-destroy-confirm.tsx`                                                   |
-| `links-title`                 | `src/features/links/topbar.tsx` — the view the route projects                                   |
-| `links-search-toggle`         | ” — summons the search row                                                                      |
-| `links-search-input`          | `src/features/links/search-bar.tsx`                                                             |
-| `links-search-clear`          | ”                                                                                               |
-| `links-search-advanced`       | ” — opens the advanced sheet                                                                    |
-| `advanced-search-<field>`     | ” — `text-all` `text-any` `text-none` `url` `title` `note`                                      |
-| `advanced-search-submit`      | ” — also `-clear`, `-close` (the sheet's ✕, `components/ui/sheet.tsx`)                          |
-| `links-select-links`          | `src/features/links/more-options-menu.tsx` — enters bulk edit                                   |
-| `links-lock-app`              | ” — relocks the app                                                                             |
-| `bulk-count`                  | `src/features/links/bulk-edit-bar.tsx`                                                          |
-| `bulk-<action>`               | ” — `exit` `select-all` `copy` `move` `more` `remove` `restore` `delete`                        |
-| `bulk-menu-<action>`          | ” — `edit-tags` `pin` `unpin` `archive` `unarchive`                                             |
-| `bulk-tags-save`              | `src/features/links/bulk-tags-dialog.tsx`                                                       |
-| `list-picker-rows`            | `src/components/links/list-command.tsx` — the rows' scroller, for `childOf`                     |
-| `list-menu-<action>`          | `src/features/settings/lists-section.tsx` — `move-to` `lock` `unlock` `remove-lock`             |
-| `app-lock-set`                | `src/features/settings/misc-section.tsx` — also `app-lock-remove`                               |
-| `lock-dialog-<part>`          | `src/components/lock-password-dialog.tsx` — `password` `checkbox` `submit` `error`              |
-| `app-lock-pane`               | `src/components/app-lock-gate.tsx` — the gate is up                                             |
-| `list-lock-pane`              | `src/features/links/main.tsx` — a locked list's pane is up                                      |
-| `lock-pane-<part>`            | `src/components/lock-pane.tsx` — `password` `unlock` `error`                                    |
-| `settings-open-navigation`    | `src/features/settings/topbar.tsx`                                                              |
-| `settings-close`              | ” — returns to the links route                                                                  |
-| `settings-title`              | ” — the active section's label                                                                  |
-| `settings-nav-<section>`      | `src/features/settings/sidebar.tsx`                                                             |
-| `settings-back`               | `src/features/settings/settings-kit.tsx` — a sub-view's back link (its label repeats the title) |
-| `measure-stall-reading`       | `src/features/settings/data-section.tsx` — measurement bundles only (`measure:data:<platform>`) |
-| `measure-begin-<label>`       | `src/components/measure-probe.tsx` — also `measure-end`; measurement bundles only               |
-| `export-data-format-<format>` | ” — `bracemark` `netscape` `csv` `text` export radio rows                                       |
-| `extraction-mode-<mode>`      | `src/features/settings/extraction-section.tsx` — `off` `saves` `all` radio rows                 |
-| `extraction-count-<bucket>`   | ” — the number in `done` `pending` `will-retry` `wont-retry`                                    |
-| `extraction-progress`         | ” — "N of M links previewed."                                                                   |
-| `extraction-generate-all`     | ” — also `extraction-pause`, which replaces it while the job runs                               |
-| `delete-all-open`             | `src/features/settings/data-section.tsx`                                                        |
-| `delete-all-confirm`          | ” — the confirmation checkbox row                                                               |
-| `delete-all-submit`           | ” — the destructive action                                                                      |
-| `delete-all-complete`         | ” — renders only after a successful wipe                                                        |
-| `delete-account-open`         | `src/features/settings/account-section.tsx`                                                     |
-| `delete-account-password`     | ” — the fresh-proof password re-entry                                                           |
-| `delete-account-confirm`      | ” — the confirmation checkbox row                                                               |
-| `delete-account-submit`       | ” — the destructive action                                                                      |
-| `share-title`                 | `src/features/share/share-specimen.tsx` — the payload title                                     |
-| `share-url`                   | ” — the normalized address                                                                      |
-| `share-add`                   | `src/features/share/share-screen.tsx` — the Save action                                         |
-| `share-list-row`              | ” — the current destination disclosure                                                          |
-| `share-tags-row`              | ” — the current tag-set disclosure                                                              |
-| `share-saved`                 | ” — the durable-save confirmation                                                               |
-| `share-signed-out`            | ” — the no-session terminal state                                                               |
-| `share-no-url`                | ” — the no-HTTP-URL terminal state                                                              |
-| `share-quota`                 | ” — the at-cap terminal state                                                                   |
-| `share-list-input`            | `src/features/share/share-list-picker.tsx`                                                      |
-| `share-list-create`           | ” — the new-list action                                                                         |
-| `share-tag-input`             | `src/features/share/share-tags-picker.tsx`                                                      |
-| `share-tag-create`            | ” — the new-tag action                                                                          |
-| `share-close`                 | `src/features/share/share-kit.tsx` — the process/surface exit                                   |
-| `share-back`                  | ” — a picker's header control, back to the compose screen                                       |
-| `share-backdrop`              | ” — the dismiss layer behind the panel; a flow asserts its ABSENCE, never taps it               |
-| `subscription-plan`           | `src/features/settings/subscription-section.tsx` — the current plan's name                      |
-| `subscription-refresh`        | ” — re-reads `GET /v1/iap/status`                                                               |
-| `subscription-price-<plan>`   | ” — the upgrade card's price: the store's, or the planning placeholder                          |
-| `subscription-upgrade-<plan>` | ” — the upgrade card's button; enabled only once the store returned the product                 |
-| `subscription-restore`        | ” — Restore purchases                                                                           |
-| `subscription-notice`         | ” — the result notice; also `subscription-error`                                                |
-| `paywall`                     | `src/contexts/paywall-provider.tsx` — the upgrade dialog is up                                  |
-| `paywall-<action>`            | ” — `upgrade` `dismiss`                                                                         |
-| `contract-vectors-pass`       | `src/app/contract-vectors.tsx` (dev-only)                                                       |
-| `contract-vectors-fail`       | ” — carries the failing check names in its text                                                 |
-| `vector-<check>`              | ” — one per vector, `PASS`/`FAIL`/`RUNNING`                                                     |
+| testID                        | where                                                                                            |
+| ----------------------------- | ------------------------------------------------------------------------------------------------ |
+| `sign-in-username`            | `src/features/auth/sign-in-form.tsx`                                                             |
+| `sign-in-password`            | `src/features/auth/sign-in-form.tsx`                                                             |
+| `sign-in-submit`              | `src/features/auth/sign-in-form.tsx`                                                             |
+| `sign-in-error`               | ” — the submit-level `root` error                                                                |
+| `sign-in-use-recovery`        | ” — the toggle into the recovery door                                                            |
+| `sign-in-recovery-username`   | ” — `RecoverySignIn`                                                                             |
+| `sign-in-recovery-code`       | ” — `RecoverySignIn`                                                                             |
+| `sign-in-recovery-submit`     | ” — `RecoverySignIn`                                                                             |
+| `sign-in-recovery-error`      | ” — `RecoverySignIn`                                                                             |
+| `sign-in-use-password`        | ” — the toggle back out                                                                          |
+| `links-screen`                | `src/app/(app)/links/index.tsx` (a root marker)                                                  |
+| `links-open-navigation`       | `src/features/links/topbar.tsx`                                                                  |
+| `sidebar-rail-hide`           | `src/features/links/sidebar-rail.tsx` — puts the docked rail away (wide windows only)            |
+| `sidebar-rail-show`           | ” — docks it again, in the topbar's leading slot                                                 |
+| `sidebar-rail-width`          | ” — the docked rail's width grip, an adjustable whose text ends in its step's name               |
+| `links-nav-list-<id>`         | `src/features/links/sidebar.tsx` — a drawer row                                                  |
+| `links-nav-tag-<id>`          | ” — the tag rows                                                                                 |
+| `links-nav-all`               | ” — Show All                                                                                     |
+| `links-nav-section-<section>` | ” — the `lists` and `tags` section headers (collapse/expand)                                     |
+| `links-more-options`          | `src/features/links/more-options-menu.tsx`                                                       |
+| `links-sync`                  | ” — the Sync menu item (`syncNow`)                                                               |
+| `links-open-settings`         | ” — the Settings menu item                                                                       |
+| `links-list`                  | `src/features/links/main.tsx` — the FlashList, the viewport bounds are read against              |
+| `links-refresh-pill`          | `src/features/links/shared.tsx` — the "New updates" pill                                         |
+| `links-empty`                 | ” — the settled empty state, never the loading bones; a scroller, its bounds are the empty pane  |
+| `add-link-url`                | `src/features/links/link-add-panel.tsx`                                                          |
+| `add-link-save`               | ” — the submit, whose label flips Save→Confirm                                                   |
+| `add-link-optional`           | ” — the "List, tags & note" disclosure                                                           |
+| `add-link-list`               | ” — the optional fields, each named like its label                                               |
+| `add-link-tags`               | ”                                                                                                |
+| `add-link-note`               | ”                                                                                                |
+| `add-link-cancel`             | ” — the explicit discard                                                                         |
+| `edit-link-title`             | `src/features/links/link-edit-panel.tsx`                                                         |
+| `edit-link-list`              | ”                                                                                                |
+| `edit-link-tags`              | ”                                                                                                |
+| `edit-link-note`              | ”                                                                                                |
+| `edit-link-save`              | ”                                                                                                |
+| `edit-link-cancel`            | ” — the explicit discard                                                                         |
+| `list-picker-search`          | `src/components/links/list-command.tsx`                                                          |
+| `list-picker-create`          | ” — the Create row                                                                               |
+| `tag-picker-search`           | `src/components/links/tags-command.tsx`                                                          |
+| `tag-picker-create`           | ” — the Create row                                                                               |
+| `tag-picker-rows`             | ” — the rows' scroller, for `childOf`                                                            |
+| `tag-picker-done`             | `src/components/links/tags-field.tsx`                                                            |
+| `link-options`                | `src/features/links/link-row-menu.tsx` — a row's ⋯                                               |
+| `link-menu-<action>`          | ” — `edit` `pin` `unpin` `archive` `unarchive` `remove` `restore` `delete`                       |
+| `link-destroy-submit`         | `src/features/links/link-destroy-confirm.tsx`                                                    |
+| `links-title`                 | `src/features/links/topbar.tsx` — the view the route projects                                    |
+| `links-search-toggle`         | ” — summons the search row                                                                       |
+| `links-search-input`          | `src/features/links/search-bar.tsx`                                                              |
+| `links-search-clear`          | ”                                                                                                |
+| `links-search-advanced`       | ” — opens the advanced sheet                                                                     |
+| `advanced-search-<field>`     | ” — `text-all` `text-any` `text-none` `url` `title` `note`                                       |
+| `advanced-search-submit`      | ” — also `-clear`, `-close` (the sheet's ✕, `components/ui/sheet.tsx`)                           |
+| `links-select-links`          | `src/features/links/more-options-menu.tsx` — enters bulk edit                                    |
+| `links-lock-app`              | ” — relocks the app                                                                              |
+| `bulk-count`                  | `src/features/links/bulk-edit-bar.tsx`                                                           |
+| `bulk-<action>`               | ” — `exit` `select-all` `copy` `move` `more` `remove` `restore` `delete`                         |
+| `bulk-menu-<action>`          | ” — `edit-tags` `pin` `unpin` `archive` `unarchive`                                              |
+| `bulk-tags-save`              | `src/features/links/bulk-tags-dialog.tsx`                                                        |
+| `list-picker-rows`            | `src/components/links/list-command.tsx` — the rows' scroller, for `childOf`                      |
+| `list-menu-<action>`          | `src/features/settings/lists-section.tsx` — `move-to` `lock` `unlock` `remove-lock`              |
+| `app-lock-set`                | `src/features/settings/misc-section.tsx` — also `app-lock-remove`                                |
+| `lock-dialog-<part>`          | `src/components/lock-password-dialog.tsx` — `password` `checkbox` `submit` `error`               |
+| `app-lock-pane`               | `src/components/app-lock-gate.tsx` — the gate is up                                              |
+| `list-lock-pane`              | `src/features/links/main.tsx` — a locked list's pane is up                                       |
+| `lock-pane-<part>`            | `src/components/lock-pane.tsx` — `password` `unlock` `error`                                     |
+| `settings-open-navigation`    | `src/features/settings/topbar.tsx`                                                               |
+| `settings-close`              | ” — returns to the links route                                                                   |
+| `settings-title`              | ” — the active section's label                                                                   |
+| `settings-nav-<section>`      | `src/features/settings/sidebar.tsx`                                                              |
+| `settings-back`               | `src/features/settings/settings-kit.tsx` — a sub-view's back link (its label repeats the title)  |
+| `measure-stall-reading`       | `src/features/settings/data-section.tsx` — measurement bundles only (`measure:data:<platform>`)  |
+| `measure-begin-<label>`       | `src/components/measure-probe.tsx` — also `measure-end`; measurement bundles only                |
+| `export-data-format-<format>` | ” — `bracemark` `netscape` `csv` `text` export radio rows                                        |
+| `extraction-mode-<mode>`      | `src/features/settings/extraction-section.tsx` — `off` `saves` `all` radio rows                  |
+| `extraction-count-<bucket>`   | ” — the number in `done` `pending` `will-retry` `wont-retry`                                     |
+| `extraction-progress`         | ” — "N of M links previewed."                                                                    |
+| `extraction-generate-all`     | ” — also `extraction-pause`, which replaces it while the job runs                                |
+| `delete-all-open`             | `src/features/settings/data-section.tsx`                                                         |
+| `delete-all-confirm`          | ” — the confirmation checkbox row                                                                |
+| `delete-all-submit`           | ” — the destructive action                                                                       |
+| `delete-all-complete`         | ” — renders only after a successful wipe                                                         |
+| `delete-account-open`         | `src/features/settings/account-section.tsx`                                                      |
+| `delete-account-password`     | ” — the fresh-proof password re-entry                                                            |
+| `delete-account-confirm`      | ” — the confirmation checkbox row                                                                |
+| `delete-account-submit`       | ” — the destructive action                                                                       |
+| `change-password-open`        | `src/features/settings/account-section.tsx` — the Account row                                    |
+| `change-password-current`     | ” — the current-password proof                                                                   |
+| `change-password-new`         | ” — the new-password field (`NewPasswordField`); its revealed box is `change-password-new-shown` |
+| `change-password-submit`      | ” — Change password                                                                              |
+| `change-password-show-new`    | ” — the done screen's "Show my new password"                                                     |
+| `change-password-shown-new`   | ” — the new password that opens, as text                                                         |
+| `change-password-done`        | ” — the done screen's Done                                                                       |
+| `create-account-username`     | `src/features/auth/create-account-form.tsx` — the one step                                       |
+| `create-account-password`     | ” — the password (`NewPasswordField`); its revealed box is `create-account-password-shown`       |
+| `create-account-submit`       | ” — Create account                                                                               |
+| `create-account-error`        | ” — a failure other than a taken username                                                        |
+| `welcome-create-recovery`     | `src/components/welcome-gate.tsx` — step 1, Create recovery code                                 |
+| `welcome-skip-recovery`       | ” — Skip for now                                                                                 |
+| `welcome-recovery-code`       | ” — the code, as text (`ShowOnceSecret`'s `testID`)                                              |
+| `welcome-recovery-continue`   | ” — Continue, once the code is shown                                                             |
+| `welcome-check-password`      | ” — step 2, the check's password                                                                 |
+| `welcome-check-submit`        | ” — Sign in to check                                                                             |
+| `welcome-check-error`         | ” — its empty / mismatch message                                                                 |
+| `welcome-show-password`       | ” — "Forgot your password? Show it again"                                                        |
+| `welcome-shown-password`      | ” — the held password, as text                                                                   |
+| `welcome-check-continue`      | ” — Continue, once the check passes                                                              |
+| `welcome-skip-check`          | ” — Skip                                                                                         |
+| `welcome-import`              | ” — step 3, Import bookmarks                                                                     |
+| `welcome-start`               | ” — step 3, Start using Bracemark                                                                |
+| `share-title`                 | `src/features/share/share-specimen.tsx` — the payload title                                      |
+| `share-url`                   | ” — the normalized address                                                                       |
+| `share-add`                   | `src/features/share/share-screen.tsx` — the Save action                                          |
+| `share-list-row`              | ” — the current destination disclosure                                                           |
+| `share-tags-row`              | ” — the current tag-set disclosure                                                               |
+| `share-saved`                 | ” — the durable-save confirmation                                                                |
+| `share-signed-out`            | ” — the no-session terminal state                                                                |
+| `share-no-url`                | ” — the no-HTTP-URL terminal state                                                               |
+| `share-quota`                 | ” — the at-cap terminal state                                                                    |
+| `share-list-input`            | `src/features/share/share-list-picker.tsx`                                                       |
+| `share-list-create`           | ” — the new-list action                                                                          |
+| `share-tag-input`             | `src/features/share/share-tags-picker.tsx`                                                       |
+| `share-tag-create`            | ” — the new-tag action                                                                           |
+| `share-close`                 | `src/features/share/share-kit.tsx` — the process/surface exit                                    |
+| `share-back`                  | ” — a picker's header control, back to the compose screen                                        |
+| `share-backdrop`              | ” — the dismiss layer behind the panel; a flow asserts its ABSENCE, never taps it                |
+| `subscription-plan`           | `src/features/settings/subscription-section.tsx` — the current plan's name                       |
+| `subscription-refresh`        | ” — re-reads `GET /v1/iap/status`                                                                |
+| `subscription-price-<plan>`   | ” — the upgrade card's price: the store's, or the planning placeholder                           |
+| `subscription-upgrade-<plan>` | ” — the upgrade card's button; enabled only once the store returned the product                  |
+| `subscription-restore`        | ” — Restore purchases                                                                            |
+| `subscription-notice`         | ” — the result notice; also `subscription-error`                                                 |
+| `paywall`                     | `src/contexts/paywall-provider.tsx` — the upgrade dialog is up                                   |
+| `paywall-<action>`            | ” — `upgrade` `dismiss`                                                                          |
+| `contract-vectors-pass`       | `src/app/contract-vectors.tsx` (dev-only)                                                        |
+| `contract-vectors-fail`       | ” — carries the failing check names in its text                                                  |
+| `vector-<check>`              | ” — one per vector, `PASS`/`FAIL`/`RUNNING`                                                      |
 
 The three `contract-vectors` ids are the one group NOT in the shipped app: the
 screen returns a `<Redirect>` in production. Exactly one of `-pass`/`-fail` ever
@@ -3346,13 +3370,13 @@ change one and the other two are describing a different picture
 Five more scenes are docs figures, each with a way to come out wrong that fails
 nothing:
 
-| scene               | the frame                       | what goes wrong silently                                                                                                                                                                                                                                              |
-| ------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `select-links`      | the whole 390x420 viewport      | a tick below the fold is still clickable — Playwright scrolls the row into view — so the capture is of a scrolled list under a count naming rows that have left the picture; and the height is counted off how this library's first three titles wrap                 |
-| `sync-status`       | the Sync row                    | its second line is a clock ("just now", then "N min ago"), so it depends on how many scenes ran first; the scene presses Sync now to pin it                                                                                                                           |
-| `import-over-limit` | the import's question           | pressing "Import 10 links" instead of leaving the question unanswered fills the account, and every later run photographs a different sentence                                                                                                                         |
-| `edit-link`         | the Edit link dialog            | the preview is read from local bytes only, so the dialog can be open and complete-looking over an empty plate; and the picture is of a link with NO title of its own — retitle the library's first link and the figure's caption describes a state it no longer shows |
-| `recovery-code`     | the auth card and 16px round it | finishing the ceremony instead of stopping at step 3 makes the code in the picture a working door to an account                                                                                                                                                       |
+| scene               | the frame                   | what goes wrong silently                                                                                                                                                                                                                                              |
+| ------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `select-links`      | the whole 390x420 viewport  | a tick below the fold is still clickable — Playwright scrolls the row into view — so the capture is of a scrolled list under a count naming rows that have left the picture; and the height is counted off how this library's first three titles wrap                 |
+| `sync-status`       | the Sync row                | its second line is a clock ("just now", then "N min ago"), so it depends on how many scenes ran first; the scene presses Sync now to pin it                                                                                                                           |
+| `import-over-limit` | the import's question       | pressing "Import 10 links" instead of leaving the question unanswered fills the account, and every later run photographs a different sentence                                                                                                                         |
+| `edit-link`         | the Edit link dialog        | the preview is read from local bytes only, so the dialog can be open and complete-looking over an empty plate; and the picture is of a link with NO title of its own — retitle the library's first link and the figure's caption describes a state it no longer shows |
+| `recovery-code`     | the welcome's card and 16px | pressing Create recovery code instead of stopping before it makes the code in the picture a working door to an account                                                                                                                                                |
 
 `import-over-limit` is also the one scene that is **not a picture of the shot
 account**: the question is only asked of a free plan, which the shot account's
@@ -3364,13 +3388,14 @@ first launch. Like `scale`, the account is fixed per browser context, so
 cap, which no page is otherwise allowed to type; the site's `figures.spec.ts`
 fails when the plan table stops agreeing with it.
 
-`recovery-code` is the one scene with **nobody signed in** (`account:
-SIGNED_OUT`), and what it leans on is where the ceremony commits: the client
-mints the recovery code when step 3 mounts, and the server hears of neither the
-code nor the username until one of that step's two buttons is pressed. The scene
-presses neither, so no account exists afterwards and the string a reader sees
-opens nothing — the only kind of recovery code a public page should print.
-`launchApp` takes `signedOut` for it and skips the ceremony. It is also the one
+`recovery-code` is the one scene that **starts signed out** (`account:
+SIGNED_OUT`) and makes its own throwaway account: create-account is one step, and
+the recovery code is offered after it, on the welcome's first step
+([account.md](./account.md), _the welcome_). The scene stops there, before
+**Create recovery code**, so the picture shows the offer and no code, and the
+account behind it has none — a code is live the moment it is shown, so a picture
+of one would print a working door. `launchApp` takes `signedOut` for it and skips
+its own ceremony; the scene's `prepare` runs the create (`submitCreateAccount`). It is also the one
 scene with a `bleed`: the auth card's top-right corner is the brand's fold rather
 than a radius, so the frame is grown by a margin of the page and the card's own
 edge is in the picture, where every other framed capture leaves its edge to the
@@ -4251,15 +4276,19 @@ sign-in password with the lock password. They now say `one-time-code`
 
 ```sh
 npm run dev                                         # the api and the web app
-npm run measure:password-manager                    # all eight flows, about a minute
+npm run measure:password-manager                    # all eleven flows, about a minute and a half
 npm run measure:password-manager -- --flow change-generated,create-account
 npm run measure:password-manager -- --headed
 ```
 
-Eight flows, each on a fresh account in a fresh profile — change password
+Eleven flows, each on a fresh account in a fresh profile — change password
 (current password + the generated words kept, current password + a password typed
 over them, recovery code + the words kept), Settings → Recovery code, create-account with the generated words and
-with a typed password, and the two lock flows (`lock-app`: set the app lock, close Settings, unlock;
+with a typed password (both one step, the welcome skipped), create-account through
+the whole welcome — a recovery code, then a refused and a passed check
+(`create-account-welcome`), change password
+with a wrong current password before the right one (`change-wrong-current`),
+sign-in after a trip through the recovery door and back (`sign-in-switch`), and the two lock flows (`lock-app`: set the app lock, close Settings, unlock;
 `lock-list`: lock a list, close Settings, unlock it in place) — each against the
 submissions it should produce: the fields, Chrome's decision, and how many. A
 lock flow's expected count is **zero**. Under `off` the app-lock flow logged two
@@ -4267,13 +4296,15 @@ lock flow's expected count is **zero**. Under `off` the app-lock flow logged two
 logged one. A field Chrome chose that has no id prints as `#<renderer id>`
 rather than `—`, so a lock field is not mistaken for no field. The recovery-code view's expected field is the **current
 password**, never the code: the code is a second door, and saved as this site's
-password it would fill sign-in. Create-account's is **one** submission, at the
-end: an exposed passphrase on its setup step made Chrome treat Continue as a
-submission (the username check's fetch counts as one) and offer to save before
-the account existed. Its check field reads as the **current** password on both
-paths, because the check is a login and not a sign-up: on a `new-password` field
-there Safari offered its own password
-([accessibility.md](./accessibility.md), _iOS AutoFill, checked by hand_). Every
+password it would fill sign-in. Create-account's is **one** submission, the create
+itself, with `signup-new-password` as the new password: the form is one step, and goes
+away only once the account exists (docs/account.md, _creating an account_). The
+welcome flow adds a second, its passed check — a login with the same pair, which a
+fresh profile that never pressed Save is offered again; the refused check is none,
+and the recovery code never appears. The check field is `current-password`, because
+the check is a login and not a sign-up: on a `new-password` field there Safari
+offered its own password ([accessibility.md](./accessibility.md), _iOS AutoFill,
+checked by hand_). Every
 change-password flow expects `cp-new-password` as the new password, the generated
 words included. It
 prints a ✓/✗ line per flow and exits non-zero on a difference, and writes each
@@ -4286,7 +4317,17 @@ all eight as expected, every change-password flow taking `cp-new-password` as th
 password. Under `next dev` the same run could not finish: starting the Argon2 worker
 made Turbopack compile it and reload the page mid-submit, at create-account and at
 change password alike, which is a dev-server artifact the production build does not
-have.
+have. It is not only the measurement: `WEB-ACCOUNT-006` and `-008` fail the same way
+under `next dev` (the trace shows `[Fast Refresh] rebuilding` and the page reloading
+mid-submit, on retry too), and pass against the export. Run once more the same day
+with the four flows added after it: all twelve as expected; and again after
+create-account became one step with the welcome after it, on the eleven flows above:
+all eleven as expected. ⚠ On that run
+`nx build @stxapps/bracemark-web -c development` baked **`https://api.bracemark.com`**
+into the export (its log said `Environments: .env.production`), so the `envFile` did
+not take; exporting `.env.development` into the shell first (`set -a; .
+apps/bracemark-web/.env.development; set +a`) gave a local build. Check the bundle
+names `localhost:8787` before serving one, as `runner/web-export.ts` does.
 
 **It is not a test, and it is in no suite.** The internals page is a debugging
 surface, not a contract, and the system Chrome auto-updates, so a suite gated on

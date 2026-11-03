@@ -195,8 +195,9 @@ export function NewPasswordField({
           not get the full-width button that IS the step on the recovery panels, and
           which here sat stacked over the submit, two full-width buttons for one real
           action. The panel's reason for Regenerate above Copy (a copy it silently
-          invalidates) is covered by what follows the submit: create-account's check
-          step, and change password's done screen, which shows the new password again.
+          invalidates) is covered by what follows the submit: the welcome's check after
+          create-account, and change password's done screen, which both show the
+          password again.
 
           Copy LEFT, where reading starts, because it is the one people need; Regenerate
           pushed RIGHT, so a thumb aiming at Copy doesn't mint a new password, and

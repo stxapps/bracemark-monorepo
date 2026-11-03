@@ -320,10 +320,10 @@ chromium` (~550 MB into `~/Library/Caches/ms-playwright/`) if it is absent.
   after it and expect the site dev server to be up. Sign-in is `/sign-in`. After
   sign-in, give the initial sync ~2s before asserting on content.
 - Creating an account headless: fill `#username`, replace `#signup-new-password`
-  with a known password (the field starts on generated words), Continue, "Continue
-  without a recovery code" on the recovery step (its primary is disabled until the
-  saved-it checkbox is ticked), fill `#password`, then "Sign in to finish". Nothing
-  exists until that passes. Argon2 makes the submit take a few seconds.
+  with a known password (the field starts on generated words), then "Create
+  account" — one step, which creates the account and signs in (Argon2 makes it take
+  a few seconds). The welcome follows: "Skip for now" (no recovery code), "Skip" (no
+  check), "Start using Bracemark". `e2e/web/fixtures/account.ts` is the scripted copy.
 
 ## Drive real Safari on macOS
 

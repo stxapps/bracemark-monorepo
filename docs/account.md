@@ -677,7 +677,7 @@ their own only behind a strength gate. As built:
 - **the choose-a-password block is ONE component per platform** —
   `NewPasswordField` + `useNewPassword`
   (`web-ui/components/auth/new-password-field.tsx`, native twin in
-  `bracemark-expo/src/features/auth/`), rendered by create-account's first step and
+  `bracemark-expo/src/features/auth/`), rendered by create-account and
   by Settings → change password. It owns the field, the meter, the message line,
   the Copy/Regenerate row and **the gate**: the hook returns `{ password, ok }`, and
   a caller spells its submit's `disabled` as `!ok` and nothing else. The two
@@ -707,8 +707,9 @@ their own only behind a strength gate. As built:
   state in words instead of only in an `aria-label`. Regenerate goes **above** Copy
   because it silently invalidates a copy already taken, and nothing ever checks a
   recovery code, so a stale copy would surface only when the code is needed. Settle,
-  then commit. Only create-account passes the checkbox (_creating an account_ and
-  _a recovery code in Settings_ say why).
+  then commit. No caller passes the checkbox any more: both places that show a code —
+  the welcome and Settings — show one that is already live (_a recovery code in
+  Settings_ says why that drops the box).
 
 This keeps the promise: a user _can_ pick their own username and password (good
 UX), but the **safe path is the default path** (wallet-grade entropy), rather
@@ -716,74 +717,130 @@ than relying on every user to invent a strong secret.
 
 ### ⚠ creating an account
 
-> **STATUS — ✅ built** (`web-ui/components/auth/create-account-form.tsx`,
-> `new-password-field.tsx`, native twins in `bracemark-expo/src/features/auth/`).
-> The words are in `CREATE_ACCOUNT_COPY`, `react/lib/create-account-copy.ts`.
+> **STATUS — ✅ built** (`web-ui/components/auth/create-account-form.tsx`, native twin
+> in `bracemark-expo/src/features/auth/`; the welcome is `WelcomeGate`,
+> `bracemark-web/src/components/welcome-gate.tsx` and
+> `bracemark-expo/src/components/welcome-gate.tsx`). The words are in
+> `CREATE_ACCOUNT_COPY` and `WELCOME_COPY`, `react/lib/create-account-copy.ts`.
 
-| step                         | shows                                                                                                                | notes                                                                                                                                   |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. Create account            | username; one real `new-password` field holding the generated words; meter; one row: Copy left, Regenerate right     | no generated/typed switch: editing the field is choosing your own, and an edit meets the same floors. No "I've saved it" checkbox       |
-| 2. Recovery code             | the wallet panel; **Continue**; **Continue without a recovery code**                                                 | skippable, and the checkbox still gates Continue. `recoverySaved` is an attestation, so making it mandatory only moves the exit into it |
-| 3. Check your saved password | Back; read-only visible username; `current-password`; **Sign in to finish**; **Forgot your password? Show it again** | a local compare of canonical forms. Passing creates the account and signs in                                                            |
+**One step:** a username, the `new-password` field already holding generated words
+(meter, message line, Copy left and Regenerate right, the eye and the whole-password
+box), and **Create account**, which creates the account and signs in. That is the
+shape every password manager knows as a sign-up, and the reason for it is the
+manager:
 
-**The order is the design, and each part of it is about a password manager.**
+- **Whatever is in the field when the button is pressed simply is the password.** A
+  manager's own suggestion (Safari's "Use Strong Password", Chrome's "Suggest strong
+  password") is welcome here, not a trap: there is nothing later for it to disagree
+  with.
+- **The form goes away only once the account exists**, which is when a manager offers
+  to save. One save, with the new password, at the right time. Measured on Chrome
+  (`create-account`, `create-account-own`, [e2e.md](./e2e.md), _measuring the password
+  manager_): one submission, `signup-new-password` as the new password, after the
+  account is made.
+- ⚠ **Open: Safari and words set by script.** On the three-step form, macOS Safari
+  raised "Save Password?" at Continue for a password typed by hand and **not** for the
+  generated words, which the field holds by script ([accessibility.md](./accessibility.md),
+  _iOS AutoFill, checked by hand_). That was a mercy there. Here it would mean Safari
+  does not offer to save the untouched words at **Create account** — Chrome does,
+  measured. Not yet run in Safari. If it does not, the welcome's check catches it:
+  nothing is saved, the check is empty, "Show it again" is right there.
 
-- **A new password is asked for once**, on step 1, where a manager's suggestion is
-  welcome. Whatever is accepted simply is the password.
-- **The check comes last and reads as a login**, so a manager offers what it holds
-  rather than a new password that could not match.
-- **The recovery step sits between them** because copying the code replaces the
-  clipboard. Otherwise the check could be passed by pasting back what step 1 copied,
-  which proves nothing.
-- **Nothing exists until the check passes.** So Back undoes everything, a closed tab
-  strands no username, and a password a browser filled in can simply be believed.
+**It replaced a three-step ceremony** (2026-11-03), whose order was: the password, a
+recovery code, then a sign-in-shaped check, with nothing created until the check
+passed. Every part of that cost something on some browser:
 
-A wrong password gets "That doesn’t match. Check what you saved and try again."
-An empty one, spaces included since derivation trims them, gets "Please enter a
-password" instead: it is not a mismatch, and the lock screens already say it.
-Sign in to finish stays live, for the reason in _when a submit is allowed to be
-`disabled`_, and a username lost at the last moment still returns to step 1
-(`UsernameTakenError`). **Forgot your password? Show it again** reveals it in place,
-so someone who saved nothing is told and not stranded. Once the tab is closed that is
-gone with everything else, because no account exists.
+- step 1's filled `new-password` field went away **before the account existed**, and
+  the iOS app read that as a submission — **Save Password?** over the recovery step,
+  for an account not yet made (iPhone simulator, measured; it is what
+  `NATIVE-ACCOUNT-003` first caught);
+- the check had to read as a **login** to Safari, which rested on two exact strings,
+  and when Safari offered anyway, the form needed an "adopt" branch to switch to the
+  password Safari had already saved;
+- Back, Regenerate and a browser's earlier save could leave a saved copy that no
+  longer matched.
 
-The header rules from before all hold. Every step opens with a **`StepHeader`**: a
-chrome row (the Back link plus a plain **"Step _n_ of 3"**) over that step's own
-title and description, because a static title leaves near-identical screens differing
-by a small grey counter. So **neither the page nor the screen renders a header of its
-own**: `step` is form-local state, three boundaries below both, and the header moved
-down to it. The **consent line** does not move, because it must hold at every step.
-The counter stays plain text. It earns its place on step 1, says nothing like
-"(optional)" on the recovery step, and is not dots or a capsule strip, which would
-imply steps you can click back to and outshout the primary button.
+The recovery code and the check were worth keeping, so they moved **after** the
+account, to the welcome, below. A failed check there is no longer "nothing exists,
+start again" — but a held password and a real password change cover everything that
+gave.
 
-**Step 1's Copy is a text button, on one row with Regenerate.** A normal sign-up is a
-username, a password and a submit, and on this step the main way the password gets
-saved is the browser's own save, because the field is a real `new-password` field.
-Copy is the fallback for someone saving it anywhere else, so it does not get the
-wallet panel's full-width button, which here stacked a second full-width button over
-Continue. The panel's reason for Regenerate above Copy (it silently invalidates a
-copy already taken) is covered on this form by step 3, which checks the saved copy
-before anything exists. Copy goes **left**, where reading starts, because it is the
-one people need; Regenerate goes **right**, so the two sit far apart and a thumb
-aiming at Copy does not mint a new password, and "Copy" turning into "Copied" moves
-nothing. Both share one class (`SECRET_TEXT_ACTION`, beside `ShowOnceSecret` on each
-platform). Settings → change password draws it the same way, being the same field. The
-recovery panels, here and in Settings, keep the full-width Copy: there it IS the step,
-and the recovery step depends on the code actually being copied. The recovery step's
-Regenerate takes step 1's look (`SECRET_TEXT_ACTION`) and its place on the right, but
-on its own row above Copy: nothing ever checks a recovery code, so there a stale copy
-would surface only when the code is needed. On the right, the eye goes from the code
-to Copy, and Regenerate reads as the aside it is.
+Errors: a username taken at the last moment is said under the username
+(`UsernameTakenError`); anything else under the button. The button is disabled
+until both message lines pass and while the account is being created (its label
+says "Creating account…"), and `submit` also returns while pending, because a
+keyboard's Return is not disabled with the button and a second create comes back as
+`UsernameTakenError` on an account just made. The username is `readOnly`, not
+`disabled`, while pending: a manager reads it as the form goes away.
 
-The recovery step's second button is labelled by its outcome, in `ghost` under the
-primary. "Skip for now" as a text link named neither what it did nor what it was, and
-with the primary at 50% opacity a bordered alternative would be the strongest thing on
-the screen. It wraps, with `min-h` rather than `h`: the label cannot be shortened, and
-it is wider than a narrow phone's button.
+**⚠ iOS re-offers over a prefilled field.** Tapping the password field raises "Use
+Strong Password?" although it holds a value, and accepting is fine. But with the
+focus still in the field the sheet came straight back, with Save & Fill under the same
+thumb, and a second accept mints a second password. An empty field does not do this,
+so it is the prefill's cost. `new-password-field.tsx` leaves the field once a manager
+has filled it, which stopped the repeat. It is on a timer because iOS has not set
+`:autofill` yet in the event that reports the fill, nor on the next frame: a
+`requestAnimationFrame` version never fired. Measured on the three-step form; the
+field is the same one.
 
-Web's `HiddenUsername` is gone from this form: the username is visible on the step a
-manager saves from.
+### the welcome
+
+> **STATUS — ✅ built** (`WelcomeGate`, web and native, mounted under
+> `InitialSyncGate` in each `(app)` layout).
+
+Once, after create-account, for the account just made, a gate covers the app: a
+content swap like `InitialSyncGate`, never a redirect, so finishing it uncovers the
+library the user is already in. Three steps, each skippable, and the order is the
+design:
+
+| step                         | shows                                                                                                 | exits                                 |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| 1. Your account is ready     | **Create recovery code**; once made, the wallet panel without its checkbox                            | **Continue**; **Skip for now**        |
+| 2. Check your saved password | read-only username; `current-password`; **Sign in to check**; **Forgot your password? Show it again** | **Continue** once it passes; **Skip** |
+| 3. You’re all set            | **Import bookmarks** (to Settings → Data); **Start using Bracemark**                                  | either ends the welcome               |
+
+- **The code first**, because copying it replaces the clipboard: the check after it
+  cannot then be passed by pasting back a password copied on the create form, which
+  proves nothing about the saved copy.
+- **The code is made when asked for, not before.** An account whose code nobody saw
+  would read as "has a recovery code" and silence Settings' nudge. Made, it is live:
+  the line says so, and there is no "I've saved it" checkbox, for _a recovery code in
+  Settings_'s reasons.
+- **The check is a login**, in shape and in words, so a manager offers the copy it
+  saved. It is a local compare of canonical forms against the held password:
+  derivation is deterministic, so a match is a sign-in that works. Empty (spaces
+  included) gets "Please enter a password"; a mismatch, "That doesn’t match…". Sign in
+  to check stays live (gating it on a match would make it a hint oracle).
+
+**⚠ The password is held in memory for the welcome's lifetime, and nowhere else**
+(`react/lib/welcome-store.ts`). Two steps need it: minting the code proves a door
+(`useRecoveryCode`, the password proof — nothing to type), and **Show it again** is
+the second look for someone who saved nothing. That person cannot get it back later:
+signed in, a password change needs the password or a code, and signed out, there is
+no door at all. `useCreateAccount`'s `onSuccess` begins the welcome **before** the
+session flips the app in, so the gate never flashes the library. It is never written
+to storage, it ends when the welcome finishes, on every session teardown (both auth
+providers' `teardown` call `endWelcome`), and on reload — which therefore skips the
+welcome; Settings' "no recovery code" nudge still covers the code. The gate shows only
+when the held username is the session's.
+
+**⚠ The safety net under Safari, now a password change.** If Safari reads the check
+as a sign-up anyway and its strong password is taken, it has already saved that
+password under this username, over the real one: a saved copy that cannot sign in, on
+an account with no reset. So when the check fails **and** `:autofill` matches the
+field (the browser filled it), web offers **Use this password instead**: a real
+password change, proved with the held password, behind the same floor any new
+password meets (`newPasswordMessage`, zxcvbn); the held password is updated to it. A
+value typed by hand never gets the offer, since adopting a typo would undo the check;
+an engine without the selector throws and gets the plain mismatch. **Native has no
+such path**: React Native has no `:autofill`, and bracemark-expo gets no strong-password
+offer from iOS, with no shared web credentials. Linking them would likely bring the
+offer into the app, so that decision needs this section read first.
+
+Measured on Chrome (`create-account-welcome`): the refused check is no submission;
+the passed one is a login with the same pair, which in a fresh profile, where nobody
+pressed Save at the create, Chrome offers to save again, and in a profile that saved
+it has nothing to offer. Never the code.
 
 #### ⚠ how safari tells a login from a sign-up
 
@@ -792,7 +849,9 @@ No attribute controls Safari's strong-password offer. `current-password`,
 username all left it in place on a form that Safari read as a sign-up
 ([accessibility.md](./accessibility.md), _iOS AutoFill, checked by hand_). The decision
 comes from **words on the page**, so there are two independent layers here, and only
-the second is a safety property.
+the second is a safety property. They now guard the welcome's check (above), which
+is where a login-shaped form for a brand-new password still lives; the measurements
+below were taken on the three-step form's check, whose words the welcome kept but one.
 
 **Layer 1, the labels: avoiding the offer.** ⚠ Safari gives a login's treatment only
 with **both** a submit that says "Sign in" and a control that says "Forgot your
@@ -805,50 +864,33 @@ password?". Measured on the shipped DOM, 2026-11-02:
 | link says "Show my password again" | blue **Use Strong Password**                      | not run                                           |
 
 So these two strings are load-bearing, and a copy edit can undo them silently, on one
-browser, with everything else green. `create-account-form.spec.tsx` pins them on
-purpose. Change either and re-measure.
+browser, with everything else green. ⚠ **The welcome changed one of them**: its submit
+says "Sign in to check" where the measured one said "Sign in to finish". It still
+starts with "Sign in", and "Forgot your password? Show it again" is unchanged, but
+**the new submit has not been measured in Safari**: re-run the table above
+([app-drivers.md](./app-drivers.md), _driving real Safari on macOS_ and _driving
+Safari in the iOS Simulator_) before relying on Layer 1. `welcome-gate.spec.tsx` pins
+both strings on purpose; change either and re-measure.
 
 They are also honest, and that is the better reason to trust them: this step **is** a
 login, and those are the words a login has. Safari cannot stop reading them that way
-without breaking its treatment of sign-in pages generally. What can move is us, and
-the spec covers that.
+without breaking its treatment of sign-in pages generally.
 
-**Layer 2, the adopt path: surviving the offer.** Accepting Safari's offer saves its
-password at once, under the account's username, before the form has checked anything.
-If the form refuses that value and the reader finishes with the other one, the saved
-copy can never sign in, on an account with no reset. That is the worst thing this form
-can produce, so it must not depend on a heuristic someone else owns.
+**Layer 2, the switch: surviving the offer.** Accepting Safari's offer saves its
+password at once, under the account's username, before the page has checked anything,
+so this must not depend on a heuristic someone else owns. The page can tell: after an
+accepted offer, `:autofill` matches the field, on macOS and on iOS, through blur and
+through the failed check, and it does not match a value typed by hand. The welcome's
+**Use this password instead** (_the welcome_, above) acts on that. What it does not
+cover: someone who clears the field by hand and enters the real password has left
+`:autofill` behind and passes the check, with Safari's copy stale; Safari then asks to
+update it, and **Not Now** keeps the wrong one, which the site's _Where to keep your
+password_ warns about.
 
-The page can tell. After an accepted offer, `:autofill` matches the field, on macOS and
-on iOS, through blur and through the failed check, and it does not match a value typed
-by hand. So when the check fails **and** the browser filled the field, the form says
-so and offers **Use this password instead**. Nothing exists yet, so changing the
-password is free: it goes through step 1's gate and finishes, and the saved copy and
-the account agree however the page was classified. It also covers an older save of the
-same username, left by regenerating after a browser had saved.
-
-- A value that was typed never gets the offer. Adopting a typo would undo the check.
-- An engine without the selector throws, and gets the plain mismatch.
-- **What this does not cover:** someone who clears the field by hand and enters the
-  step 1 password has left `:autofill` behind, so they finish with Safari's copy
-  stale. Safari then asks to update it, and **Not Now** keeps the wrong one, which
-  the site's _Where to keep your password_ warns about.
-- **Native has no such path.** React Native has no `:autofill`, and bracemark-expo gets
-  no strong-password offer from iOS, with no shared web credentials. Linking them
-  would likely bring the offer into the app, so that decision needs this section read
-  first.
-
-**⚠ iOS re-offers over a prefilled field.** Tapping the password field on step 1 raises
-"Use Strong Password?" although it holds a value, and accepting is fine. But with the
-focus still in the field the sheet came straight back, with Save & Fill under the same
-thumb. An empty field does not do this, in the same `<form>`, so it is the prefill's
-cost. A second accept mints a second password, and the mismatch then goes through the
-adopt path. `new-password-field.tsx` leaves the field once a manager has filled it,
-which stopped the repeat. It is on a timer because iOS has not set `:autofill` yet in
-the event that reports the fill, nor on the next frame: a `requestAnimationFrame`
-version never fired.
-
-**Where the password is saved, by path.** Measured on the real build unless noted:
+**Where the password was saved, by path, on the three-step form** (measured on the
+real build unless noted). The one-step form saves from the create itself, which is
+the ordinary sign-up every row below already handled at its end; only Chrome has been
+re-measured on it (_creating an account_, above):
 
 | browser                | default path                                                                        | offer accepted on step 1                                                                           |
 | ---------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -869,10 +911,11 @@ normal message and a reader can take another.
 
 **Rejected.** A warning alone leaves the trap in place. A plain text check field did
 lose the offer, but only unmasked, with no "password" wording and no username beside
-it: it shows the password on screen and gives a manager nothing to save from. Creating
-the account at step 2 and checking after it strands a username on a closed tab, and
-makes Back impossible. A visible single-line field for the words cannot show them: a
-phone's field holds about 30 characters of 45.
+it: it shows the password on screen and gives a manager nothing to save from. A
+visible single-line field for the words cannot show them: a phone's field holds about
+30 characters of 45. Asking for the password again on the welcome instead of holding
+it was weighed and dropped: it would cost "Show it again", and someone who saved
+nothing would have no way to see it before signing out with no door left.
 
 ### ⚠ changing a password
 
@@ -882,7 +925,7 @@ phone's field holds about 30 characters of 45.
 
 Settings → change password is the ordinary shape a manager knows: a proof (the
 current password, or the recovery code for someone who lost it), then the same
-`NewPasswordField` create-account's first step uses, already holding generated words,
+`NewPasswordField` create-account uses, already holding generated words,
 then **Change password**. `HiddenUsername` names the account, so a manager knows
 which saved login an update belongs to.
 
@@ -892,21 +935,22 @@ checkbox. The done screen says what to do with that offer ("If your browser or
 password manager offers to update your saved password, accept it.") and keeps the new
 password one press away (**Show my new password**, with Copy) until the user leaves
 through **Done** or the back link.
-That is create-account's "Forgot your password? Show it again" in the one place a
-change can have it, and it serves whoever declined the update or uses no manager.
+That is the welcome's "Forgot your password? Show it again" in the one place a change
+can have it, and it serves whoever declined the update or uses no manager.
 
-⚠ **There is no check step, and create-account's must not be copied here.** The
-manager already holds the **old** password for this username. A login-shaped check
-would be offered that one, fail as a mismatch, and the adopt branch would then offer
-to make the old password the new one, which the ladder refuses. Create-account's check
-works only because, for a new account, the manager has nothing saved.
+⚠ **There is no check, and the welcome's must not be copied here.** Right after a
+change, a manager that declined the update still holds the **old** password for this
+username. A login-shaped check would be offered that one, fail as a mismatch, and the
+switch branch would then offer to make the old password the new one, which the ladder
+refuses. The welcome's check works because, for a new account, the only thing a
+manager can hold is what it saved at the create.
 
 Measured on Chrome by `npm run measure:password-manager` (`change-generated`,
 `change-own`, `change-recovery`, [e2e.md](./e2e.md)): one update offer, with
 `cp-new-password` as the new password. Not yet checked in Safari: whether it offers to
 update for words the field was filled with by script and never edited, which is the
-case it skipped at create-account's Continue. The done screen's reveal is the net if it
-does not.
+case it skipped at the three-step form's Continue (create-account, on the same field,
+is in the same position). The done screen's reveal is the net if it does not.
 
 ### a recovery code in Settings
 
@@ -970,9 +1014,9 @@ Account alike: **disable only when something else on screen already says why,
 permanently and adjacently.** A disabled button is silent in every channel —
 `disabled` drops it from the tab order, `disabled:pointer-events-none` kills
 hover, and nothing is announced — so it is only honest when the blocker is either
-a **permanent message line** under the offending field (the setup step, where the
+a **permanent message line** under the offending field (create-account, where the
 ladder _is_ the gate) or a **labelled checkbox** immediately above it
-(`recoverySaved`, create-account's recovery step, in `ShowOnceSecret`). Everything
+(`ShowOnceSecret`'s optional confirm, which no caller passes today). Everything
 else stays live and answers the click with an announced error, which is the one
 channel a disabled button doesn't have
 ([accessibility.md](./accessibility.md), _the one rule_). Qualifying is a
@@ -983,7 +1027,7 @@ An in-flight request is the third allowed case, and there the **label** carries
 the state ("Signing in…", "Deleting account…") — the greyed rectangle announces
 nothing by itself.
 
-So: create-account's Sign in to finish is always live (gating it on a live match would
+So: the welcome's Sign in to check is always live (gating it on a live match would
 make the button a hint oracle for the password being re-typed); password sign-in
 submits empty and lets validation speak — its fields are RHF-uncontrolled, so an
 emptiness gate read through `watch` can also go stale against a password-manager
@@ -996,11 +1040,10 @@ same pass, so satisfying one doesn't reveal the other — and that is precisely 
 its confirm box, legible enough to gate on, does **not** hold the button down. A
 checkbox gate can only ever report the miss it is gating on, so a user who typed a
 password but didn't tick would meet a dead button naming neither requirement, and
-wouldn't hear about the password until after ticking. `ShowOnceSecret`'s two boxes
-have neither problem: each is the only requirement on its step, and each attests
-to an act performed off-screen ("I've saved it") that the disable exists to teach.
-The recovery step's disabled primary also sits above a **live** ghost alternative,
-where delete-account's button is the whole screen's only control. The one
+wouldn't hear about the password until after ticking. `ShowOnceSecret`'s box, where a
+caller passes it, has neither problem: it is the only requirement on its step, and
+attests to an act performed off-screen ("I've saved it") that the disable exists to
+teach. The one
 emptiness gate that _stays_ is delete-account's `subscriptionBlocks`, which has a
 `SettingsNotice` above it stating the block in full and linking where to fix it.
 

@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { useApiClient, usernameAvailableQueryOptions } from '@stxapps/react';
+import { beginWelcome, useApiClient, usernameAvailableQueryOptions } from '@stxapps/react';
 import {
   ApiError,
   bytesToHex,
@@ -124,7 +124,12 @@ export function useCreateAccount() {
     // authenticated, so the UI reacts to the new login. The component keeps only
     // the failure→setError mapping, which is UI feedback and fine to drop when
     // gone.
-    onSuccess: async ({ session, encryptionKey, username }) => {
+    onSuccess: async ({ session, encryptionKey, username }, { password }) => {
+      // The welcome that follows needs the password itself: to mint a recovery code
+      // and to show it again (react/lib/welcome-store.ts says why, and that it lives
+      // in memory only). Begun BEFORE the session flips the app in, so the first frame
+      // of the (app) layout already has it and WelcomeGate never flashes the library.
+      beginWelcome({ username, password });
       // A brand-new account has no server data, so mark its first sync done up
       // front (empty cursor). This lets InitialSyncGate render the app immediately with
       // no pull — the sign-in path, which has no such flag, blocks on a full

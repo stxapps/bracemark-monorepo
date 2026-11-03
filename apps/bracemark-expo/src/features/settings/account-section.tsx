@@ -279,14 +279,13 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
     } catch (err) {
       if (err instanceof InvalidCredentialsError) setError('Incorrect password.');
       else if (err instanceof InvalidRecoveryCodeError) setError('That recovery code didn’t work.');
-      // The save went out and nothing came back, so it may have landed. On the
-      // password path a retry proves with the CURRENT password, which may now be
-      // the new one; on the recovery path the code still opens, so a retry is safe.
+      // No answer, and the hook could not reach the server to settle it either (it
+      // tests the new password against the door first: use-change-password.ts). So
+      // say it is unknown, and that a retry is safe: if the change landed, the retry
+      // finds the new password already opening and ends on the done screen.
       else if (err instanceof UnconfirmedSaveError) {
         setError(
-          useRecovery
-            ? 'We didn’t get an answer, so your password may have changed anyway. Try again to be sure.'
-            : 'We didn’t get an answer, so your password may have changed anyway. If you try again and your current password is refused, enter the new one instead.',
+          'We didn’t get an answer, so we can’t tell yet whether your password changed. Check your connection and try again.',
         );
       } else setError('Could not change your password. Please try again.');
     }
@@ -309,6 +308,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
           </View>
           <Text className="text-sm text-muted-foreground">{NEW_PASSWORD_COPY.afterChange}</Text>
           <Pressable
+            testID="change-password-show-new"
             role="button"
             aria-expanded={showNew}
             onPress={() => setShowNew((shown) => !shown)}
@@ -325,7 +325,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
                 aria-label={NEW_PASSWORD_COPY.shownLabel}
                 className="rounded-lg border border-border bg-muted/40 px-3 py-2.5"
               >
-                <Text selectable className="font-mono text-sm">
+                <Text testID="change-password-shown-new" selectable className="font-mono text-sm">
                   {newPassword.password}
                 </Text>
               </View>
@@ -335,7 +335,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
           {/* 24 below whatever is last, so the toggle's 8 of slop stays under half the
               gap. */}
           <View className="mt-3 flex-row">
-            <Button onPress={onBack}>
+            <Button testID="change-password-done" onPress={onBack}>
               <Text>Done</Text>
             </Button>
           </View>
@@ -385,6 +385,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
           <View className="gap-2">
             <Text className="text-sm font-medium">Current password</Text>
             <PasswordInput
+              testID="change-password-current"
               aria-label="Current password"
               autoComplete="current-password"
               value={currentPassword}
@@ -415,6 +416,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
           label={NEW_PASSWORD_COPY.label}
           shownLabel={NEW_PASSWORD_COPY.shownLabel}
           inputRef={newPasswordRef}
+          testID="change-password-new"
           disabled={changePassword.isPending}
           onEdit={() => {
             if (error) setError(null);
@@ -429,6 +431,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
         <View>
           <View className="flex-row">
             <Button
+              testID="change-password-submit"
               disabled={changePassword.isPending || !newPassword.ok}
               onPress={() => void onSubmit()}
             >
@@ -459,6 +462,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
 // code server-side, and show it ONCE. Regenerating invalidates any previous code.
 function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasRecovery: boolean }) {
   const recovery = useRecoveryCode();
+  const { username } = useAuth();
   const queryClient = useQueryClient();
   const [currentPassword, setCurrentPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -483,7 +487,12 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
         proof: { kind: 'password', currentPassword },
       });
       setCode(result.recoveryCode);
-      // The nudge on the overview reads this query — refresh it so it clears.
+      // The mint landed, so the door exists: say so in the cache at once, then refresh.
+      // Invalidating alone left a window, until the refetch answered, where the
+      // overview still showed its "no recovery code" nudge and a second visit here
+      // froze `hadRecovery` as false: "Generate recovery code" with no warning that the
+      // code just made would stop working, then "set up" instead of "replaced".
+      queryClient.setQueryData([...hasRecoveryDoorQueryKey, username], true);
       void queryClient.invalidateQueries({ queryKey: hasRecoveryDoorQueryKey });
     } catch (err) {
       if (err instanceof InvalidCredentialsError) setError('Incorrect password.');
@@ -499,7 +508,7 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
 
   // The code is live by the time this renders, and the screen says so first; the way
   // out is ordinary, because leaving unsaved costs only a fresh mint. Web's note has
-  // the argument, and why create-account's recovery step keeps its checkbox.
+  // the argument.
   if (code) {
     return (
       <View>
@@ -688,6 +697,7 @@ export function AccountSection() {
               icon={<Icon as={KeyRound} className="size-5 text-muted-foreground" />}
               title="Change password"
               description="Set a new password using your current one or your recovery code."
+              testID="change-password-open"
               onPress={() => setView('change-password')}
             />
             <SettingsRow

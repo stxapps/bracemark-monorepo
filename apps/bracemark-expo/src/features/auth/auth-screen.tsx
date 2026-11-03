@@ -31,7 +31,8 @@ import { cn } from '../../lib/utils';
 // off it instead.
 //
 // Mobile-only concerns web's layout doesn't have: the scroll view keeps long
-// content (the ceremony's recovery step) reachable on small screens, and it's
+// content (create-account's field, message and reveal box) reachable on small
+// screens, and it's
 // keyboard-controller's KeyboardAwareScrollView because the keyboard overlays
 // the window on BOTH platforms now — with edge-to-edge (enforced on
 // Android 15+) `adjustResize` no longer resizes the window, and RN core only

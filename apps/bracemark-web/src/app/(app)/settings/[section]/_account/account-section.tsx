@@ -286,14 +286,13 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
     } catch (err) {
       if (err instanceof InvalidCredentialsError) setError('Incorrect password.');
       else if (err instanceof InvalidRecoveryCodeError) setError('That recovery code didn’t work.');
-      // The save went out and nothing came back, so it may have landed. On the
-      // password path a retry proves with the CURRENT password, which may now be
-      // the new one; on the recovery path the code still opens, so a retry is safe.
+      // No answer, and the hook could not reach the server to settle it either (it
+      // tests the new password against the door first: use-change-password.ts). So
+      // say it is unknown, and that a retry is safe: if the change landed, the retry
+      // finds the new password already opening and ends on the done screen.
       else if (err instanceof UnconfirmedSaveError) {
         setError(
-          useRecovery
-            ? 'We didn’t get an answer, so your password may have changed anyway. Try again to be sure.'
-            : 'We didn’t get an answer, so your password may have changed anyway. If you try again and your current password is refused, enter the new one instead.',
+          'We didn’t get an answer, so we can’t tell yet whether your password changed. Check your connection and try again.',
         );
       } else setError('Could not change your password. Please try again.');
     }
@@ -304,8 +303,8 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
   // is gone, so "I've saved it" ticked beforehand was a promise, not a fact. So this
   // screen says what to do with that offer, and keeps the new password one press away
   // until the user leaves: someone who declined the update, or uses no manager, is
-  // told and not stranded. It is create-account's "Show it again" in the place a
-  // change can have one. There is no check step as create-account has: the manager
+  // told and not stranded. It is the welcome's "Show it again" in the place a
+  // change can have one. There is no check as the welcome has: the manager
   // holds the OLD password for this username, so a login-shaped check would be
   // offered that one (docs/account.md, _changing a password_).
   //
@@ -325,7 +324,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
             {SESSION_COPY.passwordChanged}
           </p>
           <p className="text-sm text-muted-foreground">{NEW_PASSWORD_COPY.afterChange}</p>
-          {/* A `button` with `aria-expanded`, as create-account's "Show it again". The
+          {/* A `button` with `aria-expanded`, as the welcome's "Show it again". The
               `after:` slop is its target (docs/accessibility.md, _a web target on a
               touch screen_): what sits around it takes no tap. */}
           <button
@@ -503,7 +502,12 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
         proof: { kind: 'password', currentPassword },
       });
       setCode(result.recoveryCode);
-      // The nudge on the overview reads this query — refresh it so it clears.
+      // The mint landed, so the door exists: say so in the cache at once, then refresh.
+      // Invalidating alone left a window, until the refetch answered, where the
+      // overview still showed its "no recovery code" nudge and a second visit here
+      // froze `hadRecovery` as false: "Generate recovery code" with no warning that the
+      // code just made would stop working, then "set up" instead of "replaced".
+      queryClient.setQueryData([...hasRecoveryDoorQueryKey, username], true);
       void queryClient.invalidateQueries({ queryKey: hasRecoveryDoorQueryKey });
     } catch (err) {
       if (err instanceof InvalidCredentialsError) setError('Incorrect password.');
@@ -522,9 +526,8 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
   // leaving unsaved, and that read as a confirm step: a user could take the code to
   // count only once ticked. Leaving without saving is a chore rather than a loss, since
   // anyone who can still sign in mints another here, so the way out is ordinary and
-  // the line under the code says what to do if they didn't save it. Contrast
-  // create-account's recovery step, which keeps its checkbox: there nothing is
-  // committed yet, and it gates a choice between two ways on.
+  // the line under the code says what to do if they didn't save it. The welcome after
+  // create-account shows its code the same way, for the same reason.
   if (code) {
     return (
       <>

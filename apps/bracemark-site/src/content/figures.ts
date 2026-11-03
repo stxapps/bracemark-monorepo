@@ -176,24 +176,22 @@ export const FIGURES = {
       'Edit link in the web app. The list, tags, and note are yours, and so is a title once ' +
       'you type one; the grey title and the image were fetched from the page.',
   },
-  // `recovery-code` in e2e/shot/scenes.ts: the auth card and 16px of the page
-  // round it, with nobody signed in. ⚠ THE CODE IN IT OPENS NOTHING — the scene
-  // stops before either button that would create the account, and the caption
-  // says so because a reader cannot tell. A capture of a FINISHED ceremony would
-  // print a working door to an account; never swap one in.
+  // `recovery-code` in e2e/shot/scenes.ts: the welcome's first step, the card and
+  // 16px of the page round it. ⚠ NO CODE IN IT, on purpose: the scene stops before
+  // "Create recovery code", because a code is live the moment it is shown, and a
+  // picture of one would print a working door to an account. Never swap one in.
   'recovery-code': {
     width: 373,
-    height: 707,
+    height: 304,
     widths: [373, 746, 1119],
     alt:
-      'Step 2 of 3 of creating an account in the web app, headed Recovery code. A box holds ' +
-      'a long code in groups of five characters, with Regenerate on the right under it and a ' +
-      'full-width Copy button below that, then a ' +
-      'tick box that reads I’ve saved my recovery code somewhere safe. The Continue button ' +
-      'is greyed out, and under it is Continue without a recovery code.',
+      'The first step of the welcome after creating an account in the web app, marked Step 1 ' +
+      'of 3 and headed Your account is ready. It reads Set up a recovery code: a second way ' +
+      'into your account if you ever lose your password. Under it is a Create recovery code ' +
+      'button, and under that, Skip for now.',
     caption:
-      'The recovery step in the web app. Continue stays greyed out until you tick the box. ' +
-      'The code shown here is an example and opens no account.',
+      'The recovery step in the web app, right after the account is created. The code is made ' +
+      'when you choose Create recovery code, and shown once.',
   },
 } satisfies Record<string, DocFigure>;
 

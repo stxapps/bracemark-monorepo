@@ -83,12 +83,22 @@ export type DoorOpener =
 // The credential miss from unlockAccount: the GCM tag failed, meaning a wrong
 // password — or a tampered/swapped blob, deliberately indistinguishable. Same
 // contract as web-crypto's WrongPasswordError.
-export class WrongPasswordError extends Error {}
+export class WrongPasswordError extends Error {
+  // Named explicitly: callers across a package boundary match on `name`
+  // (use-change-password.ts, `mapOpenError`), and a subclass inherits
+  // Error's "Error" unless it says otherwise. Without this every wrong
+  // password and stale recovery code in Settings read as "Could not change
+  // your password". A literal, so minification can't rename it.
+  override name = 'WrongPasswordError';
+}
 
 // The recovery-door analogue of WrongPasswordError: the GCM tag failed unwrapping
 // the recovery door, i.e. a wrong/mistyped recovery code (or a swapped blob).
 // Same contract as web-crypto's WrongRecoveryCodeError.
-export class WrongRecoveryCodeError extends Error {}
+export class WrongRecoveryCodeError extends Error {
+  // Named explicitly, for WrongPasswordError's reason above.
+  override name = 'WrongRecoveryCodeError';
+}
 
 // HKDF needs a salt; the DEK is already uniformly random, so an empty salt is the
 // standard choice (RFC 5869 treats it as a string of zeros).

@@ -63,13 +63,23 @@ export interface WrappedDek {
 // callers can map exactly this to "incorrect username or password" while letting
 // every other failure (Argon2 worker OOM, worker chunk load) surface as the
 // infrastructure error it is, not a phantom credential error.
-export class WrongPasswordError extends Error {}
+export class WrongPasswordError extends Error {
+  // Named explicitly: callers across a package boundary match on `name`
+  // (use-change-password.ts, `mapOpenError`), and a subclass inherits
+  // Error's "Error" unless it says otherwise. Without this every wrong
+  // password and stale recovery code in Settings read as "Could not change
+  // your password". A literal, so minification can't rename it.
+  override name = 'WrongPasswordError';
+}
 
 // The recovery-door analogue of WrongPasswordError: the GCM tag failed unwrapping
 // the recovery door, i.e. a wrong/mistyped recovery code (or a swapped blob).
 // Distinct type so the recovery sign-in / change-password paths can surface
 // "invalid recovery code" without conflating it with a password miss.
-export class WrongRecoveryCodeError extends Error {}
+export class WrongRecoveryCodeError extends Error {
+  // Named explicitly, for WrongPasswordError's reason above.
+  override name = 'WrongRecoveryCodeError';
+}
 
 // How a caller proves it may re-wrap the DEK (change password, regenerate
 // recovery): it presents an EXISTING door it can open. Either the current

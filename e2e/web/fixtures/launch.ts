@@ -48,16 +48,15 @@ export interface LaunchOptions {
   // seeding shortcut here either (see ./account.ts) — so the only thing it
   // changes is who gets created.
   create?: Credentials;
-  // Take create-account's recovery-code exit instead of skipping it, and return
-  // the minted code as `recoveryCode`. Only the mobile runner wants this — see
+  // Take the welcome's recovery-code step instead of skipping it, and return the
+  // minted code as `recoveryCode`. Only the mobile runner wants this — see
   // createAccountWithRecovery. Ignored when `existing` is set: that account was
   // created elsewhere and its code, if any, was shown once and is gone.
   withRecovery?: boolean;
   // Skip the account ceremony altogether and hand back the first page, signed
-  // out, with `credentials` minted and unused. Only shot/ wants this: its picture
-  // of create-account's recovery step is of a screen the ceremony walks THROUGH,
-  // and an account nobody finishes creating is one nobody has to clean up.
-  // Ignored when `existing` or `create` is set.
+  // out, with `credentials` minted and unused, for a case that drives the create
+  // itself (WEB-ACCOUNT-007, shot/'s welcome figure). Ignored when `existing` or
+  // `create` is set.
   signedOut?: boolean;
   // Watch the run. `slowMo` is only useful with this on. Unset, they follow
   // E2E_HEADED and E2E_SLOW_MO, which runner/web.ts sets from `--headed` and

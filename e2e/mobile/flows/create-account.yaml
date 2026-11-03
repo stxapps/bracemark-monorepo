@@ -1,0 +1,310 @@
+# Create an account ON THE DEVICE, in one step, on the generated words; go through
+# the welcome (a recovery code, the check, start); change the password on new
+# generated words; and sign back in with them.
+#
+# Every other flow signs into an account a BROWSER created (runner/lib.ts,
+# provisionAccount), so until this one nothing ran the native create-account form,
+# the welcome, the native change-password form or expo-crypto's create and rotate
+# paths on a device. jest owns the rules (create-account-form.spec.tsx,
+# welcome-gate.spec.tsx, new-password-field.spec.tsx); what only a device shows is that the words the field
+# starts on are what the account is created under, through Argon2id and the DEK wrap
+# in react-native-quick-crypto, and that the rotation's words sign in.
+#
+# The secret is never typed by the runner and never chosen by it — the generated
+# words, end to end, are the point of the case, and why it needs no PASSWORD. The
+# flow reads them off the screen with `copyTextFrom` and types them back from
+# `maestro.copiedText`, Maestro's own clipboard, not the device's (bulk-copy.yaml).
+# Not `pasteText`: into a secure field on iOS it left the field empty. A keyboard left
+# up swallows the next tap, so a typed field is followed by `hideKeyboard` as in
+# subflows/sign-in-fields.yaml — except a field that focuses itself, whose keyboard
+# `hideKeyboard` could not find: Return puts that one away.
+#
+#   maestro test mobile/flows/create-account.yaml -e NEW_USERNAME=…
+#
+# NEW_USERNAME is a name nobody has; the runner mints it. Destructive only in that
+# it creates an account.
+appId: com.bracemark.app
+tags: [NATIVE-ACCOUNT-003, full, online, destructive, ios, android]
+---
+- runFlow:
+    file: subflows/cold-launch.yaml
+- extendedWaitUntil:
+    visible: 'Create account'
+    timeout: 60000
+- tapOn: 'Create account'
+
+# One step. The password field already holds the words; only the username is typed.
+# The words are read off the reveal box under the field (the eye), which is what
+# someone writing them down does.
+- extendedWaitUntil:
+    visible:
+      id: 'create-account-username'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: 'create-account-username'
+- inputText: ${NEW_USERNAME}
+# Not always dismissable on iOS (Maestro finds no dismiss action on some passes), so
+# optional, and the eye is pressed until the box is there: a tap the keyboard took
+# changes nothing and is simply taken again.
+- hideKeyboard:
+    optional: true
+- repeat:
+    times: 4
+    while:
+      notVisible:
+        id: 'create-account-password-shown'
+    commands:
+      - tapOn:
+          text: 'Show password'
+          optional: true
+      - extendedWaitUntil:
+          visible:
+            id: 'create-account-password-shown'
+          timeout: 3000
+          optional: true
+- copyTextFrom:
+    id: 'create-account-password-shown'
+# The keyboard must be gone before the button is tapped: with it up, a tap aimed at
+# "Create account" landed on the keyboard and typed into the revealed password. Return
+# puts a single-line field's keyboard away where `hideKeyboard` could not.
+- pressKey: Enter
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible:
+    id: 'create-account-password-shown'
+    text: ${maestro.copiedText}
+# The button opens once the availability check has answered for THIS name.
+- extendedWaitUntil:
+    visible:
+      id: 'create-account-submit'
+      enabled: true
+    timeout: 30000
+- takeScreenshot: create-account
+- tapOn:
+    id: 'create-account-submit'
+
+# Argon2id + the DEK wrap on the device, then the welcome. iOS may raise Save
+# Password? as the form goes away — now, rightly, after the account exists.
+- repeat:
+    times: 5
+    while:
+      notVisible:
+        id: 'welcome-create-recovery'
+    commands:
+      - runFlow:
+          when:
+            platform: iOS
+          commands:
+            - tapOn:
+                text: 'Not Now'
+                optional: true
+      - assertVisible:
+          id: 'welcome-create-recovery'
+          optional: true
+- extendedWaitUntil:
+    visible:
+      id: 'welcome-create-recovery'
+    timeout: 120000
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - extendedWaitUntil:
+          visible: 'Save Password?'
+          timeout: 3000
+          optional: true
+      - tapOn:
+          text: 'Not Now'
+          optional: true
+
+# Welcome 1: a recovery code, minted with the held password.
+- tapOn:
+    id: 'welcome-create-recovery'
+- extendedWaitUntil:
+    visible:
+      id: 'welcome-recovery-code'
+    timeout: 120000
+- takeScreenshot: welcome-recovery
+- tapOn:
+    id: 'welcome-recovery-continue'
+
+# Welcome 2: the check. The field focuses itself; Return on it empty is answered as
+# empty (and puts the keyboard away — with it up, the next tap was swallowed).
+- extendedWaitUntil:
+    visible:
+      id: 'welcome-check-password'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      id: 'welcome-check-error'
+    timeout: 10000
+- tapOn:
+    id: 'welcome-check-password'
+- inputText: ${maestro.copiedText}
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      id: 'welcome-check-continue'
+    timeout: 10000
+- takeScreenshot: welcome-check-passed
+- tapOn:
+    id: 'welcome-check-continue'
+
+# Welcome 3: in.
+- tapOn:
+    id: 'welcome-start'
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 30000
+
+# Change password, with the words as the CURRENT password (still on Maestro's
+# clipboard) and the field's own new words kept.
+- runFlow:
+    file: subflows/open-settings.yaml
+    env:
+      SECTION: account
+- scrollUntilVisible:
+    element:
+      id: 'change-password-open'
+- tapOn:
+    id: 'change-password-open'
+- extendedWaitUntil:
+    visible:
+      id: 'change-password-current'
+    timeout: 10000
+- tapOn:
+    id: 'change-password-current'
+- inputText: ${maestro.copiedText}
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: 'change-password-submit'
+      enabled: true
+- tapOn:
+    id: 'change-password-submit'
+- repeat:
+    times: 5
+    while:
+      notVisible:
+        id: 'change-password-show-new'
+    commands:
+      - runFlow:
+          when:
+            platform: iOS
+          commands:
+            - tapOn:
+                text: 'Not Now'
+                optional: true
+      - assertVisible:
+          id: 'change-password-show-new'
+          optional: true
+- extendedWaitUntil:
+    visible:
+      id: 'change-password-show-new'
+    timeout: 120000
+- tapOn:
+    id: 'change-password-show-new'
+- extendedWaitUntil:
+    visible:
+      id: 'change-password-shown-new'
+    timeout: 5000
+- copyTextFrom:
+    id: 'change-password-shown-new'
+- takeScreenshot: change-password-done
+- scrollUntilVisible:
+    element:
+      id: 'change-password-done'
+- tapOn:
+    id: 'change-password-done'
+- extendedWaitUntil:
+    visible:
+      id: 'change-password-open'
+    timeout: 10000
+
+# Sign out, and back in with the new words: the rotation is real only if they open.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 60000
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-sign-out'
+- repeat:
+    times: 5
+    while:
+      notVisible: 'Sign in'
+    commands:
+      - runFlow:
+          when:
+            platform: iOS
+          commands:
+            - tapOn:
+                text: 'Not Now'
+                optional: true
+      - assertVisible:
+          text: 'Sign in'
+          optional: true
+- extendedWaitUntil:
+    visible: 'Sign in'
+    timeout: 60000
+# The landing paints under the "Signing out…" dialog while the device copy is erased,
+# so a tap can land on the dialog's scrim: keep pressing until the form is up.
+- repeat:
+    times: 10
+    while:
+      notVisible:
+        id: 'sign-in-username'
+    commands:
+      - tapOn:
+          text: 'Sign in'
+          optional: true
+      - extendedWaitUntil:
+          visible:
+            id: 'sign-in-username'
+          timeout: 3000
+          optional: true
+- extendedWaitUntil:
+    visible:
+      id: 'sign-in-username'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: 'sign-in-username'
+- inputText: ${NEW_USERNAME}
+- tapOn:
+    id: 'sign-in-password'
+- inputText: ${maestro.copiedText}
+- hideKeyboard
+- tapOn:
+    id: 'sign-in-submit'
+- repeat:
+    times: 5
+    while:
+      notVisible:
+        id: 'links-screen'
+    commands:
+      - runFlow:
+          when:
+            platform: iOS
+          commands:
+            - tapOn:
+                text: 'Not Now'
+                optional: true
+      - assertVisible:
+          id: 'links-screen'
+          optional: true
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 120000
+- takeScreenshot: create-account-signed-in-with-new

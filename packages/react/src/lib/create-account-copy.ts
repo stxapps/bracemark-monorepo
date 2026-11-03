@@ -1,62 +1,90 @@
-// The words create-account prints, on both platforms (docs/account.md, _creating an
-// account_). Same reasoning as the copy next door (new-password-copy.ts,
-// recovery-code-copy.ts): two components, so only one file can keep them saying the
-// same thing. Layout and tone classes stay per-platform.
-//
-// ⚠ TWO OF THESE ARE LOAD-BEARING, AND NOTHING ELSE ON THE SCREEN CAN STAND IN FOR
-// THEM. `signIn` and `showPassword` are what make Safari read the last step as a
-// login instead of a sign-up (docs/account.md, _how safari tells a login from a
-// sign-up_). It takes BOTH: a submit that says "Sign in" and a control that says
-// "Forgot your password?". Reword either and Safari goes back to offering its own
-// strong password on a field that has to match, with no error anywhere, on one
-// browser, so `create-account-form.spec.tsx` pins the exact strings. "Show my
-// password again" sounds like a harmless polish of the second one, and it was
-// measured failing.
-//
-// The form survives that going wrong (`offeredPassword` below), so a heuristic moving
-// under us costs a detour and not a wrong saved copy. It is still a detour worth
-// avoiding, and it is why these two are here and not typed into each form.
+// The words create-account and the welcome after it print, on both platforms
+// (docs/account.md, _creating an account_ and _the welcome_). Same reasoning as the
+// copy next door (new-password-copy.ts, recovery-code-copy.ts): two components per
+// platform, so only one file can keep them saying the same thing. Layout and tone
+// classes stay per-platform.
+
 export const CREATE_ACCOUNT_COPY = {
-  heading: {
-    setup: {
-      title: 'Create account',
-      description:
-        'No email address, no password reset — your password unlocks the key to your links.',
-    },
-    check: {
-      title: 'Check your saved password',
-      description:
-        'Sign in with the copy you saved. That proves it works and creates your account.',
-    },
-  },
+  title: 'Create account',
+  // A disclosure rather than a caption: both halves name a field this form will never
+  // show, because the account has neither (docs/account.md — the secret IS the
+  // account).
+  description: 'No email address, no password reset — your password unlocks the key to your links.',
 
   // The field's own words (its message, help and Regenerate) are NEW_PASSWORD_COPY's,
   // shared with Settings → change password. Only the label differs: here it is the
   // account's first password, so "New" would describe nothing.
   passwordLabel: 'Password',
-
-  continueWithoutRecovery: 'Continue without a recovery code',
-
-  /** ⚠ Load-bearing: see the note above. Keep "Sign in". */
-  signIn: 'Sign in to finish',
-  creating: 'Creating account…',
-  /** ⚠ Load-bearing: see the note above. Keep "Forgot your password?". */
-  showPassword: 'Forgot your password? Show it again',
   shownPasswordLabel: 'Your password',
 
-  // Nothing entered, which is not a mismatch: "doesn't match" would send someone to
-  // check a saved copy when they have not typed anything yet. The lock screens' words
-  // (lockPasswordSchema); sign-in's own schema answers empty input with its length
-  // rule, which would read here as a hint about the password.
+  // ONE STEP: this button creates the account and signs in, which is the moment a
+  // password manager offers to save — after the account exists, from the form it was
+  // typed or suggested into.
+  submit: 'Create account',
+  creating: 'Creating account…',
+} as const;
+
+// The welcome: three steps after the account exists, each skippable. The order is
+// the design. The recovery code comes first because copying it replaces the
+// clipboard, so the check after it cannot be passed by pasting back a password copied
+// on the create form, which proves nothing about the saved copy.
+export const WELCOME_COPY = {
+  heading: {
+    recovery: {
+      title: 'Your account is ready',
+      description:
+        'Set up a recovery code: a second way into your account if you ever lose your password.',
+    },
+    check: {
+      title: 'Check your saved password',
+      description:
+        'Sign in with the copy you saved, the way you will next time. It checks that it works.',
+    },
+    start: {
+      title: 'You’re all set',
+      description: 'Bring in the bookmarks you already have, or start with an empty library.',
+    },
+  },
+
+  // Step 1. The code is made when asked for, not before: an account whose code nobody
+  // saw would read as "has a recovery code" and silence Settings' nudge.
+  createRecovery: 'Create recovery code',
+  creatingRecovery: 'Creating…',
+  skipRecovery: 'Skip for now',
+  // After it is made: it is live already, so the line says so (RECOVERY_CODE_COPY's
+  // Settings wording is for a screen with its own back link).
+  recoveryReady: 'Your recovery code is set up. Save it somewhere safe, apart from your password.',
+  recoveryFailed: 'Could not create a recovery code. Try again, or set one up later in Settings.',
+
+  // Step 2, the check. ⚠ TWO OF THESE ARE LOAD-BEARING. `signIn` and `showPassword` are
+  // what make Safari read this step as a login rather than a sign-up
+  // (docs/account.md, _how safari tells a login from a sign-up_). It takes BOTH: a
+  // submit that says "Sign in" and a control that says "Forgot your password?".
+  // Reworded, Safari offers its own strong password on a field that has to match the
+  // account, and accepting it saves that password over the real one. "Show my password
+  // again" was measured failing. The spec pins both.
+  /** ⚠ Load-bearing: keep "Sign in". */
+  signIn: 'Sign in to check',
+  /** ⚠ Load-bearing: keep "Forgot your password?". */
+  showPassword: 'Forgot your password? Show it again',
+  // Nothing entered is not a mismatch: the lock screens' words (lockPasswordSchema).
   empty: 'Please enter a password',
   mismatch: 'That doesn’t match. Check what you saved and try again.',
-  // The password check failed AND the browser filled that field, so a manager holds
-  // something the form does not: its own strong password, or an older save of this
-  // username. Nothing exists on the server yet, so the form can take the manager's
-  // version, which is what makes this a detour rather than a wrong saved copy. The
-  // second sentence is for whoever would rather keep the first password: only their
-  // browser's Update prompt repairs what it has already saved.
+  passed: 'Your saved password works.',
+  // The check failed AND the browser filled the field: a manager holds a password the
+  // account does not, most likely Safari's own strong password, which it saved the
+  // moment it was accepted. Switching the account to it is a real password change now
+  // (the account exists), and it makes the saved copy and the account agree.
   offeredPassword:
-    'Your browser filled in a different password. Use it for this account, or enter the one from step 1 and click Update Password if your browser asks.',
+    'Your browser filled in a different password, and has probably saved it. Use it for this account so the two match.',
   useOfferedPassword: 'Use this password instead',
+  switchingPassword: 'Switching…',
+  switchFailed: 'Could not switch your password. Please try again.',
+  skipCheck: 'Skip',
+
+  // Step 3.
+  importBookmarks: 'Import bookmarks',
+  startEmpty: 'Start using Bracemark',
+
+  continue: 'Continue',
 } as const;

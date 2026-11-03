@@ -24,13 +24,17 @@ import { useRecoveryCode } from './use-recovery-code';
 
 let mockDoorFailure: Error | undefined;
 let mockSaveFailure: Error | undefined;
+// The door read that settles a change with no answer (use-change-password.ts,
+// `opensNow`) comes AFTER the save; by default the server is still unreachable then.
+let mockRereadFailure: Error | undefined;
+let mockSaveSent = false;
 const mockCall = jest.fn((endpoint: unknown) => {
   if (endpoint === readPasswordDoorEndpoint) {
-    return mockDoorFailure
-      ? Promise.reject(mockDoorFailure)
-      : Promise.resolve({ wrappedDek: '00', iv: '00' });
+    const failure = mockSaveSent ? mockRereadFailure : mockDoorFailure;
+    return failure ? Promise.reject(failure) : Promise.resolve({ wrappedDek: '00', iv: '00' });
   }
   if (endpoint === changePasswordEndpoint || endpoint === putRecoveryDoorEndpoint) {
+    mockSaveSent = true;
     return mockSaveFailure ? Promise.reject(mockSaveFailure) : Promise.resolve({ ok: true });
   }
   return Promise.reject(new Error('unexpected endpoint'));
@@ -39,8 +43,23 @@ const mockCall = jest.fn((endpoint: unknown) => {
 const mockDoor = { wrappedDek: new Uint8Array([1]), iv: new Uint8Array([2]) };
 const mockAccount = { publicKey: 'pk', sign: () => Promise.resolve('sig') };
 jest.mock('@stxapps/react', () => ({ useApiClient: () => ({ call: mockCall }) }));
+// A named error, as the crypto package's own are (derive.ts): the hook reads `name`.
+function mockWrongPassword() {
+  const err = new Error('Incorrect username or password');
+  err.name = 'WrongPasswordError';
+  return err;
+}
+// Whether the CURRENT proof opens (the rotation), and whether the NEW password opens
+// the door as the server now holds it (the settle).
+let mockCurrentOpens = true;
+let mockNewOpens = false;
 jest.mock('@stxapps/expo-crypto', () => ({
-  changePasswordDoor: () => Promise.resolve({ passwordDoor: mockDoor, account: mockAccount }),
+  changePasswordDoor: () =>
+    mockCurrentOpens
+      ? Promise.resolve({ passwordDoor: mockDoor, account: mockAccount })
+      : Promise.reject(mockWrongPassword()),
+  unlockAccount: () =>
+    mockNewOpens ? Promise.resolve(mockAccount) : Promise.reject(mockWrongPassword()),
   regenerateRecoveryDoor: () => Promise.resolve({ recoveryDoor: mockDoor, account: mockAccount }),
 }));
 jest.mock('./use-sign-in', () => ({ InvalidCredentialsError: class extends Error {} }));
@@ -92,6 +111,10 @@ async function failureOf(flow: (typeof FLOWS)[number]): Promise<unknown> {
 beforeEach(() => {
   mockDoorFailure = undefined;
   mockSaveFailure = undefined;
+  mockRereadFailure = new TypeError('Failed to fetch');
+  mockSaveSent = false;
+  mockCurrentOpens = true;
+  mockNewOpens = false;
 });
 
 describe.each(FLOWS)('$name', (flow) => {
@@ -117,5 +140,47 @@ describe.each(FLOWS)('$name', (flow) => {
   it('keeps a timeout before the save as an ordinary failure, since nothing was written', async () => {
     mockDoorFailure = new ApiTimeoutError(60_000);
     expect(await failureOf(flow)).toBe(mockDoorFailure);
+  });
+});
+
+// A change with no answer is SETTLED by asking the door, not the user: the new
+// password opens it (it landed) or it does not (nothing changed). And a retry whose
+// current password is refused may be a change that already landed. Before this, the
+// form told people to type the new password as the current one, and the new-password
+// field then refused it as "That's your current password."
+describe('change password — settled by the door', () => {
+  const change = FLOWS[0];
+
+  it('ends in success when the save got no answer but the new password opens', async () => {
+    mockSaveFailure = new ApiTimeoutError(60_000);
+    mockRereadFailure = undefined;
+    mockNewOpens = true;
+    expect(await failureOf(change)).toBeUndefined();
+  });
+
+  it('is an ordinary failure when the save got no answer and nothing changed', async () => {
+    mockSaveFailure = new TypeError('Failed to fetch');
+    mockRereadFailure = undefined;
+    mockNewOpens = false;
+    const failure = await failureOf(change);
+    expect(failure).toBe(mockSaveFailure);
+    expect(failure).not.toBeInstanceOf(UnconfirmedSaveError);
+  });
+
+  it('ends in success when the current password is refused because the change already landed', async () => {
+    mockCurrentOpens = false;
+    mockNewOpens = true;
+    expect(await failureOf(change)).toBeUndefined();
+    // Nothing was sent: the account is already where the call wanted it.
+    expect(mockSaveSent).toBe(false);
+  });
+
+  it('is still "incorrect" when neither the current nor the new password opens', async () => {
+    mockCurrentOpens = false;
+    mockNewOpens = false;
+    const failure = await failureOf(change);
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).constructor.name).not.toBe('UnconfirmedSaveError');
+    expect(mockSaveSent).toBe(false);
   });
 });

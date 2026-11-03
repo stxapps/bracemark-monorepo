@@ -140,6 +140,30 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
   },
   {
+    "id": "WEB-ACCOUNT-007",
+    "title": "Create account on the generated words in one step, then the welcome (recovery code, check, start), then sign in",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "empty",
+    "path": "web/account.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "browsers": ["chrome", "firefox"],
+    "widths": ["wide", "narrow"]
+  },
+  {
+    "id": "WEB-ACCOUNT-008",
+    "title": "A recovery code from Settings is live on its done screen, changes the password, and dies when replaced",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "empty",
+    "path": "web/account.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "browsers": ["chrome", "firefox"],
+    "widths": ["wide", "narrow"]
+  },
+  {
     "id": "VERSION-SKEW-WEB-001",
     "title": "A newer build upgrading the data database closes the old tab's connection at once, keeps an unsaved editor on screen, and offers the reload",
     "surface": "web",
@@ -975,6 +999,17 @@
     "path": "mobile/flows/recovery-sign-in.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
     "environments": ["local", "staging"]
+  },
+  {
+    "id": "NATIVE-ACCOUNT-003",
+    "title": "Create an account on the device on the generated words, change its password on new words, and sign back in with them",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/create-account.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "widths": ["narrow", "wide"]
   },
   {
     "id": "ACCOUNT-DELETE-002",

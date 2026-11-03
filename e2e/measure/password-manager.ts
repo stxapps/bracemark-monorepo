@@ -10,7 +10,7 @@ import { capture } from '../runner/process';
 import { assertOriginOwnedByRepo } from '../runner/stack';
 import { newCredentials } from '../web/fixtures/account';
 import { unique } from '../web/fixtures/data';
-import { API_URL, CHROME_PATH, WEB_URL } from '../web/fixtures/env';
+import { API_URL, CHROME_PATH, SITE_URL, WEB_URL } from '../web/fixtures/env';
 import { launchApp, type LaunchedApp } from '../web/fixtures/launch';
 import { openSidebarItem } from '../web/fixtures/links';
 import { grantPlusAndLoad } from '../web/fixtures/plan';
@@ -140,46 +140,119 @@ const FLOWS: Flow[] = [
     expected: [{ current: 'rc-current', next: '', decision: ASK }],
   },
   {
-    // The check reads as a login, a username beside a `current-password`, so that
-    // is what Chrome should save from: one submission, at the end, after the account
-    // exists. The password on step one stays a `new-password` field, which is where a
-    // manager's suggestion is welcome.
+    // ONE STEP: the create form is a sign-up, a username ahead of a `new-password`,
+    // and it goes away only once the account exists, so that is what Chrome should
+    // save from — one submission, the new password, after the account is made. The
+    // welcome after it is skipped through here (`create-account-welcome` drives it).
     name: 'create-account',
-    what: 'Create account, generated passphrase, no recovery code',
+    what: 'Create account, generated passphrase, welcome skipped',
     launch: { signedOut: true },
     run: async ({ page, credentials }) => {
       await page.goto('/create-account');
       await page.locator('#username').fill(credentials.username);
       await expect(page.getByText('Username is available')).toBeVisible();
-      const passphrase = await page.locator('#signup-new-password').inputValue();
-      // Showing the words only flips the field's `type` now, and a box under it holds
-      // the whole password. It used to swap the input for a textarea and back, and a
-      // filled password field going away is the shape a manager can read as a
-      // submission, so the round trip stays here to catch the swap coming back.
+      // Showing the words only flips the field's `type`, and a box under it holds the
+      // whole password. It used to swap the input for a textarea and back, and a filled
+      // password field going away is the shape a manager can read as a submission, so
+      // the round trip stays here to catch the swap coming back.
       await page.getByRole('button', { name: 'Show password' }).click();
       await page.getByRole('button', { name: 'Hide password' }).click();
-      await page.getByRole('button', { name: /^continue$/i }).click();
-      await page.getByRole('button', { name: /without a recovery code/i }).click();
-      await page.locator('#password').fill(passphrase);
-      await page.getByRole('button', { name: 'Sign in to finish' }).click();
-      await expect(page).toHaveURL(/\/links/, { timeout: 60_000 });
+      await page.getByRole('button', { name: 'Create account', exact: true }).click();
+      await skipWelcome(page);
     },
-    expected: [{ current: 'password', next: '', decision: ASK }],
+    expected: [{ current: '', next: 'signup-new-password', decision: ASK }],
   },
   {
-    // The same field, edited: this is the path that used to be a separate one.
+    // The same field, edited: the password typed over the words.
     name: 'create-account-own',
-    what: 'Create account, typed password, no recovery code',
+    what: 'Create account, typed password, welcome skipped',
     launch: { signedOut: true },
     run: async ({ page, credentials }) => {
       await page.goto('/create-account');
       await page.locator('#username').fill(credentials.username);
       await expect(page.getByText('Username is available')).toBeVisible();
       await page.locator('#signup-new-password').fill(credentials.password);
-      await page.getByRole('button', { name: /^continue$/i }).click();
-      await page.getByRole('button', { name: /without a recovery code/i }).click();
+      await page.getByRole('button', { name: 'Create account', exact: true }).click();
+      await skipWelcome(page);
+    },
+    expected: [{ current: '', next: 'signup-new-password', decision: ASK }],
+  },
+  {
+    // The whole welcome after the create: a recovery code minted (a request, with no
+    // form — the code must never be saved as this site's password), then the check,
+    // refused once and then passed. The refused attempt is no submission: the form
+    // stays. The passed one is, a login with the username and the SAME password — and
+    // in this fresh profile, where nobody pressed Save at the create, Chrome asks
+    // again, which is a second chance to save the right password. In a profile that
+    // saved it, the pair is unchanged and there is nothing to offer. Never the code.
+    name: 'create-account-welcome',
+    what: 'Create account, then a recovery code and a refused-then-passed check',
+    launch: { signedOut: true },
+    run: async ({ page, credentials }) => {
+      await page.goto('/create-account');
+      await page.locator('#username').fill(credentials.username);
+      await expect(page.getByText('Username is available')).toBeVisible();
+      const words = await page.locator('#signup-new-password').inputValue();
+      await page.getByRole('button', { name: 'Create account', exact: true }).click();
+      await page.getByRole('button', { name: 'Create recovery code' }).click({ timeout: 60_000 });
+      await expect(page.getByLabel('Your recovery code')).toBeVisible({ timeout: 60_000 });
+      await page.getByRole('button', { name: 'Copy', exact: true }).click();
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await page.locator('#welcome-password').fill(`${words}x`);
+      await page.getByRole('button', { name: 'Sign in to check' }).click();
+      await expect(page.getByText('That doesn’t match.', { exact: false })).toBeVisible();
+      await page.waitForTimeout(2_500);
+      await page.locator('#welcome-password').fill(words);
+      await page.getByRole('button', { name: 'Sign in to check' }).click();
+      await expect(page.getByText('Your saved password works.')).toBeVisible();
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await page.getByRole('button', { name: 'Start using Bracemark' }).click();
+      await expect(page).toHaveURL(/\/links/);
+    },
+    expected: [
+      { current: '', next: 'signup-new-password', decision: ASK },
+      { current: 'welcome-password', next: '', decision: ASK },
+    ],
+  },
+  {
+    // "Incorrect password." leaves the form on screen, so the refused attempt must
+    // not be the one Chrome offers to save: that would replace the saved login with
+    // a password that does not work. One submission, the one that landed.
+    name: 'change-wrong-current',
+    what: 'Change password, a wrong current password first, then the right one',
+    launch: {},
+    run: async ({ page, credentials }) => {
+      await openChangePassword(page);
+      await page.locator('#cp-current').fill(`${credentials.password}x`);
+      await page.getByRole('button', { name: 'Change password', exact: true }).click();
+      await expect(page.getByRole('alert').filter({ hasText: 'Incorrect password.' })).toBeVisible({
+        timeout: 60_000,
+      });
+      await page.waitForTimeout(2_500);
+      await page.locator('#cp-current').fill(credentials.password);
+      await submitGenerated(page);
+    },
+    expected: [{ current: 'cp-current', next: 'cp-new-password', decision: ASK }],
+  },
+  {
+    // Sign-in after a trip through the recovery door and back, which now carries the
+    // username across (sign-in-form.tsx). The door swap unmounts one form and mounts
+    // the other; only the final sign-in may be a submission, and with the password
+    // door's fields, never the recovery code's.
+    name: 'sign-in-switch',
+    what: 'Sign in, after switching to the recovery door and back',
+    launch: {},
+    run: async ({ page, credentials }) => {
+      await signOut(page);
+      await page.goto('/sign-in');
+      await page.locator('#username').fill(credentials.username);
+      await page.getByRole('button', { name: /use a recovery code/i }).click();
+      await expect(page.locator('#rec-username')).toHaveValue(credentials.username);
+      await page.locator('#rec-code').fill('AAAAA-BBBBB');
+      await page.getByRole('button', { name: 'Use your password instead' }).click();
+      await expect(page.locator('#username')).toHaveValue(credentials.username);
       await page.locator('#password').fill(credentials.password);
-      await page.getByRole('button', { name: 'Sign in to finish' }).click();
+      await page.getByRole('button', { name: 'Sign in', exact: true }).click();
       await expect(page).toHaveURL(/\/links/, { timeout: 60_000 });
     },
     expected: [{ current: 'password', next: '', decision: ASK }],
@@ -238,6 +311,27 @@ async function leaveSettings(page: Page): Promise<void> {
   await page.getByRole('link', { name: 'Close settings' }).click();
   await expect(page).toHaveURL(/\/links/);
   await page.waitForTimeout(2_500);
+}
+
+// The menu's sign-out, which wipes the device and leaves for the marketing site — not
+// running under `npm run dev`, so it is stubbed, as account.e2e.ts does.
+async function signOut(page: Page): Promise<void> {
+  const site = new URL(SITE_URL);
+  await page.route(`${site.origin}/**`, (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<title>site stub</title>' }),
+  );
+  await page.goto('/links');
+  await page.getByRole('button', { name: /^More options/ }).click();
+  await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  await page.waitForURL((url) => url.origin === site.origin, { timeout: 30_000 });
+}
+
+// The welcome after create-account, through its exits: no code, no check, in.
+async function skipWelcome(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Skip for now' }).click({ timeout: 60_000 });
+  await page.getByRole('button', { name: 'Skip', exact: true }).click();
+  await page.getByRole('button', { name: 'Start using Bracemark' }).click();
+  await expect(page).toHaveURL(/\/links/);
 }
 
 async function openChangePassword(page: Page): Promise<void> {

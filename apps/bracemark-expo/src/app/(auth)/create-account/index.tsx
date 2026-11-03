@@ -1,38 +1,25 @@
+import { CREATE_ACCOUNT_COPY } from '@stxapps/react';
+
 import { LegalConsent } from '../../../components/legal-consent';
 import { AuthAltAction } from '../../../features/auth/auth-alt-action';
 import { AuthScreen } from '../../../features/auth/auth-screen';
 import { CreateAccountForm } from '../../../features/auth/create-account-form';
 
-// `/create-account` — mirrors bracemark-web's `(auth)/create-account/page.tsx`:
-// the card chrome (AuthScreen ≈ the web layout's lockup + dog-eared Card, plus
-// this page's CardHeader/Content/Footer) around the shared ceremony form. Thin
-// by design — the UI lives in `src/features/auth/` because every file under the
-// app root becomes a route (no `_`-private folders in expo-router).
+// `/create-account` — mirrors bracemark-web's `(auth)/create-account/page.tsx`: the
+// card chrome (AuthScreen ≈ the web layout's lockup + dog-eared Card) around the
+// one-step form. Thin by design — the UI lives in `src/features/auth/` because every
+// file under the app root becomes a route (no `_`-private folders in expo-router).
 //
-// NO `title`/`description`, and this is the one asymmetry with /sign-in, which
-// passes AuthScreen a static title. The form under this one advances
-// setup → recovery → check, and each step now replaces the heading with its own
-// ("Recovery code", "Check your saved password") — so the heading has to be rendered
-// by the thing that knows the step. `step` is state local to CreateAccountForm,
-// and lifting it up here so this file could swap three words would be the tail
-// wagging the dog; the header moved down to the state instead. StepHeader in
-// `features/auth/create-account-form.tsx` owns it, at the same
-// `text-xl font-semibold tracking-tight` step AuthScreen uses, and carries the
-// argument for the swap. Web's page mirrors this exactly (no CardHeader).
+// One step, so the screen owns its heading, as /sign-in does: the title over the
+// disclosure line (no email address, no reset), which has to be read before the
+// account is made. The welcome after it is the app's (components/welcome-gate.tsx).
 //
-// The disclosure that used to sit here — "No email address, no password reset" —
-// went with it, as step one's description. It has to be seen before the ceremony
-// starts, and step one is the step everyone sees; steps two and three then say
-// the same thing about themselves, at the moment it bites.
-//
-// The consent line stays on the SCREEN even though the header left, because the
-// reason differs: it has to hold at EVERY step, so it must not be step-aware. It
-// names the act, so it is true from the first step instead of being sprung on
-// someone three steps in. Web's page carries the identical placement and the longer
-// argument.
+// The consent line names the ACT, under the form: it is about this form.
 export default function CreateAccountScreen() {
   return (
     <AuthScreen
+      title={CREATE_ACCOUNT_COPY.title}
+      description={CREATE_ACCOUNT_COPY.description}
       footer={<AuthAltAction prompt="Already have an account?" href="/sign-in" action="Sign in" />}
     >
       <CreateAccountForm />

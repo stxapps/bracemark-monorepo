@@ -2,15 +2,14 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { ShowOnceSecret } from './show-once-secret';
 
-// The wallet-style panel behind the recovery code, at create-account and in Settings.
-// There is no server-side reset, so this is the only moment the code exists in a form
-// the user can save, and the panel's whole job is getting it somewhere safe.
+// The wallet-style panel behind the recovery code, on the welcome after create-account
+// and in Settings. There is no server-side reset, so this is the only moment the code
+// exists in a form the user can save, and the panel's whole job is getting it
+// somewhere safe.
 //
-// The load-bearing case is the SETTLE-BEFORE-COMMIT one: `actions` (Regenerate)
-// sits directly above Copy, and regenerating silently invalidates a copy already
-// taken — the clipboard still holds the old secret. If the button goes on saying
-// "Copied" over a new value, the panel is actively asserting something false
-// about the one string the user cannot recover. Nothing catches that: the reset
+// The load-bearing case is the reset: a new secret drops "Copied". If the button went
+// on saying "Copied" over a new value, the panel would be asserting something false
+// about the one string the user cannot recover. Nothing else catches that: the reset
 // is an effect keyed on `secret`, drop it and every render still looks right.
 
 const writeText = jest.fn<Promise<void>, [string]>();
@@ -28,26 +27,15 @@ beforeEach(() => {
   writeText.mockResolvedValue(undefined);
 });
 
-const onSavedChange = jest.fn();
-const confirm = (saved: boolean) => ({
-  id: 'saved',
-  saved,
-  onSavedChange,
-  label: 'I’ve saved my recovery code',
-});
-
 function renderPanel(overrides: Partial<React.ComponentProps<typeof ShowOnceSecret>> = {}) {
-  onSavedChange.mockReset();
   const props: React.ComponentProps<typeof ShowOnceSecret> = {
     secret: 'ripe-anchor-velvet-quill-north-timber',
     label: 'Your recovery code',
-    confirm: confirm(false),
     ...overrides,
   };
   const view = render(<ShowOnceSecret {...props} />);
   return {
     ...view,
-    onSavedChange,
     rerender: (next: Partial<React.ComponentProps<typeof ShowOnceSecret>>) =>
       view.rerender(<ShowOnceSecret {...props} {...next} />),
   };
@@ -127,42 +115,12 @@ describe('ShowOnceSecret', () => {
     expect(copyButton().textContent).toBe('Copy');
   });
 
-  // The checkbox is the gate create-account spells its Continue's `disabled` against.
-  it('reports the confirmation up to the caller', () => {
+  // Every code it shows is already live, so it asks for no tick: one read as the thing
+  // that would make the code count.
+  it('asks for no "I’ve saved it" tick', () => {
     renderPanel();
-
-    fireEvent.click(screen.getByRole('checkbox', { name: 'I’ve saved my recovery code' }));
-
-    expect(onSavedChange).toHaveBeenCalledWith(true);
-  });
-
-  it('reflects the caller’s saved state rather than keeping its own', () => {
-    const view = renderPanel({ confirm: confirm(true) });
-    expect((screen.getByRole('checkbox') as HTMLInputElement).getAttribute('data-state')).toBe(
-      'checked',
-    );
-
-    view.rerender({ confirm: confirm(false) });
-    expect((screen.getByRole('checkbox') as HTMLInputElement).getAttribute('data-state')).toBe(
-      'unchecked',
-    );
-  });
-
-  // Settings shows a code that is already live, so it asks for no tick: one there read
-  // as the thing that would make the code count.
-  it('renders no checkbox for a caller that passes no confirmation', () => {
-    renderPanel({ confirm: undefined });
 
     expect(screen.queryByRole('checkbox')).toBeNull();
     expect(copyButton().textContent).toBe('Copy');
-  });
-
-  // `actions` are the controls that change WHICH secret you get, and they render
-  // between the value and Copy so they read as belonging to the value above them.
-  it('renders the caller’s actions before the copy step', () => {
-    renderPanel({ actions: <button type="button">Regenerate</button> });
-
-    const buttons = screen.getAllByRole('button').map((b) => b.textContent);
-    expect(buttons.indexOf('Regenerate')).toBeLessThan(buttons.indexOf('Copy'));
   });
 });

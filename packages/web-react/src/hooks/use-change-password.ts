@@ -14,7 +14,7 @@ import {
   readPasswordDoorEndpoint,
   readRecoveryDoorEndpoint,
 } from '@stxapps/shared';
-import { changePasswordDoor, type DoorOpener } from '@stxapps/web-crypto';
+import { changePasswordDoor, type DoorOpener, unlockAccount } from '@stxapps/web-crypto';
 
 import { useAuth } from '../contexts/auth-provider';
 import { InvalidCredentialsError } from './use-sign-in';
@@ -79,10 +79,10 @@ export async function openerForProof(
 // connection dropped mid-flight. The server may have stored the new door anyway:
 // when the platform is slow, a call can outlast the client deadline
 // (DEFAULT_CALL_TIMEOUT_MS) while its write still lands. "Please try again" is the wrong
-// thing to say then. After a password change, the old password may already be
-// refused, so a retry fails as "Incorrect password." and looks like a lockout.
-// After a new recovery code, the old code may already be dead and the new one was
-// never shown. So this has its own type, and the form says what may have happened.
+// thing to say then. A password change settles it by asking the door (`opensNow`), and
+// throws this only when the server cannot be reached for that either. A new recovery
+// code cannot be settled — the code that may have landed was never shown — so it
+// always throws this, and the form says to generate another.
 // Thrown only for the FINAL save. A failure before it (the door fetch, the
 // Argon2 run) wrote nothing and stays the ordinary "please try again".
 export class UnconfirmedSaveError extends Error {
@@ -111,6 +111,35 @@ export function mapOpenError(err: unknown): never {
   throw err;
 }
 
+// Whether `password` opens this account's password door as the server holds it NOW —
+// `null` when the server can't be asked. This is how a change that got no answer is
+// settled without asking the user to guess: the door either already takes the new
+// password (it landed) or does not (nothing changed). It tells nobody anything new:
+// the door is served pre-auth by design (docs/account.md, _why the wrapped DEK is
+// served pre-auth_), so any password can be tested against it offline already.
+async function opensNow(
+  api: ApiClient,
+  username: string,
+  password: string,
+): Promise<boolean | null> {
+  let door;
+  try {
+    door = await api.call(readPasswordDoorEndpoint, { username });
+  } catch {
+    return null;
+  }
+  try {
+    await unlockAccount(username, password, {
+      wrappedDek: hexToBytes(door.wrappedDek),
+      iv: hexToBytes(door.iv),
+    });
+    return true;
+  } catch (err) {
+    if (err instanceof Error && err.name === 'WrongPasswordError') return false;
+    throw err;
+  }
+}
+
 export function useChangePassword() {
   const api = useApiClient();
   const { username } = useAuth();
@@ -128,11 +157,27 @@ export function useChangePassword() {
       // to persist AND the (unchanged) account, so we sign the proof without
       // opening the DEK twice. A wrong current-password/recovery-code surfaces here
       // (mapOpenError → the form's typed miss).
-      const { passwordDoor, account } = await changePasswordDoor(
-        username,
-        newPassword,
-        opener,
-      ).catch(mapOpenError);
+      //
+      // A refused CURRENT password may be a change that already landed: the save before
+      // got no answer, and the retry proves with the old password, which the door no
+      // longer takes. If the new password opens it, the account is already where this
+      // call wants it, and that is success — not "Incorrect password." over a change
+      // that worked, which is what sent people to type the new password as the current
+      // one and meet "That's your current password."
+      let rotated;
+      try {
+        rotated = await changePasswordDoor(username, newPassword, opener).catch(mapOpenError);
+      } catch (err) {
+        if (
+          err instanceof InvalidCredentialsError &&
+          proof.kind === 'password' &&
+          (await opensNow(api, username, newPassword))
+        ) {
+          return;
+        }
+        throw err;
+      }
+      const { passwordDoor, account } = rotated;
 
       // Step 3: sign the action-bound proof (carrying the new door, so the
       // signature covers what gets stored) and POST it. The bearer token rides
@@ -153,8 +198,15 @@ export function useChangePassword() {
         await api.call(changePasswordEndpoint, { payload, signature });
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) throw new InvalidCredentialsError();
-        if (isNoAnswer(err)) throw new UnconfirmedSaveError({ cause: err });
-        throw err;
+        if (!isNoAnswer(err)) throw err;
+        // No answer. Ask the door instead of the user: the new password opens it (the
+        // save landed: done), or it does not (nothing changed: an ordinary failure, so
+        // "try again" is true). Only a server that still can't be reached leaves it
+        // unknown.
+        const landed = await opensNow(api, username, newPassword);
+        if (landed === true) return;
+        if (landed === false) throw err;
+        throw new UnconfirmedSaveError({ cause: err });
       }
       // Nothing to persist locally: the DEK/publicKey/encryptionKey and the
       // session are all unchanged by a door rotation.

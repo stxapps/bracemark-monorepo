@@ -10,6 +10,7 @@ import { AppLockGate } from '@/components/app-lock-gate';
 import { AuthGuard } from '@/components/auth-guard';
 import { InitialSyncGate } from '@/components/initial-sync-gate';
 import { SyncProviderWithSweep } from '@/components/sync-provider-with-sweep';
+import { WelcomeGate } from '@/components/welcome-gate';
 import { PaywallProvider } from '@/contexts/paywall-provider';
 
 // Guard for the signed-in app (/links, /settings, …). The stack below, in
@@ -64,6 +65,11 @@ import { PaywallProvider } from '@/contexts/paywall-provider';
 //                     screen). Never redirects.
 //   InitialSyncGate — "is the local store ready?" Renders a decrypting screen on
 //                     first sync, then the app. Never redirects (sync-provider).
+//   WelcomeGate     — the welcome after create-account (recovery code, a check of
+//                     the saved password, import or start), once, for the account
+//                     just made; then the app. A content swap like the gates above,
+//                     never a redirect. Below InitialSyncGate, whose new-account
+//                     path renders at once, so the welcome is the first thing seen.
 //   PaywallProvider — the hoisted upgrade dialog behind the entitlement gates.
 // This layout stays a server component and just composes the client wrappers.
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -77,8 +83,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <LockProvider>
                   <AppLockGate>
                     <InitialSyncGate>
-                      <PaywallProvider>
-                        {/* NO WRAPPER ELEMENT HERE, on purpose. Every screen under
+                      <WelcomeGate>
+                        <PaywallProvider>
+                          {/* NO WRAPPER ELEMENT HERE, on purpose. Every screen under
                             this layout is already its own `h-dvh` frame carrying
                             its own `safe-area` (links/page.tsx,
                             settings/layout.tsx), so a box here is either dead
@@ -89,8 +96,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                             fold. That is the blanket bug from inner-layout.tsx one
                             level lower. A bare `min-h-dvh` div used to sit here; it
                             constrained nothing. docs/safe-area.md. */}
-                        {children}
-                      </PaywallProvider>
+                          {children}
+                        </PaywallProvider>
+                      </WelcomeGate>
                     </InitialSyncGate>
                   </AppLockGate>
                 </LockProvider>

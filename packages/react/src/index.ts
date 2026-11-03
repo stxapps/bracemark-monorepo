@@ -16,3 +16,4 @@ export * from './lib/paywall-copy';
 export * from './lib/recovery-code-copy';
 export * from './lib/session-copy';
 export * from './lib/sync-before-sign-out';
+export * from './lib/welcome-store';

@@ -12,7 +12,7 @@ import {
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
-import { useApiClient } from '@stxapps/react';
+import { endWelcome, useApiClient } from '@stxapps/react';
 import { newSessionGeneration, sessionProbeEndpoint, type SessionState } from '@stxapps/shared';
 
 import { clearData } from '../data/clear-data';
@@ -227,6 +227,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // A failed record deletion must not be followed by a data wipe: otherwise
       // relaunch would adopt a still-persisted session over an empty library.
       await clearSession();
+      // The welcome's held password goes with the session it was for
+      // (react/lib/welcome-store.ts).
+      endWelcome();
       setStatus('ending');
       publishSessionChange({ generation: null, reason: why });
       let cleanupError: unknown;

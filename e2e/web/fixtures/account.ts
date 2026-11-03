@@ -49,77 +49,62 @@ export function newCredentials(): Credentials {
 // The step sequence mirrors `.claude/skills/verify/SKILL.md`. If the flow is
 // reshaped, that skill and this helper move together.
 export async function createAccount(page: Page, credentials: Credentials): Promise<void> {
-  await fillCredentialSteps(page, credentials);
+  await submitCreateAccount(page, credentials);
 
-  // The recovery step's primary action stays disabled until its saved-it checkbox
-  // is ticked, so the secondary is the one an unattended run takes. An account
-  // with no recovery code is a legitimate product state, not a test-only shortcut.
-  await page.getByRole('button', { name: /without a recovery code/i }).click();
-  await finishCheck(page, credentials);
-
-  // Argon2id runs here. The generous timeout is the derivation, not the network.
-  await expect(page).toHaveURL(/\/links/, { timeout: 60_000 });
+  // The welcome, skipped through: no recovery code (a legitimate product state, not a
+  // test-only shortcut) and no check. WELCOME-* cases drive it for real.
+  await page.getByRole('button', { name: 'Skip for now' }).click();
+  await page.getByRole('button', { name: 'Skip', exact: true }).click();
+  await page.getByRole('button', { name: 'Start using Bracemark' }).click();
+  await expect(page).toHaveURL(/\/links/);
+  await expect(page.getByRole('heading', { name: 'You’re all set' })).toHaveCount(0);
 }
 
-// The same ceremony, taking the recovery-code exit, and returning the code it was
-// handed. Only `mobile/flows/recovery-sign-in.yaml` needs this: the recovery door
-// is the one credential a run CANNOT choose in advance — it is CSPRNG-minted by
-// the client and never user-supplied by design ("we GENERATE it and never let
-// users type their own", `packages/shared/src/crypto/recovery-code.ts`), so the
-// show-once panel is the only place it exists in a form anything can capture.
+// The same, taking the welcome's recovery-code step, and returning the code it was
+// handed. Only `mobile/flows/recovery-sign-in.yaml` needs this: the recovery door is
+// the one credential a run CANNOT choose in advance — it is CSPRNG-minted by the
+// client and never user-supplied by design ("we GENERATE it and never let users type
+// their own", `packages/shared/src/crypto/recovery-code.ts`), so the show-once panel
+// is the only place it exists in a form anything can capture. It is read off the
+// `<output>` by its `aria-label`, so a restyle of the panel cannot silently start
+// returning the wrong string.
 //
-// That makes this the deliberate exception to the rule stated above, not a
-// contradiction of it: the password is scraped-vs-chosen and we choose, the
-// recovery code has no chosen form to prefer. It is read off the `<output>` by
-// its `aria-label` rather than by a class or a nth-child, so a restyle of the
-// wallet panel cannot silently start returning the wrong string.
-//
-// Returned in DISPLAY form, hyphens and all ("A1B2C-D3E4F-…"), which is what the
-// user would have saved and what a flow should type back — `normalizeRecoveryCode`
-// strips the grouping before it is ever key material, so the round trip through
-// the hyphenated form is part of what this exercises.
+// Returned in DISPLAY form, hyphens and all ("A1B2C-D3E4F-…"), which is what the user
+// would have saved and what a flow should type back — `normalizeRecoveryCode` strips
+// the grouping before it is ever key material.
 export async function createAccountWithRecovery(
   page: Page,
   credentials: Credentials,
 ): Promise<string> {
-  await fillCredentialSteps(page, credentials);
+  await submitCreateAccount(page, credentials);
 
-  const code = (await page.getByLabel('Your recovery code').innerText()).trim();
-  if (!code) throw new Error('create-account showed an empty recovery code');
-
-  // `#recovery-saved` is the attestation checkbox that ungates the primary
-  // action. The anchored name keeps this off "Continue without a recovery code",
-  // which is the same button family one line apart.
-  await page.locator('#recovery-saved').check();
-  await page.getByRole('button', { name: /^continue$/i }).click();
-  await finishCheck(page, credentials);
-
-  await expect(page).toHaveURL(/\/links/, { timeout: 60_000 });
+  await page.getByRole('button', { name: 'Create recovery code' }).click();
+  const shown = page.getByLabel('Your recovery code');
+  // A door: an Argon2id open of the password door, then a write.
+  await expect(shown).toBeVisible({ timeout: 60_000 });
+  const code = (await shown.innerText()).trim();
+  if (!code) throw new Error('the welcome showed an empty recovery code');
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByRole('button', { name: 'Skip', exact: true }).click();
+  await page.getByRole('button', { name: 'Start using Bracemark' }).click();
+  await expect(page).toHaveURL(/\/links/);
   return code;
 }
 
-// Step 1 of the ceremony, which both exits share. Leaves the page on step 2, the
-// recovery panel. Nothing has reached the server's accounts when it returns, nor will
-// it until the check on step 3 passes, which is what lets shot/ photograph step 2 and
-// walk away.
-export async function fillCredentialSteps(page: Page, credentials: Credentials): Promise<void> {
+// The one step of create-account, which creates the account and signs in. Leaves the
+// page on the welcome's first step. The field starts on a generated passphrase, and
+// editing it is choosing your own: we replace it, because a generated password would
+// have to be scraped off the screen and kept for the mobile half of the contract run,
+// and scraping a secret out of the DOM is a worse dependency than typing a known one.
+export async function submitCreateAccount(page: Page, credentials: Credentials): Promise<void> {
   await page.goto('/create-account');
-
   await page.locator('#username').fill(credentials.username);
-
-  // The field starts on a generated passphrase, and editing it is choosing your own.
-  // We replace it: a generated password would have to be scraped off the screen and
-  // kept for the mobile half of the contract run, and scraping a secret out of the DOM
-  // is a worse dependency than typing a known one in.
   await page.locator('#signup-new-password').fill(credentials.password);
-  await page.getByRole('button', { name: /^continue$/i }).click();
-}
-
-// Step 3: sign in with the saved copy, which creates the account. Exact name: step 3
-// has a second control mentioning a password.
-export async function finishCheck(page: Page, credentials: Credentials): Promise<void> {
-  await page.locator('#password').fill(credentials.password);
-  await page.getByRole('button', { name: 'Sign in to finish' }).click();
+  await page.getByRole('button', { name: 'Create account', exact: true }).click();
+  // Argon2id runs here. The generous timeout is the derivation, not the network.
+  await expect(page.getByRole('heading', { name: 'Your account is ready' })).toBeVisible({
+    timeout: 60_000,
+  });
 }
 
 // Sign in an already-created account. Used by the contract runner's reverse leg,

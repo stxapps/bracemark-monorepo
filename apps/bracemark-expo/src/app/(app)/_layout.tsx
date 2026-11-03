@@ -12,6 +12,7 @@ import { AppLockGate } from '../../components/app-lock-gate';
 import { AuthGuard } from '../../components/auth-guard';
 import { InitialSyncGate } from '../../components/initial-sync-gate';
 import { ShareBridge } from '../../components/share-bridge';
+import { WelcomeGate } from '../../components/welcome-gate';
 import { PaywallProvider } from '../../contexts/paywall-provider';
 import { SignOutProvider } from '../../contexts/sign-out-provider';
 
@@ -74,6 +75,10 @@ import { SignOutProvider } from '../../contexts/sign-out-provider';
 //                  (it covers even the decrypting screen).
 //   InitialSyncGate — "is the local store ready?" Renders a decrypting screen
 //                  on first sync, then the app. Never redirects (sync-provider).
+//   WelcomeGate  — the welcome after create-account (recovery code, a check of
+//                  the saved password, import or start), once, for the account
+//                  just made; then the app. A content swap, never a redirect. Below
+//                  InitialSyncGate, whose new-account path renders at once.
 //   PaywallProvider — the hoisted upgrade dialog behind the entitlement gates
 //                  (locks, nested lists). Must stay BELOW AppLockGate — the
 //                  mirror image of SignOutProvider above: its dialog portals out
@@ -103,17 +108,19 @@ export default function AppLayout() {
                 <LockProvider>
                   <AppLockGate>
                     <InitialSyncGate>
-                      <PaywallProvider>
-                        <Stack screenOptions={{ headerShown: false }}>
-                          {/* "Sign in to resume" for an expired session
+                      <WelcomeGate>
+                        <PaywallProvider>
+                          <Stack screenOptions={{ headerShown: false }}>
+                            {/* "Sign in to resume" for an expired session
                               (docs/sessions.md) — modal: a form with a keyboard,
                               over a library that stays open. */}
-                          <Stack.Screen
-                            name="resume"
-                            options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-                          />
-                        </Stack>
-                      </PaywallProvider>
+                            <Stack.Screen
+                              name="resume"
+                              options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+                            />
+                          </Stack>
+                        </PaywallProvider>
+                      </WelcomeGate>
                     </InitialSyncGate>
                   </AppLockGate>
                 </LockProvider>

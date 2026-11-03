@@ -1,6 +1,6 @@
 // The words the new-password field prints: ONE real field, already holding generated
 // words, which the user may edit into their own (docs/account.md, _generated
-// password_). It renders on create-account's first step and on Settings → change
+// password_). It renders on create-account and on Settings → change
 // password, web and native, so four places print these and only this file keeps them
 // saying the same thing. The prose had already drifted once (Settings dropped "there
 // is no way to reset it if it's lost" from the typed paragraph, and nothing recorded
