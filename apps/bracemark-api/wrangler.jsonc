@@ -303,6 +303,10 @@
         // Mint the keys in the R2 dashboard (Manage R2 API Tokens) scoped to the
         // bucket below. See docs/hosting.md.
         "R2_USER_FILES_BUCKET": "bracemark-user-files-staging",
+        // The daily per-network signup cap (services/signup-cap.ts). On here so
+        // the path runs where it is deployed, but far above production's: the
+        // staging e2e suites make a fresh account per case, all from one address.
+        "SIGNUP_CAP_PER_DAY": "200",
         // The Server-Timing breakdown (src/lib/server-timing.ts) — on here, where
         // `measure:sync` runs; production leaves it unset.
         "SERVER_TIMING": "1",
@@ -426,6 +430,10 @@
         // Mint the keys in the R2 dashboard (Manage R2 API Tokens) scoped to the
         // bucket below. See docs/hosting.md.
         "R2_USER_FILES_BUCKET": "bracemark-user-files-production",
+        // The most accounts one network (an IPv4 address, an IPv6 /64) may create
+        // per UTC day (services/signup-cap.ts). Room for a household or a shared
+        // NAT; development leaves it unset, which is off.
+        "SIGNUP_CAP_PER_DAY": "10",
         // Paddle Billing — LIVE Paddle. Secrets, set separately:
         //   wrangler secret put PADDLE_WEBHOOK_SECRET --env production
         //   wrangler secret put PADDLE_API_KEY --env production

@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { CREATE_ACCOUNT_COPY, usernameMessage, useUsernameAvailable } from '@stxapps/react';
 import { canonicalizeUsername } from '@stxapps/shared';
-import { useCreateAccount, UsernameTakenError } from '@stxapps/web-react';
+import { SignupLimitedError, useCreateAccount, UsernameTakenError } from '@stxapps/web-react';
 import {
   NewPasswordField,
   useNewPassword,
@@ -77,7 +77,8 @@ export function CreateAccountForm() {
       // navigates. Nothing to do here.
     } catch (err) {
       if (err instanceof UsernameTakenError) setUsernameTaken(true);
-      else setSubmitError('Could not create account. Please try again.');
+      else if (err instanceof SignupLimitedError) setSubmitError(CREATE_ACCOUNT_COPY.signupLimited);
+      else setSubmitError(CREATE_ACCOUNT_COPY.submitFailed);
     }
   };
 

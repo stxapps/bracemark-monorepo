@@ -2,8 +2,8 @@
 --
 -- For changes to a LIVE db, add a numbered migration under
 -- db/migrations/sessions/ — keep this snapshot and the migration set in lockstep
--- (0001_init.sql + 0002_revoked_at.sql together produce this file). See
--- db/migrations/README.md.
+-- (0001_init.sql + 0002_revoked_at.sql + 0003_signup_counts.sql together produce
+-- this file). See db/migrations/README.md.
 --
 -- Sessions live in their OWN database, separate from the directory + account
 -- shards (DIRECTORY_DB, ACCOUNTS_DB_N), for two reasons: (1) they are high-churn
@@ -38,3 +38,14 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_revoked_at ON sessions(revoked_at);
+
+-- The per-network daily signup counter (0003): one row per (network, UTC day),
+-- the network an HMAC, never an address. Disposable like the sessions beside it;
+-- the daily cron deletes past days. services/signup-cap.ts.
+CREATE TABLE IF NOT EXISTS signup_counts (
+  network_hash TEXT NOT NULL,
+  day          INTEGER NOT NULL,         -- days since the epoch, UTC
+  count        INTEGER NOT NULL,
+  PRIMARY KEY (network_hash, day)
+);
+CREATE INDEX IF NOT EXISTS idx_signup_counts_day ON signup_counts(day);

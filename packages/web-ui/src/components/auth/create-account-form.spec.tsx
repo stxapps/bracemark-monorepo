@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { CREATE_ACCOUNT_COPY, useUsernameAvailable } from '@stxapps/react';
-import { useCreateAccount, UsernameTakenError } from '@stxapps/web-react';
+import { SignupLimitedError, useCreateAccount, UsernameTakenError } from '@stxapps/web-react';
 
 import { installJsdomStubs } from '../../testing/jsdom-stubs';
 import { CreateAccountForm } from './create-account-form';
@@ -27,7 +27,8 @@ jest.mock('@stxapps/react', () => ({
 
 jest.mock('@stxapps/web-react', () => {
   class UsernameTakenError extends Error {}
-  return { UsernameTakenError, useCreateAccount: jest.fn() };
+  class SignupLimitedError extends Error {}
+  return { SignupLimitedError, UsernameTakenError, useCreateAccount: jest.fn() };
 });
 
 let mockGuessesLog10: number | null = 30;
@@ -162,6 +163,17 @@ describe('CreateAccountForm — failures', () => {
     );
     expect(passwordField().value).toBe(words);
     expect((submitButton() as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  // The daily per-network cap: "try again" would only fail again, so it says when.
+  it('says to come back tomorrow when the network has reached its daily cap', async () => {
+    createAccount.mockRejectedValue(new SignupLimitedError());
+    render(<CreateAccountForm />);
+    typeUsername();
+
+    await submit();
+
+    expect(screen.getByRole('alert').textContent).toBe(CREATE_ACCOUNT_COPY.signupLimited);
   });
 });
 

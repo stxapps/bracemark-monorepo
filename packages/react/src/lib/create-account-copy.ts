@@ -22,6 +22,14 @@ export const CREATE_ACCOUNT_COPY = {
   // typed or suggested into.
   submit: 'Create account',
   creating: 'Creating account…',
+  // Under the button, after a submit. The other failure is generic and says to try
+  // again, which here would only fail again: the server's daily per-network cap
+  // (bracemark-api services/signup-cap.ts) clears tomorrow, not in a moment. Shared
+  // wifi and mobile carriers put many people behind one address, so it names the
+  // network rather than the person.
+  submitFailed: 'Could not create account. Please try again.',
+  signupLimited:
+    'Too many accounts have been created from this network today. Please try again tomorrow.',
 } as const;
 
 // The welcome: three steps after the account exists, each skippable. The order is

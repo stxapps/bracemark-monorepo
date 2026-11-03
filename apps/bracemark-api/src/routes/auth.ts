@@ -36,7 +36,7 @@ import {
 import { verifyAuthProof } from '../lib/auth-proof';
 import type { AppEnv } from '../lib/env';
 import { requireAuth } from '../middleware/auth';
-import { rateLimit } from '../middleware/rate-limit';
+import { callerNetwork, rateLimit } from '../middleware/rate-limit';
 import {
   changePasswordDoor,
   createAccount,
@@ -48,6 +48,7 @@ import {
   signIn,
 } from '../services/account';
 import { revokeOtherSessions, revokeSession } from '../services/session';
+import { claimSignupSlot } from '../services/signup-cap';
 
 // All routes carry their own '/v1/auth/…' path (from the shared contract,
 // version prefix and all), so this sub-app is mounted at the root in app.ts.
@@ -84,6 +85,11 @@ export const authRoutes = new Hono<AppEnv>()
       // Proof-of-possession: verify the signature over the exact signed bytes, and
       // that the payload is fresh and for this action, BEFORE provisioning anything.
       const proof = await verifyAuthProof(payload, signature, createAccountPayloadSchema);
+
+      // The day's cap for the caller's network (services/signup-cap.ts): after the
+      // proof, so a malformed request costs no counter write; before the claim, so
+      // a refused one provisions nothing. Off where the env leaves it unset.
+      await claimSignupSlot(c.env, callerNetwork(c));
 
       const result = await createAccount(c.env, {
         username: proof.username,

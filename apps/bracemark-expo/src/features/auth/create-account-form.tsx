@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { type TextInput, View } from 'react-native';
 
-import { useCreateAccount, UsernameTakenError } from '@stxapps/expo-react';
+import { SignupLimitedError, useCreateAccount, UsernameTakenError } from '@stxapps/expo-react';
 import { CREATE_ACCOUNT_COPY, usernameMessage, useUsernameAvailable } from '@stxapps/react';
 import { canonicalizeUsername } from '@stxapps/shared';
 
@@ -57,7 +57,8 @@ export function CreateAccountForm() {
       // onSuccess in the hook begins the welcome and flips auth state.
     } catch (err) {
       if (err instanceof UsernameTakenError) setUsernameTaken(true);
-      else setSubmitError('Could not create account. Please try again.');
+      else if (err instanceof SignupLimitedError) setSubmitError(CREATE_ACCOUNT_COPY.signupLimited);
+      else setSubmitError(CREATE_ACCOUNT_COPY.submitFailed);
     }
   };
 

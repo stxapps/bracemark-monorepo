@@ -1,10 +1,12 @@
 import { env } from 'cloudflare:workers';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   bytesToHex,
   changePasswordEndpoint,
   checkUsernameEndpoint,
+  CREATE_ACCOUNT_ERROR,
+  createAccountEndpoint,
   deleteAccountEndpoint,
   DOOR_PASSWORD,
   DOOR_RECOVERY,
@@ -182,6 +184,52 @@ describe('auth routes', () => {
       const res = await lookup(readPasswordDoorEndpoint.path, 'no');
 
       expect(res.status).toBe(400);
+    });
+  });
+
+  describe(`POST ${createAccountEndpoint.path}: the daily per-network cap`, () => {
+    async function create(username: string, ip: string, cap: string | undefined) {
+      const { keyPair, publicKey } = await newKeyPair();
+      const payload = JSON.stringify({
+        action: 'create-account',
+        username,
+        publicKey,
+        passwordDoor: { wrappedDek: bytesToHex(door.wrappedDek), iv: bytesToHex(door.iv) },
+        timestamp: Date.now(),
+      });
+      return app.request(
+        createAccountEndpoint.path,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'cf-connecting-ip': ip },
+          body: JSON.stringify({ payload, signature: await sign(keyPair, payload) }),
+        },
+        { ...env, SIGNUP_CAP_PER_DAY: cap },
+      );
+    }
+
+    it('refuses past the cap with signup_limited, counting an IPv6 /64 as one network', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      expect((await create('capfirst', '2001:db8:0:1::1', '1')).status).toBe(201);
+
+      // Another address in the same /64 is the same caller.
+      const refused = await create('capsecond', '2001:db8:0:1::2', '1');
+      expect(refused.status).toBe(429);
+      await expect(refused.json()).resolves.toMatchObject({
+        error: CREATE_ACCOUNT_ERROR.signupLimited,
+      });
+      expect(Number(refused.headers.get('retry-after'))).toBeGreaterThan(0);
+      // Refused before the claim: the name is still free.
+      expect(await usernamesRepo(env.DIRECTORY_DB).findByUsername('capsecond')).toBeNull();
+
+      // A different network is unaffected.
+      expect((await create('capthird', '203.0.113.7', '1')).status).toBe(201);
+    });
+
+    it('does not count at all where the env leaves the cap unset', async () => {
+      expect((await create('nocap1', '203.0.113.8', undefined)).status).toBe(201);
+      expect((await create('nocap2', '203.0.113.8', undefined)).status).toBe(201);
     });
   });
 

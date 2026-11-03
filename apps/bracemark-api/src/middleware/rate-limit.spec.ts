@@ -212,4 +212,15 @@ describe('the key strategies', () => {
 
     await expect((await app.request('/p')).text()).resolves.toBe('unknown:/p');
   });
+
+  // Every address in one IPv6 /64 is one caller (shared net/ip.ts networkKey).
+  it('folds an IPv6 address to its /64, so rotating the low bits buys no bucket', async () => {
+    const app = new Hono<AppEnv>().get('/p', (c) => c.text(ipRateLimitKey(c)));
+    const keyFor = async (ip: string) =>
+      (await app.request('/p', { headers: { 'cf-connecting-ip': ip } })).text();
+
+    await expect(keyFor('2001:db8:0:1::1')).resolves.toBe('2001:db8:0:1::/64:/p');
+    await expect(keyFor('2001:db8:0:1:dead:beef:0:7')).resolves.toBe('2001:db8:0:1::/64:/p');
+    await expect(keyFor('203.0.113.7')).resolves.toBe('203.0.113.7:/p');
+  });
 });

@@ -135,6 +135,16 @@ export type Bindings = {
   API_RATE_LIMIT_WEBHOOK: RateLimit; // wide tier (sole limiter for the Paddle webhook)
   API_RATE_LIMIT_BLOB: RateLimit; // per-user tier (sole limiter for the blob route)
 
+  // The most accounts one network (an IPv4 address, an IPv6 /64) may create per
+  // UTC day (services/signup-cap.ts). Unset, or anything but a positive integer,
+  // is off: development leaves it unset because the e2e suites create many
+  // accounts from one address.
+  SIGNUP_CAP_PER_DAY?: string;
+  // Above this many new accounts in 24 h, the daily cron's signup line is a
+  // console.error rather than a console.log (services/signup-report.ts). Unset is
+  // log-only. Set it from the line's own history, well above the normal level.
+  SIGNUP_ALERT_PER_DAY?: string;
+
   // "1" adds a Server-Timing header to every response (lib/server-timing.ts).
   // Set in development and staging only; unset is off.
   SERVER_TIMING?: string;

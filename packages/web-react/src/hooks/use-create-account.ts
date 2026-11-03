@@ -5,8 +5,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { beginWelcome, useApiClient, usernameAvailableQueryOptions } from '@stxapps/react';
 import {
   ApiError,
+  apiErrorCode,
   bytesToHex,
   canonicalizeUsername,
+  CREATE_ACCOUNT_ERROR,
   createAccountEndpoint,
   type CreateAccountInput,
   type CreateAccountPayload,
@@ -28,6 +30,10 @@ import { useAuth } from '../contexts/auth-provider';
 // the orchestration and just signals which kind of failure occurred.
 export class UsernameTakenError extends Error {}
 export class UsernameCheckError extends Error {}
+// The caller's network has created its accounts for the day (429
+// `signup_limited`, bracemark-api services/signup-cap.ts). Not retried: it clears
+// at the next UTC day, not in seconds.
+export class SignupLimitedError extends Error {}
 
 export function useCreateAccount() {
   const api = useApiClient();
@@ -107,6 +113,9 @@ export function useCreateAccount() {
         session = await api.call(createAccountEndpoint, { payload, signature });
       } catch (err) {
         if (err instanceof ApiError && err.status === 409) throw new UsernameTakenError();
+        if (apiErrorCode(err) === CREATE_ACCOUNT_ERROR.signupLimited) {
+          throw new SignupLimitedError();
+        }
         throw err;
       }
 

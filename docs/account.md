@@ -766,12 +766,29 @@ start again" — but a held password and a real password change cover everything
 gave.
 
 Errors: a username taken at the last moment is said under the username
-(`UsernameTakenError`); anything else under the button. The button is disabled
+(`UsernameTakenError`); anything else under the button. One of those has words of
+its own: past the server's **daily per-network cap** (below) the api answers 429
+`signup_limited`, the hooks throw `SignupLimitedError`, and the form says to try
+again tomorrow (`CREATE_ACCOUNT_COPY.signupLimited`) rather than "try again", which
+would only fail again. The button is disabled
 until both message lines pass and while the account is being created (its label
 says "Creating account…"), and `submit` also returns while pending, because a
 keyboard's Return is not disabled with the button and a second create comes back as
 `UsernameTakenError` on an account just made. The username is `readOnly`, not
 `disabled`, while pending: a manager reads it as the form goes away.
+
+**The daily per-network cap.** `POST /v1/auth/create-account` counts the accounts
+each caller network creates per UTC day and refuses past `SIGNUP_CAP_PER_DAY`
+(`bracemark-api/src/services/signup-cap.ts`). A network is an IPv4 address, or an
+IPv6 /64, because a /64 is what one line or one server holds
+(`networkKey`, `shared/src/net/ip.ts`; the per-second limiters key on it too). The
+count sits in `SESSIONS_DB` as an HMAC of the network, never the address, and the
+daily cron drops past days and logs the day's new-account total
+(`services/signup-report.ts`). It runs after the signature check and before the
+username claim, so a refused request provisions nothing. The cap is per env:
+production 10, staging 200 for the e2e suites, development unset, which is off.
+Many people can share one address (a carrier's NAT, a campus), which is why the
+message names the network, not the person.
 
 **⚠ iOS re-offers over a prefilled field.** Tapping the password field raises "Use
 Strong Password?" although it holds a value, and accepting is fine. But with the

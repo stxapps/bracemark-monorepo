@@ -12,7 +12,7 @@ what R2 and the Durable Object hold is [local-first-sync.md](./local-first-sync.
 | --------------------------------------- | -------------------------------------------- | ------------------------------------------------------ | -------------------------------------------- |
 | `DIRECTORY_DB` (D1)                     | `usernames`, `purchases`, `paddle_checkouts` | **Tier-0** — the only path from a handle to an account | Time Travel + encrypted off-Cloudflare dumps |
 | each account shard (`ACCOUNTS_DB_1`, …) | `users`, `account_keys` (wrapped DEKs)       | **Tier-0** — lose it and the account is dead           | Time Travel + encrypted off-Cloudflare dumps |
-| `SESSIONS_DB` (D1)                      | `sessions`                                   | disposable — loss costs a sign-in (below)              | none, and ⚠ never restored backward          |
+| `SESSIONS_DB` (D1)                      | `sessions`, `signup_counts`                  | disposable — loss costs a sign-in (below)              | none, and ⚠ never restored backward          |
 | `USER_FILES` (R2)                       | every user's encrypted files                 | **source of truth** for bookmark data                  | off-Cloudflare mirror with dated history     |
 | `USER_DATA` (Durable Object, per user)  | op log, `file_sizes` quota map               | op log disposable; quota map derivable from R2         | built-in 30-day PITR only                    |
 

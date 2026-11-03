@@ -270,7 +270,9 @@ a malicious replacement server that deliberately copies the envelope.
 ### the sessions database — never restored backward
 
 **⚠ Never restore `SESSIONS_DB` to an earlier point. If it is damaged, empty the
-`sessions` table.** D1 Time Travel is always on and can't be turned off, so
+`sessions` table.** (The database also holds `signup_counts`, the daily signup cap's
+counter, [account.md](./account.md), _creating an account_. It is disposable too.
+Emptying it resets today's counts and nothing else.) D1 Time Travel is always on and can't be turned off, so
 `wrangler d1 time-travel restore` is always one command away, and here it is
 the wrong one. Revocation and the password-change expiry are writes, so a
 restore to before them undoes them. A phone signed out through _Sign out other

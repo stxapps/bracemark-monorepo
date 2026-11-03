@@ -54,6 +54,15 @@ describe('rate limiting', () => {
     expect(limiter.keys).toEqual(['203.0.113.9:/health', '203.0.113.9:/']);
   });
 
+  it('counts an IPv6 /64 as one caller, so rotating the low bits buys no bucket', async () => {
+    const limiter = recordingLimiter();
+    const bindings = { ...env, API_RATE_LIMIT: limiter };
+
+    await app.request('/health', { headers: { 'cf-connecting-ip': '2001:db8:0:1::1' } }, bindings);
+    await app.request('/health', { headers: { 'cf-connecting-ip': '2001:db8:0:1::2' } }, bindings);
+    expect(limiter.keys).toEqual(['2001:db8:0:1::/64:/health', '2001:db8:0:1::/64:/health']);
+  });
+
   it('falls back to a placeholder key when the edge sent no IP', async () => {
     // Never keyed on `undefined` (which would collapse every caller into one
     // bucket silently) — an IP-less request shares one explicit bucket.

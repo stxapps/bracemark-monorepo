@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
-import { useCreateAccount, UsernameTakenError } from '@stxapps/expo-react';
+import { SignupLimitedError, useCreateAccount, UsernameTakenError } from '@stxapps/expo-react';
 import { CREATE_ACCOUNT_COPY, useUsernameAvailable } from '@stxapps/react';
 
 import { CreateAccountForm } from './create-account-form';
@@ -20,7 +20,8 @@ import { CreateAccountForm } from './create-account-form';
 
 jest.mock('@stxapps/expo-react', () => {
   class UsernameTakenError extends Error {}
-  return { UsernameTakenError, useCreateAccount: jest.fn() };
+  class SignupLimitedError extends Error {}
+  return { SignupLimitedError, UsernameTakenError, useCreateAccount: jest.fn() };
 });
 
 jest.mock('@stxapps/react', () => ({
@@ -134,6 +135,14 @@ describe('CreateAccountForm (native) — failures', () => {
       'Could not create account. Please try again.',
     );
     expect(submitButton()).toBeEnabled();
+  });
+
+  it('says to come back tomorrow when the network has reached its daily cap', async () => {
+    createAccount.mockRejectedValue(new SignupLimitedError());
+    render(<CreateAccountForm />);
+    typeUsername();
+    await press();
+    expect(screen.getByRole('alert')).toHaveTextContent(CREATE_ACCOUNT_COPY.signupLimited);
   });
 });
 

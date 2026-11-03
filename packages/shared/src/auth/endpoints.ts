@@ -115,6 +115,16 @@ export const createAccountEndpoint = defineEndpoint({
   response: createAccountResponseSchema,
 });
 
+// The code of its own this endpoint answers besides 409 (name taken): 429
+// `signup_limited`, when the caller's network has created its accounts for the
+// day (bracemark-api services/signup-cap.ts). Distinct from the per-second
+// `rate_limited` because waiting a minute does not clear it; the Retry-After is
+// the time to the next UTC day. Clients branch on the CODE (`apiErrorCode`,
+// api/client.ts) and must not auto-retry it.
+export const CREATE_ACCOUNT_ERROR = {
+  signupLimited: 'signup_limited',
+} as const;
+
 // --- sign in -----------------------------------------------------------------
 
 // Step 1 of sign-in is a PRE-AUTH door fetch: the client names a username and

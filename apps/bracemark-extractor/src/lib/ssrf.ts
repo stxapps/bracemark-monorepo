@@ -17,28 +17,13 @@
 //      why Workers is the right runtime for this (docs: the sandbox "neutralizes the
 //      classic server-side-fetch SSRF").
 
+import { ipv6ToBytes, parseIpv4 } from '@stxapps/shared';
+
 export class SsrfError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'SsrfError';
   }
-}
-
-// Parse a canonical dotted-decimal IPv4 string into its 32-bit value, or null if it
-// isn't one. Input is already WHATWG-canonical (from `url.hostname`), so we only
-// accept exactly four 0-255 octets — no need to re-parse the legacy encodings the
-// URL parser already collapsed.
-function parseIpv4(host: string): number | null {
-  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
-  if (!m) return null;
-
-  let value = 0;
-  for (let i = 1; i <= 4; i++) {
-    const octet = Number(m[i]);
-    if (octet > 255) return null;
-    value = value * 256 + octet;
-  }
-  return value >>> 0;
 }
 
 // Is a 32-bit IPv4 in a private/reserved/non-globally-routable range? We allowlist
@@ -66,51 +51,6 @@ function isBlockedIpv4(ip: number): boolean {
     inRange('224.0.0.0', 4) || // multicast
     inRange('240.0.0.0', 4) // reserved (incl. 255.255.255.255 broadcast)
   );
-}
-
-// Expand a (bracket-stripped, lowercased) IPv6 string into its 16 bytes, or null if
-// it isn't a valid IPv6 literal. Handles `::` compression and a trailing embedded
-// IPv4 (`::ffff:1.2.3.4`). We can't lean on the URL parser's canonical form alone
-// here, because it re-encodes an embedded IPv4 into hex groups (`::ffff:7f00:1`), so
-// we parse the bytes ourselves and classify on them.
-function ipv6ToBytes(input: string): Uint8Array | null {
-  let str = input;
-  // Fold a trailing dotted IPv4 into two hex groups first.
-  const v4 = /:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.exec(str);
-  if (v4) {
-    const ip = parseIpv4(v4[1]);
-    if (ip === null) return null;
-
-    const hi = ((ip >>> 16) & 0xffff).toString(16);
-    const lo = (ip & 0xffff).toString(16);
-    str = `${str.slice(0, v4.index)}:${hi}:${lo}`;
-  }
-
-  const halves = str.split('::');
-  if (halves.length > 2) return null;
-
-  const toGroups = (s: string): string[] => (s === '' ? [] : s.split(':'));
-  const head = toGroups(halves[0]);
-  const tail = halves.length === 2 ? toGroups(halves[1]) : [];
-
-  let groups: string[];
-  if (halves.length === 2) {
-    const missing = 8 - (head.length + tail.length);
-    if (missing < 0) return null;
-    groups = [...head, ...Array<string>(missing).fill('0'), ...tail];
-  } else {
-    groups = head;
-  }
-  if (groups.length !== 8) return null;
-
-  const bytes = new Uint8Array(16);
-  for (let i = 0; i < 8; i++) {
-    if (!/^[0-9a-f]{1,4}$/.test(groups[i])) return null;
-    const g = parseInt(groups[i], 16);
-    bytes[i * 2] = g >> 8;
-    bytes[i * 2 + 1] = g & 0xff;
-  }
-  return bytes;
 }
 
 // Classify the 16 IPv6 bytes: block loopback/unspecified, unique-local (fc00::/7),

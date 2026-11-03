@@ -1,0 +1,57 @@
+import { ipv6ToBytes, networkKey, parseIpv4 } from './ip';
+
+describe('parseIpv4', () => {
+  it('reads four octets', () => {
+    expect(parseIpv4('203.0.113.7')).toBe(0xcb007107);
+    expect(parseIpv4('0.0.0.0')).toBe(0);
+    expect(parseIpv4('255.255.255.255')).toBe(0xffffffff);
+  });
+
+  it('refuses anything else', () => {
+    expect(parseIpv4('256.0.0.1')).toBeNull();
+    expect(parseIpv4('1.2.3')).toBeNull();
+    expect(parseIpv4('0x7f.0.0.1')).toBeNull();
+    expect(parseIpv4('2001:db8::1')).toBeNull();
+  });
+});
+
+describe('ipv6ToBytes', () => {
+  it('expands :: compression and an embedded IPv4', () => {
+    expect(Array.from(ipv6ToBytes('::1')!)).toEqual([...Array<number>(15).fill(0), 1]);
+    expect(Array.from(ipv6ToBytes('::ffff:1.2.3.4')!.slice(10))).toEqual([0xff, 0xff, 1, 2, 3, 4]);
+  });
+
+  it('refuses malformed literals', () => {
+    expect(ipv6ToBytes('1::2::3')).toBeNull();
+    expect(ipv6ToBytes('1:2:3:4:5:6:7')).toBeNull();
+    expect(ipv6ToBytes('g::1')).toBeNull();
+  });
+});
+
+describe('networkKey', () => {
+  it('keeps an IPv4 address as its own key', () => {
+    expect(networkKey('203.0.113.7')).toBe('203.0.113.7');
+  });
+
+  // The point of the function: rotating the low 64 bits must not buy a new bucket.
+  it('folds every address in an IPv6 /64 to one key', () => {
+    const a = networkKey('2001:db8:0:1::1');
+    expect(a).toBe('2001:db8:0:1::/64');
+    expect(networkKey('2001:db8:0:1:ffff:ffff:ffff:ffff')).toBe(a);
+    expect(networkKey('2001:0DB8:0000:0001:abcd::9')).toBe(a);
+  });
+
+  it('keeps neighbouring /64s apart', () => {
+    expect(networkKey('2001:db8:0:2::1')).not.toBe(networkKey('2001:db8:0:1::1'));
+  });
+
+  it('reads an IPv4-mapped IPv6 address as the IPv4 inside', () => {
+    expect(networkKey('::ffff:203.0.113.7')).toBe('203.0.113.7');
+    expect(networkKey('::ffff:cb00:7107')).toBe('203.0.113.7');
+  });
+
+  it('passes an unparseable value through unchanged', () => {
+    expect(networkKey('unknown')).toBe('unknown');
+    expect(networkKey('')).toBe('');
+  });
+});
