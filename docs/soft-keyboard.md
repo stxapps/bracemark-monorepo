@@ -982,8 +982,9 @@ and whether the user arrived already committed to typing:
   on mount scrolls it away at the moment it is meant to land. The cost of dropping
   it is one tap on a field the user was going to type into anyway.
 - A field that swaps in **within** an already-visible screen keeps its focus: the
-  create-account check step, the sign-in recovery-code toggle. No transition to
-  fight, and the press that got there was the intent to type.
+  create-account check step, the sign-in recovery-code toggle and the toggle back
+  to the password door (which, arrived at by a push, takes no focus). No transition
+  to fight, and the press that got there was the intent to type.
 - The **web twins keep their `autoFocus`** (`packages/web-ui/src/components/auth/`)
   and should. A focus in a browser tab summons no keyboard on a desktop, and there
   is no push animation for it to collide with.

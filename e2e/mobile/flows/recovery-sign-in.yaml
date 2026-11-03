@@ -75,25 +75,27 @@ tags: [NATIVE-ACCOUNT-002, full, online, ios, android]
 # cleared; raising the character count (it was 70, for a 62-character display
 # form) does not help, because the problem is the caret and not the count.
 #
-# The toggles unmount the form, so both fields come back empty — which is why the
-# username is retyped below. They are already part of the testID contract
-# (docs/e2e.md) and this uses them for what they are.
+# The toggles unmount the form, so the code comes back empty; the USERNAME does
+# not, because each switch carries it over (sign-in-form.tsx), so it is asserted
+# here rather than retyped, and the focus lands on the empty code field. They are
+# already part of the testID contract (docs/e2e.md) and this uses them for what
+# they are.
 - tapOn:
     id: 'sign-in-use-password'
+- assertVisible:
+    id: 'sign-in-username'
+    text: ${USERNAME}
 - tapOn:
     id: 'sign-in-use-recovery'
+- assertVisible:
+    id: 'sign-in-recovery-username'
+    text: ${USERNAME}
 
 - runFlow:
     file: subflows/type-autofocused.yaml
     env:
-      FIELD: sign-in-recovery-username
-      TEXT: ${USERNAME}
-
-- waitForAnimationToEnd:
-    timeout: 5000
-- tapOn:
-    id: 'sign-in-recovery-code'
-- inputText: ${RECOVERY_CODE}
+      FIELD: sign-in-recovery-code
+      TEXT: ${RECOVERY_CODE}
 - assertVisible:
     id: 'sign-in-recovery-username'
     text: ${USERNAME}

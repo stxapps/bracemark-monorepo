@@ -614,7 +614,12 @@ that disagreed about whether it could be checked.
 Create-account's password has to show more than the field holds: seven generated
 words run to about 45 characters and a phone's field shows about 30. On both
 platforms the field stays the same single-line field, and the whole password shows in
-a read-only box under it while revealed (`onShownChange`). ⚠ **A reveal must not
+a read-only box under it while revealed (`onShownChange`). The box reserves two lines
+at least (`min-h-[2lh]` on web, a two-line zero-width ghost beside the text on native),
+because 27–62 characters wrap to one line or two by chance and Regenerate otherwise
+moved the form; a length floor in `generatePassphrase` was the other fix and is the
+wrong one, since line count depends on width and font scale, and filtering draws by
+length would cost the clean 77 bits. ⚠ **A reveal must not
 change which element the field is.** Native once toggled `multiline`, which replaces
 the native view, and iOS read a filled secure field going away as a submission:
 pressing the eye raised **Save Password?** before any account existed, in the app and
@@ -948,6 +953,15 @@ proof, same `publicKey`). Because the reason to be here is a forgotten password,
 the intended follow-up is to set a new one (change-password accepts the recovery
 opener). _Nice-to-have not yet wired: forcing that set-new-password step
 immediately after a recovery sign-in; today the user does it from Settings._
+
+**The username crosses the switch between the two doors, both ways; the secret
+does not.** The person who presses "Use a recovery code" has usually just typed
+their username and failed the password, so `SignInForm` hands the username to the
+door it swaps in, and the focus lands on that door's empty secret. The carried
+value stays editable: "Incorrect username or password" does not say which was
+wrong. Only the expired state's `lockedUsername` makes it read-only
+([sessions.md](./sessions.md)). A password is never copied into the code field, nor
+a code into the password field.
 
 ### when a submit is allowed to be `disabled`
 

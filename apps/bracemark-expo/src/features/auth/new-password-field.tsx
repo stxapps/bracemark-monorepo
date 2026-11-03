@@ -128,13 +128,21 @@ export function NewPasswordField({
       />
       {/* The whole password, because seven words do not fit the field on a phone and
           this is the string the user is here to write down. Beside the field, not by
-          making it multiline: password-input.tsx carries why. */}
+          making it multiline: password-input.tsx carries why.
+          TWO LINES RESERVED, as on web: seven words wrap to one line or two by luck of
+          the draw, and Regenerate made the form below jump. The ghost is two lines of
+          zero-width spaces in the SAME Text, so it scales and caps with the password
+          and needs no fontScale arithmetic (docs/accessibility.md, _font scaling_); in a
+          row, the box is as tall as the taller of the two, so a third line still grows it. */}
       {shown ? (
         <View
           aria-label={shownLabel}
-          className="rounded-lg border border-border bg-muted/40 px-3 py-2.5"
+          className="flex-row rounded-lg border border-border bg-muted/40 px-3 py-2.5"
         >
-          <Text selectable className="font-mono text-sm">
+          <Text aria-hidden className="font-mono text-sm">
+            {'​\n​'}
+          </Text>
+          <Text selectable className="flex-1 font-mono text-sm">
             {password}
           </Text>
         </View>

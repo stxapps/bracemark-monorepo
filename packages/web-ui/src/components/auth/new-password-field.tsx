@@ -166,13 +166,18 @@ export function NewPasswordField({
           turning the field into something that wraps: password-input.tsx carries why.
           `aria-hidden` because it is a copy for the eye: the revealed field is a text
           input that already reads its whole value, and an `<output>` here would be a
-          live region speaking the password again on every keystroke. */}
+          live region speaking the password again on every keystroke.
+          TWO LINES RESERVED: seven words run 27 to 62 characters, so on a phone they
+          wrap to one line or two by luck of the draw, and pressing Regenerate made the
+          form below jump. A minimum, not a height, so a third line at a narrow width or
+          a zoom still grows the box. On the inner element because `border-box` would
+          count the padding, and in `lh` so it tracks the line height it reserves. */}
       {shown ? (
         <div
           aria-hidden
           className="rounded-lg border border-border bg-muted/40 px-3 py-2.5 font-mono text-sm wrap-break-word select-all"
         >
-          {password}
+          <div className="min-h-[2lh]">{password}</div>
         </div>
       ) : null}
       <PasswordStrengthMeter displayScore={displayScore} />

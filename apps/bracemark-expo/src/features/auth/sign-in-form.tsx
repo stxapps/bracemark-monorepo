@@ -58,29 +58,56 @@ import { PasswordInput } from './password-input';
 // editable, on both doors, so a resume can only sign back in as the account whose
 // library is on this device. `editable={false}` keeps it readable and focusable
 // for a screen reader; the value still submits with the form.
+//
+// THE USERNAME CROSSES THE SWITCH; THE SECRET DOES NOT — the web twin carries the
+// argument. `carriedUsername` is `undefined` until the first switch, which is also
+// how the password door tells a swap from the screen's arrival: only a swap may
+// take focus there (below, and docs/soft-keyboard.md, _arrival_).
 export function SignInForm({ lockedUsername }: { lockedUsername?: string } = {}) {
   const [mode, setMode] = React.useState<'password' | 'recovery'>('password');
+  const [carriedUsername, setCarriedUsername] = React.useState<string | undefined>();
+  const switchTo = (next: 'password' | 'recovery') => (username: string) => {
+    setCarriedUsername(username);
+    setMode(next);
+  };
+  const username = lockedUsername ?? carriedUsername ?? '';
   return mode === 'password' ? (
-    <PasswordSignIn lockedUsername={lockedUsername} onUseRecovery={() => setMode('recovery')} />
+    <PasswordSignIn
+      username={username}
+      locked={!!lockedUsername}
+      swapped={carriedUsername !== undefined}
+      onUseRecovery={switchTo('recovery')}
+    />
   ) : (
-    <RecoverySignIn lockedUsername={lockedUsername} onUsePassword={() => setMode('password')} />
+    <RecoverySignIn
+      username={username}
+      locked={!!lockedUsername}
+      onUsePassword={switchTo('password')}
+    />
   );
 }
 
+// `username` is where the field starts: the locked one, or the one carried over a
+// switch. A door that swapped in focuses the first field still empty.
 function PasswordSignIn({
-  lockedUsername,
+  username,
+  locked,
+  swapped,
   onUseRecovery,
 }: {
-  lockedUsername?: string;
-  onUseRecovery: () => void;
+  username: string;
+  locked: boolean;
+  swapped: boolean;
+  onUseRecovery: (username: string) => void;
 }) {
   const {
     control,
     handleSubmit,
+    getValues,
     setError,
     clearErrors,
     formState: { errors, isSubmitting },
-  } = useSignInForm(lockedUsername);
+  } = useSignInForm(username);
   const signIn = useSignIn();
   // Return on the username goes to the password instead of dropping the
   // keyboard (lib/input-keyboard.ts). Not wired while the username is locked:
@@ -128,13 +155,13 @@ function PasswordSignIn({
     <View className="gap-6">
       <View className="gap-2">
         <Text className="text-sm">Username</Text>
-        {/* NO `autoFocus` on the first field of either door — this screen is
-            pushed from the landing CTA, and a keyboard raised during that
-            slide-in arrives over a card the user hasn't seen yet. The argument
-            in full is on create-account-form.tsx's username field;
-            docs/soft-keyboard.md, _arrival_, carries the rule. The recovery
-            door below keeps its `autoFocus`: it swaps in on a press, on a
-            screen already on the glass. */}
+        {/* NO `autoFocus` on ARRIVAL — this screen is pushed from the landing
+            CTA, and a keyboard raised during that slide-in arrives over a card
+            the user hasn't seen yet. The argument in full is on
+            create-account-form.tsx's username field; docs/soft-keyboard.md,
+            _arrival_, carries the rule. A door that SWAPS in does take it — the
+            recovery door always, this one on the way back (`swapped`): it comes
+            on a press, on a screen already on the glass. */}
         <Controller
           control={control}
           name="username"
@@ -144,7 +171,8 @@ function PasswordSignIn({
               aria-label="Username"
               aria-invalid={!!errors.username}
               autoComplete="username"
-              editable={!lockedUsername}
+              autoFocus={swapped && !username}
+              editable={!locked}
               {...advanceTo(passwordRef)}
               className={cn(errors.username && 'border-destructive')}
               value={field.value}
@@ -170,6 +198,7 @@ function PasswordSignIn({
               testID="sign-in-password"
               aria-label="Password"
               returnKeyType="go"
+              autoFocus={swapped && !!username}
               aria-invalid={!!errors.password}
               autoComplete="current-password"
               className={cn(errors.password && 'border-destructive')}
@@ -194,7 +223,7 @@ function PasswordSignIn({
         <Pressable
           testID="sign-in-use-recovery"
           role="button"
-          onPress={onUseRecovery}
+          onPress={() => onUseRecovery(getValues('username'))}
           className="items-center py-2"
         >
           <Text className="text-center text-sm text-muted-foreground underline">
@@ -213,19 +242,22 @@ function PasswordSignIn({
 // went dead with nothing on screen saying why; see the web twin and
 // docs/account.md, _when a submit is allowed to be `disabled`_.
 function RecoverySignIn({
-  lockedUsername,
+  username,
+  locked,
   onUsePassword,
 }: {
-  lockedUsername?: string;
-  onUsePassword: () => void;
+  username: string;
+  locked: boolean;
+  onUsePassword: (username: string) => void;
 }) {
   const {
     control,
     handleSubmit,
+    getValues,
     setError,
     clearErrors,
     formState: { errors, isSubmitting },
-  } = useRecoverySignInForm(lockedUsername);
+  } = useRecoverySignInForm(username);
   const signIn = useSignInWithRecovery();
   const codeRef = React.useRef<TextInput>(null);
 
@@ -268,8 +300,8 @@ function RecoverySignIn({
               aria-label="Username"
               aria-invalid={!!errors.username}
               autoComplete="username"
-              autoFocus={!lockedUsername}
-              editable={!lockedUsername}
+              autoFocus={!username}
+              editable={!locked}
               {...advanceTo(codeRef)}
               className={cn(errors.username && 'border-destructive')}
               value={field.value}
@@ -295,7 +327,7 @@ function RecoverySignIn({
               aria-label="Recovery code"
               aria-invalid={!!errors.recoveryCode}
               ref={codeRef}
-              autoFocus={!!lockedUsername}
+              autoFocus={!!username}
               // A secret that is never masked — see lib/input-keyboard.ts for what
               // the keyboard is told about it, and that the capitals survive it.
               autoCapitalize="characters"
@@ -325,7 +357,7 @@ function RecoverySignIn({
         <Pressable
           testID="sign-in-use-password"
           role="button"
-          onPress={onUsePassword}
+          onPress={() => onUsePassword(getValues('username'))}
           className="items-center py-2"
         >
           <Text className="text-center text-sm text-muted-foreground underline">

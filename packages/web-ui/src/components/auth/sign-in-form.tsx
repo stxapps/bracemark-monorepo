@@ -64,6 +64,15 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // pre-filled with the stored username and read-only. Read-only rather than
 // disabled, so it stays in the tab order and is still announced — the user is
 // told whose account this is, and the value still submits with the form.
+//
+// THE USERNAME CROSSES THE SWITCH; THE SECRET DOES NOT. The two doors are one
+// account, and whoever presses "Use a recovery code" has usually just typed the
+// username and failed the password, so each switch hands the username over and the
+// focus goes to the empty secret. It stays EDITABLE (only `lockedUsername` makes it
+// read-only): "Incorrect username or password" doesn't say which, so the username
+// may be the thing that was wrong. The password and the code never cross: each
+// stays in the door it was typed into (docs/account.md, _sign-in with a recovery
+// code_).
 export function SignInForm({
   density = 'standard',
   lockedUsername,
@@ -72,17 +81,25 @@ export function SignInForm({
   lockedUsername?: string;
 }) {
   const [mode, setMode] = React.useState<'password' | 'recovery'>('password');
+  const [carriedUsername, setCarriedUsername] = React.useState('');
+  const switchTo = (next: 'password' | 'recovery') => (username: string) => {
+    setCarriedUsername(username);
+    setMode(next);
+  };
+  const username = lockedUsername ?? carriedUsername;
   return mode === 'password' ? (
     <PasswordSignIn
       density={density}
-      lockedUsername={lockedUsername}
-      onUseRecovery={() => setMode('recovery')}
+      username={username}
+      locked={!!lockedUsername}
+      onUseRecovery={switchTo('recovery')}
     />
   ) : (
     <RecoverySignIn
       density={density}
-      lockedUsername={lockedUsername}
-      onUsePassword={() => setMode('password')}
+      username={username}
+      locked={!!lockedUsername}
+      onUsePassword={switchTo('password')}
     />
   );
 }
@@ -98,22 +115,27 @@ function modeSwitchClass(density: 'standard' | 'dense') {
   );
 }
 
+// `username` is where the field starts: the locked one, or the one carried over a
+// switch. Focus goes to the first field still empty.
 function PasswordSignIn({
   density,
-  lockedUsername,
+  username,
+  locked,
   onUseRecovery,
 }: {
   density: 'standard' | 'dense';
-  lockedUsername?: string;
-  onUseRecovery: () => void;
+  username: string;
+  locked: boolean;
+  onUseRecovery: (username: string) => void;
 }) {
   const {
     register,
     handleSubmit,
+    getValues,
     setError,
     clearErrors,
     formState: { errors, isSubmitting },
-  } = useSignInForm(lockedUsername);
+  } = useSignInForm(username);
   const signIn = useSignIn();
 
   // The credential failure is a submit-level `root` error, not tied to a field,
@@ -146,8 +168,8 @@ function PasswordSignIn({
             id="username"
             type="text"
             autoComplete="username"
-            autoFocus={!lockedUsername}
-            readOnly={!!lockedUsername}
+            autoFocus={!username}
+            readOnly={locked}
             aria-invalid={!!errors.username}
             {...register('username', { onChange: clearRootError })}
           />
@@ -160,7 +182,7 @@ function PasswordSignIn({
           <PasswordInput
             id="password"
             autoComplete="current-password"
-            autoFocus={!!lockedUsername}
+            autoFocus={!!username}
             aria-invalid={!!errors.password}
             {...register('password', { onChange: clearRootError })}
           />
@@ -176,7 +198,11 @@ function PasswordSignIn({
             {isSubmitting ? 'Signing in…' : 'Sign in'}
           </Button>
           <FieldError errors={errors.root ? [errors.root] : undefined} />
-          <button type="button" onClick={onUseRecovery} className={modeSwitchClass(density)}>
+          <button
+            type="button"
+            onClick={() => onUseRecovery(getValues('username'))}
+            className={modeSwitchClass(density)}
+          >
             Forgot your password? Use a recovery code
           </button>
         </Field>
@@ -202,20 +228,23 @@ function PasswordSignIn({
 // _when a submit is allowed to be `disabled`_.
 function RecoverySignIn({
   density,
-  lockedUsername,
+  username,
+  locked,
   onUsePassword,
 }: {
   density: 'standard' | 'dense';
-  lockedUsername?: string;
-  onUsePassword: () => void;
+  username: string;
+  locked: boolean;
+  onUsePassword: (username: string) => void;
 }) {
   const {
     register,
     handleSubmit,
+    getValues,
     setError,
     clearErrors,
     formState: { errors, isSubmitting },
-  } = useRecoverySignInForm(lockedUsername);
+  } = useRecoverySignInForm(username);
   const signIn = useSignInWithRecovery();
 
   // Same as the password path: the failure is a submit-level `root` error, not tied
@@ -249,8 +278,8 @@ function RecoverySignIn({
             id="rec-username"
             type="text"
             autoComplete="username"
-            autoFocus={!lockedUsername}
-            readOnly={!!lockedUsername}
+            autoFocus={!username}
+            readOnly={locked}
             aria-invalid={!!errors.username}
             {...register('username', { onChange: clearRootError })}
           />
@@ -263,7 +292,7 @@ function RecoverySignIn({
           <Input
             id="rec-code"
             type="text"
-            autoFocus={!!lockedUsername}
+            autoFocus={!!username}
             autoCapitalize="characters"
             className="font-mono"
             aria-invalid={!!errors.recoveryCode}
@@ -276,7 +305,11 @@ function RecoverySignIn({
             {isSubmitting ? 'Signing in…' : 'Sign in with recovery code'}
           </Button>
           <FieldError errors={errors.root ? [errors.root] : undefined} />
-          <button type="button" onClick={onUsePassword} className={modeSwitchClass(density)}>
+          <button
+            type="button"
+            onClick={() => onUsePassword(getValues('username'))}
+            className={modeSwitchClass(density)}
+          >
             Use your password instead
           </button>
         </Field>

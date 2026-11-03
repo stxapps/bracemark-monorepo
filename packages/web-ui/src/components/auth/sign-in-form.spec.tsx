@@ -193,6 +193,50 @@ describe('SignInForm — the recovery door', () => {
   });
 });
 
+// The username crosses a switch, both ways; the secret never does. Whoever reaches
+// for the recovery door has usually just typed the username and failed the password,
+// and the carried value stays editable, because a failed sign-in doesn't say which
+// of the two was wrong.
+describe('SignInForm — switching doors', () => {
+  const usePasswordDoor = () =>
+    fireEvent.click(screen.getByRole('button', { name: /Use your password instead/ }));
+  const input = (label: string) => screen.getByLabelText(label) as HTMLInputElement;
+
+  it('carries the username to the recovery door, editable, focused past it', () => {
+    render(<SignInForm />);
+    fill('Username', 'wit');
+    fill('Password', 'a-very-long-passphrase');
+
+    useRecoveryDoor();
+
+    expect(input('Username').value).toBe('wit');
+    expect(input('Username').readOnly).toBe(false);
+    expect(input('Recovery code').value).toBe('');
+    expect(document.activeElement).toBe(input('Recovery code'));
+  });
+
+  it('carries an edited username back, and not the code', () => {
+    render(<SignInForm />);
+    useRecoveryDoor();
+    fill('Username', 'wit2');
+    fill('Recovery code', 'ABCD-EFGH-IJKL-MNOP');
+
+    usePasswordDoor();
+
+    expect(input('Username').value).toBe('wit2');
+    expect(input('Password').value).toBe('');
+    expect(document.activeElement).toBe(input('Password'));
+  });
+
+  it('starts on the username when there is none to carry', () => {
+    render(<SignInForm />);
+
+    useRecoveryDoor();
+
+    expect(document.activeElement).toBe(input('Username'));
+  });
+});
+
 // The expired state's resume (docs/sessions.md): a normal sign-in, but only as the
 // account whose library is on this device. The username is pre-filled and read-only —
 // still focusable and announced, and still submitted — on both doors.
