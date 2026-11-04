@@ -345,13 +345,23 @@ osascript -e 'tell application "Safari"' -e 'activate' \
   -e 'set bounds of front window to {60, 60, 1160, 860}' -e 'end tell'
 
 js()   { osascript -e 'on run argv' -e 'tell application "Safari" to do JavaScript (item 1 of argv) in front document' -e 'end run' "$1"; }
-key()  { osascript -e 'on run argv' -e 'tell application "System Events" to keystroke (item 1 of argv)' -e 'end run' "$1"; }
-code() { osascript -e "tell application \"System Events\" to key code $1"; }   # 36 return, 53 esc, 125 down, 51 delete
+# ⚠ System Events types into WHATEVER IS FRONTMOST. The terminal's own app is, after
+# any tool call, so an unguarded keystroke lands in the editor, and a Return sends it.
+front() { osascript -e 'tell application "Safari" to activate' >/dev/null; sleep 0.6
+  [ "$(osascript -e 'tell application "System Events" to get name of first process whose frontmost is true')" = Safari ]; }
+key()  { front || { echo 'Safari is not frontmost: not typing'; return 1; }
+  osascript -e 'on run argv' -e 'tell application "System Events" to keystroke (item 1 of argv)' -e 'end run' "$1"; }
+code() { front || { echo 'Safari is not frontmost: not typing'; return 1; }
+  osascript -e "tell application \"System Events\" to key code $1"; }   # 36 return, 53 esc, 125 down, 51 delete
 sheet() { osascript -e 'tell application "System Events" to tell process "Safari" to get name of buttons of sheet 1 of window 1' 2>/dev/null; }
 press() { osascript -e "tell application \"System Events\" to tell process \"Safari\" to click button \"$1\" of sheet 1 of window 1"; }
 ```
 
+- **Submit with a real Return, and type the passwords.** A scripted `click()` on the
+  submit button drew no save or update offer where a Return on the same form did, so a
+  silence after one says nothing. A password typed by `key` is what a person's is.
 - **Screenshots:** the display is 3840×2160 at 2×, so a screen point is a pixel ÷ 2.
+  The window opened above spans pixels 120–2320 by 120–1720.
   Crop before reading, for example `sips -c 860 900 --cropOffset 380 800 s.png --out c.png`
   (height, width; then y, x), and `montage` several variants into one picture.
 - **See the popup:** blur then focus the field and wait a second. It is in no

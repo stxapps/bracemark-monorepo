@@ -71,7 +71,7 @@ export const WELCOME_COPY = {
 
   // Step 2, the check. ⚠ TWO OF THESE ARE LOAD-BEARING. `signIn` and `showPassword` are
   // what make Safari read this step as a login rather than a sign-up
-  // (docs/account.md, _how safari tells a login from a sign-up_). It takes BOTH: a
+  // (docs/password-manager.md, _how Safari tells a login from a sign-up_). It takes BOTH: a
   // submit that says "Sign in" and a control that says "Forgot your password?".
   // Reworded, Safari offers its own strong password on a field that has to match the
   // account, and accepting it saves that password over the real one. "Show my password

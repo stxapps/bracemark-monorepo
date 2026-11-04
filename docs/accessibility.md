@@ -840,82 +840,34 @@ right answers:
     tokens it knows into an iOS `textContentType`, and that one is not among
     them, so on iOS create-account's username said nothing and the OS guessed.
     It carries `textContentType="username"` beside the token.
-  - **web has three forms that take the account's password and show no
-    username.** A manager reads a login as a pair, so a password field with
-    nothing beside it leaves it guessing — which saved login to fill, which one
-    an update belongs to, and what to call the entry it offers to save. Each
-    carries `HiddenUsername` (`web-ui/components/auth/hidden-username.tsx`)
-    ahead of its password field: a `hidden` text input with
-    `autocomplete="username"` and the account's username as its value — a
-    **text** input, not `type="hidden"`, which a manager skips.
-    - **Settings → change password** holds a `current-password` and a
-      `new-password`, so a manager asked to update a saved login cannot tell
-      which one. ⚠ The new password must be a **visible** `new-password`
-      input, which it is now on every path: the generated words sit in the
-      field. They once sat in an `<output>`, which no manager reads, so the
-      form's only password field was the current one and Chrome's save prompt
-      carried the **old** password; a `hidden` input set by script patched that
-      for Chrome 155 and went with the panel ([account.md](./account.md),
-      _generated password_). The prompt is browser chrome, so no spec sees it: `npm run measure:password-manager` reads
-      which field Chrome took as which for every such form
-      ([e2e.md](./e2e.md), _measuring the password manager_), and
-      `WEB-ACCOUNT-006` pins the input it reads.
-    - **Settings → recovery code** and **delete account** each hold one
-      `current-password`. The recovery form also disappears on success, which
-      is the shape a manager reads as a login worth offering to save.
+  - **A form whose password a manager should save or update names the account
+    beside it.** A manager reads a login as a pair. Settings → change password
+    carries `HiddenUsername` on web, a `hidden` text input with
+    `autocomplete="username"`, and `AccountUsernameField` on expo, a visible
+    field, because native has no hidden input a manager still reads; the
+    welcome's check carries a visible one on both. ⚠ On expo a read-only
+    username is `LockedUsernameInput`, never `editable={false}`: that is a
+    disabled field, which iOS AutoFill skips. ⚠ **Not recovery code or delete
+    account**: their password only proves who you are, and named, it was offered
+    for saving as the form went away. They name nothing, and on web their field
+    says `one-time-code`. Not the lock surfaces, and not create-account, whose
+    username is typed.
+- **A secret that is not this app's login says `one-time-code`** on web and
+  `textContentType="oneTimeCode"` on iOS, with `autoComplete` left `off` for
+  Android. That is the lock password, on `LockPasswordDialog` and `LockPane`.
+  ⚠ `off` does not cover it on either: Chrome ignores `off` on a password field,
+  and React Native turns it into `textContentType="none"`, from which iOS infers
+  a password. Both had a manager offer to **update** the saved login with the
+  lock password.
 
-    Not the lock surfaces: a lock password is not this site's login, and naming
-    the account beside it would file it as one. Nor create-account, whose last step
-    is a real login with a visible read-only username, and is the form a manager
-    saves from ([account.md](./account.md), _creating an account_).
-- **A secret that is not this site's login says `one-time-code` (web).** The
-  lock password is the one there is, on both of its surfaces —
-  `LockPasswordDialog` (set/remove the app lock, lock/unlock/remove a list
-  lock) and `LockPane` (the in-place unlock). ⚠ `off` does not cover it: Chrome
-  ignores `autocomplete="off"` on a password field. Both surfaces were `off`.
-  In a profile with the account's login saved, setting the app lock and leaving
-  Settings made Chrome offer to **update** that login with the lock password,
-  and the unlock field was offered the sign-in password. One wrong click there
-  overwrites the saved copy of a password that has no reset
-  ([account.md](./account.md)).
-  Chrome 155's parser counts a password field marked `one-time-code` as
-  not-a-password. It still falls back to the field when the form has no other,
-  but marks that parse fallback-only. A fallback-only form gets no automatic
-  save prompt; Chrome shows only the omnibox key icon, which the user has to
-  click. It is also not a login to fill, so nothing is filled or suggested when
-  the field takes focus. That part was read from Chromium's source, not
-  measured, because the measurement's fresh profile holds no saved login.
-  **What it cannot stop:** a click on the field still
-  lists the saved logins, because Chrome offers its saved logins on every
-  `type="password"` field. The only way out of that is a field that was never
-  a password field, and every way of building one is worse: a `type="text"`
-  field with `-webkit-text-security` masking lands in Chrome's form history
-  (the residue below, of a secret this time) and in the keyboard's learned
-  words, and a screen reader echoes it as it is typed. The field stays
-  `type="password"`.
-  Why not `new-password` on the set dialog: that token asks Chrome to
-  **generate** a password and offer to save it, which is the bug.
-  `npm run measure:password-manager` has a flow for each lock kind, expecting
-  no submission ([e2e.md](./e2e.md), _measuring the password manager_). The
-  lock specs pin the token.
-- **On bracemark-expo the same secret says `textContentType="oneTimeCode"`
-  (iOS).** ⚠ `off` does not cover it there either: React Native turns `off`
-  into `textContentType="none"`, which states no purpose, so iOS Password
-  AutoFill infers a password from `secureTextEntry`. With the account's login
-  saved in Passwords, setting a lock and unlocking one each had iOS offer to
-  **update** that login with the lock password. `oneTimeCode` names a purpose
-  that is not a password, and the field is no longer saved from. It is set as
-  `textContentType`, not as `autoComplete="one-time-code"`: an explicit
-  `textContentType` wins over the mapped one on iOS, and `autoComplete` stays
-  `off` for Android, where it means "not important for autofill" and
-  `one-time-code` would become an SMS-code hint. The cost is that the QuickType
-  bar may offer a code from Messages in the field. The sheet is system UI, so
-  no spec or Maestro flow sees it; the two lock specs pin the type.
 - **Everything else is `off`, and it is `off` by default.** The input
   primitives apply it themselves — web-ui's `ui/input.tsx` and `ui/textarea.tsx`,
   expo's `ui/input.tsx` (which `Textarea` and `PasswordInput` both go through) —
   so a field that holds the user's content needs nothing, and a field that holds
   a credential has to say which.
+
+What each manager does with these, what was measured, and the reasons for each
+detail above are in [password-manager.md](./password-manager.md).
 
 The reason is not tidiness. What a browser offers to complete is what it has
 **kept**, outside this app's storage and past a sign-out
@@ -935,46 +887,6 @@ primitives also declare those defaults: exact entry for `Input`, prose assistanc
 for `Textarea`, and explicit prose overrides for Title. The field-purpose table
 and exceptions live in [editors.md](./editors.md#typing-assistance). A revealed
 password keeps its exact-entry hints even after web switches to `type="text"`.
-
-#### iOS AutoFill, checked by hand
-
-`npm run measure:password-manager` reads Chrome and nothing else, so Safari is
-checked by hand. A wrong saved copy matters most here because the password has no
-reset ([account.md](./account.md), _creating an account_, carries the design and its
-results). What follows comes from a real iPhone with AutoFill on, Safari 26.5.2 for
-macOS and the iOS 26.5 Simulator, on 2026-11-02. Not every point was run on all three.
-
-- **Safari's strong password on a new-password field.** Focusing one offers a strong
-  password from the keyboard, or as a full sheet in the Simulator, even when the field
-  already holds a value. Accepting it and then editing the field left the **edited**
-  password in the Passwords app, and AutoFill signed in with it after a sign-out.
-- ⚠ **No token stops that offer.** On Safari 26.5.2 for macOS it survived
-  `current-password`, `new-password`, `off` and `one-time-code`, a renamed id, a real
-  `<form>`, a visible username, a changed URL, sign-up wording removed from the page,
-  and a `hidden`, visually hidden or visible `new-password` input holding the password.
-  One arrangement lost it: a visible `type="text"` input or a `<textarea>`, with
-  "password" gone from its label, id, heading and description and no username beside it.
-  A text field gives a manager nothing to save from, and is the shape rejected above
-  for the lock password.
-- **What decides it is whether Safari reads the form as a sign-up or a login**, and the
-  URL does not: the real sign-in form mounted inside `/create-account` got the login
-  treatment. A login takes **both** a submit button saying "Sign in" and a control
-  saying "Forgot your password?". Either alone brought the blue offer back. "Sign in to
-  finish" and "Forgot your password? Show it again" held, the heading was free to
-  change, and "Show my password again" without the word "Forgot" failed.
-- ⚠ **`:autofill` tells a filled value from a typed one.** After an accepted offer it
-  matched on macOS, through blur and through a failed submit, and one real keystroke
-  cleared it. Typed by hand it never matched. Safari's own
-  `:-webkit-autofill-strong-password-viewable` matched too, only while focused, so
-  `:autofill` is the one to read. It is the safety net under the labels. On iOS a check
-  in the event that reports the fill, or on the next frame, did not see it yet.
-- **Safari's save prompt depends on how the value got there.** On macOS, Continue
-  raises "Save Password?" for a password typed by hand, before the account exists,
-  and not for a value set by script.
-- **Safari and the iOS app are not linked.** With no shared web credentials
-  ([hosting.md](./hosting.md)), iOS shows bracemark-expo and the web app
-  separately, but the entry Safari saved can be chosen by hand to fill sign-in in
-  the iOS app. Android was not checked.
 
 ### user text takes its own direction
 

@@ -111,7 +111,7 @@ const STRONGEST = 3;
 // password it had just filled, with Save & Fill exactly where the thumb still was. A
 // second accept mints a second password. An empty field does not do this, so it is the
 // prefill's cost, and leaving the field once a manager has filled it is what pays it
-// (docs/account.md, _how safari tells a login from a sign-up_). On a timer, because iOS
+// (docs/password-manager.md, _Safari and iOS AutoFill_). On a timer, because iOS
 // has not set `:autofill` yet in the event that reports the fill, nor on the next frame.
 function leaveFieldIfFilled(field: HTMLInputElement) {
   setTimeout(() => {

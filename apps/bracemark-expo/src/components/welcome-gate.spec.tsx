@@ -147,6 +147,18 @@ describe('WelcomeGate (native)', () => {
     expect(screen.getByTestId('welcome-shown-password')).toHaveTextContent(PASSWORD);
   });
 
+  // The check is where iOS offers to save a new account's password, as it passes,
+  // and only if it can read the username beside it: a disabled field it skips.
+  it('names the account in an enabled, locked username field', () => {
+    renderGate();
+    tap('welcome-skip-recovery');
+    const { props } = screen.getByTestId('welcome-check-username');
+    expect(props.value).toBe(USERNAME);
+    expect(props.autoComplete).toBe('username');
+    expect(props.editable).not.toBe(false);
+    expect(props.showSoftInputOnFocus).toBe(false);
+  });
+
   it('ends into the app, dropping the held password', () => {
     let held: ReturnType<typeof useWelcome> = null;
     function Probe() {

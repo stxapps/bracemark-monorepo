@@ -22,10 +22,10 @@ import { ShowOnceSecret } from '../features/auth/show-once-secret';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { Icon } from './ui/icon';
-import { Input } from './ui/input';
 import { Text } from './ui/text';
 import { ErrorText } from './error-text';
 import { FirstLineSlot } from './first-line-slot';
+import { LockedUsernameInput } from './locked-username-input';
 
 // THE WELCOME — the native port of bracemark-web's components/welcome-gate.tsx, which
 // carries the argument (docs/account.md, _the welcome_): once, after create-account,
@@ -195,15 +195,10 @@ function CheckStep({ welcome, onDone }: { welcome: Welcome; onDone: () => void }
     <View className="gap-6">
       <View className="gap-2">
         <Text className="text-sm">Username</Text>
-        {/* `editable={false}` as the expired-session sign-in does it: readable and
-            focusable, and whose password this is, for a person and for a manager. */}
-        <Input
-          aria-label="Username"
-          autoComplete="username"
-          textContentType="username"
-          editable={false}
-          value={welcome.username}
-        />
+        {/* Whose password this is, for a person and for a manager. ⚠ Enabled, not
+            `editable={false}`: iOS skips a disabled field, and with it never offered
+            to save a new account's password (locked-username-input.tsx). */}
+        <LockedUsernameInput testID="welcome-check-username" username={welcome.username} />
       </View>
       <View className="gap-2">
         <Text className="text-sm">Password</Text>

@@ -52,6 +52,7 @@ import { cn } from '../../lib/utils';
 import { NewPasswordField, useNewPassword } from '../auth/new-password-field';
 import { PasswordInput } from '../auth/password-input';
 import { CopySecretButton, ShowOnceSecret } from '../auth/show-once-secret';
+import { AccountUsernameField } from './account-username-field';
 import { SettingsHeader, SettingsNotice, SettingsPane, SettingsRow } from './settings-kit';
 
 type AccountView = 'overview' | 'change-password' | 'recovery' | 'sign-out-others' | 'delete';
@@ -147,7 +148,12 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
 
       {/* Fresh proof, not just the session: the server only accepts this call
           signed by a key the password unwraps, so the password is required here
-          even though you're signed in. */}
+          even though you're signed in.
+          ⚠ NO USERNAME BESIDE IT, unlike change password. This form goes away
+          because the account is gone, and with the account's name beside the
+          password, Google Password Manager offered to save the deleted account's
+          password (docs/password-manager.md, _a password that only proves who you
+          are_). */}
       <View className="mt-6 max-w-sm gap-2">
         <Text className="text-sm font-medium">Confirm your password</Text>
         {/* `aria-label` because the Text above is only visually adjacent — RN
@@ -363,6 +369,10 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
       />
 
       <View className="mt-6 max-w-sm gap-4">
+        {/* A `current-password` and a `new-password` and no username, so a password
+            manager asked to update a saved login has to guess which one, or files
+            the new password as an entry with no name. It reads this field instead. */}
+        <AccountUsernameField testID="change-password-username" username={username} />
         {useRecovery ? (
           <View className="gap-2">
             <Text className="text-sm font-medium">Recovery code</Text>
@@ -587,6 +597,12 @@ function RecoveryCodeView({
       />
 
       <View className="mt-6 max-w-sm gap-4">
+        {/* ⚠ NO USERNAME BESIDE IT, as on delete account. The password here only
+            proves who you are; it is not new, so there is nothing to save. A manager
+            still fills it, and with the account's name beside it Google Password
+            Manager and iOS both offered "Save password?" as the form went away, which
+            reads as saving the code just shown (docs/password-manager.md, _a password
+            that only proves who you are_). */}
         <View className="gap-2">
           <Text className="text-sm font-medium">Current password</Text>
           <PasswordInput

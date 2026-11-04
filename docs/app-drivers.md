@@ -127,6 +127,11 @@ reason: one combined variant left which change mattered unknown.
 - **macOS for an iPhone.** Offers differ: iOS raised a sheet where macOS raised a menu.
 - **A form with saved logins nearby.** The menu changes with what is saved for the
   site and for the username in the form.
+  ⚠ It can also lose the blue strong-password offer altogether: on 2026-11-04, with a
+  login saved and passwords recently generated for staging, no wording brought it
+  back, so a known-bad control could no longer fail and Layer 1 could not be
+  re-measured ([password-manager.md](./password-manager.md), _how Safari tells a
+  login from a sign-up_).
 
 **To test a build, not staging's form.** A local HTTPS origin means a certificate
 warning here, and clicking through changes trust on the real profile. Instead read
@@ -228,6 +233,13 @@ arm64-v8a:
 | ------------------ | ---------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------- |
 | `bracemark-pixel8` | **Pixel 8** (1080×2400, 420 dpi)               | 411 × 914 — phone layout upright           | the canonical phone; every e2e run, every shot                             |
 | `bracemark-tablet` | **Pixel Tablet** profile at 1920×1200, 240 dpi | 1280 × 800, sw800 — docked rails both ways | the wide window ([safe-area.md](./safe-area.md), _wide windows on native_) |
+
+⚠ **No Google account is signed in on either, and the suite depends on it.** With
+one, Google Password Manager offers to save the login in a sheet over the app after
+every sign-in. `subflows/sign-in.yaml` dismisses that kind of sheet on iOS only, so
+every Android case stops at sign-in. Sign one in to measure Google Password Manager
+([password-manager.md](./password-manager.md), _the Android app_), and take it off
+again before the next run: _Settings → Passwords, passkeys & accounts_.
 
 The image choice is **disk, not preference**: that one was already downloaded
 (2.3 GB), and any other API level or variant is a fresh 1.5–2.5 GB. `minSdkVersion`

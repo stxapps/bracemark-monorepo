@@ -53,6 +53,13 @@ export const BLOG_POSTS: BlogPost[] = [
       'Chrome’s new header lets the browser refuse a page’s off-list connections. We tested it, and it also blocks a click on a saved link.',
     publishedAt: '2026-11-05T00:00:00Z',
   },
+  {
+    slug: 'password-managers',
+    title: 'Getting your password manager to save the right password',
+    description:
+      'We can’t reset your password, so the copy your password manager keeps has to be right. We measured what Chrome, Safari, iOS, and Android do with our forms.',
+    publishedAt: '2026-11-06T00:00:00Z',
+  },
 ];
 
 export function findBlogPost(slug: string): BlogPost | undefined {

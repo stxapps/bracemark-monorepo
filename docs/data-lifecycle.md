@@ -1671,7 +1671,10 @@ back, _and_ not deleted. So the account action is deletion, done properly.
 **Double guard.** The route requires the bearer token (names the account) AND
 a fresh signed proof (`action: 'delete-account'`, the same
 `verifyAuthProof` machinery as sign-in) — the user re-enters their password,
-the client unwraps the DEK and signs. A stolen session token alone can never
+the client unwraps the DEK and signs. ⚠ That password field names no account, and
+on web says `one-time-code`: a manager that knew whose password it was offered to
+save it after the account was gone ([password-manager.md](./password-manager.md),
+_a password that only proves who you are_). A stolen session token alone can never
 erase an account. The service then binds the proof to the session (the signed
 username must resolve to the authed userId — a valid proof for account A on a
 session for account B dies) and runs the same load-bearing check as sign-in:

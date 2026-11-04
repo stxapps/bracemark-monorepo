@@ -879,8 +879,8 @@ credential, so it is committed.
 Not to be confused with `apple-app-site-association`, which is for universal links
 and shared web credentials — neither of which Bracemark uses. The visible cost is
 that iOS keeps a password saved in Safari apart from bracemark-expo, though it can
-still be chosen by hand ([accessibility.md](./accessibility.md), _iOS AutoFill,
-checked by hand_).
+still be chosen by hand ([password-manager.md](./password-manager.md), _the apps
+and the website are not linked_).
 
 Three things it depends on, none of which announces itself:
 

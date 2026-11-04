@@ -124,9 +124,10 @@ const FLOWS: Flow[] = [
     expected: [{ current: '', next: 'cp-new-password', decision: ASK }],
   },
   {
-    // The recovery code is a second door, not the password: what Chrome should
-    // offer is the CURRENT password, which this form proves — never the code,
-    // which would then fill sign-in's password field.
+    // NO submission. The password here only proves who you are, so there is
+    // nothing new to save, and an offer as the form gives way to the code reads as
+    // saving the code. As a `current-password` beside HiddenUsername it was an ASK
+    // (docs/password-manager.md, _a password that only proves who you are_).
     name: 'recovery-view',
     what: 'Settings → Recovery code, generate',
     launch: {},
@@ -136,8 +137,9 @@ const FLOWS: Flow[] = [
       await page.locator('#rc-current').fill(credentials.password);
       await page.getByRole('button', { name: /^Generate/ }).click();
       await expect(page.getByLabel('Your recovery code')).toBeVisible({ timeout: 60_000 });
+      await page.waitForTimeout(2_500);
     },
-    expected: [{ current: 'rc-current', next: '', decision: ASK }],
+    expected: [],
   },
   {
     // ONE STEP: the create form is a sign-up, a username ahead of a `new-password`,
@@ -256,6 +258,31 @@ const FLOWS: Flow[] = [
       await expect(page).toHaveURL(/\/links/, { timeout: 60_000 });
     },
     expected: [{ current: 'password', next: '', decision: ASK }],
+  },
+  {
+    // NO submission: the account this password opens is gone once the form goes
+    // away, and a manager that saves it keeps a login for nothing. The specimen is
+    // native. With the account's name beside the password, Google Password Manager
+    // offered to save a just-deleted account's password on Android, and so did iOS
+    // when that name was editable (docs/password-manager.md, _a password that only
+    // proves who you are_).
+    name: 'delete-account',
+    what: 'Settings → Delete account',
+    launch: {},
+    run: async ({ page, credentials }) => {
+      const site = new URL(SITE_URL);
+      await page.route(`${site.origin}/**`, (route) =>
+        route.fulfill({ contentType: 'text/html', body: '<title>site stub</title>' }),
+      );
+      await page.goto('/settings/account');
+      await page.getByRole('button', { name: /^Delete account/ }).click();
+      await page.locator('#delete-account-password').fill(credentials.password);
+      await page.locator('#delete-account-confirm').click();
+      await page.getByRole('button', { name: 'Delete account forever' }).click();
+      await page.waitForURL((url) => url.origin === site.origin, { timeout: 60_000 });
+      await page.waitForTimeout(2_500);
+    },
+    expected: [],
   },
   {
     // NO submission, from either surface. The specimen came from a real profile

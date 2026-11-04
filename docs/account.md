@@ -738,13 +738,11 @@ manager:
   (`create-account`, `create-account-own`, [e2e.md](./e2e.md), _measuring the password
   manager_): one submission, `signup-new-password` as the new password, after the
   account is made.
-- ⚠ **Open: Safari and words set by script.** On the three-step form, macOS Safari
-  raised "Save Password?" at Continue for a password typed by hand and **not** for the
-  generated words, which the field holds by script ([accessibility.md](./accessibility.md),
-  _iOS AutoFill, checked by hand_). That was a mercy there. Here it would mean Safari
-  does not offer to save the untouched words at **Create account** — Chrome does,
-  measured. Not yet run in Safari. If it does not, the welcome's check catches it:
-  nothing is saved, the check is empty, "Show it again" is right there.
+- **Safari saves the untouched words too.** It skipped a value set by script at the
+  three-step form's Continue, but at **Create account** it offered **Save Password?**
+  for the generated words, once the account existed (macOS, 2026-11-04,
+  [password-manager.md](./password-manager.md), _Safari and iOS AutoFill_). The iOS
+  app does not; there the welcome's check is the save.
 
 **It replaced a three-step ceremony** (2026-11-03), whose order was: the password, a
 recovery code, then a sign-in-shaped check, with nothing created until the check
@@ -752,8 +750,8 @@ passed. Every part of that cost something on some browser:
 
 - step 1's filled `new-password` field went away **before the account existed**, and
   the iOS app read that as a submission — **Save Password?** over the recovery step,
-  for an account not yet made (iPhone simulator, measured; it is what
-  `NATIVE-ACCOUNT-003` first caught);
+  for an account not yet made ([password-manager.md](./password-manager.md), _the iOS
+  app_);
 - the check had to read as a **login** to Safari, which rested on two exact strings,
   and when Safari offered anyway, the form needed an "adopt" branch to switch to the
   password Safari had already saved;
@@ -790,15 +788,9 @@ production 10, staging 200 for the e2e suites, development unset, which is off.
 Many people can share one address (a carrier's NAT, a campus), which is why the
 message names the network, not the person.
 
-**⚠ iOS re-offers over a prefilled field.** Tapping the password field raises "Use
-Strong Password?" although it holds a value, and accepting is fine. But with the
-focus still in the field the sheet came straight back, with Save & Fill under the same
-thumb, and a second accept mints a second password. An empty field does not do this,
-so it is the prefill's cost. `new-password-field.tsx` leaves the field once a manager
-has filled it, which stopped the repeat. It is on a timer because iOS has not set
-`:autofill` yet in the event that reports the fill, nor on the next frame: a
-`requestAnimationFrame` version never fired. Measured on the three-step form; the
-field is the same one.
+**⚠ iOS re-offers over a prefilled field**, and a second accept mints a second
+password. `new-password-field.tsx` leaves the field once a manager has filled it,
+on a timer ([password-manager.md](./password-manager.md), _Safari and iOS AutoFill_).
 
 ### the welcome
 
@@ -852,87 +844,34 @@ value typed by hand never gets the offer, since adopting a typo would undo the c
 an engine without the selector throws and gets the plain mismatch. **Native has no
 such path**: React Native has no `:autofill`, and bracemark-expo gets no strong-password
 offer from iOS, with no shared web credentials. Linking them would likely bring the
-offer into the app, so that decision needs this section read first.
+offer into the app, so that decision needs this section read first
+([password-manager.md](./password-manager.md), _the apps and the website are not
+linked_).
 
 Measured on Chrome (`create-account-welcome`): the refused check is no submission;
 the passed one is a login with the same pair, which in a fresh profile, where nobody
 pressed Save at the create, Chrome offers to save again, and in a profile that saved
 it has nothing to offer. Never the code.
 
-#### ⚠ how safari tells a login from a sign-up
+#### ⚠ the check's two strings are load-bearing
 
-No attribute controls Safari's strong-password offer. `current-password`,
-`new-password`, `off`, `one-time-code`, a renamed id, a real `<form>` and a visible
-username all left it in place on a form that Safari read as a sign-up
-([accessibility.md](./accessibility.md), _iOS AutoFill, checked by hand_). The decision
-comes from **words on the page**, so there are two independent layers here, and only
-the second is a safety property. They now guard the welcome's check (above), which
-is where a login-shaped form for a brand-new password still lives; the measurements
-below were taken on the three-step form's check, whose words the welcome kept but one.
+Safari decides between a sign-up and a login from the words on the page, and gives a
+login's treatment only with **both** a submit that says "Sign in" and a control that
+says "Forgot your password?". Lose either, and Safari offers its strong password on
+the check, and saves it over the real one once accepted. That is why the check says
+**Sign in to check** and **Forgot your password? Show it again**, why
+`welcome-gate.spec.tsx` pins both, and why a copy edit to either needs a Safari
+re-measure. The measurements, the second layer (`:autofill`) and what is still
+unmeasured are in [password-manager.md](./password-manager.md), _how Safari tells a
+login from a sign-up_.
 
-**Layer 1, the labels: avoiding the offer.** ⚠ Safari gives a login's treatment only
-with **both** a submit that says "Sign in" and a control that says "Forgot your
-password?". Measured on the shipped DOM, 2026-11-02:
-
-| check step                         | Safari 26.5.2, macOS (DOM on a real HTTPS origin) | iOS 26.5 Simulator (real build)                   |
-| ---------------------------------- | ------------------------------------------------- | ------------------------------------------------- |
-| as built                           | small "Suggest New Password" item, no blue offer  | ordinary keyboard, or **Sign In → Fill Password** |
-| button says "Finish up"            | blue **Use Strong Password**                      | **Use Strong Password?** sheet                    |
-| link says "Show my password again" | blue **Use Strong Password**                      | not run                                           |
-
-So these two strings are load-bearing, and a copy edit can undo them silently, on one
-browser, with everything else green. ⚠ **The welcome changed one of them**: its submit
-says "Sign in to check" where the measured one said "Sign in to finish". It still
-starts with "Sign in", and "Forgot your password? Show it again" is unchanged, but
-**the new submit has not been measured in Safari**: re-run the table above
-([app-drivers.md](./app-drivers.md), _driving real Safari on macOS_ and _driving
-Safari in the iOS Simulator_) before relying on Layer 1. `welcome-gate.spec.tsx` pins
-both strings on purpose; change either and re-measure.
-
-They are also honest, and that is the better reason to trust them: this step **is** a
-login, and those are the words a login has. Safari cannot stop reading them that way
-without breaking its treatment of sign-in pages generally.
-
-**Layer 2, the switch: surviving the offer.** Accepting Safari's offer saves its
-password at once, under the account's username, before the page has checked anything,
-so this must not depend on a heuristic someone else owns. The page can tell: after an
-accepted offer, `:autofill` matches the field, on macOS and on iOS, through blur and
-through the failed check, and it does not match a value typed by hand. The welcome's
-**Use this password instead** (_the welcome_, above) acts on that. What it does not
-cover: someone who clears the field by hand and enters the real password has left
-`:autofill` behind and passes the check, with Safari's copy stale; Safari then asks to
-update it, and **Not Now** keeps the wrong one, which the site's _Where to keep your
-password_ warns about.
-
-**Where the password was saved, by path, on the three-step form** (measured on the
-real build unless noted). The one-step form saves from the create itself, which is
-the ordinary sign-up every row below already handled at its end; only Chrome has been
-re-measured on it (_creating an account_, above):
-
-| browser                | default path                                                                        | offer accepted on step 1                                                                           |
-| ---------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| iOS Safari (Simulator) | **Save Password?** after the account exists; that copy signed in                    | one sheet; check offers **Fill Password**; first press created the account                         |
-| Chrome 156, macOS      | one submission at the end, username + current password (`measure:password-manager`) | not run                                                                                            |
-| Chrome 155, Android    | **Save password?** after the account exists; that copy signed in                    | not run                                                                                            |
-| Safari 26.5.2, macOS   | not run on this build: see below                                                    | measured before the build, on staging's form: no mismatch, no prompt, and the saved copy signed in |
-
-macOS Safari reaches a local build only through a certificate warning, and clicking
-through changes trust on a real profile, so the shipped DOM was placed into staging's
-origin instead. That covers Safari's classification, which reads the DOM, and not a
-whole run. On a real iPhone, a real Mac and a site with no saved logins at all this has
-not been run ([app-drivers.md](./app-drivers.md), _driving Safari in the iOS Simulator_).
-
-Safari's own passwords pass the gate: one real one scored 19.59, and 2,996 of 3,000
-samples imitating their format cleared `PASSWORD_MIN_GUESSES_LOG10`. The rest get the
-normal message and a reader can take another.
-
-**Rejected.** A warning alone leaves the trap in place. A plain text check field did
-lose the offer, but only unmasked, with no "password" wording and no username beside
-it: it shows the password on screen and gives a manager nothing to save from. A
-visible single-line field for the words cannot show them: a phone's field holds about
-30 characters of 45. Asking for the password again on the welcome instead of holding
-it was weighed and dropped: it would cost "Show it again", and someone who saved
-nothing would have no way to see it before signing out with no door left.
+**Rejected.** A warning alone leaves the trap in place. A plain text check field
+loses the offer only by showing the password and giving a manager nothing to save
+([password-manager.md](./password-manager.md)). A visible single-line field for the
+words cannot show them: a phone's field holds about 30 characters of 45. Asking for
+the password again on the welcome instead of holding it was weighed and dropped: it
+would cost "Show it again", and someone who saved nothing would have no way to see it
+before signing out with no door left.
 
 ### ⚠ changing a password
 
@@ -944,7 +883,8 @@ Settings → change password is the ordinary shape a manager knows: a proof (the
 current password, or the recovery code for someone who lost it), then the same
 `NewPasswordField` create-account uses, already holding generated words,
 then **Change password**. `HiddenUsername` names the account, so a manager knows
-which saved login an update belongs to.
+which saved login an update belongs to. bracemark-expo uses a visible read-only
+field instead (_naming the account on native_, below).
 
 **The save is asked for after the change, not before it.** A manager offers to update
 only once the submit has landed and the form is gone, so there is no "I've saved it"
@@ -962,16 +902,34 @@ switch branch would then offer to make the old password the new one, which the l
 refuses. The welcome's check works because, for a new account, the only thing a
 manager can hold is what it saved at the create.
 
-Measured on Chrome by `npm run measure:password-manager` (`change-generated`,
-`change-own`, `change-recovery`, [e2e.md](./e2e.md)): one update offer, with
-`cp-new-password` as the new password. Not yet checked in Safari: whether it offers to
-update for words the field was filled with by script and never edited, which is the
-case it skipped at the three-step form's Continue (create-account, on the same field,
-is in the same position). The done screen's reveal is the net if it does not.
+Measured on Chrome: one update offer, with `cp-new-password` as the new password. On
+Safari for macOS: "update the password saved for ⟨username⟩", for the untouched
+words too, and the updated copy signed in. On iOS in the app there is no update offer at all, so the
+reveal is the only way there ([password-manager.md](./password-manager.md)).
+
+#### ⚠ naming the account on native
+
+bracemark-expo's change password carries `AccountUsernameField` above the proof
+field, and the welcome's check a username of its own: both are
+`LockedUsernameInput`, visible, enabled and locked, because native has no hidden
+input a manager still reads, and iOS skips a disabled one (`editable={false}`). On
+Android the field is what lets Google Password Manager update the right login after
+a change. On iOS it is what makes the welcome's check offer to save a new account's
+password, the only place the app gets that offer. ⚠ Recovery code and delete account
+must not have one: their password only proves who you are, and with the account's
+name beside it every manager measured offered to save it as the form went away, on
+delete account for an account already gone. The measurements are in
+[password-manager.md](./password-manager.md), _the iOS app_, _naming the account on
+native_ and _a password that only proves who you are_.
 
 ### a recovery code in Settings
 
 > **STATUS — ✅ built** (`RecoveryCodeView`, beside `ChangePasswordView`).
+
+⚠ The current password here only proves who you are, so it names no account and, on
+web, says `one-time-code`: a manager fills it and offers no save
+([password-manager.md](./password-manager.md), _a password that only proves who you
+are_).
 
 The current password, then **Generate recovery code** (or **Generate new code**, which
 retires the old one at once). The code is live by the time it is shown, and the screen
@@ -1597,10 +1555,11 @@ the data is gone."**
 - **Generated passphrase** — ✅ built (the "Secure your account" ceremony +
   skippable recovery code + recovery sign-in + change-password/recovery door
   management). Remaining: **DEK rotation** (compromise remedy) and **expo parity**.
-- **Change password in Safari** — not run: whether Safari offers to update the saved
-  login for generated words it never saw typed (_changing a password_).
-- **Create-account on a real iPhone and a real Mac** — not run. The Simulator and the
-  shipped DOM on staging's origin agree; see _how safari tells a login from a sign-up_.
+- **Change password in Safari** — ✅ measured 2026-11-04: it offers to update for the
+  untouched words (_changing a password_).
+- **Create-account on a real Mac** — ✅ run 2026-11-04 on staging, Safari 26.5.2: saved
+  after the account existed. **On a real iPhone** — not run
+  ([password-manager.md](./password-manager.md), _open_).
 - **No-recovery messaging** — ✅ built: the create-account UI states "there is no
   reset" and the skippable recovery step; a persistent "no recovery set" nudge
   lives in Settings → Account.

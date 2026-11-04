@@ -1,6 +1,12 @@
 // WHOSE PASSWORD THIS IS, for a password manager — on a form that takes the
-// account's password and shows no username field. Three do: Settings → change
-// password, recovery code and delete account.
+// account's password and shows no username field, where saving is the point:
+// Settings → change password, whose update has to go to the right login. ⚠ NOT
+// recovery code or delete account. Their password only proves who you are, and
+// Chrome offered to save it as the form went away, on delete account for an account
+// already gone. They say `one-time-code` instead (account-section.tsx;
+// docs/password-manager.md, _a password that only proves who you are_). bracemark-expo's twin is a VISIBLE
+// read-only field, since native has no hidden input a manager reads
+// (apps/bracemark-expo/src/features/settings/account-username-field.tsx).
 // A manager reads a login as a PAIR, and a password field with no username beside
 // it leaves it guessing: it offers to save an entry with the name blank (Chrome
 // did, at the end of create-account), it cannot say which saved login an update

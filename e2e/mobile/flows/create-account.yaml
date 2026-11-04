@@ -147,6 +147,25 @@ tags: [NATIVE-ACCOUNT-003, full, online, destructive, ios, android]
     id: 'welcome-check-password'
 - inputText: ${maestro.copiedText}
 - pressKey: Enter
+# A passed check is where iOS offers to save the new account's password: the field
+# leaves with the account's name beside it (locked-username-input.tsx). The sheet
+# covers the app, so it is answered, Not Now, before the screen under it is read.
+- repeat:
+    times: 5
+    while:
+      notVisible:
+        id: 'welcome-check-continue'
+    commands:
+      - runFlow:
+          when:
+            platform: iOS
+          commands:
+            - tapOn:
+                text: 'Not Now'
+                optional: true
+      - assertVisible:
+          id: 'welcome-check-continue'
+          optional: true
 - extendedWaitUntil:
     visible:
       id: 'welcome-check-continue'
@@ -178,6 +197,12 @@ tags: [NATIVE-ACCOUNT-003, full, online, destructive, ios, android]
     visible:
       id: 'change-password-current'
     timeout: 10000
+# Whose password this is, for a password manager: the account just created, which
+# reaches this view only through the session the create made
+# (account-username-field.tsx).
+- assertVisible:
+    id: 'change-password-username'
+    text: ${NEW_USERNAME}
 - tapOn:
     id: 'change-password-current'
 - inputText: ${maestro.copiedText}

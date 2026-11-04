@@ -76,7 +76,8 @@ that reading comes _before_ the edit; nothing downstream will tell you.
 | the read edge — indexes, liveQuery, virtual scrolling, paging                  | `client-queries.md` ⚠           |
 | links-page search (the URL⇄`LinkQuery` grammar, the UI); expo route params     | `search.md` ⚠                   |
 | accounts — key derivation, username/password rules                             | `account.md` ⚠                  |
-| **the create-account form** — its steps; a password manager's offers           | `account.md` ⚠                  |
+| **the create-account form** — its steps                                        | `account.md` ⚠                  |
+| **a password or username field** — what a manager suggests, saves, fills       | `password-manager.md` ⚠         |
 | **sessions — lifetime, expiry, revocation; anything that wipes a device**      | `sessions.md` ⚠                 |
 | **the service worker — what it caches, when it registers, how it updates**     | `offline-mode.md` ⚠             |
 | server backups — D1 export, R2 replication, **an R2 lifecycle rule**, restores | `server-backups.md` ⚠           |

@@ -1286,6 +1286,7 @@ All of them are in the app:
 | `delete-account-confirm`      | ” — the confirmation checkbox row                                                                |
 | `delete-account-submit`       | ” — the destructive action                                                                       |
 | `change-password-open`        | `src/features/settings/account-section.tsx` — the Account row                                    |
+| `change-password-username`    | ” — the read-only username above the proof                                                       |
 | `change-password-current`     | ” — the current-password proof                                                                   |
 | `change-password-new`         | ” — the new-password field (`NewPasswordField`); its revealed box is `change-password-new-shown` |
 | `change-password-submit`      | ” — Change password                                                                              |
@@ -1306,6 +1307,7 @@ All of them are in the app:
 | `welcome-skip-recovery`       | ” — Skip for now                                                                                 |
 | `welcome-recovery-code`       | ” — the code, as text (`ShowOnceSecret`'s `testID`)                                              |
 | `welcome-recovery-continue`   | ” — Continue, once the code is shown                                                             |
+| `welcome-check-username`      | ” — step 2, the check's locked username (`LockedUsernameInput`)                                  |
 | `welcome-check-password`      | ” — step 2, the check's password                                                                 |
 | `welcome-check-submit`        | ” — Sign in to check                                                                             |
 | `welcome-check-error`         | ” — its empty / mismatch message                                                                 |
@@ -4310,46 +4312,54 @@ It exists because the save prompt is browser chrome, outside the page and out of
 Playwright's reach, and because every way of getting it wrong is **silent**: the
 field a manager saves from is invisible or missing, and every flow passes either
 way. The specimen is change password's old generated panel, where Chrome offered
-to save the **old** password ([accessibility.md](./accessibility.md), _what a field
-tells the browser_). `WEB-ACCOUNT-006` pins the visible `new-password` field that
+to save the **old** password ([password-manager.md](./password-manager.md),
+_Chrome_). `WEB-ACCOUNT-006` pins the visible `new-password` field that
 replaced it; this is the measurement that shows Chrome actually reads it, and the thing to re-run
 when any form that takes a password changes shape. The second specimen runs the
 other way. The lock surfaces said `off`, which Chrome ignores on a password
 field, so setting a lock or unlocking one made Chrome offer to replace the saved
 sign-in password with the lock password. They now say `one-time-code`
-([accessibility.md](./accessibility.md), _what a field tells the browser_).
+([password-manager.md](./password-manager.md), _the lock password is not a login_).
+The results of every run, and what each platform does that no script reads, are
+kept in [password-manager.md](./password-manager.md); this section is how to run
+the scripts.
 
 ```sh
 npm run dev                                         # the api and the web app
-npm run measure:password-manager                    # all eleven flows, about a minute and a half
+npm run measure:password-manager                    # all twelve flows, about two minutes
 npm run measure:password-manager -- --flow change-generated,create-account
 npm run measure:password-manager -- --headed
 ```
 
-Eleven flows, each on a fresh account in a fresh profile — change password
+Twelve flows, each on a fresh account in a fresh profile — change password
 (current password + the generated words kept, current password + a password typed
 over them, recovery code + the words kept), Settings → Recovery code, create-account with the generated words and
 with a typed password (both one step, the welcome skipped), create-account through
 the whole welcome — a recovery code, then a refused and a passed check
 (`create-account-welcome`), change password
 with a wrong current password before the right one (`change-wrong-current`),
-sign-in after a trip through the recovery door and back (`sign-in-switch`), and the two lock flows (`lock-app`: set the app lock, close Settings, unlock;
+sign-in after a trip through the recovery door and back (`sign-in-switch`), delete
+account (`delete-account`), and the two lock flows (`lock-app`: set the app lock, close Settings, unlock;
 `lock-list`: lock a list, close Settings, unlock it in place) — each against the
 submissions it should produce: the fields, Chrome's decision, and how many. A
-lock flow's expected count is **zero**. Under `off` the app-lock flow logged two
+lock flow's expected count is **zero**, and so is delete account's: its password
+opens nothing once the form goes away. As a `current-password` it logged an `ASK`,
+with the hidden username and without it. Under `off` the app-lock flow logged two
 `ASK the user` lines, one for the set and one for the unlock, and the list flow
 logged one. A field Chrome chose that has no id prints as `#<renderer id>`
-rather than `—`, so a lock field is not mistaken for no field. The recovery-code view's expected field is the **current
-password**, never the code: the code is a second door, and saved as this site's
-password it would fill sign-in. Create-account's is **one** submission, the create
+rather than `—`, so a lock field is not mistaken for no field. The recovery-code view's
+count is **zero** too: its password only proves who you are. It was an `ASK` with the
+current password, never the code, while the view carried `HiddenUsername`
+([password-manager.md](./password-manager.md), _a password that only proves who you
+are_). Create-account's is **one** submission, the create
 itself, with `signup-new-password` as the new password: the form is one step, and goes
 away only once the account exists (docs/account.md, _creating an account_). The
 welcome flow adds a second, its passed check — a login with the same pair, which a
 fresh profile that never pressed Save is offered again; the refused check is none,
 and the recovery code never appears. The check field is `current-password`, because
 the check is a login and not a sign-up: on a `new-password` field there Safari
-offered its own password ([accessibility.md](./accessibility.md), _iOS AutoFill,
-checked by hand_). Every
+offered its own password ([password-manager.md](./password-manager.md), _how
+Safari tells a login from a sign-up_). Every
 change-password flow expects `cp-new-password` as the new password, the generated
 words included. It
 prints a ✓/✗ line per flow and exits non-zero on a difference, and writes each
@@ -4371,7 +4381,8 @@ rewritten every 3s: both failed, retries included, with the same errors and 30�
 rebuilds per trace. The export has no watcher, which is all its passes showed. Run once more the same day
 with the four flows added after it: all twelve as expected; and again after
 create-account became one step with the welcome after it, on the eleven flows above:
-all eleven as expected. ⚠ On that run
+all eleven as expected. Run 2026-11-04 under `next dev`, with `delete-account` added
+and its field marked `one-time-code`: all twelve as expected. ⚠ On the 2026-11-03 run
 `nx build @stxapps/bracemark-web -c development` baked **`https://api.bracemark.com`**
 into the export (its log said `Environments: .env.production`), so the `envFile` did
 not take; exporting `.env.development` into the shell first (`set -a; .
@@ -4387,8 +4398,7 @@ reading anything into it.
 Its limits, which it cannot see past:
 
 - **It reads Chrome only.** Safari and iOS AutoFill need the real app. The results
-  so far are in [accessibility.md](./accessibility.md), _iOS AutoFill, checked by
-  hand_, and [app-drivers.md](./app-drivers.md), _driving real Safari on macOS_ and
+  so far are in [password-manager.md](./password-manager.md), and [app-drivers.md](./app-drivers.md), _driving real Safari on macOS_ and
   _driving Safari in the iOS Simulator_, is how to reach it.
 - **The log names fields, never values.** "The prompt carries the new password"
   is inferred from which field Chrome took as the new one.
@@ -4398,6 +4408,52 @@ Its limits, which it cannot see past:
   dismissed for a site a few times are a real profile's to show. So is the
   _fill_ side of a lock field: with nothing saved there is nothing to suggest,
   so a lock flow shows the save half only.
+
+#### the native leg — `measure:autofill:android`
+
+`e2e/measure/autofill-android.ts` (`npm run measure:autofill:android`) reads what
+Android hands the autofill service on bracemark-expo's three Account views that
+take the account's password. On change password: whether a field hinted `username`,
+holding a value as long as the account's name, comes before the proof field. On
+recovery code and delete account: that there is no such field. It signs one fresh
+account in three times, opens each view and focuses the proof field
+(`measure/flows/account-view-focus.yaml`). That focus is the fill request. Then it
+runs `dumpsys autofill`, which writes the request's `AssistStructure` to logcat
+while the framework's log level is verbose. The script sets that level and puts it
+back afterwards. Nothing is submitted.
+
+The flow signs in on its own rather than through `subflows/sign-in.yaml`. On an
+emulator with a Google account signed in, Google Password Manager offers to save
+the login in a sheet over the app after every sign-in, and that subflow dismisses
+the sheet on iOS only. ⚠ **So does every Android case in the suite**: with a Google
+account on the AVD, each one stops at sign-in behind the sheet. The suite's AVDs
+have none ([app-drivers.md](./app-drivers.md), _the AVDs_). Take the account off
+again after measuring with one.
+
+```sh
+npm run dev                         # api + web (the account is made there)
+npm run expo:start                  # Metro, from this checkout
+npm run measure:autofill:android    # the one attached device; about four minutes
+npm run measure:autofill:android -- --device emulator-5556
+```
+
+It prints ✓/✗ per view, with each field's label, hints and value length. `missing`
+means no username node where one belongs, `after` means one that comes after the
+password, and `named` means one on delete account. It exits non-zero on any of them, and writes each view's raw logcat to
+`.artifacts/measure/<run>/`. It reads the structure, not a manager's decision, so
+it needs no Google account on the AVD. It is not a test, for the same reason as
+the Chrome leg: the dump's format is a debugging surface, and a dump it no longer
+parses prints `?`. Run 2026-11-04 on the Pixel 8 AVD: all three ✓. With the field
+hidden everywhere, the views that should name the account came back `missing`, so
+the measure can fail. Recovery code has expected no username since later the same
+day. What Google Password Manager decides from these structures was
+measured by hand with a Google account signed in
+([password-manager.md](./password-manager.md), _the Android app_).
+
+iOS has nothing like it, since an app cannot read what AutoFill was given. The
+iOS results were taken by hand on a throwaway simulator, reading the sheet and the
+Passwords app through Maestro ([password-manager.md](./password-manager.md), _naming the account on
+native_).
 
 ### state today
 

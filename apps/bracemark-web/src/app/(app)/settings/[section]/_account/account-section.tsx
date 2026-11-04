@@ -73,7 +73,6 @@ type AccountView = 'overview' | 'change-password' | 'recovery' | 'sign-out-other
 
 function DeleteAccountView({ onBack }: { onBack: () => void }) {
   const { subscription } = useEntitlements();
-  const { username } = useAuth();
   const { mutate, isPending, error, reset } = useDeleteAccount();
   const [password, setPassword] = useState('');
   const [confirmed, setConfirmed] = useState(false);
@@ -157,17 +156,22 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
       )}
 
       <form onSubmit={onSubmit}>
-        {/* One `current-password` and no username: without this a password
-            manager can't tell which saved login to fill here. */}
-        <HiddenUsername username={username} />
         {/* Fresh proof, not just the session: the server only accepts this call
             signed by a key the password unwraps, so the password is required
-            here even though you're signed in. */}
+            here even though you're signed in.
+            ⚠ `one-time-code`, NOT `current-password`, and no HiddenUsername. This
+            form goes away because the account is gone, and as a `current-password`
+            Chrome offered to save it after the delete, with the hidden username
+            and without it alike: a saved login for an account that no longer
+            exists. `one-time-code` makes Chrome's parse fallback-only, so it asks
+            nothing, and a click on the field still lists the saved logins to fill
+            (docs/password-manager.md, _a password that only proves who you are_;
+            `measure:password-manager`, flow `delete-account`). */}
         <div className="flex max-w-sm flex-col gap-2">
           <Label htmlFor="delete-account-password">Confirm your password</Label>
           <PasswordInput
             id="delete-account-password"
-            autoComplete="current-password"
+            autoComplete="one-time-code"
             value={password}
             disabled={isPending}
             aria-invalid={passwordNudge}
@@ -599,16 +603,19 @@ function RecoveryCodeView({
       />
 
       <form onSubmit={onSubmit} className="flex max-w-sm flex-col gap-4">
-        {/* One `current-password` and no username — and this form DISAPPEARS on
-            success, replaced by the code, which is the shape a password manager
-            reads as a login it should offer to save. Unnamed, that is an entry
-            with the username blank. */}
-        <HiddenUsername username={username} />
+        {/* ⚠ `one-time-code` and no HiddenUsername, as on delete account. The
+            password here only proves who you are; it is not new, so there is
+            nothing to save. As a `current-password` beside the account's name,
+            Chrome offered to save it as the form went away, replaced by the code,
+            which reads as saving the code. `one-time-code` makes Chrome's parse
+            fallback-only, so it asks nothing, and a click on the field still lists
+            the saved logins to fill (docs/password-manager.md, _a password that
+            only proves who you are_). */}
         <div className="flex flex-col gap-2">
           <Label htmlFor="rc-current">Current password</Label>
           <PasswordInput
             id="rc-current"
-            autoComplete="current-password"
+            autoComplete="one-time-code"
             value={currentPassword}
             disabled={busy}
             onChange={(e) => {
@@ -621,14 +628,8 @@ function RecoveryCodeView({
             why nested rather than a margin on the flex item. */}
         <div>
           <Button type="submit" disabled={busy}>
-            {busy ? (
-              <Loader2 data-icon="inline-start" className="size-4 animate-spin" />
-            ) : null}
-            {busy
-              ? 'Generating…'
-              : hadRecovery
-                ? 'Generate new code'
-                : 'Generate recovery code'}
+            {busy ? <Loader2 data-icon="inline-start" className="size-4 animate-spin" /> : null}
+            {busy ? 'Generating…' : hadRecovery ? 'Generate new code' : 'Generate recovery code'}
           </Button>
           {error ? (
             <p role="alert" className="mt-3 flex items-start gap-2 text-sm text-destructive">
@@ -775,10 +776,7 @@ export function AccountSection() {
       ) : view === 'change-password' ? (
         <ChangePasswordView onBack={() => setView('overview')} />
       ) : view === 'recovery' ? (
-        <RecoveryCodeView
-          onBack={() => setView('overview')}
-          hasRecovery={hasRecovery.data}
-        />
+        <RecoveryCodeView onBack={() => setView('overview')} hasRecovery={hasRecovery.data} />
       ) : view === 'sign-out-others' ? (
         <SignOutOtherDevicesView onBack={() => setView('overview')} />
       ) : (

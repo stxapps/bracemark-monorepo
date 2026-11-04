@@ -1,0 +1,78 @@
+# Sign in, open Settings → Account → one of the three views that take the
+# account's password, and focus its proof field, which is what makes Android ask
+# the autofill service to fill and hand it the screen's structure. The script reads
+# that structure afterwards (measure/autofill-android.ts). Nothing is submitted.
+#
+# Parameters: USERNAME, PASSWORD; VIEW (`change-password`, `recovery-code` or
+# `delete-account`, the prefix of the view's testIDs); FIELD (the proof field's
+# testID).
+#
+# Its own sign-in rather than subflows/sign-in.yaml: on an emulator with a Google
+# account, Google Password Manager offers to save the login in a sheet over the
+# app, which that subflow dismisses on iOS only (the suite's AVD has no account,
+# and the lookup would cost every Android case). This dismisses both.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../../mobile/flows/subflows/cold-launch.yaml
+- extendedWaitUntil:
+    visible: 'Sign in'
+    timeout: 60000
+- tapOn: 'Sign in'
+- runFlow:
+    file: ../../mobile/flows/subflows/sign-in-fields.yaml
+- tapOn:
+    id: 'sign-in-submit'
+- repeat:
+    times: 8
+    while:
+      notVisible:
+        id: 'links-screen'
+    commands:
+      - runFlow:
+          when:
+            platform: iOS
+          commands:
+            - tapOn:
+                text: 'Not Now'
+                optional: true
+      # Back, not a button: after one "Not now" for this app, Google's next sheet
+      # offers "Never" in its place, which must not be pressed.
+      - runFlow:
+          when:
+            platform: Android
+            visible: 'Save password.*'
+          commands:
+            - pressKey: back
+      - assertVisible:
+          id: 'links-screen'
+          optional: true
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 120000
+- runFlow:
+    when:
+      platform: Android
+      visible: 'Save password.*'
+    commands:
+      - pressKey: back
+- runFlow:
+    file: ../../mobile/flows/subflows/open-settings.yaml
+    env:
+      SECTION: account
+- scrollUntilVisible:
+    element:
+      id: '${VIEW}-open'
+- tapOn:
+    id: '${VIEW}-open'
+- extendedWaitUntil:
+    visible:
+      id: '${FIELD}'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    id: '${FIELD}'
+- waitForAnimationToEnd:
+    timeout: 3000

@@ -218,7 +218,7 @@ describe('WelcomeGate — the check', () => {
 
   // ⚠ The strings ARE the behaviour: Safari reads "Sign in" + "Forgot your password?"
   // as a login, and anything else as a sign-up whose strong password it saves over the
-  // real one (docs/account.md, _how safari tells a login from a sign-up_).
+  // real one (docs/password-manager.md, _how Safari tells a login from a sign-up_).
   it('keeps the two labels Safari reads as a login, on a username + current-password form', async () => {
     await toCheck();
     expect(button('Sign in to check')).toBeTruthy();
