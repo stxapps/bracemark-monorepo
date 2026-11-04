@@ -11,8 +11,8 @@ import {
   hasRecoveryDoorQueryKey,
   RECOVERY_CODE_COPY,
   useWelcome,
-  type Welcome,
   WELCOME_COPY,
+  type WelcomeCredentials,
 } from '@stxapps/react';
 import { canonicalizePassword } from '@stxapps/shared';
 
@@ -68,7 +68,13 @@ export function WelcomeGate({ children }: { children: ReactNode }) {
   );
 }
 
-function WelcomeScreen({ welcome, onImport }: { welcome: Welcome; onImport: () => void }) {
+function WelcomeScreen({
+  welcome,
+  onImport,
+}: {
+  welcome: WelcomeCredentials;
+  onImport: () => void;
+}) {
   const [step, setStep] = useState<Step>('recovery');
   const { title, description } = WELCOME_COPY.heading[step];
   return (
@@ -100,7 +106,7 @@ function Done({ children }: { children: string }) {
   );
 }
 
-function RecoveryStep({ welcome, onDone }: { welcome: Welcome; onDone: () => void }) {
+function RecoveryStep({ welcome, onDone }: { welcome: WelcomeCredentials; onDone: () => void }) {
   const recovery = useRecoveryCode();
   const queryClient = useQueryClient();
   const [code, setCode] = useState<string | null>(null);
@@ -165,7 +171,7 @@ function RecoveryStep({ welcome, onDone }: { welcome: Welcome; onDone: () => voi
   );
 }
 
-function CheckStep({ welcome, onDone }: { welcome: Welcome; onDone: () => void }) {
+function CheckStep({ welcome, onDone }: { welcome: WelcomeCredentials; onDone: () => void }) {
   const [value, setValue] = useState('');
   const [checkError, setCheckError] = useState<'empty' | 'mismatch' | null>(null);
   const [passed, setPassed] = useState(false);

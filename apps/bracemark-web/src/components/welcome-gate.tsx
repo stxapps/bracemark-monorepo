@@ -13,8 +13,8 @@ import {
   RECOVERY_CODE_COPY,
   updateWelcomePassword,
   useWelcome,
-  type Welcome,
   WELCOME_COPY,
+  type WelcomeCredentials,
 } from '@stxapps/react';
 import { canonicalizePassword, NEW_PASSWORD_MIN_LENGTH } from '@stxapps/shared';
 import {
@@ -66,7 +66,7 @@ export function WelcomeGate({ children }: { children: ReactNode }) {
   return <WelcomeScreen welcome={welcome} />;
 }
 
-function WelcomeScreen({ welcome }: { welcome: Welcome }) {
+function WelcomeScreen({ welcome }: { welcome: WelcomeCredentials }) {
   const [step, setStep] = useState<Step>('recovery');
   const { title, description } = WELCOME_COPY.heading[step];
 
@@ -104,7 +104,7 @@ function WelcomeScreen({ welcome }: { welcome: Welcome }) {
 // 1. The recovery code, made on request. Not before: an account whose code nobody
 // saw would read as "has a recovery code" and silence Settings' nudge. The proof is
 // the held password, so there is nothing to type.
-function RecoveryStep({ welcome, onDone }: { welcome: Welcome; onDone: () => void }) {
+function RecoveryStep({ welcome, onDone }: { welcome: WelcomeCredentials; onDone: () => void }) {
   const recovery = useRecoveryCode();
   const queryClient = useQueryClient();
   const [code, setCode] = useState<string | null>(null);
@@ -204,7 +204,7 @@ function filledByBrowser(input: HTMLInputElement | null) {
 // AND the browser filled the field, it offers to make the account match: a real
 // password change now, proved with the held password, behind the same floor any new
 // password meets.
-function CheckStep({ welcome, onDone }: { welcome: Welcome; onDone: () => void }) {
+function CheckStep({ welcome, onDone }: { welcome: WelcomeCredentials; onDone: () => void }) {
   const changePassword = useChangePassword();
   const [value, setValue] = useState('');
   const [checkError, setCheckError] = useState<CheckError | null>(null);

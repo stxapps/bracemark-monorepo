@@ -18,20 +18,20 @@ import { useSyncExternalStore } from 'react';
 // rather than context because the create mutation's `onSuccess` must set it BEFORE
 // the session flips the app in, from a hook outside any provider it could reach.
 
-export interface Welcome {
+export interface WelcomeCredentials {
   // Canonical. The gate shows only for the account it was begun for.
   username: string;
   password: string;
 }
 
-let current: Welcome | null = null;
+let current: WelcomeCredentials | null = null;
 const listeners = new Set<() => void>();
 
 function emit() {
   for (const listener of listeners) listener();
 }
 
-export function beginWelcome(welcome: Welcome): void {
+export function beginWelcome(welcome: WelcomeCredentials): void {
   current = welcome;
   emit();
 }
@@ -57,7 +57,7 @@ function subscribe(listener: () => void) {
   };
 }
 
-export function useWelcome(): Welcome | null {
+export function useWelcome(): WelcomeCredentials | null {
   return useSyncExternalStore(
     subscribe,
     () => current,
