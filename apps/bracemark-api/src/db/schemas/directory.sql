@@ -2,7 +2,8 @@
 --
 -- For changes to a LIVE db, add a numbered migration under
 -- db/migrations/directory/ — keep this snapshot and the migration set in lockstep
--- (0001_init.sql mirrors this file). See db/migrations/README.md.
+-- (0001_init.sql + 0002_usernames_created_at.sql together produce this file).
+-- See db/migrations/README.md.
 --
 -- The GLOBAL, never-sharded registry: the username uniqueness namespace and the
 -- username→account routing map. It is tiny (~70 B/row → ~140M usernames in one
@@ -28,10 +29,12 @@ CREATE TABLE IF NOT EXISTS usernames (
   username      TEXT PRIMARY KEY,
   user_id       TEXT NOT NULL,
   account_db_id TEXT NOT NULL,
-  created_at    INTEGER NOT NULL,         -- when the name was claimed (audit only; never updated)
+  created_at    INTEGER NOT NULL,         -- when the name was claimed (never updated; the daily cron counts the last 24 h of it)
   deleted_at    INTEGER                   -- non-NULL = TOMBSTONE: the account was deleted, the name stays occupied (see docs/data-lifecycle.md). The PK keeps re-claims failing; user_id is retained so a delete-account retry can still bind the name to its (gone) account. Releasing tombstones after a cooldown is a future policy loosen — never the reverse.
 );
 CREATE INDEX IF NOT EXISTS idx_usernames_user_id ON usernames(user_id);
+-- The daily signup report's range (0002, services/signup-report.ts).
+CREATE INDEX IF NOT EXISTS idx_usernames_created_at ON usernames(created_at);
 
 -- Subscription purchases — one row per provider subscription.
 -- GLOBAL (here, not an account shard) because webhook events

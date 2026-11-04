@@ -548,7 +548,11 @@ switched on. Two things make that more than housekeeping:
   the request data, and of those search words by name
   (`apps/bracemark-site/src/app/privacy/page.tsx`, _Technical and security
   data_). A CloudFront standard log delivered to a bucket of ours would be
-  exactly that copy, under a retention period we would then be choosing.
+  exactly that copy, under a retention period we would then be choosing. The
+  sentence's one carve-out, short-lived counters for rate limits and abuse,
+  covers the api's signup cap ([account.md](./account.md), _creating an
+  account_) and the Workers' per-second limiters. A request log is not a counter
+  and is not short-lived, so it doesn't fall inside it.
 
 Read back with the AWS CLI on 2026-10-13, both tiers:
 
@@ -1155,7 +1159,9 @@ this entire phase.
 **bracemark-api carries a cron trigger** (`triggers.crons`, declared per env in
 `wrangler.jsonc`, daily): the `scheduled` handler in `src/worker.ts` purges
 finished session rows on their two retention clocks
-([sessions.md](./sessions.md)). It ships with the deploy like any other config;
+([sessions.md](./sessions.md)), logs the last 24 h of new accounts and drops
+past days of the signup cap's counter ([account.md](./account.md), _creating an
+account_). It ships with the deploy like any other config;
 `wrangler dev` never fires it, and `curl
 "http://127.0.0.1:8787/cdn-cgi/handler/scheduled"` runs it locally.
 

@@ -135,11 +135,19 @@ export type Bindings = {
   API_RATE_LIMIT_WEBHOOK: RateLimit; // wide tier (sole limiter for the Paddle webhook)
   API_RATE_LIMIT_BLOB: RateLimit; // per-user tier (sole limiter for the blob route)
 
-  // The most accounts one network (an IPv4 address, an IPv6 /64) may create per
-  // UTC day (services/signup-cap.ts). Unset, or anything but a positive integer,
-  // is off: development leaves it unset because the e2e suites create many
-  // accounts from one address.
-  SIGNUP_CAP_PER_DAY?: string;
+  // The most accounts one network may create per UTC day (services/signup-cap.ts),
+  // one setting per address family so each can be tuned on its own. Either unit
+  // can be a whole shared network (signup-cap.ts says why), so neither is the
+  // tighter one by default. Each is on or off by itself. Unset, or anything but a
+  // positive integer, is off: development leaves both unset because the e2e
+  // suites create many accounts from one address.
+  SIGNUP_CAP_IPV4_PER_DAY?: string;
+  SIGNUP_CAP_IPV6_PER_DAY?: string;
+  // "1" refuses a signup past its network's cap (429 `signup_limited`). Anything
+  // else observes: the signup is counted, logged once past the cap, and let
+  // through, and the daily report says how many networks went past. Production
+  // observes and staging enforces (services/signup-cap.ts says why).
+  SIGNUP_CAP_ENFORCE?: string;
   // Above this many new accounts in 24 h, the daily cron's signup line is a
   // console.error rather than a console.log (services/signup-report.ts). Unset is
   // log-only. Set it from the line's own history, well above the normal level.

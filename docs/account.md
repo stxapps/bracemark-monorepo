@@ -765,8 +765,8 @@ gave.
 
 Errors: a username taken at the last moment is said under the username
 (`UsernameTakenError`); anything else under the button. One of those has words of
-its own: past the server's **daily per-network cap** (below) the api answers 429
-`signup_limited`, the hooks throw `SignupLimitedError`, and the form says to try
+its own: past the server's **daily per-network cap** (below), where it is
+enforced, the api answers 429 `signup_limited`, the hooks throw `SignupLimitedError`, and the form says to try
 again tomorrow (`CREATE_ACCOUNT_COPY.signupLimited`) rather than "try again", which
 would only fail again. The button is disabled
 until both message lines pass and while the account is being created (its label
@@ -776,16 +776,74 @@ keyboard's Return is not disabled with the button and a second create comes back
 `disabled`, while pending: a manager reads it as the form goes away.
 
 **The daily per-network cap.** `POST /v1/auth/create-account` counts the accounts
-each caller network creates per UTC day and refuses past `SIGNUP_CAP_PER_DAY`
+each caller network creates per UTC day, against that network's cap
 (`bracemark-api/src/services/signup-cap.ts`). A network is an IPv4 address, or an
 IPv6 /64, because a /64 is what one line or one server holds
-(`networkKey`, `shared/src/net/ip.ts`; the per-second limiters key on it too). The
-count sits in `SESSIONS_DB` as an HMAC of the network, never the address, and the
-daily cron drops past days and logs the day's new-account total
-(`services/signup-report.ts`). It runs after the signature check and before the
-username claim, so a refused request provisions nothing. The cap is per env:
-production 10, staging 200 for the e2e suites, development unset, which is off.
-Many people can share one address (a carrier's NAT, a campus), which is why the
+(`networkKey`, `shared/src/net/ip.ts`; the per-second limiters key on it too).
+
+**Production observes the cap; it does not enforce it.** A signup past the cap is
+refused only where `SIGNUP_CAP_ENFORCE` is `"1"`. Anywhere else it is counted,
+logged once per network per day (`signupCap: … went past 50 today (observing,
+not refused)`), and let through. Any fixed number per network is a guess, and a
+wrong one turns away real people on shared wifi without anyone hearing about it.
+A night of bulk accounts, by contrast, shows up in the next morning's report, and
+each free account's storage is capped anyway. So production watches until the
+report shows a source worth refusing and a number that would refuse it, and
+enforcing is then one setting in `wrangler.jsonc` and a deploy: the 429 and the
+forms' "try again tomorrow" are built and stay built. Staging enforces, so that
+path keeps running somewhere it is deployed. Set `SIGNUP_ALERT_PER_DAY` from the
+report's first weeks; that is what turns a flood into an error-level line.
+
+**Switching to enforce needs no /privacy change, and neither does retuning.**
+/privacy was worded to hold in both modes: its notice says we count "and cap them
+if we need to", its _Technical and security data_ carve-out names counters that
+"apply our rate limits and watch for abuse", and its retention line ties them to
+the period they count, not to a number. A cap's number, the families being set
+apart, how a network is keyed, or a longer counting window move none of that.
+What does need /privacy first is new data going somewhere new: a human check
+(Turnstile sends browser signals to Cloudflare; App Attest and Play Integrity
+bring in Apple and Google), or counts kept well past the period they cover.
+
+**One cap per address family, at the same number today, because either unit can
+be thousands of people.** A shared network (a campus, an office, a venue's wifi)
+is one IPv4 address behind NAT, or one IPv6 /64: IPv6 gives each device its own
+address, but every address on the network shares the /64, and dual-stack devices
+prefer IPv6, so a crowd lands in the /64's bucket. The one difference runs the
+other way: a carrier's NAT puts thousands of unrelated customers behind one IPv4
+address, which IPv6 has no equivalent of. Nothing in a request says how many share
+it (`request.cf` names the network's owner, not its size). So the IPv6 cap is not
+the tighter one: "a /64 is one household or one server" is true of homes, phones
+and rented servers, but not of shared wifi, and a tighter /64 cap would refuse
+exactly the crowd. Against someone making accounts in bulk the cap is only a
+speed bump, since they rotate addresses whatever the number, so its real cost is
+the people it refuses by mistake. Two settings rather than one so each family can
+be tuned from the daily report on its own; anything that isn't a /64 takes the
+IPv4 cap. `SIGNUP_CAP_IPV4_PER_DAY` and `SIGNUP_CAP_IPV6_PER_DAY` are per env:
+production 50 and 50 (observed), staging 200 and 200 (enforced, high enough for
+the e2e suites), development unset, which is off and counts nothing. If bulk
+signups ever get past an enforced cap, the answer is a human check (Turnstile on
+the web, App Attest and Play Integrity in the apps), not a lower number.
+
+The count sits in `SESSIONS_DB` as an HMAC of the network, never the address,
+with the cap it was counted against. The HMAC keeps addresses out of a dump of
+the table and no further: we hold the key, and an IPv4 row can be matched by
+trying every address. **⚠ /privacy rests on the counter being short-lived.** The
+carve-out in its _Technical and security data_ (the one copy of request data we
+keep ourselves) and the counters' line under _How long we keep it_ both say so,
+and a counter kept for days past the period it counts makes both false with
+nothing failing, so /privacy changes first. They deliberately say nothing about
+how a counter is keyed, which would be false of the per-second limiters (/privacy
+itself says they hold the address briefly), nor that the cap limits anything,
+which is false while production only observes.
+
+The daily cron logs the day's new-account total, how many networks went past
+their cap yesterday (saying whether that was refused or observed), and the
+busiest network's signups, then drops past days (`services/signup-report.ts`).
+The last two are what the cap is decided from: a busiest network far above the
+cap on an ordinary day, with no jump in the total, is a crowd on shared wifi, and
+a lone network far above it on the day the total jumps is a source worth
+refusing. The cap runs after the signature check and before the username claim,
+so a refused request provisions nothing. Many people can share one address, which is why the
 message names the network, not the person.
 
 **⚠ iOS re-offers over a prefilled field**, and a second accept mints a second
@@ -1335,6 +1393,7 @@ CREATE TABLE usernames (
   deleted_at    INTEGER                  -- non-NULL = tombstone (account deleted, name stays occupied)
 );
 CREATE INDEX idx_usernames_user_id ON usernames(user_id);
+CREATE INDEX idx_usernames_created_at ON usernames(created_at); -- the daily signup report
 
 -- ACCOUNTS_DB_N (one per shard) ---------------------------------------------
 
@@ -1373,8 +1432,19 @@ CREATE TABLE sessions (
   revoked_at    INTEGER                  -- NULL, or when it was explicitly revoked
 );
 CREATE INDEX idx_sessions_user_id ON sessions(user_id);
-CREATE INDEX idx_sessions_expires_at ON sessions(expires_at);
-CREATE INDEX idx_sessions_revoked_at ON sessions(revoked_at);
+-- cleanup's two clocks, each a range over one index (sessionsRepo.purge)
+CREATE INDEX idx_sessions_purge ON sessions(revoked_at, expires_at);
+
+-- the daily per-network signup cap's counter (services/signup-cap.ts). The
+-- network is an HMAC, never an address; the daily cron deletes past days.
+CREATE TABLE signup_counts (
+  network_hash TEXT NOT NULL,
+  day          INTEGER NOT NULL,          -- days since the epoch, UTC
+  count        INTEGER NOT NULL,
+  cap          INTEGER,                   -- the cap it was counted against
+  PRIMARY KEY (network_hash, day)
+);
+CREATE INDEX idx_signup_counts_day ON signup_counts(day);
 ```
 
 **Create-account is cross-DB (claim-then-write).** Because the directory and the

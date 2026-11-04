@@ -303,10 +303,15 @@
         // Mint the keys in the R2 dashboard (Manage R2 API Tokens) scoped to the
         // bucket below. See docs/hosting.md.
         "R2_USER_FILES_BUCKET": "bracemark-user-files-staging",
-        // The daily per-network signup cap (services/signup-cap.ts). On here so
+        // The daily per-network signup caps (services/signup-cap.ts). On here so
         // the path runs where it is deployed, but far above production's: the
-        // staging e2e suites make a fresh account per case, all from one address.
-        "SIGNUP_CAP_PER_DAY": "200",
+        // staging e2e suites make a fresh account per case, all from one address,
+        // and that address is IPv4 or IPv6 depending on the machine's line.
+        "SIGNUP_CAP_IPV4_PER_DAY": "200",
+        "SIGNUP_CAP_IPV6_PER_DAY": "200",
+        // Enforced here, unlike production, so the refusal path (the 429 and the
+        // forms' "try again tomorrow") keeps running somewhere it is deployed.
+        "SIGNUP_CAP_ENFORCE": "1",
         // The Server-Timing breakdown (src/lib/server-timing.ts) — on here, where
         // `measure:sync` runs; production leaves it unset.
         "SERVER_TIMING": "1",
@@ -430,10 +435,17 @@
         // Mint the keys in the R2 dashboard (Manage R2 API Tokens) scoped to the
         // bucket below. See docs/hosting.md.
         "R2_USER_FILES_BUCKET": "bracemark-user-files-production",
-        // The most accounts one network (an IPv4 address, an IPv6 /64) may create
-        // per UTC day (services/signup-cap.ts). Room for a household or a shared
-        // NAT; development leaves it unset, which is off.
-        "SIGNUP_CAP_PER_DAY": "10",
+        // The daily per-network signup cap (services/signup-cap.ts), OBSERVED
+        // here, not enforced: with no SIGNUP_CAP_ENFORCE, a network past it is
+        // logged and let through, and the daily cron's signup line counts the
+        // networks that went past and the busiest network's attempts. The same
+        // number for both families: a campus or a venue's wifi is one IPv4
+        // address behind NAT or one IPv6 /64, and dual-stack devices put the
+        // crowd in the /64. Enforce ("SIGNUP_CAP_ENFORCE": "1") once that line
+        // shows a source worth refusing, at a number that refuses it.
+        // Development leaves the caps unset, which is off.
+        "SIGNUP_CAP_IPV4_PER_DAY": "50",
+        "SIGNUP_CAP_IPV6_PER_DAY": "50",
         // Paddle Billing — LIVE Paddle. Secrets, set separately:
         //   wrangler secret put PADDLE_WEBHOOK_SECRET --env production
         //   wrangler secret put PADDLE_API_KEY --env production

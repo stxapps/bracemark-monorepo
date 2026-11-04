@@ -10,8 +10,10 @@ conflate them:
     uniqueness namespace + username→shard routing. Never sharded.
   - **accounts** (`ACCOUNTS_DB_1`, … one binding per shard) — `users` +
     `account_keys`. The `accounts` migration set is applied to **each** shard.
-  - **sessions** (`SESSIONS_DB`) — bearer-token `sessions` only. Separate db:
-    high-churn and not Tier-0 (a lost session regenerates by re-auth).
+  - **sessions** (`SESSIONS_DB`) — bearer-token `sessions`, plus `signup_counts`
+    (the daily per-network signup cap's counter, `services/signup-cap.ts`).
+    Separate db: high-churn and not Tier-0 (a lost session regenerates by
+    re-auth; a lost counter resets today's counts and nothing else).
   - All hold only small, bounded-per-user rows, so none nears D1's 10 GB cap;
     `account_db_id` (in the directory + sessions) routes a user to their shard
     (see `db/db-routes.ts`). create-account is cross-DB (claim-then-write) — see

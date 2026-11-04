@@ -126,11 +126,13 @@ this in `requireAuth`, `middleware/auth.ts`, through `renewSession`
   at sign-in, say). That is a schema addition and a field /privacy doesn't
   describe, so /privacy changes first.
 
-**Sliding alone needs no new columns.** `expires_at`, `last_seen_at` and
-`idx_sessions_expires_at` already existed. The explicit revocation marker below
-is the append-only migration `0002_revoked_at.sql` (plus
-`idx_sessions_revoked_at`, cleanup's second clock), folded into
-`db/schemas/sessions.sql`.
+**Sliding alone needs no new columns.** `expires_at` and `last_seen_at` already
+existed. The explicit revocation marker below is the append-only migration
+`0002_revoked_at.sql`, folded into `db/schemas/sessions.sql`. Cleanup's two
+clocks share one index, `idx_sessions_purge` on `(revoked_at, expires_at)`
+(`0004_purge_index.sql`). It replaced one index per column, because with those
+the "unrevoked and expired" branch matched every live session on
+`revoked_at IS NULL` and checked `expires_at` row by row.
 
 Regular successful authenticated traffic keeps a session alive. Opening the
 app offline does not renew it, and a 90-day window is not a guarantee for every

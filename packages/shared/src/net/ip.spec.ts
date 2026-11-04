@@ -1,4 +1,4 @@
-import { ipv6ToBytes, networkKey, parseIpv4 } from './ip';
+import { ipv6ToBytes, isIpv6Network, networkKey, parseIpv4 } from './ip';
 
 describe('parseIpv4', () => {
   it('reads four octets', () => {
@@ -53,5 +53,15 @@ describe('networkKey', () => {
   it('passes an unparseable value through unchanged', () => {
     expect(networkKey('unknown')).toBe('unknown');
     expect(networkKey('')).toBe('');
+  });
+});
+
+describe('isIpv6Network', () => {
+  it('is true of a /64 and false of everything else networkKey returns', () => {
+    expect(isIpv6Network(networkKey('2001:db8:0:1::1'))).toBe(true);
+    expect(isIpv6Network(networkKey('::1'))).toBe(true);
+    expect(isIpv6Network(networkKey('203.0.113.7'))).toBe(false);
+    expect(isIpv6Network(networkKey('::ffff:203.0.113.7'))).toBe(false);
+    expect(isIpv6Network(networkKey('unknown'))).toBe(false);
   });
 });

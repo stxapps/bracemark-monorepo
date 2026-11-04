@@ -1,9 +1,18 @@
+import { signupCountsRepo } from '../db/repositories/signup-counts';
 import type { Bindings } from '../lib/env';
-import { signupCapOf } from './signup-cap';
+import { signupCapEnforcedOf } from './signup-cap';
 
-// The daily cron's account-creation line: how many accounts the last 24 h made, and
-// how many networks reached the signup cap yesterday. A flood of new accounts
-// shows up here a day before it shows up as storage.
+// The daily cron's account-creation line: how many accounts the last 24 h made,
+// how many networks went past their signup cap yesterday, and how many signups
+// the busiest network made. A flood of new accounts shows up here a day before it
+// shows up as storage.
+//
+// The last two are what the cap is decided from (services/signup-cap.ts).
+// Production observes the cap rather than enforcing it, so these say what the
+// cap WOULD have done: a busiest network far above the cap on an ordinary day,
+// with no flood in the total, is a crowd on shared wifi, and a lone network far
+// above it on the day the total jumps is a source worth refusing. Where the cap
+// is enforced, the networks past it are people (or scripts) that were refused.
 //
 // One console.log every day, so the normal level is on record. That record is
 // what SIGNUP_ALERT_PER_DAY gets set from. Above that threshold the line is a
@@ -15,7 +24,7 @@ import { signupCapOf } from './signup-cap';
 
 const DAY_MS = 86_400_000;
 
-export type SignupReport = { created: number; cappedNetworks: number };
+export type SignupReport = { created: number; cappedNetworks: number; busiest: number };
 
 export async function reportSignups(
   env: Bindings,
@@ -28,24 +37,23 @@ export async function reportSignups(
     .first<{ n: number }>();
   const created = createdRow?.n ?? 0;
 
-  // Yesterday's rows, read before the same cron run purges them (worker.ts).
-  const cap = signupCapOf(env);
-  let cappedNetworks = 0;
-  if (cap !== null) {
-    const row = await env.SESSIONS_DB.prepare(
-      `SELECT COUNT(*) AS n FROM signup_counts WHERE day = ? AND count > ?`,
-    )
-      .bind(Math.floor(now / DAY_MS) - 1, cap)
-      .first<{ n: number }>();
-    cappedNetworks = row?.n ?? 0;
-  }
+  // Yesterday's rows, read before the same cron run purges them (worker.ts). Each
+  // row carries the cap it was counted against, so the two families' caps need
+  // no sorting out here, and with both caps off there are no rows to count.
+  const counts = signupCountsRepo(env.SESSIONS_DB);
+  const yesterday = Math.floor(now / DAY_MS) - 1;
+  const [cappedNetworks, busiest] = await Promise.all([
+    counts.countOverCap(yesterday),
+    counts.busiest(yesterday),
+  ]);
 
-  const line = `signups: ${created} accounts in the last 24 h; ${cappedNetworks} networks reached the daily cap yesterday`;
+  const mode = signupCapEnforcedOf(env) ? 'refused' : 'observed, not refused';
+  const line = `signups: ${created} accounts in the last 24 h; yesterday ${cappedNetworks} networks went past their daily cap (${mode}) and the busiest network made ${busiest} signups`;
   const threshold = Number(env.SIGNUP_ALERT_PER_DAY);
   if (Number.isInteger(threshold) && threshold > 0 && created > threshold) {
     console.error(`${line} (above the alert threshold of ${threshold})`);
   } else {
     console.log(line);
   }
-  return { created, cappedNetworks };
+  return { created, cappedNetworks, busiest };
 }

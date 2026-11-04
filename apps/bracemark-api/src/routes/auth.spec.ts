@@ -188,7 +188,15 @@ describe('auth routes', () => {
   });
 
   describe(`POST ${createAccountEndpoint.path}: the daily per-network cap`, () => {
-    async function create(username: string, ip: string, cap: string | undefined) {
+    // `cap` sets both families' caps; a test about the two passes them apart.
+    // Enforced unless `enforce` is false (production's observe mode).
+    async function create(
+      username: string,
+      ip: string,
+      cap: string | undefined,
+      ipv6Cap: string | undefined = cap,
+      enforce = true,
+    ) {
       const { keyPair, publicKey } = await newKeyPair();
       const payload = JSON.stringify({
         action: 'create-account',
@@ -204,7 +212,12 @@ describe('auth routes', () => {
           headers: { 'content-type': 'application/json', 'cf-connecting-ip': ip },
           body: JSON.stringify({ payload, signature: await sign(keyPair, payload) }),
         },
-        { ...env, SIGNUP_CAP_PER_DAY: cap },
+        {
+          ...env,
+          SIGNUP_CAP_IPV4_PER_DAY: cap,
+          SIGNUP_CAP_IPV6_PER_DAY: ipv6Cap,
+          SIGNUP_CAP_ENFORCE: enforce ? '1' : undefined,
+        },
       );
     }
 
@@ -225,6 +238,25 @@ describe('auth routes', () => {
 
       // A different network is unaffected.
       expect((await create('capthird', '203.0.113.7', '1')).status).toBe(201);
+    });
+
+    it('lets an IPv4 address past the point where a /64 is refused', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      // IPv4 cap 2, IPv6 cap 1.
+      expect((await create('famv6a', '2001:db8:0:2::1', '2', '1')).status).toBe(201);
+      expect((await create('famv6b', '2001:db8:0:2::2', '2', '1')).status).toBe(429);
+      expect((await create('famv4a', '203.0.113.20', '2', '1')).status).toBe(201);
+      expect((await create('famv4b', '203.0.113.20', '2', '1')).status).toBe(201);
+      expect((await create('famv4c', '203.0.113.20', '2', '1')).status).toBe(429);
+    });
+
+    it('creates the account past the cap where the cap is observed', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      expect((await create('obsfirst', '203.0.113.30', '1', '1', false)).status).toBe(201);
+      expect((await create('obssecond', '203.0.113.30', '1', '1', false)).status).toBe(201);
+      expect(await usernamesRepo(env.DIRECTORY_DB).findByUsername('obssecond')).not.toBeNull();
     });
 
     it('does not count at all where the env leaves the cap unset', async () => {

@@ -94,5 +94,17 @@ export function networkKey(ip: string): string {
 
   const groups: string[] = [];
   for (let i = 0; i < 8; i += 2) groups.push(((bytes[i] << 8) | bytes[i + 1]).toString(16));
-  return `${groups.join(':')}::/64`;
+  return `${groups.join(':')}${IPV6_NETWORK_SUFFIX}`;
+}
+
+const IPV6_NETWORK_SUFFIX = '::/64';
+
+// Is this networkKey an IPv6 /64? A limit with a setting per family branches
+// here (bracemark-api services/signup-cap.ts). Not because a /64 is smaller: a
+// home, a phone or a rented server holds one, but so does a whole shared network
+// (a campus, a venue's wifi), every device on it inside the same /64. False for
+// an IPv4 address, an IPv4-mapped one (networkKey has already unwrapped it) and
+// anything unparseable.
+export function isIpv6Network(key: string): boolean {
+  return key.endsWith(IPV6_NETWORK_SUFFIX);
 }

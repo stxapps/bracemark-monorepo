@@ -156,7 +156,26 @@ export default function Page() {
             it puts its own here. Each entry says what is different for the
             reader, and one is a correction rather than a change — Paddle's
             dashboard always showed us a web buyer's name and email address,
-            and the policy said so only now. */}
+            and the policy said so only now.
+
+            4 NOVEMBER 2026 WENT UP BESIDE IT, newest first, and may come out on
+            or after 4 December 2026. It is a change, not a correction: the
+            signup cap's counter is the first copy of anything from the request
+            data that we keep ourselves (_Technical and security data_ says what
+            it is and why the wording stays at its kind; _How long we keep it_
+            gives its retention). Per _Changes to this policy_, production counts
+            and observes from day one, and refusing is a later switch (bracemark-api
+            services/signup-cap.ts). So the bullet says we count, and that we
+            may cap. */}
+        <h2>What changed on 4 November 2026</h2>
+        <ul>
+          <li>
+            We now count how many accounts each network creates in a day, which lets us spot
+            accounts being created in bulk and cap them if we need to. The count is short-lived.{' '}
+            <em>Technical and security data</em> and <em>How long we keep it</em> now say so.
+          </li>
+        </ul>
+
         <h2>What changed on 29 October 2026</h2>
         <ul>
           <li>
@@ -389,14 +408,47 @@ export default function Page() {
             a broken promise. The uses are the two the page names everywhere
             else — running the service, and totals that name nobody — and the
             Nos that matter are the ones that stay: no profile, no tracking
-            between visits, no join to an account, no copy of our own. */}
+            between visits, no join to an account, no copy of our own.
+
+            "APART FROM SHORT-LIVED COUNTERS" — THE ONE THING OF OUR OWN, NAMED
+            BY KIND. The signup cap (bracemark-api services/signup-cap.ts) keeps
+            a per-network count of today's new accounts in our own database, so
+            "no separate copy of our own" would stand bare over a table that
+            holds one: a keyed hash of each address, the IPv6 ones cut to their
+            /64, until the next day's cron. The carve-out names the
+            category, not the mechanism, on purpose. The next limit that counts
+            per address falls inside it without an edit, which a sentence naming
+            the hash, the /64 or "until the next day" would not.
+
+            NO "WHICH NEVER STORE THE ADDRESS ITSELF". It was drafted onto this
+            sentence and failed twice. It described every rate limiter,
+            and the link-preview service's limiter "briefly holds the requesting
+            IP address", which this page says under _How link previews are fetched_.
+            And even of the signup counter it said more than the HMAC does: we
+            hold the key, and there are only about four billion IPv4 addresses
+            to try, so "not the address itself" let a reader conclude we cannot
+            tell which address, which is false. "Short-lived" is the protection
+            that is real, and it is the half that has to stay true: a counter
+            kept for weeks needs this sentence, and the retention bullet under
+            _How long we keep it_, changed first. How it is keyed doesn't move
+            either.
+
+            "AND WATCH FOR ABUSE", because production only watches. The cap is
+            observed there, not enforced: a network past it is logged and let
+            through, and the daily report says what the cap would have done.
+            "Counters that apply our rate limits" alone would be false of a
+            counter that limits nothing. Both purposes are ones this page already
+            gives: _Technical and security data_ ("to apply rate limits against
+            abuse") and _How we use what we collect_ ("prevent abuse, enforce rate
+            limits"). */}
         <p>
           That data lives in <strong>Cloudflare</strong>’s, <strong>Amazon Web Services</strong>’,
           and, for the status page, <strong>GitHub</strong>’s own logs, under their retention
           periods rather than any we set. We read it to find a fault or an attack, and their
           dashboards compile totals from it — visits, pages, the sites a visit came from — which we
           read like the totals under <em>How we use what we collect</em>. We do not join it to your
-          account, and we keep no separate copy of our own.
+          account. Apart from short-lived counters that apply our rate limits and watch for abuse, we
+          keep no separate copy of our own.
         </p>
         <p>
           Two of the choices that decide what reaches those logs are ours rather than theirs, and we
@@ -838,6 +890,17 @@ export default function Page() {
             <strong>Support email</strong> — until it is no longer useful for supporting you. The
             questions we paraphrase from it for help pages and fixes carry no name, email address,
             or username, and we keep those.
+          </li>
+          {/* A RULE, NOT A NUMBER, for the same reason the paragraph about
+              request data keeps no number: the per-second limiters reset in
+              seconds and the signup cap's counter at the end of the UTC day, and
+              the daily cron deletes a finished day's counts a few hours later
+              (bracemark-api worker.ts, services/signup-cap.ts). "Until shortly
+              after" covers both and the next counter too. One kept for days
+              past the period it counts makes it false. */}
+          <li>
+            <strong>Rate-limit and abuse counters</strong> — until shortly after the period they
+            count ends.
           </li>
           <li>
             <strong>Infrastructure logs</strong> — for the short window our providers keep them,

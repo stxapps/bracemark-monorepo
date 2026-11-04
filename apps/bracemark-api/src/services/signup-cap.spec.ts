@@ -5,7 +5,13 @@ import { CREATE_ACCOUNT_ERROR } from '@stxapps/shared';
 
 import type { Bindings } from '../lib/env';
 import { HttpError } from '../lib/errors';
-import { claimSignupSlot, purgeSignupCounts, signupCapOf } from './signup-cap';
+import {
+  claimSignupSlot,
+  purgeSignupCounts,
+  signupCapEnforcedOf,
+  signupCapFor,
+  signupCapsOf,
+} from './signup-cap';
 import { reportSignups } from './signup-report';
 
 // Real D1 (SESSIONS_DB, migrated by test/apply-migrations.ts), so the counter's
@@ -24,8 +30,29 @@ async function rowsOn(day: number): Promise<number> {
   return row?.n ?? 0;
 }
 
-function capped(cap: string | undefined, extra: Partial<Bindings> = {}): Bindings {
-  return { ...env, SIGNUP_CAP_PER_DAY: cap, ...extra } as Bindings;
+// The env with each family's cap set, ENFORCED, since most tests here are about
+// refusals; the observe-mode tests pass `SIGNUP_CAP_ENFORCE: undefined` in
+// `extra`. No default for `ipv6`: a default parameter also fills in an explicit
+// `undefined`, which is the "this family is off" case.
+function caps(
+  ipv4: string | undefined,
+  ipv6: string | undefined,
+  extra: Partial<Bindings> = {},
+): Bindings {
+  return {
+    ...env,
+    SIGNUP_CAP_IPV4_PER_DAY: ipv4,
+    SIGNUP_CAP_IPV6_PER_DAY: ipv6,
+    SIGNUP_CAP_ENFORCE: '1',
+    ...extra,
+  } as Bindings;
+}
+
+const OBSERVE: Partial<Bindings> = { SIGNUP_CAP_ENFORCE: undefined };
+
+// Both families at one cap, for the tests about counting rather than families.
+function capped(cap: string | undefined): Bindings {
+  return caps(cap, cap);
 }
 
 async function refusal(p: Promise<void>): Promise<HttpError> {
@@ -41,15 +68,34 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('signupCapOf', () => {
-  it('reads a positive integer and treats everything else as off', () => {
-    expect(signupCapOf(capped('10'))).toBe(10);
-    expect(signupCapOf(capped(undefined))).toBeNull();
-    expect(signupCapOf(capped(''))).toBeNull();
-    expect(signupCapOf(capped('0'))).toBeNull();
-    expect(signupCapOf(capped('ten'))).toBeNull();
-    expect(signupCapOf(capped('2.5'))).toBeNull();
-    expect(signupCapOf(undefined)).toBeNull();
+describe('signupCapsOf', () => {
+  it('reads a positive integer per family and treats everything else as off', () => {
+    expect(signupCapsOf(caps('50', '10'))).toEqual({ ipv4: 50, ipv6: 10 });
+    expect(signupCapsOf(caps('50', undefined))).toEqual({ ipv4: 50, ipv6: null });
+    for (const off of [undefined, '', '0', 'ten', '2.5']) {
+      expect(signupCapsOf(capped(off))).toEqual({ ipv4: null, ipv6: null });
+    }
+    expect(signupCapsOf(undefined)).toEqual({ ipv4: null, ipv6: null });
+  });
+});
+
+describe('signupCapEnforcedOf', () => {
+  it('enforces on "1" only, and observes on anything else', () => {
+    expect(signupCapEnforcedOf(capped('5'))).toBe(true);
+    for (const v of [undefined, '', '0', 'true', 'yes']) {
+      expect(signupCapEnforcedOf(caps('5', '5', { SIGNUP_CAP_ENFORCE: v }))).toBe(false);
+    }
+    expect(signupCapEnforcedOf(undefined)).toBe(false);
+  });
+});
+
+describe('signupCapFor', () => {
+  it('gives a /64 the IPv6 cap and every other network the IPv4 one', () => {
+    const e = caps('50', '10');
+    expect(signupCapFor(e, '2001:db8:0:1::/64')).toBe(10);
+    expect(signupCapFor(e, '203.0.113.7')).toBe(50);
+    // No address from the edge: the IPv4 cap, the one for a single address.
+    expect(signupCapFor(e, 'unknown')).toBe(50);
   });
 });
 
@@ -81,6 +127,51 @@ describe('claimSignupSlot', () => {
 
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledWith('signupCap: refused 198.51.100.4 after 1 today');
+  });
+
+  it('observes where the cap is not enforced: counts, logs once, refuses nothing', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const e = caps('1', '1', OBSERVE);
+    const at = NOON + 50 * DAY_MS;
+
+    for (let i = 0; i < 4; i++) await claimSignupSlot(e, '198.51.100.40', at);
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      'signupCap: 198.51.100.40 went past 1 today (observing, not refused)',
+    );
+    // Still counted, so the report can say what the cap would have done.
+    const row = await env.SESSIONS_DB.prepare(
+      `SELECT MAX(count) AS n FROM signup_counts WHERE day = ?`,
+    )
+      .bind(Math.floor(at / DAY_MS))
+      .first<{ n: number }>();
+    expect(row?.n).toBe(4);
+  });
+
+  it('holds each family to its own cap', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const e = caps('3', '1');
+    const at = NOON + 30 * DAY_MS;
+
+    await claimSignupSlot(e, '2001:db8:0:9::/64', at);
+    await refusal(claimSignupSlot(e, '2001:db8:0:9::/64', at));
+
+    await claimSignupSlot(e, '192.0.2.9', at);
+    await claimSignupSlot(e, '192.0.2.9', at);
+    await claimSignupSlot(e, '192.0.2.9', at);
+    await refusal(claimSignupSlot(e, '192.0.2.9', at));
+  });
+
+  it('writes nothing for a family whose cap is off', async () => {
+    const e = caps('5', undefined);
+    const at = NOON + 40 * DAY_MS;
+
+    await claimSignupSlot(e, '2001:db8:0:a::/64', at);
+    expect(await rowsOn(Math.floor(at / DAY_MS))).toBe(0);
+
+    await claimSignupSlot(e, '192.0.2.10', at);
+    expect(await rowsOn(Math.floor(at / DAY_MS))).toBe(1);
   });
 
   it('counts each network on its own', async () => {
@@ -146,10 +237,54 @@ describe('reportSignups', () => {
     await claimSignupSlot(e, '203.0.113.2', at - DAY_MS);
     await refusal(claimSignupSlot(e, '203.0.113.2', at - DAY_MS));
 
-    await expect(reportSignups(e, at)).resolves.toEqual({ created: 1, cappedNetworks: 1 });
+    await expect(reportSignups(e, at)).resolves.toEqual({
+      created: 1,
+      cappedNetworks: 1,
+      busiest: 2,
+    });
     expect(log).toHaveBeenCalledWith(
-      'signups: 1 accounts in the last 24 h; 1 networks reached the daily cap yesterday',
+      'signups: 1 accounts in the last 24 h; yesterday 1 networks went past their daily cap (refused) and the busiest network made 2 signups',
     );
+  });
+
+  // Production's mode: the line says what the cap would have done, and says so.
+  it('reports an observed cap as observed, with the busiest network', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const e = caps('2', '2', OBSERVE);
+    const at = NOON + 400 * DAY_MS;
+    const yesterday = at - DAY_MS;
+
+    for (let i = 0; i < 5; i++) await claimSignupSlot(e, '203.0.113.60', yesterday);
+    await claimSignupSlot(e, '203.0.113.61', yesterday);
+
+    await expect(reportSignups(e, at)).resolves.toEqual({
+      created: 0,
+      cappedNetworks: 1,
+      busiest: 5,
+    });
+    expect(log).toHaveBeenCalledWith(
+      'signups: 0 accounts in the last 24 h; yesterday 1 networks went past their daily cap (observed, not refused) and the busiest network made 5 signups',
+    );
+  });
+
+  // The row says which cap it was counted against, so a count that is over the
+  // IPv6 cap but under the IPv4 one is read right without the report knowing
+  // which family the (hashed) network was.
+  it('judges each network by its own family’s cap', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const e = caps('3', '1');
+    const at = NOON + 300 * DAY_MS;
+    const yesterday = at - DAY_MS;
+
+    // Two each: past the /64's cap of 1, inside the address's cap of 3.
+    await claimSignupSlot(e, '2001:db8:0:b::/64', yesterday);
+    await refusal(claimSignupSlot(e, '2001:db8:0:b::/64', yesterday));
+    await claimSignupSlot(e, '192.0.2.11', yesterday);
+    await claimSignupSlot(e, '192.0.2.11', yesterday);
+
+    await expect(reportSignups(e, at)).resolves.toMatchObject({ cappedNetworks: 1 });
   });
 
   it('raises the line to an error above the alert threshold', async () => {
@@ -158,9 +293,9 @@ describe('reportSignups', () => {
     await claimName('a1', at - 1000);
     await claimName('a2', at - 2000);
 
-    await reportSignups(capped(undefined, { SIGNUP_ALERT_PER_DAY: '1' }), at);
+    await reportSignups(caps(undefined, undefined, { SIGNUP_ALERT_PER_DAY: '1' }), at);
     expect(error).toHaveBeenCalledWith(
-      'signups: 2 accounts in the last 24 h; 0 networks reached the daily cap yesterday (above the alert threshold of 1)',
+      'signups: 2 accounts in the last 24 h; yesterday 0 networks went past their daily cap (refused) and the busiest network made 0 signups (above the alert threshold of 1)',
     );
   });
 });

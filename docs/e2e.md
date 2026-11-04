@@ -2415,7 +2415,8 @@ roles once; `cases.json` makes admission explicit per case, with local-only as
 the default. A requested unsupported case fails before account provisioning.
 Staging uses fresh Free accounts and serial browser execution, preserving the
 real Cloudflare limits. One of those limits is ours: staging's api caps the accounts
-one network creates per UTC day at 200 (`SIGNUP_CAP_PER_DAY`, [account.md](./account.md),
+one network creates per UTC day at 200, for IPv4 and IPv6 alike
+(`SIGNUP_CAP_IPV4_PER_DAY`, `SIGNUP_CAP_IPV6_PER_DAY`, [account.md](./account.md),
 _creating an account_). A day of repeated full staging runs from one machine can
 reach it, and the symptom is the create-account form saying to try again tomorrow. Direct session edits, process/network fault injection,
 and Android `run-as` sandbox reads remain local, and the D1 helper refuses
