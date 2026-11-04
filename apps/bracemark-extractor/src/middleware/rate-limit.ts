@@ -1,10 +1,9 @@
 import type { Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 
-import { networkKey } from '@stxapps/shared';
-
 import type { AppEnv, Bindings, RateLimit } from '../lib/env';
 import { HttpError } from '../lib/errors';
+import { callerNetworkKey } from '../lib/network';
 
 // Rate limiting — the same shape as bracemark-api's, minus the per-user key (the
 // extractor is anonymous, so there's no session to key on; everything is per-IP).
@@ -47,19 +46,12 @@ export const RATE_LIMIT_PERIODS: Record<RateLimitTier, number> = {
   image: 10,
 };
 
-// The caller's network: an IPv4 address as is, an IPv6 address as its /64
-// (networkKey, @stxapps/shared net/ip.ts). Keying on the full IPv6 address would
-// hand anyone holding a /64 (every VPS, most home lines) 2^64 fresh buckets.
-function callerNetwork(c: Context<AppEnv>): string {
-  return networkKey(c.req.header('cf-connecting-ip') ?? 'unknown');
-}
-
 // The counter key. Per-IP + per-path: each (caller, endpoint) pair gets its own
 // bucket, so a flood of one endpoint doesn't throttle the others.
-// `cf-connecting-ip` is the real client IP set by Cloudflare's edge, folded to
-// its network (an IPv6 address to its /64) by callerNetwork above.
+// The caller is its network (an IPv6 address folded to its /64) — callerNetworkKey,
+// lib/network.ts.
 export function ipRateLimitKey(c: Context<AppEnv>): string {
-  return `${callerNetwork(c)}:${c.req.path}`;
+  return `${callerNetworkKey(c)}:${c.req.path}`;
 }
 
 // Rate-limit middleware backed by Cloudflare's native Workers Rate Limiting

@@ -779,7 +779,7 @@ keyboard's Return is not disabled with the button and a second create comes back
 each caller network creates per UTC day, against that network's cap
 (`bracemark-api/src/services/signup-cap.ts`). A network is an IPv4 address, or an
 IPv6 /64, because a /64 is what one line or one server holds
-(`networkKey`, `shared/src/net/ip.ts`; the per-second limiters key on it too).
+(`networkKeyOf`, `shared/src/net/ip.ts`; the per-second limiters key on it too).
 
 **Production observes the cap; it does not enforce it.** A signup past the cap is
 refused only where `SIGNUP_CAP_ENFORCE` is `"1"`. Anywhere else it is counted,

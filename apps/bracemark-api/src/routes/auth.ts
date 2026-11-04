@@ -35,8 +35,9 @@ import {
 
 import { verifyAuthProof } from '../lib/auth-proof';
 import type { AppEnv } from '../lib/env';
+import { callerNetworkKey } from '../lib/network';
 import { requireAuth } from '../middleware/auth';
-import { callerNetwork, rateLimit } from '../middleware/rate-limit';
+import { rateLimit } from '../middleware/rate-limit';
 import {
   changePasswordDoor,
   createAccount,
@@ -89,7 +90,7 @@ export const authRoutes = new Hono<AppEnv>()
       // The day's cap for the caller's network (services/signup-cap.ts): after the
       // proof, so a malformed request costs no counter write; before the claim, so
       // a refused one provisions nothing. Off where the env leaves it unset.
-      await claimSignupSlot(c.env, callerNetwork(c));
+      await claimSignupSlot(c.env, callerNetworkKey(c));
 
       const result = await createAccount(c.env, {
         username: proof.username,

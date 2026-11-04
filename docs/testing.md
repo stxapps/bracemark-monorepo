@@ -743,7 +743,7 @@ absent, the `/v1/fetch-image` exemption from the baseline rate-limit tier, and t
 limiter's per-IP-per-path key, which is a **published** fact rather than an
 internal (`/privacy` and `/extractor` both name `cf-connecting-ip`). The "IP" in
 that key is the caller's network: an IPv6 address counts as its /64
-(`networkKey`, `shared/src/net/ip.ts`), and both Workers' specs pin it. What the
+(`networkKeyOf`, `shared/src/net/ip.ts`), and both Workers' specs pin it. What the
 suite cannot check is the thing `wrangler.jsonc` decides — that no URL reaches a
 log.
 

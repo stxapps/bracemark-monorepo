@@ -1,6 +1,6 @@
 // IP address parsing, shared by both Workers: bracemark-extractor's SSRF guard
 // classifies the bytes of a URL's host, and both Workers' rate limiters key their
-// counters on the caller's network (networkKey below). One parser, so the two
+// counters on the caller's network (networkKeyOf below). One parser, so the two
 // can't disagree about what an address is.
 
 // Parse a canonical dotted-decimal IPv4 string into its 32-bit value, or null if it
@@ -81,7 +81,7 @@ export function ipv6ToBytes(input: string): Uint8Array | null {
 //   edge can't split one caller across two keys.
 // - Anything unparseable → unchanged. It still keys a bucket; it just isn't
 //   folded, which is the old behaviour rather than a new failure.
-export function networkKey(ip: string): string {
+export function networkKeyOf(ip: string): string {
   if (parseIpv4(ip) !== null) return ip;
 
   const bytes = ipv6ToBytes(ip.toLowerCase());
@@ -103,8 +103,8 @@ const IPV6_NETWORK_SUFFIX = '::/64';
 // here (bracemark-api services/signup-cap.ts). Not because a /64 is smaller: a
 // home, a phone or a rented server holds one, but so does a whole shared network
 // (a campus, a venue's wifi), every device on it inside the same /64. False for
-// an IPv4 address, an IPv4-mapped one (networkKey has already unwrapped it) and
+// an IPv4 address, an IPv4-mapped one (networkKeyOf has already unwrapped it) and
 // anything unparseable.
-export function isIpv6Network(key: string): boolean {
-  return key.endsWith(IPV6_NETWORK_SUFFIX);
+export function isIpv6Network(networkKey: string): boolean {
+  return networkKey.endsWith(IPV6_NETWORK_SUFFIX);
 }

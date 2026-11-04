@@ -1,4 +1,4 @@
-import { ipv6ToBytes, isIpv6Network, networkKey, parseIpv4 } from './ip';
+import { ipv6ToBytes, isIpv6Network, networkKeyOf, parseIpv4 } from './ip';
 
 describe('parseIpv4', () => {
   it('reads four octets', () => {
@@ -28,40 +28,40 @@ describe('ipv6ToBytes', () => {
   });
 });
 
-describe('networkKey', () => {
+describe('networkKeyOf', () => {
   it('keeps an IPv4 address as its own key', () => {
-    expect(networkKey('203.0.113.7')).toBe('203.0.113.7');
+    expect(networkKeyOf('203.0.113.7')).toBe('203.0.113.7');
   });
 
   // The point of the function: rotating the low 64 bits must not buy a new bucket.
   it('folds every address in an IPv6 /64 to one key', () => {
-    const a = networkKey('2001:db8:0:1::1');
+    const a = networkKeyOf('2001:db8:0:1::1');
     expect(a).toBe('2001:db8:0:1::/64');
-    expect(networkKey('2001:db8:0:1:ffff:ffff:ffff:ffff')).toBe(a);
-    expect(networkKey('2001:0DB8:0000:0001:abcd::9')).toBe(a);
+    expect(networkKeyOf('2001:db8:0:1:ffff:ffff:ffff:ffff')).toBe(a);
+    expect(networkKeyOf('2001:0DB8:0000:0001:abcd::9')).toBe(a);
   });
 
   it('keeps neighbouring /64s apart', () => {
-    expect(networkKey('2001:db8:0:2::1')).not.toBe(networkKey('2001:db8:0:1::1'));
+    expect(networkKeyOf('2001:db8:0:2::1')).not.toBe(networkKeyOf('2001:db8:0:1::1'));
   });
 
   it('reads an IPv4-mapped IPv6 address as the IPv4 inside', () => {
-    expect(networkKey('::ffff:203.0.113.7')).toBe('203.0.113.7');
-    expect(networkKey('::ffff:cb00:7107')).toBe('203.0.113.7');
+    expect(networkKeyOf('::ffff:203.0.113.7')).toBe('203.0.113.7');
+    expect(networkKeyOf('::ffff:cb00:7107')).toBe('203.0.113.7');
   });
 
   it('passes an unparseable value through unchanged', () => {
-    expect(networkKey('unknown')).toBe('unknown');
-    expect(networkKey('')).toBe('');
+    expect(networkKeyOf('unknown')).toBe('unknown');
+    expect(networkKeyOf('')).toBe('');
   });
 });
 
 describe('isIpv6Network', () => {
-  it('is true of a /64 and false of everything else networkKey returns', () => {
-    expect(isIpv6Network(networkKey('2001:db8:0:1::1'))).toBe(true);
-    expect(isIpv6Network(networkKey('::1'))).toBe(true);
-    expect(isIpv6Network(networkKey('203.0.113.7'))).toBe(false);
-    expect(isIpv6Network(networkKey('::ffff:203.0.113.7'))).toBe(false);
-    expect(isIpv6Network(networkKey('unknown'))).toBe(false);
+  it('is true of a /64 and false of everything else networkKeyOf returns', () => {
+    expect(isIpv6Network(networkKeyOf('2001:db8:0:1::1'))).toBe(true);
+    expect(isIpv6Network(networkKeyOf('::1'))).toBe(true);
+    expect(isIpv6Network(networkKeyOf('203.0.113.7'))).toBe(false);
+    expect(isIpv6Network(networkKeyOf('::ffff:203.0.113.7'))).toBe(false);
+    expect(isIpv6Network(networkKeyOf('unknown'))).toBe(false);
   });
 });

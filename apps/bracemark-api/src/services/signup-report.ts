@@ -1,4 +1,5 @@
 import { signupCountsRepo } from '../db/repositories/signup-counts';
+import { usernamesRepo } from '../db/repositories/usernames';
 import type { Bindings } from '../lib/env';
 import { signupCapEnforcedOf } from './signup-cap';
 
@@ -18,9 +19,6 @@ import { signupCapEnforcedOf } from './signup-cap';
 // what SIGNUP_ALERT_PER_DAY gets set from. Above that threshold the line is a
 // console.error instead, which is what an error-level filter or alert in Workers
 // Logs finds. With the threshold unset, it is always the log line.
-//
-// `usernames.created_at` counts every claim, tombstones included. A deleted
-// account was still created that day.
 
 const DAY_MS = 86_400_000;
 
@@ -30,12 +28,8 @@ export async function reportSignups(
   env: Bindings,
   now: number = Date.now(),
 ): Promise<SignupReport> {
-  const createdRow = await env.DIRECTORY_DB.prepare(
-    `SELECT COUNT(*) AS n FROM usernames WHERE created_at >= ?`,
-  )
-    .bind(now - DAY_MS)
-    .first<{ n: number }>();
-  const created = createdRow?.n ?? 0;
+  // Every claim, tombstones included (usernamesRepo.countCreatedSince).
+  const created = await usernamesRepo(env.DIRECTORY_DB).countCreatedSince(now - DAY_MS);
 
   // Yesterday's rows, read before the same cron run purges them (worker.ts). Each
   // row carries the cap it was counted against, so the two families' caps need

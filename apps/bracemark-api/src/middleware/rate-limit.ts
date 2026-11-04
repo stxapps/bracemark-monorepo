@@ -1,13 +1,13 @@
 import type { Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 
-import { networkKey } from '@stxapps/shared';
-
 import type { AppEnv, Bindings, RateLimit } from '../lib/env';
 import { HttpError } from '../lib/errors';
+import { callerNetworkKey } from '../lib/network';
 
 // Rate limiting — tiers, key strategies, and the middleware that uses them, all
-// in one place (the middleware is the only consumer). The actual volumes
+// in one place (the middleware is their only consumer; the caller's network they
+// key on is lib/network.ts, which the signup cap shares). The actual volumes
 // (requests / window) are set on the bindings in wrangler.jsonc — the native
 // binding only allows a 10s or 60s window, so a "1 req/sec" feel is the TIGHT
 // tier (10 req / 10s). Here we just name the tiers and pick a key strategy;
@@ -66,19 +66,12 @@ export const RATE_LIMIT_PERIODS: Record<RateLimitTier, number> = {
   blob: 10,
 };
 
-// The caller's network: an IPv4 address as is, an IPv6 address as its /64
-// (networkKey, @stxapps/shared net/ip.ts). Keying on the full IPv6 address would
-// hand anyone holding a /64 (every VPS, most home lines) 2^64 fresh buckets.
-export function callerNetwork(c: Context<AppEnv>): string {
-  return networkKey(c.req.header('cf-connecting-ip') ?? 'unknown');
-}
-
 // The counter key. Per-IP + per-path by default: each (caller, endpoint) pair
 // gets its own bucket, so a flood of one endpoint doesn't throttle the others.
-// `cf-connecting-ip` is the real client IP set by Cloudflare's edge, folded to
-// its network (an IPv6 address to its /64) by callerNetwork above.
+// The caller is its network (an IPv6 address folded to its /64) — callerNetworkKey,
+// lib/network.ts.
 export function ipRateLimitKey(c: Context<AppEnv>): string {
-  return `${callerNetwork(c)}:${c.req.path}`;
+  return `${callerNetworkKey(c)}:${c.req.path}`;
 }
 
 // Key an authenticated endpoint by user instead of IP, so a single account

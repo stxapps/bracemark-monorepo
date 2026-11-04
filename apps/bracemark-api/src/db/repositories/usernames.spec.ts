@@ -119,4 +119,19 @@ describe('usernames directory', () => {
 
     await expect(repo.findByUsername('stillactive')).resolves.toMatchObject({ deletedAt: null });
   });
+
+  // The daily report's account count (services/signup-report.ts). Claimed at a
+  // time far past every other case's, so the count sees only this case's rows.
+  it('counts the names claimed since a time, tombstones included', async () => {
+    const at = 4_000_000_000_000;
+    const now = vi.spyOn(Date, 'now');
+    now.mockReturnValue(at - 1);
+    await repo.claim({ username: 'claimedbefore', userId: 'u_l', accountDbId: '1' });
+    now.mockReturnValue(at);
+    await repo.claim({ username: 'claimedat', userId: 'u_m', accountDbId: '1' });
+    await repo.claim({ username: 'claimedthendeleted', userId: 'u_n', accountDbId: '1' });
+    await repo.tombstone('claimedthendeleted', 'u_n');
+
+    await expect(repo.countCreatedSince(at)).resolves.toBe(2);
+  });
 });

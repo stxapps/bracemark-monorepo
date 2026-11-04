@@ -98,5 +98,16 @@ export function usernamesRepo(db: D1Database) {
         .bind(Date.now(), canonicalizeUsername(username), userId)
         .run();
     },
+
+    // How many names were claimed at or after `since` (ms) — the daily report's
+    // account count (services/signup-report.ts). Every claim counts, tombstones
+    // included: a deleted account was still created that day.
+    async countCreatedSince(since: number): Promise<number> {
+      const r = await db
+        .prepare(`SELECT COUNT(*) AS n FROM usernames WHERE created_at >= ?`)
+        .bind(since)
+        .first<{ n: number }>();
+      return r?.n ?? 0;
+    },
   };
 }

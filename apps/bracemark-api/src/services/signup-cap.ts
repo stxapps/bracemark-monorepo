@@ -6,7 +6,7 @@ import { HttpError } from '../lib/errors';
 import { derivedHmacKey, hmacSecret } from '../r2/hmac-key';
 
 // A daily cap on the accounts one network may create: an IPv4 address, or an IPv6
-// /64 (callerNetwork, middleware/rate-limit.ts). It complements the route's
+// /64 (callerNetworkKey, lib/network.ts). It complements the route's
 // per-second 'tight' limiter. That one bounds bursts. This one bounds a day's
 // volume, which the native binding can't, because its window is 10 s or 60 s.
 //
@@ -86,14 +86,14 @@ export function signupCapEnforcedOf(env: Bindings | undefined): boolean {
 }
 
 // The cap this network counts against, or null when its family's cap is off.
-export function signupCapFor(env: Bindings | undefined, network: string): number | null {
+export function signupCapFor(env: Bindings | undefined, networkKey: string): number | null {
   const caps = signupCapsOf(env);
-  return isIpv6Network(network) ? caps.ipv6 : caps.ipv4;
+  return isIpv6Network(networkKey) ? caps.ipv6 : caps.ipv4;
 }
 
-async function networkHash(env: Bindings, network: string): Promise<string> {
+async function networkHashOf(env: Bindings, networkKey: string): Promise<string> {
   const key = await derivedHmacKey(hmacSecret(env), HMAC_INFO);
-  return bytesToHex(new Uint8Array(await crypto.subtle.sign('HMAC', key, utf8(network))));
+  return bytesToHex(new Uint8Array(await crypto.subtle.sign('HMAC', key, utf8(networkKey))));
 }
 
 // Count this signup against the network's day, and once the day's cap is spent,
@@ -106,15 +106,15 @@ async function networkHash(env: Bindings, network: string): Promise<string> {
 // before it, and a network past its cap stays past it either way.
 export async function claimSignupSlot(
   env: Bindings | undefined,
-  network: string,
+  networkKey: string,
   now: number = Date.now(),
 ): Promise<void> {
-  const cap = signupCapFor(env, network);
+  const cap = signupCapFor(env, networkKey);
   if (cap === null || !env) return;
 
   const day = Math.floor(now / DAY_MS);
   const count = await signupCountsRepo(env.SESSIONS_DB).increment(
-    await networkHash(env, network),
+    await networkHashOf(env, networkKey),
     day,
     cap,
   );
@@ -127,8 +127,8 @@ export async function claimSignupSlot(
   if (count === cap + 1) {
     console.warn(
       enforced
-        ? `signupCap: refused ${network} after ${cap} today`
-        : `signupCap: ${network} went past ${cap} today (observing, not refused)`,
+        ? `signupCap: refused ${networkKey} after ${cap} today`
+        : `signupCap: ${networkKey} went past ${cap} today (observing, not refused)`,
     );
   }
   if (!enforced) return;
