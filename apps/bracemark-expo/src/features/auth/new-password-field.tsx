@@ -140,7 +140,10 @@ export function NewPasswordField({
           the draw, and Regenerate made the form below jump. The ghost is two lines of
           zero-width spaces in the SAME Text, so it scales and caps with the password
           and needs no fontScale arithmetic (docs/accessibility.md, _font scaling_); in a
-          row, the box is as tall as the taller of the two, so a third line still grows it. */}
+          row, the box is as tall as the taller of the two, so a third line still grows it.
+          On Android a long password cuts mid-word rather than after a hyphen, which
+          is deliberate: docs/theme.md, _extending_, has what was tried and why each
+          way of fixing it loses something. */}
       {shown ? (
         <View
           aria-label={shownLabel}

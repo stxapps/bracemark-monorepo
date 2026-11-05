@@ -1015,6 +1015,31 @@ same role the kit's menu items have).
   until `--font-mono` got an `@variant ios` / `@variant android` value in
   `global.css` → [expo-dependencies.md](./expo-dependencies.md), _font —
   monospace_.
+- **A revealed password cuts mid-word on Android, and that is deliberate.** Web
+  (`wrap-break-word`) and iOS break a passphrase after a hyphen
+  (`…wasp-garbage-` / `ostrich`). Android's line breaker (Minikin) does not
+  offer a break after a hyphen between letters. It leaves that to hyphenation,
+  and RN turns hyphenation off, so with every `textBreakStrategy` the line fills
+  and cuts the word (`…garbage-ostr` / `ich`). Measured on the emulator, the
+  available fixes all lose something:
+  - `android_hyphenationFrequency` breaks at the existing hyphens only while the
+    whole run is 45 characters or less. Seven words often run longer, and
+    `…hospita` / `l…` came back.
+  - The same setting **inserts** a hyphen into a run without one
+    (`…blanke-` / `tumbrella`). In a password the user writes down by hand, that
+    is an extra character.
+  - A zero-width space after each hyphen makes the break, but it also lands in
+    a press-and-hold copy, and `canonicalizePassword` keeps it, so the copy is a
+    different password.
+  - Word pieces in a `flex-wrap` row wrap correctly, but then the box is no
+    longer one selectable string. That loses Android's press-and-hold copy (the
+    welcome screen has no Copy button) and the exact text the e2e flows read
+    with `copyTextFrom` and type back in.
+
+  So the boxes stay one exact, selectable string on Android and cut mid-word.
+  Every character is still in order, so nothing is lost. Don't try the first
+  three again. The fourth is a product decision, not a bug fix.
+
 - **A placeholder longer than its field wraps on Android, and no class or prop
   stops it.** A single-line field's hint mounts on one line, clipped at the
   edge, and then wraps the first time it changes or the field is typed in and
