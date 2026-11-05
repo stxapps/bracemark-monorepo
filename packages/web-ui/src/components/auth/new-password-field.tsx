@@ -5,17 +5,17 @@ import { RefreshCw } from 'lucide-react';
 
 import { type FieldMessage, NEW_PASSWORD_COPY, newPasswordMessage } from '@stxapps/react';
 import { canonicalizePassword, generatePassphrase, NEW_PASSWORD_MIN_LENGTH } from '@stxapps/shared';
+import {
+  CopySecretTextButton,
+  SECRET_TEXT_ACTION,
+  SECRET_TEXT_SLOP_Y,
+} from '@stxapps/web-ui/components/auth/copy-secret-button';
 import { PasswordInput } from '@stxapps/web-ui/components/auth/password-input';
 import {
   MESSAGE_TONE,
   PasswordStrengthMeter,
   usePasswordStrength,
 } from '@stxapps/web-ui/components/auth/password-strength';
-import {
-  CopySecretTextButton,
-  SECRET_TEXT_ACTION,
-  SECRET_TEXT_SLOP_Y,
-} from '@stxapps/web-ui/components/auth/show-once-secret';
 import { Field, FieldDescription, FieldLabel } from '@stxapps/web-ui/components/ui/field';
 import { cn } from '@stxapps/web-ui/lib/utils';
 

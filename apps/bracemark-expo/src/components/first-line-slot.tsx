@@ -7,10 +7,10 @@ import { Text } from './ui/text';
 // FIRST line of the Text beside it, in a row that is `items-start`. The settings
 // radio rows (misc-, extraction- and data-section) use it twice each: once around
 // the radio, once around the icon, so the two share a line with the label however
-// far the label wraps. The confirm-checkbox rows (auth's show-once-secret, the two
-// delete confirmations in settings) use it once, around the box, and so does
-// every notice, banner and receipt line that leads with an icon — ErrorText and
-// SettingsNotice among them, which is how most call sites reach it.
+// far the label wraps. The confirm-checkbox rows (the two delete confirmations in
+// settings) use it once, around the box, and so does every notice, banner and
+// receipt line that leads with an icon — ErrorText and SettingsNotice among them,
+// which is how most call sites reach it.
 //
 // It is the ONLY way this app puts a glyph beside wrapping text. A new row that
 // reaches for `mt-0.5` is the web twin's class arriving in a port: correct there,

@@ -8,9 +8,9 @@ import { canonicalizePassword, generatePassphrase, NEW_PASSWORD_MIN_LENGTH } fro
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
+import { CopySecretTextButton, SECRET_TEXT_ACTION, SECRET_TEXT_SLOP } from './copy-secret-button';
 import { PasswordInput } from './password-input';
 import { MESSAGE_TONE, PasswordStrengthMeter, usePasswordStrength } from './password-strength';
-import { CopySecretTextButton, SECRET_TEXT_ACTION, SECRET_TEXT_SLOP } from './show-once-secret';
 
 // CHOOSING A NEW PASSWORD: ONE REAL FIELD, ALREADY FILLED — the native port of
 // web-ui's components/auth/new-password-field.tsx, and like it the one field both

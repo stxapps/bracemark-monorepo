@@ -49,9 +49,10 @@ import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
 import { advanceTo, shownSecretKeyboardType } from '../../lib/input-keyboard';
 import { cn } from '../../lib/utils';
+import { CopySecretButton } from '../auth/copy-secret-button';
 import { NewPasswordField, useNewPassword } from '../auth/new-password-field';
 import { PasswordInput } from '../auth/password-input';
-import { CopySecretButton, ShowOnceSecret } from '../auth/show-once-secret';
+import { ShowOnceSecret } from '../auth/show-once-secret';
 import { AccountUsernameField } from './account-username-field';
 import { SettingsHeader, SettingsNotice, SettingsPane, SettingsRow } from './settings-kit';
 

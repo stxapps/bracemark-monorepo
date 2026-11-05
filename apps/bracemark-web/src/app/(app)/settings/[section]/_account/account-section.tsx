@@ -50,13 +50,14 @@ import {
   useHasRecoveryDoor,
   useRecoveryCode,
 } from '@stxapps/web-react';
+import { CopySecretButton } from '@stxapps/web-ui/components/auth/copy-secret-button';
 import { HiddenUsername } from '@stxapps/web-ui/components/auth/hidden-username';
 import {
   NewPasswordField,
   useNewPassword,
 } from '@stxapps/web-ui/components/auth/new-password-field';
 import { PasswordInput } from '@stxapps/web-ui/components/auth/password-input';
-import { CopySecretButton, ShowOnceSecret } from '@stxapps/web-ui/components/auth/show-once-secret';
+import { ShowOnceSecret } from '@stxapps/web-ui/components/auth/show-once-secret';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
 import { Input } from '@stxapps/web-ui/components/ui/input';

@@ -40,8 +40,8 @@
 //  - Copy links writes through expo-clipboard (web's navigator.clipboard), with
 //    the same transient flip to a check as the only feedback — the GLYPH, for
 //    web's reason: no label is rendered to flip (the accessible name flips to
-//    "Copied" with it). It is also the confirmation ShowOnceSecret already uses
-//    on this platform (features/auth/show-once-secret.tsx), so the app confirms
+//    "Copied" with it). It is also the confirmation CopySecretButton already uses
+//    on this platform (features/auth/copy-secret-button.tsx), so the app confirms
 //    a copy one way.
 //  - Move to opens a Dialog listing the list tree (the anchored ListCommand
 //    popover doesn't fit a phone; the picker excludes Trash like web — trashing
@@ -261,7 +261,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
       // paste is what would tell them otherwise. Deliberately no error text —
       // this bar has no error surface (a failed bulk write in `runBulk` is
       // silent the same way), and its least consequential action is not where
-      // to introduce one. ShowOnceSecret swallows the same way.
+      // to introduce one. CopySecretButton swallows the same way.
       return;
     }
     setCopied(true);

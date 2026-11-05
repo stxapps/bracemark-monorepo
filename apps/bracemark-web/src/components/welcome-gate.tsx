@@ -138,7 +138,7 @@ function RecoveryStep({ welcome, onDone }: { welcome: WelcomeCredentials; onDone
           {WELCOME_COPY.recoveryReady}
         </p>
         {/* Settings' panel, without its checkbox: the code is live already, and Copy is
-            the step (show-once-secret.tsx). */}
+            the step (copy-secret-button.tsx). */}
         <ShowOnceSecret secret={code} label={RECOVERY_CODE_COPY.secretLabel} />
         <Button type="button" className="w-full" onClick={onDone}>
           {WELCOME_COPY.continue}
