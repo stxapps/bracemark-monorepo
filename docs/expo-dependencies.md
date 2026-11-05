@@ -516,6 +516,45 @@ no splash gate, and no flash. Wiring (already done):
   empty-state heading ("No links yet", `font-medium`) must read heavier than the
   body line under it.
 
+#### font — monospace
+
+The `font-mono` utility (passwords shown in full, the recovery code and its input,
+`Text`'s `code` variant) uses the **system** monospace face on each platform, not
+a bundled one: **Menlo** on iOS and the generic **`monospace`** family on Android.
+`global.css` sets both under `@variant ios` / `@variant android`. Nothing is
+embedded or needs a native build. It's a token only, so a Metro reload carries it.
+
+- **Why a token was needed at all.** RN's `fontFamily` is **one family name**,
+  not a CSS fallback list, and Uniwind passes a token's value through verbatim.
+  With no `--font-mono` of our own, Tailwind's default stack reached the device
+  as the single string `"ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+Liberation Mono, Courier New, monospace"`. No installed family has that name,
+  so both platforms fell back to the system sans **with no warning**. Every
+  `font-mono` drew SF Pro on iOS and Roboto on Android: not monospace, and not
+  Inter either, because the class replaces `Text`'s `font-sans` rather than
+  adding to it. Any family token is the same trap, so give it **one name per
+  platform**, never a stack.
+- **Why these two names.** Menlo ships with iOS and resolves by name. SF Mono,
+  which `ui-monospace` means in a browser, is not reachable by name from RN.
+  `monospace` is in RN Android's list of generic families and maps to the
+  system's monospace typeface. Web needs neither, because a browser reads the
+  stack.
+- **How the platform split works.** Uniwind files a `:root` variable under
+  `@variant ios`/`android` in a platform-scoped set
+  (`__uniwind-platform-<platform>`, `bundler/css-processor/processor.ts`), and
+  the runtime merges the running platform's set over the base vars at startup
+  (`core/native/store.ts`, `reinit`). The `font-mono` class compiles to
+  `vars["--font-mono"]`, so it picks the platform's value. To check what a
+  family token resolves to without a device, use the probe in
+  [theme.md](./theme.md), _extending_: run Uniwind's `compileCSS` with a
+  `UniwindBundlerConfig({ cssEntryFile: './global.css' }, 'ios')` from
+  `apps/bracemark-expo`, evaluate the module, merge the platform set, and read
+  `vars['--font-mono'](vars)`.
+- **The tell on a device** is the letterforms. Menlo's `l` and `i` have slab
+  serifs and every glyph is the same width, next to the Inter in the field above
+  it. Settings → Account → Change password → the eye on the new password shows
+  it (`change-password-new-shown`).
+
 #### runtime polyfills
 
 `@stxapps/shared`'s byte encodings (`crypto/encoding.ts`) call the standard

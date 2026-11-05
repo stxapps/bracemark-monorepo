@@ -53,6 +53,29 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+/* The `font-mono` family, one per platform, because RN's `fontFamily` is ONE
+   family name and not a CSS fallback list. Left alone, Tailwind's default
+   `--font-mono` stack (`ui-monospace, SFMono-Regular, Menlo, …`) reached the
+   device as that whole string, matched no installed family, and drew the system
+   sans with no warning: every `font-mono` in the app was SF Pro on iOS and Roboto
+   on Android, not monospace and not Inter. Menlo ships with iOS and resolves by
+   name (SF Mono, which `ui-monospace` means on web, does not); `monospace` is
+   the generic family RN Android maps to the system monospace face. Uniwind files
+   these under its platform-scoped vars and merges the running platform's set at
+   startup; web keeps Tailwind's stack, which a browser can read.
+   docs/expo-dependencies.md, _font — monospace_. Any family token is the same
+   trap: one name per platform, never a stack. */
+@layer theme {
+  :root {
+    @variant ios {
+      --font-mono: 'Menlo';
+    }
+    @variant android {
+      --font-mono: 'monospace';
+    }
+  }
+}
+
 /* Per-theme color values. Declaring `--color-background` here generates the
    `bg-background` / `text-background` / `border-background` utilities. */
 @layer theme {

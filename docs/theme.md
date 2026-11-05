@@ -1008,6 +1008,13 @@ same role the kit's menu items have).
   `.placeholder\:…::placeholder { color }`, which the processor then reads as a
   plain `color` on the class — an answer that is wrong in the other direction,
   and not what Metro sees.
+- **A font-family token needs one name per platform, never a CSS stack.** RN's
+  `fontFamily` is a single name. Uniwind passes a stack through as one string
+  that matches no family, and the text draws in the system sans without a
+  warning. That is how every `font-mono` in the expo app drew SF Pro and Roboto
+  until `--font-mono` got an `@variant ios` / `@variant android` value in
+  `global.css` → [expo-dependencies.md](./expo-dependencies.md), _font —
+  monospace_.
 - **A placeholder longer than its field wraps on Android, and no class or prop
   stops it.** A single-line field's hint mounts on one line, clipped at the
   edge, and then wraps the first time it changes or the field is typed in and
