@@ -74,14 +74,14 @@ export function SignInForm({ lockedUsername }: { lockedUsername?: string } = {})
   return mode === 'password' ? (
     <PasswordSignIn
       username={username}
-      locked={!!lockedUsername}
+      usernameLocked={!!lockedUsername}
       swapped={carriedUsername !== undefined}
       onUseRecovery={switchTo('recovery')}
     />
   ) : (
     <RecoverySignIn
       username={username}
-      locked={!!lockedUsername}
+      usernameLocked={!!lockedUsername}
       onUsePassword={switchTo('password')}
     />
   );
@@ -91,12 +91,12 @@ export function SignInForm({ lockedUsername }: { lockedUsername?: string } = {})
 // switch. A door that swapped in focuses the first field still empty.
 function PasswordSignIn({
   username,
-  locked,
+  usernameLocked,
   swapped,
   onUseRecovery,
 }: {
   username: string;
-  locked: boolean;
+  usernameLocked: boolean;
   swapped: boolean;
   onUseRecovery: (username: string) => void;
 }) {
@@ -172,7 +172,7 @@ function PasswordSignIn({
               aria-invalid={!!errors.username}
               autoComplete="username"
               autoFocus={swapped && !username}
-              editable={!locked}
+              editable={!usernameLocked}
               {...advanceTo(passwordRef)}
               className={cn(errors.username && 'border-destructive')}
               value={field.value}
@@ -243,11 +243,11 @@ function PasswordSignIn({
 // docs/account.md, _when a submit is allowed to be `disabled`_.
 function RecoverySignIn({
   username,
-  locked,
+  usernameLocked,
   onUsePassword,
 }: {
   username: string;
-  locked: boolean;
+  usernameLocked: boolean;
   onUsePassword: (username: string) => void;
 }) {
   const {
@@ -301,7 +301,7 @@ function RecoverySignIn({
               aria-invalid={!!errors.username}
               autoComplete="username"
               autoFocus={!username}
-              editable={!locked}
+              editable={!usernameLocked}
               {...advanceTo(codeRef)}
               className={cn(errors.username && 'border-destructive')}
               value={field.value}

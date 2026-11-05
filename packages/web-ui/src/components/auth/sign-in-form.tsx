@@ -91,14 +91,14 @@ export function SignInForm({
     <PasswordSignIn
       density={density}
       username={username}
-      locked={!!lockedUsername}
+      usernameLocked={!!lockedUsername}
       onUseRecovery={switchTo('recovery')}
     />
   ) : (
     <RecoverySignIn
       density={density}
       username={username}
-      locked={!!lockedUsername}
+      usernameLocked={!!lockedUsername}
       onUsePassword={switchTo('password')}
     />
   );
@@ -120,12 +120,12 @@ function modeSwitchClass(density: 'standard' | 'dense') {
 function PasswordSignIn({
   density,
   username,
-  locked,
+  usernameLocked,
   onUseRecovery,
 }: {
   density: 'standard' | 'dense';
   username: string;
-  locked: boolean;
+  usernameLocked: boolean;
   onUseRecovery: (username: string) => void;
 }) {
   const {
@@ -169,7 +169,7 @@ function PasswordSignIn({
             type="text"
             autoComplete="username"
             autoFocus={!username}
-            readOnly={locked}
+            readOnly={usernameLocked}
             aria-invalid={!!errors.username}
             {...register('username', { onChange: clearRootError })}
           />
@@ -229,12 +229,12 @@ function PasswordSignIn({
 function RecoverySignIn({
   density,
   username,
-  locked,
+  usernameLocked,
   onUsePassword,
 }: {
   density: 'standard' | 'dense';
   username: string;
-  locked: boolean;
+  usernameLocked: boolean;
   onUsePassword: (username: string) => void;
 }) {
   const {
@@ -279,7 +279,7 @@ function RecoverySignIn({
             type="text"
             autoComplete="username"
             autoFocus={!username}
-            readOnly={locked}
+            readOnly={usernameLocked}
             aria-invalid={!!errors.username}
             {...register('username', { onChange: clearRootError })}
           />
