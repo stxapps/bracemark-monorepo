@@ -17,7 +17,7 @@ import {
   mapOpenError,
   openerForProof,
   UnconfirmedSaveError,
-} from './use-change-password';
+} from '../lib/door-proof';
 import { InvalidCredentialsError } from './use-sign-in';
 
 // The expo sibling of web-react's hooks/use-recovery-code.ts, verbatim in

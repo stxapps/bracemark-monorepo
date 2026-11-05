@@ -1,10 +1,10 @@
 import { WrongPasswordError, WrongRecoveryCodeError } from '@stxapps/expo-crypto';
 
-import { mapOpenError } from './use-change-password';
-import { InvalidCredentialsError } from './use-sign-in';
-import { InvalidRecoveryCodeError } from './use-sign-in-with-recovery';
+import { InvalidCredentialsError } from '../hooks/use-sign-in';
+import { InvalidRecoveryCodeError } from '../hooks/use-sign-in-with-recovery';
+import { mapOpenError } from './door-proof';
 
-// THE REAL CLASSES, which use-change-password.spec.tsx cannot use: it mocks
+// THE REAL CLASSES, which hooks/use-change-password.spec.tsx cannot use: it mocks
 // @stxapps/expo-crypto whole, and its stand-ins carried the `name` the real classes
 // lacked. `mapOpenError` matches on `name`, and for as long as the crypto package's
 // errors inherited Error's "Error", a wrong current password in Settings and a
@@ -14,15 +14,14 @@ import { InvalidRecoveryCodeError } from './use-sign-in-with-recovery';
 //
 // The package's native crypto is stubbed: only the two error classes are wanted, and
 // react-native-quick-crypto throws at import without its TurboModule.
-// The hook's own imports reach expo-sqlite and the session store, which need a native
-// runtime too; the form-facing errors are stand-ins, as in use-change-password.spec.tsx.
+// The sign-in hooks that define the form-facing errors reach expo-sqlite and the
+// session store, which need a native runtime too; those errors are stand-ins, as in
+// hooks/use-change-password.spec.tsx.
 jest.mock('react-native-quick-crypto', () => ({}));
-jest.mock('@stxapps/react', () => ({}));
-jest.mock('./use-sign-in', () => ({ InvalidCredentialsError: class extends Error {} }));
-jest.mock('./use-sign-in-with-recovery', () => ({
+jest.mock('../hooks/use-sign-in', () => ({ InvalidCredentialsError: class extends Error {} }));
+jest.mock('../hooks/use-sign-in-with-recovery', () => ({
   InvalidRecoveryCodeError: class extends Error {},
 }));
-jest.mock('../contexts/auth-provider', () => ({}));
 describe('mapOpenError', () => {
   it('reads a wrong password as the form’s credential miss', () => {
     expect(() => mapOpenError(new WrongPasswordError('Invalid password'))).toThrow(

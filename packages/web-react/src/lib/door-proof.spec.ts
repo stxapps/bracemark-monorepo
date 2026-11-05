@@ -1,10 +1,10 @@
 import { WrongPasswordError, WrongRecoveryCodeError } from '@stxapps/web-crypto';
 
-import { mapOpenError } from './use-change-password';
-import { InvalidCredentialsError } from './use-sign-in';
-import { InvalidRecoveryCodeError } from './use-sign-in-with-recovery';
+import { InvalidCredentialsError } from '../hooks/use-sign-in';
+import { InvalidRecoveryCodeError } from '../hooks/use-sign-in-with-recovery';
+import { mapOpenError } from './door-proof';
 
-// THE REAL CLASSES, which use-change-password.spec.tsx cannot use: it mocks
+// THE REAL CLASSES, which hooks/use-change-password.spec.tsx cannot use: it mocks
 // @stxapps/web-crypto whole, and its stand-ins carried the `name` the real classes
 // lacked. `mapOpenError` matches on `name`, and for as long as the crypto package's
 // errors inherited Error's "Error", a wrong current password in Settings and a

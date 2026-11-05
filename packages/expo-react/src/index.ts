@@ -58,6 +58,7 @@ export * from './hooks/use-tag-mutations';
 export * from './hooks/use-tags';
 export * from './lib/auth-api-client';
 export * from './lib/device-extraction';
+export { type DoorProofInput, UnconfirmedSaveError } from './lib/door-proof';
 export * from './lib/image';
 export * from './lib/query-managers';
 export * from './lib/stall-probe';

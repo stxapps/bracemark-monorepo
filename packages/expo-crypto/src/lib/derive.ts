@@ -85,7 +85,7 @@ export type DoorOpener =
 // contract as web-crypto's WrongPasswordError.
 export class WrongPasswordError extends Error {
   // Named explicitly: callers across a package boundary match on `name`
-  // (use-change-password.ts, `mapOpenError`), and a subclass inherits
+  // (lib/door-proof.ts, `mapOpenError`), and a subclass inherits
   // Error's "Error" unless it says otherwise. Without this every wrong
   // password and stale recovery code in Settings read as "Could not change
   // your password". A literal, so minification can't rename it.

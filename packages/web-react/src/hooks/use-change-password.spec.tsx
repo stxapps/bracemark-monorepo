@@ -19,7 +19,8 @@ import {
   readPasswordDoorEndpoint,
 } from '@stxapps/shared';
 
-import { UnconfirmedSaveError, useChangePassword } from './use-change-password';
+import { UnconfirmedSaveError } from '../lib/door-proof';
+import { useChangePassword } from './use-change-password';
 import { useRecoveryCode } from './use-recovery-code';
 
 let mockDoorFailure: Error | undefined;

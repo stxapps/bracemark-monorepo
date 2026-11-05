@@ -19,7 +19,7 @@ import {
   mapOpenError,
   openerForProof,
   UnconfirmedSaveError,
-} from './use-change-password';
+} from '../lib/door-proof';
 import { InvalidCredentialsError } from './use-sign-in';
 
 // Generate or regenerate the recovery door (Settings → Account → Recovery code).
