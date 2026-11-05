@@ -1,8 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import type { FieldMessage } from '@stxapps/react';
-import { PASSWORD_MIN_GUESSES_LOG10 } from '@stxapps/shared';
+import { type FieldMessage, STRENGTH_LABELS, strengthDisplayScore } from '@stxapps/react';
 
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
@@ -35,12 +34,9 @@ import { cn } from '../../lib/utils';
 // is the one thing this file must not do. The iOS share extension is unaffected: it
 // is a separate Metro entry (index.share.js) that never reaches the auth surfaces.
 
-// Display bands over the same guess estimate the gate uses — one per meter segment,
-// so `displayScore` (0–3) is both the band index and the last segment lit. The top
-// band IS the gate (PASSWORD_MIN_GUESSES_LOG10), so a full green meter and a passing
-// entropy gate are the same condition by construction rather than by clamping.
-const DISPLAY_BANDS = [10, 14, PASSWORD_MIN_GUESSES_LOG10];
-const TOP_BAND = DISPLAY_BANDS.length; // displayScore 3 = "Strong" = passes the gate
+// The display bands, their labels and the banding step are SHARED with web, in
+// `@stxapps/react` (lib/password-strength-bands.ts): the same estimate must light the
+// same meter on both platforms.
 
 type ScoreFn = (password: string, userInputs: string[]) => number;
 
@@ -119,10 +115,7 @@ export function usePasswordStrength(
       return { guessesLog10: null, displayScore: null, ready: scoreFn !== null };
     }
     const guessesLog10 = scoreFn(password, inputsKey ? inputsKey.split(' ').filter(Boolean) : []);
-    // Band the estimate, then hold it one under the top while the length floor blocks
-    // submit — the entropy floor needs no such step, since the top band IS that floor.
-    const band = DISPLAY_BANDS.filter((b) => guessesLog10 >= b).length;
-    const displayScore = password.length < minLength ? Math.min(band, TOP_BAND - 1) : band;
+    const displayScore = strengthDisplayScore(guessesLog10, password.length, minLength);
     return { guessesLog10, displayScore, ready: true };
   }, [scoreFn, password, inputsKey, minLength]);
 }
@@ -151,14 +144,11 @@ export const MESSAGE_TONE: Record<FieldMessage['tone'], string> = {
   muted: 'text-muted-foreground',
 };
 
-// One label per band, so a full meter reads "Strong" exactly when the gate passes.
-const LABELS = ['Very weak', 'Weak', 'Fair', 'Strong'] as const;
-
 // The label the meter lays out invisibly to size its label slot (the strut note on
 // PasswordStrengthMeter). Widest by ADVANCE, not by character count, though here the
 // two agree by a wide margin — 60 at 1× against 38 for "Strong". Rewording a label
 // means re-asking which one this is; a narrower strut wraps the wider label.
-const WIDEST_LABEL: (typeof LABELS)[number] = 'Very weak';
+const WIDEST_LABEL: (typeof STRENGTH_LABELS)[number] = 'Very weak';
 
 // Bar fill and label share ONE tone per band — see the web twin for why the top band
 // is green rather than `bg-primary` (`--primary` is a chroma-0 neutral, so a passing
@@ -173,10 +163,13 @@ const TONES = [
   { bar: 'bg-destructive', text: 'text-destructive' },
   { bar: 'bg-amber-500', text: AMBER },
   { bar: 'bg-emerald-500', text: EMERALD },
-] as const;
+  // One tone per label, held by the type: a band added in `@stxapps/react` without a
+  // tone here fails typecheck rather than rendering an unpainted top segment.
+] as const satisfies { length: typeof STRENGTH_LABELS.length };
 
-// A four-segment meter with a text label. Purely presentational — it renders the
-// hook's `displayScore` and knows nothing about the policy behind it.
+// A meter with one segment per STRENGTH_LABELS entry (four today) and a text label.
+// Purely presentational — it renders the hook's `displayScore` and knows nothing about
+// the policy behind it.
 //
 // A null score (empty password, or the estimator still loading) renders the EMPTY
 // TRACK, not nothing, so the meter doesn't shove the message and helper text below it
@@ -219,9 +212,9 @@ export function PasswordStrengthMeter({ displayScore }: { displayScore: number |
   return (
     <View className="mt-1 flex-row items-center gap-2" aria-live="polite">
       <View className="flex-1 flex-row gap-1">
-        {[0, 1, 2, 3].map((i) => (
+        {STRENGTH_LABELS.map((label, i) => (
           <View
-            key={i}
+            key={label}
             className={cn('h-1.5 flex-1 rounded-full', i < filled ? tone?.bar : 'bg-border')}
           />
         ))}
@@ -231,7 +224,7 @@ export function PasswordStrengthMeter({ displayScore }: { displayScore: number |
           <Text className="text-xs opacity-0">{WIDEST_LABEL}</Text>
         </View>
         <Text className={cn('absolute inset-0 text-right text-xs', tone?.text)}>
-          {displayScore === null ? '' : LABELS[displayScore]}
+          {displayScore === null ? '' : STRENGTH_LABELS[displayScore]}
         </Text>
       </View>
     </View>

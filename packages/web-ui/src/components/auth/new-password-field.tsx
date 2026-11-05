@@ -3,7 +3,12 @@
 import * as React from 'react';
 import { RefreshCw } from 'lucide-react';
 
-import { type FieldMessage, NEW_PASSWORD_COPY, newPasswordMessage } from '@stxapps/react';
+import {
+  type FieldMessage,
+  NEW_PASSWORD_COPY,
+  newPasswordMessage,
+  STRONGEST_DISPLAY_SCORE,
+} from '@stxapps/react';
 import { canonicalizePassword, generatePassphrase, NEW_PASSWORD_MIN_LENGTH } from '@stxapps/shared';
 import {
   CopySecretTextButton,
@@ -97,14 +102,11 @@ export function useNewPassword({
     setPassword,
     regenerate,
     generated,
-    displayScore: generated ? STRONGEST : displayScore,
+    displayScore: generated ? STRONGEST_DISPLAY_SCORE : displayScore,
     message,
     ok: message.tone === 'ok',
   };
 }
-
-// The meter's top band ("Strong", password-strength.tsx).
-const STRONGEST = 3;
 
 // ⚠ iOS SAFARI OFFERS AGAIN IF THE FOCUS STAYS. Taking its strong password on a field
 // that already held a value brought "Use Strong Password?" straight back up, over the

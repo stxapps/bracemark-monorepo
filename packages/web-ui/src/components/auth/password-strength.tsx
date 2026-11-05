@@ -2,8 +2,7 @@
 
 import * as React from 'react';
 
-import type { FieldMessage } from '@stxapps/react';
-import { PASSWORD_MIN_GUESSES_LOG10 } from '@stxapps/shared';
+import { type FieldMessage, STRENGTH_LABELS, strengthDisplayScore } from '@stxapps/react';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 // The create-account entropy gate (docs/account.md). Callers gate on the returned
@@ -16,8 +15,9 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // ("guesses >= 1e10" ≈ 33 bits) — so score 4 spans `Summer2026Bracemark!` (~35 bits)
 // through a 7-word passphrase (~121 bits). Anything a caller could gate on it is
 // wrong, so it doesn't leave this file; `displayScore` below is ours, derived from
-// the same floors as the gate. See the constant's comment in `shared`
-// `auth/credentials.ts`.
+// the same floors as the gate, by the bands in `@stxapps/react`
+// (lib/password-strength-bands.ts), shared with native. See the constant's comment in
+// `shared` `auth/credentials.ts`.
 //
 // zxcvbn is heavy (~1.7 MB of raw dictionary JSON), so it's DYNAMICALLY imported
 // on first use — it never lands in the initial auth-route bundle. Until it loads,
@@ -43,13 +43,6 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // dead weight in the chunk. Native pays for this differently — Metro has no code
 // splitting, so there the packs sit in the app bundle either way; the note on the
 // twin (bracemark-expo/src/features/auth/password-strength.tsx) covers it.
-
-// Display bands over the same guess estimate the gate uses — one per meter segment,
-// so `displayScore` (0–3) is both the band index and the last segment lit. The top
-// band IS the gate (PASSWORD_MIN_GUESSES_LOG10), so a full green meter and a passing
-// entropy gate are the same condition by construction rather than by clamping.
-const DISPLAY_BANDS = [10, 14, PASSWORD_MIN_GUESSES_LOG10];
-const TOP_BAND = DISPLAY_BANDS.length; // displayScore 3 = "Strong" = passes the gate
 
 type ScoreFn = (password: string, userInputs: string[]) => number;
 
@@ -86,7 +79,7 @@ export async function loadPasswordScorer(): Promise<ScoreFn> {
 // gate enforces, so it can never read "Strong" while submit is blocked ("green meter
 // but disabled button"). Below `minLength` it's held one band under the top; zxcvbn
 // can't be told either floor — it reports estimated guess counts and buckets them —
-// so we bucket them ourselves here.
+// so we bucket them ourselves (`strengthDisplayScore`, shared with native).
 //
 // Pass the CANONICAL password so both the length and the estimate match what
 // actually derives the KEK.
@@ -169,10 +162,7 @@ export function usePasswordStrength(
       return { guessesLog10: null, displayScore: null, ready: scoreFn !== null, failed };
     }
     const guessesLog10 = scoreFn(password, inputsKey ? inputsKey.split(' ').filter(Boolean) : []);
-    // Band the estimate, then hold it one under the top while the length floor blocks
-    // submit — the entropy floor needs no such step, since the top band IS that floor.
-    const band = DISPLAY_BANDS.filter((b) => guessesLog10 >= b).length;
-    const displayScore = password.length < minLength ? Math.min(band, TOP_BAND - 1) : band;
+    const displayScore = strengthDisplayScore(guessesLog10, password.length, minLength);
     return { guessesLog10, displayScore, ready: true, failed: false };
   }, [scoreFn, password, inputsKey, minLength, failed]);
 }
@@ -204,9 +194,6 @@ export const MESSAGE_TONE: Record<FieldMessage['tone'], string> = {
   muted: '',
 };
 
-// One label per band, so a full meter reads "Strong" exactly when the gate passes.
-const LABELS = ['Very weak', 'Weak', 'Fair', 'Strong'] as const;
-
 // Bar fill and label share ONE tone per band, so the two halves of the meter can't
 // disagree. The top band is GREEN, not `bg-primary`: `--primary` is a neutral
 // (oklch(0.205 0 0) light / oklch(0.922 0 0) dark — chroma 0), so a passing meter
@@ -223,10 +210,13 @@ const TONES = [
   { bar: 'bg-destructive', text: 'text-destructive' },
   { bar: 'bg-amber-500', text: AMBER },
   { bar: 'bg-emerald-500', text: EMERALD },
-] as const;
+  // One tone per label, held by the type: a band added in `@stxapps/react` without a
+  // tone here fails typecheck rather than rendering an unpainted top segment.
+] as const satisfies { length: typeof STRENGTH_LABELS.length };
 
-// A four-segment meter with a text label. Purely presentational — it renders the
-// hook's `displayScore` and knows nothing about the policy behind it.
+// A meter with one segment per STRENGTH_LABELS entry (four today) and a text label.
+// Purely presentational — it renders the hook's `displayScore` and knows nothing about
+// the policy behind it.
 //
 // A null score (empty password, or the estimator still loading) renders the EMPTY
 // TRACK, not nothing: the meter is a fixed part of the typed-password field, so
@@ -260,15 +250,15 @@ export function PasswordStrengthMeter({ displayScore }: { displayScore: number |
   return (
     <div className="mt-1 flex items-center gap-2" aria-live="polite">
       <div className="flex flex-1 gap-1">
-        {[0, 1, 2, 3].map((i) => (
+        {STRENGTH_LABELS.map((label, i) => (
           <span
-            key={i}
+            key={label}
             className={cn('h-1.5 flex-1 rounded-full', i < filled ? tone?.bar : 'bg-border')}
           />
         ))}
       </div>
       <span className={cn('min-h-4 w-16 shrink-0 text-right text-xs', tone?.text)}>
-        {displayScore === null ? '' : LABELS[displayScore]}
+        {displayScore === null ? '' : STRENGTH_LABELS[displayScore]}
       </span>
     </div>
   );

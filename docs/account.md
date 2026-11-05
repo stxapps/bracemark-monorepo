@@ -454,7 +454,10 @@ Rough entropy targets, for calibration:
 > t=3) is hours on a single GPU. `guessesLog10` is uncapped and is the real signal.
 > The meter still displays the score, but `usePasswordStrength` clamps it to
 > sub-passing whenever either floor blocks submit, so meter and gate stay one signal
-> (no "green meter, disabled button").
+> (no "green meter, disabled button"). The bands, their labels and that clamp are one
+> copy for both platforms, in `@stxapps/react` (`lib/password-strength-bands.ts`):
+> the top band is the gate, and `STRONGEST_DISPLAY_SCORE` is derived from the band
+> count, which is what the generated words show without being scored.
 >
 > **Which dictionaries the estimate is scored against is part of the gate.** zxcvbn
 > models anything it fails to match as 10^length, so with the 20-char floor above, a

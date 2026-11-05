@@ -2,7 +2,12 @@ import * as React from 'react';
 import { Pressable, type TextInput, View } from 'react-native';
 import { RefreshCw } from 'lucide-react-native';
 
-import { type FieldMessage, NEW_PASSWORD_COPY, newPasswordMessage } from '@stxapps/react';
+import {
+  type FieldMessage,
+  NEW_PASSWORD_COPY,
+  newPasswordMessage,
+  STRONGEST_DISPLAY_SCORE,
+} from '@stxapps/react';
 import { canonicalizePassword, generatePassphrase, NEW_PASSWORD_MIN_LENGTH } from '@stxapps/shared';
 
 import { Icon } from '../../components/ui/icon';
@@ -37,9 +42,6 @@ export type NewPasswordControl = {
   message: FieldMessage;
   ok: boolean;
 };
-
-// The meter's top band ("Strong", password-strength.tsx).
-const STRONGEST = 3;
 
 // `currentPassword` is change password's proof field, when the proof is a password: a
 // new password equal to it is refused by the ladder (field-messages.ts).
@@ -78,7 +80,7 @@ export function useNewPassword({
     setPassword,
     regenerate,
     generated,
-    displayScore: generated ? STRONGEST : displayScore,
+    displayScore: generated ? STRONGEST_DISPLAY_SCORE : displayScore,
     message,
     ok: message.tone === 'ok',
   };

@@ -12,6 +12,7 @@ export * from './lib/field-messages';
 export * from './lib/lock-copy';
 export * from './lib/misc-settings-copy';
 export * from './lib/new-password-copy';
+export * from './lib/password-strength-bands';
 export * from './lib/paywall-copy';
 export * from './lib/recovery-code-copy';
 export * from './lib/session-copy';
