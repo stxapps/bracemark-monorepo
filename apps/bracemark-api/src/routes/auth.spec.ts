@@ -837,6 +837,9 @@ describe('auth routes', () => {
 
       // Moved aside, not dropped: the shard outlives this test.
       await env.ACCOUNTS_DB_1.exec('ALTER TABLE account_keys RENAME TO account_keys_aside');
+      // The forced door-write failure reaches the app's onError, which logs it.
+      // Spying keeps the suite quiet and pins that the 500 is that failure.
+      const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       let res;
       try {
         res = await app.request(
@@ -844,7 +847,13 @@ describe('auth routes', () => {
           { ...req, headers: { ...req.headers, ...acct.auth } },
           env,
         );
+        expect(error).toHaveBeenCalledWith(
+          'Unhandled error:',
+          expect.stringContaining('no such table: account_keys'),
+          expect.any(Error),
+        );
       } finally {
+        error.mockRestore();
         await env.ACCOUNTS_DB_1.exec('ALTER TABLE account_keys_aside RENAME TO account_keys');
       }
 
