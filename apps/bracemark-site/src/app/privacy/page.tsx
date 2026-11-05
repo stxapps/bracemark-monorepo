@@ -447,8 +447,8 @@ export default function Page() {
           periods rather than any we set. We read it to find a fault or an attack, and their
           dashboards compile totals from it — visits, pages, the sites a visit came from — which we
           read like the totals under <em>How we use what we collect</em>. We do not join it to your
-          account. Apart from short-lived counters that apply our rate limits and watch for abuse, we
-          keep no separate copy of our own.
+          account. Apart from short-lived counters that apply our rate limits and watch for abuse,
+          we keep no separate copy of our own.
         </p>
         <p>
           Two of the choices that decide what reaches those logs are ours rather than theirs, and we

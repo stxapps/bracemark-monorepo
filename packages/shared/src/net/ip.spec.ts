@@ -17,8 +17,10 @@ describe('parseIpv4', () => {
 
 describe('ipv6ToBytes', () => {
   it('expands :: compression and an embedded IPv4', () => {
-    expect(Array.from(ipv6ToBytes('::1')!)).toEqual([...Array<number>(15).fill(0), 1]);
-    expect(Array.from(ipv6ToBytes('::ffff:1.2.3.4')!.slice(10))).toEqual([0xff, 0xff, 1, 2, 3, 4]);
+    expect(Array.from(ipv6ToBytes('::1') ?? [])).toEqual([...Array<number>(15).fill(0), 1]);
+    expect(Array.from((ipv6ToBytes('::ffff:1.2.3.4') ?? []).slice(10))).toEqual([
+      0xff, 0xff, 1, 2, 3, 4,
+    ]);
   });
 
   it('refuses malformed literals', () => {
