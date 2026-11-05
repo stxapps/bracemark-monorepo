@@ -95,7 +95,7 @@ function WelcomeScreen({
   );
 }
 
-function Done({ children }: { children: string }) {
+function DoneLine({ children }: { children: string }) {
   return (
     <View className="flex-row items-start gap-2">
       <FirstLineSlot textClassName="text-sm">
@@ -134,7 +134,7 @@ function RecoveryStep({ welcome, onDone }: { welcome: WelcomeCredentials; onDone
   if (code) {
     return (
       <View className="gap-4">
-        <Done>{WELCOME_COPY.recoveryReady}</Done>
+        <DoneLine>{WELCOME_COPY.recoveryReady}</DoneLine>
         <ShowOnceSecret
           testID="welcome-recovery-code"
           secret={code}
@@ -188,7 +188,7 @@ function CheckStep({ welcome, onDone }: { welcome: WelcomeCredentials; onDone: (
     return (
       <View className="gap-4">
         <View role="status">
-          <Done>{WELCOME_COPY.passed}</Done>
+          <DoneLine>{WELCOME_COPY.passed}</DoneLine>
         </View>
         <Button testID="welcome-check-continue" onPress={onDone}>
           <Text>{WELCOME_COPY.continue}</Text>
