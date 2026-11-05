@@ -15,8 +15,10 @@ import { useSyncExternalStore } from 'react';
 // never written to storage, gone on reload, cleared when the welcome finishes and on
 // sign-out (both auth providers' `endSession`). A reload therefore skips the welcome;
 // Settings → Account's "no recovery code" nudge still covers the code. Module state
-// rather than context because the create mutation's `onSuccess` must set it BEFORE
-// the session flips the app in, from a hook outside any provider it could reach.
+// rather than context: the writers are the create mutation's `onSuccess` (which must
+// set it BEFORE the session flips the app in) and AuthProvider's own teardown, so a
+// provider would have to sit above AuthProvider in both app roots and every spec
+// harness, for no gain — there is nothing to inject.
 
 export interface WelcomeCredentials {
   // Canonical. The gate shows only for the account it was begun for.
