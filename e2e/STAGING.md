@@ -478,6 +478,22 @@ Runner checks passed 6/6, browser and header-comparison checks 6/6, registry
 validation passed for 161 cases, and scoped lint/typecheck passed. Two local
 smoke cases passed with the guard in place, under no CSP.
 
+## Measured production headers — 2026-11-06
+
+`npx nx check:headers @stxapps/e2e -- production`, with both production hosts
+serving `db4c230` (`web/20261101-113358`, `site/20261101-113550`, clean). This
+time it ran against a real build, not CloudFront's 403: the page answered 200 and
+the missing path 404 on each host, all four carried the designed headers, and
+Chrome refused the unapproved script and the unapproved connection on both
+origins.
+
+That is the half of the first-deploy check a script can do. It shows the policy
+is the designed one and is enforced; it does not show the build works under it.
+The by-hand pass followed the same day: a Paddle checkout, a server
+extraction, the PWA installed and removed, and the bookmark converter, whose
+console (Firefox) held no CSP message. Neither did the app's, signed in, with
+images and favicons loading and a link editor open.
+
 ## Sync measurement
 
 ```sh

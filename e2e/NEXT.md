@@ -48,9 +48,11 @@ site's refusals and its pages/converter case, the service worker/manifest case,
 and `IAP-WEB-001` under the deployed policy. The first enforced run had two
 failures from the new violation guard alone: the staging marketing site was
 serving an old build whose zod chunk tripped an `eval` violation; redeploying
-it cleared both. Open: run `check:headers -- production` and a manual pass on
-production's first deploy; run the two server-extraction journeys against
-staging — they are admitted, but have not run there until the D1-only token
+it cleared both. `check:headers -- production` passed against the deployed
+production build on 2026-11-06
+([STAGING.md](./STAGING.md#measured-production-headers--2026-11-06)), and the
+manual pass followed the same day. Open: run the two server-extraction journeys
+against staging — they are admitted, but have not run there until the D1-only token
 exists ([STAGING.md](./STAGING.md#the-two-cases-that-grant-a-plan)). Details:
 [STAGING.md](./STAGING.md#measured-csp-enforcement--2026-10-09).
 
