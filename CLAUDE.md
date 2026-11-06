@@ -111,6 +111,7 @@ that reading comes _before_ the edit; nothing downstream will tell you.
 | **turning on any CloudFront/S3 request log** — /privacy says we keep no copy   | `hosting.md` ⚠                  |
 | leaving an origin — cross-origin nav vs. the Next router                       | `hosting.md`                    |
 | **the public repo, the AGPL licence, what we claim about it**                  | `brand-assets.md` ⚠             |
+| **reproducible builds** — `BUILD_ID`, comparing a rebuild with what is served  | `reproducible-builds.md` ⚠      |
 | **the mark** — the icon shape, its two components, the icon PNGs               | `brand-assets.md`               |
 | **user-facing wording** — the voice, "bookmark" vs "link", the lines, a claim  | `brand-assets.md` ⚠             |
 | the marketing site — its pages, its apex, why it's in this repo                | `architecture.md`, `hosting.md` |

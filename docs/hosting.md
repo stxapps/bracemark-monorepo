@@ -1324,7 +1324,9 @@ remove the previous copy a moment before it is replaced.
 It is the **operator's record, not a claim**. A self-reported sha proves nothing
 about the bytes served beside it, so it does not move the boundary in
 [brand-assets.md](./brand-assets.md), _the source — what we may claim_: still
-"see for yourself what we do", never "verify what you are running".
+"see for yourself what we do", never "verify what you are running". What would
+move it is a rebuild that matches the served bytes:
+[reproducible-builds.md](./reproducible-builds.md).
 
 **Rolling back.**
 

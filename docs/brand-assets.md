@@ -916,7 +916,8 @@ and no signed release, so nothing ties a served asset back to a commit. So:
 _"see for yourself what we do"_, never _"verify what you are running"_. Every
 placement states the limit rather than leaving a reader to discover it. If
 reproducible builds ever ship, this paragraph is what changes, and the surfaces
-below move with it.
+below move with it. What they would and would not prove, per platform, and what
+the new boundary may say: [reproducible-builds.md](./reproducible-builds.md).
 
 **A network inspector is a third thing, and it sits inside the boundary.** Both
 halves above are about the SOURCE — what a reader can read, and what reading
