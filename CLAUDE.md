@@ -70,7 +70,7 @@ that reading comes _before_ the edit; nothing downstream will tell you.
 | ------------------------------------------------------------------------------ | ------------------------------- |
 | workspace layout, package boundaries; an import _inside_ a package             | `architecture.md` ⚠             |
 | **any dependency version / `package.json` / Expo SDK bump**                    | `architecture.md` ⚠             |
-| **running `nx migrate`; when the Expo SDK ceiling lifts**                      | `dependency-upgrades.md` ⚠      |
+| **running `nx migrate`; the Expo SDK ceiling; an Xcode/macOS bump**            | `dependency-upgrades.md` ⚠      |
 | local store + encrypted file sync (the data path); what the server still holds | `local-first-sync.md` ⚠         |
 | **a schema — Dexie, expo-sqlite, an R2 payload, D1, the DO**                   | `local-first-sync.md` ⚠         |
 | the read edge — indexes, liveQuery, virtual scrolling, paging                  | `client-queries.md` ⚠           |

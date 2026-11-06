@@ -515,9 +515,10 @@ on it to the iOS SDK it was built with:
 | iOS 27.1 SDK or later         | uses the full display; the SYSTEM's toolbars and tab bars turn vertical, below the status bar                                      |
 
 So nothing in _wide windows on native_ ([safe-area.md](./safe-area.md)) reaches
-the Duo until the iOS build moves to Xcode 27, and whether Expo SDK 54 / React
-Native 0.81 builds with it has not been tried ([dependency-upgrades.md](./dependency-upgrades.md)
-records why the Expo SDK is held where it is). What is known about the 27.1
+the Duo until the iOS build moves to Xcode 27 — which waits for the SDK 58 / RN
+0.88 bump, since RN ≤ 0.87 built with Xcode 27 fails on launch (UIScene) and
+`expo run:ios` can't find the simulator ([dependency-upgrades.md](./dependency-upgrades.md),
+_Xcode 27 and macOS 27_, and why the Expo SDK is held where it is). What is known about the 27.1
 tier, for when it arrives:
 
 - **Our bars are our own** — both topbars are hand-built `View`s, so they stay
