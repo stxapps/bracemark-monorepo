@@ -588,10 +588,19 @@ HardwareKeyboardLastSeen` prints `1`. Write it `false` the same way and
 - **`hideKeyboard` taps a blank area on iOS**, so on a surface with a
   tap-to-close backdrop it closes the surface. If a flow loses its buttons right
   after that step, this is why.
-- **Boot ONE platform at a time.** `e2e/runner/lib.ts` passes Maestro no
-  `--device`, so with both a simulator and an emulator up it picks
-  non-deterministically or hangs on an interactive picker. Shut one down before
-  booting the other.
+- **Boot ONE device at a time, and shut it down when you're done.** Two
+  reasons. First, `e2e/runner/lib.ts` passes Maestro no `--device`, so with both
+  a simulator and an emulator up it picks non-deterministically or hangs on an
+  interactive picker. Second, this Mac has 16 GB: every extra device pushes the
+  ones in use into swap, which nothing reports — steps just slow until a fixed
+  wait runs out and reads as a flake (`docs/app-drivers.md`, _the tablet AVD_,
+  "Boot only the device a leg runs on"). So check what is already booted
+  (`xcrun simctl list devices booted`, `adb devices`) and shut that down before
+  booting the other platform. Verify on iOS and Android in turn, never side by
+  side. At the end of the task, shut down whatever you booted
+  (`xcrun simctl shutdown <udid>`, `adb -s <serial> emu kill`), unless the
+  user is still using it. "Reuse what's already up" applies within a task, not
+  after it.
 - **`launchApp` resumes an app, it does not cold-start it.** A flow that assumes
   it begins at a root screen passes alone and fails in a directory run, because
   the previous flow left the app deep in a navigation stack. Reset with
