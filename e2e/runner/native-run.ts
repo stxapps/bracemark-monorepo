@@ -5,7 +5,13 @@ import { E2E_ROOT, runArtifactDir } from '../paths';
 import { API_URL, EXTRACTOR_URL, SITE_URL, WEB_URL } from '../web/fixtures/env';
 import { type NativeCliOptions, type NativePlatform } from './cli';
 import { assertInstalledDevBuild } from './dev-build';
-import { deviceWidth, iosFullScreenApps, resolveDevice } from './device';
+import {
+  deviceWidth,
+  googleAccountCount,
+  iosFullScreenApps,
+  resolveDevice,
+  screenLockType,
+} from './device';
 import { lostDriverToStatusBarRace } from './driver-loss';
 import { E2E_ENVIRONMENT, IS_STAGING } from './environment';
 import {
@@ -354,6 +360,38 @@ async function androidValue(deviceId: string, args: string[]): Promise<string> {
   return (await capture('adb', ['-s', deviceId, ...args], { timeoutMs: 15_000 })).stdout.trim();
 }
 
+// The e2e AVDs carry no Google account and no screen lock; those belong on the
+// password-manager AVD (docs/app-drivers.md, _the AVDs_). Both are refused here,
+// in seconds, rather than found at the first sign-in ten minutes in.
+async function assertAndroidUnclaimed(deviceId: string): Promise<void> {
+  const [accounts, lock] = await Promise.all([
+    androidValue(deviceId, ['shell', 'dumpsys', 'account']),
+    androidValue(deviceId, ['shell', 'dumpsys', 'lock_settings']),
+  ]);
+  const google = googleAccountCount(accounts);
+  if (google > 0) {
+    throw new Error(
+      `Android device ${deviceId} has ${google === 1 ? 'a Google account' : `${google} Google accounts`} ` +
+        'signed in, so Google Password Manager covers every sign-in with its save sheet. ' +
+        'Use an AVD without one, or remove it: Settings → Passwords, passkeys & accounts ' +
+        '(docs/app-drivers.md, _the AVDs_).',
+    );
+  }
+  const type = screenLockType(lock);
+  if (type === undefined) {
+    console.warn(
+      `warning: could not read the screen lock on ${deviceId} (no CredentialType in ` +
+        '`dumpsys lock_settings`); if the run stalls at the keyguard, that is why.',
+    );
+  } else if (type.toUpperCase() !== 'NONE') {
+    throw new Error(
+      `Android device ${deviceId} has a screen lock (${type}), so every cold boot stops at the ` +
+        'keyguard. Use an AVD without one, or set it to None: Settings → Security & privacy → ' +
+        'Device unlock (docs/app-drivers.md, _the AVDs_).',
+    );
+  }
+}
+
 async function androidDevice(
   deviceId: string,
   requiredReversePorts: number[],
@@ -368,6 +406,7 @@ async function androidDevice(
 
   const booted = await androidValue(deviceId, ['shell', 'getprop', 'sys.boot_completed']);
   if (booted !== '1') throw new Error(`Android device ${deviceId} has not completed boot`);
+  await assertAndroidUnclaimed(deviceId);
 
   const reversals = await androidValue(deviceId, ['reverse', '--list']);
   for (const port of requiredReversePorts) {

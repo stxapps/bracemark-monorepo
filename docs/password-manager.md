@@ -351,8 +351,10 @@ The sheet's title says _save_ even when it replaces a saved login's password.
 - **After one "Not now", the next sheet offers "Never" in its place.** "Never" turns
   saving off for the app. A flow that dismisses the sheet presses Back instead.
 - **It needs a screen lock** to show a saved password, and asks for it each time.
-- ⚠ **With a Google account on the AVD, every e2e sign-in stops behind the sheet**
-  ([app-drivers.md](./app-drivers.md), _the AVDs_).
+- ⚠ **With a Google account on the AVD, every e2e sign-in stops behind the sheet**,
+  so the account and the PIN live on `bracemark-fold`, and the e2e preflight refuses
+  a device with either ([app-drivers.md](./app-drivers.md), _the AVDs_, _the fold
+  AVD_). Measure there.
 
 ### ⚠ a password that only proves who you are
 

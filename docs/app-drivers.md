@@ -226,25 +226,35 @@ pull the plain `google_apis` variant if that ever matters.
 
 #### the AVDs
 
-Two emulators on one system image — the `android-36.1` `google_apis_playstore`
+Three emulators on one system image — the `android-36.1` `google_apis_playstore`
 arm64-v8a:
 
-| AVD                | device                                         | window, in dp                              | role                                                                       |
-| ------------------ | ---------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------- |
-| `bracemark-pixel8` | **Pixel 8** (1080×2400, 420 dpi)               | 411 × 914 — phone layout upright           | the canonical phone; every e2e run, every shot                             |
-| `bracemark-tablet` | **Pixel Tablet** profile at 1920×1200, 240 dpi | 1280 × 800, sw800 — docked rails both ways | the wide window ([safe-area.md](./safe-area.md), _wide windows on native_) |
+| AVD                | device                                         | window, in dp                                                     | role                                                                       |
+| ------------------ | ---------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `bracemark-pixel8` | **Pixel 8** (1080×2400, 420 dpi)               | 411 × 914 — phone layout upright                                  | the canonical phone; every e2e run, every shot                             |
+| `bracemark-tablet` | **Pixel Tablet** profile at 1920×1200, 240 dpi | 1280 × 800, sw800 — docked rails both ways                        | the wide window ([safe-area.md](./safe-area.md), _wide windows on native_) |
+| `bracemark-fold`   | **Pixel 9 Pro Fold**, 390 dpi                  | folded 443 × 994 (1080×2424); open 851 × 882 (2076×2152) — docked | the fold, and Google Password Manager — never an e2e device (below)        |
 
-⚠ **No Google account is signed in on either, and the suite depends on it.** With
-one, Google Password Manager offers to save the login in a sheet over the app after
-every sign-in. `subflows/sign-in.yaml` dismisses that kind of sheet on iOS only, so
-every Android case stops at sign-in. Sign one in to measure Google Password Manager
-([password-manager.md](./password-manager.md), _the Android app_), and take it off
-again before the next run: _Settings → Passwords, passkeys & accounts_.
+⚠ **The two e2e AVDs carry no Google account and no screen lock, and the preflight
+refuses either.** With an account, Google Password Manager offers to save the login
+in a sheet over the app after every sign-in, change of password and delete account
+([password-manager.md](./password-manager.md), _the Android app_);
+`subflows/sign-in.yaml` dismisses that kind of sheet on iOS only, so every Android
+case stopped at sign-in. A screen lock holds every cold boot — which is every boot
+here (`fastboot.forceColdBoot`, below) — at the keyguard. So `androidDevice` in
+`runner/native-run.ts` reads `dumpsys account` and `dumpsys lock_settings` and
+refuses a device with a `com.google` account or a `CredentialType` other than
+`NONE`, in seconds. Both live on `bracemark-fold` instead (_the fold AVD_, below),
+which is why the preflight refuses it too. Matching iOS by teaching the flows the
+Android sheets was weighed and not done: the iOS simulator has no passcode and no
+account either, Android raises more sheets than iOS (and "Never" after one "Not
+now"), and every optional lookup costs a run time even when nothing comes — the
+~12 minutes per iPhone run `subflows/sign-in.yaml` records.
 
 The image choice is **disk, not preference**: that one was already downloaded
 (2.3 GB), and any other API level or variant is a fresh 1.5–2.5 GB. `minSdkVersion`
-is 33, so 36.1 is comfortably in range. Both AVDs read it in place, so the
-second one cost no download.
+is 33, so 36.1 is comfortably in range. All three AVDs read it in place, so the
+second and third cost no download.
 
 Created with `avdmanager`, which needed `cmdline-tools` — the SDK here shipped
 with `emulator` and `platform-tools` only, so it was bootstrapped from Google's
@@ -260,19 +270,22 @@ avdmanager create avd -n bracemark-pixel8 \
   -k "system-images;android-36.1;google_apis_playstore;arm64-v8a" -d pixel_8
 ```
 
-Launch it with one of four root scripts, device × window, each in a terminal of
+Launch it with one of six root scripts, device × window, each in a terminal of
 its own (it runs in the foreground; ⌃C or `adb -s <serial> emu kill` stops it):
 
 ```sh
 npm run expo:android:emulator:phone             # with its window — to watch, or drive by hand
 npm run expo:android:emulator:tablet
+npm run expo:android:emulator:fold
 npm run expo:android:emulator:phone:headless    # no window — for a run you walk away from
 npm run expo:android:emulator:tablet:headless
+npm run expo:android:emulator:fold:headless
 ```
 
-All four are `tools/scripts/android-emulator.sh`, which does two things a bare
+All six are `tools/scripts/android-emulator.sh`, which does two things a bare
 `emulator -avd` doesn't. It gives each AVD a **fixed console port**, so the
-phone is always `emulator-5554` and the tablet `emulator-5556`. It also sets the
+phone is always `emulator-5554`, the tablet `emulator-5556` and the fold
+`emulator-5558`. It also sets the
 **reverse mappings** once `sys.boot_completed` reads 1: 8081, 8787 and 8788 on
 that serial only, so both can be up together without `ANDROID_SERIAL`. A
 boot prints `android-emulator: … reverse mappings set: …` once that is done
@@ -321,13 +334,26 @@ four for disk and two the defaults get wrong for e2e:
 Measured: 32 s cold boot, and `maestro hierarchy` returns a 69 KB tree at exit
 0 — the same attach check _verified against Xcode 26_ below records for iOS.
 
-Disk is **~2.4 GB** in `~/.android/avd`, essentially all of it
+Disk is **~2.4 GB** in `~/.android/avd` when new, essentially all of it
 `userdata-qemu.img.qcow2`, and it is worth knowing the shape of that number: it
 reads 1.0 GB the moment boot completes and settles at 2.3 GB after the first
 clean shutdown. Measure after a full boot/shutdown cycle or you will record less
 than half the real cost. The cap is `disk.dataPartition.size` above, so it grows
 toward 6 GB as the app writes and never past it (it stood at 4.2 GB on
-2026-10-23, after two months of dev builds). The cold-boot settings do hold
+2026-10-23, after two months of dev builds).
+
+**⚠ Plan for 6 GB per AVD, and do not lower the cap.** On 2026-11-08 both e2e
+AVDs' files sat at the cap, and the guests were nearly full: the Pixel 8's
+`/data` 5.1 of 5.8 GB used (91%), the tablet's 4.8 (87%). That is live data, not
+the file's leftovers. Google updates its own apps from the Play Store whether or
+not an account is signed in — 28 updated packages on the Pixel 8, 2.6 GB of
+`/data/app`; 25 and 2.2 GB on the tablet, which has never had an account — and the
+dev build is ~140 MB of that. A 4 GB cap would hold about half of those updates
+and then post Android's low-storage warning, which lands in a shot. The
+cap only goes down with `-wipe-data` anyway, and the updates come back after.
+A wipe is how to get space back from an AVD (to ~1 GB, rising to ~5 GB again
+over weeks); it loses what lives in userdata — the dev build, the tablet's
+on-screen keyboard setting below, Chrome's first run, the fold's account. The cold-boot settings do hold
 — the shutdown log says `Snapshots have been disabled by the user, save request
 is ignored`, which is the ~2 GB that is _not_ on disk.
 
@@ -360,7 +386,7 @@ hierarchy` exit 0, a 72 KB tree). This is the most likely reading of the
 
 **⚠ `-no-window` alone falls back to software rendering.** Without a window the
 emulator picks `swangle_indirect` — SwiftShader on the CPU — which is the same
-software path the `hw.gpu.enabled = no` row above rules out. All four scripts pass
+software path the `hw.gpu.enabled = no` row above rules out. All six scripts pass
 `-gpu host` (log: `gpu mode host`, `Selecting Vulkan device: Apple M1`;
 SurfaceFlinger: `ANGLE … Metal`). A hand-typed `-no-window` without it runs,
 passes nothing faster and says nothing.
@@ -393,8 +419,8 @@ emulator shut down, and check `adb shell wm size` after the next boot.
 clear 768, so the rails dock upright and on its side, and the side that does
 NOT is reached on the same AVD: split-screen in landscape hands the app roughly
 half of 1280, below 768 (not yet measured), and a freeform window narrower still. A 7" (sw600) tablet
-would only re-run the phone layout upright. A foldable is a separate AVD
-(`pixel_9_pro_fold`), made when the fold itself needs running.
+would only re-run the phone layout upright. The foldable is a separate AVD,
+`bracemark-fold` (_the fold AVD_, below).
 
 **RAM 2 GB, 4 cores** — the phone's, so a timing measured on one carries to the
 other. Measured on the home screen 30 s after a cold boot: 830 MB available in
@@ -458,6 +484,38 @@ in front, once per AVD. The store screenshots are a different leg: the phone one
 Pixel 8, and `e2e/shot/mobile.ts` accepts only its 1080×2400; the tablet ones
 (`--tablet`) are this AVD's 1920×1200 on its side ([e2e.md](./e2e.md), _the
 published screenshots_).
+
+#### ⚠ the fold AVD
+
+`bracemark-fold` was made on 2026-11-08 the same way, from the
+`pixel_9_pro_fold` profile, with the phone's six edits (the 10G → 6G data cap,
+no SD card, cold boot, no snapshots, GPU, hardware keyboard) and
+`showDeviceFrame = no`. It has no skin, like the tablet. Its two jobs share it
+because neither belongs on an e2e device:
+
+- **The fold itself.** It boots open: 2076×2152 at 390 dpi, 851 × 882 dp, so
+  the rails dock. Closed it is the outer display, 1080×2424, 443 × 994 dp, the
+  phone layout. `adb -s emulator-5558 emu fold` and `… emu unfold` switch it
+  from the console, headless or not (`dumpsys device_state` then reads
+  `CLOSED`, and `wm size` follows). The window's toolbar has the same buttons.
+  So one AVD crosses 768 on a fold, which is the
+  release check in [safe-area.md](./safe-area.md) (_wide windows on native_):
+  fold and unfold with the add panel open, and nothing should remount.
+- **Google Password Manager.** The Google account and the 0000 PIN that
+  [password-manager.md](./password-manager.md) (_the Android app_) needs go
+  here, signed in by hand. It needs the PIN to show a saved password. They are
+  why the preflight refuses this AVD for an e2e run (_the AVDs_, above), and
+  why the Pixel 8 can stay clean.
+
+Neither job is an e2e leg, so nothing in `e2e/` names this AVD, and no shot
+accepts its rasters. Closed, it is a narrow device next to the Pixel 8. With
+both up, a narrow run would have to choose between them, so boot it alone.
+`show_ime_with_hard_keyboard` is set to 1 (_the tablet AVD_, above, for why).
+
+Disk: 1.0 GB after its first boot and shutdown, 2.4 GB once the account was
+signed in (2026-11-08; the guest's `/data` 1.7 GB). Expect it to reach the 6 GB
+cap like the other two (_the AVDs_, above), and sooner, since the account adds
+Gmail, Photos and the rest to what Play updates.
 
 #### ⚠ the iPad simulator
 

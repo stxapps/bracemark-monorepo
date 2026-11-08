@@ -1,20 +1,23 @@
 #!/usr/bin/env bash
 #
-# Boot one of the two e2e AVDs and leave it ready to run against: the emulator
+# Boot one of the three AVDs and leave it ready to run against: the emulator
 # in the foreground, and the `adb reverse` mappings set on it once it has booted.
 #
 #   tools/scripts/android-emulator.sh phone [--headless] [emulator options]
 #   tools/scripts/android-emulator.sh tablet [--headless] [emulator options]
+#   tools/scripts/android-emulator.sh fold [--headless] [emulator options]
 #
 # Normally reached through the root scripts, `npm run
-# expo:android:emulator:{phone,tablet}[:headless]`, each in a terminal of its
-# own. ⌃C stops the emulator; so does `adb -s <serial> emu kill`.
+# expo:android:emulator:{phone,tablet,fold}[:headless]`, each in a terminal of
+# its own. ⌃C stops the emulator; so does `adb -s <serial> emu kill`.
 #
-# phone is `bracemark-pixel8`, tablet is `bracemark-tablet` (docs/app-drivers.md,
-# the AVDs; docs/e2e.md, _narrow and wide_). Each gets a FIXED console port, so
+# phone is `bracemark-pixel8`, tablet is `bracemark-tablet` — the two e2e AVDs
+# (docs/e2e.md, _narrow and wide_) — and fold is `bracemark-fold`, the foldable
+# and the one AVD with a Google account and a screen lock, for Google Password
+# Manager (docs/app-drivers.md, the AVDs). Each gets a FIXED console port, so
 # its serial is known before it boots — emulator-5554 for the phone,
-# emulator-5556 for the tablet — and both can be up at once without anyone
-# reading `adb devices` to tell them apart.
+# emulator-5556 for the tablet, emulator-5558 for the fold — and all can be up
+# at once without anyone reading `adb devices` to tell them apart.
 #
 # --headless adds `-no-window`: a hidden emulator window is a throttled emulator
 # (docs/app-drivers.md), so a run you walk away from goes on this one. `-gpu
@@ -52,13 +55,14 @@ die() { printf '\033[31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 note() { printf '\033[2m%s\033[0m\n' "$*" >&2; }
 
 usage() {
-  sed -n '6,7p' "${BASH_SOURCE[0]}" | sed 's/^# *//' >&2
+  sed -n '6,8p' "${BASH_SOURCE[0]}" | sed 's/^# *//' >&2
   exit 2
 }
 
 case "${1:-}" in
   phone) avd=bracemark-pixel8 port=5554 ;;
   tablet) avd=bracemark-tablet port=5556 ;;
+  fold) avd=bracemark-fold port=5558 ;;
   *) usage ;;
 esac
 shift

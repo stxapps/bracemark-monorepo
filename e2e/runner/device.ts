@@ -139,6 +139,26 @@ export function isFullScreenApps(medusa: string, chamois: string): boolean {
   return medusa === '0' && chamois === '0';
 }
 
+// What makes an AVD an e2e device rather than a password-manager one
+// (docs/app-drivers.md, _the AVDs_). A Google account turns on Google Password
+// Manager, whose save sheet covers the app after every sign-in, change of
+// password and delete account; a screen lock holds every cold boot at the
+// keyguard. Neither fails where it starts — the run goes red at its first sign-in.
+//
+// `dumpsys account`: one `Account {name=…, type=…}` line per account. Only the
+// count leaves this function: the name is the person's address.
+export function googleAccountCount(dumpsys: string): number {
+  return dumpsys.split('\n').filter((line) => /^\s*Account \{.*type=com\.google\}/.test(line))
+    .length;
+}
+
+// `dumpsys lock_settings`: `CredentialType: PIN` (measured, Android 16), or
+// PATTERN / PASSWORD; NONE without a lock. Undefined when the line is missing,
+// which is a dump this does not know how to read — not a device without a lock.
+export function screenLockType(dumpsys: string): string | undefined {
+  return /^\s*CredentialType: (\S+)/m.exec(dumpsys)?.[1];
+}
+
 export async function iosFullScreenApps(deviceId: string): Promise<boolean> {
   const read = async (key: string) => {
     const defaults = ['spawn', deviceId, 'defaults', 'read', 'com.apple.springboard', key];

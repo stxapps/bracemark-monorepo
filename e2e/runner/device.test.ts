@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
+  googleAccountCount,
   isFullScreenApps,
   parseAttachedAndroid,
   parseBootedSimulators,
   pickDevice,
+  screenLockType,
 } from './device';
 
 const SIMULATORS = JSON.stringify({
@@ -54,6 +56,28 @@ test('only an iPad that has chosen Full Screen Apps counts as full screen', () =
   assert.equal(isFullScreenApps('1', '0'), false); // Windowed Apps
   assert.equal(isFullScreenApps('0', '1'), false); // Stage Manager
   assert.equal(isFullScreenApps('', ''), false); // as a simulator comes: Windowed Apps
+});
+
+// The shapes read off the Pixel 8 (a Google account and a PIN) and the tablet
+// AVD (neither) on 2026-11-08, Android 16.
+test('a Google account and a screen lock are read off dumpsys', () => {
+  const signedIn = [
+    'User UserInfo{0:Owner:4c13}:',
+    '  Accounts: 1',
+    '    Account {name=someone@example.com, type=com.google}',
+    '  ',
+    '  RegisteredServicesCache: 5 services',
+    '    ServiceInfo: AuthenticatorDescription {type=com.google}, ComponentInfo{…}, uid 10147',
+  ].join('\n');
+  assert.equal(googleAccountCount(signedIn), 1); // the authenticator line is not an account
+  assert.equal(googleAccountCount('User UserInfo{0:Owner:4c13}:\n  Accounts: 0\n  '), 0);
+
+  assert.equal(
+    screenLockType('User State:\n  User 0\n    Quality: 0\n    CredentialType: PIN\n'),
+    'PIN',
+  );
+  assert.equal(screenLockType('User State:\n  User 0\n    CredentialType: NONE\n'), 'NONE');
+  assert.equal(screenLockType('User State:\n  User 0\n'), undefined);
 });
 
 test('a width picks the one device on its side of 768, and names what to boot when none is', () => {

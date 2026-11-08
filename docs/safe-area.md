@@ -688,7 +688,8 @@ the tablet AVD, the rest on it on its side and on the iPad (A16) upright; the
 reds on the way were the harness
 (e2e.md, _what the first wide runs found_). What they do not cover is below. Before a release: run
 each on an iPad (full screen, both Split View widths, rotation across 768), a
-tablet AVD, and a foldable AVD folding and
+tablet AVD, and the foldable AVD (`bracemark-fold`, `adb emu fold` / `unfold` —
+[app-drivers.md](./app-drivers.md), _the fold AVD_) folding and
 unfolding with the add panel open; and on the iPad, the iPad keyboard's floating
 and split modes against the editors' sticky footers, whose lift assumes a
 keyboard docked to the bottom of the window ([soft-keyboard.md](./soft-keyboard.md)).

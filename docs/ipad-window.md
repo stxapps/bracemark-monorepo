@@ -13,7 +13,7 @@ the e2e runs need is in [app-drivers.md](./app-drivers.md), _the iPad simulator_
 
 iPadOS 26 has three modes, under _Settings → Multitasking & Gestures_: Full
 Screen Apps, Windowed Apps and Stage Manager. Every new iPad simulator starts in
-**Windowed Apps** (read on a never-booted iPad Air 11-inch, iOS 26.5). A real
+**Windowed Apps** (read on a never-booted iPad simulator, iOS 26.5). A real
 iPad's mode, new or upgraded, has not been checked.
 
 Windowed does not always look windowed. Upright on the iPad (A16), the app filled
