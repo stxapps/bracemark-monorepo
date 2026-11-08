@@ -77,7 +77,7 @@ export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise
 //   - FACTS ARE BEHAVIOUR, `NEVER` IS INVARIANTS — and the line between them is
 //     the roadmap. FACTS describes the build that is running: it may change in a
 //     release, and changing it is a normal edit to this file. NEVER is the
-//     committed invariant list from docs/link-extraction.md (separate app,
+//     committed invariant list from docs/link-extraction-server.md (separate app,
 //     separate origin, anonymous, plaintext-return-only, stream-don't-store,
 //     never-log-the-URL) — the things that cannot change without changing what
 //     this service IS. Sorting a claim into the wrong list is how a page like
@@ -88,7 +88,7 @@ export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise
 //
 //       WHAT IT TAKES FROM A PAGE IS A FACT, NOT A NEVER. Server-tier extraction
 //       is `titleImage` today, and `readMode` is already in the planned response
-//       shape (docs/link-extraction.md — _server extraction_). It is the one
+//       shape (docs/link-extraction-server.md). It is the one
 //       further facet this tier can produce: screenshot and page copy need a
 //       browser actually rendering the page, which is why they are the
 //       active-context tiers' work (apps/bracemark-extension/utils/capture.ts).
@@ -155,7 +155,7 @@ export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise
 //     MUCH IS READ. Read-mode therefore needs it re-checked, not rewritten. What
 //     is genuinely still open is the BEHAVIOUR — whether server-side read-mode
 //     should honour robots.txt, and in which form — which is a decision for the
-//     extractor, not for this file, and is tracked in docs/link-extraction.md
+//     extractor, not for this file, and is tracked in docs/link-extraction-server.md
 //     (_deferred / open_). Settle it there; this page only ever reports it.
 
 const USER_AGENT = 'bracemark-extractor/1.0 (+https://bracemark.com/extractor)';

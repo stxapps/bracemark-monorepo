@@ -51,6 +51,7 @@ export * from './import/project';
 export * from './import/resolve';
 export * from './import/text';
 export * from './net/ip';
+export * from './reader/reader-doc';
 export * from './stores/listing-copy';
 export * from './stores/listings';
 export * from './sync/blob-transfer';

@@ -117,7 +117,7 @@ function iconPx(icon: CollectedIcon): number | undefined {
 }
 
 // The page's declared favicon — the accuracy upgrade over guessing `/favicon.ico`
-// (docs/link-extraction.md — _favicons_). Only ever called by a client that ALREADY
+// (docs/link-extraction-favicons.md). Only ever called by a client that ALREADY
 // fetched this page's HTML, so it costs no disclosure the page fetch didn't pay; it is
 // not a licence for a standalone favicon fetch, which stays behind the client's
 // extraction opt-in.

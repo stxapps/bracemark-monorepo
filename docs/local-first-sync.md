@@ -61,7 +61,7 @@ ground.
 >   description read "we see your username and your plan, never a link" — true of
 >   `bracemark-api` and false of us, because `bracemark-extractor` is handed a
 >   plaintext URL by construction whenever the opt-in setting is on
->   ([link-extraction.md](./link-extraction.md), _server extraction_). Scoping a
+>   ([link-extraction-server.md](./link-extraction-server.md)). Scoping a
 >   claim to a component we do not name is the same move as inventing a "sync
 >   server", one verb further in. What survives every extraction setting is what we
 >   **store** of the library, which is ciphertext.

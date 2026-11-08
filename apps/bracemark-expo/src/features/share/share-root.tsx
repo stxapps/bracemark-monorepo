@@ -68,5 +68,5 @@ export function ShareRoot(props: ShareInitialProps) {
   }
 
   const payload = useMemo(() => payloadFromInitialProps(props), [props]);
-  return <ShareScreen url={payload.url} title={payload.title} />;
+  return <ShareScreen url={payload.url} title={payload.title} readMode={payload.readMode} />;
 }

@@ -169,6 +169,15 @@ export async function recordUnreadablePaths(
   });
 }
 
+// Record that the orphaned-file sweep ran to the end (SyncMetaRecord.lastOrphanSweepAt).
+// Fenced: a sweep that outlived its account writes nothing.
+export async function markOrphanSweep(username: string, at: number): Promise<void> {
+  await db.transaction('rw', db.syncMeta, async () => {
+    await assertAccountStillOwnsStore(username);
+    await db.syncMeta.update(username, { lastOrphanSweepAt: at });
+  });
+}
+
 // Inside a transaction that includes db.syncMeta, with the row its fence just read:
 // drop paths a pull has now stored or deleted from the unreadable record. A path
 // left in it by mistake costs nothing worse than a dangling extraction the sweep

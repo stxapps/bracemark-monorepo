@@ -9,6 +9,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { Complete } from './Complete';
 import { Editor } from './Editor';
+import { type KeepRequest } from './KeptCopies';
 import { PopupMessage, PopupShell } from './Shell';
 import { Resume, SignIn } from './SignIn';
 import { SyncDetail, SyncPill } from './Sync';
@@ -121,7 +122,11 @@ function SaveFlow() {
   const [tab, setTab] = useState<ActiveTab | null | undefined>(undefined);
   // Set the moment a save completes, so we flip to the complete page without waiting
   // on the live "already saved?" query to catch up.
-  const [justSaved, setJustSaved] = useState<LinkItem | null>(null);
+  // …along with which kept copies that save asked for, so the complete page opens on
+  // "Keeping…" for them.
+  const [justSaved, setJustSaved] = useState<{ link: LinkItem; requested: KeepRequest } | null>(
+    null,
+  );
 
   useEffect(() => {
     browser.tabs
@@ -178,14 +183,16 @@ function SaveFlow() {
   // Editor is no better — Save would mint a live copy shadowing the trashed one,
   // and readLinkByUrlKey (a `.first()` on the index) would then return an arbitrary
   // one of the two. So the editor takes the match and offers Restore instead.
-  const link = justSaved ?? existing;
-  if (link && link.listId !== TRASH_ID) return <Complete link={link} tab={tab} />;
+  const link = justSaved?.link ?? existing;
+  if (link && link.listId !== TRASH_ID) {
+    return <Complete link={link} tab={tab} requested={justSaved?.requested} />;
+  }
   return (
     <Editor
       tab={tab}
       url={normalizedUrl || tab.url}
       trashed={link ?? undefined}
-      onSaved={setJustSaved}
+      onSaved={(saved, requested) => setJustSaved({ link: saved, requested })}
     />
   );
 }

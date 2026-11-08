@@ -61,6 +61,7 @@ import {
   bundleFromLibrary,
   EXPORT_MIME,
   exportFileName,
+  extractionFileIds,
   EXTRACTIONS_PREFIX,
   extractionSchema,
   FILES_PREFIX,
@@ -225,9 +226,7 @@ function referencedFilePaths(links: GatheredLink[]): string[] {
   const ids = new Set<string>();
   for (const { link, extraction } of links) {
     if (link.customImageId !== undefined) ids.add(link.customImageId);
-    if (extraction?.imageId !== undefined) ids.add(extraction.imageId);
-    if (extraction?.pageCopyId !== undefined) ids.add(extraction.pageCopyId);
-    if (extraction?.screenshotId !== undefined) ids.add(extraction.screenshotId);
+    for (const id of extractionFileIds(extraction)) ids.add(id);
   }
   return [...ids].map((id) => pathFromId(id, FILES_PREFIX));
 }

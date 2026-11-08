@@ -84,7 +84,7 @@ web-react` (`data/db.ts`), a single-row off-sync Dexie table that never becomes
 `themeStateSchema` is a `z.object` whose three fields are `z.string()`, **not**
 `z.enum(THEME_MODES)` or a time regex. This schema parses **persisted bytes**,
 and `settings/general.enc` is a **shared** file (`linksLayout`, `serverExtraction`,
-and `theme` all live in it). If a strict field rejected a newer client's unknown
+the kept-copies save setting and `theme` all live in it). If a strict field rejected a newer client's unknown
 `mode` or a malformed time, the WHOLE blob would fail to parse and drop from the
 UI — taking `linksLayout`/`serverExtraction` down with the theme. So the schema
 parses leniently and the **read edge** (`coerceThemeState`, applied in

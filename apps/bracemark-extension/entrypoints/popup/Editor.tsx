@@ -1,8 +1,21 @@
 import { useState } from 'react';
 import { TriangleAlert } from 'lucide-react';
 
-import { DEFAULT_LIST_ID, LINK_NOTE_MAX, PLAN_LABELS, TRASH_ID } from '@stxapps/shared';
-import { linkIdOf, type LinkItem, useLinkMutations, useLinkQuota } from '@stxapps/web-react';
+import {
+  DEFAULT_LIST_ID,
+  keepOnSaveOf,
+  LINK_NOTE_MAX,
+  PLAN_LABELS,
+  TRASH_ID,
+} from '@stxapps/shared';
+import {
+  linkIdOf,
+  type LinkItem,
+  readSettingsGeneral,
+  useEntitlements,
+  useLinkMutations,
+  useLinkQuota,
+} from '@stxapps/web-react';
 import { LinkQuotaBanner } from '@stxapps/web-ui/components/links/link-quota-banner';
 import { ListSelect } from '@stxapps/web-ui/components/links/list-select';
 import { TagsField } from '@stxapps/web-ui/components/links/tags-field';
@@ -12,6 +25,7 @@ import { Textarea } from '@stxapps/web-ui/components/ui/textarea';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { type ActiveTab } from './App';
+import { type KeepRequest, NO_KEEP_REQUEST } from './KeptCopies';
 import { PageSpecimen } from './PageSpecimen';
 import { PopupBody, PopupTitle } from './Shell';
 
@@ -24,8 +38,9 @@ import { openWebApp } from '@/utils/open-web-app';
 // another. Below it the shared ListSelect / TagsField pickers (web-ui — the same
 // pieces bracemark-web's quick-add popover and edit dialog render) and an optional
 // note. Save writes one `links/{id}.enc`, kicks the cheap active-tab titleImage
-// extraction (fire-and-forget), and hands the created link up so the
-// popup shows the complete page.
+// extraction (fire-and-forget) — and, on a plan with `keptCopies`, the kept copies
+// the synced save setting asks for — and hands the created link up so the popup
+// shows the complete page.
 //
 // There is no URL FIELD, and that's the difference between this editor and
 // bracemark-web's quick-add: the URL isn't something the user types here, it's the
@@ -46,6 +61,22 @@ import { openWebApp } from '@/utils/open-web-app';
 // bracemark-web's quick-add: this popup has never been able to save a second copy of
 // the active tab (an already-saved tab goes to Complete), so adding one for the
 // trashed case would be a new power in the smaller surface.
+// What this save should keep, read from the STORE at the save — not from a render's
+// copy of the settings. `useSettings` answers the defaults until its read of the
+// settings blob lands, so a save made in the first frames of the popup would keep
+// read mode for a user who turned it off; the same reason expo's `extractNow` reads
+// its mode at the gesture (docs/link-extraction.md, _expo drains in the foreground_).
+// A read that fails keeps nothing: the save itself is unaffected, and both copies
+// stay one tap away on the complete screen.
+async function keepRequestedAtSave(entitled: boolean): Promise<KeepRequest> {
+  if (!entitled) return NO_KEEP_REQUEST;
+  try {
+    return keepOnSaveOf(await readSettingsGeneral());
+  } catch {
+    return NO_KEEP_REQUEST;
+  }
+}
+
 export function Editor({
   tab,
   url,
@@ -55,10 +86,13 @@ export function Editor({
   tab: ActiveTab;
   url: string;
   trashed?: LinkItem;
-  onSaved: (link: LinkItem) => void;
+  // `requested` — the kept copies this save asked for, so Complete opens on
+  // "Keeping…" for them.
+  onSaved: (link: LinkItem, requested: KeepRequest) => void;
 }) {
   const linkMutations = useLinkMutations();
   const { count, max, atLimit } = useLinkQuota();
+  const { entitlements } = useEntitlements();
 
   const [listId, setListId] = useState<string>(DEFAULT_LIST_ID);
   const [tagIds, setTagIds] = useState<string[]>([]);
@@ -95,14 +129,23 @@ export function Editor({
         setSaving(false);
         return;
       }
-      // Auto-run the cheap facets off the live DOM, fire-and-forget (heavy screenshot
-      // / page copy stay manual on the complete page — see link-extraction.md). A
-      // restore takes this path too: we're standing on the live page either way, and
-      // refreshing the title/image of a link you're re-adding is the point.
+      // Auto-run the cheap facet off the live DOM, fire-and-forget. A restore takes
+      // this path too: we're standing on the live page either way, and refreshing the
+      // title/image of a link you're re-adding is the point.
       const id = linkIdOf(link);
       void sendMessage({ type: 'EXTRACT', linkId: id, facet: 'titleImage' });
+      // And the kept copies the synced save setting asks for, on a plan that keeps
+      // copies: the save is the gesture, and this tab the only place a copy can be
+      // taken (docs/link-extraction-keep.md, _when a copy is taken_). One message
+      // per facet, so a page with no article costs the title and the screenshot
+      // nothing.
+      const requested = await keepRequestedAtSave(entitlements.keptCopies);
+      if (requested.readMode) void sendMessage({ type: 'EXTRACT', linkId: id, facet: 'readMode' });
+      if (requested.screenshot) {
+        void sendMessage({ type: 'EXTRACT', linkId: id, facet: 'screenshot' });
+      }
 
-      onSaved(link);
+      onSaved(link, requested);
     } catch {
       setSaving(false);
     }
