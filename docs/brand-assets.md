@@ -537,6 +537,19 @@ pages" on the converter's page describes that data and stays. What is barred is
 our name for our planned feature — "page copies", "screenshots" — which reads as
 ours wherever it appears.
 
+**Another tool's words about us become ours when we post them.** That paragraph's
+converse: there, another app's words describe that app's data and stay. Here,
+they describe us. A screenshot of an AI's read of this repo, a scanner's report,
+or a reviewer's verdict, put on a page or in a post, is held to this whole
+section and to _terminology_, because we chose to show it and where to crop it.
+It is harder to keep than our own copy, for two reasons. The tool doesn't know
+these rules: asked what the code sends off a device, it can answer "no
+analytics", bare, which is the phrase _terminology_ bars because /privacy names
+the totals we count on the server. And we can't edit its words, so the only
+fixes are the crop, the text posted beside it, an answer ready for the reply it
+invites, or not using it. Check it as copy before posting, including the parts
+that flatter us: those are the ones a reader will test.
+
 **A limit the copy states is a claim, and it has to hold for the ordinary
 case.** The same change printed "up to 100,000 links" beside a byte limit that
 stopped a note-free library at about 94,000; the fix moved the limit, not the
