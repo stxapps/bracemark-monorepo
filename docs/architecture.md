@@ -251,6 +251,12 @@ page is scanned. The post source imports nothing. `content/blog/blog.spec.ts` ch
 file/manifest parity, mapped components, date format, and internal links, since
 MDX is outside the TypeScript and ESLint passes described above.
 
+Unpublished posts wait in `content/blog/draft/`. The spec reads only the folder's
+top level and the article page loads only manifest slugs, so a draft is neither
+checked nor built. To publish one, move it up a level and add its manifest entry.
+The spec then holds it to every rule above. The repository is public, so a
+committed draft can be read on GitHub before the post is live.
+
 A post that reports a point-in-time result is one of a series, not a page kept
 current. Each source security review gets its own post, its slug carrying the
 month (`source-security-review-2026-10`), and links to its own dated report in

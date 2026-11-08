@@ -639,6 +639,14 @@ Eight things nothing would flag:
   the fit check silently becomes phone-only. (`ui/textarea.tsx` records the
   tailwind-merge trap that came with it — a cancel has to be spelled at the same
   variant scope as what it cancels.)
+- **⚠ A fold can leave JS on the old width.** Folded, React Native sometimes
+  never sends its dimensions-changed event, so `useWindowDimensions` and
+  Uniwind's `md:` keep the open screen's width, and the docked rail stays on the
+  phone-sized cover screen. It happened on 3 of about 16 folds on the fold AVD on
+  2026-11-08, and the next resize clears it. It is open upstream
+  ([react/react-native#52952](https://github.com/react/react-native/issues/52952)).
+  The measurements and how to spot it are in `e2e/mobile/RELEASE.md`
+  (`WINDOW-FOLD-ANDROID-001`, step 5).
 - **Android recreates an activity for an undeclared config change**, and a fold,
   a split-screen drag or a move to another display changes `smallestScreenSize`.
   `plugins/with-android-manifest-policy.js` adds it to `MainActivity`'s
@@ -688,9 +696,11 @@ the tablet AVD, the rest on it on its side and on the iPad (A16) upright; the
 reds on the way were the harness
 (e2e.md, _what the first wide runs found_). What they do not cover is below. Before a release: run
 each on an iPad (full screen, both Split View widths, rotation across 768), a
-tablet AVD, and the foldable AVD (`bracemark-fold`, `adb emu fold` / `unfold` —
+tablet AVD, and the foldable AVD (`bracemark-fold`,
 [app-drivers.md](./app-drivers.md), _the fold AVD_) folding and
-unfolding with the add panel open; and on the iPad, the iPad keyboard's floating
+unfolding with the add panel open — the release checklist
+`WINDOW-FOLD-ANDROID-001` (`e2e/mobile/RELEASE.md`, _Android foldable_), which
+also covers the open screen's near-square window and its cutout; and on the iPad, the iPad keyboard's floating
 and split modes against the editors' sticky footers, whose lift assumes a
 keyboard docked to the bottom of the window ([soft-keyboard.md](./soft-keyboard.md)).
 

@@ -1,0 +1,42 @@
+{/_ DRAFT, not published. To publish: move this file up to blog/, and add to index.ts:
+slug: 'android-foldables'
+title: 'Folding and unfolding Bracemark on Android'
+description: 'A foldable hands Bracemark a phone screen and a near-square one. We tested what folding keeps, what it changes, and the bug we found.'
+publishedAt: the publishing day
+Publish after the tablet post, which this one links to. Before publishing:
+re-check the known-bug section against react/react-native#52952 and our own fix. _/}
+
+A foldable phone gives Bracemark two different screens. Folded, it’s a phone: about 443 points wide, and the app uses its phone layout. Open, it’s a near-square screen about 851 by 882 points, wide enough for the sidebar to stay docked beside your links, as it does [on a tablet](/blog/tablets-and-ipad).
+
+So folding is the one everyday gesture that switches Bracemark between its two layouts while you’re using it. We wanted to know what that keeps and what it changes, so we ran the app on a Pixel 9 Pro Fold emulator, Android 16, folding and unfolding it from every state we could think of. Here’s what we found, including a bug we haven’t fixed yet.
+
+## Nothing you’ve typed is lost
+
+When a window changes size in a way an app hasn’t said it can handle, Android rebuilds the app’s screen from scratch. For Bracemark that would close the form you were in, and throw away a half-typed link, an unsaved title, or a search you were building. Folding and unfolding change the window in exactly that way.
+
+We declared that change when we added tablet support, so Android re-lays out the screen instead of rebuilding it. On the foldable we checked it from each state that holds text: adding a link with half a web address typed, editing a link with a changed title not yet saved, Advanced Search with a query in it, and the panel for saving a link shared from another app. Each time, folding and unfolding kept the form open and the text in it. We also read Android’s own event log after every fold, and it never once rebuilt the screen.
+
+What does change is the form’s shape. On the open screen, adding or editing a link happens in a centred card. Fold the phone and the same form becomes a sheet at the bottom of the screen, above the keyboard. Unfold it and it becomes a card again, with what you typed still in it.
+
+## A near-square screen
+
+Open, the foldable is narrower than a tablet and nearly as tall as it is wide. Bracemark’s sidebar never takes more than 40% of the window, so on this screen it stops at 320 points, one step short of its widest. At its default 240, each link row keeps its date. If you widen the sidebar to 320, the rows become too narrow for the date, so the date goes and the title gets the room. Narrow the sidebar again and the date comes back.
+
+Each screen has its own camera, so each has its own cutout: in the top-right corner when the phone is open, and top centre when it’s folded. Android reports each as space to keep clear, and on both screens the toolbar’s buttons sit below it.
+
+Open, Gboard comes up split in two by default, with a gap in the middle. Bracemark’s forms sit above it. If you switch Gboard to floating, the forms stay where they are and the keyboard floats over them. Their buttons stay reachable, but the keyboard can cover part of the field you’re typing in. A floating keyboard doesn’t tell the app how much of the screen it covers, so the app can’t move out of its way. You can drag the keyboard aside.
+
+Half-open, with the phone bent like a laptop or a book, Bracemark doesn’t change its layout. We didn’t build a layout around the hinge; the app keeps the one it had flat, and everything still reads with the screen bent.
+
+## A bug we haven’t fixed yet
+
+{/* TODO before publishing: re-check. If our fix or React Native’s has shipped, rewrite this section as fixed, with the version. */}
+Sometimes, after you fold the phone, Bracemark keeps its open-screen layout on the folded screen. The sidebar stays docked beside a list that is now only a few letters wide. Nothing is lost, and unfolding the phone puts it right. On the emulator, this happened in 3 of about 16 folds, and never on an unfold.
+
+The cause is below Bracemark, in React Native, the framework the app is built on. Android knew the screen had changed size. React Native didn’t pass the new size on, so the app went on laying itself out for the old one. Others have run into the same bug on foldables, and it’s [open in React Native’s tracker](https://github.com/react/react-native/issues/52952). Until it’s fixed there or we work around it, unfolding and folding again brings the right layout back.
+
+## How we tested
+
+We don’t have a physical foldable, so this was an emulator: Android’s own Pixel 9 Pro Fold profile, which folds, unfolds and half-opens on command. Our automated tests already shrink an Android tablet’s screen across the width where the layout switches, with a half-typed link in the add form. That covers rebuilding the screen, but not the rest of a fold: a different screen with a different cutout, and a near-square window when it’s open. So the fold has a checklist of its own, which we run by hand before each release. This post is its first run.
+
+If something looks wrong on your foldable, [tell us](/support), and say which phone it is.

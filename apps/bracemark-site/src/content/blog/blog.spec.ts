@@ -12,6 +12,7 @@ import { headingId } from '../../lib/mdx/headings';
 import { SITE_URL } from '../../lib/site';
 import { BLOG_POSTS } from './index';
 
+// Not recursive, on purpose: `draft/` holds unpublished posts (index.ts).
 const FILES = readdirSync(__dirname).filter((file) => file.endsWith('.mdx'));
 const SITE_PATHS = new Set(sitemap().map((entry) => entry.url.slice(SITE_URL.length)));
 

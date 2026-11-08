@@ -498,9 +498,17 @@ because neither belongs on an e2e device:
   phone layout. `adb -s emulator-5558 emu fold` and `… emu unfold` switch it
   from the console, headless or not (`dumpsys device_state` then reads
   `CLOSED`, and `wm size` follows). The window's toolbar has the same buttons.
-  So one AVD crosses 768 on a fold, which is the
-  release check in [safe-area.md](./safe-area.md) (_wide windows on native_):
-  fold and unfold with the add panel open, and nothing should remount.
+  So one AVD crosses 768 on a fold. That is the release checklist
+  `WINDOW-FOLD-ANDROID-001` (`e2e/mobile/RELEASE.md`, _Android foldable_):
+  nothing should remount. ⚠ **Folding brings up the lock screen, and a swipe
+  dismisses it**: no PIN, in every fold on 2026-11-08, even 65 s on. The app
+  pauses behind it. This image's Display settings offer no "continue on fold"
+  choice. So a PIN typed blind lands in the app's focused field. After a cold
+  boot, though, the PIN is needed once before the app can even be opened: until
+  then `expo run:android` installs and then fails with "unable to resolve
+  Intent". `adb emu sensor set hinge-angle0 90` half-opens it.
+  Each screen has its own camera cutout: open, top-right (a 136 px top inset);
+  folded, top centre (152 px).
 - **Google Password Manager.** The Google account and the 0000 PIN that
   [password-manager.md](./password-manager.md) (_the Android app_) needs go
   here, signed in by hand. It needs the PIN to show a saved password. They are

@@ -1820,6 +1820,16 @@
     "widths": ["wide"]
   },
   {
+    "id": "WINDOW-FOLD-ANDROID-001",
+    "title": "On a foldable, folding and unfolding keeps the open screen, its half-typed text and the lock, and the open screen's near-square window lays out with the rails docked",
+    "surface": "native",
+    "tier": "release",
+    "traits": ["online", "android"],
+    "fixture": "scale",
+    "path": "mobile/RELEASE.md",
+    "artifacts": ["manual-checklist"]
+  },
+  {
     "id": "VISUAL-APP-001",
     "title": "The app's named visual checkpoints on a phone and a tablet, light and dark",
     "surface": "native",

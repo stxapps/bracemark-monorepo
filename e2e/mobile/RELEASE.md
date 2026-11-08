@@ -259,3 +259,121 @@ install so the device has never been asked.
    a Google account that has not reviewed Bracemark, and repeat steps 1, 4 and 6.
    Play shows its in-app review card; a sideloaded build calls the same code and
    shows nothing, which is expected.
+
+## Android foldable
+
+`WINDOW-FOLD-ANDROID-001` `release` `online` `android`
+
+`WINDOW-RESIZE-ANDROID-001` already proves, on the tablet AVD, that the window
+crossing 768 is a re-layout and not a remount: it shrinks the display with
+`wm size`. A real fold is more than that. It switches to a different screen, with
+its own camera cutout and insets. It brings up the lock screen. And open, it
+hands the app a near-square window that no other device here has. That is what
+this checks.
+
+It is manual on an emulator, not an e2e leg. The fold AVD carries the Google
+account and the PIN that Google Password Manager needs, so the e2e preflight
+refuses it. Folding is also both of the runner's two widths at once
+(docs/app-drivers.md, _the AVDs_, _the fold AVD_).
+
+**Setup.** Start `npm run expo:android:emulator:fold`, with its window, so the
+toolbar's fold buttons are there. Boot no other Android device, so
+`npm run expo:android` installs the dev build on this one. Sign in as `plus-full`
+(`npm run seed:accounts`; docs/e2e.md, _seeded dev accounts_), so there are
+1,000 links to scroll. Google Password Manager offers to save the login: press
+**Back**, not "Not now", because a "Not now" makes the next sheet offer "Never"
+(docs/password-manager.md, _the Android app_).
+
+Fold and unfold with the toolbar, or with `adb -s emulator-5558 emu fold` /
+`emu unfold`. ⚠ **Folding brings up the lock screen, and a swipe dismisses it.**
+The app pauses behind it, as it does for any lock screen. On 2026-11-08 every
+fold showed it, and none needed the PIN, even after 65 s; unfolding showed
+nothing. Swipe it away within 60 s, so the app lock's grace window does not
+come into it (except in step 6). **Never type the PIN without looking.** When
+the lock screen is already gone, the digits and the Enter land in the app's
+focused field, and the Enter can close or submit what you are checking.
+
+**After a cold boot, unlock with the PIN before installing.** Until the first
+unlock after boot, Android cannot open the app. `npm run expo:android` then
+installs the build and fails to open it ("unable to resolve Intent"), and Metro
+exits with it. Unlock, run `npm run expo:start`, and open the app with
+`npm run android:open -w @stxapps/bracemark-expo`.
+
+1. **Open, upright** (2076×2152 at 390 dpi, 851 × 882 dp; a portrait window, so
+   the links rail starts at 240). The links and settings rails dock. In the
+   ~611 dp links pane, rows show the title, host, tags and date. Drag the rail's
+   grip to its widest step, 320: the 40% limit stops it there
+   (docs/safe-area.md, _wide windows on native_). That leaves about 531 dp,
+   below the 576 a row needs for its date column (`link-row.tsx`). The date
+   column goes, the title takes the room, and nothing clips. Drag back to 240:
+   the date column comes back.
+2. **Open, on its side** (882 × 851, landscape, rail 280 by default). The same
+   checks. The rails stay docked.
+3. **The cutouts.** The open screen's camera hole is in its top-right corner.
+   Android reports it as a 136 px (56 dp) top inset, upright and on its side.
+   The topbar's trailing controls sit clear of it both ways. Folded, the outer
+   screen's hole is top centre (152 px).
+4. **Dialogs, open.** The add panel, the link editor and Advanced Search are
+   centred `max-w-lg` dialogs, and the add panel's backdrop covers the docked
+   rail (as `LAYOUT-WIDE-001` checks on the tablet).
+5. **Fold, swipe the lock screen away, check; unfold, check.** Do this once from each of these
+   states, with the keyboard up where there is a field:
+   - the add panel with a half-typed URL;
+   - the link editor with a title changed and not saved;
+   - the links list scrolled several hundred rows down;
+   - Advanced Search with a query typed;
+   - Settings, one level in.
+
+   **Pass:** the same screen with the same text after each change. The panel and
+   the editor turn from dialogs into bottom sheets and back. The list stays
+   near where it was. **Fail:** the app restarts (the landing screen, or the
+   links screen at the top), or a field comes back empty. That means the activity
+   was recreated (docs/expo-build.md, _devices_, `smallestScreenSize`).
+
+   ⚠ **Known failure, open upstream: folded, the app can keep the wide layout.**
+   The rail stays docked on the 443 dp outer screen, the list is squeezed to a
+   letter or two per title, and there is no menu button. Nothing was remounted
+   and no text is lost, and it does not clear by waiting, scrolling or leaving
+   the app; the next unfold does. On 2026-11-08 (React Native 0.81.5, Android 16) it happened on 3 of about 16 folds and none of the unfolds. Android had
+   the new size: `DeviceInfo`'s window read 1080×2424 px. But JS's `Dimensions`
+   still held the open screen's 851.7 × 882.9 dp, because React Native never
+   sent its dimensions-changed event. `useWideWindow` (`lib/window-class.ts`) and
+   Uniwind's `md:` both read that value, so a JS-side listener cannot fix it.
+   Upstream: [react/react-native#52952](https://github.com/react/react-native/issues/52952)
+   is open, and it is the one to watch. Its stale bot flagged it on 2026-08-18
+   for closing, so check it is still open. A reproducer project is in
+   [the thread](https://github.com/react/react-native/issues/52952#issuecomment-3146415102).
+   That comment calls Android 16 unaffected, but here, on 16, it is intermittent.
+   The fix proposed in
+   [#53467](https://github.com/react/react-native/pull/53467) (`ReactRootView`
+   listening to `WindowInfoTracker`) was closed unmerged as a draft. The thread
+   suggests `useSafeAreaFrame` (react-native-safe-area-context) as a stopgap.
+   Here it could only correct the JS branches: Uniwind's `md:` still reads
+   `Dimensions`, so a fix has to make React Native send the event. Spot it with
+   `uiautomator dump`: `links-screen`'s left edge is still at 585 px on a
+   1080 px screen. Fold and unfold a few times per state, since one clean fold
+   proves nothing. Record a sighting as this known failure, not as a new one,
+   until upstream ships a fix or the app adds a native one.
+
+6. **The app lock across a fold.** Set an app lock (Settings → Misc). Fold, and
+   swipe the lock screen away within 60 s: the app is still open. Unfold, fold
+   again, wait more than 60 s, then swipe it away: Bracemark's own lock gate is
+   up, and its password opens it (docs/locks.md, the 60 s grace window). Remove
+   the lock afterwards.
+7. **The share panel.** Open a page in Chrome, share it to Bracemark, and fold
+   and unfold with the panel up. It keeps the URL, and saving works
+   (docs/share-sheet.md: the share activity declares `smallestScreenSize` too).
+8. **The keyboard, open.** In the add panel and the link editor, switch Gboard
+   to its split layout and then to floating. The sticky footers' buttons stay
+   above the keys, or at least reachable. Record what happens: whether the
+   footers' lift holds for a keyboard that is not docked to the bottom is open
+   (docs/soft-keyboard.md).
+9. **Half-open.** Bend the screen to about 90°, upright and on its side:
+   `adb -s emulator-5558 emu sensor set hinge-angle0 90` (`dumpsys device_state`
+   reads `HALF_OPENED`; `180` lays it flat again). To turn it, set
+   `accelerometer_rotation` to 0 first, or `user_rotation` is ignored. The app does not read
+   the hinge, on purpose (docs/expo-build.md, _devices_). Check only that the
+   list and the dialogs still read with the screen bent.
+
+Record the build, the AVD's Android and Gboard versions, and a pass or fail for
+each step. Note the rail width at step 1 if a row clipped.

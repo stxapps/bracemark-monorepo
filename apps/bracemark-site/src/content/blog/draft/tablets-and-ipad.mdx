@@ -1,0 +1,52 @@
+{/_ DRAFT, not published. To publish: move this file up to blog/, and add to index.ts:
+slug: 'tablets-and-ipad'
+title: 'Bracemark on iPad and Android tablets'
+description: 'On a tablet, Bracemark docks its sidebars beside your links. We explain the one width it switches at, the resizable sidebar, and what isn’t done yet.'
+publishedAt: the day the App Store release is live
+Before publishing: re-check every TODO below against what shipped. _/}
+
+Bracemark is now on the App Store, and it runs on iPad as well as iPhone. On Android it has fitted tablets since version 1.1. This post is about what changes on a bigger screen, why it changes at one exact width, and what we haven’t finished yet.
+
+## One width, not one device
+
+On a phone, your lists and tags live in a sidebar that slides in over your links, and Settings works the same way. On a tablet there’s room for both, so the sidebar stays open beside the list, and the Settings menu stays open beside the page you’re on.
+
+The app doesn’t ask what kind of device it’s on to decide this. It looks at the width of its window, and it switches at 768 points: below that, the phone layout; at 768 or wider, the docked sidebars. Nothing else changes the layout.
+
+We chose the window over the device because the window is what you actually get. An iPad running apps in windows can hand Bracemark one narrower than a phone’s, and the app then uses its phone layout. An Android tablet can run the app in half the screen, or in a freely sized window. Most phones turned on their side are wider than 768, so they get the docked sidebar. One rule covers all of them.
+
+We picked 768 because it’s where the [web app](/docs/get-the-apps) docks its sidebar, so both apps turn into the same layout at the same width. It has a cost. An iPad mini held upright is 744 points wide, and a 7-inch Android tablet held upright is narrower still, so both get the phone layout. A sidebar docked beside them would leave the list about as wide as a phone’s.
+
+## A sidebar you can resize
+
+On the web, you drag the sidebar’s edge to any width. On a touch screen that didn’t work well. There’s no pointer to hover over a thin edge, a finger isn’t precise enough to stop at an exact width, and when you use cards, the number of columns depends on the space the sidebar leaves. A sidebar that moved one point at a time would rearrange the cards on every frame of the drag.
+
+So the sidebar has a grip on its edge, and it moves in steps: 240, 280, 320, 360 or 400 points. As you drag, it jumps to the next step when your finger passes halfway. The cards rearrange once per step, not once per frame. A double-tap returns it to the default width, and dragging it past half its narrowest width puts it away. With VoiceOver or TalkBack, the grip is an adjustable control, so a swipe moves it a step and you hear “Narrowest” through “Widest” rather than a number of points.
+
+Two limits keep the list usable. The sidebar never takes more than 40% of the window. It also keeps a separate width for an upright window and a wide one. The default is 240 upright and 280 on its side. On an 11-inch iPad held upright, 240 is the widest sidebar that still leaves each row enough room to show its date.
+
+“Upright” here means the window, not the iPad. A landscape iPad running two apps side by side can give Bracemark a window that is taller than it is wide, and that window gets the upright width.
+
+The grip itself took a second attempt. On Android, a view inside the sidebar can’t receive a touch past the sidebar’s edge, so the grip’s touch area stopped exactly at the line it was drawn on, and a finger aimed at it often missed. It now sits across the edge, half over the sidebar and half over the list.
+
+## Forms that fit a bigger screen
+
+On a phone, adding a link opens a sheet from the bottom of the screen, above the keyboard. On an iPad we first used the same sheet, and the iPad keyboard broke it. An iPad keyboard can float, undock, or split in two, and a hardware keyboard replaces it with a thin bar. The library we use to keep forms above the keyboard moves them up by the keyboard’s height, wherever the keyboard actually is. With a floating keyboard, the sheet rose by the height of a keyboard that wasn’t at the bottom.
+
+So at 768 and wider, adding a link, editing one and Advanced Search open as a centred card instead, which doesn’t depend on where the keyboard is.
+
+The first version of that card had a quieter bug. It dimmed the list behind it, but not the docked sidebar, so you could still tap a list in the sidebar while a half-finished form sat open. On a phone, the sidebar slides in over the list, so every test on a phone passed. The dimmed layer now covers the whole window.
+
+## Turning the screen without losing your place
+
+Rotate a tablet, drag a split-screen divider, or move the app to another display, and the window changes size. On Android, a window change the app hasn’t declared it can handle makes the system rebuild the screen from scratch. That would close the form you were in and lose a half-typed link. The Expo template we build on doesn’t declare the one Android reports when a window crosses from phone size to tablet size, so we added it.
+
+Our automated tests now run the app on two wide devices as well as the phones: an iPad simulator and an Android tablet emulator. One test types half a link into the add form, shrinks the Android tablet’s display below 768, and checks that the form and the text are still there after it re-lays out as a phone. Another turns the iPad on its side and back with the form open.
+
+## What isn’t done yet
+
+{/* TODO before publishing: re-check against what shipped. If the window-controls bug is fixed, replace this paragraph. */}
+iPadOS 26 can run apps in windows you resize yourself (Windowed Apps, in Settings → Multitasking & Gestures). In a small window, the iPad’s own window controls sit over the button that opens the sidebar, and only a thin strip at the bottom of that button still responds. We found this on the iPad simulator and haven’t fixed it yet. Full Screen Apps, the mode our automated tests run in, isn’t affected.
+
+{/* TODO before publishing: drop this paragraph if a real iPad has been used by then. */}
+We’ve tested on the iPad simulator and the Android emulator, not on a physical iPad. If something looks wrong on yours, [tell us](/support).

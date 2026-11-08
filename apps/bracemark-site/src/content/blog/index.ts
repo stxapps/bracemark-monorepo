@@ -1,6 +1,9 @@
 // The published blog manifest. Its fields are shared by the index, article
-// pages, metadata, sitemap, and RSS feed. Keep draft prose outside this folder:
-// blog.spec.ts checks that every MDX file here has a published manifest entry.
+// pages, metadata, sitemap, and RSS feed. Drafts go in `draft/`: blog.spec.ts
+// checks that every MDX file directly in this folder has a published manifest
+// entry, and nothing reads the subfolder — the article page loads only manifest
+// slugs (lib/mdx/load.ts). Publishing is moving the file up a level and adding
+// its entry here. The repo is public, so a committed draft is readable on GitHub.
 
 export type BlogPost = {
   slug: string;
