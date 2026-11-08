@@ -196,9 +196,11 @@ export function LinkAddSurface({
   // from the submit that found it, so Restore doesn't re-query.
   const [trashedMatch, setTrashedMatch] = useState<LinkItem | null>(null);
 
-  // Reset to a clean draft whenever the surface opens; clear on close too so a
-  // half-filled form never lingers. defaultListId is read at open time so the
-  // pre-selection tracks the view the user opened it from.
+  // Reset to a clean draft whenever the surface opens, so a half-filled form
+  // never comes back. Closing does NOT clear it — the closed surface keeps its
+  // last draft in state, which is why anything reading that state while closed
+  // must gate on `open` (useUnsavedDraft, below). defaultListId is read at open
+  // time so the pre-selection tracks the view the user opened it from.
   //
   // Every state above lives HERE rather than in a form subcomponent, which is
   // what lets the container swap mid-edit: crossing `md` (a rotation, a resized
@@ -320,7 +322,15 @@ export function LinkAddSurface({
   // Reported page-wide for the "updated, reload" pill (use-unsaved-draft.ts).
   // Wider than the close guard: a typed URL is cheap to retype after a stray
   // click, but a reload the app starts should still not drop it unasked.
-  useUnsavedDraft(optionalDirty || url.trim() !== '');
+  //
+  // Gated on `open`, because this surface is NOT unmounted when it closes — the
+  // topbar instance lives as long as the page — and its draft state is reset only
+  // when it next OPENS (onOpenChange). Ungated, a closed surface reported the
+  // leftovers: the URL of a link just saved or cancelled, and — with nothing typed
+  // at all — `listId !== defaultListId` the moment the user picked another list in
+  // the rail, since `listId` still held the list the page loaded on. Either made
+  // the pill's "discard your changes?" ask about an editor that wasn't open.
+  useUnsavedDraft(open && (optionalDirty || url.trim() !== ''));
 
   // Guard only the ACCIDENTAL close vectors (outside-click / overlay tap,
   // Escape, and the sheet's swipe-adjacent dismissals), and only when the

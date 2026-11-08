@@ -210,7 +210,11 @@ local writes already started to commit (`flushLocalWrites`, a read-only Dexie
 transaction that queues behind every earlier write) and never discards an
 editor's unsaved work silently: the three web editors report their dirty flag
 (`useUnsavedDraft` — the edit dialog, quick-add, bulk tags), and with one open
-the user either keeps editing or explicitly chooses "Discard and reload". A
+the user either keeps editing or explicitly chooses "Discard and reload". The
+flag is reported **only while the editor is open**: quick-add stays mounted when
+closed and keeps its last draft in state until it next opens, so an ungated flag
+asked about an editor nobody could see — a just-saved URL, or a list picked in
+the rail after load. A
 routine update never reloads a tab by itself. `PWA-007` deploys a new worker
 under two open tabs: both show the pill, the one left alone keeps working, and
 Reload lands the other on the new worker.
