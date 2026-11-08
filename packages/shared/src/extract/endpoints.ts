@@ -1,8 +1,10 @@
 import { API_V1, defineEndpoint } from '../api/endpoint';
+import { readerDocSchema } from '../reader/reader-doc';
 import { LINK_TITLE_MAX } from '../sync/entities';
 import { z } from '../zod';
 
-// bracemark-extractor contract — the title/image metadata fetch + the image proxy.
+// bracemark-extractor contract — the page fetch (title/image, and read mode on request)
+// + the image proxy.
 //
 // Defined once here in `shared` (the lowest, platform-agnostic layer), exactly
 // like the auth/sync contracts, so the `bracemark-extractor` Worker validates against
@@ -44,6 +46,45 @@ export const httpUrlSchema = z
 // + egress), the same abuse-gate role `MAX_COMMIT_OPS`/`MAX_SIGN_PATHS` play for
 // sync — over the cap the whole request 400s at the contract before any fetch runs.
 export const MAX_EXTRACT_URLS = 20;
+
+// The facets one extract request can ask the server for — the subset of the extraction
+// facets (sync/entities.ts) a raw-HTML fetch can produce. Screenshot and page copy need a
+// browser rendering the page, so they are never the server's (docs/link-extraction-keep.md,
+// _per client_). One fetch of the page serves every facet asked for, under one SSRF guard
+// and one rate-limit hit — which is why read mode is a field on this route rather than a
+// second endpoint.
+export const EXTRACT_FACETS = ['titleImage', 'readMode'] as const;
+export const extractFacetSchema = z.enum(EXTRACT_FACETS);
+export type ExtractFacet = z.infer<typeof extractFacetSchema>;
+
+// The batch cap when `readMode` is among the facets. Each result then carries a whole
+// article (up to the walker's READER_DOC_MAX_CHARS, though a real one is tens of KB),
+// and each page costs Readability's parse on the Worker's CPU rather than a streaming
+// head scan — so a read-mode request is a handful of pages, never a drain's page of
+// twenty. Over it the request 400s at the contract, like MAX_EXTRACT_URLS.
+// apps/bracemark-site/src/app/extractor/page.tsx prints this number: move both.
+export const MAX_EXTRACT_READ_MODE_URLS = 5;
+
+// Why a result that was asked for `readMode` carries none, when the page itself was
+// fetched (`ok: true`). A free STRING on the wire, not an enum, so a newer server's
+// reason never fails an older client's parse of the whole response; a client narrows
+// it through `readModeVerdictOf` (extract/read-mode.ts), where an unknown reason is a
+// transient failure.
+//  - 'not-an-article'     — Readability found no article: a product page, an app shell,
+//                           a JS-rendered page whose HTML holds no text. Settled.
+//  - 'not-html'           — the address isn't a document (a PDF, an image). Settled.
+//  - 'robots-disallowed'  — the site's robots.txt disallows this path for
+//                           bracemark-extractor (or for `*`). Settled for the server
+//                           tier; a client reading the live page may still take one.
+//  - 'robots-unavailable' — robots.txt could not be read (a 5xx, a timeout), which
+//                           RFC 9309 treats as a full disallow until it can. Transient.
+export const READ_MODE_REASONS = {
+  notAnArticle: 'not-an-article',
+  notHtml: 'not-html',
+  robotsDisallowed: 'robots-disallowed',
+  robotsUnavailable: 'robots-unavailable',
+} as const;
+export type ReadModeReason = (typeof READ_MODE_REASONS)[keyof typeof READ_MODE_REASONS];
 
 // Per-URL failure reasons. An enum (not a free string) so the client can branch:
 //  - 'blocked'          — SSRF guard rejected the URL or a redirect hop (private
@@ -114,37 +155,69 @@ export const extractResultSchema = z.object({
   // Optional, not required, so a client stays compatible with an extractor that predates
   // it (the fallback is the enum's transient default).
   status: z.number().int().optional(),
+  // The page's read-mode copy — only when the request asked for `readMode`, the page
+  // was HTML, robots.txt allowed it, and Readability found an article. Blocks, never
+  // HTML (reader/reader-doc.ts): the server runs the same walker every live-page capture
+  // runs (reader/reader-doc-from-dom.ts), so a server copy reads like an extension one.
+  // Parsed with the stored-bytes schema (no `.max()`), and the client re-parses it before
+  // it encrypts anything.
+  readMode: readerDocSchema.optional(),
+  // Why `readMode` is absent on an `ok` result that asked for it (READ_MODE_REASONS).
+  readModeReason: z.string().optional(),
 });
 export type ExtractResult = z.infer<typeof extractResultSchema>;
 
-export const extractRequestSchema = z.object({
-  urls: z.array(httpUrlSchema).min(1).max(MAX_EXTRACT_URLS),
-  // Opt-in: inline the og:image bytes in the result (base64) so an interactive save
-  // skips the second /v1/fetch-image round trip. HONORED ONLY for a single-URL request
-  // — a batch/import gets `imageUrl` only (inlining N images would bloat the JSON and
-  // defeat the streaming proxy). The decision is the CLIENT's, never the server's:
-  // only the client knows "interactive single save" vs "bulk-import drain"
-  // (urls.length is a weak proxy a chunked import would fool). The server merely
-  // enforces the single-URL guard + the inline byte cap.
-  inlineImage: z.boolean().optional(),
-});
+export const extractRequestSchema = z
+  .object({
+    urls: z.array(httpUrlSchema).min(1).max(MAX_EXTRACT_URLS),
+    // Opt-in: inline the og:image bytes in the result (base64) so an interactive save
+    // skips the second /v1/fetch-image round trip. HONORED ONLY for a single-URL request
+    // — a batch/import gets `imageUrl` only (inlining N images would bloat the JSON and
+    // defeat the streaming proxy). The decision is the CLIENT's, never the server's:
+    // only the client knows "interactive single save" vs "bulk-import drain"
+    // (urls.length is a weak proxy a chunked import would fool). The server merely
+    // enforces the single-URL guard + the inline byte cap.
+    inlineImage: z.boolean().optional(),
+    // Which facets to produce. Absent means `['titleImage']` — what every client before
+    // read mode sent, so an older client's request means what it always meant. A
+    // `readMode` request may name at most MAX_EXTRACT_READ_MODE_URLS urls.
+    facets: z.array(extractFacetSchema).min(1).max(EXTRACT_FACETS.length).optional(),
+  })
+  .refine(
+    (request) =>
+      !request.facets?.includes('readMode') || request.urls.length <= MAX_EXTRACT_READ_MODE_URLS,
+    {
+      message: `a readMode request takes at most ${MAX_EXTRACT_READ_MODE_URLS} urls`,
+      path: ['urls'],
+    },
+  );
 export type ExtractRequest = z.infer<typeof extractRequestSchema>;
+
+// The facets a request asks for, defaulted — the server's reading of `facets`.
+export function extractFacetsOf(request: Pick<ExtractRequest, 'facets'>): Set<ExtractFacet> {
+  return new Set(request.facets ?? ['titleImage']);
+}
 
 export const extractResponseSchema = z.object({
   results: z.array(extractResultSchema),
 });
 export type ExtractResponse = z.infer<typeof extractResponseSchema>;
 
-// POST /v1/extract { urls, inlineImage? }
-//   → { results: [{ url, ok, title?, imageUrl?, imageBase64?, error? }] }
+// POST /v1/extract { urls, inlineImage?, facets? }
+//   → { results: [{ url, ok, title?, imageUrl?, imageBase64?, error?, status?,
+//                   readMode?, readModeReason? }] }
 //
 // Its own deadline, sized from the extractor's upstream limits
 // (bracemark-extractor lib/safe-fetch.ts): each page is up to MAX_REDIRECTS + 1
 // hops at FETCH_TIMEOUT_MS each (6 × 8 s), and a single-URL inline extract then
 // fetches the image the same way, one after the other — ~96 s before the
-// extractor can answer a slow-but-healthy request. A batch resolves its URLs
-// concurrently, so it fits the same bound. Raising either limit there means
-// raising this.
+// extractor can answer a slow-but-healthy request. A `readMode` request adds the
+// robots.txt read of the final page's origin after the page (lib/robots.ts:
+// MAX_REDIRECTS + 1 hops at ROBOTS_TIMEOUT_MS, 6 × 3 s), and a readMode-ONLY request
+// reads it before the page too — ~84 s; with titleImage and the inline image, the first
+// read runs beside the page fetch, so 48 + 18 + 48 = ~114 s. A batch resolves its URLs
+// concurrently, so it fits the same bound. Raising any of those limits means raising
+// this.
 export const EXTRACT_TIMEOUT_MS = 2 * 60_000;
 
 export const extractEndpoint = defineEndpoint({

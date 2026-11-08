@@ -22,6 +22,11 @@
       "import": "./src/reader/reader-doc-core.ts",
       "default": "./src/reader/reader-doc-core.ts"
     },
+    "./reader/reader-doc-from-dom": {
+      "types": "./src/reader/reader-doc-from-dom.ts",
+      "import": "./src/reader/reader-doc-from-dom.ts",
+      "default": "./src/reader/reader-doc-from-dom.ts"
+    },
     "./testing": {
       "types": "./src/testing/backup-fixtures.ts",
       "import": "./src/testing/backup-fixtures.ts",

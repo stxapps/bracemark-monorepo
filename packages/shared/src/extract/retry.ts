@@ -1,6 +1,6 @@
 import { type Facet } from '../sync/entities';
 import { backoff, EXTRACTION_BACKOFF_MAX_MS } from '../sync/extraction';
-import { type ExtractError } from './endpoints';
+import { type ExtractError, type ExtractResult, READ_MODE_REASONS } from './endpoints';
 
 // The PERMANENT/TRANSIENT axis for one link's failed extraction — `permanent` (never
 // retry) vs `failed` (retry once cooled past `backoff` — sync/extraction.ts).
@@ -80,4 +80,31 @@ export async function verdictForExtractError(
     return verdictForStatus(status, priorAttempts);
   }
   return isPermanent(error) ? 'permanent' : 'failed';
+}
+
+// One `ExtractResult` → the `readMode` facet's verdict, for the server tier: `done` when
+// the copy came back; otherwise the page fetch's own verdict when the fetch failed, or the
+// result's `readModeReason` (endpoints.ts, READ_MODE_REASONS). The settled reasons are
+// answers about the PAGE — no article in its HTML, not a document, the site's robots.txt
+// says no — that a retry from this tier can't change, so they're `permanent` and ride on
+// the facet as its `reason`. `robots-unavailable`, and any reason this build doesn't
+// know (a newer server's), stays transient. A live-page client may still take a copy
+// later, at its own tier: an explicit ask is never gated on a server verdict.
+export async function readModeVerdictOf(
+  result: Pick<ExtractResult, 'ok' | 'error' | 'status' | 'readMode' | 'readModeReason'>,
+  priorAttempts: () => number | Promise<number>,
+): Promise<{ status: Facet['status']; reason?: string }> {
+  if (!result.ok) {
+    return { status: await verdictForExtractError(result.error, result.status, priorAttempts) };
+  }
+  if (result.readMode) return { status: 'done' };
+  const reason = result.readModeReason;
+  if (
+    reason === READ_MODE_REASONS.notAnArticle ||
+    reason === READ_MODE_REASONS.notHtml ||
+    reason === READ_MODE_REASONS.robotsDisallowed
+  ) {
+    return { status: 'permanent', reason };
+  }
+  return { status: 'failed', ...(reason ? { reason } : {}) };
 }

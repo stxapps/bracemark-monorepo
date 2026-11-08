@@ -52,6 +52,13 @@ export interface ExtractClient {
   // with ApiTimeoutError — the same as a JSON call, since this one can't ride
   // `callEndpoint`.
   fetchImage(url: string, signal?: AbortSignal): Promise<Uint8Array>;
+  // One page's read-mode copy — POST /v1/extract with `facets: ['readMode']`, a single
+  // URL. Only ever an explicit per-link ask (web-react lib/server-read-mode.ts): read
+  // mode is a whole article, so no drain batches it, and the contract caps a readMode
+  // request at MAX_EXTRACT_READ_MODE_URLS regardless. Returns that URL's result:
+  // `readMode` when the server found an article, else `readModeReason` (or a failed
+  // fetch's `error`).
+  extractReadMode(url: string, signal?: AbortSignal): Promise<ExtractResult>;
 }
 
 export function createExtractClient({
@@ -87,6 +94,18 @@ export function createExtractClient({
         { signal },
       );
       return results;
+    },
+
+    async extractReadMode(url, signal) {
+      const { results } = await callEndpoint(
+        { baseUrl, fetch: fetchImpl },
+        extractEndpoint,
+        { urls: [url], facets: ['readMode'] },
+        { signal },
+      );
+      const result = results[0];
+      if (!result) throw new Error('extractReadMode: empty result array');
+      return result;
     },
 
     async fetchImage(url, signal) {

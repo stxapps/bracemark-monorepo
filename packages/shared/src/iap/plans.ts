@@ -404,9 +404,12 @@ export const LIFETIME_ON_SALE = false;
 // (what the account has). The second reading is the stricter one — a feature
 // promised to someone who has already paid is a support ticket, not a lost sale.
 // Four rules when editing:
-//   - Only list what actually SHIPS. Reader view, screenshots, page copies, and AI
-//     are gated in ENTITLEMENTS above but not yet built, so they are NOT promised
-//     here — re-add each line as it lands. At launch Plus is unlimited links +
+//   - Only list what actually SHIPS. Page copies and AI are gated in ENTITLEMENTS
+//     above but not yet built, so they are NOT promised here — re-add each line as
+//     it lands. Read mode and screenshots (`keptCopies`) HAVE landed, on desktop
+//     (mobile takes read mode, no screenshot yet — docs/link-extraction-keep.md),
+//     and are not listed yet either: adding the line is a copy change, with its
+//     platform scope, for the cards, /pricing and both settings sections at once. At launch Plus is unlimited links +
 //     server-side link previews + app lock/hidden lists + the structured search
 //     editor.
 //   - Every list here is an INCREMENT over the plan below it, never an inventory.

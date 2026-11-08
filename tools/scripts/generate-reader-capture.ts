@@ -33,6 +33,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 // What the bundle's behaviour depends on. The spec hashes the same list.
 export const READER_CAPTURE_HASH_INPUTS = [
   'packages/web-react/src/lib/reader-doc-from-page.ts',
+  'packages/shared/src/reader/reader-doc-from-dom.ts',
   'packages/shared/src/reader/reader-doc.ts',
   'packages/shared/src/reader/reader-doc-core.ts',
   'node_modules/@mozilla/readability/package.json',
@@ -98,11 +99,11 @@ export async function renderReaderCapture(): Promise<{
 
   const preprocessing = `// ${banner}
 //
-// The iOS share extension's NSExtensionJavaScriptPreprocessingFile (wired by
-// expo-share-extension's \`preprocessingFile\` option in app.config.ts). Safari runs it
-// inside the shared page; the result lands on the sheet's RN root as
+// The NSExtensionJavaScriptPreprocessingFile of the iOS share extension (wired by
+// the \`preprocessingFile\` option of expo-share-extension, in app.config.ts). Safari runs it
+// inside the shared page; the result lands on the RN root of the sheet as
 // \`preprocessingResults\` and is read by src/features/share/share-url.ts.
-// docs/share-sheet.md, _what the sheet does and doesn't do_.
+// docs/share-sheet.md, the section on what the sheet does.
 /* eslint-disable */
 ${code}
 var ExtensionPreprocessingJS = {
@@ -132,7 +133,7 @@ true;`;
 export const READER_CAPTURE_SOURCE_HASH = '${hash}';
 
 // Inject into a WebView showing the page; it posts \`{ type: 'bracemark-read-mode', doc }\`
-// back through window.ReactNativeWebView, \`doc\` null when the page isn't an article.
+// back through window.ReactNativeWebView, \`doc\` null when the page is not an article.
 // prettier-ignore
 export const READER_CAPTURE_SCRIPT: string = ${JSON.stringify(injected)};
 `;

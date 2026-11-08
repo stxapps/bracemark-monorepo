@@ -8,7 +8,7 @@ on. Split out of [link-extraction.md](./link-extraction.md), which says **when**
 client calls it (the web drain, _Generate all_, imports) and why the default
 never does; this file is what happens on the other end of that call.
 [link-extraction-keep.md](./link-extraction-keep.md) has the read-mode facet this
-path is next to serve, [api-contracts.md](./api-contracts.md) the contract-first
+path also serves (_robots.txt and read mode_, below, is the part of it that lives here), [api-contracts.md](./api-contracts.md) the contract-first
 endpoint shape and the no-cache rule, and [hosting.md](./hosting.md) its origin.
 
 ### the service
@@ -40,8 +40,8 @@ browser that can't fetch for itself. It is a **separate app**, not a route in
   can't reach your private network or cloud IMDS (`169.254.169.254`), which
   neutralizes the classic server-side-fetch SSRF.
 - **Pure function, never a writer.** `bracemark-extractor` takes
-  `POST { urls } → [{ url, ok, title?, image?, readMode?, error? }]` — a **per-URL
-  result array** (partial success, never all-or-nothing, so each link's facet records
+  `POST { urls, facets? } → [{ url, ok, title?, imageUrl?, readMode?, readModeReason?, error? }]`
+  — a **per-URL result array** (partial success, never all-or-nothing, so each link's facet records
   its own `done` / `failed` / `permanent`) — **plaintext**, and returns it to
   the requesting client. The **client** (which holds the data key) does the E2E
   write-back into `links` / `files` / `extraction`. The extractor **holds no key,
@@ -160,8 +160,9 @@ browser that can't fetch for itself. It is a **separate app**, not a route in
   - **Its numbers are these constants.** The timeout, redirect cap, HTML ceiling,
     image ceiling and batch cap are printed as prose on a public page, and
     `bracemark-site` does not depend on `bracemark-extractor` — so moving
-    `FETCH_TIMEOUT_MS`, `MAX_REDIRECTS`, `MAX_HTML_BYTES`, `MAX_IMAGE_BYTES` or
-    `MAX_EXTRACT_URLS` silently turns a published commitment into a false one,
+    `FETCH_TIMEOUT_MS`, `MAX_REDIRECTS`, `MAX_HTML_BYTES`, `MAX_IMAGE_BYTES`,
+    `MAX_EXTRACT_URLS`, `MAX_EXTRACT_READ_MODE_URLS` or `MAX_ROBOTS_BYTES` silently
+    turns a published commitment into a false one,
     with no failing test. Move the page in the same change.
   - **Its blocking advice is `verdictForStatus`.** The page tells an operator to
     answer `403` because that is what the retry ladder settles as `permanent`;
@@ -179,11 +180,17 @@ browser that can't fetch for itself. It is a **separate app**, not a route in
     second surface call the extractor on its own, and the page describes a politeness
     the code no longer keeps. Nothing checks it — `bracemark-site` can't see either
     file.
-  - **robots.txt is disclosed, not obeyed.** The extractor does not fetch it —
-    these are one-shot fetches a person asked for, the same posture as a chat
-    app's link unfurl — and the page says so in those words rather than implying
-    compliance. If it ever does read robots.txt, that section becomes a promise
-    and has to be rewritten; until then it must not read as one.
+  - **robots.txt is obeyed for read mode, and disclosed as ignored for the rest.**
+    The title and the preview image are fetched without reading it — one-shot
+    fetches a person asked for, the posture of a chat app's link unfurl — and a
+    read-mode request reads it first (_robots.txt and read mode_, below). The page
+    says exactly that split, in those words: _It reads your robots.txt before it
+    keeps an article_. So the split is now a published **promise** in one direction
+    and a disclosure in the other, and either half moving — read mode skipping the
+    file, the title starting to obey it, a different group counting — is a change to
+    that section in the same release. The read-mode batch cap
+    (`MAX_EXTRACT_READ_MODE_URLS`) and the robots.txt read's own ceilings
+    (`ROBOTS_TIMEOUT_MS`, `MAX_ROBOTS_BYTES`) joined the numbers it prints.
     Network-abuse reports land at `abuse@bracemark.com` (`ABUSE_EMAIL`,
     `apps/bracemark-site/src/lib/site.ts`), an address that exists for this service
     specifically — nothing else in the product generates a reason to write to it.
@@ -204,25 +211,56 @@ takes the second, explicit opt-in.
   (fall back to `title = host`) rather than return garbage; richer per-type handling
   (PDF title, oEmbed, eventual Browser-Rendering JS execution) is the open scope
   call.
-- **Does server-side read-mode honour `robots.txt`?** Open, and it wants settling
-  BEFORE read-mode ships on this tier rather than after: it is a fetch-path change
-  (a second request per host, plus somewhere to cache the verdict — the extractor
-  is stateless and has no KV, so that means the Workers `caches` API or nothing),
-  and it is cheaper designed in than bolted on. Today the extractor does not read
-  the file, and `/extractor` **discloses** that rather than claiming compliance
-  (`apps/bracemark-site/src/app/extractor/page.tsx`). The disclosure's argument is
-  written to the axis that read-mode does not move — one person chose one address,
-  one request went out, the result went only to them — so read-mode needs it
-  re-checked, not rewritten. What read-mode does change is the OBJECTION: a title
-  is promotional and a publisher usually wants it in the unfurl, while the article
-  body is the thing they sell, so the population with a reason to complain is
-  different from the population `robots.txt` was aimed at. Three ways to land it:
-  read the file and honour it for every facet (simplest to explain; blanket
-  `User-agent: *` rules aimed at crawlers would start costing users titles on sites
-  that never meant to block an unfurl); honour it for `readMode` only and still
-  return `titleImage` (defensible, and the split matches the objection); or honour
-  only a rule that names **this** UA — treating a deliberate `bracemark-extractor`
-  block as authoritative while ignoring blanket ones — which is the current
-  disclosure's own distinction made mechanical, and the only option that turns that
-  section of the page from a disclosure into a claim. Whichever wins, the page
-  changes in the same release.
+- **Server read mode is built; the robots.txt question it opened is settled — below.**
+
+### robots.txt and read mode
+
+Server read mode (`facets: ['readMode']` on `POST /v1/extract` — the contract,
+`@stxapps/shared` extract/endpoints.ts; the facet's design,
+[link-extraction-keep.md](./link-extraction-keep.md)) is the one facet that reads the
+site's `robots.txt` first. Of the three ways this was open to land — honour it for every
+facet, for read mode only, or only for a rule naming this UA — it is the **second**:
+
+- **Read mode only.** A title is promotional and a publisher usually wants it in the
+  unfurl; the article body is what they sell, so the people with a reason to object to
+  a server keeping it are the people `robots.txt` speaks for. The title and image stay
+  unconditional, so a blanket `User-agent: *` / `Disallow: /` aimed at crawlers never
+  costs a user their titles.
+- **The group for `bracemark-extractor`, else `*`** — RFC 9309's choice of group, so a
+  site that disallows every crawler disallows this read mode too, and a site can allow
+  this service alone with a group of its own. Longest match wins, Allow on a tie, `*` and
+  `$` understood, percent-encoding normalized (`lib/robots.ts`, pinned by
+  `robots.spec.ts`).
+- **Status rules from the RFC**: a 4xx (or a redirect walk the SSRF guard refuses) is no
+  file, so no rules; a 5xx, a timeout or a network failure is _unreachable_, which the RFC
+  reads as a full disallow — here `robots-unavailable`, a **transient** answer for that
+  request, never a settled one.
+- **Which page's file**: the FINAL page's, after redirects — a shortener's robots.txt
+  says nothing about the article it points at. A readMode-only request also reads the
+  requested origin's file BEFORE the page and doesn't fetch a page it disallows; with
+  `titleImage` too, the page is fetched either way and the first read runs beside it.
+- **Stateless — no cache.** One read per origin per request (`createRobotsReader`),
+  dropped with it. Not the Workers `caches` API: a cached `robots.txt` keyed by host is a
+  record on our side that someone saved a page from that host, which _persists nothing_
+  rules out. The cost is a small extra request per origin, on read-mode requests only.
+- **A disallow is `permanent` for the server tier, not for the link.** The client
+  records `readMode` `permanent` with `reason: 'robots-disallowed'`
+  (`readModeVerdictOf`, extract/retry.ts), so nothing re-asks the server; a person who
+  opens the page and keeps a copy with the browser extension still can — that is their
+  own browser reading the page they are looking at, which no robots rule speaks to.
+
+What is still open: whether the **title** should ever honour a rule that names this UA
+specifically (the third option, a deliberate `bracemark-extractor` block made
+mechanical). Today that block is honoured by a `403`, which the page advises.
+
+**Cost on the Worker.** Read mode parses the page into a DOM (linkedom) and runs
+Readability over it, where the title is a streaming head scan. Measured on Node over
+synthetic article pages (not yet on workerd, and not on real pages): ~45 ms of CPU at
+35 KB of HTML, ~0.4 s at 300 KB, ~0.9 s at 1.5 MB — and the read stops at
+`MAX_HTML_BYTES`. Every one of those is past the Workers Free plan's 10 ms CPU limit, so
+⚠ **read mode needs the Workers Paid plan on the account that serves it** before it is
+turned on for anyone; on Free, the request is killed for CPU and the whole batch comes
+back a 5xx, which the client reads as a transport failure and retries, forever and
+silently. Nothing in this repo can check which plan an account is on. That is why a read-mode request is
+capped at `MAX_EXTRACT_READ_MODE_URLS` and why only an explicit per-link ask sends one
+(web-react `lib/server-read-mode.ts`); no drain batches read mode.

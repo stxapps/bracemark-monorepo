@@ -32,19 +32,24 @@ export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise
 // Three rules hold this page, and each has a way of being violated silently:
 //
 //   - EVERY NUMBER IS A CONSTANT IN THE REPO. The timeout, the redirect cap, the
-//     HTML ceiling, the image ceiling and the batch cap below are
-//     FETCH_TIMEOUT_MS, MAX_REDIRECTS, MAX_HTML_BYTES, MAX_IMAGE_BYTES and
-//     MAX_EXTRACT_URLS. They are written out as prose rather than imported
+//     HTML ceiling, the image ceiling, the two batch caps and the robots.txt
+//     ceiling below are FETCH_TIMEOUT_MS, MAX_REDIRECTS, MAX_HTML_BYTES,
+//     MAX_IMAGE_BYTES, MAX_EXTRACT_URLS, MAX_EXTRACT_READ_MODE_URLS (shared
+//     extract/endpoints.ts) and MAX_ROBOTS_BYTES (the extractor's lib/robots.ts). They are written out as prose rather than imported
 //     because the extractor is a separate app this site does not depend on — so
 //     if one of those constants moves, THIS PAGE IS THE THING THAT BREAKS, with
 //     no type error to say so. A published cap that the code exceeds is not a
 //     stale doc, it is a false statement to someone who is deciding whether to
 //     trust us.
 //
-//   - THE ROBOTS.TXT PARAGRAPH STAYS HONEST. We do not read robots.txt, and the
-//     temptation to fudge that on the one page where operators look for it is
-//     exactly why it is stated first and plainly. If the extractor ever learns to
-//     read it, this section changes from a disclosure to a claim — and not before.
+//   - THE ROBOTS.TXT PARAGRAPH STAYS HONEST — and it is now half a CLAIM. Read mode
+//     reads robots.txt and obeys the group for `bracemark-extractor`, else `*`; the
+//     title and preview image don't read it at all (apps/bracemark-extractor
+//     lib/robots.ts, docs/link-extraction-server.md, _robots.txt and read mode_).
+//     Both halves are stated plainly, because an operator who reads "it obeys
+//     robots.txt" and writes a rule expecting the title to stop has been misled by
+//     omission. The obeying half is a promise: if read mode ever skips the file, or
+//     a different group starts to count, this section changes in that release.
 //
 //   - THE BLOCKING ADVICE HAS TO MATCH `verdictForStatus`. 403 → retried up the
 //     backoff ladder, then permanent; 404/410 → permanent immediately; 429/5xx →
@@ -87,22 +92,23 @@ export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise
 //     Two consequences, both live:
 //
 //       WHAT IT TAKES FROM A PAGE IS A FACT, NOT A NEVER. Server-tier extraction
-//       is `titleImage` today, and `readMode` is already in the planned response
-//       shape (docs/link-extraction-server.md). It is the one
-//       further facet this tier can produce: screenshot and page copy need a
-//       browser actually rendering the page, which is why they are the
-//       active-context tiers' work (apps/bracemark-extension/utils/capture.ts).
-//       So the payload is named in ONE row of FACTS ("Takes") and nowhere in
-//       NEVER — when read-mode ships here, that row plus the four prose mentions
-//       (the lede, the log card, the crawler section, the blocking consequence)
-//       are the whole edit, and no promise on this page moves. Do NOT re-describe
-//       the payload inside NEVER, however true it is today.
+//       is `titleImage` and, when a person asks for it, `readMode` — the article's
+//       text (docs/link-extraction-server.md). Those are the only facets this tier
+//       can produce: screenshot and page copy need a browser actually rendering
+//       the page, which is why they are the active-context tiers' work
+//       (apps/bracemark-extension/utils/capture.ts). So the payload is named in
+//       ONE row of FACTS ("Takes") and nowhere in NEVER — read-mode landed as that
+//       row plus the four prose mentions (the lede, the log card, the crawler
+//       section, the blocking consequence) and the robots.txt section, and no
+//       promise on this page moved. Do NOT re-describe the payload inside NEVER,
+//       however true it is today.
 //
 //       The REQUEST COUNT moves with it, and is the half this list used to miss.
 //       "It is a fetcher, not a crawler" prices a save at TWO requests to the
 //       reader's server — one document fetch, plus one image fetch if the markup
-//       names a preview image — and a second facet asked for later is another
-//       fetch of a page you already answered for. The three nevers in that
+//       names a preview image — and read mode, asked for later, is another fetch
+//       of a page you already answered for, plus the robots.txt read before it.
+//       The paragraph says both now. The three nevers in that
 //       paragraph survive — no link-following, no self-initiated second page, no
 //       revisiting to see what changed, all still true, because the second fetch
 //       is still one person's one save. The arithmetic beside them does not, so
@@ -164,15 +170,16 @@ const USER_AGENT = 'bracemark-extractor/1.0 (+https://bracemark.com/extractor)';
 // want, then what it costs to give it. Deliberately includes the numbers that make
 // this cheap to host rather than only the ones that make us look careful.
 //
-// `Takes` is the row read-mode moves; see the fourth rule above before editing it.
+// `Takes` is the row read-mode moved; see the fourth rule above before editing it.
 const FACTS: [string, string][] = [
-  ['Takes', 'a title · a preview image'],
+  ['Takes', 'a title · a preview image · the article’s text, when asked'],
   ['Method', 'GET · no cookies, no credentials'],
   ['Timeout', '8 seconds per hop'],
   ['Redirects', '5 maximum'],
   ['HTML read', 'first 1 MB, then cancelled'],
   ['Images', '10 MB ceiling · never resized'],
-  ['Per request', '20 URLs at most'],
+  ['robots.txt', 'read before taking the article’s text · first 512 KB'],
+  ['Per request', '20 URLs at most · 5 when taking the article’s text'],
   ['Rate limit', 'per calling IP address · a counter, not a log'],
   ['JavaScript', 'not executed'],
   ['Runs on', 'Cloudflare Workers'],
@@ -226,7 +233,7 @@ export default function Page() {
     <PageShell
       eyebrow="Bot"
       title="Someone saved a link to your page."
-      lede="That is the whole reason this fetcher knocked. A person asked it to look for a title and preview image in your document — and here is everything about it that an access log won’t tell you."
+      lede="That is the whole reason this fetcher knocked. A person asked it to look for a title and preview image in your document, or for the text of your article, so they can keep a copy to read later on their own device — and here is everything about it that an access log won’t tell you."
     >
       <div className={cn('space-y-14')}>
         {/* The string they searched for, given the weight /support gives its
@@ -244,9 +251,10 @@ export default function Page() {
             Bracemark is an end-to-end encrypted bookmark manager. When someone saves a link in the
             web app — or asks us to fill in ones they saved or imported earlier — the browser won’t
             let that page fetch yours, so this service fetches it instead: reads the title and the
-            preview image, hands both back to the person’s own device, and forgets the address. It
-            is the only server of ours that fetches a page at all: every other way of saving a link
-            reads it on the person’s own device, from their own address.
+            preview image — and, if they asked to keep it, the article’s text — hands them back to
+            the person’s own device, and forgets the address. It is the only server of ours that
+            fetches a page at all: every other way of saving a link reads it on the person’s own
+            device, from their own address.
           </p>
         </section>
 
@@ -279,7 +287,10 @@ export default function Page() {
               discovers a page. One extraction attempt for one saved link makes one document request
               to you, plus one for a preview image if your document names one. A transient failure
               can be retried later. The person’s browser can’t read that image cross-origin any more
-              than it could read your page — that’s why we need the second request.
+              than it could read your page — that’s why we need the second request. Keeping the
+              article’s text is a separate ask the person makes for one link at a time: the service
+              reads your robots.txt first, then the document, so it is usually a second request for
+              a page you have already answered for.
             </p>
             <p>
               There is a backlog, though, and it is theirs rather than ours. Links saved before
@@ -384,29 +395,38 @@ export default function Page() {
 
         <section>
           <h2 className={cn('font-display text-2xl font-semibold tracking-tight')}>
-            It doesn’t read your robots.txt
+            It reads your robots.txt before it takes an article’s text
           </h2>
           <div className={cn('mt-4 space-y-4 text-base leading-7 text-muted-foreground')}>
             <p>
-              Said plainly, because this is the page where you came looking for it. A robots
-              directive won’t stop this fetcher, and we would rather disclose that than let you
-              write a rule that quietly does nothing.
+              Said plainly, because this is the page where you came looking for it, and the answer
+              has two halves. Before this service hands anyone the text of your article, it reads
+              your robots.txt and obeys it: the group for{' '}
+              <span className={cn('font-mono text-sm text-foreground')}>bracemark-extractor</span>{' '}
+              if you wrote one, otherwise the{' '}
+              <span className={cn('font-mono text-sm text-foreground')}>*</span> group. A path
+              disallowed there gets no copy of its text from us, and if only the text was asked for,
+              the page isn’t requested at all. If your robots.txt can’t be reached, no text is taken
+              that time. For the title and the preview image, it does not read robots.txt, and a
+              directive won’t stop those — we would rather say so than let you write a rule that
+              quietly does less than you meant.
             </p>
             <p>
-              The reasoning, for what it is worth, is about who chose — not about how much gets
-              read. A robots directive governs automated discovery: something deciding on its own
-              what to visit next, at a cadence and a volume you never agreed to. Nothing here
-              decides anything. One person put one address into their own library, one request went
-              out because of that, and what came back went to their device and nowhere else. There
-              is no queue behind it for a directive to shorten and no next page for it to keep us
-              away from.
+              The reasoning is about who chose, and about what is being taken. A robots directive
+              governs automated discovery: something deciding on its own what to visit next, at a
+              cadence and a volume you never agreed to. Nothing here decides anything — one person
+              put one address into their own library, one request went out because of that, and what
+              came back went to their device and nowhere else. A title and a preview image are what
+              a link preview in any chat app shows, and the tags they come from are published to be
+              shown there. The text of an article is what many sites exist to publish on their own
+              terms, so for that half your robots.txt gets the say.
             </p>
             <p>
               That is an argument, and one we could lose. It rests entirely on the request being one
               person’s and on there being exactly one of them. If this service ever fetches on its
               own initiative, or at a volume that a single save can’t account for, the argument is
               gone and this section gets rewritten rather than defended. Blocking by user agent
-              works either way, which is why that is documented below.
+              works for both halves, which is why that is documented below.
             </p>
           </div>
         </section>
@@ -471,8 +491,8 @@ export default function Page() {
             </p>
             <p>
               What blocking does to the person who saved the link: they get your hostname as the
-              title and no preview image. The link still works, they aren’t told why, and nothing
-              else about your site is affected.
+              title, no preview image, and no copy of the article’s text. The link still works, they
+              aren’t told why, and nothing else about your site is affected.
             </p>
           </div>
         </section>

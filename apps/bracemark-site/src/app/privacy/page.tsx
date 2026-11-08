@@ -35,12 +35,12 @@ export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise
 //   - bracemark-extractor is the ONE component that fetches user URLs. It holds no
 //     key, persists nothing, and its rate limiter logs IP addresses but never URLs
 //     (docs/link-extraction.md). What that service RETURNS is a fact that moves and
-//     the promise beside it is not: server-tier extraction is `titleImage` today
-//     and `readMode` is already in the planned response shape, so the em-dash
-//     clause in that paragraph ("the title and the preview image") is an
-//     enumeration to extend when read-mode ships, while "keeps nothing" and the
-//     three clauses after it are invariants that must not move. /extractor's
-//     header comment keeps the same split and the same change-list;
+//     the promise beside it is not: server-tier extraction is `titleImage`, and
+//     `readMode` when a person asks to keep a link's text, so the clause in that
+//     paragraph naming what comes back ("the title and preview image", then the
+//     article's text) is an enumeration that grew once already, while "keeps no
+//     page data" and the three clauses after it are invariants that must not move.
+//     /extractor's header comment keeps the same split and the same change-list;
 //   - subscription rows come from the payment providers, never from card data we
 //     hold, because we never hold any (docs/iap.md). The paragraph admitting that
 //     paying deanonymizes is traceable the same way, to that doc's _privacy note_:
@@ -166,7 +166,28 @@ export default function Page() {
             gives its retention). Per _Changes to this policy_, production counts
             and observes from day one, and refusing is a later switch (bracemark-api
             services/signup-cap.ts). So the bullet says we count, and that we
-            may cap. */}
+            may cap.
+
+            8 NOVEMBER 2026 WENT UP ABOVE THEM, newest first, and may come out on
+            or after 8 December 2026. It changes HOW WE USE an address we were
+            already handed, not what we collect: server read mode
+            (docs/link-extraction-server.md, _robots.txt and read mode_) has the
+            link-preview service return a page's text as well, on one person's
+            ask for one link. The bullet says what is new to the reader — what
+            comes back, and that it is only on request — and what is not: the
+            service still keeps nothing (the invariants _How link previews are
+            fetched_ lists). Per _Changes to this policy_ this page goes live
+            BEFORE the extractor that does it: deploy bracemark-site first. */}
+        <h2>What changed on 8 November 2026</h2>
+        <ul>
+          <li>
+            When you ask the web app for a read-mode copy of a link (the article’s text, to read
+            later), our link-preview service now returns that text as well as the title and preview
+            image. It goes to your device, where it is encrypted like the rest of your library, and
+            the service keeps none of it. <em>How link previews are fetched</em> now says so.
+          </li>
+        </ul>
+
         <h2>What changed on 4 November 2026</h2>
         <ul>
           <li>
@@ -613,12 +634,12 @@ export default function Page() {
           it. It is off unless you turn it on. When it is on, newly saved links and older pending
           links are sent as they come into view while you browse; Generate all sends every pending
           link. The service receives the address, fetches the page, returns the title and preview
-          image, and keeps no page data: it stores no URLs, writes none to its logs, holds no key,
-          and is not told which account asked. Its rate limiter briefly holds the requesting IP
-          address so that a single source cannot abuse it. The same service is described from the
-          other side — for the people who run the sites it fetches — on{' '}
-          <Link href="/extractor">its own page</Link>, including the caps it holds itself to and how
-          to turn it away.
+          image — and, when you ask for a read-mode copy of a link, the article’s text — and keeps
+          no page data: it stores no URLs, writes none to its logs, holds no key, and is not told
+          which account asked. Its rate limiter briefly holds the requesting IP address so that a
+          single source cannot abuse it. The same service is described from the other side — for the
+          people who run the sites it fetches — on <Link href="/extractor">its own page</Link>,
+          including the caps it holds itself to and how to turn it away.
         </p>
 
         <h3>If you contact us</h3>

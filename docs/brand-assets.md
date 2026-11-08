@@ -526,8 +526,10 @@ counts, far from any page. It is still the product talking, it is held to this
 whole section, and nothing checks it — `listing-copy.spec.ts` walks the store
 strings only. The specimen: when Bracemark backups became a converter input, the
 receipt's losses line and the page's input row both listed page copies and
-screenshots among what a backup holds. Both are planned features, and a sentence
-saying they are "not included" tells the reader they exist.
+screenshots among what a backup holds. Both were planned features then, and a
+sentence saying they are "not included" told the reader they existed. (Screenshots
+have since shipped, on desktop; page copies have not — the list is in
+`listing-copy.ts`.)
 
 **Another app's feature, in its own words, is not the same finding.** The
 converter reads LinkWarden, whose exports carry archived pages, so "archived

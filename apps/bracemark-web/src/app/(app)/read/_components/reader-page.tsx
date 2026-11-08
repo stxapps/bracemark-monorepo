@@ -1,23 +1,25 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowUpRight, BookOpen, Image as ImageIcon, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { LOCK_COPY } from '@stxapps/react';
-import { hostFromText, openableUrl } from '@stxapps/shared';
+import { hostFromText, openableUrl, READ_MODE_REASONS } from '@stxapps/shared';
 import {
   type KeptCopyFacet,
   type LinkItem,
   readExtraction,
   readLinkById,
+  type ServerReadModeOutcome,
   useEntitlements,
   useImageFileUrl,
   useKeptCopyMutations,
   useLocks,
   useReaderDoc,
+  useServerReadMode,
 } from '@stxapps/web-react';
 import { ReaderArticle } from '@stxapps/web-ui/components/reader/reader-article';
 import {
@@ -56,6 +58,12 @@ import { readLinksReturn } from '@/lib/links-return';
 //   - THE COPY IS TEXT. Rendering is web-ui's ReaderArticle, which turns strings
 //     into text nodes and nothing else (link-extraction-keep.md, the format
 //     tripwire). This file never touches the document's contents.
+//
+// The empty state is also where the web app TAKES a read-mode copy, through
+// bracemark-extractor (useServerReadMode — offered only with the server-extraction
+// opt-in on, on a plan with `keptCopies`). The row menu's _Keep read mode_ opens this
+// page with `&keep=readMode`, which runs that once and is then dropped from the
+// address, so a reload or a history entry can't fetch the page again on its own.
 
 // The ✕'s target: where the links page was, read after mount because
 // sessionStorage isn't there during the static render (settings' topbar does the
@@ -217,18 +225,104 @@ function DeleteCopy({ link, facet }: { link: LinkItem; facet: KeptCopyFacet }) {
   );
 }
 
-function EmptyCopies({ href }: { href: string | undefined }) {
+// What the server's answer means to the person who asked — the reasons are
+// READ_MODE_REASONS (@stxapps/shared extract/endpoints.ts). A copy that landed needs no
+// words: the page swaps the empty state for it. A FAILURE (nothing learned about the
+// page) takes the fixed error shape and announces as an alert; a settled answer about
+// the page is information, read politely (docs/brand-assets.md, _errors have a fixed
+// shape_; docs/accessibility.md).
+type OutcomeNotice = { text: string; failure: boolean };
+
+const KEEP_FAILED: OutcomeNotice = {
+  text: 'Could not keep read mode. Please try again.',
+  failure: true,
+};
+
+function outcomeNotice(outcome: ServerReadModeOutcome | 'error'): OutcomeNotice | null {
+  if (outcome === 'error') return KEEP_FAILED;
+  if (outcome.kind !== 'none') return null;
+  switch (outcome.reason) {
+    case READ_MODE_REASONS.notAnArticle:
+      return {
+        text: 'There’s no article on this page to keep in read mode. To keep how it looks, take a screenshot with the browser extension.',
+        failure: false,
+      };
+    case READ_MODE_REASONS.notHtml:
+      return { text: 'This address isn’t a web page, so there’s no text to keep.', failure: false };
+    case READ_MODE_REASONS.robotsDisallowed:
+      return {
+        text: 'This site asks services like ours not to copy its pages, so we don’t take one. You can still keep a copy from the page itself, with the browser extension.',
+        failure: false,
+      };
+    default:
+      return KEEP_FAILED;
+  }
+}
+
+function KeepReadMode({ link, auto }: { link: LinkItem; auto: boolean }) {
+  const { keep } = useServerReadMode();
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<OutcomeNotice | null>(null);
+
+  const run = () => {
+    setBusy(true);
+    setNotice(null);
+    keep(link)
+      .then((outcome) => setNotice(outcomeNotice(outcome)))
+      .catch(() => setNotice(outcomeNotice('error')))
+      .finally(() => setBusy(false));
+  };
+
+  // The row menu's _Keep read mode_ arrives with `auto` — that click was the ask. Once
+  // per mount; the parent has already dropped the parameter from the address.
+  const started = useRef(false);
+  useEffect(() => {
+    if (!auto || started.current) return;
+    started.current = true;
+    run();
+    // `run` is recreated per render; the ref is what makes this a once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto]);
+
+  return (
+    <>
+      <Button size="sm" disabled={busy} onClick={run}>
+        <BookOpen data-icon="inline-start" />
+        {busy ? 'Keeping read mode…' : 'Keep read mode'}
+      </Button>
+      {notice ? (
+        <p role={notice.failure ? 'alert' : 'status'} className={cn('text-pretty')}>
+          {notice.text}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+function EmptyCopies({
+  link,
+  href,
+  autoKeep,
+}: {
+  link: LinkItem;
+  href: string | undefined;
+  autoKeep: boolean;
+}) {
   const { entitlements } = useEntitlements();
+  const { available: serverAvailable } = useServerReadMode();
   const paywall = usePaywall();
 
   return (
     <Notice title="No copy of this page yet">
       <p>
         A kept copy is the page’s text in read mode, and a screenshot of how it looked — yours to
-        read even if the page changes or disappears. Copies are taken from the page itself: open it,
-        then save it with the Bracemark browser extension.
+        read even if the page changes or disappears.{' '}
+        {serverAvailable
+          ? 'Keep its read mode now — the preview service you turned on in Settings fetches it for you. To keep a screenshot too, open the page and save it with the Bracemark browser extension.'
+          : 'Copies are taken from the page itself: open it, then save it with the Bracemark browser extension.'}
       </p>
       <div className={cn('flex flex-wrap justify-center gap-2')}>
+        {serverAvailable ? <KeepReadMode link={link} auto={autoKeep} /> : null}
         {href ? (
           <Button asChild variant="outline" size="sm">
             <a href={href} target="_blank" rel="noreferrer">
@@ -248,7 +342,18 @@ function EmptyCopies({ href }: { href: string | undefined }) {
 }
 
 export function ReaderPage() {
-  const linkId = useSearchParams().get('link') ?? '';
+  const searchParams = useSearchParams();
+  const linkId = searchParams.get('link') ?? '';
+  // `&keep=readMode` — the row menu's _Keep read mode_. Read once into state and then
+  // dropped from the address (a replace, not a push), so the ask runs for the click
+  // that made it and never for a reload, a restored tab or a history entry.
+  const router = useRouter();
+  const pathname = usePathname();
+  const [autoKeep] = useState(() => searchParams.get('keep') === 'readMode');
+  useEffect(() => {
+    if (searchParams.get('keep') === null) return;
+    router.replace(`${pathname}?link=${encodeURIComponent(linkId)}`);
+  }, [searchParams, router, pathname, linkId]);
   const closeHref = useCloseHref();
   const { status: lockStatus, isListLocked, unlockList } = useLocks();
 
@@ -328,7 +433,7 @@ export function ReaderPage() {
       </>
     );
   } else {
-    body = <EmptyCopies href={href} />;
+    body = <EmptyCopies link={link} href={href} autoKeep={autoKeep} />;
   }
 
   return (

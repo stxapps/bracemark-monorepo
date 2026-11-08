@@ -31,6 +31,7 @@ const mockUpdate = jest.fn();
 const mockCreate = jest.fn();
 const mockSetMenuOpen = jest.fn();
 const mockRequestMove = jest.fn();
+let mockCanKeepReadMode = false;
 
 jest.mock('@stxapps/web-react', () => ({
   linkIdOf: (link: { path: string }) => link.path.replace(/^links\/|\.enc$/g, ''),
@@ -47,6 +48,7 @@ jest.mock('@stxapps/web-react', () => ({
   // module scope of its other hooks.
   useExtraction: () => ({ reportDisplayedLinkPaths: jest.fn() }),
   useTags: () => [],
+  useServerReadMode: () => ({ available: mockCanKeepReadMode, keep: jest.fn() }),
 }));
 
 jest.mock('../../_contexts/view-state-provider', () => ({
@@ -235,10 +237,33 @@ describe('Read', () => {
       />,
     );
 
+  afterEach(() => {
+    mockCanKeepReadMode = false;
+  });
+
   test('is absent on a link with no kept copy', () => {
     mountWith({});
     openMenu();
     expect(screen.queryByRole('menuitem', { name: 'Read' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Keep read mode' })).toBeNull();
+  });
+
+  test('is Keep read mode on a link with no copy, when the web app can take one', () => {
+    mockCanKeepReadMode = true;
+    mountWith({});
+    openMenu();
+    expect(screen.queryByRole('menuitem', { name: 'Read' })).toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Keep read mode' }).getAttribute('href')).toBe(
+      '/read?link=l1&keep=readMode',
+    );
+  });
+
+  test('stays Read on a link that has a copy, even when one could be taken', () => {
+    mockCanKeepReadMode = true;
+    mountWith({ screenshotId: 'file-1' });
+    openMenu();
+    expect(screen.getByRole('menuitem', { name: 'Read' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Keep read mode' })).toBeNull();
   });
 
   test.each([['readModeId'], ['screenshotId']])(

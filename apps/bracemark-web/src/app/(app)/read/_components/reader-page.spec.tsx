@@ -21,9 +21,15 @@ let mockLocked = false;
 let mockKeptCopies = false;
 const mockShowPaywall = jest.fn();
 const mockRemoveCopy = jest.fn(async (_link: unknown, _facet: string) => true);
+let mockServerAvailable = false;
+const mockKeep = jest.fn(async (_link: unknown): Promise<object> => ({ kind: 'kept' }));
+let mockSearch = 'link=l1';
+const mockReplace = jest.fn();
 
 jest.mock('next/navigation', () => ({
-  useSearchParams: () => new URLSearchParams('link=l1'),
+  useSearchParams: () => new URLSearchParams(mockSearch),
+  useRouter: () => ({ replace: mockReplace }),
+  usePathname: () => '/read',
 }));
 jest.mock('dexie-react-hooks', () => ({
   useLiveQuery: (querier: () => Promise<unknown>, deps: unknown[]) => {
@@ -41,6 +47,7 @@ jest.mock('@stxapps/web-react', () => ({
   useEntitlements: () => ({ entitlements: { keptCopies: mockKeptCopies } }),
   useImageFileUrl: (id: string | undefined) => (id ? `blob:${id}` : undefined),
   useKeptCopyMutations: () => ({ removeCopy: mockRemoveCopy }),
+  useServerReadMode: () => ({ available: mockServerAvailable, keep: mockKeep }),
   useLocks: () => ({
     status: 'ready',
     isListLocked: () => mockLocked,
@@ -74,6 +81,10 @@ beforeEach(() => {
   mockKeptCopies = false;
   mockShowPaywall.mockClear();
   mockRemoveCopy.mockClear();
+  mockServerAvailable = false;
+  mockKeep.mockClear();
+  mockSearch = 'link=l1';
+  mockReplace.mockClear();
 });
 
 test('a link in a locked list shows the unlock pane and none of the copy', async () => {
@@ -156,4 +167,54 @@ test('deleting a copy asks first, then removes that copy of this link', async ()
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
   });
   expect(mockRemoveCopy).toHaveBeenCalledWith(LINK, 'readMode');
+});
+
+describe('keeping read mode through the link-preview service', () => {
+  test('is offered on an empty link only when the web app can take a copy', async () => {
+    mockKeptCopies = true;
+    render(<ReaderPage />);
+    await screen.findByText('No copy of this page yet');
+    expect(screen.queryByRole('button', { name: 'Keep read mode' })).toBeNull();
+  });
+
+  test('a press asks once, for this link, and says why when there is no copy', async () => {
+    mockKeptCopies = true;
+    mockServerAvailable = true;
+    mockKeep.mockResolvedValueOnce({
+      kind: 'none',
+      status: 'permanent',
+      reason: 'robots-disallowed',
+    });
+    render(<ReaderPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Keep read mode' }));
+
+    expect((await screen.findByRole('status')).textContent).toMatch(
+      /asks services like ours not to/,
+    );
+    expect(mockKeep).toHaveBeenCalledTimes(1);
+    expect(mockKeep.mock.calls[0][0]).toMatchObject({ url: LINK.url });
+  });
+
+  test('arriving from the row menu runs it once and drops the ask from the address', async () => {
+    mockKeptCopies = true;
+    mockServerAvailable = true;
+    mockSearch = 'link=l1&keep=readMode';
+    render(<ReaderPage />);
+
+    await waitFor(() => expect(mockKeep).toHaveBeenCalledTimes(1));
+    expect(mockReplace).toHaveBeenCalledWith('/read?link=l1');
+  });
+
+  test('a transport failure says so rather than throwing', async () => {
+    mockKeptCopies = true;
+    mockServerAvailable = true;
+    mockKeep.mockRejectedValueOnce(new Error('503'));
+    render(<ReaderPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Keep read mode' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Could not keep read mode. Please try again.',
+    );
+  });
 });

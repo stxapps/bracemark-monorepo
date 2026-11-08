@@ -1,6 +1,11 @@
 import { ApiError, ApiTimeoutError } from '../api/client';
 import { createExtractClient } from './client';
-import { FETCH_IMAGE_TIMEOUT_MS, MAX_EXTRACT_URLS } from './endpoints';
+import {
+  extractRequestSchema,
+  FETCH_IMAGE_TIMEOUT_MS,
+  MAX_EXTRACT_READ_MODE_URLS,
+  MAX_EXTRACT_URLS,
+} from './endpoints';
 
 // The client binding to bracemark-extractor. `callEndpoint` already has its own spec
 // (api/client.spec.ts) — what this file pins is the part that is this client's own
@@ -459,5 +464,50 @@ describe('createExtractClient', () => {
     }
 
     expect(f.count()).toBe(1);
+  });
+});
+
+describe('extractReadMode — one page’s article', () => {
+  const DOC = { version: 1, capturedAt: 1, blocks: [{ id: 'b0', kind: 'paragraph', runs: [] }] };
+
+  it('asks for the readMode facet alone, for one URL, with no inline image and no credential', async () => {
+    const f = recordingFetch(results([{ url: URL_A, ok: true, readMode: DOC }]));
+
+    const result = await clientWith(f).extractReadMode(URL_A);
+
+    expect(f.body()).toEqual({ urls: [URL_A], facets: ['readMode'] });
+    expect(f.init().headers).toEqual({ 'content-type': 'application/json' });
+    expect(result.readMode).toEqual(DOC);
+  });
+
+  it('carries a reason it doesn’t know through the parse — a newer server’s', async () => {
+    const f = recordingFetch(
+      results([{ url: URL_A, ok: true, readModeReason: 'from-the-future' }]),
+    );
+    await expect(clientWith(f).extractReadMode(URL_A)).resolves.toMatchObject({
+      readModeReason: 'from-the-future',
+    });
+  });
+});
+
+describe('the request contract — facets', () => {
+  const urls = (n: number) => Array.from({ length: n }, (_, i) => `https://example.com/${i}`);
+
+  it('takes the old request unchanged: no facets means titleImage, up to MAX_EXTRACT_URLS', () => {
+    expect(extractRequestSchema.safeParse({ urls: urls(MAX_EXTRACT_URLS) }).success).toBe(true);
+  });
+
+  it('caps a readMode request at MAX_EXTRACT_READ_MODE_URLS', () => {
+    const ask = (n: number) =>
+      extractRequestSchema.safeParse({ urls: urls(n), facets: ['titleImage', 'readMode'] }).success;
+    expect(ask(MAX_EXTRACT_READ_MODE_URLS)).toBe(true);
+    expect(ask(MAX_EXTRACT_READ_MODE_URLS + 1)).toBe(false);
+  });
+
+  it('refuses a facet a raw-HTML fetch can’t produce, and an empty list', () => {
+    expect(extractRequestSchema.safeParse({ urls: urls(1), facets: ['screenshot'] }).success).toBe(
+      false,
+    );
+    expect(extractRequestSchema.safeParse({ urls: urls(1), facets: [] }).success).toBe(false);
   });
 });

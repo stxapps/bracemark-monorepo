@@ -13,12 +13,7 @@ import {
 } from '@stxapps/shared';
 import { newId } from '@stxapps/web-crypto';
 
-import {
-  type ExtractionFields,
-  type ExtractionPatch,
-  writeExtraction,
-  writeFile,
-} from '../data/mutations';
+import { type ExtractionPatch, writeExtraction, writeFile } from '../data/mutations';
 import { type LinkItem, readExtraction } from '../data/queries';
 import { resizeImage } from './resize-image';
 
@@ -40,8 +35,8 @@ import { resizeImage } from './resize-image';
 // Like the extension worker it writes ONLY `extractions/` + `files/`, NEVER
 // `links/{id}.enc` (the writer-split — docs/link-extraction.md), so a backfill can't
 // clobber a concurrent user edit. It only ever does `titleImage`: the server tier can't
-// screenshot/page copy (no renderer) and read-mode parity isn't promised, so those facets
-// stay active-context only.
+// screenshot/page copy (no renderer), and its read mode is a per-link ask, never a drain
+// (lib/server-read-mode.ts says why).
 //
 // Throws on a wholesale TRANSPORT failure of the extract request itself
 // (network/abort/non-2xx) — plus a fail-fast guard if handed more than MAX_EXTRACT_URLS
@@ -138,23 +133,35 @@ export async function runServerTitleImageBatch(
   // pool (and the whole function) never throws.
   await mapLimit(pending, IMAGE_CONCURRENCY, async ({ result, targets }) => {
     try {
-      const fields: ExtractionFields = {};
-
       const image = await loadImage(result, client);
-      if (image.kind === 'bytes') {
-        // Cap dimensions + re-encode before storing, to bound the quota (the deferred
-        // client thumbnailing step — the extractor never resizes). Content before
-        // metadata: write the `files/` blob, then reference it from `extractions/`.
-        const resized = await resizeImage(image.bytes);
-        const imageId = newId();
-        await writeFile(username, imageId, resized);
-        fields.imageId = imageId;
-      }
       // A transient image failure leaves the facet `failed` so backoff retries it (the
       // image isn't lost to a passing throttle); otherwise the facet settles `done`. The
       // writer bumps the retry counter only on a `failed` state (done resets to attempts: 0).
       const state = newFacet(image.kind === 'transient' ? 'failed' : 'done', EXTRACTED_BY);
-      await writeAll(username, targets, { fields, facet: 'titleImage', state });
+      if (image.kind !== 'bytes') {
+        await writeAll(username, targets, { facet: 'titleImage', state });
+        return;
+      }
+      // Cap dimensions + re-encode before storing, to bound the quota (the deferred
+      // client thumbnailing step — the extractor never resizes). Content before
+      // metadata: write the `files/` blob, then reference it from `extractions/`.
+      //
+      // ONE BLOB PER LINK, never one shared by the group: a blob is owned by the
+      // extraction that names it, and every path that removes a ref deletes what it
+      // named — a re-capture replacing it (writeExtraction), a destroy, the dangling
+      // sweep. Two links naming one blob means either link's re-extraction deletes the
+      // other's preview on every device. The same article saved twice costs its preview
+      // twice; that is the price.
+      const resized = await resizeImage(image.bytes);
+      for (const target of targets) {
+        const imageId = newId();
+        await writeFile(username, imageId, resized);
+        await writeExtraction(username, idFromPath(target.path, LINKS_PREFIX), {
+          fields: { imageId },
+          facet: 'titleImage',
+          state,
+        });
+      }
     } catch {
       // resize/write threw — record a transient failure so the link is retried, the
       // title from pass 1 intact.

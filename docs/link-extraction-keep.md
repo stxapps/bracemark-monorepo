@@ -6,8 +6,8 @@ it (`pageCopy`). When each is taken, by which client, in what format, behind whi
 gate, and how its blob is removed. Part of the link-extraction set: everything the
 facets share — who may fetch, the tiers, the writer-split, the extraction entity,
 the queue — is [link-extraction.md](./link-extraction.md), and this file assumes it.
-[link-extraction-server.md](./link-extraction-server.md) is the server path the
-read-mode facet is next to serve; [reader.md](./reader.md) is the screen that shows
+[link-extraction-server.md](./link-extraction-server.md) is the server path that also
+serves the read-mode facet, and where its robots.txt rule lives; [reader.md](./reader.md) is the screen that shows
 a kept copy and the highlights and notes made on it; [data-lifecycle.md](./data-lifecycle.md)
 and [data-limits.md](./data-limits.md) carry the export and limit rows for these
 blobs.
@@ -17,10 +17,15 @@ automatically on a save when the plan has `keptCopies`, and offers read mode and
 screenshot as taps on its saved screen (`popup/Editor.tsx`, `popup/KeptCopies.tsx`;
 captures in `utils/capture.ts`, `extraction-worker.ts`); bracemark-web reads both at
 `/read?link=<id>` ([reader.md](./reader.md), _the web reader_), and the synced save
-setting chooses what a save keeps (Settings → Link previews → Kept copies). Not
-built: the per-link and bulk actions,
-removal and the orphan sweep, expo, server read mode, and page copy anywhere.
-Everything below marked _planned_ is the design those pieces are built to.
+setting chooses what a save keeps (Settings → Link previews → Kept copies). Server
+read mode is built (_per client_, bracemark-extractor) and reached from bracemark-web
+as a per-link _Keep read mode_. Removal (one copy, and a selection's in bulk edit) and
+the orphaned-file sweep are built (_removal, cleanup, export_), and so are expo's
+reader, its iOS share-from-Safari read mode and its capture screen (_per client_,
+bracemark-expo). Not built: a per-link _Keep screenshot_ outside the extension's saved
+screen, the scoped bulk job, expo's screenshot and its switch for the save setting, and
+page copy anywhere. Everything below marked _planned_ is the design those pieces are
+built to.
 
 **Naming.** "Page copy", never "archive" — the word is the Archive system list's
 ([link-extraction.md](./link-extraction.md), the opening note). "Read mode" in prose,
@@ -193,7 +198,8 @@ An upgrade there is the user's choice, offered, never taken.
 ### per client
 
 **bracemark-extension — built.** Read mode is Readability over a clone of the live
-DOM, then a walk of the article into blocks (`utils/reader-doc-from-page.ts`). It
+DOM, then a walk of the article into blocks (web-react `lib/reader-doc-from-page.ts`,
+over the shared walker in `@stxapps/shared` `reader/reader-doc-from-dom.ts`). It
 has to run in the page — Readability needs a DOM and the background is a service
 worker — and it can't be an inline `executeScript` func, which is serialized alone
 and can't reach a library. So it is an **unlisted script**
@@ -206,18 +212,27 @@ extension already holds. `defuddle` (Obsidian Web Clipper's extractor) is worth 
 benchmark against Readability on modern pages; the converter is the only part that
 would change.
 
-**bracemark-extractor — read mode planned, nothing else.** Readability needs a DOM;
-a Worker has none, but `linkedom` gives Readability enough of one, at tens of
-milliseconds of CPU a page. The contract grows a facet list on the existing route —
-`POST /v1/extract { urls, facets: ['titleImage', 'readMode'] }` — not a second
-endpoint: one HTML fetch serves both facets under one SSRF guard and one rate limit,
-and the batch cap shrinks when `readMode` is asked for, since each result now carries
-an article. Results are `extractedBy: 'server'`, raw HTML only, so a JS-rendered page
-settles `permanent`. **Two things first**: the open `robots.txt` question
-([link-extraction-server.md](./link-extraction-server.md), _deferred / open_) — the
-recommendation is to honour it for `readMode` only, since the article body is what a
-publisher sells and the title is what they want in an unfurl — and `/extractor`, which
-describes what the service fetches and returns, changes in the same release.
+**bracemark-extractor — read mode built, nothing else.** Readability needs a DOM; a
+Worker has none, so `linkedom` builds one from the HTML string (`lib/read-mode.ts`),
+and the article then goes through the **same walker** every live-page capture uses —
+`readerDocFromArticle`, `@stxapps/shared` `reader/reader-doc-from-dom.ts`, which
+web-react's `reader-doc-from-page.ts` now calls too — so a server copy reads like an
+extension one. It sets the document's base URL first (the page's `<base>` resolved
+against the final address, else that address), because linkedom has none and
+Readability resolves relative links against it. The contract is a facet list on the
+existing route — `POST /v1/extract { urls, facets: ['titleImage', 'readMode'] }`, absent
+meaning `['titleImage']` — not a second endpoint: one HTML fetch serves both facets under
+one SSRF guard and one rate limit, and a `readMode` request takes at most
+`MAX_EXTRACT_READ_MODE_URLS` (5) URLs, since each result carries an article. A result
+carries `readMode` (a `ReaderDoc`) or `readModeReason` — `not-an-article`, `not-html`,
+`robots-disallowed` (settled, `permanent` with that `reason`) or `robots-unavailable`
+(transient) — read through `readModeVerdictOf` (extract/retry.ts). Results are
+`extractedBy: 'server'`, raw HTML only, so a JS-rendered page settles `permanent`, and the
+read ends at `MAX_HTML_BYTES`. **robots.txt is honoured for `readMode` only** — the
+article body is what a publisher sells, the title is what they want in an unfurl — and
+`/extractor` says so; the rule, the status handling and why nothing is cached are
+[link-extraction-server.md](./link-extraction-server.md), _robots.txt and read mode_,
+which also carries the ⚠ CPU note: read mode needs the Workers Paid plan.
 
 **No screenshot or page copy on the server, including Cloudflare's Browser
 Rendering.** A headless browser behind an anonymous endpoint is a far better prize
@@ -257,18 +272,32 @@ and Android's WebView has its own `CookieManager`, apart from Chrome's. So, in o
 Never a hidden or background WebView: iOS suspends it, offscreen rendering is
 unreliable, and it is invisible work on the user's battery.
 
-**bracemark-web — orchestrates only.** It can't fetch a page (CORS), so its read
-mode is the extractor's, under `serverExtraction`, and it has no screenshot or page
-copy of its own. A link saved in the web app gets a live-page copy when the user
-opens it with the extension or the app.
+**bracemark-web — the server's read mode, on a per-link ask.** It can't fetch a page
+(CORS), so its read mode is the extractor's, under `serverExtraction`, and it has no
+screenshot or page copy of its own. Built as trigger 2 above for read mode: a link with
+no copy gets _Keep read mode_ in its row menu while `useServerReadMode().available`
+(signed in, a ready store, the `serverExtraction` opt-in, an extractor in this build, and
+`keptCopies`), which opens `/read?link=<id>&keep=readMode`; the reader runs that ask
+once, drops the parameter from the address (so a reload or a history entry never
+fetches on its own), and says what came back. The same _Keep read mode_ button sits in
+the reader's empty state. `runServerReadMode` (web-react `lib/server-read-mode.ts`)
+stores the copy exactly as the extension does, at the `server` tier, and **never
+replaces a copy that exists** — checked before the request and again after it, since a
+live-page capture may land meanwhile — nor overwrites a better tier's settled verdict
+with a server `failed`. Not a drain, and not the save: a save in the web app still keeps
+no copy on its own (the settings' wording promises exactly that), because a standing
+"fetch the article of everything I save" through the server is the un-gestured rule
+_when a copy is taken_ turns down. A link saved in the web app still gets a live-page
+copy when the user opens it with the extension or the app.
 
 ### the gate — `entitlements.keptCopies`
 
 The kept copies are a Plus feature, `keptCopies` in `iap/plans.ts`, enforced in the
 client like every per-feature gate (the server can't tell one `files/` blob from
 another); the byte and file ceilings stay the server-hard backstop. It is checked
-where a capture is asked for — the browser extension's save and its saved screen —
-and the upgrade dialog's words are `PAYWALL_COPY.keptCopies` (`@stxapps/react`).
+where a capture is asked for — the browser extension's save and its saved screen,
+expo's share drain and capture screen, and bracemark-web's server read mode
+(`useServerReadMode`) — and the upgrade dialog's words are `PAYWALL_COPY.keptCopies` (`@stxapps/react`).
 Two rules:
 
 - **Reading is never gated.** A copy taken while entitled stays readable, exported

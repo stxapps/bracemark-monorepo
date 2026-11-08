@@ -21,9 +21,10 @@ const CAPTURE_MODULE =
 
 // READER_CAPTURE_HASH_INPUTS in the generator, and the same hash. Listed again rather
 // than imported: a package spec reaching into tools/ is the coupling this repo keeps
-// out of its module graph, and the list is four lines.
+// out of its module graph, and the list is a few lines.
 const HASH_INPUTS = [
   'packages/web-react/src/lib/reader-doc-from-page.ts',
+  'packages/shared/src/reader/reader-doc-from-dom.ts',
   'packages/shared/src/reader/reader-doc.ts',
   'packages/shared/src/reader/reader-doc-core.ts',
   'node_modules/@mozilla/readability/package.json',

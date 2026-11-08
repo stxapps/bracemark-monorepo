@@ -109,8 +109,10 @@ something the architecture does not support.** Flag as high severity:
 - **Beyond the claim boundary** — any wording that lets a reader think they can
   verify the build they were served ("verify", "provably", "audited"). Public
   source proves what the code does, not which build was served.
-- **Unshipped features** — read mode, screenshots, page copies and AI are planned.
-  `listing-copy.ts` keeps the list; _only what ships_ in `docs/brand-assets.md`
+- **Unshipped features** — page copies and AI are planned. Read mode and
+  screenshots ship, with a platform scope a claim has to keep: the mobile apps
+  take read mode but no screenshot yet, so a mobile surface promising one is a
+  finding. `listing-copy.ts` keeps the list; _only what ships_ in `docs/brand-assets.md`
   is the rule, and it binds every string a user reads — the marketing site, and a
   tool's output such as the bookmark converter's receipt and errors.
 - **Numbers that can go stale** — a cap, a price, a trial length written as a

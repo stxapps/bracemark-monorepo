@@ -1,5 +1,5 @@
 import { backoff, EXTRACTION_BACKOFF_MAX_MS } from '../sync/extraction';
-import { isPermanent, verdictForExtractError, verdictForStatus } from './retry';
+import { isPermanent, readModeVerdictOf, verdictForExtractError, verdictForStatus } from './retry';
 
 // The attempt count at which the backoff ladder tops out — the point the 403 rule gives up
 // at. Derived by WALKING `backoff` itself, not by restating its curve: a copy of the formula
@@ -81,5 +81,46 @@ describe('verdictForExtractError', () => {
   it('ignores a status on errors that never carry one', async () => {
     await expect(verdictForExtractError('too_large', 200, never)).resolves.toBe('permanent');
     await expect(verdictForExtractError('timeout', 200, never)).resolves.toBe('failed');
+  });
+});
+
+describe('readModeVerdictOf', () => {
+  const none = () => 0;
+  const DOC = { version: 1, capturedAt: 1, blocks: [] };
+
+  it('is done when the copy came back', async () => {
+    await expect(readModeVerdictOf({ ok: true, readMode: DOC }, none)).resolves.toEqual({
+      status: 'done',
+    });
+  });
+
+  it.each(['not-an-article', 'not-html', 'robots-disallowed'])(
+    'settles %s — an answer about the page — as permanent, keeping the reason',
+    async (reason) => {
+      await expect(readModeVerdictOf({ ok: true, readModeReason: reason }, none)).resolves.toEqual({
+        status: 'permanent',
+        reason,
+      });
+    },
+  );
+
+  it('keeps an unreadable robots.txt, an unknown reason, or none at all transient', async () => {
+    await expect(
+      readModeVerdictOf({ ok: true, readModeReason: 'robots-unavailable' }, none),
+    ).resolves.toEqual({ status: 'failed', reason: 'robots-unavailable' });
+    await expect(readModeVerdictOf({ ok: true, readModeReason: 'later' }, none)).resolves.toEqual({
+      status: 'failed',
+      reason: 'later',
+    });
+    await expect(readModeVerdictOf({ ok: true }, none)).resolves.toEqual({ status: 'failed' });
+  });
+
+  it('reaches the page fetch’s own verdict when the fetch failed', async () => {
+    await expect(
+      readModeVerdictOf({ ok: false, error: 'bad_status', status: 410 }, none),
+    ).resolves.toEqual({ status: 'permanent' });
+    await expect(readModeVerdictOf({ ok: false, error: 'timeout' }, none)).resolves.toEqual({
+      status: 'failed',
+    });
   });
 });

@@ -39,6 +39,7 @@ import {
 } from '@stxapps/shared';
 
 import { db } from '../data/db';
+import { writeExtraction } from '../data/mutations';
 import { readExtraction } from '../data/queries';
 import { seedNewAccount } from '../data/sync-store';
 import { runServerTitleImageBatch } from './server-extraction';
@@ -260,6 +261,32 @@ describe('runServerTitleImageBatch', () => {
       expect((await readExtraction('l_1'))?.title).toBe('Shared');
       expect((await readExtraction('l_2'))?.title).toBe('Shared');
       expect((await facetOf('l_2'))?.status).toBe('done');
+    });
+
+    // A blob is owned by the extraction that names it: a re-capture of one link deletes
+    // the preview it replaces (writeExtraction), and a destroy deletes what it named. A
+    // preview SHARED by two links would then vanish from the other on every device.
+    it('gives each link its own preview blob, so re-extracting one leaves the other', async () => {
+      const extractor = client({
+        extract: jest.fn(async (url: string) =>
+          ok(url, { title: 'Shared', imageBase64: 'AQIDBA==' }),
+        ),
+      });
+      await runServerTitleImageBatch(
+        USER,
+        [linkItem('l_1', 'https://example.com/a'), linkItem('l_2', 'https://example.com/a')],
+        extractor,
+      );
+
+      const first = (await readExtraction('l_1'))?.imageId;
+      const second = (await readExtraction('l_2'))?.imageId;
+      expect(first).toBeDefined();
+      expect(second).toBeDefined();
+      expect(first).not.toBe(second);
+
+      // l_1's preview replaced by a later capture: l_2's blob is untouched.
+      await writeExtraction(USER, 'l_1', { fields: { imageId: 'newer' } });
+      expect((await db.items.get(pathFromId(second ?? '', FILES_PREFIX)))?.data).toBeDefined();
     });
 
     // The return value is the caller's auto-budget, and it counts LINKS processed, not

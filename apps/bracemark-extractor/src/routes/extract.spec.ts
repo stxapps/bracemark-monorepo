@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { type ExtractResponse, MAX_EXTRACT_URLS } from '@stxapps/shared';
+import {
+  type ExtractResponse,
+  MAX_EXTRACT_READ_MODE_URLS,
+  MAX_EXTRACT_URLS,
+} from '@stxapps/shared';
 
 import { app } from '../app';
 import { MAX_INLINE_IMAGE_BYTES } from '../lib/safe-fetch';
@@ -16,7 +20,7 @@ function stubFetch(impl: (url: string) => Response): ReturnType<typeof vi.fn> {
 
 async function postExtract(
   urls: string[],
-  body: { inlineImage?: boolean } = {},
+  body: { inlineImage?: boolean; facets?: string[] } = {},
 ): Promise<{ status: number; body: ExtractResponse }> {
   const res = await app.request('/v1/extract', {
     method: 'POST',
@@ -360,5 +364,129 @@ describe('POST /v1/extract', () => {
     // Only the page itself was fetched.
     expect(mock).toHaveBeenCalledTimes(1);
     expect(String(mock.mock.calls[0][0])).toBe('https://example.com/post');
+  });
+});
+
+// Read mode on the same route — one fetch of the page, plus robots.txt, which read mode
+// (and only read mode) obeys (lib/robots.ts).
+describe('POST /v1/extract — facets: readMode', () => {
+  const PROSE =
+    'Bookmarks are a pointer, and a pointer is only as good as the page behind it. ' +
+    'Pages move, sites close, and articles slip behind a sign-in wall long after the ' +
+    'moment someone decided they were worth keeping. A copy of the words is the part ' +
+    'that lasts, which is why this paragraph keeps going for a while longer than usual.';
+  const ARTICLE =
+    '<html><head><title>Doc</title><meta property="og:title" content="OG"></head><body>' +
+    `<article><h1>Doc</h1><p>${PROSE}</p><p>${PROSE}</p><p>${PROSE}</p></article></body></html>`;
+  const html = (body: string) =>
+    new Response(body, { status: 200, headers: { 'content-type': 'text/html' } });
+
+  // robots.txt answers `robots`; every other address answers `pageBody`.
+  function stubSite(robots: () => Response, page: () => Response = () => html(ARTICLE)) {
+    return stubFetch((url) => (url.endsWith('/robots.txt') ? robots() : page()));
+  }
+  const noRobots = () => new Response('', { status: 404 });
+
+  it('returns the article as a ReaderDoc, and no title when only readMode was asked', async () => {
+    stubSite(noRobots);
+    const { status, body } = await postExtract(['https://example.com/a'], { facets: ['readMode'] });
+    expect(status).toBe(200);
+    const [result] = body.results;
+    expect(result).toMatchObject({ url: 'https://example.com/a', ok: true });
+    expect(result.title).toBeUndefined();
+    expect(result.readMode?.blocks.length).toBeGreaterThan(0);
+    expect(result.readMode?.sourceUrl).toBe('https://example.com/a');
+  });
+
+  it('serves both facets from one page fetch', async () => {
+    const mock = stubSite(noRobots);
+    const { body } = await postExtract(['https://example.com/a'], {
+      facets: ['titleImage', 'readMode'],
+    });
+    expect(body.results[0].title).toBe('OG');
+    expect(body.results[0].readMode).toBeDefined();
+    const pageFetches = mock.mock.calls.filter(([u]) => !String(u).endsWith('/robots.txt'));
+    expect(pageFetches).toHaveLength(1);
+  });
+
+  it('never fetches a page robots.txt disallows when only readMode was asked', async () => {
+    const mock = stubSite(() => new Response('User-agent: bracemark-extractor\nDisallow: /'));
+    const { body } = await postExtract(['https://example.com/a'], { facets: ['readMode'] });
+    expect(body.results[0]).toEqual({
+      url: 'https://example.com/a',
+      ok: true,
+      readModeReason: 'robots-disallowed',
+    });
+    expect(mock.mock.calls.map(([u]) => String(u))).toEqual(['https://example.com/robots.txt']);
+  });
+
+  it('still returns the title when robots.txt disallows — robots binds read mode only', async () => {
+    stubSite(() => new Response('User-agent: *\nDisallow: /'));
+    const { body } = await postExtract(['https://example.com/a'], {
+      facets: ['titleImage', 'readMode'],
+    });
+    expect(body.results[0]).toMatchObject({
+      ok: true,
+      title: 'OG',
+      readModeReason: 'robots-disallowed',
+    });
+    expect(body.results[0].readMode).toBeUndefined();
+  });
+
+  it('never reads robots.txt for a titleImage-only request', async () => {
+    const mock = stubSite(() => new Response('User-agent: *\nDisallow: /'));
+    await postExtract(['https://example.com/a']);
+    expect(mock.mock.calls.map(([u]) => String(u))).toEqual(['https://example.com/a']);
+  });
+
+  it('says why when there is no copy: unreadable robots, no article, not HTML', async () => {
+    stubSite(() => new Response('', { status: 503 }));
+    let { body } = await postExtract(['https://example.com/a'], { facets: ['readMode'] });
+    expect(body.results[0].readModeReason).toBe('robots-unavailable');
+
+    stubSite(noRobots, () => html('<html><body><div id="root"></div></body></html>'));
+    ({ body } = await postExtract(['https://example.com/a'], { facets: ['readMode'] }));
+    expect(body.results[0].readModeReason).toBe('not-an-article');
+
+    stubSite(
+      noRobots,
+      () => new Response('%PDF', { status: 200, headers: { 'content-type': 'application/pdf' } }),
+    );
+    ({ body } = await postExtract(['https://example.com/a'], { facets: ['readMode'] }));
+    expect(body.results[0].readModeReason).toBe('not-html');
+  });
+
+  it('reads the robots.txt of the page a redirect lands on', async () => {
+    const mock = stubFetch((url) => {
+      if (url === 'https://short.example/x') {
+        return new Response(null, {
+          status: 301,
+          headers: { location: 'https://news.example/story' },
+        });
+      }
+      if (url === 'https://news.example/robots.txt')
+        return new Response('User-agent: *\nDisallow: /');
+      if (url.endsWith('/robots.txt')) return noRobots();
+      return html(ARTICLE);
+    });
+    const { body } = await postExtract(['https://short.example/x'], { facets: ['readMode'] });
+    expect(body.results[0].readModeReason).toBe('robots-disallowed');
+    expect(mock.mock.calls.map(([u]) => String(u))).toContain('https://news.example/robots.txt');
+  });
+
+  it('caps a readMode request at MAX_EXTRACT_READ_MODE_URLS, at the contract', async () => {
+    const mock = stubSite(noRobots);
+    const urls = Array.from(
+      { length: MAX_EXTRACT_READ_MODE_URLS + 1 },
+      (_, i) => `https://example.com/${i}`,
+    );
+    const { status } = await postExtract(urls, { facets: ['readMode'] });
+    expect(status).toBe(400);
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a facet the server cannot produce', async () => {
+    const { status } = await postExtract(['https://example.com/a'], { facets: ['screenshot'] });
+    expect(status).toBe(400);
   });
 });

@@ -6,6 +6,7 @@ import {
   ArrowDown,
   ArrowUp,
   BookOpen,
+  BookPlus,
   Copy,
   FolderInput,
   MoreHorizontal,
@@ -26,6 +27,7 @@ import {
   useLinkMutations,
   useListMutations,
   usePinMutations,
+  useServerReadMode,
 } from '@stxapps/web-react';
 import { ListCommand } from '@stxapps/web-ui/components/links/list-command';
 import { Button } from '@stxapps/web-ui/components/ui/button';
@@ -55,7 +57,10 @@ const EXCLUDE_IDS = [TRASH_ID];
 // Remove). `Read` is the one CONDITIONAL item: it appears only on a link with a
 // kept copy (`readModeId` or `screenshotId`, docs/reader.md), because the reader
 // has nothing to open otherwise, and it is the menu's one route change (a
-// `<Link>` to `/read`). The
+// `<Link>` to `/read`). On a link with no copy it is _Keep read mode_ instead, when
+// the web app can take one (useServerReadMode: the server-extraction opt-in, a plan
+// with `keptCopies`) — the same route with `&keep=readMode`, which the reader runs
+// once and shows the answer to (read/_components/reader-page.tsx). The
 // variant is keyed off the LINK's own `listId`, not the active view, so a
 // trashed/archived link gets the right menu in the All view and tag views too:
 //
@@ -125,12 +130,21 @@ export function LinkRowMenu({
   const inTrash = link.listId === TRASH_ID;
   const inArchive = link.listId === ARCHIVE_ID;
 
+  const { available: canKeepReadMode } = useServerReadMode();
   const hasCopy = Boolean(link.readModeId || link.screenshotId);
+  const readHref = `/read?link=${encodeURIComponent(linkIdOf(link))}`;
   const read = hasCopy ? (
     <DropdownMenuItem asChild>
-      <Link href={`/read?link=${encodeURIComponent(linkIdOf(link))}`}>
+      <Link href={readHref}>
         <BookOpen className="size-4" />
         Read
+      </Link>
+    </DropdownMenuItem>
+  ) : canKeepReadMode ? (
+    <DropdownMenuItem asChild>
+      <Link href={`${readHref}&keep=readMode`}>
+        <BookPlus className="size-4" />
+        Keep read mode
       </Link>
     </DropdownMenuItem>
   ) : null;

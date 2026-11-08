@@ -22,8 +22,14 @@
 //     because no one had a reason to open that file.
 //
 // THE COPY RULE, inherited from apps/bracemark-site/src/app/page.tsx: only promise
-// what ships. Read mode, screenshots, page copies and AI are planned, not shipped,
-// so none of them appears here.
+// what ships. Page copies and AI are planned, not shipped, so neither appears here.
+// Read mode and screenshots SHIP — on desktop: the browser extension takes both, the
+// web app reads them and keeps read mode through the link-preview service, and the
+// mobile apps read them and keep read mode (from a Safari share on iOS, and from a
+// link's capture screen) but take no screenshot yet (docs/link-extraction-keep.md).
+// They are a Plus feature (`keptCopies`). None of these strings names them yet: that
+// is a copy decision for each listing, with the platform scope stated — the mobile
+// listings in particular must not promise a screenshot the app cannot take.
 //
 // ITS SIBLING, AND THE ONE THAT BIT: no claim about the server may read as
 // EXHAUSTIVE unless it is. "Our servers hold a path, a size, and bytes we have no

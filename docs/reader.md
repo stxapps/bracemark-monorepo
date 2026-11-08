@@ -43,6 +43,14 @@ the row can't keep. The ✕ returns to the links view the user left
 - **Reading is never gated.** A copy that exists is shown on every plan; only the
   empty state reads `keptCopies`, to offer Plus beside the way a copy is taken (open
   the page, save it with the browser extension) — iap/plans.ts, the `keptCopies` note.
+- **Taking a read-mode copy here.** With server extraction on and a plan with
+  `keptCopies`, the empty state offers _Keep read mode_, and a link with no copy has
+  _Keep read mode_ in its row menu instead of **Read** — the same route with
+  `&keep=readMode`, run once on arrival and then dropped from the address, so a reload
+  or a history entry never fetches the page by itself. The answer is shown in place:
+  the copy (the screen swaps to it), or why there is none — no article, not a web page,
+  the site's robots.txt says no, or try later
+  ([link-extraction-keep.md](./link-extraction-keep.md), _bracemark-web_).
 - **Bytes on demand.** `useReaderDoc` (web-react) asks `FileContentProvider` for the
   blob at once — no settle delay, the reader is a deliberate open — then gunzips and
   parses it; bytes that aren't a copy settle as "can't be read", never a throw. A copy
@@ -58,9 +66,10 @@ rules as web — locks first, reading and deleting never gated, text only — an
 states, read through expo-react's `useReaderDoc`, which reads the decrypted file off
 disk and gunzips it with fflate (Hermes has no DecompressionStream). The screenshot is
 expo-image over the same file. Unlike web it has no empty-state upsell: a link only
-reaches the screen with a copy, and this app can't take one yet
-([link-extraction-keep.md](./link-extraction-keep.md), _expo_), so there would be
-nothing to offer.
+reaches the screen with a copy, and taking one is the capture screen's job
+(`/capture?link=<id>`, the row menu's _Keep a copy_ —
+[link-extraction-keep.md](./link-extraction-keep.md), _expo_), so there would be
+nothing to offer here.
 
 ### rendering — text nodes only
 

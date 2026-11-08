@@ -42,14 +42,20 @@ export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise
 //
 // The one entitlement deliberately NOT published: the byte/file storage quota
 // (`maxBytes` / `maxFiles`). It is a server-hard cost backstop, not a product
-// gate, and until the heavy-blob features ship (read-mode, screenshot, page
-// copy — all ▹ planned) nothing can reach it: the only blob a library stores is
-// the client-extracted preview image, so a maxed 200-link free account is ~16 MB
-// against 100 MiB. Publishing a limit for a feature that does not exist yet is
-// the inverse of the never-promise-what-isn't-built rule, invites the
-// Drive/Dropbox comparison on an axis Bracemark doesn't compete on, and turns a
-// number we still need to retune into a contract we'd have to grandfather. Put
-// the row back when the heavy blobs land and the number is finally load-bearing.
+// gate. It was unreachable until the heavy-blob features shipped: the only blob a
+// library stored was the client-extracted preview image, so a maxed 200-link free
+// account is ~16 MB against 100 MiB. Read mode and screenshots now ship
+// (`keptCopies`, Plus — a read-mode copy is ~10–30 KB, a screenshot ~100–250 KB,
+// both estimates in docs/link-extraction-keep.md); page copy is still planned.
+// Publishing the limit before any of them existed was the inverse of the
+// never-promise-what-isn't-built rule, invites the Drive/Dropbox comparison on an
+// axis Bracemark doesn't compete on, and turns a number we still need to retune
+// into a contract we'd have to grandfather. The first heavy blobs have now landed,
+// so whether the row goes back is an OPEN decision rather than a settled one: a
+// Plus library keeping a screenshot of every save reaches its 5 GiB at roughly
+// 15,000–20,000 links (screenshot plus preview image, at the estimates above), which
+// makes the number load-bearing for some readers — and
+// re-measure the sizes from real captures before it is printed anywhere.
 // A user who somehow reaches the ceiling still gets told, in-app, by the "storage
 // full" surfaces the quota gate already drives.
 //
@@ -80,9 +86,10 @@ function monthlyEquivalent(usdPerYear: number): string {
   return Number.isInteger(perMonth) ? `$${perMonth}` : `$${perMonth.toFixed(2)}`;
 }
 
-// Only what SHIPS — the same rule the paid card copy in plans.ts follows. Read
-// mode, screenshots, page copies and AI are entitlements without features behind
-// them yet, so they are not promised anywhere on this page.
+// Only what SHIPS — the same rule the paid card copy in plans.ts follows. Page
+// copies and AI are entitlements without features behind them yet, so they are not
+// promised anywhere on this page. Read mode and screenshots ship (desktop; mobile
+// takes read mode only) and are not named here yet — plans.ts says how they join.
 //
 // The previews line names the free CLIENT paths on purpose. Free gets the best
 // extractor there is — the browser extension's active tab, or the mobile app's

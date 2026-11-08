@@ -220,22 +220,37 @@ async function extractOne(
   // PASS 2 — the image, then the TERMINAL facet write. A transient image failure leaves
   // the facet `failed` so backoff retries it (the image isn't lost to a passing blip) with
   // the title from pass 1 already visible; anything else settles `done`.
+  //
+  // ONE BLOB PER LINK, never one shared by the group: a blob is owned by the extraction
+  // that names it, and every path that removes a ref deletes what it named — a re-capture
+  // replacing it (writeExtraction), a destroy, the dangling sweep. Two links naming one
+  // blob means either link's re-extraction deletes the other's preview on every device.
+  // The same article saved twice costs its preview twice; that is the price.
   const image = await loadImage(imageUrl);
-  const fields: ExtractionFields = {};
+  const imageIds = new Map<LinkItem, string>();
   if (image.kind === 'file') {
     try {
-      const imageId = newId();
-      await writeFile(username, imageId, image.file); // content before metadata
-      fields.imageId = imageId;
+      for (const target of targets) {
+        const imageId = newId();
+        await writeFile(username, imageId, image.file); // content before metadata
+        imageIds.set(target, imageId);
+      }
     } finally {
       deleteQuietly(image.file);
     }
   }
-  await writeAll(username, targets, {
-    fields,
-    facet: 'titleImage',
-    state: newFacet(image.kind === 'transient' ? 'failed' : 'done', tier),
-  });
+  const state = newFacet(image.kind === 'transient' ? 'failed' : 'done', tier);
+  await Promise.all(
+    targets.map((target) => {
+      const imageId = imageIds.get(target);
+      const fields: ExtractionFields = imageId ? { imageId } : {};
+      return writeExtraction(username, idFromPath(target.path, LINKS_PREFIX), {
+        fields,
+        facet: 'titleImage',
+        state,
+      });
+    }),
+  );
 
   // The carve-out (header): capture the icon this page DECLARED, since we're already here.
   await captureDeclaredFavicon(username, collected, page.finalUrl, opts);
