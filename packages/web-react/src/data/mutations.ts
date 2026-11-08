@@ -349,7 +349,8 @@ export async function bulkWriteLinks(username: string, edits: LinkEdit[]): Promi
 }
 
 // Delete one link: drop its `links/{id}.enc`. Thin like deleteList/deletePin —
-// higher-level cleanup (its pin, its `files/` content) is the caller's concern.
+// higher-level cleanup (its pin, its extraction, its `files/` content) is the
+// caller's concern (use-link-mutations.destroy).
 export function deleteLink(username: string, link: WithPath<Link>): Promise<void> {
   return deleteEntity(username, link.path);
 }

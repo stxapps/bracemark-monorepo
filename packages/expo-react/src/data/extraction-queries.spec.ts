@@ -168,7 +168,8 @@ describe('readExtractionFacetCounts', () => {
   it('counts each trashed link once even when its extraction carries other facets', async () => {
     // The join is restricted to the three titleImage tokens for exactly this reason: an
     // unrestricted one would multiply the trashed link by its other facets' tokens
-    // (`done:screenshot`, …) and over-subtract every term. Web can't get this wrong (it
+    // (`done:screenshot`, …) and inflate the trashed-link total. The per-status sums stay
+    // right, so it shows up as pending: 0 where 1 is live. Web can't get this wrong (it
     // reads one status per link in JS), which is precisely why the SQL needs its own case.
     const extraction: Extraction = {
       id: 'trash-many',

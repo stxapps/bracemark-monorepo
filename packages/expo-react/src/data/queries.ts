@@ -553,7 +553,9 @@ function readTrashedTitleImageCounts(): {
   // The join is restricted to the three titleImage tokens, so at most ONE junction row
   // can match a link (a facet has exactly one status) and `COUNT(*)` stays the trashed
   // LINK count — an unrestricted join would multiply each link by its other facets'
-  // tokens (`done:screenshot`, …) and inflate every term.
+  // tokens (`done:screenshot`, …) and inflate `total`. The three SUMs would stay right
+  // (each CASE matches one titleImage token), so the damage is a live total too low and
+  // a pending count clamped short.
   const row = getDb()
     .select({
       total: count(),
