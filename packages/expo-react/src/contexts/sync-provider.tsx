@@ -300,31 +300,42 @@ export function SyncProvider({
     // account (@stxapps/shared sync/retry.ts). One timer for the app; it dies
     // with the effect, so nothing is scheduled while paused or signed out.
     const retries = createSyncRetryScheduler({ run: () => void backgroundSync() });
-    // Wake-ups, not the schedule: the network coming back, or the app coming back
-    // to the foreground, starts a PENDING retry at once (at most every 30 s).
-    // NetInfo reports the current state on subscribing; with nothing pending
-    // that is a no-op.
+    // Wake-ups, not the schedule (at most every 30 s). The network coming back
+    // starts a PENDING retry at once; NetInfo reports the current state on
+    // subscribing, and with nothing pending that is a no-op. The app coming back
+    // to the foreground does that too, and also re-runs a cycle that failed for
+    // any reason, or one that settled over 10 min ago — and a cycle still in
+    // flight on the way back, whose requests' deadlines have just fired together
+    // (Android stops JS timers in the background), is retried the moment it
+    // fails instead of 5 s later. docs/local-first-sync.md, _retrying a failure_.
     const unsubscribeNetInfo = NetInfo.addEventListener((state) => {
-      if (state.isConnected !== false) retries.wake();
+      if (state.isConnected !== false) retries.wake('online');
     });
     const appState = AppState.addEventListener('change', (status) => {
-      if (status === 'active') retries.wake();
+      if (status === 'active') retries.wake('foreground');
     });
 
     // Returning visit → render local data now, refresh in the background. The
     // outcome lands on the INDICATOR (bgSyncStatus), never the gate: a failed
     // background cycle coexists with a usable store, so storeStatus stays put.
+    let latestCycle: Promise<unknown> | undefined;
     const backgroundSync = () => {
       const deps = cycleDeps();
       if (!deps) return Promise.resolve();
       setBgSyncStatus('syncing');
       const cycle = runIncrementalSync(deps, reportCycleProgress);
+      latestCycle = cycle;
       retries.watch(cycle);
       // Returned for syncAndWait. Both branches below are handled, so it settles
-      // with the cycle and never rejects.
+      // with the cycle and never rejects. Each branch paints only the LATEST
+      // cycle: a wake-up retries a failed one from inside its settlement, before
+      // these run (@stxapps/shared sync/retry.ts, `run`), and the failure must not
+      // land on the indicator over the retry already in flight — the very
+      // "Sync failed" that retry exists to spare. Callers that joined one engine
+      // run share its promise, so they all still paint it.
       return cycle.then(
         (outcome) => {
-          if (!active) return;
+          if (!active || cycle !== latestCycle) return;
           settleCycleProgress();
           // A completed cycle is 'idle' UNLESS the plan/quota gate refused part
           // of the push — that resolves rather than rejects (the rest of the
@@ -339,7 +350,7 @@ export function SyncProvider({
           setLastError(null);
         },
         (err: unknown) => {
-          if (!active) return;
+          if (!active || cycle !== latestCycle) return;
           settleCycleProgress();
           setBgSyncStatus('error');
           setBlockedCount(0);

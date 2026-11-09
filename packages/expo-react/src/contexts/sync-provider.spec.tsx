@@ -7,13 +7,16 @@
 // is the rule.
 
 import type { ReactNode } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
 import {
   ApiError,
+  ApiTimeoutError,
   INITIAL_SYNC_RETRY_DELAYS_MS,
   SYNC_RETRY_DELAYS_MS,
   SYNC_RETRY_JITTER,
+  SYNC_STALE_AFTER_MS,
 } from '@stxapps/shared';
 
 import { SyncProvider, useSync } from './sync-provider';
@@ -296,7 +299,27 @@ describe('one record per cycle', () => {
 describe('retrying a failed cycle', () => {
   const past = (ms: number) => ms * (1 + SYNC_RETRY_JITTER) + 1;
 
-  afterEach(() => jest.useRealTimers());
+  // The provider's foreground wake-up: the latest AppState listener, so a spec
+  // can bring the app back.
+  let appStateListener: ((status: AppStateStatus) => void) | undefined;
+  beforeEach(() => {
+    appStateListener = undefined;
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, listener) => {
+      appStateListener = listener;
+      return { remove: () => undefined };
+    });
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
+  const backToApp = () => appStateListener?.('active');
+
+  async function failOnce(result: { current: ReturnType<typeof useSync> }, err: unknown) {
+    mockRunIncrementalSync.mockImplementationOnce(() => Promise.reject(err));
+    await act(() => result.current.syncAndWait());
+    expect(result.current.bgSyncStatus).toBe('error');
+  }
 
   it('starts the next cycle itself after a failure that may clear', async () => {
     const { result } = await readySync();
@@ -320,6 +343,63 @@ describe('retrying a failed cycle', () => {
       mockNetInfoListener?.({ isConnected: true });
     });
     expect(mockRunIncrementalSync).toHaveBeenCalledTimes(2);
+  });
+  // Coming back to the app: a cycle the trip away broke, a failure that
+  // waited for a person, a library that went stale meanwhile
+  // (docs/local-first-sync.md, _retrying a failure_).
+  it('retries a cycle that fails just after coming back at once, and never shows the failure', async () => {
+    const { result } = await readySync();
+    let fail!: (err: unknown) => void;
+    let land!: (outcome: { blocked: boolean; blockedCount: number }) => void;
+    mockRunIncrementalSync
+      .mockImplementationOnce(() => new Promise((_, reject) => void (fail = reject)))
+      .mockImplementationOnce(() => new Promise((resolve) => void (land = resolve)));
+    act(() => result.current.syncNow());
+    await act(async () => {
+      backToApp();
+    });
+    expect(mockRunIncrementalSync).toHaveBeenCalledTimes(1);
+
+    // The broken cycle's failure must not land over the retry it started: on a
+    // device that retry is a whole cycle long, all of it under "Sync failed".
+    await act(async () => {
+      fail(new ApiTimeoutError(60_000));
+    });
+    expect(mockRunIncrementalSync).toHaveBeenCalledTimes(2);
+    expect(result.current.bgSyncStatus).toBe('syncing');
+    expect(result.current.lastError).toBeNull();
+
+    await act(async () => {
+      land({ blocked: false, blockedCount: 0 });
+    });
+    expect(result.current.bgSyncStatus).toBe('idle');
+  });
+
+  it('re-runs a cycle that failed for good on coming back', async () => {
+    const { result } = await readySync();
+    jest.useFakeTimers();
+    await failOnce(result, new ApiError(400, ''));
+
+    await act(async () => {
+      backToApp();
+    });
+    expect(mockRunIncrementalSync).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(result.current.bgSyncStatus).toBe('idle'));
+  });
+
+  it('syncs on coming back once the last cycle is over 10 min old, and not before', async () => {
+    await readySync();
+    jest.useFakeTimers();
+    await act(async () => {
+      backToApp();
+    });
+    expect(mockRunIncrementalSync).not.toHaveBeenCalled();
+
+    await act(() => jest.advanceTimersByTimeAsync(SYNC_STALE_AFTER_MS));
+    await act(async () => {
+      backToApp();
+    });
+    expect(mockRunIncrementalSync).toHaveBeenCalledTimes(1);
   });
 });
 

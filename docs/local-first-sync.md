@@ -2348,10 +2348,31 @@ passes show in a trace: the second is a `push.again` or `pull.again` span.
 - One timer, in the tab or app whose cycle failed. Other tabs' cycles take the
   same Web Lock (_two tabs, one queue_), so a cycle any of them runs
   meanwhile is the retry, and a clean one resets the backoff.
-- Coming back online (`online` on web; the network state on expo) and coming
-  back to the tab or app (`visibilitychange`, `AppState` `active`) start a
-  cycle at once, at most every 30 s. These are wake-ups, not the schedule:
-  they cover the device that was offline for the whole backoff.
+- **Wake-ups**, not the schedule — each starts a cycle at once when one is
+  due, at most every 30 s (`SYNC_WAKE_MIN_INTERVAL_MS`), and nothing before the
+  first cycle has settled (the launch's own is coming):
+  - Coming back **online** (`online` on web; the network state on expo) starts
+    a _pending_ retry, so a device offline for a 30-minute step does not sit
+    out the rest of it. A permanent failure is left alone: the network cannot
+    fix it.
+  - Coming back to the **tab or app** (`visibilitychange`, `AppState`
+    `active`) starts a pending retry too, and also re-runs a cycle that failed
+    _for any reason_ — the person's return gets the one try a launch would —
+    and one that settled longer ago than 10 min (`SYNC_STALE_AFTER_MS`), clean
+    or not. Nothing else syncs after a clean cycle until a write, a press or a
+    launch, so without it a phone back from an afternoon in a pocket shows the
+    morning's library.
+  - A wake-up that finds a cycle **still running** starts nothing, but if that
+    cycle then fails transiently it is retried at once, not 5 s later, and
+    without climbing the backoff. That is the cycle a trip to the background
+    breaks: Android stops an app's JS timers there (React Native's
+    `JavaTimerManager` pauses on `onHostPause`), so every request still out
+    meets its 60 s deadline the moment the app comes back, just after the
+    `active` that found it running — "Sync failed" on return, for a cycle that
+    was healthy when the person left. The retry starts from inside the failed
+    cycle's settlement, before the provider's own handler for it, so the
+    providers paint only their **latest** cycle (`latestCycle`): the failure
+    never lands on the indicator over the retry.
 - Never while sync is paused (an expired session) or the store is not ready.
 - **The first sync** is blocking, so it gets its own short schedule: three
   retries at 2 s, 10 s and 30 s behind a "Retrying…" line, then the gate's

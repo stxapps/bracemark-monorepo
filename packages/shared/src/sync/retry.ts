@@ -98,10 +98,19 @@ export const INITIAL_SYNC_RETRY_DELAYS_MS: readonly number[] = [2_000, 10_000, 3
 // tabs that failed together do not retry together.
 export const SYNC_RETRY_JITTER = 0.25;
 
-// Coming back online or to the app starts a pending retry at once, but no more
-// often than this: a tab flicked back and forth, or a flapping connection, would
-// otherwise start a cycle per event.
+// A wake-up starts a cycle at once, but no more often than this: a tab or app
+// flicked back and forth, or a flapping connection, would otherwise start a
+// cycle per event.
 export const SYNC_WAKE_MIN_INTERVAL_MS = 30_000;
+
+// Coming back to the tab or app starts a cycle when the last one settled longer
+// ago than this, clean or not. A clean cycle schedules nothing after it — the
+// next one is a write's, a press's or a launch's — so a device that sat in a
+// pocket all afternoon would otherwise show the morning's library until one of
+// those. Ten minutes because a cycle with nothing to move is one empty
+// `opsList` call, and a person who switches away and straight back has seen
+// the last one land.
+export const SYNC_STALE_AFTER_MS = 10 * 60_000;
 
 export function jitteredSyncDelayMs(baseMs: number, random: () => number = Math.random): number {
   return Math.round(baseMs * (1 - SYNC_RETRY_JITTER + 2 * SYNC_RETRY_JITTER * random()));
@@ -113,18 +122,35 @@ export interface SyncRetryScheduler {
   // failure drops the retry and waits for a person. Coalesced callers share one
   // cycle promise, so a promise already watched is not counted twice.
   watch(cycle: Promise<unknown>): void;
-  // The device came back online, or the person came back to the tab or app:
-  // start the pending retry now, if there is one and the last wake-up was long
-  // enough ago. Nothing pending, nothing started — a wake-up is not a schedule.
-  wake(): void;
+  // The device came back online (`'online'`), or the person came back to the
+  // tab or app (`'foreground'`): start a cycle now if one is due, and the last
+  // wake-up that started one was long enough ago. Due means —
+  //   both      a retry is pending: a transient failure is waiting out its step.
+  //   foreground  the last cycle failed for any reason, or settled longer ago
+  //             than SYNC_STALE_AFTER_MS. A permanent failure gets this one
+  //             try per return, as it would a launch's; the network coming back
+  //             cannot fix it, so `'online'` leaves it.
+  // A wake-up while a cycle runs starts nothing, but a transient failure of
+  // that cycle is retried at once instead of on the schedule: a cycle that
+  // spans a trip to the background is the one the trip breaks (an Android app's
+  // JS timers stop there, and every request's deadline fires together on the
+  // way back — docs/local-first-sync.md, _retrying a failure_). Before the
+  // first cycle has settled, nothing is due: the launch's own is coming.
+  wake(reason: SyncWakeReason): void;
   // Whether a retry is scheduled.
   readonly pending: boolean;
   // Stop for good: the account, the session or the provider went away.
   dispose(): void;
 }
 
+export type SyncWakeReason = 'online' | 'foreground';
+
 export interface SyncRetrySchedulerOptions {
   // Start a cycle. The provider's own runner, which watches what it starts.
+  // Called synchronously from the failed cycle's settlement when a wake-up
+  // retries it at once, BEFORE the provider's own handler for that cycle runs
+  // — so the provider must not paint a cycle's outcome once another has
+  // started (both providers, `latestCycle`).
   run: () => void;
   // Test seams.
   now?: () => number;
@@ -137,7 +163,8 @@ export interface SyncRetrySchedulerOptions {
 // tab's cycle takes the same Web Lock, so a cycle it runs meanwhile drains the
 // same queue, and this tab's retry then finds little left.
 export function createSyncRetryScheduler(options: SyncRetrySchedulerOptions): SyncRetryScheduler {
-  const { run, now = Date.now, random = Math.random } = options;
+  // Late-bound, so a replaced clock (a test's fake timers) is the one read.
+  const { run, now = () => Date.now(), random = Math.random } = options;
   const setTimer = options.setTimer ?? ((fire, ms) => setTimeout(fire, ms));
   const clearTimer =
     options.clearTimer ?? ((timer) => clearTimeout(timer as ReturnType<typeof setTimeout>));
@@ -147,6 +174,16 @@ export function createSyncRetryScheduler(options: SyncRetrySchedulerOptions): Sy
   let lastWake = -Infinity;
   let disposed = false;
   const watched = new WeakSet<Promise<unknown>>();
+  // Cycles watched and not yet settled. One at a time in practice (the
+  // engines' single flight hands every caller the same promise), counted
+  // rather than flagged so an overlap could not end the count early.
+  let running = 0;
+  // When the last watched cycle settled, and whether it failed; undefined until
+  // one has.
+  let lastSettledAt: number | undefined;
+  let lastFailed = false;
+  // A wake-up arrived while a cycle ran: its transient failure goes again at once.
+  let wokeMidCycle = false;
 
   const cancel = (): void => {
     if (timer === undefined) return;
@@ -157,17 +194,39 @@ export function createSyncRetryScheduler(options: SyncRetrySchedulerOptions): Sy
     timer = undefined;
     if (!disposed) run();
   };
+  // A wake-up's cycle, at most every SYNC_WAKE_MIN_INTERVAL_MS. True if it ran.
+  const runForWake = (): boolean => {
+    const at = now();
+    if (at - lastWake < SYNC_WAKE_MIN_INTERVAL_MS) return false;
+    lastWake = at;
+    cancel();
+    run();
+    return true;
+  };
+  const settle = (failed: boolean): boolean => {
+    running = Math.max(0, running - 1);
+    lastSettledAt = now();
+    lastFailed = failed;
+    const woke = wokeMidCycle;
+    wokeMidCycle = false;
+    return woke;
+  };
   const succeeded = (): void => {
+    settle(false);
     cancel();
     step = 0;
   };
   const failed = (err: unknown): void => {
+    const woke = settle(true);
     cancel();
     if (disposed) return;
     if (!isTransientSyncFailure(err)) {
       step = 0;
       return;
     }
+    // The wake-up's retry, not the schedule's: the step stays where it was, as
+    // for a wake-up that starts a pending retry.
+    if (woke && runForWake()) return;
     const base = SYNC_RETRY_DELAYS_MS[Math.min(step, SYNC_RETRY_DELAYS_MS.length - 1)];
     step += 1;
     timer = setTimer(fire, jitteredSyncDelayMs(base, random));
@@ -177,15 +236,20 @@ export function createSyncRetryScheduler(options: SyncRetrySchedulerOptions): Sy
     watch(cycle) {
       if (watched.has(cycle)) return;
       watched.add(cycle);
+      running += 1;
       cycle.then(succeeded, failed);
     },
-    wake() {
-      if (disposed || timer === undefined) return;
-      const at = now();
-      if (at - lastWake < SYNC_WAKE_MIN_INTERVAL_MS) return;
-      lastWake = at;
-      cancel();
-      run();
+    wake(reason) {
+      if (disposed) return;
+      if (running > 0) {
+        wokeMidCycle = true;
+        return;
+      }
+      if (lastSettledAt === undefined) return;
+      const due =
+        timer !== undefined ||
+        (reason === 'foreground' && (lastFailed || now() - lastSettledAt >= SYNC_STALE_AFTER_MS));
+      if (due) runForWake();
     },
     get pending() {
       return timer !== undefined;

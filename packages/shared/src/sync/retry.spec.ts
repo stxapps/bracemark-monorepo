@@ -10,6 +10,7 @@ import {
   runInitialSyncWithRetries,
   SYNC_RETRY_DELAYS_MS,
   SYNC_RETRY_JITTER,
+  SYNC_STALE_AFTER_MS,
   SYNC_WAKE_MIN_INTERVAL_MS,
   SyncIncompleteError,
 } from './retry';
@@ -192,26 +193,154 @@ describe('createSyncRetryScheduler', () => {
     clock.advance(SYNC_RETRY_DELAYS_MS[0]);
     await fail(); // now waiting out the second step
 
-    scheduler.wake();
+    scheduler.wake('online');
     expect(run).toHaveBeenCalledTimes(2);
     expect(scheduler.pending).toBe(false);
 
     // The woken cycle failed again; a second wake-up inside the interval waits
     // for the schedule instead of starting another.
     await fail();
-    scheduler.wake();
+    scheduler.wake('foreground');
     expect(run).toHaveBeenCalledTimes(2);
     clock.advance(SYNC_WAKE_MIN_INTERVAL_MS);
-    scheduler.wake();
+    scheduler.wake('foreground');
     expect(run).toHaveBeenCalledTimes(3);
   });
 
-  it('starts nothing on a wake-up with no retry pending', async () => {
+  it('starts nothing on a wake-up after a fresh clean cycle, or before any cycle', async () => {
     const { run, scheduler, succeed } = setup();
-    scheduler.wake();
+    scheduler.wake('foreground');
     await succeed();
-    scheduler.wake();
+    scheduler.wake('foreground');
+    scheduler.wake('online');
     expect(run).not.toHaveBeenCalled();
+  });
+
+  // The cycle a clean one leaves behind is nobody's: without this, a device
+  // back from an afternoon in a pocket shows the morning's library until a
+  // write, a press or a launch.
+  it('starts a cycle on coming back once the last one is stale, and not on the network', async () => {
+    const { clock, run, scheduler, succeed } = setup();
+    await succeed();
+    clock.advance(SYNC_STALE_AFTER_MS - 1);
+    scheduler.wake('foreground');
+    expect(run).not.toHaveBeenCalled();
+
+    clock.advance(1);
+    scheduler.wake('online');
+    expect(run).not.toHaveBeenCalled();
+    scheduler.wake('foreground');
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  // A permanent failure waits for a write, a press or a launch — and coming
+  // back to the app is the person's return, so it gets the launch's one try.
+  // The network coming back cannot fix it.
+  it('re-runs a cycle that failed permanently on coming back, not on the network', async () => {
+    const { run, scheduler, fail } = setup();
+    await fail(new ApiError(400, ''));
+    scheduler.wake('online');
+    expect(run).not.toHaveBeenCalled();
+    scheduler.wake('foreground');
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  // An Android app's JS timers stop in the background, so every request a
+  // cycle had in flight meets its deadline the moment the app comes back, and
+  // the cycle fails just after the wake-up that found it still running.
+  describe('a wake-up while a cycle runs', () => {
+    function inFlight(scheduler: ReturnType<typeof createSyncRetryScheduler>) {
+      let reject!: (err: unknown) => void;
+      let resolve!: () => void;
+      const cycle = new Promise<void>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      scheduler.watch(cycle);
+      return { cycle, resolve, reject };
+    }
+
+    it('starts nothing then, and retries a transient failure at once', async () => {
+      const { clock, run, scheduler } = setup();
+      const { reject } = inFlight(scheduler);
+      scheduler.wake('foreground');
+      expect(run).not.toHaveBeenCalled();
+
+      reject(new ApiTimeoutError(60_000));
+      await settle();
+      expect(run).toHaveBeenCalledTimes(1);
+      expect(clock.waits()).toEqual([]);
+    });
+
+    // The retry is the wake-up's, not the schedule's, so the next failure still
+    // waits the schedule's first step.
+    it('leaves the backoff where it was', async () => {
+      const { clock, scheduler, fail } = setup();
+      const { reject } = inFlight(scheduler);
+      scheduler.wake('foreground');
+      reject(new ApiError(503, ''));
+      await settle();
+
+      await fail();
+      expect(clock.waits()).toEqual([SYNC_RETRY_DELAYS_MS[0]]);
+    });
+
+    // The provider paints a cycle from its own handler, attached after it
+    // watched it; the retry has to exist by then, so the failure can be dropped
+    // instead of landing on the indicator over the retry.
+    it('starts the retry before a handler attached after the watch sees the failure', async () => {
+      const { run, scheduler } = setup();
+      const { cycle, reject } = inFlight(scheduler);
+      const seen: number[] = [];
+      cycle.catch(() => seen.push(run.mock.calls.length));
+      scheduler.wake('foreground');
+      reject(new ApiError(503, ''));
+      await settle();
+      expect(seen).toEqual([1]);
+    });
+
+    it('leaves a permanent failure to the next return, and a clean cycle alone', async () => {
+      const { run, scheduler } = setup();
+      const first = inFlight(scheduler);
+      scheduler.wake('foreground');
+      first.reject(new ApiError(400, ''));
+      await settle();
+      expect(run).not.toHaveBeenCalled();
+
+      const second = inFlight(scheduler);
+      scheduler.wake('foreground');
+      second.resolve();
+      await settle();
+      expect(run).not.toHaveBeenCalled();
+    });
+
+    it('keeps to the wake-up interval, falling back to the schedule inside it', async () => {
+      const { clock, run, scheduler, fail } = setup();
+      await fail();
+      scheduler.wake('foreground'); // starts the pending retry
+      expect(run).toHaveBeenCalledTimes(1);
+
+      const { reject } = inFlight(scheduler);
+      scheduler.wake('foreground');
+      reject(new ApiError(503, ''));
+      await settle();
+      expect(run).toHaveBeenCalledTimes(1);
+      expect(clock.waits()).toEqual([SYNC_RETRY_DELAYS_MS[1]]);
+    });
+
+    // Only the cycle the wake-up found running: one that starts after it
+    // settled is retried on the schedule.
+    it('is spent by the cycle it found', async () => {
+      const { clock, run, scheduler, fail } = setup();
+      const { resolve } = inFlight(scheduler);
+      scheduler.wake('foreground');
+      resolve();
+      await settle();
+
+      await fail();
+      expect(run).not.toHaveBeenCalled();
+      expect(clock.waits()).toEqual([SYNC_RETRY_DELAYS_MS[0]]);
+    });
   });
 
   it('stops for good once disposed', async () => {
@@ -220,7 +349,7 @@ describe('createSyncRetryScheduler', () => {
     scheduler.dispose();
     clock.advance(SYNC_RETRY_DELAYS_MS[0]);
     await fail();
-    scheduler.wake();
+    scheduler.wake('foreground');
 
     expect(run).not.toHaveBeenCalled();
     expect(scheduler.pending).toBe(false);
