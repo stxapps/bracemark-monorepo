@@ -806,8 +806,7 @@ hearing about it. So the deployed cap is set far above what a room of people
 signing up together makes in a day: it is the hard stop, not the alarm. The
 alarm is the daily report, whose busiest-network figure shows a source long
 before it reaches the cap. Lower the cap from that figure's history, never on a
-guess. Set `SIGNUP_ALERT_PER_DAY` from the report's first weeks; that is what
-turns a flood into an error-level line.
+guess.
 
 **Switching to enforce needs no /privacy change, and neither does retuning.**
 /privacy was worded to hold in both modes: its notice says we count "and cap them
@@ -852,10 +851,16 @@ itself says they hold the address briefly), nor that the cap always limits
 anything: whether an env enforces it is one setting, and /privacy has to hold
 either way.
 
-The daily cron logs the day's new-account total, how many networks went past
-their cap yesterday (saying whether that was refused or observed), and the
-busiest network's signups, then drops past days (`services/signup-report.ts`).
-The last two are what the cap is decided from: a busiest network far above the
+The daily cron keeps the cap's figures as totals, then drops past days
+(`services/signup-report.ts`). For every finished day since its last run it
+writes one `signup_days` row: how many networks went past their cap (with the
+caps in force and whether they refused or observed) and the busiest network's
+signups — no network and no hash, zeros on a day nobody signed up, so a missing
+day means the cron didn't run. The rows are kept 40 days, long enough to read a
+whole past month back, and are what the report reads; the per-network rows they
+come from still go the next day, as /privacy says. It also logs one line with
+yesterday's figures and the last 24 h of new accounts, for an incident. The
+cap's two figures are what it is decided from: a busiest network far above the
 cap on an ordinary day, with no jump in the total, is a crowd on shared wifi, and
 a lone network far above it on the day the total jumps is a source worth
 refusing. The cap runs after the signature check and before the username claim,

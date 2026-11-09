@@ -2184,6 +2184,19 @@ unless a later month has already replaced it — /privacy, _How long we keep it_
 ⚠ A DO has one alarm; the next feature that wants one (op-log compaction) has to
 share it.
 
+**What is kept past the month is totals, never an account.** No cron can read a
+count that sits one per DO, so the call that moves a count past a step adds one
+to that day's total in `transfer_days` (`SESSIONS_DB`): per counter, high-water
+plan and step, with no user id. The steps are the plan's own threshold, marked as
+the budget, and a fixed ladder (`TRANSFER_STEPS`, 100 to 1M in 1-2-5 steps).
+Counts only rise within a month, so an account passes each step at most once a
+month, and a month's rows for a step add up to how many accounts reached it —
+the distribution the thresholds are set from. The plan is read only on a call
+that passes a step, and the read and the write are caught: a failure is a total
+off by one, never a failed sync. A refused batch is handed back before it is
+noted. The daily cron drops rows after 40 days. The log line stays the only
+place an account is named, for looking into a crossing.
+
 **The gate is namespace-blind, and reads only CURRENT usage.** It compares
 `fileCount` and `totalBytes` against the plan's ceilings and ignores what the
 batch is about to add — the same conservatism the byte check always had, since a

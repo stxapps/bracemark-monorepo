@@ -12,7 +12,7 @@ import {
   signupCapFor,
   signupCapsOf,
 } from './signup-cap';
-import { reportSignups } from './signup-report';
+import { purgeSignupDays, reportSignups, SIGNUP_DAYS_KEPT } from './signup-report';
 
 // Real D1 (SESSIONS_DB, migrated by test/apply-migrations.ts), so the counter's
 // single-upsert increment and the purge run against the actual table. Storage is
@@ -22,6 +22,26 @@ import { reportSignups } from './signup-report';
 const DAY_MS = 86_400_000;
 // Noon UTC on some day, so "today" and "tomorrow" are unambiguous.
 const NOON = 20_000 * DAY_MS + DAY_MS / 2;
+
+type SignupDayRow = {
+  day: number;
+  capped_networks: number;
+  busiest: number;
+  cap_ipv4: number | null;
+  cap_ipv6: number | null;
+  enforced: number;
+};
+
+// The signup_days rows from `day` on, oldest first. Tests here run on days far
+// apart, so each reads from a day of its own.
+async function signupDaysFrom(day: number): Promise<SignupDayRow[]> {
+  const { results } = await env.SESSIONS_DB.prepare(
+    `SELECT * FROM signup_days WHERE day >= ? AND day < ? ORDER BY day`,
+  )
+    .bind(day, day + 100)
+    .all<SignupDayRow>();
+  return results;
+}
 
 async function rowsOn(day: number): Promise<number> {
   const row = await env.SESSIONS_DB.prepare(`SELECT COUNT(*) AS n FROM signup_counts WHERE day = ?`)
@@ -287,15 +307,72 @@ describe('reportSignups', () => {
     await expect(reportSignups(e, at)).resolves.toMatchObject({ cappedNetworks: 1 });
   });
 
-  it('raises the line to an error above the alert threshold', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const at = NOON + 200 * DAY_MS;
-    await claimName('a1', at - 1000);
-    await claimName('a2', at - 2000);
+  // What the cron writes down before the purge takes the per-network rows away.
+  // A skipped run skips its purge too, so the next run finds both days still in
+  // signup_counts and writes each exactly, and the day nobody signed up gets a
+  // row of zeros rather than no row: no row is how a cron that didn't run shows.
+  it('keeps every finished day since the last as a row of totals, zeros included', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const e = caps('1', '2');
+    const base = NOON + 700 * DAY_MS;
+    const day = Math.floor(base / DAY_MS);
 
-    await reportSignups(caps(undefined, undefined, { SIGNUP_ALERT_PER_DAY: '1' }), at);
-    expect(error).toHaveBeenCalledWith(
-      'signups: 2 accounts in the last 24 h; yesterday 0 networks went past their daily cap (refused) and the busiest network made 0 signups (above the alert threshold of 1)',
-    );
+    await reportSignups(e, base);
+    await claimSignupSlot(e, '203.0.113.70', base);
+    await refusal(claimSignupSlot(e, '203.0.113.70', base));
+    await refusal(claimSignupSlot(e, '203.0.113.70', base));
+    await claimSignupSlot(e, '203.0.113.71', base);
+    // No run on day + 1: the next is on day + 2.
+    await expect(reportSignups(e, base + 2 * DAY_MS)).resolves.toMatchObject({
+      cappedNetworks: 0,
+      busiest: 0,
+    });
+
+    const written = await signupDaysFrom(day);
+    expect(written).toEqual([
+      { day, capped_networks: 1, busiest: 3, cap_ipv4: 1, cap_ipv6: 2, enforced: 1 },
+      { day: day + 1, capped_networks: 0, busiest: 0, cap_ipv4: 1, cap_ipv6: 2, enforced: 1 },
+    ]);
+
+    // The same run again writes the same rows, not a second set.
+    await reportSignups(e, base + 2 * DAY_MS);
+    expect(await signupDaysFrom(day)).toEqual(written);
+  });
+
+  // A table empty or long idle starts SIGNUP_DAYS_KEPT back, not at the epoch:
+  // a row older than that would be purged on the same run.
+  it('reaches back no further than the rows are kept', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const at = NOON + 900 * DAY_MS;
+    const today = Math.floor(at / DAY_MS);
+
+    await reportSignups(caps(undefined, undefined, OBSERVE), at);
+
+    const written = await signupDaysFrom(today - SIGNUP_DAYS_KEPT - 1);
+    expect(written[0]?.day).toBe(today - SIGNUP_DAYS_KEPT);
+    expect(written.at(-1)).toEqual({
+      day: today - 1,
+      capped_networks: 0,
+      busiest: 0,
+      cap_ipv4: null,
+      cap_ipv6: null,
+      enforced: 0,
+    });
+  });
+});
+
+describe('purgeSignupDays', () => {
+  it('drops the rows older than they are kept, and keeps the rest', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const at = NOON + 1200 * DAY_MS;
+    const today = Math.floor(at / DAY_MS);
+    await reportSignups(capped('5'), at);
+
+    await purgeSignupDays(capped('5'), at + DAY_MS);
+
+    const kept = await signupDaysFrom(today - SIGNUP_DAYS_KEPT);
+    expect(kept[0]?.day).toBe(today + 1 - SIGNUP_DAYS_KEPT);
+    expect(kept.at(-1)?.day).toBe(today - 1);
   });
 });

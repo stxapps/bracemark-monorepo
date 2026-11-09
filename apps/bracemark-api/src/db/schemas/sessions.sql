@@ -3,8 +3,9 @@
 -- For changes to a LIVE db, add a numbered migration under
 -- db/migrations/sessions/ — keep this snapshot and the migration set in lockstep
 -- (0001_init.sql + 0002_revoked_at.sql + 0003_signup_counts.sql +
--- 0004_purge_index.sql + 0005_signup_counts_cap.sql together produce this
--- file). See db/migrations/README.md.
+-- 0004_purge_index.sql + 0005_signup_counts_cap.sql + 0006_signup_days.sql +
+-- 0007_transfer_days.sql together produce this file). See
+-- db/migrations/README.md.
 --
 -- Sessions live in their OWN database, separate from the directory + account
 -- shards (DIRECTORY_DB, ACCOUNTS_DB_N), for two reasons: (1) they are high-churn
@@ -52,3 +53,27 @@ CREATE TABLE IF NOT EXISTS signup_counts (
   PRIMARY KEY (network_hash, day)
 );
 CREATE INDEX IF NOT EXISTS idx_signup_counts_day ON signup_counts(day);
+
+-- The signup cap's figures as one row of totals per UTC day (0006), written by
+-- the daily cron from signup_counts before it purges them. No network, no hash.
+-- services/signup-report.ts.
+CREATE TABLE IF NOT EXISTS signup_days (
+  day             INTEGER PRIMARY KEY,   -- days since the epoch, UTC, as signup_counts
+  capped_networks INTEGER NOT NULL,      -- networks whose count went past the cap it was counted against
+  busiest         INTEGER NOT NULL,      -- the most signups any one network made; 0 for a day with none
+  cap_ipv4        INTEGER,               -- the caps in force at the cron; NULL = off
+  cap_ipv6        INTEGER,
+  enforced        INTEGER NOT NULL       -- 1 refused past the cap, 0 observed
+);
+
+-- Daily totals of accounts passing a step of the monthly transfer count (0007).
+-- No user id: each crossing adds one to its day's row. services/transfer-budget.ts.
+CREATE TABLE IF NOT EXISTS transfer_days (
+  day      INTEGER NOT NULL,             -- days since the epoch, UTC, of the call that crossed
+  counter  TEXT    NOT NULL,             -- 'puts' | 'commits'
+  plan     TEXT    NOT NULL,             -- the account's high-water plan
+  step     INTEGER NOT NULL,             -- the count that was passed
+  budget   INTEGER NOT NULL,             -- 1 = the plan's threshold, 0 = a ladder step
+  accounts INTEGER NOT NULL,             -- how many accounts passed it that day
+  PRIMARY KEY (day, counter, plan, step)
+);

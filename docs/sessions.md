@@ -283,8 +283,12 @@ a malicious replacement server that deliberately copies the envelope.
 
 **⚠ Never restore `SESSIONS_DB` to an earlier point. If it is damaged, empty the
 `sessions` table.** (The database also holds `signup_counts`, the daily signup cap's
-counter, [account.md](./account.md), _creating an account_. It is disposable too.
-Emptying it resets today's counts and nothing else.) D1 Time Travel is always on and can't be turned off, so
+counter, [account.md](./account.md), _creating an account_, and two tables of daily
+totals that name nobody: `signup_days`, the cap's figures, and `transfer_days`,
+accounts passing each step of the monthly transfer count
+([local-first-sync.md](./local-first-sync.md)). All three are disposable too.
+Emptying the counter resets today's counts, and emptying a totals table loses past
+figures, and nothing else.) D1 Time Travel is always on and can't be turned off, so
 `wrangler d1 time-travel restore` is always one command away, and here it is
 the wrong one. Revocation and the password-change expiry are writes, so a
 restore to before them undoes them. A phone signed out through _Sign out other

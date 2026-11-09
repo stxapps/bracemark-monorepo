@@ -3,12 +3,14 @@
 // 0003_signup_counts.sql). One row per (network, UTC day). services/signup-cap.ts
 // owns the policy; this is only the counter.
 
+export type SignupDayTotals = { day: number; cappedNetworks: number; busiest: number };
+
 export function signupCountsRepo(db: D1Database) {
   return {
     // Count one signup for this network today, returning the new total. One
     // upsert, so two concurrent signups can't both read the same count and both
     // pass the cap. The row keeps the cap it was counted against (0005), since
-    // the hash can't say which family's cap that was: countOverCap below reads it.
+    // the hash can't say which family's cap that was: totalsByDay below reads it.
     async increment(networkHash: string, day: number, cap: number): Promise<number> {
       const row = await db
         .prepare(
@@ -21,24 +23,21 @@ export function signupCountsRepo(db: D1Database) {
       return row?.count ?? 1;
     },
 
-    // How many networks went past their cap on `day`, each judged by the cap it
-    // was counted against. A row from before 0005 has no cap and isn't counted.
-    async countOverCap(day: number): Promise<number> {
-      const row = await db
-        .prepare(`SELECT COUNT(*) AS n FROM signup_counts WHERE day = ? AND count > cap`)
-        .bind(day)
-        .first<{ n: number }>();
-      return row?.n ?? 0;
-    },
-
-    // The most signups any one network made on `day`, refused ones included; 0
-    // for a day with none. The report's measure of how a cap would land.
-    async busiest(day: number): Promise<number> {
-      const row = await db
-        .prepare(`SELECT COALESCE(MAX(count), 0) AS n FROM signup_counts WHERE day = ?`)
-        .bind(day)
-        .first<{ n: number }>();
-      return row?.n ?? 0;
+    // Each day in [from, to] that has rows: how many networks went past the cap
+    // they were counted against, and the most signups any one network made
+    // (refused ones included). A row from before 0005 has no cap and counts as
+    // not past it. Days without rows are absent; the caller fills them in.
+    async totalsByDay(from: number, to: number): Promise<SignupDayTotals[]> {
+      const { results } = await db
+        .prepare(
+          `SELECT day,
+                  COALESCE(SUM(count > cap), 0) AS cappedNetworks,
+                  MAX(count) AS busiest
+           FROM signup_counts WHERE day BETWEEN ? AND ? GROUP BY day`,
+        )
+        .bind(from, to)
+        .all<SignupDayTotals>();
+      return results;
     },
 
     // Delete every day before `day`. Returns the number of rows removed.

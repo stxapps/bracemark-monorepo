@@ -1,7 +1,8 @@
 import type { Bindings } from './lib/env';
 import { purgeSessions } from './services/session';
 import { purgeSignupCounts } from './services/signup-cap';
-import { reportSignups } from './services/signup-report';
+import { purgeSignupDays, reportSignups } from './services/signup-report';
+import { purgeTransferDays } from './services/transfer-budget';
 import { app } from './app';
 
 // Durable Object classes must be EXPORTED from the entry module so the Workers
@@ -10,9 +11,11 @@ import { app } from './app';
 export { UserDataDO } from './do/user-data';
 
 // The daily cron (wrangler.jsonc → `triggers.crons`, per env). It runs three jobs.
-// Session cleanup, on the two retention clocks (docs/sessions.md); dropping past
-// days of the signup counter (services/signup-cap.ts); and one log line with the
-// day's new-account count (services/signup-report.ts). On session cleanup: a
+// Session cleanup, on the two retention clocks (docs/sessions.md); the signup
+// figures — written down as one row of totals per finished day, then the past
+// days of the per-network counter dropped (services/signup-report.ts,
+// services/signup-cap.ts); and dropping the daily totals tables' old rows
+// (signup_days, transfer_days). On session cleanup: a
 // purged token answers `session_unknown`, which keeps the device's library, so
 // this job can shorten how long a revocation stays deliverable but can never
 // cause a wipe. It is also the home for the orphan-claim and tombstone-teardown
@@ -28,8 +31,11 @@ export async function scheduled(
       (err: unknown) => console.error('scheduled: session purge failed', err),
     ),
   );
-  // The report reads yesterday's signup counts, so it runs before the purge that
-  // drops them. A failed report must not stop the purge.
+  // The report writes the finished days' totals from the per-network counts, so
+  // it runs before the purge that drops them. A failed report must not stop the
+  // purge: /privacy promises the per-network rows go shortly after their day,
+  // and that outranks a day's totals. A day lost that way has no signup_days
+  // row, which is how it shows.
   ctx.waitUntil(
     reportSignups(env)
       .catch((err: unknown) => console.error('scheduled: signup report failed', err))
@@ -38,6 +44,13 @@ export async function scheduled(
         (purged) => console.log(`scheduled: purged ${purged} signup-count rows`),
         (err: unknown) => console.error('scheduled: signup-count purge failed', err),
       ),
+  );
+  ctx.waitUntil(
+    Promise.all([purgeSignupDays(env), purgeTransferDays(env)]).then(
+      ([days, transfers]) =>
+        console.log(`scheduled: purged ${days} signup-day and ${transfers} transfer-day rows`),
+      (err: unknown) => console.error('scheduled: totals purge failed', err),
+    ),
   );
 }
 

@@ -11,7 +11,10 @@ conflate them:
   - **accounts** (`ACCOUNTS_DB_1`, … one binding per shard) — `users` +
     `account_keys`. The `accounts` migration set is applied to **each** shard.
   - **sessions** (`SESSIONS_DB`) — bearer-token `sessions`, plus `signup_counts`
-    (the daily per-network signup cap's counter, `services/signup-cap.ts`).
+    (the daily per-network signup cap's counter, `services/signup-cap.ts`) and
+    two tables of daily totals that name nobody: `signup_days` (the cap's
+    figures, `services/signup-report.ts`) and `transfer_days` (accounts passing
+    each step of the monthly transfer count, `services/transfer-budget.ts`).
     Separate db: high-churn and not Tier-0 (a lost session regenerates by
     re-auth; a lost counter resets today's counts and nothing else).
   - All hold only small, bounded-per-user rows, so none nears D1's 10 GB cap;

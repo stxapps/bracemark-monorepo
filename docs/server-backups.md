@@ -8,13 +8,13 @@ what R2 and the Durable Object hold is [local-first-sync.md](./local-first-sync.
 
 ### what each store needs
 
-| store                                   | holds                                        | stakes                                                 | protection                                   |
-| --------------------------------------- | -------------------------------------------- | ------------------------------------------------------ | -------------------------------------------- |
-| `DIRECTORY_DB` (D1)                     | `usernames`, `purchases`, `paddle_checkouts` | **Tier-0** — the only path from a handle to an account | Time Travel + encrypted off-Cloudflare dumps |
-| each account shard (`ACCOUNTS_DB_1`, …) | `users`, `account_keys` (wrapped DEKs)       | **Tier-0** — lose it and the account is dead           | Time Travel + encrypted off-Cloudflare dumps |
-| `SESSIONS_DB` (D1)                      | `sessions`, `signup_counts`                  | disposable — loss costs a sign-in (below)              | none, and ⚠ never restored backward          |
-| `USER_FILES` (R2)                       | every user's encrypted files                 | **source of truth** for bookmark data                  | off-Cloudflare mirror with dated history     |
-| `USER_DATA` (Durable Object, per user)  | op log, `file_sizes` quota map               | op log disposable; quota map derivable from R2         | built-in 30-day PITR only                    |
+| store                                   | holds                                                       | stakes                                                          | protection                                   |
+| --------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------- | -------------------------------------------- |
+| `DIRECTORY_DB` (D1)                     | `usernames`, `purchases`, `paddle_checkouts`                | **Tier-0** — the only path from a handle to an account          | Time Travel + encrypted off-Cloudflare dumps |
+| each account shard (`ACCOUNTS_DB_1`, …) | `users`, `account_keys` (wrapped DEKs)                      | **Tier-0** — lose it and the account is dead                    | Time Travel + encrypted off-Cloudflare dumps |
+| `SESSIONS_DB` (D1)                      | `sessions`, `signup_counts`, `signup_days`, `transfer_days` | disposable — loss costs a sign-in and past daily totals (below) | none, and ⚠ never restored backward          |
+| `USER_FILES` (R2)                       | every user's encrypted files                                | **source of truth** for bookmark data                           | off-Cloudflare mirror with dated history     |
+| `USER_DATA` (Durable Object, per user)  | op log, `file_sizes` quota map                              | op log disposable; quota map derivable from R2                  | built-in 30-day PITR only                    |
 
 ### backups & replication
 
@@ -37,7 +37,16 @@ what R2 and the Durable Object hold is [local-first-sync.md](./local-first-sync.
   authenticates again. If the table is damaged or lost, empty it. Under
   [sessions.md](./sessions.md) every device then gets `session_unknown`, keeps
   its library, and signs in again; what's lost is the pending remote wipes the
-  table carried.
+  table carried. The other three tables are disposable too, and nothing copies
+  them either: `signup_counts` is today's signup-cap counter
+  ([account.md](./account.md), _creating an account_), and `signup_days` and
+  `transfer_days` are daily totals that name nobody, kept 40 days
+  (`SIGNUP_DAYS_KEPT`, `TRANSFER_DAYS_KEPT`) and then purged by the daily cron
+  ([sessions.md](./sessions.md), _the sessions database_). Those 40 days are the
+  only history the totals have, so a figure that has to outlive them is read
+  and kept elsewhere before it ages out. Losing the database resets today's
+  counts and loses the past totals; restoring it backward would bring them back
+  and un-revoke sessions with them, so it is still emptied, not restored.
 - **R2 (bulk ciphertext):** R2 is durable but **not versioned**, and it is the
   **source of truth** for bookmark data
   ([local-first-sync.md](./local-first-sync.md#source-of-truth-r2-is-truth-the-op-log-is-an-accelerator)).

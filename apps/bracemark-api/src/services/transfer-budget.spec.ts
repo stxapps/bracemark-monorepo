@@ -1,14 +1,47 @@
+import { env as workerEnv } from 'cloudflare:workers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Bindings } from '../lib/env';
-import { crossed, noteTransfer, transferThresholdsOf } from './transfer-budget';
+import {
+  crossed,
+  noteTransfer,
+  purgeTransferDays,
+  TRANSFER_DAYS_KEPT,
+  TRANSFER_STEPS,
+  transferThresholdsOf,
+} from './transfer-budget';
 
-// The log line is the whole output of a count that refuses nothing, so the two
-// properties worth pinning are that it fires exactly once per account per
-// threshold per month, and against the account's own plan. Neither shows in any
-// response.
+// A count that refuses nothing has two outputs, the log line and the day's
+// totals, and neither shows in any response. So what is pinned is that the line
+// fires exactly once per account per threshold per month, against the account's
+// own plan; that the totals add one account per step passed and name nobody;
+// and that neither can fail the sync it rides on.
+//
+// Real D1 (SESSIONS_DB). Storage is shared by every test in this file, so each
+// test that reads the totals writes them on a day of its own (`now`).
 
-const env = (puts?: string) => ({ TRANSFER_BUDGET_PUTS_PER_MONTH: puts }) as unknown as Bindings;
+const DAY_MS = 86_400_000;
+
+const env = (puts?: string) =>
+  ({ ...workerEnv, TRANSFER_BUDGET_PUTS_PER_MONTH: puts }) as unknown as Bindings;
+
+type TransferDayRow = {
+  day: number;
+  counter: string;
+  plan: string;
+  step: number;
+  budget: number;
+  accounts: number;
+};
+
+async function totalsOn(day: number): Promise<TransferDayRow[]> {
+  const { results } = await workerEnv.SESSIONS_DB.prepare(
+    `SELECT * FROM transfer_days WHERE day = ? ORDER BY counter, plan, step`,
+  )
+    .bind(day)
+    .all<TransferDayRow>();
+  return results;
+}
 
 describe('transferThresholdsOf', () => {
   it('reads plan:count pairs', () => {
@@ -81,5 +114,107 @@ describe('noteTransfer', () => {
     await noteTransfer(thresholds, 'u_4', 'puts', undefined, planOf);
 
     expect(planOf).not.toHaveBeenCalled();
+  });
+
+  it('adds one account to each step it passed, for its plan, and names nobody', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const e = env('free:100,plus:1500');
+    const day = 30_000;
+    const plus = () => Promise.resolve('plus' as const);
+
+    await noteTransfer(
+      e,
+      'u_10',
+      'puts',
+      { period: 1, before: 900, after: 1600 },
+      plus,
+      day * DAY_MS,
+    );
+    await noteTransfer(
+      e,
+      'u_11',
+      'puts',
+      { period: 1, before: 990, after: 1010 },
+      plus,
+      day * DAY_MS,
+    );
+
+    const rows = await totalsOn(day);
+    expect(rows).toEqual([
+      { day, counter: 'puts', plan: 'plus', step: 1000, budget: 0, accounts: 2 },
+      { day, counter: 'puts', plan: 'plus', step: 1500, budget: 1, accounts: 1 },
+    ]);
+    expect(JSON.stringify(rows)).not.toMatch(/u_1[01]/);
+  });
+
+  // The ladder and the budget can meet; the totals keep one row, marked.
+  it('keeps a threshold that is also a ladder step as one row, marked as the budget', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const day = 30_001;
+    expect(TRANSFER_STEPS).toContain(1000);
+
+    await noteTransfer(
+      env('plus:1000'),
+      'u_12',
+      'puts',
+      { period: 1, before: 900, after: 1100 },
+      () => Promise.resolve('plus'),
+      day * DAY_MS,
+    );
+
+    expect(await totalsOn(day)).toEqual([
+      { day, counter: 'puts', plan: 'plus', step: 1000, budget: 1, accounts: 1 },
+    ]);
+  });
+
+  // The plan read and the write ride a sync call. Either failing is a total off
+  // by one, never a failed sync; the line, written first, still goes out.
+  it('never fails the call it rides on', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const day = 30_002;
+    const count = { period: 1, before: 50, after: 150 };
+
+    await expect(
+      noteTransfer(
+        env('free:100'),
+        'u_13',
+        'puts',
+        count,
+        () => Promise.reject(new Error('d1')),
+        day * DAY_MS,
+      ),
+    ).resolves.toBeUndefined();
+    const broken = {
+      ...env('free:100'),
+      SESSIONS_DB: {
+        prepare: () => {
+          throw new Error('d1 down');
+        },
+      },
+    } as unknown as Bindings;
+    await expect(
+      noteTransfer(broken, 'u_14', 'puts', count, () => Promise.resolve('free'), day * DAY_MS),
+    ).resolves.toBeUndefined();
+
+    expect(error).toHaveBeenCalledTimes(2);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(await totalsOn(day)).toEqual([]);
+  });
+});
+
+describe('purgeTransferDays', () => {
+  it('drops the rows older than they are kept, and keeps the rest', async () => {
+    const today = 31_000;
+    const free = () => Promise.resolve('free' as const);
+    const count = { period: 1, before: 0, after: 100 };
+    for (const day of [today - TRANSFER_DAYS_KEPT - 1, today - TRANSFER_DAYS_KEPT]) {
+      await noteTransfer(env(), 'u_15', 'puts', count, free, day * DAY_MS);
+    }
+
+    await purgeTransferDays(env(), today * DAY_MS);
+
+    expect(await totalsOn(today - TRANSFER_DAYS_KEPT - 1)).toEqual([]);
+    expect(await totalsOn(today - TRANSFER_DAYS_KEPT)).toHaveLength(1);
   });
 });

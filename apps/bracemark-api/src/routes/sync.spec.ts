@@ -532,6 +532,53 @@ describe('sync control plane', () => {
       expect(res.status).toBe(403);
       expect((await counts(userId))?.puts).toBe(0);
     });
+
+    // The day's totals (services/transfer-budget.ts) through the real route: a
+    // batch that takes the account past the ladder's first step adds one account
+    // to it, and the same batch refused adds nothing, because it was handed back
+    // before it could be noted. Read as a difference: the totals name nobody, so
+    // another test's account on the same day is indistinguishable.
+    it('adds an accepted batch’s crossing to the day’s totals, and not a refused one', async () => {
+      const passedFirstStep = async () =>
+        Number(
+          (
+            await env.SESSIONS_DB.prepare(
+              `SELECT COALESCE(SUM(accounts), 0) AS n FROM transfer_days
+               WHERE day = ? AND counter = 'puts' AND plan = 'free' AND step = 100`,
+            )
+              .bind(Math.floor(Date.now() / 86_400_000))
+              .first<{ n: number }>()
+          )?.n ?? 0,
+        );
+      const paths = Array.from({ length: 100 }, (_, i) => `links/t${i}.enc`);
+
+      const refused = await authFor('sync-transfer-step-refused');
+      await userDataStub(env, refused.userId).commitOps([
+        {
+          op: 'put',
+          path: 'files/huge.enc',
+          updatedAt: 1000,
+          size: entitlementsOf('free').maxBytes,
+        },
+      ]);
+      const before = await passedFirstStep();
+      const res = await app.request(
+        filesSignEndpoint.path,
+        json(refused.auth, { op: 'put', paths }),
+        env,
+      );
+      expect(res.status).toBe(403);
+      expect(await passedFirstStep()).toBe(before);
+
+      const accepted = await authFor('sync-transfer-step');
+      const ok = await app.request(
+        filesSignEndpoint.path,
+        json(accepted.auth, { op: 'put', paths }),
+        env,
+      );
+      expect(ok.status).toBe(200);
+      expect(await passedFirstStep()).toBe(before + 1);
+    });
   });
 
   describe(`POST ${filesSignEndpoint.path}`, () => {
