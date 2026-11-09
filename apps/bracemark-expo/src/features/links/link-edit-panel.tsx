@@ -85,7 +85,7 @@ function sameIds(a: string[], b: string[]): boolean {
 // The editor's draft and its one Save. Mounted per open, so the draft is a
 // snapshot of `link`. `onDone` is how the editor closes once a Save lands.
 function useLinkEditDraft(link: LinkItem, onDone: () => void) {
-  const { update, saveCustomImage, deleteCustomImage } = useLinkMutations();
+  const { update, saveCustomImage } = useLinkMutations();
 
   // The extraction supplies the fallbacks the overrides sit above: the
   // placeholder title and the image shown after "Reset to extracted". Live, so
@@ -165,21 +165,16 @@ function useLinkEditDraft(link: LinkItem, onDone: () => void) {
       }
 
       // Content-before-metadata: the new `files/` blob lands before the link
-      // references it; the replaced blob is dropped only after the reference
-      // moved off it.
-      const replacedImageId = link.customImageId;
+      // references it. The replaced one is `update`'s to reclaim, read off the
+      // record it re-reads — not off this snapshot, which another device may
+      // have changed while the dialog was open.
       if (image.kind === 'pick') {
         patch.customImageId = await saveCustomImage(image);
-      } else if (image.kind === 'clear' && replacedImageId) {
+      } else if (image.kind === 'clear' && link.customImageId) {
         patch.customImageId = undefined;
       }
 
-      if (Object.keys(patch).length > 0) {
-        await update(link, patch);
-        if (image.kind !== 'keep' && replacedImageId) {
-          await deleteCustomImage(replacedImageId);
-        }
-      }
+      if (Object.keys(patch).length > 0) await update(link, patch);
       onDone();
     } finally {
       setSaving(false);

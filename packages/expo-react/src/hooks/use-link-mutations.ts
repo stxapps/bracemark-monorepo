@@ -91,9 +91,6 @@ export interface LinkMutations {
   // `update` with the returned id (which also kicks the sync). Takes the picked
   // file's uri + reported dimensions (not bytes — see the header).
   saveCustomImage: (source: ResizeImageSource) => Promise<string>;
-  // Drop a replaced/cleared custom image's `files/{id}.enc` blob. Call AFTER the
-  // `update` that removed/replaced the reference.
-  deleteCustomImage: (fileId: string) => Promise<void>;
 }
 
 export function useLinkMutations(): LinkMutations {
@@ -146,6 +143,17 @@ export function useLinkMutations(): LinkMutations {
       // the honest LWW outcome for edit-vs-delete.
       const current = (await readLinkById(linkIdOf(link))) ?? link;
       await writeLink(username, current, patch);
+      // The custom image this write replaced or cleared, reclaimed — read off
+      // `current`, the record the patch was merged onto, never off the caller's
+      // snapshot: an image another device set while a dialog was open is the one
+      // this write drops, and deleting the snapshot's instead leaked it. After the
+      // write, so the reference has moved off the blob first (metadata before
+      // content on the way down). A write landing between the re-read and the put
+      // can still leave one behind, which the orphaned-file sweep reclaims.
+      const replaced = current.customImageId;
+      if ('customImageId' in patch && replaced !== undefined && replaced !== patch.customImageId) {
+        await deleteFile(username, replaced);
+      }
       requestSync();
     },
     [username, requestSync],
@@ -254,16 +262,6 @@ export function useLinkMutations(): LinkMutations {
     [username],
   );
 
-  const deleteCustomImage = useCallback(
-    async (fileId: string) => {
-      if (!username) throw new Error('useLinkMutations: no active account');
-
-      await deleteFile(username, fileId);
-      requestSync();
-    },
-    [username, requestSync],
-  );
-
   return useMemo<LinkMutations>(
     () => ({
       create,
@@ -272,8 +270,7 @@ export function useLinkMutations(): LinkMutations {
       destroy,
       destroyMany,
       saveCustomImage,
-      deleteCustomImage,
     }),
-    [create, update, updateMany, destroy, destroyMany, saveCustomImage, deleteCustomImage],
+    [create, update, updateMany, destroy, destroyMany, saveCustomImage],
   );
 }

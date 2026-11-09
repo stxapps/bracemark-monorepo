@@ -1,9 +1,19 @@
-import { FILES_PREFIX, LINKS_PREFIX, MY_LIST_ID, pathFromId } from '@stxapps/shared';
+import {
+  FILES_PREFIX,
+  LINKS_PREFIX,
+  MY_LIST_ID,
+  ORPHAN_GRACE_MS,
+  ORPHAN_SWEEP_INTERVAL_MS,
+  pathFromId,
+} from '@stxapps/shared';
 
 import { db } from './db';
 import { writeExtraction, writeFile, writeLink } from './mutations';
-import { ORPHAN_GRACE_MS, ORPHAN_SWEEP_INTERVAL_MS, sweepOrphanFiles } from './sweep-orphan-files';
+import { sweepOrphanFiles } from './sweep-orphan-files';
 import { getSyncMeta, recordUnreadablePaths, seedNewAccount } from './sync-store';
+
+// A skip as the pull records it: the path and the stamp it was listed at.
+const stamped = (path: string) => ({ path, updatedAt: 1 });
 
 // The orphaned-file sweep deletes user data on every device when it is wrong, so most
 // of this file is the cases where it must NOT delete (its header has the reasoning):
@@ -87,9 +97,19 @@ it('spares a blob younger than the grace, and one with a write still queued', as
   expect(await exists('unpushed')).toBe(true);
 });
 
+// A row from before the record can't vouch for this store (the dangling sweep's spec
+// has the reasoning); the first case above is the positive control.
+it('does nothing until a full listing has completed with the record in place', async () => {
+  await pushedFile('orphan');
+  await db.syncMeta.update(USER, { unreadableRecordCompleteAt: undefined });
+
+  await expect(sweepOrphanFiles(USER, NOW)).resolves.toBe(0);
+  expect(await exists('orphan')).toBe(true);
+});
+
 it('does nothing while any path is recorded unreadable', async () => {
   await pushedFile('orphan');
-  await recordUnreadablePaths(USER, ['links/skipped.enc']);
+  await recordUnreadablePaths(USER, ['links/skipped.enc'].map(stamped));
 
   await expect(sweepOrphanFiles(USER, NOW)).resolves.toBe(0);
   expect(await exists('orphan')).toBe(true);

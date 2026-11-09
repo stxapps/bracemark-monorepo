@@ -15,10 +15,10 @@
 // table that changes shape gets a numbered migration keyed on
 // `PRAGMA user_version`, run on open before first use and append-only like the
 // server's. Never edit a shipped statement in place: "delete the app" now
-// deletes a library that may exist nowhere else. The runner lands with the
-// first migration. Nothing sets user_version yet, so a shipped database reads 0,
-// and the runner must take 0 to mean this schema (docs/local-first-sync.md,
-// _schema changes_).
+// deletes a library that may exist nowhere else. The runner is `runMigrations`
+// (below the DDL). The first release set no user_version, so a database it
+// created reads 0, and the runner takes 0 to mean this schema
+// (docs/local-first-sync.md, _schema changes_).
 //
 // How the web store's IndexedDB idioms map onto SQLite:
 //
@@ -69,7 +69,7 @@ import {
 } from 'drizzle-orm/sqlite-core';
 import { openDatabaseSync } from 'expo-sqlite';
 
-import type { LinksLayout, ThemeState } from '@stxapps/shared';
+import type { LinksLayout, ThemeState, UnreadableRecheck } from '@stxapps/shared';
 
 // Raw decrypted bytes. drizzle's built-in `blob({ mode: 'buffer' })` types as
 // Node's Buffer, which doesn't exist on Hermes — expo-sqlite reads/binds BLOBs
@@ -90,6 +90,17 @@ export const syncMeta = sqliteTable('sync_meta', {
   syncCursorUpdatedAt: integer('sync_cursor_updated_at').notNull(),
   syncCursorPath: text('sync_cursor_path').notNull(),
   firstSyncDoneAt: integer('first_sync_done_at').notNull(),
+  // The four columns migration 1 added (MIGRATIONS below) — web's optional
+  // `unreadablePaths`, `unreadableRecheck`, `unreadableRecordCompleteAt` and
+  // `lastOrphanSweepAt`, same meaning (web-react db.ts SyncMetaRecord). NULL
+  // where web's field is absent: a row from before the migration, or one no
+  // pull has skipped anything for. A migrated row's NULL
+  // `unreadableRecordCompleteAt` is the point: every released build skipped
+  // without recording, so the engine forces one fallback before any sweep runs.
+  unreadablePaths: text('unreadable_paths', { mode: 'json' }).$type<string[]>(),
+  unreadableRecheck: text('unreadable_recheck', { mode: 'json' }).$type<UnreadableRecheck>(),
+  unreadableRecordCompleteAt: integer('unreadable_record_complete_at'),
+  lastOrphanSweepAt: integer('last_orphan_sweep_at'),
 });
 
 // Namespace discriminator for single-type ordered queries — same values as
@@ -565,6 +576,57 @@ export const DDL = `
   );
 `;
 
+// ⚠ The numbered migrations past the shipped DDL — APPEND-ONLY, like the
+// server's (header). `MIGRATIONS[i]` takes a database from user_version `i` to
+// `i + 1`, and 0 is the DDL above: what every database the first release created
+// reads, since nothing set the pragma then. Never edit or reorder a shipped
+// entry. A device that ran it has its user_version past it and will never run it
+// again, so an edit reaches fresh installs and no one else, with nothing to say
+// so.
+//
+// Additive only, because a downgrade still happens (a sideloaded Android build,
+// an older TestFlight one): an older build runs its own DDL idempotently and
+// reads past columns it doesn't know. A database at a version this build doesn't
+// know is left as it is, for the same reason. A change an older build could NOT
+// read past — a dropped or renamed column, a new NOT NULL — needs that ruled out
+// first, not just a migration.
+export const MIGRATIONS: readonly string[] = [
+  // 1 — the unreadable record, its recheck schedule, when the record became
+  // complete, and the orphaned-file sweep's throttle, on the bookkeeping row
+  // (`syncMeta` above). Nullable, so a row from before reads as "nothing
+  // recorded, not complete, never swept".
+  `ALTER TABLE sync_meta ADD COLUMN unreadable_paths TEXT;
+   ALTER TABLE sync_meta ADD COLUMN unreadable_recheck TEXT;
+   ALTER TABLE sync_meta ADD COLUMN unreadable_record_complete_at INTEGER;
+   ALTER TABLE sync_meta ADD COLUMN last_orphan_sweep_at INTEGER;`,
+];
+
+// Bring the database up to MIGRATIONS.length, one version per transaction: the
+// pragma is in the database header and transactional, so a migration and the
+// version that records it commit together, and one that fails rolls back to the
+// version before it and throws. The next open tries it again.
+function runMigrations(client: SqliteClient): void {
+  const statement = client.prepareSync('PRAGMA user_version;');
+  let version: number;
+  try {
+    const row = statement.executeSync().getFirstSync() as { user_version: number } | null;
+    version = row?.user_version ?? 0;
+  } finally {
+    statement.finalizeSync();
+  }
+  for (; version < MIGRATIONS.length; version++) {
+    client.execSync('BEGIN IMMEDIATE;');
+    try {
+      client.execSync(MIGRATIONS[version]);
+      client.execSync(`PRAGMA user_version = ${version + 1};`);
+      client.execSync('COMMIT;');
+    } catch (err) {
+      client.execSync('ROLLBACK;');
+      throw err;
+    }
+  }
+}
+
 // A transaction handle over this database — what the tx-taking store helpers
 // (item-store's putItemsTx, pending-store's enqueuePutTx) accept, so a
 // multi-store write (data/mutations.ts) can compose both into ONE transaction:
@@ -647,6 +709,7 @@ export function getDb(): ExpoSQLiteDatabase<typeof schema> {
     // WAL lets the change-listener reads proceed while a write is in flight.
     sqlite.execSync('PRAGMA journal_mode = WAL;');
     sqlite.execSync(DDL);
+    runMigrations(sqlite);
     db = drizzle(cacheStatements(sqlite, STATEMENT_CACHE_SIZE), { schema });
   }
   return db;

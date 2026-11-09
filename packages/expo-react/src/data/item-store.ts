@@ -12,9 +12,9 @@
 // fields (`updatedAt`, `data`, `hasDataFile`), so reads don't join the junction
 // tables back in — the read layer queries those directly.
 
-import { and, count, eq, gt, gte, inArray, lt, sql } from 'drizzle-orm';
+import { and, count, eq, gt, gte, inArray, lt, or, sql } from 'drizzle-orm';
 
-import { chunk } from '@stxapps/shared';
+import { chunk, FILES_PREFIX } from '@stxapps/shared';
 
 import {
   type DbTx,
@@ -33,7 +33,7 @@ import {
 // querying `pending_ops` itself. One direction only; pending-store never imports back.
 import { type PendingOpRecord, queuedPathsTx, queuedWriteIdTx } from './pending-store';
 import type { ItemRecord } from './projection';
-import { assertAccountOwnsStoreTx } from './sync-store';
+import { assertAccountOwnsStoreTx, forgetUnreadablePathsTx } from './sync-store';
 
 export type ItemRow = typeof items.$inferSelect;
 
@@ -159,6 +159,65 @@ export function namespaceRowsPage(prefix: string, after: string, limit: number):
     .all();
 }
 
+// The sweeps' reads (data/sweep-dangling-extractions.ts, sweep-orphan-files.ts):
+// keys and stamps only, so no `data` blob comes off a page for a scan that is
+// normally answered without one.
+
+// Every path under one namespace, in path order.
+export function namespacePaths(prefix: string): string[] {
+  return getDb()
+    .select({ path: items.path })
+    .from(items)
+    .where(and(gte(items.path, prefix), lt(items.path, prefixEnd(prefix))))
+    .all()
+    .map((row) => row.path);
+}
+
+// Every path under one namespace with its stored server stamp.
+export function namespaceStamps(prefix: string): { path: string; updatedAt: number }[] {
+  return getDb()
+    .select({ path: items.path, updatedAt: items.updatedAt })
+    .from(items)
+    .where(and(gte(items.path, prefix), lt(items.path, prefixEnd(prefix))))
+    .all();
+}
+
+// Which of `paths` have a row here.
+export function presentPaths(paths: string[]): Set<string> {
+  const present = new Set<string>();
+  for (const batch of chunk(paths, IN_BATCH)) {
+    const rows = getDb()
+      .select({ path: items.path })
+      .from(items)
+      .where(inArray(items.path, batch))
+      .all();
+    for (const row of rows) present.add(row.path);
+  }
+  return present;
+}
+
+// Up to `limit` ENTITY rows (every namespace but `files/`) whose path sorts after
+// `after` ('' starts at the beginning), in path order, with their bytes — the
+// orphaned-file sweep's scan, a page at a time so it can yield between pages
+// (namespaceRowsPage's reason).
+export function entityRowsPage(
+  after: string,
+  limit: number,
+): { path: string; data: Uint8Array | null }[] {
+  return getDb()
+    .select({ path: items.path, data: items.data })
+    .from(items)
+    .where(
+      and(
+        gt(items.path, after),
+        or(lt(items.path, FILES_PREFIX), gte(items.path, prefixEnd(FILES_PREFIX))),
+      ),
+    )
+    .orderBy(items.path)
+    .limit(limit)
+    .all();
+}
+
 // How many rows the range holds, without reading one: the paged reader's total.
 export function namespaceCount(prefix: string): number {
   const row = getDb()
@@ -254,7 +313,11 @@ export async function putItemsUnqueued(username: string, records: ItemRecord[]):
     );
     const writable = records.filter((r) => !queued.has(r.path));
     if (writable.length > 0) putItemsTx(tx, writable);
-    return writable.map((r) => r.path);
+    const stored = writable.map((r) => r.path);
+    // A path stored is no longer one a pull could not read (sync-store's
+    // forgetUnreadablePathsTx), in the same transaction as the store.
+    forgetUnreadablePathsTx(tx, username, stored);
+    return stored;
   });
 }
 
@@ -277,6 +340,8 @@ export async function deleteItemsUnqueued(username: string, paths: string[]): Pr
     const queued = queuedPathsTx(tx, username, paths);
     const deletable = paths.filter((path) => !queued.has(path));
     if (deletable.length > 0) deleteItemsTx(tx, deletable);
+    // Deleted on the server: absent here is now the truth, not an unreadable blob.
+    forgetUnreadablePathsTx(tx, username, deletable);
     return deletable;
   });
 }

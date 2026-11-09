@@ -429,10 +429,19 @@ The three client shapes now change on different terms:
   shipped statement. One process opens the database at a time (the iOS share
   extension writes its outbox file, not the database;
   [share-sheet.md](./share-sheet.md)), so there's no multi-tab counterpart to
-  `versionchange`. No migration exists yet, so there's no runner yet either.
-  It lands with the first migration. Nothing sets `user_version` today, so
-  every database the first release created reads `0`, and the runner has to
-  treat `0` as the shipped schema, not as an empty database.
+  `versionchange`. The runner is `runMigrations` in `db.ts`, over its
+  append-only `MIGRATIONS` list: each entry takes the database one version up,
+  in one transaction with the `user_version` that records it. The first release
+  set no `user_version`, so every database it created reads `0`, and the runner
+  treats `0` as the shipped schema, not as an empty database. Migration 1 adds
+  the bookkeeping row's four nullable columns (the unreadable record, its
+  recheck schedule, when the record became complete, the orphaned-file sweep's
+  stamp). A migrated row is not complete, so its first cycle after the update is
+  a fallback (_crypto boundary_). ⚠ Additive only: a
+  downgraded build (a sideloaded Android one, an older TestFlight one) opens a
+  newer database and must read past what it doesn't know, so a database at a
+  version this build doesn't know is left as it is. The specs that open a file
+  shaped like the first release's are `data/db.migrations.spec.ts`.
 - **R2 payloads** are already built to cross versions. Every entity is a
   `z.looseObject` (`packages/shared/src/sync/entities.ts`), so an older client
   passes fields it doesn't know through unchanged, and the blob frame's version
@@ -1556,8 +1565,18 @@ two cheap rules, not transactions:
 **Orphans can't be garbage-collected server-side** — the server can't read the
 ciphertext to know what's referenced. The only place GC is possible is the
 **client**, which holds the key, can decrypt all metadata to compute the
-referenced set, and delete the rest. We don't do this yet; the per-user quota
-bounds the growth, and orphans are produced only by rare mid-flight failures.
+referenced set, and delete the rest. That is the **orphaned-file sweep**, run by
+bracemark-web and bracemark-expo after a successful cycle
+([link-extraction-keep.md](./link-extraction-keep.md), _removal, cleanup,
+export_). Orphans are not only the rare mid-flight failure above: ordinary
+concurrency makes them too — two devices or tabs capturing the same link in one
+sync window (last-writer-wins keeps one extraction, and the other's blob loses
+its reference), two custom-image picks racing on one link, a device that pushed
+a blob and stalled before the entity naming it. The sweep reclaims them, but
+conservatively: only a blob 30 days old by its server stamp, at most weekly and
+500 a run, and not at all on a device with a recorded unreadable path. Until
+then an orphan counts against the quota, and an account at its byte ceiling
+can't release it by deleting the links it can see.
 
 ### who enforces ordering: server per-commit, client cross-commit
 
@@ -2001,16 +2020,49 @@ is what the server could already achieve by withholding it (below). ⚠ **A
 completed cycle does not mean the store holds everything up to the cursor**: a
 skip is one way it can lack a path the server holds, and not the only one
 ([link-extraction.md](./link-extraction.md) lists the known others where the
-dangling-extraction sweep has to live with them). On web the pull records skipped paths
-on the account's bookkeeping row (`unreadablePaths`) as it finishes, before the
-cursor or the first-sync flag is claimed, and drops a path again once a later
-pull stores or deletes it; `markFirstSyncDone` updates that row rather than
-rewriting it, or a fresh sign-in would lose the record it has just made. (expo
-keeps no such record; nothing there turns a local absence into a server
-delete.) Any
-logic that reads local absence as server absence has to consult the record.
-The dangling-extraction sweep, the one place a local absence becomes a server
-delete, does ([link-extraction.md](./link-extraction.md)). An
+dangling-extraction sweep has to live with them). On both platforms the pull records skipped paths
+on the account's bookkeeping row (`unreadablePaths`), each with the stamp it was
+listed at, as it finishes, before the cursor or the first-sync flag is claimed,
+and drops a path again once a later pull stores or deletes it;
+`markFirstSyncDone` updates that row rather than rewriting it, or a fresh
+sign-in would lose the record it has just made. ⚠ Any logic that reads local
+absence as server absence has to consult the record, **and has to wait until
+the record is complete** (`unreadableRecordCompleteAt`; shared's
+`unreadableRecordComplete`). An empty record proves nothing on a row that
+predates it, because builds from before the record skipped without recording
+and the cursor is past those paths. The record is complete once a full listing,
+a first sync or a fallback, has finished on this device with the record in
+place. A new account and the delete-all reset start complete, having nothing to
+skip. For any other row, the engines route the next cycle to the fallback
+whatever the op log says, and mark the record complete only when that fallback
+finishes. The fallback downloads every path missing here, so a skipped one
+fails again and is recorded this time. That covers every web row from before
+the record and every expo row migration 1 brought up. What it can't cover is a
+web tab still running a pre-record build, which skips into a store this build
+has already proven. The two sweeps, the only
+places a local absence becomes a server delete, do, on both platforms
+([link-extraction.md](./link-extraction.md), the dangling sweep;
+[link-extraction-keep.md](./link-extraction-keep.md), the orphaned-file sweep).
+
+**A recorded path is fetched again, never dropped for failing** (the engines'
+`recheckUnreadable`; the rules and the schedule are shared's
+`sync/unreadable.ts`). The cursor is past a skipped path, so no pull meets it
+again unless it is rewritten. Yet a skip is often transient — a corrupt
+transfer, a delete this device hasn't met yet — and while any path is recorded
+the orphaned-file sweep stays off on that device. So after each successful
+cycle, inside its lock and before `afterCycle`, a recheck that is due fetches up
+to 100 recorded paths: one that opens now is stored at the stamp the skipping
+pull saw (a GET doesn't say which version it served, and an older stamp is the
+safe side, since the next pull that lists the path fetches it again), a 404
+takes the path out, and anything else keeps it. The schedule backs off — an
+hour after a path is recorded, then a day, then weekly — and a new path restarts
+it. ⚠ **Nothing drops a path because it has failed for a long time**, and
+nothing deletes the blob, here or on the server: "this device can't read it"
+is not "it's garbage" (a platform-only decrypt bug, a bad download, a wrong key
+all look the same), a delete reaches every device including those that read it
+fine, and forgetting the path is what would let the orphaned-file sweep delete
+the blobs it names. A path that never opens keeps that sweep off on that device
+for good; that's the price, paid in leaked quota rather than in data. An
 **unknown version** is deliberately not skipped: that is a newer client's
 format, an update reads it, and skipping would move the cursor past it for
 good. The batch content fetch (`loadEntityContents` — an export's file phase,
@@ -2906,8 +2958,6 @@ with the blob route, so this is the local baseline, not a comparison.
   user's unsynced edit. Open product call (the shipped engine picks local-wins —
   never silently discard the user's unsynced work); conditional writes make it a
   prompt rather than a silent choice.
-- **Client-side orphan GC** (see _multi-file consistency_) — quota bounds growth
-  until then.
 - **Offline content pinning / prefetch** (see _data model — metadata vs.
   content_) — let users mark bookmarks "available offline," or prefetch page copies
   on idle, so a never-opened page copy isn't missing offline.

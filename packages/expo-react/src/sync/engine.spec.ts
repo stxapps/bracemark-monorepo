@@ -66,6 +66,7 @@ import {
   getSyncMeta,
   isFirstSyncDone,
   markFirstSyncDone,
+  recordUnreadablePaths,
 } from '../data/sync-store';
 import {
   File as MemFile,
@@ -79,6 +80,7 @@ import {
   holdSyncCycles,
   loadEntityContent,
   loadEntityContents,
+  recheckUnreadable,
   runIncrementalSync,
   runInitialSync,
   type SyncDeps,
@@ -1336,6 +1338,139 @@ describe('a pulled blob that does not open under its path', () => {
     );
 
     expect((await getSyncMeta(USER))?.syncCursorUpdatedAt).toBe(1000);
+  });
+
+  // THE RECORD (SyncMetaRecord.unreadablePaths) — drift guards only; web's spec has the
+  // full set (second pass, fallback, a failed cycle). The cursor is past a skipped path,
+  // so without the record the sweeps would read its absence as the server's.
+  describe('the record of what was skipped', () => {
+    const unreadable = async () => (await getSyncMeta(USER))?.unreadablePaths ?? null;
+    const quietly = async (run: () => Promise<unknown>): Promise<void> => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+      try {
+        await run();
+      } finally {
+        warn.mockRestore();
+      }
+    };
+    const oneOp = (op: 'put' | 'delete'): OpsListReply => ({
+      ops: [{ op, path: LINK_PATH, updatedAt: 3000 }],
+      oldestUpdatedAt: 500,
+      newestUpdatedAt: 3000,
+      hasMore: false,
+    });
+
+    it('holds the path once the cycle that skipped it has completed', async () => {
+      failToOpen(LINK_PATH, new BlobUnreadableError(LINK_PATH));
+
+      await quietly(() => runIncrementalSync(deps({ opsList: () => TWO_PUTS })));
+
+      expect(await unreadable()).toEqual([LINK_PATH]);
+    });
+
+    it('lets the path go once a later pull stores it', async () => {
+      failToOpen(LINK_PATH, new BlobUnreadableError(LINK_PATH));
+      await quietly(() => runIncrementalSync(deps({ opsList: () => TWO_PUTS })));
+      (decryptEntity as jest.Mock).mockImplementation(async (_key: unknown, bytes: Uint8Array) =>
+        bytes.slice(1),
+      );
+
+      await runIncrementalSync(deps({ opsList: () => oneOp('put') }));
+
+      expect(await bodyAt(LINK_PATH)).toBe(`server ${LINK_PATH}`);
+      expect(await unreadable()).toBeNull();
+    });
+
+    it('lets the path go once the server deletes it', async () => {
+      failToOpen(LINK_PATH, new BlobUnreadableError(LINK_PATH));
+      await quietly(() => runIncrementalSync(deps({ opsList: () => TWO_PUTS })));
+
+      await runIncrementalSync(deps({ opsList: () => oneOp('delete') }));
+
+      expect(await unreadable()).toBeNull();
+    });
+
+    // THE RECHECK — drift guards; web's spec has the full set (the schedule, a 404, a
+    // newer local copy).
+    describe('the recheck', () => {
+      const LATER = 2 * 60 * 60 * 1000;
+
+      it('stores a blob that opens now, at the stamp the pull saw', async () => {
+        failToOpen(LINK_PATH, new BlobUnreadableError(LINK_PATH));
+        const at = Date.now();
+        await quietly(() => runIncrementalSync(deps({ opsList: () => TWO_PUTS })));
+        (decryptEntity as jest.Mock).mockImplementation(async (_key: unknown, bytes: Uint8Array) =>
+          bytes.slice(1),
+        );
+
+        await recheckUnreadable(deps(), at + LATER);
+
+        expect(await bodyAt(LINK_PATH)).toBe(`server ${LINK_PATH}`);
+        expect((await getItem(LINK_PATH))?.updatedAt).toBe(2000);
+        expect(await unreadable()).toBeNull();
+      });
+
+      it('keeps a path that still does not open', async () => {
+        failToOpen(LINK_PATH, new BlobUnreadableError(LINK_PATH));
+        const at = Date.now();
+        await quietly(() => runIncrementalSync(deps({ opsList: () => TWO_PUTS })));
+
+        await quietly(() => recheckUnreadable(deps(), at + LATER));
+
+        expect(await unreadable()).toEqual([LINK_PATH]);
+        expect((await getSyncMeta(USER))?.unreadableRecheck).toMatchObject({ tries: 1 });
+      });
+
+      it('runs in a successful cycle, before afterCycle', async () => {
+        await recordUnreadablePaths(USER, [{ path: LINK_PATH, updatedAt: 2000 }], 0);
+        let seen: string[] | null | undefined;
+
+        await runIncrementalSync({
+          ...deps({
+            opsList: () => ({
+              ops: [],
+              oldestUpdatedAt: 500,
+              newestUpdatedAt: 1000,
+              hasMore: false,
+            }),
+          }),
+          afterCycle: async () => {
+            seen = (await getSyncMeta(USER))?.unreadablePaths;
+            return false;
+          },
+        });
+
+        expect(seen).toBeNull();
+        expect(await bodyAt(LINK_PATH)).toBe(`server ${LINK_PATH}`);
+      });
+    });
+
+    // A store migration 1 brought up (unreadableRecordCompleteAt NULL) — drift guard;
+    // web's spec has the failed-fallback case. One forced fallback re-lists it, records
+    // the skip it meets, and completes the record; the next cycle is incremental.
+    it('sends a row from before the record to the fallback once, and completes it', async () => {
+      getDb()
+        .update(syncMeta)
+        .set({ unreadableRecordCompleteAt: null })
+        .where(eq(syncMeta.username, USER))
+        .run();
+      failToOpen(LINK_PATH, new BlobUnreadableError(LINK_PATH));
+      let listings = 0;
+      const handlers = {
+        opsList: () => ({ ops: [], oldestUpdatedAt: 500, newestUpdatedAt: 1000, hasMore: false }),
+        filesList: () => {
+          listings += 1;
+          return [{ path: LINK_PATH, updatedAt: 400 }];
+        },
+      };
+
+      await quietly(() => runIncrementalSync(deps(handlers)));
+      await quietly(() => runIncrementalSync(deps(handlers)));
+
+      expect(listings).toBe(1);
+      expect(await unreadable()).toEqual([LINK_PATH]);
+      expect((await getSyncMeta(USER))?.unreadableRecordCompleteAt).toBeGreaterThan(0);
+    });
   });
 });
 

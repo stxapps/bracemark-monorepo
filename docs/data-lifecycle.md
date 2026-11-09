@@ -613,10 +613,11 @@ null`. Written as it was, the loop's edges reached the library and one Move up
   metadata), so a blob chosen for a row the schema then refuses would be stored,
   queued and uploaded with no link anywhere naming it — counted against the
   account's storage, reported by nothing. The blob is therefore selected
-  **after** its row validates, under a provisional id until then. Selection, not
-  cleanup: deleting on refusal would take the image from an accepted row that
-  shares it. A reference is claimed by the first _accepted_ row, so a refused row
-  ahead of it in the file does not cost the later one its image.
+  **after** its row validates, under a provisional id until then. Each accepted
+  row gets a blob of its own, even when several rows name one image: a shared
+  blob would be deleted under the others the moment one link is destroyed or
+  given a new image ([link-extraction.md](./link-extraction.md), _a blob belongs
+  to one link_).
 - **A folder past the depth limit is placed at it.** `TREE_MAX_DEPTH`
   (`sync/tree.ts`). Every segment of a folder path becomes a list, and each
   format lets the file choose the depth — nested `<DL>`s, separators in one CSV

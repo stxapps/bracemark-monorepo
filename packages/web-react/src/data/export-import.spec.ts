@@ -481,6 +481,7 @@ beforeEach(async () => {
     syncCursorUpdatedAt: CURSOR,
     syncCursorPath: `${LINKS_PREFIX}l_seed.enc`,
     firstSyncDoneAt: 1,
+    unreadableRecordCompleteAt: 1,
   });
 });
 

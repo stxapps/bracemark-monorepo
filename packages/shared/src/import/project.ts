@@ -159,11 +159,15 @@ function* projectSteps(options: ProjectImportOptions): Generator<void, Projected
   const lists = new ListResolver(options.lists, now, newId);
   const tags = new TagResolver(options.tags, now, newId);
 
-  // One blob per distinct reference — two links sharing an image share the file.
-  // Filled as links are ACCEPTED, below: a reference enters this map, and its
-  // bytes enter `files`, only once a link naming it has passed the schema.
+  // ONE BLOB PER LINK, never one shared by rows that name the same image: a
+  // blob is owned by the link that names it, and every path that removes a ref
+  // deletes what it named (destroy, the editor replacing the image). Two links
+  // naming one blob means either link's delete or new image removes the other's
+  // image on every device. Two rows with one image cost its bytes twice; that is
+  // the price, the same one extraction pays (web-react lib/server-extraction.ts).
+  // Filled as links are ACCEPTED, below: a row's bytes enter `files` only once
+  // its link has passed the schema.
   const files: ProjectedEntry<Uint8Array>[] = [];
-  const fileIdByRef = new Map<string, string>();
 
   let invalidCount = 0;
   let linkCount = 0;
@@ -205,24 +209,16 @@ function* projectSteps(options: ProjectImportOptions): Generator<void, Projected
     if (customTitle !== undefined && !namesOnlyTheAddress(customTitle, row.url)) {
       link.customTitle = customTitle;
     }
-    // The row's custom image: the blob an earlier accepted row already claimed
-    // for this reference, or a new one that is only PROVISIONAL until this link
+    // The row's custom image: a blob of its own, only PROVISIONAL until this link
     // validates. The orchestrators write `files` before `entries`, so a blob
     // selected for a row that is then refused would be stored, uploaded and
     // counted against the account's storage with no link anywhere naming it.
-    // Selecting here, after the check, is the fix; deleting on refusal would not
-    // be, since a refused row can share its image with an accepted one.
-    let newFile: { ref: string; id: string; bytes: Uint8Array } | undefined;
+    let newFile: { id: string; bytes: Uint8Array } | undefined;
     if (row.imageRef !== undefined) {
-      const claimed = fileIdByRef.get(row.imageRef);
-      if (claimed !== undefined) {
-        link.customImageId = claimed;
-      } else {
-        const bytes = images.get(row.imageRef);
-        if (bytes !== undefined) {
-          newFile = { ref: row.imageRef, id: newId(), bytes };
-          link.customImageId = newFile.id;
-        }
+      const bytes = images.get(row.imageRef);
+      if (bytes !== undefined) {
+        newFile = { id: newId(), bytes };
+        link.customImageId = newFile.id;
       }
     }
     if (!linkSchema.safeParse(link).success) {
@@ -230,7 +226,6 @@ function* projectSteps(options: ProjectImportOptions): Generator<void, Projected
       continue;
     }
     if (newFile !== undefined) {
-      fileIdByRef.set(newFile.ref, newFile.id);
       files.push({ path: pathFromId(newFile.id, FILES_PREFIX), data: newFile.bytes });
     }
     linkEntries.push({ path: pathFromId(id, LINKS_PREFIX), data: link });

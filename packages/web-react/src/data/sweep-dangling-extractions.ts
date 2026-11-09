@@ -30,7 +30,8 @@
 //     extension's documented future — docs/link-extraction.md) that skips some
 //     `links/` would judge healthy extractions dangling and delete them for every
 //     device. That's why bracemark-web hands it to its SyncProvider
-//     (SyncProviderWithSweep) and no shared provider runs it by default;
+//     (SyncProviderWithSweep), as bracemark-expo does its own copy, and no shared
+//     provider runs it by default;
 //   - and even then, a link the pull SKIPPED is not absent from the server. A blob
 //     that does not open under its path (sync/engine.ts openPulled) is passed over
 //     and the cycle completes without it. The pull records those paths on the account's row
@@ -44,8 +45,11 @@
 // Even so, a successful cycle is not proof that the store holds every path the
 // server does, and these KNOWN GAPS can still have a link absent here, present
 // there, and its extraction swept for every device:
-//   - a skip made by a build from before the record existed, or by a tab still
-//     running one: nothing recorded it, and the cursor is already past it;
+//   - a skip made by a tab still running a build from before the record, into a
+//     store this build has already proven. (A store whose ROW predates the record is
+//     not a gap: the sweep refuses to run until a full listing has completed with the
+//     record in place — SyncMetaRecord.unreadableRecordCompleteAt — and the engine
+//     forces that fallback.);
 //   - an op log restored beneath this device's cursor and then written to: the next
 //     commit is stamped above the stale cursor, so the cycle is routed incremental
 //     instead of to the fallback and never lists the ops the restore lost. A
@@ -68,6 +72,8 @@
 import Dexie from 'dexie';
 
 import {
+  danglingExtractionPaths,
+  danglingSweepMayRun,
   extractionFileIds,
   EXTRACTIONS_PREFIX,
   idFromPath,
@@ -82,8 +88,16 @@ import { getSyncMeta } from './sync-store';
 
 // Sweep every dangling extraction: delete it (and its `files/` content) locally and
 // queue the server deletes. Returns how many extractions were swept, so the caller
-// knows whether to kick a sync cycle to push the tombstones.
+// knows whether to kick a sync cycle to push the tombstones. Which ones are dangling
+// is shared's danglingExtractionPaths, the rule expo's sweep runs too.
 export async function sweepDanglingExtractions(username: string): Promise<number> {
+  // Not until the record can vouch for this store (shared's danglingSweepMayRun):
+  // until a full listing has run with it in place, an absent link may be one an
+  // older build skipped without recording.
+  const meta = await getSyncMeta(username);
+  if (!danglingSweepMayRun(meta ?? undefined)) return 0;
+  // Links a pull skipped as unreadable: absent here, not proven absent there.
+  const unreadable = new Set(meta?.unreadablePaths);
   const exPaths = await db.items
     .where('[itemType+itemUpdatedAt]')
     .between(['extraction', Dexie.minKey], ['extraction', Dexie.maxKey], true, true)
@@ -91,17 +105,13 @@ export async function sweepDanglingExtractions(username: string): Promise<number
   if (exPaths.length === 0) return 0;
 
   const linkPaths = exPaths.map((path) => rekey(path, EXTRACTIONS_PREFIX, LINKS_PREFIX));
-  const existing = new Set(await db.items.where('path').anyOf(linkPaths).primaryKeys());
-  // Links a pull skipped as unreadable: absent here, not proven absent there.
-  const unreadable = new Set((await getSyncMeta(username))?.unreadablePaths);
+  const present = new Set(await db.items.where('path').anyOf(linkPaths).primaryKeys());
 
   let swept = 0;
-  for (let i = 0; i < exPaths.length; i++) {
-    if (existing.has(linkPaths[i]) || unreadable.has(linkPaths[i])) continue;
-
+  for (const exPath of danglingExtractionPaths(exPaths, present, unreadable)) {
     // Dangling. Decode this one extraction for its `files/` refs (the link's own
     // customImageId was the destroyer's job), then tear down content-before-entity.
-    const linkId = idFromPath(exPaths[i], EXTRACTIONS_PREFIX);
+    const linkId = idFromPath(exPath, EXTRACTIONS_PREFIX);
     const extraction = await readExtraction(linkId);
     for (const fileId of extractionFileIds(extraction)) await deleteFile(username, fileId);
     await deleteExtraction(username, linkId);

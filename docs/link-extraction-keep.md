@@ -328,17 +328,27 @@ Two rules:
   from a page that changed), through `useKeptCopyMutations`. Never gated on the plan.
   Expo has the same per-copy delete in its reader (expo-react ports
   `removeKeptCopy`); bulk delete is web-only for now.
-- ⚠ **The orphaned-file sweep** — `sweepOrphanFiles` (web-react
-  `data/sweep-orphan-files.ts`), run by bracemark-web after the dangling sweep in
-  the same `afterCycle` slot (`components/sync-provider-with-sweep.tsx`). It
+- ⚠ **The orphaned-file sweep** — `sweepOrphanFiles` (web-react and expo-react
+  `data/sweep-orphan-files.ts`, whose rules are ONE copy in shared's
+  `sync/sweeps.ts`), run by bracemark-web and bracemark-expo after the dangling
+  sweep in the same `afterCycle` slot (each app's
+  `components/sync-provider-with-sweep.tsx`). Both apps, because the blobs count
+  against the user's byte quota and a library used only on phones had nothing
+  else to reclaim them. It
   reclaims `files/` blobs nothing references: a capture race that LWW settled
   against one device, a blob pushed by a device that stalled before its extraction,
   and builds from before the replaced-blob reclaim. **It deletes user data on every
   device when it is wrong**, so it is stricter than the dangling sweep on every
   axis, and each rule is silent if dropped:
   - the dangling sweep's conditions (a full-sync client, a successful cycle, inside
-    its lock), and **no recorded unreadable path at all** — it can't tell which
-    blob a skipped entity named;
+    its lock, **a complete unreadable record** — not before a full listing has run
+    with the record in place, [local-first-sync.md](./local-first-sync.md),
+    _crypto boundary_), and **no recorded unreadable path at all** — it can't tell which
+    blob a skipped entity named (a blob's id is random, never derived from the
+    entity that names it, so there is no "that link's files" to spare). The
+    unreadable recheck is what keeps a transient skip from holding it off for good
+    ([local-first-sync.md](./local-first-sync.md), _crypto boundary_). A path that
+    stays unreadable keeps it off on that device, by design;
   - **any string in any entity is a reference** — not just the fields this build
     knows (`EXTRACTION_FILE_REF_FIELDS`, `customImageId`), because a newer client's
     field or namespace may name a blob, and an older device would otherwise delete

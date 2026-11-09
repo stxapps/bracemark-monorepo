@@ -45,111 +45,77 @@
 //     yielding to the main thread between chunks of the scan.
 //
 // The dangling sweep's KNOWN GAPS apply here too and cost more: a successful cycle
-// can still lack an entity the server holds (a skip by a build older than the
-// unreadable record, an op log restored beneath the cursor, a wedged queued put), and
+// can still lack an entity the server holds (a skip by a tab still running a build
+// older than the unreadable record, an op log restored beneath the cursor, a wedged
+// queued put — a store whose row predates the record is held off by the gate, as in
+// the dangling sweep), and
 // a blob only that entity names would be swept. The grace does not cover that case.
 // Accepted with the same eyes open as the dangling sweep — those states are exotic,
 // and an orphan costs quota forever — but it is the reason for every condition above.
 
-import { FILES_PREFIX, idFromPath } from '@stxapps/shared';
+import {
+  entityWrittenDuring,
+  FILES_PREFIX,
+  ORPHAN_GRACE_MS,
+  orphanCandidates,
+  orphansToDelete,
+  orphanSweepMayRun,
+  pendingWrites,
+  strikeEntityReferences,
+} from '@stxapps/shared';
 
 import { yieldToMain } from '../lib/yield-to-main';
 import { db } from './db';
 import { deleteFile } from './mutations';
 import { getSyncMeta, markOrphanSweep } from './sync-store';
 
-// How old a blob's server stamp must be before it can count as orphaned.
-export const ORPHAN_GRACE_MS = 30 * 24 * 60 * 60 * 1000;
-// How often a device runs the sweep for an account. Each run decodes every entity.
-export const ORPHAN_SWEEP_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
-// The most blobs one run deletes — a backlog clears over runs rather than in one
-// burst of queued deletes.
-export const ORPHAN_SWEEP_MAX = 500;
 // Entities decoded per chunk of the scan, between yields.
 const SCAN_CHUNK = 500;
 
-// Stop the run: something in the store can't be read, so nothing can be proven
-// unreferenced.
-class Unprovable extends Error {}
-
-// Every string at any depth of a decoded entity, against the candidates: a match is
-// a reference, and the candidate leaves the set.
-function strikeReferences(value: unknown, candidates: Set<string>): void {
-  if (typeof value === 'string') {
-    candidates.delete(value);
-  } else if (Array.isArray(value)) {
-    for (const item of value) strikeReferences(item, candidates);
-  } else if (value !== null && typeof value === 'object') {
-    for (const item of Object.values(value)) strikeReferences(item, candidates);
-  }
-}
-
 // Sweep orphaned `files/` blobs: delete each locally and queue the server delete.
 // Returns how many were swept, so the caller knows whether to run another cycle to
-// push the deletes.
+// push the deletes. The rules (the gate, the candidates, what counts as a reference,
+// the cap) are shared's sync/sweeps.ts, which expo's sweep runs too; this keeps the
+// store reads and the deletes.
 export async function sweepOrphanFiles(username: string, now = Date.now()): Promise<number> {
-  const meta = await getSyncMeta(username);
-  if (!meta || meta.firstSyncDoneAt <= 0) return 0;
-  if (meta.unreadablePaths?.length) return 0;
-  if (
-    meta.lastOrphanSweepAt !== undefined &&
-    now - meta.lastOrphanSweepAt < ORPHAN_SWEEP_INTERVAL_MS
-  ) {
-    return 0;
-  }
+  if (!orphanSweepMayRun(await getSyncMeta(username), now)) return 0;
 
-  // Candidates: old enough by their SERVER stamp (> 0 — a local unpushed write is 0),
-  // and with nothing queued for their path.
-  const cutoff = now - ORPHAN_GRACE_MS;
-  const oldPaths = (
-    await db.items.where('updatedAt').between(0, cutoff, false, false).primaryKeys()
-  ).filter((path) => path.startsWith(FILES_PREFIX));
-  const pendingIds = async () =>
-    new Set(
-      (await db.pendingOps.where('username').equals(username).toArray()).map(
-        (op) => `${op.path}\u0000${op.writeId}`,
-      ),
-    );
-  const before = await pendingIds();
-  const queued = new Set([...before].map((key) => key.slice(0, key.indexOf('\u0000'))));
-  const candidates = new Set(
-    oldPaths.filter((path) => !queued.has(path)).map((path) => idFromPath(path, FILES_PREFIX)),
-  );
+  // Candidates: old enough by their SERVER stamp, and with nothing queued for their
+  // path. The index range is only the cheap first cut; orphanCandidates applies the
+  // rule.
+  const fileRows: { path: string; updatedAt: number }[] = [];
+  await db.items
+    .where('updatedAt')
+    .between(0, now - ORPHAN_GRACE_MS, false, false)
+    .eachKey((updatedAt, cursor) => {
+      const path = cursor.primaryKey as string;
+      if (path.startsWith(FILES_PREFIX)) fileRows.push({ path, updatedAt: updatedAt as number });
+    });
+  const queue = async () =>
+    pendingWrites(await db.pendingOps.where('username').equals(username).toArray());
+  const before = await queue();
+  const candidates = orphanCandidates(fileRows, before, now);
 
   if (candidates.size > 0) {
-    try {
-      const entityPaths = (await db.items.toCollection().primaryKeys()).filter(
-        (path) => !path.startsWith(FILES_PREFIX),
-      );
-      const decoder = new TextDecoder();
-      for (let i = 0; i < entityPaths.length && candidates.size > 0; i += SCAN_CHUNK) {
-        const records = await db.items.bulkGet(entityPaths.slice(i, i + SCAN_CHUNK));
-        for (const record of records) {
-          if (!record) continue; // deleted since the key scan — it references nothing now
-          if (!record.data) throw new Unprovable();
-          let value: unknown;
-          try {
-            value = JSON.parse(decoder.decode(record.data));
-          } catch {
-            throw new Unprovable();
-          }
-          strikeReferences(value, candidates);
-        }
-        await yieldToMain();
+    const entityPaths = (await db.items.toCollection().primaryKeys()).filter(
+      (path) => !path.startsWith(FILES_PREFIX),
+    );
+    const decoder = new TextDecoder();
+    for (let i = 0; i < entityPaths.length && candidates.size > 0; i += SCAN_CHUNK) {
+      const records = await db.items.bulkGet(entityPaths.slice(i, i + SCAN_CHUNK));
+      for (const record of records) {
+        if (!record) continue; // deleted since the key scan — it references nothing now
+        // A record that can't be read stops the run: nothing is provable then.
+        if (!strikeEntityReferences(record.data, candidates, decoder)) return 0;
       }
-    } catch (err) {
-      if (err instanceof Unprovable) return 0;
-      throw err;
+      await yieldToMain();
     }
     // An entity write landed while we scanned: its references weren't seen.
-    for (const key of await pendingIds()) {
-      if (!before.has(key) && !key.startsWith(FILES_PREFIX)) return 0;
-    }
+    if (entityWrittenDuring(before, await queue())) return 0;
   }
 
   let swept = 0;
-  for (const fileId of candidates) {
-    if (swept >= ORPHAN_SWEEP_MAX) break;
+  for (const fileId of orphansToDelete(candidates)) {
     await deleteFile(username, fileId);
     swept += 1;
   }

@@ -19,7 +19,7 @@
 
 import Dexie, { type EntityTable, type Table } from 'dexie';
 
-import type { OpKind, ThemeState } from '@stxapps/shared';
+import type { OpKind, ThemeState, UnreadableRecheck } from '@stxapps/shared';
 
 import { isUpdateRequired, markUpdateRequired, onUpdateRequired } from './update-required';
 
@@ -72,11 +72,26 @@ export interface SyncMetaRecord {
   // recording it. But skips made before this field existed, or by a tab still running
   // such a build, are in no record, and nothing meets them again until a rewrite or a
   // fallback lists them: a row with no field, or an empty one, is not proof that
-  // nothing was skipped. Dropped from as a later pull stores or deletes a path; gone
+  // nothing was skipped. `unreadableRecordCompleteAt` below is that proof, and the
+  // readers that judge by absence require it. Dropped from as a later pull stores or deletes a path; gone
   // with the row on sign-out, and with delete-all-data's reset, which rewrites the
   // row whole along with wiping the items. Optional, and not indexed, so adding it
   // needed no schema version.
   unreadablePaths?: string[];
+  // When to fetch the recorded paths again, how often that has failed, and each
+  // path's server stamp as the skipping pull saw it (shared's sync/unreadable.ts,
+  // which owns the rules; the engine's recheckUnreadable runs it). Absent with no
+  // record, and on a record written before rechecks existed, which is then due at
+  // once. Optional and not indexed, like `unreadablePaths`.
+  unreadableRecheck?: UnreadableRecheck;
+  // When a FULL LISTING (a first sync, or a fallback) last completed on this device
+  // with the record in place, so the record covers every skip in this store. Absent on
+  // a row from before the record existed, whose skips nothing recorded: the engine
+  // then forces one fallback (runCycle), and both sweeps refuse to run until it has
+  // completed (shared's unreadableRecordComplete, sync/sweeps.ts). Set by
+  // seedNewAccount and the delete-all reset too, which have nothing to skip. Optional
+  // and not indexed, like `unreadablePaths`.
+  unreadableRecordCompleteAt?: number;
   // When the orphaned-file sweep last ran to the end for this account on this device
   // (data/sweep-orphan-files.ts) — its weekly throttle. Device-local bookkeeping, gone
   // with the row on sign-out and with delete-all-data's rewrite. Optional and not

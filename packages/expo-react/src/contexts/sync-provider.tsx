@@ -140,8 +140,24 @@ interface SyncContextValue {
 
 const SyncContext = createContext<SyncContextValue | null>(null);
 
-export function SyncProvider({ children }: { children: ReactNode }) {
+// `afterCycle` is the engine's SyncDeps.afterCycle, for the account a cycle runs as —
+// web-react's SyncProvider prop of the same name, same rules: passed by the app that
+// mounts this provider (bracemark-expo's sweeps, SyncProviderWithSweep), never
+// defaulted, so nothing inherits a judgment by absence from a shared provider. Read
+// through a ref, so a new function each render neither re-runs the sync effect nor
+// reaches a cycle already started.
+export function SyncProvider({
+  children,
+  afterCycle,
+}: {
+  children: ReactNode;
+  afterCycle?: (username: string) => Promise<boolean>;
+}) {
   const { username, status: authStatus, sessionState } = useAuth();
+  const afterCycleRef = useRef(afterCycle);
+  useEffect(() => {
+    afterCycleRef.current = afterCycle;
+  }, [afterCycle]);
   const api = useApiClient();
   const [storeStatus, setStoreStatus] = useState<StoreStatus>('checking');
   const [bgSyncStatus, setBgSyncStatus] = useState<BgSyncStatus>('idle');
@@ -226,7 +242,13 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     const cycleDeps = (): SyncDeps | null => {
       const current = getSession();
       if (current?.username !== username) return null;
-      return { username, encryptionKey: current.encryptionKey, api: api.withSession(current) };
+      const after = afterCycleRef.current;
+      return {
+        username,
+        encryptionKey: current.encryptionKey,
+        api: api.withSession(current),
+        ...(after ? { afterCycle: () => after(username) } : {}),
+      };
     };
     // Fresh slate for the indicator — a stale 'error' / stale timestamp from a
     // previous account (or a pre-retry run) must not bleed into this one.

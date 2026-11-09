@@ -48,6 +48,7 @@ import {
   type OpsListResponse,
   type ProgressFn,
   type PushedChunk,
+  recheckBatch,
   recordBlocked,
   retryTransientBlobTransfer,
   runChunkedPush,
@@ -55,12 +56,14 @@ import {
   SET_OUTAGE_FAILURES,
   type SignedUrl,
   type SignOp,
+  type SkippedPath,
   type SyncCycleProgressFn,
   SyncIncompleteError,
   syncNamespace,
   type SyncOutcome,
   type SyncTrace,
   traceApi,
+  unreadableRecordComplete,
   untilAborted,
   withRetry,
 } from '@stxapps/shared';
@@ -72,10 +75,12 @@ import { toItemRecord } from '../data/projection';
 import {
   advanceCursor,
   assertAccountStillOwnsStore,
+  finishUnreadableRecheck,
   forgetUnreadablePaths,
   getSyncMeta,
   isFirstSyncDone,
   markFirstSyncDone,
+  markUnreadableRecordComplete,
   recordUnreadablePaths,
   resetCursor,
 } from '../data/sync-store';
@@ -504,9 +509,82 @@ async function incrementalSyncOnce(
 ): Promise<SyncOutcome> {
   return withCycleLock(deps.username, async () => {
     const outcome = await runCycle(deps, report);
+    await runUnreadableRecheck(deps);
     await runAfterCycle(deps);
     return outcome;
   });
+}
+
+// THE RECHECK of the unreadable record (SyncMetaRecord.unreadablePaths; shared's
+// sync/unreadable.ts owns the rules and the schedule). Inside the lock of the cycle
+// that just succeeded, and before afterCycle, so a record it empties lets the
+// orphaned-file sweep run in the same slot. A skip is often transient: a corrupt
+// transfer, or a delete this device hasn't met yet. But the cursor is past the path,
+// so no pull meets it again unless it is rewritten, and one such path would keep the
+// sweep off on this device for good. Per path fetched:
+//
+//   - it opens → stored like a pulled record, at the stamp the skipping pull saw (a
+//     GET doesn't say which version it served, and an older stamp is the safe side:
+//     the next pull that lists the path fetches it again). putPulled takes it out of
+//     the record. Not stored if the store already holds a newer one, which this
+//     device then wrote and committed, and that also takes it out. Kept when no
+//     stamp was recorded (a record from before stamps), since there is no stamp to
+//     store it at;
+//   - a 404 → out of the record: the server holds nothing there now;
+//   - it still won't open, or the GET fails → kept, and backed off.
+//
+// It never deletes anything, here or on the server. Failing for a long time is not a
+// reason to drop a path, because a dropped path is what lets the orphaned-file sweep
+// delete the blobs it names, on every device, including those that read it fine.
+// A failure here never fails the cycle that just succeeded.
+async function runUnreadableRecheck(deps: SyncDeps): Promise<void> {
+  try {
+    await recheckUnreadable(deps);
+  } catch (err) {
+    console.warn('sync: the unreadable recheck failed', err);
+  }
+}
+
+export async function recheckUnreadable(deps: SyncDeps, now = Date.now()): Promise<void> {
+  const meta = await getSyncMeta(deps.username);
+  if (!meta || meta.firstSyncDoneAt <= 0) return;
+  const batch = recheckBatch(
+    { paths: meta.unreadablePaths ?? [], recheck: meta.unreadableRecheck },
+    now,
+  );
+  if (batch.length === 0) return;
+  deps = withRetryDeps(deps);
+  const stamps = meta.unreadableRecheck?.stamps ?? {};
+
+  const signed = await signPaths(deps.api, 'get', batch);
+  const locals = new Map(
+    (await db.items.bulkGet(batch)).flatMap((r) => (r ? [[r.path, r.updatedAt] as const] : [])),
+  );
+  const healed: ItemRecord[] = [];
+  const gone: string[] = [];
+  await mapLimit(batch, INDEX_CONCURRENCY, async (path) => {
+    const url = signed.get(path);
+    if (!url) return;
+    let blob: Uint8Array;
+    try {
+      blob = await getBlob(url.url, url.authorization);
+    } catch (err) {
+      if (err instanceof BlobRequestError && err.status === 404) gone.push(path);
+      return;
+    }
+    let data: Uint8Array;
+    try {
+      data = await decryptEntity(deps.encryptionKey, blob, path);
+    } catch {
+      return;
+    }
+    const stamp = stamps[path];
+    const local = locals.get(path);
+    if (local !== undefined && stamp !== undefined && local > stamp) gone.push(path);
+    else if (stamp !== undefined) healed.push(toItemRecord(path, stamp, data));
+  });
+  await putPulled(deps.username, healed);
+  await finishUnreadableRecheck(deps.username, batch, gone, now);
 }
 
 // SyncDeps.afterCycle, inside the lock of the cycle that just succeeded. A request
@@ -551,12 +629,26 @@ async function runCycle(deps: SyncDeps, report: SyncCycleProgressFn): Promise<Sy
         limit: OPS_PAGE,
       });
 
-      if (needsFallback(since, first)) {
+      // A store the unreadable record can't vouch for yet goes to the fallback once,
+      // whatever the op log says: its row predates the record, so a build from
+      // before it may have skipped paths without recording them, behind the cursor.
+      // The fallback downloads every path missing here, a skipped one fails again
+      // and is recorded this time, and only then may the sweeps judge by absence
+      // (shared's unreadableRecordComplete, sync/sweeps.ts).
+      // No row is no store to vouch for (a torn-down account's stale cycle), and
+      // nothing to force.
+      const mustProve = meta !== undefined && !unreadableRecordComplete(meta);
+      if (mustProve || needsFallback(since, first)) {
         note({ kind: 'fallback' });
         // `first` was answered before the listing the fallback is about to take,
         // so its newest stamp is the high-water mark that listing will reflect —
         // the same read logWatermark makes for a first sync, already in hand.
         await fallbackCycle(deps, pending, outcome, first.newestUpdatedAt ?? 0, report);
+        // A fallback is a full listing, whichever reason routed it, so it completes
+        // the record for a store not yet proven. After the fallback's own claim, and
+        // only if it got there: one that throws leaves the store unproven, and the
+        // next cycle forces another.
+        if (mustProve) await markUnreadableRecordComplete(deps.username);
       } else {
         note({ kind: 'incremental' });
         await incrementalCycle(deps, since, sincePath, first, pending, outcome, report);
@@ -1600,7 +1692,7 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
   // absence trust a completed cycle at all (SyncMetaRecord.unreadablePaths). Once,
   // at the end, rather than per skip: if every blob fails (a key or reader bug), a
   // per-skip write would rewrite a growing list once per path.
-  const unreadable: string[] = [];
+  const unreadable: SkippedPath[] = [];
 
   // `finally`, so the two skips below tick the counter too: an entry dropped
   // for a mid-pull 404 or a blob that will not open still leaves the pull with
@@ -1651,7 +1743,7 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
 
       const data = await trace.span('blob.decrypt', () => openPulled(deps, blob, e.path));
       if (!data) {
-        unreadable.push(e.path);
+        unreadable.push({ path: e.path, updatedAt: e.updatedAt });
         return;
       }
       await trace.span('blob.store', () =>

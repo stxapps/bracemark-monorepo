@@ -31,7 +31,10 @@ import {
   getSyncMeta,
   isFirstSyncDone,
   markFirstSyncDone,
+  markOrphanSweep,
+  recordUnreadablePaths,
   resetCursor,
+  resetToSeededStateTx,
   seedNewAccount,
 } from './sync-store';
 
@@ -60,6 +63,9 @@ jest.mock('./session-store', () => ({
 }));
 
 const USER = 'alice';
+
+// A skip as the pull records it: the path and the stamp it was listed at.
+const stamped = (path: string) => ({ path, updatedAt: 1 });
 
 beforeEach(() => {
   getDb().run(sql`DELETE FROM sync_meta`);
@@ -271,5 +277,66 @@ describe('claimIfStillSignedIn', () => {
     await claimIfStillSignedIn(USER);
 
     expect(mockReadUnderLock).toEqual([true]);
+  });
+});
+
+// The unreadable record (SyncMetaRecord.unreadablePaths) and the orphaned-file sweep's
+// stamp, which migration 1 added as columns. The trap they share is that this store
+// UPDATES its row where web's `put` rewrote it whole: a writer that names its columns
+// keeps every column it didn't name. So a reset that forgets them hands a wiped store a
+// record of paths the server no longer holds (the sweeps then stay off for good), and a
+// claim that rewrote the row would drop a record the first sync has just made.
+describe('the unreadable record and the sweep stamp', () => {
+  const recorded = async () => {
+    const meta = await getSyncMeta(USER);
+    return [meta?.unreadablePaths ?? null, meta?.lastOrphanSweepAt ?? null];
+  };
+  const scheduled = async () => (await getSyncMeta(USER))?.unreadableRecheck ?? null;
+
+  async function withRecord(): Promise<void> {
+    await beginInitialSync(USER);
+    await recordUnreadablePaths(USER, ['links/l_a.enc'].map(stamped));
+    await markOrphanSweep(USER, 1234);
+  }
+
+  it('adds to the record without repeating a path', async () => {
+    await withRecord();
+
+    await recordUnreadablePaths(USER, ['links/l_a.enc', 'lists/s_b.enc'].map(stamped));
+
+    expect(await recorded()).toEqual([['links/l_a.enc', 'lists/s_b.enc'], 1234]);
+  });
+
+  it('survives the first sync being marked done', async () => {
+    await withRecord();
+
+    await markFirstSyncDone(USER, 500, '');
+
+    expect(await recorded()).toEqual([['links/l_a.enc'], 1234]);
+  });
+
+  it('is cleared by the delete-all-data reset', async () => {
+    await withRecord();
+
+    getDb().transaction((tx) => resetToSeededStateTx(tx, USER));
+
+    expect(await recorded()).toEqual([null, null]);
+    expect(await scheduled()).toBeNull();
+  });
+
+  it('is cleared when the account is seeded anew', async () => {
+    await withRecord();
+
+    await seedNewAccount(USER);
+
+    expect(await recorded()).toEqual([null, null]);
+    expect(await scheduled()).toBeNull();
+  });
+
+  it('refuses to record for an account that no longer owns the store', async () => {
+    await expect(
+      recordUnreadablePaths(USER, ['links/l_a.enc'].map(stamped)),
+    ).rejects.toBeInstanceOf(AccountFencedError);
+    await expect(markOrphanSweep(USER, 1)).rejects.toBeInstanceOf(AccountFencedError);
   });
 });

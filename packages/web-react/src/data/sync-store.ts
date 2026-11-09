@@ -5,6 +5,14 @@
 // invariant ("firstSyncDoneAt > 0 ⇒ local store is complete up to the cursor")
 // has one owner. Deliberately tiny and side-effect-light — no network, no React.
 
+import {
+  afterRecheck,
+  forgetSettled,
+  recordSkips,
+  type SkippedPath,
+  type UnreadableState,
+} from '@stxapps/shared';
+
 import { db, type SyncMetaRecord } from './db';
 import { peekSession, withSessionLock } from './session-store';
 
@@ -35,6 +43,9 @@ export function seedNewAccount(username: string): Promise<string> {
     syncCursorUpdatedAt: 0,
     syncCursorPath: '',
     firstSyncDoneAt: Date.now(),
+    // A new account has nothing a build could have skipped, so the record is
+    // complete from the start (shared's unreadableRecordComplete).
+    unreadableRecordCompleteAt: Date.now(),
   });
 }
 
@@ -115,6 +126,8 @@ export async function resetToSeededState(username: string): Promise<void> {
     syncCursorUpdatedAt: 0,
     syncCursorPath: '',
     firstSyncDoneAt: Date.now(),
+    // The server holds nothing now, so nothing here is an unrecorded skip.
+    unreadableRecordCompleteAt: Date.now(),
   });
 }
 
@@ -146,26 +159,71 @@ export async function markFirstSyncDone(
       syncCursorUpdatedAt,
       syncCursorPath,
       firstSyncDoneAt: Date.now(),
+      // A first sync is a full listing, and its pull recorded what it skipped
+      // before this claim, so the record now covers the whole store.
+      unreadableRecordCompleteAt: Date.now(),
     });
   });
 }
 
+// A fallback (a full listing) completed with the record in place: from now on an
+// absence here that the record doesn't name is not a skip (SyncMetaRecord.
+// unreadableRecordCompleteAt). The engine calls it after the fallback's cursor
+// claim; the fallback's pull recorded its skips before that. Fenced like the
+// pull's writes.
+export async function markUnreadableRecordComplete(username: string): Promise<void> {
+  await db.transaction('rw', db.syncMeta, async () => {
+    await assertAccountStillOwnsStore(username);
+    await db.syncMeta.update(username, { unreadableRecordCompleteAt: Date.now() });
+  });
+}
+
+// The record as shared's rules see it (sync/unreadable.ts).
+function unreadableState(meta: SyncMetaRecord): UnreadableState {
+  return { paths: meta.unreadablePaths ?? [], recheck: meta.unreadableRecheck };
+}
+
 // Add paths a pull skipped as unreadable to the account's record
-// (SyncMetaRecord.unreadablePaths). The pull calls it once, as it finishes and
-// before its caller claims anything, so the record is never behind a completed
-// cycle. Fenced like the pull's own writes: a pull that outlived its account fails
-// here, as its puts and deletes would.
+// (SyncMetaRecord.unreadablePaths), each with the server stamp the pull saw for it
+// (the recheck stores a healed blob at that stamp). The pull calls it once, as it
+// finishes and before its caller claims anything, so the record is never behind a
+// completed cycle. Fenced like the pull's own writes: a pull that outlived its
+// account fails here, as its puts and deletes would.
 export async function recordUnreadablePaths(
   username: string,
-  paths: readonly string[],
+  skipped: readonly SkippedPath[],
+  now = Date.now(),
 ): Promise<void> {
-  if (paths.length === 0) return;
+  if (skipped.length === 0) return;
   await db.transaction('rw', db.syncMeta, async () => {
     const meta = await assertAccountStillOwnsStore(username);
-    const held = new Set(meta.unreadablePaths);
-    const before = held.size;
-    for (const path of paths) held.add(path);
-    if (held.size !== before) await db.syncMeta.update(username, { unreadablePaths: [...held] });
+    const next = recordSkips(unreadableState(meta), skipped, now);
+    if (next) {
+      await db.syncMeta.update(username, {
+        unreadablePaths: [...next.paths],
+        unreadableRecheck: next.recheck,
+      });
+    }
+  });
+}
+
+// The end of a recheck (sync/engine.ts recheckUnreadable): the paths it found gone
+// (a 404) leave the record, the ones still unreadable move to the back, and the next
+// recheck is scheduled. The ones it healed already left, with the put that stored
+// them. Fenced like the pull's writes.
+export async function finishUnreadableRecheck(
+  username: string,
+  checked: readonly string[],
+  gone: readonly string[],
+  now = Date.now(),
+): Promise<void> {
+  await db.transaction('rw', db.syncMeta, async () => {
+    const meta = await assertAccountStillOwnsStore(username);
+    const next = afterRecheck(unreadableState(meta), checked, gone, now);
+    await db.syncMeta.update(username, {
+      unreadablePaths: [...next.paths],
+      unreadableRecheck: next.recheck,
+    });
   });
 }
 
@@ -187,12 +245,12 @@ export async function forgetUnreadablePaths(
   meta: SyncMetaRecord,
   paths: readonly string[],
 ): Promise<void> {
-  const held = meta.unreadablePaths;
-  if (!held?.length || paths.length === 0) return;
-  const settled = new Set(paths);
-  const left = held.filter((path) => !settled.has(path));
-  if (left.length !== held.length) {
-    await db.syncMeta.update(meta.username, { unreadablePaths: left });
+  const next = forgetSettled(unreadableState(meta), paths);
+  if (next) {
+    await db.syncMeta.update(meta.username, {
+      unreadablePaths: [...next.paths],
+      unreadableRecheck: next.recheck,
+    });
   }
 }
 

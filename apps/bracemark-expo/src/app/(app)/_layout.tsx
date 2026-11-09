@@ -5,13 +5,13 @@ import {
   FaviconProvider,
   FileContentProvider,
   LockProvider,
-  SyncProvider,
 } from '@stxapps/expo-react';
 
 import { AppLockGate } from '../../components/app-lock-gate';
 import { AuthGuard } from '../../components/auth-guard';
 import { InitialSyncGate } from '../../components/initial-sync-gate';
 import { ShareBridge } from '../../components/share-bridge';
+import { SyncProviderWithSweep } from '../../components/sync-provider-with-sweep';
 import { WelcomeGate } from '../../components/welcome-gate';
 import { PaywallProvider } from '../../contexts/paywall-provider';
 import { SignOutProvider } from '../../contexts/sign-out-provider';
@@ -23,10 +23,10 @@ import { SignOutProvider } from '../../contexts/sign-out-provider';
 // Gate stack, in the SAME order as bracemark-web's `(app)/layout.tsx`, whose header
 // carries the matching list — keep the two in step. Nesting depth tracks
 // dependency strength: session-only providers sit shallow, ready-store ones
-// deeper, gates last. The only deliberate differences from web are
-// platform-specific: the render-null ShareBridge here, and there a SyncProvider
-// that carries the dangling-extraction sweep (SyncProviderWithSweep), which this
-// app does not run.
+// deeper, gates last. The only deliberate difference from web is
+// platform-specific: the render-null ShareBridge here. Both apps mount their
+// SyncProvider as SyncProviderWithSweep, which carries the dangling-extraction
+// and orphaned-file sweeps.
 //
 // Guard vs Gate is a rule, not decoration: a GUARD's non-pass branch NAVIGATES
 // (it redirects off the route), a GATE's swaps content in place and never leaves
@@ -41,6 +41,8 @@ import { SignOutProvider } from '../../contexts/sign-out-provider';
 //                  AuthProvider mounted in the root `_layout`.
 //   SyncProvider — runs initial/incremental sync and exposes
 //                  storeStatus/requestSync to the app. Never redirects.
+//                  Mounted as SyncProviderWithSweep (the two sweeps after a
+//                  successful cycle).
 //   SignOutProvider — the hoisted sign-out flow: a sync first when a change
 //                  hasn't synced, the question for what that could not save,
 //                  and the cover over the app while the sign-out runs. Needs
@@ -99,7 +101,7 @@ import { SignOutProvider } from '../../contexts/sign-out-provider';
 export default function AppLayout() {
   return (
     <AuthGuard>
-      <SyncProvider>
+      <SyncProviderWithSweep>
         <SignOutProvider>
           <FileContentProvider>
             <FaviconProvider>
@@ -128,7 +130,7 @@ export default function AppLayout() {
             </FaviconProvider>
           </FileContentProvider>
         </SignOutProvider>
-      </SyncProvider>
+      </SyncProviderWithSweep>
     </AuthGuard>
   );
 }

@@ -36,6 +36,9 @@ import { listPendingOps } from './pending-store';
 import { sweepDanglingExtractions } from './sweep-dangling-extractions';
 import { recordUnreadablePaths, seedNewAccount } from './sync-store';
 
+// A skip as the pull records it: the path and the stamp it was listed at.
+const stamped = (path: string) => ({ path, updatedAt: 1 });
+
 // The teardown ORDER is the thing under test below, and the finished state can't show it
 // — the queue is keyed on (account, path), so it comes back in path order however the
 // deletes were interleaved. So the two delete calls are recorded as they happen, over the
@@ -134,7 +137,7 @@ describe('sweepDanglingExtractions', () => {
     await seedExtraction('l_unreadable', { imageId: 'f_image', pageCopyId: 'f_copy' });
     await seedExtraction('l_orphan');
     await db.pendingOps.clear();
-    await recordUnreadablePaths(USER, [pathFromId('l_unreadable', LINKS_PREFIX)]);
+    await recordUnreadablePaths(USER, [pathFromId('l_unreadable', LINKS_PREFIX)].map(stamped));
 
     expect(await sweepDanglingExtractions(USER)).toBe(1);
     expect(await exists(pathFromId('l_unreadable', EXTRACTIONS_PREFIX))).toBe(true);
@@ -145,6 +148,17 @@ describe('sweepDanglingExtractions', () => {
     expect((await listPendingOps(USER)).map((op) => op.path)).toEqual([
       pathFromId('l_orphan', EXTRACTIONS_PREFIX),
     ]);
+  });
+
+  // A row from before the record: its skips were never recorded, so an absent link may
+  // be one an older build skipped. The engine forces a fallback to complete the record;
+  // until it has, nothing is judged dangling. The positive control is the case below.
+  it('does nothing until a full listing has completed with the record in place', async () => {
+    await seedExtraction('l_gone');
+    await db.syncMeta.update(USER, { unreadableRecordCompleteAt: undefined });
+
+    expect(await sweepDanglingExtractions(USER)).toBe(0);
+    expect(await exists(pathFromId('l_gone', EXTRACTIONS_PREFIX))).toBe(true);
   });
 
   it('deletes an extraction whose link is gone', async () => {

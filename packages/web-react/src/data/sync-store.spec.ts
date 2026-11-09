@@ -34,6 +34,9 @@ import {
   seedNewAccount,
 } from './sync-store';
 
+// A skip as the pull records it: the path and the stamp it was listed at.
+const stamped = (path: string) => ({ path, updatedAt: 1 });
+
 // A first sync as the engine runs it: claim the row, then mark it done.
 async function markFirstSyncDone(username: string, updatedAt: number, path: string) {
   await beginInitialSync(username);
@@ -140,7 +143,7 @@ describe('the unreadable record', () => {
 
   it('survives the first sync being marked done', async () => {
     await beginInitialSync(USER);
-    await recordUnreadablePaths(USER, ['links/l_1.enc']);
+    await recordUnreadablePaths(USER, ['links/l_1.enc'].map(stamped));
 
     await markDone(USER, 10, '');
 
@@ -151,8 +154,8 @@ describe('the unreadable record', () => {
   it('adds each path once, however many pulls skip it', async () => {
     await seedNewAccount(USER);
 
-    await recordUnreadablePaths(USER, ['links/l_1.enc']);
-    await recordUnreadablePaths(USER, ['links/l_1.enc', 'links/l_2.enc']);
+    await recordUnreadablePaths(USER, ['links/l_1.enc'].map(stamped));
+    await recordUnreadablePaths(USER, ['links/l_1.enc', 'links/l_2.enc'].map(stamped));
 
     expect(await unreadable()).toEqual(['links/l_1.enc', 'links/l_2.enc']);
   });
@@ -162,8 +165,8 @@ describe('the unreadable record', () => {
   it('keeps what earlier pulls recorded when a later one records something else', async () => {
     await seedNewAccount(USER);
 
-    await recordUnreadablePaths(USER, ['links/l_1.enc']);
-    await recordUnreadablePaths(USER, ['links/l_2.enc']);
+    await recordUnreadablePaths(USER, ['links/l_1.enc'].map(stamped));
+    await recordUnreadablePaths(USER, ['links/l_2.enc'].map(stamped));
 
     expect(await unreadable()).toEqual(['links/l_1.enc', 'links/l_2.enc']);
   });
@@ -171,15 +174,15 @@ describe('the unreadable record', () => {
   // Fenced like the pull's own writes: a pull that outlived its account fails here
   // rather than creating a row for it.
   it('refuses to record for an account that is no longer on the device', async () => {
-    await expect(recordUnreadablePaths(USER, ['links/l_1.enc'])).rejects.toBeInstanceOf(
-      AccountFencedError,
-    );
+    await expect(
+      recordUnreadablePaths(USER, ['links/l_1.enc'].map(stamped)),
+    ).rejects.toBeInstanceOf(AccountFencedError);
     expect(await getSyncMeta(USER)).toBeUndefined();
   });
 
   it('forgets only the paths a pull has since stored or deleted', async () => {
     await seedNewAccount(USER);
-    await recordUnreadablePaths(USER, ['links/l_1.enc', 'links/l_2.enc']);
+    await recordUnreadablePaths(USER, ['links/l_1.enc', 'links/l_2.enc'].map(stamped));
 
     await db.transaction('rw', db.syncMeta, async () => {
       const meta = await assertAccountStillOwnsStore(USER);
@@ -193,7 +196,7 @@ describe('the unreadable record', () => {
   // anywhere afterwards.
   it('is dropped by delete-all’s reset', async () => {
     await seedNewAccount(USER);
-    await recordUnreadablePaths(USER, ['links/l_1.enc']);
+    await recordUnreadablePaths(USER, ['links/l_1.enc'].map(stamped));
 
     await db.transaction('rw', db.syncMeta, () => resetToSeededState(USER));
 

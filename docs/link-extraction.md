@@ -375,13 +375,17 @@ ever reads it (every join goes link → extraction), but it skews the facet coun
 (its outcome token counts against no link, so `pending` under-counts) and leaks
 storage — the blob plus the `files/` content it references, in R2 against the quota
 and in every device's local store, with no other reclamation path. So it's fixed by
-deletion: `sweepDanglingExtractions` (web-react) scans extraction paths against
-their co-keyed links (keys only — blobs are read only when a dangling is actually
-found) and tears each one down content-before-entity through the normal delete
-mutations, queuing the server deletes. **bracemark-web** runs it once per session,
-at the **end of a successful sync cycle and inside that cycle's lock** (the engine's
-`afterCycle`, handed to its `SyncProvider`; the cycle runs once more to push the
-deletes). ⚠ Nowhere else does absence mean much, and even there it is not proof
+deletion: `sweepDanglingExtractions` (web-react and expo-react, one rule between
+them: shared's `danglingExtractionPaths`, `sync/sweeps.ts`) scans extraction paths
+against their co-keyed links (keys only — blobs are read only when a dangling is
+actually found) and tears each one down content-before-entity through the normal
+delete mutations, queuing the server deletes. **bracemark-web and bracemark-expo**
+both run it, at the **end of a successful sync cycle and inside that cycle's lock**
+(the engine's `afterCycle`, handed to the app's `SyncProvider` by its
+`SyncProviderWithSweep`; the cycle runs once more to push the deletes). Web runs it
+once per visit, expo at most once a day per mount, since a phone's process lives
+on in the background for days. Before both apps ran it, a library used only on
+phones never had its danglings reclaimed. ⚠ Nowhere else does absence mean much, and even there it is not proof
 (below). Mid-pull it means nothing: the
 fallback listing walks in path order, `extractions/` sorts before `links/`, and a
 pull's GETs land in any order — in another tab as much as this one, which is why
@@ -395,18 +399,26 @@ them for every device. ⚠ A completed cycle is not a complete store either: a l
 blob that does not open under its path is skipped and the cycle completes without
 it ([local-first-sync.md](./local-first-sync.md), _crypto boundary_). So the sweep
 also passes over any extraction whose link is in the pull's record of skipped paths
-(`unreadablePaths` on the account's sync bookkeeping row). Without that, one link
-blob this device could not read deleted that link's extraction and its image,
-screenshot and page copy on every device. The record outlives the session because
-the cursor is past the skipped link: a later session's cycle completes without
-meeting it again.
+(`unreadablePaths` on the account's sync bookkeeping row, kept on both platforms).
+Without that, one link blob this device could not read deleted that link's
+extraction and its image, screenshot and page copy on every device. The record
+outlives the session because the cursor is past the skipped link: a later
+session's cycle completes without meeting it again. A recheck fetches recorded
+paths again on a backoff and takes out the ones that now open or are gone
+([local-first-sync.md](./local-first-sync.md), _crypto boundary_).
 
 ⚠ **Known gaps: a successful cycle can still lack a link the server holds**, and
 the sweep then deletes that link's extraction and its `files/` for every device:
 
-- **A skip from before the record existed.** Builds older than the record, or a
-  tab still running one, skipped without recording, and the cursor is already
-  past those links.
+- **A skip by a tab still running a build from before the record.** It skips
+  without recording into a store this build has already proven. A store whose
+  row predates the record is no longer a gap: until a full listing (a first sync
+  or a fallback) has completed with the record in place
+  (`unreadableRecordCompleteAt` on the bookkeeping row), both sweeps refuse to
+  run, and the engines force that fallback on the next cycle. The fallback
+  downloads every path missing here, so a link an older build skipped fails
+  again and is recorded this time. Every web row from before the record and
+  every expo row migration 1 brought up starts that way.
 - **An op log restored beneath a device's cursor, then written to.** The next
   commit is stamped above the stale cursor, so the cycle is routed incremental
   rather than to the fallback and never lists the ops the restore lost; the
@@ -428,7 +440,24 @@ was replaced — on every device, for as long as the account lived. `writeExtrac
 (both platforms) now diffs the refs inside its read-merge (`replacedExtractionFileIds`)
 and deletes what the write dropped after the put lands, metadata before content. An
 interruption between the two leaves the blob orphaned, which is where every replaced
-blob used to end up anyway.
+blob used to end up anyway. A link's custom image is reclaimed the same way, by
+`useLinkMutations.update` on both platforms: it takes the replaced id from the
+record it re-reads before merging, not from the editor's snapshot, so an image
+another device set meanwhile is the one deleted, not leaked.
+
+**⚠ A blob belongs to one link.** Every path that removes a ref deletes what it
+named — destroy, the reclaims above, the dangling sweep — and none asks whether
+another record names the same id: that check would mean decoding the library, or a
+new index on both platforms, per delete, and it could still only see this device's
+copy while the delete reaches every device. So nothing may write one blob for two
+links. Extraction gives each link in a same-URL group its own copy of the preview
+(`server-extraction.ts`, `device-extraction.ts`), and an import gives each row its
+own copy of an image several rows name (`import/project.ts`); the same image saved
+twice costs its bytes twice. Libraries written before that (a same-URL group's
+shared preview, an import's shared custom image) keep their shared blobs, and
+nothing splits them: destroying one of those links, or replacing its image, deletes
+the blob under the others, which then fall back to no image. Accepted — a preview
+re-extracts; a shared custom image does not.
 
 The cost is a **render-time join**: drawing a row needs both files, co-keyed by the
 same `{id}` (the UI resolves `customTitle ?? extraction.title ?? host(url)` and

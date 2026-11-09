@@ -62,8 +62,9 @@ export interface ImportedLink {
   pinRank?: string;
   // The user's custom link image, as a key into `ImportedBundle.images`. Kept as
   // a REFERENCE rather than inline bytes so a row stays cheap to copy and two
-  // rows can share one blob. The orchestrator writes the bytes as a
-  // `files/{id}.enc` and points `link.customImageId` at it.
+  // rows naming one image hold one copy in memory. The orchestrator writes the
+  // bytes as a `files/{id}.enc` of the row's own (one blob per link, never
+  // shared — import/project.ts) and points `link.customImageId` at it.
   imageRef?: string;
 }
 

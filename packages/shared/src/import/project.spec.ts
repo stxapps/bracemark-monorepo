@@ -178,9 +178,11 @@ describe('projectImportedLinks', () => {
     expect(result).toMatchObject({ listCount: 0, tagCount: 0 });
   });
 
-  it('writes one blob per distinct image reference and shares it between rows', () => {
-    // Two links can point at one image (a Brace export does this), and a row whose
-    // reference has no bytes must still import — just without its custom image.
+  // Two links can point at one image (a Brace export does this). Each gets a blob of
+  // its own: a shared one would be deleted under the other link the moment either is
+  // destroyed or given a new image, on every device. And a row whose reference has
+  // no bytes must still import — just without its custom image.
+  it('writes a blob per row, even for rows that name the same image', () => {
     const bytes = new Uint8Array([1, 2, 3]);
     const result = project({
       rows: [
@@ -191,12 +193,14 @@ describe('projectImportedLinks', () => {
       images: new Map([['kept.png', bytes]]),
     });
 
-    const links = linksOf(result);
-    expect(links[0].customImageId).toBeDefined();
-    expect(links[1].customImageId).toBe(links[0].customImageId);
-    expect(links[2].customImageId).toBeUndefined();
+    const [a, b, c] = linksOf(result);
+    expect(a.customImageId).toBeDefined();
+    expect(b.customImageId).toBeDefined();
+    expect(b.customImageId).not.toBe(a.customImageId);
+    expect(c.customImageId).toBeUndefined();
     expect(result.files).toEqual([
-      { path: pathFromId(links[0].customImageId as string, FILES_PREFIX), data: bytes },
+      { path: pathFromId(a.customImageId as string, FILES_PREFIX), data: bytes },
+      { path: pathFromId(b.customImageId as string, FILES_PREFIX), data: bytes },
     ]);
     expect(result.linkCount).toBe(3);
   });
@@ -218,10 +222,8 @@ describe('projectImportedLinks', () => {
     expect(result.files).toEqual([]);
   });
 
-  // A refused row and an accepted one can name the same image, in either order.
-  // Refused-first is the case a "skip the ref once seen" map gets wrong: the
-  // refused row would claim the reference and the accepted row's image would be
-  // dropped with it.
+  // A refused row and an accepted one can name the same image, in either order:
+  // the accepted row keeps its image, and the refused row leaves no blob behind.
   it.each([
     ['refused first', ['bad', 'good']],
     ['accepted first', ['good', 'bad']],
@@ -560,7 +562,8 @@ describe('projectImportedLinks', () => {
 // look like success everywhere except a frozen tab.
 describe('projectImportedLinksInChunks', () => {
   // A mix that exercises every branch whose state spans rows — the list and tag
-  // resolvers, the shared image, the pins — across more than one chunk boundary.
+  // resolvers, an image several rows name, the pins — across more than one chunk
+  // boundary.
   const rows = Array.from({ length: PROJECT_CHUNK * 2 + 7 }, (_, i) =>
     row({
       url: `https://example.com/${i}`,

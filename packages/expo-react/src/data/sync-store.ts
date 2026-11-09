@@ -7,11 +7,20 @@
 
 import { eq } from 'drizzle-orm';
 
+import {
+  afterRecheck,
+  forgetSettled,
+  recordSkips,
+  type SkippedPath,
+  type UnreadableState,
+} from '@stxapps/shared';
+
 import { type DbTx, getDb, syncMeta } from './db';
 import { loadSession, withSessionLock } from './session-store';
 
-// Same shape as web-react's SyncMetaRecord (every column NOT NULL, so the
-// drizzle-inferred row already matches it exactly).
+// Same shape as web-react's SyncMetaRecord, with web's four optional fields
+// (`unreadablePaths`, `unreadableRecheck`, `unreadableRecordCompleteAt`,
+// `lastOrphanSweepAt`) as nullable columns: NULL here is web's absent field.
 export type SyncMetaRecord = typeof syncMeta.$inferSelect;
 
 // The bookkeeping row for an account, or undefined if this device has never
@@ -46,6 +55,14 @@ export async function seedNewAccount(username: string): Promise<void> {
     syncCursorUpdatedAt: 0,
     syncCursorPath: '',
     firstSyncDoneAt: Date.now(),
+    // A new account has skipped nothing and never swept. Set explicitly, since
+    // the upsert rewrites a row the same name left behind (web's `put` replaces
+    // it whole).
+    unreadablePaths: null,
+    unreadableRecheck: null,
+    // Nothing a build could have skipped (web's seedNewAccount).
+    unreadableRecordCompleteAt: Date.now(),
+    lastOrphanSweepAt: null,
   });
 }
 
@@ -111,10 +128,21 @@ export async function claimIfStillSignedIn(username: string): Promise<void> {
 // account was torn down under its server call throws instead of handing the store
 // back to it (web's sync-store carries the reasoning). The row is keyed on the
 // username, not the session: the SAME account signing back in meanwhile passes.
+// The unreadable record and the sweep's stamp go too: the server holds nothing
+// now, so nothing is unreadable, and web's reset rewrites the row whole. An
+// UPDATE names its columns, so here they have to be named.
 export function resetToSeededStateTx(tx: DbTx, username: string): void {
   assertAccountOwnsStoreTx(tx, username);
   tx.update(syncMeta)
-    .set({ syncCursorUpdatedAt: 0, syncCursorPath: '', firstSyncDoneAt: Date.now() })
+    .set({
+      syncCursorUpdatedAt: 0,
+      syncCursorPath: '',
+      firstSyncDoneAt: Date.now(),
+      unreadablePaths: null,
+      unreadableRecheck: null,
+      unreadableRecordCompleteAt: Date.now(),
+      lastOrphanSweepAt: null,
+    })
     .where(eq(syncMeta.username, username))
     .run();
 }
@@ -135,8 +163,27 @@ export async function markFirstSyncDone(
 ): Promise<void> {
   getDb().transaction((tx) => {
     assertAccountOwnsStoreTx(tx, username);
+    // A first sync is a full listing whose pull recorded its skips before this
+    // claim, so the record now covers the store (web's markFirstSyncDone).
     tx.update(syncMeta)
-      .set({ syncCursorUpdatedAt, syncCursorPath, firstSyncDoneAt: Date.now() })
+      .set({
+        syncCursorUpdatedAt,
+        syncCursorPath,
+        firstSyncDoneAt: Date.now(),
+        unreadableRecordCompleteAt: Date.now(),
+      })
+      .where(eq(syncMeta.username, username))
+      .run();
+  });
+}
+
+// A fallback (a full listing) completed with the record in place — web-react
+// sync-store's markUnreadableRecordComplete. Fenced like the pull's writes.
+export async function markUnreadableRecordComplete(username: string): Promise<void> {
+  getDb().transaction((tx) => {
+    assertAccountOwnsStoreTx(tx, username);
+    tx.update(syncMeta)
+      .set({ unreadableRecordCompleteAt: Date.now() })
       .where(eq(syncMeta.username, username))
       .run();
   });
@@ -183,4 +230,88 @@ export async function resetCursor(
     .set({ syncCursorUpdatedAt, syncCursorPath })
     .where(eq(syncMeta.username, username))
     .run();
+}
+
+// The record as shared's rules see it (sync/unreadable.ts), read inside `tx`.
+function unreadableStateTx(tx: DbTx, username: string): UnreadableState {
+  const meta = tx
+    .select({ paths: syncMeta.unreadablePaths, recheck: syncMeta.unreadableRecheck })
+    .from(syncMeta)
+    .where(eq(syncMeta.username, username))
+    .get();
+  return { paths: meta?.paths ?? [], recheck: meta?.recheck ?? undefined };
+}
+
+// Write a record shared's rules returned. An empty one is NULL, as web's absent field.
+function writeUnreadableTx(tx: DbTx, username: string, next: UnreadableState): void {
+  tx.update(syncMeta)
+    .set({
+      unreadablePaths: next.paths.length > 0 ? [...next.paths] : null,
+      unreadableRecheck: next.recheck ?? null,
+    })
+    .where(eq(syncMeta.username, username))
+    .run();
+}
+
+// Add paths a pull skipped as unreadable to the account's record
+// (SyncMetaRecord.unreadablePaths), each with the server stamp the pull saw for
+// it — web-react sync-store's recordUnreadablePaths, which carries the
+// reasoning. The pull calls it once, as it finishes and before its caller claims
+// the cursor or the first sync, so the record is never behind a completed cycle.
+// Fenced like the pull's own writes.
+export async function recordUnreadablePaths(
+  username: string,
+  skipped: readonly SkippedPath[],
+  now = Date.now(),
+): Promise<void> {
+  if (skipped.length === 0) return;
+  getDb().transaction((tx) => {
+    assertAccountOwnsStoreTx(tx, username);
+    const next = recordSkips(unreadableStateTx(tx, username), skipped, now);
+    if (next) writeUnreadableTx(tx, username, next);
+  });
+}
+
+// Inside the pull's own write transaction (item-store's putItemsUnqueued /
+// deleteItemsUnqueued), after its fence: drop the paths it has just stored or
+// deleted from the unreadable record — web-react sync-store's
+// forgetUnreadablePaths. A path left in by mistake costs a sweep that waits; one
+// dropped by mistake can cost a deleted extraction or blob for every device, so
+// only the pull's successful writes (and the recheck's, through them) call this.
+export function forgetUnreadablePathsTx(
+  tx: DbTx,
+  username: string,
+  paths: readonly string[],
+): void {
+  const next = forgetSettled(unreadableStateTx(tx, username), paths);
+  if (next) writeUnreadableTx(tx, username, next);
+}
+
+// The end of a recheck (sync/engine.ts recheckUnreadable) — web-react
+// sync-store's finishUnreadableRecheck: the paths it found gone leave the
+// record, the ones still unreadable move to the back, and the next recheck is
+// scheduled. Fenced like the pull's writes.
+export async function finishUnreadableRecheck(
+  username: string,
+  checked: readonly string[],
+  gone: readonly string[],
+  now = Date.now(),
+): Promise<void> {
+  getDb().transaction((tx) => {
+    assertAccountOwnsStoreTx(tx, username);
+    writeUnreadableTx(
+      tx,
+      username,
+      afterRecheck(unreadableStateTx(tx, username), checked, gone, now),
+    );
+  });
+}
+
+// Record that the orphaned-file sweep ran to the end (SyncMetaRecord.lastOrphanSweepAt).
+// Fenced: a sweep that outlived its account writes nothing.
+export async function markOrphanSweep(username: string, at: number): Promise<void> {
+  getDb().transaction((tx) => {
+    assertAccountOwnsStoreTx(tx, username);
+    tx.update(syncMeta).set({ lastOrphanSweepAt: at }).where(eq(syncMeta.username, username)).run();
+  });
 }

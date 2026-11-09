@@ -42,13 +42,14 @@ import {
 import { enqueuePut } from '../data/pending-store';
 import { toItemRecord } from '../data/projection';
 import { sweepDanglingExtractions } from '../data/sweep-dangling-extractions';
-import { beginInitialSync, getSyncMeta } from '../data/sync-store';
+import { beginInitialSync, getSyncMeta, recordUnreadablePaths } from '../data/sync-store';
 import { AccountFencedError } from '../data/sync-store';
 import {
   holdSyncCycles,
   installSyncTrace,
   loadEntityContent,
   loadEntityContents,
+  recheckUnreadable,
   runIncrementalSync,
   runInitialSync,
   type SyncDeps,
@@ -292,6 +293,7 @@ beforeEach(async () => {
     syncCursorUpdatedAt: 1000,
     syncCursorPath: 'links/l_seed.enc',
     firstSyncDoneAt: 1,
+    unreadableRecordCompleteAt: 1,
   });
 });
 
@@ -2312,6 +2314,168 @@ describe('a pulled blob that does not open under its path', () => {
       expect(await db.items.get(FILE_PATH)).toBeDefined();
       expect(committedPaths().sort()).toEqual([DANGLING_PATH, OTHER_FILE_PATH].sort());
     });
+
+    // THE RECHECK (recheckUnreadable; shared's sync/unreadable.ts owns the schedule).
+    // The cursor is past a skipped path, so without it a skip that was only transient
+    // stays recorded until the path is rewritten, and the orphaned-file sweep stays off
+    // on this device for that long. What it must never do is drop a path the server
+    // still holds and this device still can't read.
+    describe('the recheck', () => {
+      const HOUR = 60 * 60 * 1000;
+      const DAY = 24 * HOUR;
+      const linkGets = () =>
+        mockGetBlob.mock.calls.filter(([url]) => pathFor(url) === LINK_PATH).length;
+      const opensAgain = () =>
+        (decryptEntity as jest.Mock).mockImplementation(async (_key: unknown, bytes: Uint8Array) =>
+          bytes.slice(1),
+        );
+      async function skipLink(): Promise<number> {
+        failToOpen(LINK_PATH, new BlobUnreadableError(LINK_PATH));
+        const at = Date.now();
+        await quietly(() => runIncrementalSync(deps({ opsList: () => TWO_PUTS })));
+        return at;
+      }
+
+      it('waits until due, then stores a blob that opens now at the stamp the pull saw', async () => {
+        const at = await skipLink();
+        opensAgain();
+        mockGetBlob.mockClear();
+
+        await recheckUnreadable(deps(), at);
+        expect(linkGets()).toBe(0);
+
+        await recheckUnreadable(deps(), at + 2 * HOUR);
+
+        expect(await bodyAt(LINK_PATH)).toBe(`server ${LINK_PATH}`);
+        expect((await db.items.get(LINK_PATH))?.updatedAt).toBe(2000);
+        expect(await unreadable()).toEqual([]);
+        expect((await getSyncMeta(USER))?.unreadableRecheck).toBeUndefined();
+      });
+
+      it('lets a path go that the server no longer holds, and stores nothing', async () => {
+        const at = await skipLink();
+        mockGetBlob.mockImplementation(async (url: string) => {
+          if (pathFor(url) === LINK_PATH) throw new BlobRequestError('GET', 404);
+          return new Uint8Array([0xee, ...utf8(`server ${pathFor(url)}`)]);
+        });
+
+        await recheckUnreadable(deps(), at + 2 * HOUR);
+
+        expect(await db.items.get(LINK_PATH)).toBeUndefined();
+        expect(await unreadable()).toEqual([]);
+      });
+
+      // The case the recheck exists to get right: still unreadable is still held,
+      // however many times, and only the schedule moves.
+      it('keeps a path that still does not open, and backs off', async () => {
+        const at = await skipLink();
+
+        await quietly(() => recheckUnreadable(deps(), at + 2 * HOUR));
+
+        expect(await unreadable()).toEqual([LINK_PATH]);
+        expect((await getSyncMeta(USER))?.unreadableRecheck).toMatchObject({
+          tries: 1,
+          dueAt: at + 2 * HOUR + DAY,
+        });
+      });
+
+      // This device wrote and committed the path since the skip: what the server serves
+      // now is that write, and storing it at the older stamp would roll the row back.
+      it('does not overwrite a newer local copy, and lets the path go', async () => {
+        const at = await skipLink();
+        await seedSynced(LINK_PATH, 'mine', 5000);
+        opensAgain();
+
+        await recheckUnreadable(deps(), at + 2 * HOUR);
+
+        expect(await bodyAt(LINK_PATH)).toBe('mine');
+        expect((await db.items.get(LINK_PATH))?.updatedAt).toBe(5000);
+        expect(await unreadable()).toEqual([]);
+      });
+
+      // Run by the cycle itself, and before afterCycle, so a record it empties lets the
+      // orphaned-file sweep run in the same slot rather than a cycle later.
+      it('runs in a successful cycle, before afterCycle', async () => {
+        await recordUnreadablePaths(USER, [{ path: LINK_PATH, updatedAt: 2000 }], 0);
+        let seen: string[] | undefined;
+
+        await runIncrementalSync({
+          ...deps({
+            opsList: () => ({
+              ops: [],
+              oldestUpdatedAt: 500,
+              newestUpdatedAt: 1000,
+              hasMore: false,
+            }),
+          }),
+          afterCycle: async () => {
+            seen = (await getSyncMeta(USER))?.unreadablePaths;
+            return false;
+          },
+        });
+
+        expect(seen).toEqual([]);
+        expect(await bodyAt(LINK_PATH)).toBe(`server ${LINK_PATH}`);
+      });
+    });
+
+    // A ROW FROM BEFORE THE RECORD (unreadableRecordCompleteAt absent). Its skips were
+    // never recorded and the cursor is past them, so an empty record proves nothing
+    // and the sweeps would delete by an absence no pull will ever correct. One forced
+    // fallback re-lists the store: a skipped path is missing here, so it is fetched,
+    // fails again, and is recorded this time.
+    describe('a row from before the record', () => {
+      const NO_OPS: OpsListReply = {
+        ops: [],
+        oldestUpdatedAt: 500,
+        newestUpdatedAt: 1000,
+        hasMore: false,
+      };
+
+      it('goes to the fallback once, records the skip it meets, and is complete after', async () => {
+        await db.syncMeta.update(USER, { unreadableRecordCompleteAt: undefined });
+        failToOpen(LINK_PATH, new BlobUnreadableError(LINK_PATH));
+        let listings = 0;
+        const handlers = {
+          opsList: () => NO_OPS,
+          filesList: () => {
+            listings += 1;
+            return [
+              { path: LINK_PATH, updatedAt: 400 },
+              { path: OTHER_LINK_PATH, updatedAt: 401 },
+            ];
+          },
+        };
+
+        await quietly(() => runIncrementalSync(deps(handlers)));
+
+        expect(listings).toBe(1);
+        expect(await unreadable()).toEqual([LINK_PATH]);
+        expect((await getSyncMeta(USER))?.unreadableRecordCompleteAt).toBeGreaterThan(0);
+
+        await quietly(() => runIncrementalSync(deps(handlers)));
+        expect(listings).toBe(1);
+      });
+
+      it('stays unproven when the fallback fails, and the next cycle forces it again', async () => {
+        await db.syncMeta.update(USER, { unreadableRecordCompleteAt: undefined });
+        let listings = 0;
+        const failing = {
+          opsList: () => NO_OPS,
+          filesList: () => {
+            listings += 1;
+            throw new Error('listing failed');
+          },
+        };
+
+        await expect(runIncrementalSync(deps(failing))).rejects.toThrow('listing failed');
+        expect((await getSyncMeta(USER))?.unreadableRecordCompleteAt).toBeUndefined();
+
+        await runIncrementalSync(deps({ opsList: () => NO_OPS, filesList: () => [] }));
+        expect(listings).toBe(1);
+        expect((await getSyncMeta(USER))?.unreadableRecordCompleteAt).toBeGreaterThan(0);
+      });
+    });
   });
 });
 
@@ -2985,6 +3149,7 @@ async function inSyncWith(server: SyncServer, username = USER): Promise<number> 
     syncCursorUpdatedAt: stamp,
     syncCursorPath: BASE_PATH,
     firstSyncDoneAt: 1,
+    unreadableRecordCompleteAt: 1,
   });
   return stamp;
 }
@@ -3037,6 +3202,7 @@ describe('the cursor claims only what a cycle read', () => {
       syncCursorUpdatedAt: 0,
       syncCursorPath: '',
       firstSyncDoneAt: 1,
+      unreadableRecordCompleteAt: 1,
     });
     await seedQueued(LINK_PATH, 'saved here');
 
@@ -3228,6 +3394,7 @@ describe('the cursor claims only what a cycle read', () => {
       syncCursorUpdatedAt: newest + 1_000_000,
       syncCursorPath: 'links/l_gone.enc',
       firstSyncDoneAt: 1,
+      unreadableRecordCompleteAt: 1,
     });
 
     const { deps: client, calls } = onServer(server);
@@ -3249,6 +3416,7 @@ describe('the cursor claims only what a cycle read', () => {
       syncCursorUpdatedAt: 0,
       syncCursorPath: '',
       firstSyncDoneAt: 1,
+      unreadableRecordCompleteAt: 1,
     });
 
     await seedQueued(LINK_PATH, 'first');

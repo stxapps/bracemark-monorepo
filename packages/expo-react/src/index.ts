@@ -29,6 +29,8 @@ export * from './data/share-theme-store';
 export * from './data/share-upload';
 export * from './data/sidebar-view-store';
 export * from './data/subscription-store';
+export * from './data/sweep-dangling-extractions';
+export * from './data/sweep-orphan-files';
 export * from './data/sync-store';
 export * from './hooks/use-change-password';
 export * from './hooks/use-create-account';
