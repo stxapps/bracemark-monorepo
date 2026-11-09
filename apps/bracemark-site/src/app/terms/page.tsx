@@ -218,6 +218,35 @@ export default function Page() {
           plans include; where a change would materially reduce what you have already paid for, it
           will not take effect until your current paid period ends.
         </p>
+        {/* THE MONTHLY ALLOWANCE, disclosed before it limits anything, and written
+            once for every half it will ever have. bracemark-api counts each
+            account's sync per calendar month (services/transfer-budget.ts): today
+            uploads and the commits that record them, later downloads and listings
+            too, and none of it refuses anything yet. This paragraph is what lets
+            any of those halves start refusing without a Terms change of its own,
+            so it names the whole category — "how much an account moves through
+            sync", uploads AND downloads, and the requests that carry them — and
+            both pauses, and carries no number: the thresholds are for retuning,
+            and a figure here would be a contract.
+
+            "Well above what a library needs in ordinary use" is the sizing rule
+            the allowance is held to, not marketing: an honest library never meets
+            it. "Readable, searchable, and exportable" is true of every design the
+            allowance could take, because those run on the device over the copy it
+            already holds (docs/offline-mode.md). The last clause is the cost of a
+            DOWNLOAD pause, stated rather than left to be found: changes made on
+            another device, and a new device's first sync, wait for the month to
+            turn. Leaving it out would make the sentence before it read as "sync
+            keeps working", which a paused download is not. */}
+        <p>
+          Each plan also includes a monthly allowance for how much an account moves through sync —
+          the files it uploads and downloads, and the requests it makes to do so — set well above
+          what a library needs in ordinary use, and we count each account’s use against it. If an
+          account goes past it, we may pause that account’s new uploads, or its downloads, until the
+          next month begins. The library already on your devices stays readable, searchable, and
+          exportable throughout, though changes from your other devices, and a new device’s first
+          sync, may have to wait until then.
+        </p>
         <p>
           Prices are stated in US dollars and may be presented to you in your local currency, with
           any applicable taxes calculated at checkout. Paid plans purchased on the web are sold

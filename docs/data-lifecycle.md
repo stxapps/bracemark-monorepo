@@ -1475,7 +1475,9 @@ ciphertext, names what to delete.
 **Ordering: DO first, R2 second.** This is the op-without-object invariant
 ("the log may lag R2 but must never point ahead of it") read in the delete
 direction. Wipe the op log + quota map first (one `wipeAll` RPC — the DO's
-serialized SQLite); then page `list()` + `delete()` over the R2 prefix
+serialized SQLite, which deliberately leaves the month's transfer count in place:
+it counts what the account moved, and a wipe moves nothing back; delete account
+clears it, below); then page `list()` + `delete()` over the R2 prefix
 (1000-key pages, one subrequest each — a 100k-object library is ~200
 subrequests in one invocation). A crash between the halves leaves only
 objects-without-ops, which the fallback listing heals; the reverse order would
@@ -1702,7 +1704,10 @@ the gate.
 still-live session** (which is why sessions go last), and every step is
 idempotent:
 
-1. **Wipe the data plane** — the same `deleteAllUserData` as delete-all.
+1. **Wipe the data plane** — the same `deleteAllUserData` as delete-all — and
+   then clear the month's transfer count (`clearTransferBudget`), the one row the
+   DO keeps through that wipe ([local-first-sync.md](./local-first-sync.md),
+   _authorization & quota_).
 2. **Tombstone the username** — `deleted_at` set on the directory row, row
    kept. From here sign-in is already refused (opaquely — a tombstone answers
    exactly like a name that never existed on the pre-auth door fetch and

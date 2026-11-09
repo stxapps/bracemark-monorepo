@@ -135,12 +135,20 @@ export function foldSubscriptionStatus(
 // these two fields are grandfathered while `maxLinks` and every feature flag
 // snap back to free.
 export function foldQuotaCeilings(purchases: PurchaseEntity[]): QuotaCeilings {
+  const { maxFiles, maxBytes } = entitlementsOf(foldHighWaterPlan(purchases));
+  return { maxFiles, maxBytes };
+}
+
+// The best plan this account has ever held — the plan foldQuotaCeilings reads
+// its two numbers from, exposed for the one other reader that follows the same
+// rule: the monthly transfer thresholds (services/transfer-budget.ts), which a lapsed
+// Plus account keeps for the reason it keeps its ceilings.
+export function foldHighWaterPlan(purchases: PurchaseEntity[]): Plan {
   let plan: Plan = 'free';
   for (const p of purchases) {
     if (PLAN_RANK[p.plan] > PLAN_RANK[plan]) plan = p.plan;
   }
-  const { maxFiles, maxBytes } = entitlementsOf(plan);
-  return { maxFiles, maxBytes };
+  return plan;
 }
 
 // --- staleness refresh — the missed-webhook backstop -------------------------
@@ -541,6 +549,12 @@ export async function getSubscriptionStatus(
 // Never refreshes — see above.
 export async function getQuotaCeilings(env: Bindings, userId: string): Promise<QuotaCeilings> {
   return foldQuotaCeilings(await purchasesRepo(env.DIRECTORY_DB).listByUserId(userId));
+}
+
+// The high-water plan alone, for the transfer thresholds. Read only when a count
+// crosses one (services/transfer-budget.ts), so it is not a D1 read per commit.
+export async function getHighWaterPlan(env: Bindings, userId: string): Promise<Plan> {
+  return foldHighWaterPlan(await purchasesRepo(env.DIRECTORY_DB).listByUserId(userId));
 }
 
 // --- paddle (web overlay checkout) ----------------------------------

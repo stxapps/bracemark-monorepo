@@ -19,6 +19,7 @@ import { hmacSecret } from '../r2/hmac-key';
 import { mintUploadReceipt, readUploadReceipt, type UploadReceipt } from '../r2/upload-receipt';
 import { type ObjectStat, userFilesRepo } from '../r2/user-files';
 import { getQuotaCeilings } from './iap';
+import { noteTransfer } from './transfer-budget';
 
 // Service layer for the sync endpoints. It holds the POLICY and the cross-store
 // orchestration — TTLs, the quota gate, the op→method mapping, the blob token's
@@ -95,11 +96,25 @@ export async function signUserFileUrls(
     // putGate, r2/upload-receipt.ts). Read here, BEFORE any of the batch's PUTs
     // can land, which is what makes it a fence: every delete the commit has to
     // know about is appended after it.
+    //
+    // The same call COUNTS the batch toward the month's uploads (do/user-data.ts
+    // putGate, services/transfer-budget.ts), before the quota check that reads
+    // its usage, so the count is handed back when that check refuses: a full
+    // library's queue re-asks every cycle, and is not uploading anything.
     const [gate, ceilings] = await Promise.all([
-      time('do-usage', () => callUserData(env, userId, (stub) => stub.putGate())),
+      time('do-usage', () => callUserData(env, userId, (stub) => stub.putGate(paths.length))),
       time('d1-ceilings', () => getQuotaCeilings(env, userId)),
     ]);
-    checkPutQuota(ceilings, gate.usage);
+    try {
+      checkPutQuota(ceilings, gate.usage);
+    } catch (err) {
+      const counted = gate.puts;
+      if (counted) {
+        await callUserData(env, userId, (stub) => stub.refundPuts(paths.length, counted.period));
+      }
+      throw err;
+    }
+    await noteTransfer(env, userId, 'puts', gate.puts);
     fence = gate.fence;
   }
 
@@ -215,10 +230,15 @@ export async function commitOps(
 
   const first = resolveOps(ops, now, objects, receipts);
   if (first.entries.length === 0) return { results: [], failed: first.failed };
-  const { results, stale } = await time('do-commit', () =>
+  // The DO counts the committed puts toward the month's `commits` in the same call
+  // (do/user-data.ts commitOps); a stale batch writes and counts nothing.
+  const { results, stale, commits } = await time('do-commit', () =>
     callUserData(env, userId, (stub) => stub.commitOps(first.entries)),
   );
-  if (stale.length === 0) return { results, failed: first.failed };
+  if (stale.length === 0) {
+    await noteTransfer(env, userId, 'commits', commits);
+    return { results, failed: first.failed };
+  }
 
   // The fence turned at least one receipt down — a delete of its path, or a wipe,
   // landed since its token was signed — and the DO wrote none of the batch. Check
@@ -233,6 +253,7 @@ export async function commitOps(
   const retried = await time('do-commit', () =>
     callUserData(env, userId, (stub) => stub.commitOps(second.entries)),
   );
+  await noteTransfer(env, userId, 'commits', retried.commits);
   return { results: retried.results, failed: second.failed };
 }
 

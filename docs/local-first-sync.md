@@ -2158,6 +2158,32 @@ and no R2 call. Settings → Subscription reads it, on Plus only
 never pays for the call. It is its own endpoint rather than a field on
 `iap/status`, which every app start reads and would then pay a DO call for.
 
+**What an account moves in a month is counted, beside what it stores.** The
+size map bounds a library at one moment; nothing in it bounds a library uploaded
+and removed again and again. So the same DO keeps one more row, the
+`transfer_budget` table (`do/repositories/transfer-budget.ts`): the calendar
+month it counts and two counters. `puts` is the paths a `files/sign` put batch
+names, added inside `putGate` (the call the sign path already makes) and handed
+back with `refundPuts` when the quota check then refuses the batch, so a full
+library whose queue re-asks every cycle isn't counted each time. `commits` is
+the put ops a `commitOps` writes, added in that same call; deletes and stale
+batches add nothing. A call in a new month resets the row and is counted in it.
+**Nothing refuses a call on the count yet.** `services/transfer-budget.ts`
+compares each counted call against thresholds per high-water plan, from the env,
+and the first call past one in a month writes a log line naming the account's
+opaque id. Two seams decide whether the count means anything:
+
+- **`wipeAll` leaves it.** It is its own table so that delete-all-data, which
+  clears the op log and the size map, cannot clear it too.
+- **Account deletion clears it**, with its own RPC (`clearTransferBudget`),
+  because the DO's storage outlives the account otherwise.
+
+It lives only until shortly after its month: the call that opens a month's row
+sets the DO's alarm for just past the month's end, and `alarm()` drops the row
+unless a later month has already replaced it — /privacy, _How long we keep it_.
+⚠ A DO has one alarm; the next feature that wants one (op-log compaction) has to
+share it.
+
 **The gate is namespace-blind, and reads only CURRENT usage.** It compares
 `fileCount` and `totalBytes` against the plan's ceilings and ignores what the
 batch is about to add — the same conservatism the byte check always had, since a

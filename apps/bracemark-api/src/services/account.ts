@@ -9,6 +9,7 @@ import { accountsDb, assignAccountDbId } from '../db/db-routes';
 import { accountKeysRepo } from '../db/repositories/account-keys';
 import { usernamesRepo } from '../db/repositories/usernames';
 import { usersRepo } from '../db/repositories/users';
+import { callUserData } from '../do/user-data';
 import type { Bindings } from '../lib/env';
 import { HttpError } from '../lib/errors';
 import { newId } from '../lib/ids';
@@ -344,7 +345,8 @@ export async function signIn(
 // Steps are ordered so EVERY crash window is finishable by retrying with the
 // still-live session (sessions go last for exactly that reason), and each step
 // is idempotent:
-//   gate → wipe data (DO + R2) → tombstone the username → delete doors + user
+//   gate → wipe data (DO + R2) → clear the transfer count → tombstone the
+//   username → delete doors + user
 //   (one atomic shard batch — the credential and its keys leave together, the
 //   same pairing create-account writes them with) → revoke every session.
 // "Revoke", not delete: every session row KEEPS a revocation marker, so each
@@ -434,6 +436,11 @@ export async function deleteAccount(
   }
 
   await deleteAllUserData(env, session.userId);
+  // The one thing the DO keeps through delete-all-data, and must not keep through
+  // this: the month's transfer count (do/repositories/transfer-budget.ts). Its
+  // own call because wipeAll is delete-all-data's too, which leaves the count
+  // alone on purpose. Idempotent, so a resumed teardown just clears nothing again.
+  await callUserData(env, session.userId, (stub) => stub.clearTransferBudget());
   await directory.tombstone(proof.username, session.userId);
   await shard.batch([
     accountKeysRepo(shard).deleteAllByUserIdStmt(session.userId),

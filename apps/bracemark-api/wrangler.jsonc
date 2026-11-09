@@ -319,6 +319,13 @@
         "SIGNUP_CAP_IPV4_PER_DAY": "200",
         "SIGNUP_CAP_IPV6_PER_DAY": "200",
         "SIGNUP_CAP_ENFORCE": "1",
+        // Each account's monthly upload counts, per high-water plan
+        // (services/transfer-budget.ts): paths signed for upload, and put ops
+        // committed. COUNTED, NOT ENFORCED: an account's first call past its
+        // plan's number in a month writes one log line, and nothing is refused.
+        // The counts are kept either way; unset only silences the line.
+        "TRANSFER_BUDGET_PUTS_PER_MONTH": "free:25000,plus:250000,pro:250000",
+        "TRANSFER_BUDGET_COMMITS_PER_MONTH": "free:30000,plus:300000,pro:300000",
         // The Server-Timing breakdown (src/lib/server-timing.ts) — on here, where
         // `measure:sync` runs; production leaves it unset.
         "SERVER_TIMING": "1",
@@ -468,6 +475,13 @@
         "SIGNUP_CAP_IPV4_PER_DAY": "200",
         "SIGNUP_CAP_IPV6_PER_DAY": "200",
         "SIGNUP_CAP_ENFORCE": "1",
+        // Each account's monthly upload counts, per high-water plan
+        // (services/transfer-budget.ts): paths signed for upload, and put ops
+        // committed. COUNTED, NOT ENFORCED: an account's first call past its
+        // plan's number in a month writes one log line, and nothing is refused.
+        // The counts are kept either way; unset only silences the line.
+        "TRANSFER_BUDGET_PUTS_PER_MONTH": "free:25000,plus:250000,pro:250000",
+        "TRANSFER_BUDGET_COMMITS_PER_MONTH": "free:30000,plus:300000,pro:300000",
         // Paddle Billing — LIVE Paddle. Secrets, set separately:
         //   wrangler secret put PADDLE_WEBHOOK_SECRET --env production
         //   wrangler secret put PADDLE_API_KEY --env production

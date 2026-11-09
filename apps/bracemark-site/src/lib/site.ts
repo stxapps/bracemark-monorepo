@@ -126,8 +126,8 @@ export const PADDLE_REFUND_POLICY_URL = 'https://www.paddle.com/legal/refund-pol
 // The "last updated" line each policy carries. Dates live here rather than inline
 // so the two documents can never claim different vintages of the same rewrite —
 // and so bumping one after an edit is a deliberate act, not a forgotten one.
-export const TERMS_UPDATED = '13 October 2026';
-export const PRIVACY_UPDATED = '8 November 2026';
+export const TERMS_UPDATED = '9 November 2026';
+export const PRIVACY_UPDATED = '9 November 2026';
 
 // How long a backup outlives what it copies — the window /privacy (_Backups_,
 // and the key-blob line above it) and /delete-account (_What is deleted_, _What

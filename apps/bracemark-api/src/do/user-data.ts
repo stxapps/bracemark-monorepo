@@ -10,6 +10,12 @@ import {
 import type { Bindings } from '../lib/env';
 import { fileSizesRepo, type FileUsage } from './repositories/file-sizes';
 import { type OpKind, type OpLogFence, opLogsRepo } from './repositories/op-logs';
+import {
+  transferBudgetRepo,
+  type TransferCount,
+  transferPeriodEndMs,
+  transferPeriodOf,
+} from './repositories/transfer-budget';
 
 // `FileUsage` is the DO's public usage contract — re-exported here so consumers
 // (lib/quota.ts) depend on the DO boundary, not its private repository layer. It
@@ -22,6 +28,15 @@ export type { FileUsage };
 // services/ carry it through a PUT token and its upload receipt, and depend on
 // the DO boundary for it, not the repository.
 export type { OpLogFence };
+
+// `TransferCount` likewise (repositories/transfer-budget.ts): what a counted call
+// saw, which the Worker compares against its thresholds (services/transfer-budget.ts).
+export type { TransferCount };
+
+// How long after its month ends a transfer count may still exist: the alarm that
+// drops it is set this far past the month's last millisecond. "Shortly after the
+// period" is /privacy's promise for every abuse counter (How long we keep it).
+const TRANSFER_ALARM_GRACE_MS = 60 * 60 * 1000;
 
 // One mutation ready to record — what the service hands the DO after resolving
 // each op against R2. `updatedAt`/`size` are sourced per kind in services/sync.ts:
@@ -89,6 +104,19 @@ const MIGRATIONS: string[][] = [
   // row, written by the first wipe; absent reads as generation 0, so a DO that
   // has never been wiped needs nothing backfilled.
   [`CREATE TABLE IF NOT EXISTS log_generation (generation INTEGER NOT NULL)`],
+  // 2 -> 3: the month's transfer counts (repositories/transfer-budget.ts). One
+  // row, created by the first counted call; a DO that has never been counted
+  // simply has none. ⚠ Its own table, never a column on op_logs or file_sizes:
+  // wipeAll clears those two and must leave this one (that file's first seam).
+  // The CHECK pins it to one row, so a bug can't grow it into a history.
+  [
+    `CREATE TABLE IF NOT EXISTS transfer_budget (
+       id      INTEGER PRIMARY KEY CHECK (id = 1),
+       period  INTEGER NOT NULL,
+       puts    INTEGER NOT NULL,
+       commits INTEGER NOT NULL
+     )`,
+  ],
 ];
 
 function migrate(sql: SqlStorage): void {
@@ -231,7 +259,17 @@ export class UserDataDO extends DurableObject<Bindings> {
   // must keep every op younger than a receipt can be (r2/upload-receipt.ts,
   // RECEIPT_TTL_SECONDS); a delete older than that predates every receipt's
   // token, and with it every PUT a live receipt describes.
-  commitOps(entries: CommitEntry[]): { results: CommitResult[]; stale: string[] } {
+  //
+  // COUNTED: a batch that is written adds its PUT ops to the month's `commits`
+  // (repositories/transfer-budget.ts) in this same call, so the count costs no
+  // RPC. Puts only — a delete can only remove what an upload put there, so the
+  // upload count already bounds deletes — and nothing for a stale batch, which
+  // writes nothing. A retried op counts again: honest retries are part of what
+  // the count is there to measure (the ratio of commits to signed puts).
+  async commitOps(
+    entries: CommitEntry[],
+    now: number = Date.now(),
+  ): Promise<{ results: CommitResult[]; stale: string[]; commits?: TransferCount }> {
     const sizes = fileSizesRepo(this.sql);
     const ops = opLogsRepo(this.sql);
     const stale = staleReceiptPaths(ops, entries);
@@ -247,7 +285,9 @@ export class UserDataDO extends DurableObject<Bindings> {
       ops.append(op, path, stamped);
       return { path, updatedAt: stamped };
     });
-    return { results, stale: [] };
+    const puts = entries.filter((e) => e.op === 'put').length;
+    const commits = puts > 0 ? await this.countTransfer('commits', puts, now) : undefined;
+    return { results, stale: [], commits };
   }
 
   // RPC: current storage usage for this user. Sourced from the durable size map,
@@ -261,11 +301,59 @@ export class UserDataDO extends DurableObject<Bindings> {
   // (r2/blob-token.ts). One RPC for both, so a sign still makes ONE call to this
   // DO: the only DO call on the sign path (the companion existence lookup went
   // away with the link cap, lib/quota.ts).
-  putGate(): { usage: FileUsage; fence: OpLogFence } {
+  //
+  // COUNTED: `paths` — the batch's size — is added to the month's `puts` in the
+  // same call, so counting costs the sign path no round trip. It is added BEFORE
+  // the Worker's quota check, which reads the usage this returns; a batch that
+  // check then refuses is taken back with `refundPuts`, so a full library whose
+  // queue re-asks every cycle is not counted as uploading it again each time.
+  async putGate(
+    paths = 0,
+    now: number = Date.now(),
+  ): Promise<{ usage: FileUsage; fence: OpLogFence; puts?: TransferCount }> {
     return {
       usage: fileSizesRepo(this.sql).usage(),
       fence: opLogsRepo(this.sql).fence(),
+      puts: paths > 0 ? await this.countTransfer('puts', paths, now) : undefined,
     };
+  }
+
+  // RPC: undo a `putGate` count for a batch the quota check refused. `period` is
+  // the one `putGate` answered with, so a refund that lands in the next month
+  // undoes nothing.
+  refundPuts(paths: number, period: number): void {
+    transferBudgetRepo(this.sql).refund('puts', paths, period);
+  }
+
+  // RPC: account deletion's half of the transfer count — drop it, and the alarm
+  // that would have. NOT part of wipeAll, which delete-all-data also runs and
+  // which must leave the count alone (repositories/transfer-budget.ts).
+  async clearTransferBudget(): Promise<void> {
+    transferBudgetRepo(this.sql).clear();
+    await this.ctx.storage.deleteAlarm();
+  }
+
+  // The DO's alarm, which today has one job: drop a month's transfer count once
+  // the month is over. ⚠ A DO has ONE alarm. Op-log compaction is the other
+  // planned use (the class comment above); when it lands, this becomes a
+  // dispatcher over both deadlines, never a second setAlarm that silently
+  // replaces this one.
+  override async alarm(): Promise<void> {
+    transferBudgetRepo(this.sql).dropEnded(Date.now());
+  }
+
+  // Count a call, and set the alarm when it opens the month's row.
+  private async countTransfer(
+    counter: 'puts' | 'commits',
+    n: number,
+    now: number,
+  ): Promise<TransferCount> {
+    const period = transferPeriodOf(now);
+    const { opened, ...count } = transferBudgetRepo(this.sql).add(counter, n, period);
+    if (opened) {
+      await this.ctx.storage.setAlarm(transferPeriodEndMs(period) + TRANSFER_ALARM_GRACE_MS);
+    }
+    return count;
   }
 
   // RPC: delete-all-data — clear the op log AND the quota map in one serialized
@@ -288,6 +376,12 @@ export class UserDataDO extends DurableObject<Bindings> {
   // without it an upload receipt minted before the wipe would find nothing in the
   // emptied log to stop it, and its put would be recorded over an object the R2
   // half is about to remove (commitOps, THE FENCE).
+  //
+  // ⚠ It leaves `transfer_budget` alone, and that is the point of the table
+  // being separate: a wipe that reset the month's transfer count would let a
+  // library imported and wiped in a loop reset its own count every cycle
+  // (repositories/transfer-budget.ts). Account deletion clears it, separately
+  // (clearTransferBudget).
   wipeAll(): void {
     opLogsRepo(this.sql).wipe();
     fileSizesRepo(this.sql).clear();

@@ -842,11 +842,11 @@ the web, App Attest and Play Integrity in the apps), not a lower number.
 The count sits in `SESSIONS_DB` as an HMAC of the network, never the address,
 with the cap it was counted against. The HMAC keeps addresses out of a dump of
 the table and no further: we hold the key, and an IPv4 row can be matched by
-trying every address. **⚠ /privacy rests on the counter being short-lived.** The
-carve-out in its _Technical and security data_ (the one copy of request data we
-keep ourselves) and the counters' line under _How long we keep it_ both say so,
-and a counter kept for days past the period it counts makes both false with
-nothing failing, so /privacy changes first. They deliberately say nothing about
+trying every address. **⚠ /privacy rests on the counter being deleted shortly
+after its day.** The carve-out in its _Technical and security data_ (the one copy
+of request data we keep ourselves) and the counters' line under _How long we keep
+it_ both say so, and a counter kept for days past the period it counts makes
+both false with nothing failing, so /privacy changes first. They deliberately say nothing about
 how a counter is keyed, which would be false of the per-second limiters (/privacy
 itself says they hold the address briefly), nor that the cap always limits
 anything: whether an env enforces it is one setting, and /privacy has to hold

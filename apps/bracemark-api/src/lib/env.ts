@@ -149,6 +149,12 @@ export type Bindings = {
   // through, and the daily report says how many networks went past. Production
   // observes and staging enforces (services/signup-cap.ts says why).
   SIGNUP_CAP_ENFORCE?: string;
+  // The monthly transfer thresholds, per high-water plan, as `plan:count` pairs
+  // ("free:25000,plus:250000"). COUNTED ONLY: an account's first call past one in
+  // a month logs a line, and nothing is refused (services/transfer-budget.ts). Unset,
+  // or a plan missing from the list, logs nothing; the counts are kept either way.
+  TRANSFER_BUDGET_PUTS_PER_MONTH?: string;
+  TRANSFER_BUDGET_COMMITS_PER_MONTH?: string;
   // Above this many new accounts in 24 h, the daily cron's signup line is a
   // console.error rather than a console.log (services/signup-report.ts). Unset is
   // log-only. Set it from the line's own history, well above the normal level.

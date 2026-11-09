@@ -344,6 +344,14 @@ An account that does hit the byte ceiling learns it from the `quota_exceeded` �
 "storage full" surfaces, which is where a capacity refusal belongs, and on Plus
 from the readout as it fills.
 
+**The monthly transfer thresholds follow the high-water plan too.** Uploads are
+counted per account per month ([local-first-sync.md](./local-first-sync.md),
+_authorization & quota_), against thresholds read from the env per plan
+(`services/transfer-budget.ts`), and the plan is `foldHighWaterPlan`'s — the one
+`foldQuotaCeilings` reads — so a lapsed Plus account keeps Plus's numbers for the
+reason it keeps its ceilings. Nothing refuses on them yet. /terms names the
+allowance, without a number.
+
 The **downgraded** account lands on the client gate, where it always did.
 `useLinkQuota` reads `count >= max`, so an over-cap library is refused new links
 by the same gate that refuses a full one; every link they already own was

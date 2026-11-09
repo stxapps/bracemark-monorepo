@@ -1,3 +1,4 @@
+import { runInDurableObject } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
 
@@ -477,6 +478,59 @@ describe('sync control plane', () => {
         usedBytes: 231_200,
         maxBytes: entitlementsOf('plus').maxBytes,
       });
+    });
+  });
+
+  // The month's transfer count, through the real routes. What the DO counts is
+  // pinned in do/user-data.spec.ts; what only the route can show is WHICH calls
+  // reach it — a signed batch, a committed put — and that a batch the quota
+  // check refuses is handed back rather than counted on every retry.
+  describe('the transfer count', () => {
+    const counts = (userId: string) =>
+      runInDurableObject(
+        userDataStub(env, userId),
+        (_instance, state) =>
+          state.storage.sql
+            .exec<{ puts: number; commits: number }>('SELECT puts, commits FROM transfer_budget')
+            .toArray()[0],
+      );
+
+    it('counts a signed put batch by its paths, and nothing for a get', async () => {
+      const { userId, auth } = await authFor('sync-transfer-sign');
+
+      await app.request(
+        filesSignEndpoint.path,
+        json(auth, { op: 'put', paths: ['links/a.enc', 'links/b.enc', 'links/c.enc'] }),
+        env,
+      );
+      await app.request(
+        filesSignEndpoint.path,
+        json(auth, { op: 'get', paths: ['links/a.enc'] }),
+        env,
+      );
+
+      expect(await counts(userId)).toMatchObject({ puts: 3, commits: 0 });
+    });
+
+    it('hands back a batch the quota check refused', async () => {
+      const { userId, auth } = await authFor('sync-transfer-refused');
+      await userDataStub(env, userId).commitOps([
+        {
+          op: 'put',
+          path: 'files/huge.enc',
+          updatedAt: 1000,
+          size: entitlementsOf('free').maxBytes,
+        },
+      ]);
+
+      const res = await app.request(
+        filesSignEndpoint.path,
+        json(auth, { op: 'put', paths: ['links/a.enc', 'links/b.enc'] }),
+        env,
+      );
+
+      expect(res.status).toBe(403);
+      expect((await counts(userId))?.puts).toBe(0);
     });
   });
 

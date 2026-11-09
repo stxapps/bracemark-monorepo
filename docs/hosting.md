@@ -548,10 +548,12 @@ switched on. Two things make that more than housekeeping:
   (`apps/bracemark-site/src/app/privacy/page.tsx`, _Technical and security
   data_). A CloudFront standard log delivered to a bucket of ours would be
   exactly that copy, under a retention period we would then be choosing. The
-  sentence's one carve-out, short-lived counters for rate limits and abuse,
-  covers the api's signup cap ([account.md](./account.md), _creating an
-  account_) and the Workers' per-second limiters. A request log is not a counter
-  and is not short-lived, so it doesn't fall inside it.
+  sentence's one carve-out, counters for our limits and abuse, each deleted
+  shortly after the period it counts, covers the api's signup cap
+  ([account.md](./account.md), _creating an account_), its monthly transfer
+  count ([local-first-sync.md](./local-first-sync.md), _authorization & quota_)
+  and the Workers' per-second limiters. A request log is not a counter and has
+  no period to end, so it doesn't fall inside it.
 
 Read back with the AWS CLI on 2026-10-13, both tiers:
 

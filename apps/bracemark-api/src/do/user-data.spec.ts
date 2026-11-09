@@ -1,4 +1,4 @@
-import { runInDurableObject } from 'cloudflare:test';
+import { runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
 
@@ -365,5 +365,128 @@ describe('callUserData', () => {
 
     await expect(list(fakeEnv)).rejects.toBe(second);
     expect(stubs()).toBe(2);
+  });
+});
+
+// The month's transfer count (repositories/transfer-budget.ts). Nothing on screen
+// or in a response shows it, and every way it can be wrong is silent: a wipe that
+// resets it lets an import-and-wipe loop reset its own count, a deletion that
+// leaves it keeps data after the user asked for none, and a row the alarm never
+// drops breaks /privacy's "until shortly after the period they count ends".
+describe('UserDataDO transfer count', () => {
+  const NOV = Date.UTC(2026, 10, 9);
+  const DEC = Date.UTC(2026, 11, 2);
+
+  async function row(stub: ReturnType<typeof userDataStub>) {
+    return runInDurableObject(stub, (_instance, state) =>
+      state.storage.sql
+        .exec<{ period: number; puts: number; commits: number }>(
+          'SELECT period, puts, commits FROM transfer_budget',
+        )
+        .toArray(),
+    );
+  }
+
+  it('adds a sign batch’s paths to the month’s puts', async () => {
+    const stub = userDataStub(env, 'transfer-puts');
+
+    const first = await stub.putGate(1000, NOV);
+    const second = await stub.putGate(250, NOV);
+
+    expect(first.puts).toMatchObject({ before: 0, after: 1000 });
+    expect(second.puts).toMatchObject({ before: 1000, after: 1250 });
+    // A get-only or empty call (no paths) counts nothing.
+    expect((await stub.putGate()).puts).toBeUndefined();
+  });
+
+  it('counts committed puts, not deletes, and nothing for a stale batch', async () => {
+    const stub = userDataStub(env, 'transfer-commits');
+
+    const { commits } = await stub.commitOps(
+      [
+        { op: 'put', path: 'links/a.enc', updatedAt: 1000, size: 3 },
+        { op: 'put', path: 'links/b.enc', updatedAt: 1001, size: 3 },
+        { op: 'delete', path: 'links/c.enc', updatedAt: 1002, size: 0 },
+      ],
+      NOV,
+    );
+    expect(commits).toMatchObject({ before: 0, after: 2 });
+
+    // A receipt from another generation of the log: stale, so nothing is written
+    // and nothing is counted.
+    const stale = await stub.commitOps(
+      [
+        {
+          op: 'put',
+          path: 'links/d.enc',
+          updatedAt: 2000,
+          size: 3,
+          fence: { generation: 99, position: 0 },
+        },
+      ],
+      NOV,
+    );
+    expect(stale.stale).toEqual(['links/d.enc']);
+    expect(stale.commits).toBeUndefined();
+    expect((await row(stub))[0]).toMatchObject({ puts: 0, commits: 2 });
+  });
+
+  it('starts a new month at zero, counting the call that crosses into it', async () => {
+    const stub = userDataStub(env, 'transfer-rollover');
+    await stub.putGate(5000, NOV);
+
+    const december = await stub.putGate(10, DEC);
+
+    expect(december.puts).toMatchObject({ before: 0, after: 10 });
+    expect(await row(stub)).toEqual([
+      expect.objectContaining({ puts: 10, commits: 0, period: december.puts?.period }),
+    ]);
+  });
+
+  it('takes back a refused batch, within its month only', async () => {
+    const stub = userDataStub(env, 'transfer-refund');
+    const { puts } = await stub.putGate(400, NOV);
+    const november = puts?.period ?? -1;
+
+    await stub.refundPuts(400, november);
+    expect((await row(stub))[0]?.puts).toBe(0);
+
+    await stub.putGate(30, DEC);
+    await stub.refundPuts(30, november); // November's refund, in December
+    expect((await row(stub))[0]?.puts).toBe(30);
+  });
+
+  // The first seam. If this fails, "import, wipe, repeat" resets its own count.
+  it('survives delete-all-data', async () => {
+    const stub = userDataStub(env, 'transfer-wipe');
+    await stub.putGate(700, NOV);
+
+    await stub.wipeAll();
+
+    expect((await stub.putGate(1, NOV)).puts).toMatchObject({ before: 700, after: 701 });
+  });
+
+  // The second seam: deleting the account is the one thing that clears it.
+  it('is cleared by account deletion', async () => {
+    const stub = userDataStub(env, 'transfer-delete');
+    await stub.putGate(700, NOV);
+
+    await stub.clearTransferBudget();
+
+    expect(await row(stub)).toEqual([]);
+  });
+
+  it('is dropped by the alarm once its month is over, and not before', async () => {
+    const ended = userDataStub(env, 'transfer-alarm-ended');
+    await ended.putGate(10, Date.UTC(2020, 0, 5));
+    // That month's alarm is in the past, so the runtime may already have fired
+    // it; running it again is a no-op then. Either way the alarm dropped the row.
+    await runDurableObjectAlarm(ended);
+    expect(await row(ended)).toEqual([]);
+
+    const running = userDataStub(env, 'transfer-alarm-running');
+    await running.putGate(10);
+    await runDurableObjectAlarm(running);
+    expect(await row(running)).toHaveLength(1);
   });
 });

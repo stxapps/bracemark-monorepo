@@ -177,7 +177,39 @@ export default function Page() {
             comes back, and that it is only on request — and what is not: the
             service still keeps nothing (the invariants _How link previews are
             fetched_ lists). Per _Changes to this policy_ this page goes live
-            BEFORE the extractor that does it: deploy bracemark-site first. */}
+            BEFORE the extractor that does it: deploy bracemark-site first.
+
+            9 NOVEMBER 2026 WENT UP ABOVE THEM, newest first, and may come out on
+            or after 9 December 2026. It is a change to WHAT WE COLLECT: counts,
+            per account and per month, of how much the account moves through
+            sync (bracemark-api services/transfer-budget.ts and
+            do/repositories/transfer-budget.ts). It is written for the whole
+            category on purpose — today the uploads and the commits that record
+            them are counted, and downloads and listings are planned — so a new
+            count of the same kind needs no new notice; _Your library_ says why.
+            Two of this page's sentences had to move first, and they did: the
+            carve-out under _Technical and security data_ said our counters were
+            "short-lived", which a month is not, and _Your library_ listed what
+            we hold per file and nothing per account. The retention line under
+            _How long we keep it_ already held, unchanged — the count is dropped
+            by an alarm shortly after its month ends, and that line is a rule,
+            not a number, so it names no period (its own comment says why). The
+            bullet also points at /terms, which gained the allowance the count
+            is for, because /terms promises to highlight a material change on
+            this website and has no notice of its own. Per _Changes to this
+            policy_, deploy bracemark-site BEFORE the api that counts. */}
+        <h2>What changed on 9 November 2026</h2>
+        <ul>
+          <li>
+            We now count how much each account moves through sync each month, such as how many files
+            it uploads, so we can spot an account moving far more than a library needs. The counts
+            are kept until shortly after the month ends. <em>Your library</em>,{' '}
+            <em>Technical and security data</em>, and <em>How long we keep it</em> now say so, and
+            our <Link href="/terms">Terms of Service</Link> describe the monthly allowance it is
+            for.
+          </li>
+        </ul>
+
         <h2>What changed on 8 November 2026</h2>
         <ul>
           <li>
@@ -319,6 +351,34 @@ export default function Page() {
           web addresses, no tags, no notes, and no index over any of it, because none of that exists
           in a readable form on our side.
         </p>
+        {/* PER ACCOUNT, NOT PER FILE, and that is why it is its own paragraph: the
+            one above lists what we hold for each file, and these counts are one
+            row for the whole account (bracemark-api do/repositories/transfer-budget.ts).
+
+            BOUNDED BY KIND, WITH AN EXAMPLE, NOT A CLOSED LIST — the pattern
+            _How we use what we collect_ uses for totals. Today the row counts
+            uploads (paths signed for upload) and commits (uploads recorded);
+            downloads and listings are planned beside them (the read half of the
+            same allowance /terms describes). "How much it moves through sync"
+            covers all four and stays true while only two exist, and "such as how
+            many files it has uploaded" is the one example true from the first
+            deploy. What bounds it is the second sentence: a count of the
+            account's own sync requests, never anything from inside a file. A
+            count of another kind — of something a request does not already
+            carry, or that outlives its month — is a change to this page first.
+
+            "Deleting all data does not reset them" is stated because it is the
+            surprising half — a wipe that reset them would let the counts be
+            wiped along with the library, which is the pattern they exist to see
+            — and "deleting your account removes them" because otherwise a reader
+            would assume they outlive the account like the session markers do. */}
+        <p>
+          We also keep a few counts per account of how much it moves through sync this month, such
+          as how many files it has uploaded. Each is a number about the account’s own sync requests,
+          never about what is in its files, and together they tell us when an account is moving far
+          more than a library needs. Deleting all data does not reset them; deleting your account
+          removes them.
+        </p>
 
         <h3>If you subscribe</h3>
         <p>
@@ -431,15 +491,22 @@ export default function Page() {
             Nos that matter are the ones that stay: no profile, no tracking
             between visits, no join to an account, no copy of our own.
 
-            "APART FROM SHORT-LIVED COUNTERS" — THE ONE THING OF OUR OWN, NAMED
-            BY KIND. The signup cap (bracemark-api services/signup-cap.ts) keeps
-            a per-network count of today's new accounts in our own database, so
-            "no separate copy of our own" would stand bare over a table that
-            holds one: a keyed hash of each address, the IPv6 ones cut to their
-            /64, until the next day's cron. The carve-out names the
-            category, not the mechanism, on purpose. The next limit that counts
-            per address falls inside it without an edit, which a sentence naming
-            the hash, the /64 or "until the next day" would not.
+            "APART FROM COUNTERS … EACH DELETED SHORTLY AFTER THE PERIOD IT
+            COUNTS" — THE ONE THING OF OUR OWN, NAMED BY KIND. It said
+            "short-lived counters" until 9 November 2026, which held while the
+            longest counted a day; the monthly upload count (_Your library_) made
+            "short-lived" a stretch, so the protection is now stated as what it
+            is — deletion shortly after the period — the same rule as the
+            retention bullet. What follows is the reasoning from when the first
+            counter of our own arrived. The signup cap (bracemark-api
+            services/signup-cap.ts) keeps a per-network count of today's new
+            accounts in our own database, so "no separate copy of our own" would
+            stand bare over a table that holds one: a keyed hash of each
+            address, the IPv6 ones cut to their /64, until the next day's cron.
+            The carve-out names the category, not the mechanism, on purpose. The
+            next limit that counts per address falls inside it without an edit,
+            which a sentence naming the hash, the /64 or "until the next day"
+            would not.
 
             NO "WHICH NEVER STORE THE ADDRESS ITSELF". It was drafted onto this
             sentence and failed twice. It described every rate limiter,
@@ -468,8 +535,8 @@ export default function Page() {
           periods rather than any we set. We read it to find a fault or an attack, and their
           dashboards compile totals from it — visits, pages, the sites a visit came from — which we
           read like the totals under <em>How we use what we collect</em>. We do not join it to your
-          account. Apart from short-lived counters that apply our rate limits and watch for abuse,
-          we keep no separate copy of our own.
+          account. Apart from counters that apply our limits and watch for abuse, each deleted
+          shortly after the period it counts, we keep no separate copy of our own.
         </p>
         <p>
           Two of the choices that decide what reaches those logs are ours rather than theirs, and we

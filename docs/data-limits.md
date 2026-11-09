@@ -55,6 +55,7 @@ mutation hooks, an import — and that is where a new one goes.
 | a screenshot          | `SCREENSHOT_MAX_DIMENSION` 1600 px                                      | the capture resizes before storing               | —                       | as written              | accepted                               |
 | links                 | the plan's `maxLinks`                                                   | the add form gives way to `LinkQuotaBanner`      | the over-cap prompt     | refused whole           | —                                      |
 | bytes and files       | the plan's `maxBytes`, `maxFiles` (Plus's bytes published and shown)    | server, at `files/sign`                          | server                  | server                  | server                                 |
+| uploads per month     | counted per account, not enforced                                       | server, at `files/sign` and `ops/commit`         | server                  | server                  | —                                      |
 
 **Counts: none per kind.** Every link, list, tag, pin and extraction is one
 `.enc` file, so the server's `maxFiles` and `maxBytes` ([iap.md](./iap.md),

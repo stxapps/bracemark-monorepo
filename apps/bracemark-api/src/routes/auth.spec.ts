@@ -1,3 +1,4 @@
+import { runInDurableObject } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -26,6 +27,7 @@ import { purchasesRepo } from '../db/repositories/purchases';
 import { sessionsRepo } from '../db/repositories/sessions';
 import { usernamesRepo } from '../db/repositories/usernames';
 import { usersRepo } from '../db/repositories/users';
+import { userDataStub } from '../do/user-data';
 import { hashToken, newId } from '../lib/ids';
 import { userFileKey } from '../r2/keys';
 import { createAccount } from '../services/account';
@@ -501,6 +503,8 @@ describe('auth routes', () => {
       const acct = await seedFullAccount('goodbye');
       // Something in the data plane, so the wipe half is observable too.
       await env.USER_FILES.put(userFileKey(acct.userId, 'links/x.enc'), 'ciphertext');
+      // And a month's transfer count, which delete-all-data keeps and this must not.
+      await userDataStub(env, acct.userId).putGate(5);
 
       const req = await signedBody(acct.keyPair, deletePayload('goodbye', acct.publicKey));
       const res = await app.request(
@@ -524,6 +528,11 @@ describe('auth routes', () => {
       ).not.toBeNull();
       // Data plane wiped.
       expect(await env.USER_FILES.head(userFileKey(acct.userId, 'links/x.enc'))).toBeNull();
+      // The transfer count gone with it — the one row wipeAll leaves on purpose.
+      const counted = await runInDurableObject(userDataStub(env, acct.userId), (_i, state) =>
+        state.storage.sql.exec('SELECT * FROM transfer_budget').toArray(),
+      );
+      expect(counted).toEqual([]);
       // Directory row TOMBSTONED, not deleted: still present (occupied), marked.
       const entry = await usernamesRepo(env.DIRECTORY_DB).findByUsername('goodbye');
       expect(entry).not.toBeNull();
