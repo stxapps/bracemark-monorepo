@@ -2,10 +2,14 @@ import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 
-import { type AuthApiClient, canonicalizeUsername } from '@stxapps/shared';
+import { ApiError, type AuthApiClient, canonicalizeUsername } from '@stxapps/shared';
 
 import { ApiClientProvider } from '../contexts/api-client-provider';
-import { usernameAvailableQueryOptions, useUsernameAvailable } from './use-username-available';
+import {
+  USERNAME_CHECK_RETRIES,
+  usernameAvailableQueryOptions,
+  useUsernameAvailable,
+} from './use-username-available';
 
 // Two properties, both invisible from the app.
 //
@@ -74,6 +78,36 @@ describe('usernameAvailableQueryOptions', () => {
   it('asks about a name that passes the shared rules', () => {
     expect(usernameAvailableQueryOptions(availabilityClient(), 'alice').enabled).toBe(true);
   });
+
+  // Which failures are retried decides whether the field can get stuck. A retry
+  // spent on a 4xx on the merits only delays its message; a 429 NOT retried (or
+  // retried inside the window that refused it, TanStack's own timing) lands on
+  // "Couldn’t check. Try again." with the submit disabled, for a state that
+  // clears by itself.
+  describe('retries', () => {
+    const options = usernameAvailableQueryOptions(availabilityClient(), 'alice');
+    const retry = options.retry as (failureCount: number, err: unknown) => boolean;
+    const retryDelay = options.retryDelay as (failureCount: number, err: unknown) => number;
+
+    it('retries a refused, failed or dropped check, up to the limit', () => {
+      for (const err of [new ApiError(429, '', 60), new ApiError(503, ''), new TypeError('x')]) {
+        expect(retry(0, err)).toBe(true);
+        expect(retry(USERNAME_CHECK_RETRIES - 1, err)).toBe(true);
+        expect(retry(USERNAME_CHECK_RETRIES, err)).toBe(false);
+      }
+    });
+
+    it('does not retry a check refused on its merits, or one a newer keystroke aborted', () => {
+      expect(retry(0, new ApiError(400, ''))).toBe(false);
+      expect(retry(0, new DOMException('aborted', 'AbortError'))).toBe(false);
+    });
+
+    it('waits out the window a 429 names, not a guessed backoff', () => {
+      // Literal 60 s: the `standard` tier's period, which the api sends as
+      // Retry-After. It is also retryDelayMs's ceiling, so no jitter rides on it.
+      expect(retryDelay(0, new ApiError(429, '', 60))).toBe(60_000);
+    });
+  });
 });
 
 describe('useUsernameAvailable', () => {
@@ -124,6 +158,36 @@ describe('useUsernameAvailable', () => {
     rerender({ name: 'Alice' });
     expect(canonicalizeUsername('Alice')).toBe('alice');
     expect(result.current.current).toBe(true);
+  });
+
+  // The user-facing half of the retry policy: a refused check reads as "checking"
+  // (isFetching, no isError) for the whole window the server named, and then
+  // answers — never "Couldn’t check" for a refusal that clears by itself.
+  it('holds a refused check as in flight until its window clears, then answers', async () => {
+    let refusing = true;
+    const client = {
+      call: jest.fn(() =>
+        refusing ? Promise.reject(new ApiError(429, '', 60)) : Promise.resolve({ available: true }),
+      ),
+    } as unknown as AuthApiClient;
+    const { result } = renderHook(() => useUsernameAvailable('alice'), {
+      wrapper: wrap(client),
+    });
+
+    await waitFor(() => expect(result.current.failureCount).toBeGreaterThan(0));
+    expect(result.current.isFetching).toBe(true);
+    expect(result.current.isError).toBe(false);
+    refusing = false;
+
+    // Not one try inside the window: TanStack's own 1 s / 2 s / 4 s would have
+    // spent all three here and given up.
+    await act(async () => void jest.advanceTimersByTime(59_000));
+    expect(result.current.data).toBeUndefined();
+    expect(result.current.isFetching).toBe(true);
+
+    await act(async () => void jest.advanceTimersByTime(1_000));
+    await waitFor(() => expect(result.current.data).toEqual({ available: true }));
+    expect(result.current.isError).toBe(false);
   });
 
   // The point of debouncing at all: one request per pause in typing, not per

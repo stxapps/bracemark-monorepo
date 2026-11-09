@@ -88,10 +88,13 @@ app.use(
 app.use('*', serverTiming);
 
 // Baseline rate limit on every endpoint EXCEPT the provider webhooks (standard
-// tier, ~60 req/60s per IP+path; configured in wrangler.jsonc). Sensitive routes
-// stack the 'tight' tier on top at the route level, e.g. rateLimit('tight').
-// No-ops when the binding is absent (tests / unconfigured env). See
-// middleware/rate-limit.ts.
+// tier, ~600 req/60s per IP+path; configured in wrangler.jsonc). It runs before
+// any session is read, so it is a NETWORK's bucket — everyone behind one address
+// shares it — and is sized for that. One person's pace is the per-account
+// `account` tier, which requireAuth adds to every signed-in route
+// (middleware/auth.ts). Sensitive routes stack the 'tight' tier on top at the
+// route level, e.g. rateLimit('tight'). No-ops when the binding is absent
+// (tests / unconfigured env). See middleware/rate-limit.ts.
 //
 // The webhooks are exempt from THIS baseline: each provider's deliveries arrive
 // from a small set of provider IPs onto one path, so they'd share a single

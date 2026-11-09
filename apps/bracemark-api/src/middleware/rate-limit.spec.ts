@@ -30,11 +30,13 @@ function limiter(success: boolean): Recorder {
 function bindings(overrides: Partial<Record<keyof Bindings, unknown>> = {}) {
   return {
     API_RATE_LIMIT: limiter(true),
+    API_RATE_LIMIT_ACCOUNT: limiter(true),
     API_RATE_LIMIT_TIGHT: limiter(true),
     API_RATE_LIMIT_WEBHOOK: limiter(true),
     ...overrides,
   } as unknown as Bindings & {
     API_RATE_LIMIT: Recorder;
+    API_RATE_LIMIT_ACCOUNT: Recorder;
     API_RATE_LIMIT_TIGHT: Recorder;
     API_RATE_LIMIT_WEBHOOK: Recorder;
   };
@@ -47,15 +49,18 @@ describe('rateLimit', () => {
     const app = new Hono<AppEnv>()
       .onError(errorHandler)
       .get('/standard', rateLimit('standard'), ok)
+      .get('/account', rateLimit('account'), ok)
       .get('/tight', rateLimit('tight'), ok)
       .get('/webhook', rateLimit('webhook'), ok);
     const env = bindings();
 
     await app.request('/standard', {}, env);
+    await app.request('/account', {}, env);
     await app.request('/tight', {}, env);
     await app.request('/webhook', {}, env);
 
     expect(env.API_RATE_LIMIT.keys).toEqual(['unknown:/standard']);
+    expect(env.API_RATE_LIMIT_ACCOUNT.keys).toEqual(['unknown:/account']);
     expect(env.API_RATE_LIMIT_TIGHT.keys).toEqual(['unknown:/tight']);
     expect(env.API_RATE_LIMIT_WEBHOOK.keys).toEqual(['unknown:/webhook']);
   });
@@ -66,18 +71,24 @@ describe('rateLimit', () => {
   it('sends the tier’s own window as Retry-After on a 429', async () => {
     const app = new Hono<AppEnv>()
       .onError(errorHandler)
+      .get('/account', rateLimit('account'), ok)
       .get('/tight', rateLimit('tight'), ok)
       .get('/webhook', rateLimit('webhook'), ok);
     const env = bindings({
+      API_RATE_LIMIT_ACCOUNT: limiter(false),
       API_RATE_LIMIT_TIGHT: limiter(false),
       API_RATE_LIMIT_WEBHOOK: limiter(false),
     });
 
+    const account = await app.request('/account', {}, env);
+    expect(account.status).toBe(429);
+    expect(account.headers.get('retry-after')).toBe('60');
+
     const tight = await app.request('/tight', {}, env);
     expect(tight.status).toBe(429);
     // Literals, not RATE_LIMIT_PERIODS: the number IS the contract with
-    // wrangler.jsonc's `simple.period` for that binding (10s for both of these,
-    // 60s for standard — app.spec.ts pins that one), and asserting the constant
+    // wrangler.jsonc's `simple.period` for that binding (60s for account, 10s for
+    // tight and webhook, 60s for standard — app.spec.ts pins that one), and asserting the constant
     // against itself would follow a mistyped period straight into the header.
     expect(tight.headers.get('retry-after')).toBe('10');
 

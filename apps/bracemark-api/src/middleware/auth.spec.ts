@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { SESSION_ERROR } from '@stxapps/shared';
 
 import { sessionsRepo } from '../db/repositories/sessions';
-import type { AppEnv } from '../lib/env';
+import type { AppEnv, RateLimit } from '../lib/env';
 import { errorHandler } from '../lib/errors';
 import { hashToken, newId } from '../lib/ids';
 import {
@@ -150,6 +150,72 @@ describe('requireAuth', () => {
       status: 401,
       body: { error: SESSION_ERROR.unknown },
     });
+  });
+});
+
+// The per-account limit lives here because this is the first point at which a
+// request is known as an account rather than a network
+// (middleware/rate-limit.ts, _key by what is known_). Nothing in a response
+// shows which key a request was counted under, so a guard that quietly counted
+// by address — sharing one bucket across a whole campus — would pass every
+// other spec in this file.
+describe('the per-account rate limit', () => {
+  function recorder(success: boolean): RateLimit & { keys: string[] } {
+    const keys: string[] = [];
+    return {
+      keys,
+      limit: async ({ key }: { key: string }) => {
+        keys.push(key);
+        return { success };
+      },
+    };
+  }
+
+  it('counts a signed-in request by account and path, from any address', async () => {
+    const { token } = await fresh();
+    const limiter = recorder(true);
+    const from = (ip: string) => ({
+      headers: { authorization: `Bearer ${token}`, 'cf-connecting-ip': ip },
+    });
+
+    await app.request('/protected', from('203.0.113.7'), {
+      ...env,
+      API_RATE_LIMIT_ACCOUNT: limiter,
+    });
+    await app.request('/protected', from('198.51.100.2'), {
+      ...env,
+      API_RATE_LIMIT_ACCOUNT: limiter,
+    });
+
+    expect(limiter.keys).toEqual(['user:u_guarded:/protected', 'user:u_guarded:/protected']);
+  });
+
+  it('never counts a request whose token was refused', async () => {
+    const limiter = recorder(true);
+
+    const res = await app.request('/protected', bearer('tok_nobody'), {
+      ...env,
+      API_RATE_LIMIT_ACCOUNT: limiter,
+    });
+
+    expect(res.status).toBe(401);
+    expect(limiter.keys).toEqual([]);
+  });
+
+  it('refuses past the limit with the tier’s window, and renews nothing', async () => {
+    // Due for renewal: an allowed request would slide this deadline.
+    const expiresAt = Date.now() + SESSION_IDLE_MS - 2 * DAY_MS;
+    const { token, tokenHash } = await seedSession({ expiresAt });
+
+    const res = await app.request('/protected', bearer(token), {
+      ...env,
+      API_RATE_LIMIT_ACCOUNT: recorder(false),
+    });
+
+    expect(res.status).toBe(429);
+    // Literal: the account binding's `simple.period` in wrangler.jsonc.
+    expect(res.headers.get('retry-after')).toBe('60');
+    expect((await row(tokenHash))?.expiresAt).toBe(expiresAt);
   });
 });
 

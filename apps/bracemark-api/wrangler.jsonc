@@ -231,11 +231,13 @@
       // period is 10 or 60 only; 'tight' (10/10s ≈ 1 req/s) is the strictest the
       // native binding allows. namespace_id is any unique positive integer.
       //
-      // ⚠ 'standard' is DELIBERATELY ~100× the deployed tiers' 60/60s here, and
-      // must stay far above them. The binding buckets by IP+path, and locally
-      // every client is one IP — both Playwright workers and each of their tabs,
-      // the browser extension, both simulators — so a bucket the deployed tiers
-      // size for one user is shared by the whole machine. `/v1/iap/status` takes
+      // ⚠ 'standard' is DELIBERATELY 10× the deployed tiers' 600/60s here, and
+      // 'account' 100× their 60/60s; both must stay far above them. 'standard'
+      // buckets by IP+path, and locally every client is one IP — both Playwright
+      // workers and each of their tabs, the browser extension, both simulators —
+      // so the whole machine is one network. 'account' buckets by user+path, and
+      // the seeded accounts are signed into by every worker and tab at once, so
+      // a bucket the deployed tier sizes for one person is shared by a run. `/v1/iap/status` takes
       // no query string, so they all collide on one key. At 60/60s a full e2e
       // run 429s, and the client half honours the 60s Retry-After (shared
       // api/retry.ts): each hit parks that call for 60–75s. Neither symptom
@@ -250,6 +252,13 @@
         {
           "name": "API_RATE_LIMIT",
           "namespace_id": "1001",
+          "simple": { "limit": 6000, "period": 60 },
+        },
+        {
+          // PER-ACCOUNT layer on every signed-in route (requireAuth). See the
+          // ⚠ note above for why it is this far above the deployed tiers'.
+          "name": "API_RATE_LIMIT_ACCOUNT",
+          "namespace_id": "1005",
           "simple": { "limit": 6000, "period": 60 },
         },
         {
@@ -303,14 +312,12 @@
         // Mint the keys in the R2 dashboard (Manage R2 API Tokens) scoped to the
         // bucket below. See docs/hosting.md.
         "R2_USER_FILES_BUCKET": "bracemark-user-files-staging",
-        // The daily per-network signup caps (services/signup-cap.ts). On here so
-        // the path runs where it is deployed, but far above production's: the
-        // staging e2e suites make a fresh account per case, all from one address,
-        // and that address is IPv4 or IPv6 depending on the machine's line.
+        // The daily per-network signup caps (services/signup-cap.ts), the same
+        // as production's. High enough for the staging e2e suites, which make a
+        // fresh account per case, all from one address — IPv4 or IPv6 depending
+        // on the machine's line.
         "SIGNUP_CAP_IPV4_PER_DAY": "200",
         "SIGNUP_CAP_IPV6_PER_DAY": "200",
-        // Enforced here, unlike production, so the refusal path (the 429 and the
-        // forms' "try again tomorrow") keeps running somewhere it is deployed.
         "SIGNUP_CAP_ENFORCE": "1",
         // The Server-Timing breakdown (src/lib/server-timing.ts) — on here, where
         // `measure:sync` runs; production leaves it unset.
@@ -385,8 +392,21 @@
       // Not inherited from the top level — each env declares its own.
       "ratelimits": [
         {
+          // NETWORK-wide baseline, keyed by IP (an IPv6 /64) + path, before any
+          // session is read — so everyone behind one address shares it: a
+          // campus, an office, a venue's wifi. Sized for that crowd, not a
+          // person; one person's pace is 'account' below. See
+          // middleware/rate-limit.ts.
           "name": "API_RATE_LIMIT",
           "namespace_id": "1001",
+          "simple": { "limit": 600, "period": 60 },
+        },
+        {
+          // PER-ACCOUNT layer, keyed by user + path, on every signed-in route
+          // (requireAuth, middleware/auth.ts): one person's share, from any
+          // number of addresses.
+          "name": "API_RATE_LIMIT_ACCOUNT",
+          "namespace_id": "1005",
           "simple": { "limit": 60, "period": 60 },
         },
         {
@@ -435,17 +455,19 @@
         // Mint the keys in the R2 dashboard (Manage R2 API Tokens) scoped to the
         // bucket below. See docs/hosting.md.
         "R2_USER_FILES_BUCKET": "bracemark-user-files-production",
-        // The daily per-network signup cap (services/signup-cap.ts), OBSERVED
-        // here, not enforced: with no SIGNUP_CAP_ENFORCE, a network past it is
-        // logged and let through, and the daily cron's signup line counts the
-        // networks that went past and the busiest network's attempts. The same
-        // number for both families: a campus or a venue's wifi is one IPv4
+        // The daily per-network signup cap (services/signup-cap.ts), ENFORCED,
+        // and set high on purpose: far above what any room of people signing up
+        // together from one network makes in a day, so it never turns away a
+        // real crowd, while still a ceiling on what one address can create. The
+        // same number for both families: a campus or a venue's wifi is one IPv4
         // address behind NAT or one IPv6 /64, and dual-stack devices put the
-        // crowd in the /64. Enforce ("SIGNUP_CAP_ENFORCE": "1") once that line
-        // shows a source worth refusing, at a number that refuses it.
+        // crowd in the /64. The daily cron's signup line names the busiest
+        // network, which is the early signal; the cap is only the hard stop.
+        // Lower it from that line's history, never on a guess.
         // Development leaves the caps unset, which is off.
-        "SIGNUP_CAP_IPV4_PER_DAY": "50",
-        "SIGNUP_CAP_IPV6_PER_DAY": "50",
+        "SIGNUP_CAP_IPV4_PER_DAY": "200",
+        "SIGNUP_CAP_IPV6_PER_DAY": "200",
+        "SIGNUP_CAP_ENFORCE": "1",
         // Paddle Billing — LIVE Paddle. Secrets, set separately:
         //   wrangler secret put PADDLE_WEBHOOK_SECRET --env production
         //   wrangler secret put PADDLE_API_KEY --env production
@@ -513,8 +535,21 @@
       // Not inherited from the top level — each env declares its own.
       "ratelimits": [
         {
+          // NETWORK-wide baseline, keyed by IP (an IPv6 /64) + path, before any
+          // session is read — so everyone behind one address shares it: a
+          // campus, an office, a venue's wifi. Sized for that crowd, not a
+          // person; one person's pace is 'account' below. See
+          // middleware/rate-limit.ts.
           "name": "API_RATE_LIMIT",
           "namespace_id": "1001",
+          "simple": { "limit": 600, "period": 60 },
+        },
+        {
+          // PER-ACCOUNT layer, keyed by user + path, on every signed-in route
+          // (requireAuth, middleware/auth.ts): one person's share, from any
+          // number of addresses.
+          "name": "API_RATE_LIMIT_ACCOUNT",
+          "namespace_id": "1005",
           "simple": { "limit": 60, "period": 60 },
         },
         {

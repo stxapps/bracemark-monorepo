@@ -30,7 +30,7 @@ describe('bracemark-api', () => {
     await expect(res.json()).resolves.toEqual({ status: 'ok' });
   });
 
-  // The real binding would need 60 requests to trip, so swap in a denying fake:
+  // The real binding would need thousands of requests to trip, so swap in a denying fake:
   // what's under test is the 429 envelope + the Retry-After header (the standard
   // tier's 60s window — middleware/rate-limit.ts RATE_LIMIT_PERIODS).
   it('sends Retry-After on a rate-limited request', async () => {

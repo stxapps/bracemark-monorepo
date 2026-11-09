@@ -197,7 +197,7 @@ export const authRoutes = new Hono<AppEnv>()
     // requireAuth's: session_unknown / session_revoked / session_expired, or —
     // for a live session — this { ok: true }, with the idle deadline renewed
     // like any authenticated call. Read-only and cheap, so the global
-    // 'standard' tier is enough.
+    // 'standard' tier and requireAuth's per-account tier are enough.
     requireAuth,
     (c) => {
       const body: SessionProbeResponse = { ok: true };
@@ -213,7 +213,7 @@ export const authRoutes = new Hono<AppEnv>()
     // first call marks the row revoked, so repeats 401 at requireAuth before the
     // handler. Tightening it would also be counterproductive: sign-out should
     // reliably succeed so the token actually gets revoked. The global
-    // 'standard' tier is enough.
+    // 'standard' tier and requireAuth's per-account tier are enough.
     requireAuth,
     async (c) => {
       // Marks the row revoked rather than deleting it: the token stops

@@ -13,14 +13,31 @@ import { callerNetworkKey } from '../lib/network';
 // tier (10 req / 10s). Here we just name the tiers and pick a key strategy;
 // routes choose a tier.
 //
+// KEY BY WHAT IS KNOWN. Nothing in a request says how many people share its
+// address: one IPv4 address or IPv6 /64 can be one person, or a campus, an office
+// or a venue's wifi. So a bucket keyed by network is sized for a crowd, and only
+// a bucket keyed by account is sized for one person. Every signed-in request
+// therefore passes two layers: the network-wide `standard` baseline (app.ts,
+// before the session is known), and the per-account `account` tier, which
+// requireAuth applies as soon as it is (middleware/auth.ts). People behind one
+// address share the first and never each other's second.
+//
 // To add a new volume tier: add a `[[ratelimits]]` binding in wrangler.jsonc,
 // declare it on `Bindings` (lib/env.ts), and add it to RATE_LIMIT_TIERS.
 
 // The rate-limit binding names, one per volume tier. Keep in sync with the
 // `ratelimits[].name` entries in wrangler.jsonc.
 export const RATE_LIMIT_TIERS = {
-  // Baseline applied to every endpoint (configured ~60 req / 60s).
+  // Baseline applied to every endpoint, keyed by network + path (configured
+  // ~600 req / 60s). Wide because it is a NETWORK's bucket: it runs before the
+  // session is read, so everyone behind one address shares it. Its job is to stop
+  // one source hammering a path, not to pace a person — that is `account`.
   standard: 'API_RATE_LIMIT',
+  // PER-ACCOUNT layer on every signed-in route, keyed by user + path (configured
+  // ~60 req / 60s — one person's share). requireAuth applies it once the session
+  // is known (middleware/auth.ts), so no route has to opt in, and one account
+  // gets the same allowance from any number of addresses.
+  account: 'API_RATE_LIMIT_ACCOUNT',
   // Stricter tier for sensitive/expensive endpoints (~10 req / 10s ≈ 1/s).
   tight: 'API_RATE_LIMIT_TIGHT',
   // WIDE tier, sole limiter for the Paddle webhook (configured ~100 req / 10s).
@@ -61,6 +78,7 @@ export type RateLimitTier = keyof typeof RATE_LIMIT_TIERS;
 // lands the client in a fresh window.
 export const RATE_LIMIT_PERIODS: Record<RateLimitTier, number> = {
   standard: 60,
+  account: 60,
   tight: 10,
   webhook: 10,
   blob: 10,
@@ -76,7 +94,8 @@ export function ipRateLimitKey(c: Context<AppEnv>): string {
 
 // Key an authenticated endpoint by user instead of IP, so a single account
 // can't multiply its quota across IPs (and shared IPs don't collide). Falls
-// back to IP when there's no session yet. Use as the `key` arg to rateLimit().
+// back to IP when there's no session yet. Use as the `key` arg to rateLimit()
+// or checkRateLimit().
 export function userRateLimitKey(c: Context<AppEnv>): string {
   const userId = c.get('session')?.userId;
   if (userId) return `user:${userId}:${c.req.path}`;
@@ -126,9 +145,35 @@ function noteBlobRefusal(c: Context<AppEnv>): void {
   console.warn(`rateLimit: blob tier refused ${userId}`);
 }
 
+// Count one request against a tier, and refuse it with a 429 past the limit.
+// The throwing half of rateLimit(), for a caller that has to decide WHERE in its
+// own flow the count happens — requireAuth counts the `account` tier after the
+// session is resolved (the key needs it) and before it renews the session (a
+// refused request should write nothing).
+export async function checkRateLimit(
+  c: Context<AppEnv>,
+  tier: RateLimitTier,
+  key: (c: Context<AppEnv>) => string = ipRateLimitKey,
+): Promise<void> {
+  // `c.env` is undefined under `app.request()` in tests, and the binding may
+  // be absent in a misconfigured env. Fail OPEN there: an unconfigured
+  // limiter shouldn't take the API down. Real envs always bind it.
+  const limiter = c.env?.[RATE_LIMIT_TIERS[tier]] as RateLimit | undefined;
+  if (!limiter) return;
+
+  const { success } = await limiter.limit({ key: key(c) });
+  if (!success) {
+    if (tier === 'blob') noteBlobRefusal(c);
+    throw new HttpError(429, 'rate_limited', 'Too many requests', {
+      'retry-after': String(RATE_LIMIT_PERIODS[tier]),
+    });
+  }
+}
+
 // Rate-limit middleware backed by Cloudflare's native Workers Rate Limiting
 // binding. `app.ts` applies the `standard` tier globally (`app.use('*', …)`);
-// individual routes can stack a stricter tier on top, e.g.:
+// requireAuth adds the `account` tier to every signed-in route; individual
+// routes can stack a stricter tier on top, e.g.:
 //
 //   authRoutes.post('/auth/account', rateLimit('tight'), handler)
 //
@@ -139,22 +184,8 @@ export function rateLimit(
   tier: RateLimitTier = 'standard',
   key: (c: Context<AppEnv>) => string = ipRateLimitKey,
 ) {
-  const bindingName = RATE_LIMIT_TIERS[tier];
-
   return createMiddleware<AppEnv>(async (c, next) => {
-    // `c.env` is undefined under `app.request()` in tests, and the binding may
-    // be absent in a misconfigured env. Fail OPEN there: an unconfigured
-    // limiter shouldn't take the API down. Real envs always bind it.
-    const limiter = c.env?.[bindingName] as RateLimit | undefined;
-    if (!limiter) return next();
-
-    const { success } = await limiter.limit({ key: key(c) });
-    if (!success) {
-      if (tier === 'blob') noteBlobRefusal(c);
-      throw new HttpError(429, 'rate_limited', 'Too many requests', {
-        'retry-after': String(RATE_LIMIT_PERIODS[tier]),
-      });
-    }
+    await checkRateLimit(c, tier, key);
     return next();
   });
 }

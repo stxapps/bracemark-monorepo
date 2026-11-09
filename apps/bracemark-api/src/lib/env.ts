@@ -130,7 +130,8 @@ export type Bindings = {
   // --- Rate limiting — native binding, one binding per volume "tier" -------
   // The native binding's window is 10s or 60s only, so a literal "1 req/sec"
   // is expressed as the tight tier (10 req / 10s). Counters are per-colo.
-  API_RATE_LIMIT: RateLimit; // standard tier
+  API_RATE_LIMIT: RateLimit; // standard tier (per network: the pre-auth baseline)
+  API_RATE_LIMIT_ACCOUNT: RateLimit; // account tier (per user: every signed-in route)
   API_RATE_LIMIT_TIGHT: RateLimit; // tight tier (sensitive endpoints)
   API_RATE_LIMIT_WEBHOOK: RateLimit; // wide tier (sole limiter for the Paddle webhook)
   API_RATE_LIMIT_BLOB: RateLimit; // per-user tier (sole limiter for the blob route)

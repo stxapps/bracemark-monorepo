@@ -362,7 +362,7 @@ That classification + backoff math is three pure helpers —
 `isRetryableTransportError`, `retryAfterMsOf`, `jitteredDelayMs` — so **the policy
 is defined once** and every app retries by identical rules.
 
-The _mechanism_ on top of that policy is picked per call site, and the two in the
+The _mechanism_ on top of that policy is picked per call site, and the three in the
 codebase differ on purpose:
 
 - **`withRetry(api)` — an inline wrapper.** Wraps an `ApiClient` so every `.call()`
@@ -379,8 +379,18 @@ codebase differ on purpose:
   client — `withRetry`'s blocking wait can't be cancelled by `pause()` or gated on
   tab visibility.
 
-Don't stack the two: a client wrapped in `withRetry` **and** driven by a re-waking
-loop nests two backoffs against the same bucket. One retry layer per path.
+- **a TanStack query's own `retry` / `retryDelay`.** A query already retries, on
+  its own timing (1 s, 2 s, 4 s), which ignores `Retry-After`. The **username
+  availability check** (`usernameAvailableQueryOptions`, `@stxapps/react`) hands
+  the policy to TanStack instead: `retry` is `isRetryableTransportError` under a
+  count, and `retryDelay` is `retryDelayMs`, the same timing `withRetry` sleeps on.
+  The query stays cancellable by a newer keystroke, and `isFetching` stays true
+  between tries, which is what its form reads as "Checking availability…"
+  ([account.md](./account.md)).
+
+Don't stack them: a client wrapped in `withRetry` **and** driven by a re-waking
+loop, or by a query that retries too, nests two backoffs against the same bucket.
+One retry layer per path.
 
 ### deadlines
 

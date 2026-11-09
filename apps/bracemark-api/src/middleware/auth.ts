@@ -9,6 +9,7 @@ import { HttpError } from '../lib/errors';
 import { hashToken } from '../lib/ids';
 import { timerFor } from '../lib/server-timing';
 import { renewSession, SESSION_IDLE_MS, SESSION_SLIDE_MS } from '../services/session';
+import { checkRateLimit, userRateLimitKey } from './rate-limit';
 
 // Auth guard. Applied to protected routes (not globally), e.g.
 // app.use('/sync/*', requireAuth).
@@ -18,6 +19,12 @@ import { renewSession, SESSION_IDLE_MS, SESSION_SLIDE_MS } from '../services/ses
 // says WHY -> slide a live session's idle deadline off the critical path ->
 // attach the session (id, userId, accountDbId) for handlers via
 // c.get('session').
+//
+// It is also where the per-account rate limit lives (the `account` tier,
+// middleware/rate-limit.ts): the first point in a request where the caller is
+// known as an account rather than a network. Counted after the session checks,
+// so a rejected token never reaches it, and before the renewal, so a refused
+// request writes nothing.
 //
 // The four failures are four different messages to a client, and the client's
 // data depends on reading them right (docs/sessions.md, _revocation, expiry and
@@ -52,6 +59,13 @@ export const requireAuth = createMiddleware<AppEnv>(async (c, next) => {
     throw new HttpError(401, SESSION_ERROR.expired, 'Session expired');
   }
 
+  c.set('session', {
+    id: session.id,
+    userId: session.userId,
+    accountDbId: session.accountDbId,
+  });
+  await checkRateLimit(c, 'account', userRateLimitKey);
+
   // SLIDING EXPIRY. Renew when the deadline has fallen more than a day behind
   // `now + idle` — a cheap pre-check off the row already read, so most requests
   // write nothing. The UPDATE's own predicate is what makes it correct under
@@ -64,11 +78,6 @@ export const requireAuth = createMiddleware<AppEnv>(async (c, next) => {
     await offCriticalPath(c, renewOrReport(c, session.id, now, session.expiresAt));
   }
 
-  c.set('session', {
-    id: session.id,
-    userId: session.userId,
-    accountDbId: session.accountDbId,
-  });
   await next();
 });
 

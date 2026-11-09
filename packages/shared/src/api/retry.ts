@@ -64,6 +64,27 @@ export interface RetryOptions {
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+// The wait before retry number `attempt` (0 for the first retry) of a call that
+// failed with `err`: the server's Retry-After when the error carries one, else
+// exponential (base × 2^attempt), both jittered upward and capped. The one copy
+// of the policy's timing — withRetry sleeps on it, and a TanStack query's
+// `retryDelay` can hand it straight through, since TanStack's `failureCount` is
+// the same 0-based attempt index (react's use-username-available.ts).
+export function retryDelayMs(
+  err: unknown,
+  attempt: number,
+  options: Pick<RetryOptions, 'baseDelayMs' | 'maxDelayMs'> = {},
+): number {
+  const { baseDelayMs = 1_000, maxDelayMs = DEFAULT_RETRY_MAX_DELAY_MS } = options;
+  const hintMs = retryAfterMsOf(err);
+  const backoffMs = Math.min(baseDelayMs * 2 ** attempt, maxDelayMs);
+  const baseMs = hintMs !== undefined ? Math.min(hintMs, maxDelayMs) : backoffMs;
+  // maxDelayMs is a real ceiling, not merely a ceiling on the pre-jitter
+  // base. At the ceiling there is no room for upward jitter; exceeding it
+  // made the documented 60s maximum last as long as 75s.
+  return Math.min(jitteredDelayMs(baseMs), maxDelayMs);
+}
+
 // Wrap an ApiClient so every call retries retryable transport failures with
 // backoff: wait the server's Retry-After when the error carries one, else
 // exponential (base × 2^attempt), both jittered upward and capped. Non-retryable
@@ -88,13 +109,7 @@ export function withRetry(api: ApiClient, options: RetryOptions = {}): ApiClient
           // failure; a superseded request must not be revived.
           if (callOptions?.signal?.aborted) throw err;
 
-          const hintMs = retryAfterMsOf(err);
-          const backoffMs = Math.min(baseDelayMs * 2 ** attempt, maxDelayMs);
-          const baseMs = hintMs !== undefined ? Math.min(hintMs, maxDelayMs) : backoffMs;
-          // maxDelayMs is a real ceiling, not merely a ceiling on the pre-jitter
-          // base. At the ceiling there is no room for upward jitter; exceeding it
-          // made the documented 60s maximum last as long as 75s.
-          await sleep(Math.min(jitteredDelayMs(baseMs), maxDelayMs));
+          await sleep(retryDelayMs(err, attempt, { baseDelayMs, maxDelayMs }));
         }
       }
     },

@@ -3,7 +3,13 @@ import type { ApiClient, CallOptions } from './client';
 import { ApiError, ApiTimeoutError } from './client';
 import type { ApiEndpoint } from './endpoint';
 import { defineEndpoint } from './endpoint';
-import { isRetryableTransportError, jitteredDelayMs, retryAfterMsOf, withRetry } from './retry';
+import {
+  isRetryableTransportError,
+  jitteredDelayMs,
+  retryAfterMsOf,
+  retryDelayMs,
+  withRetry,
+} from './retry';
 
 // The endpoint arg is opaque to withRetry (it forwards to the wrapped client), so
 // any well-formed descriptor does.
@@ -245,6 +251,32 @@ describe('retryAfterMsOf', () => {
 
   it('distinguishes a zero hint from no hint', () => {
     expect(retryAfterMsOf(new ApiError(429, '', 0))).toBe(0);
+  });
+});
+
+// The timing withRetry sleeps on, exported so a TanStack query's `retryDelay`
+// can use it too (react's use-username-available.ts). withRetry's specs above
+// prove the policy through the wrapper; these pin the function itself, which is
+// what the query reads.
+describe('retryDelayMs', () => {
+  it('waits the Retry-After hint, whatever the attempt', () => {
+    for (const attempt of [0, 2]) {
+      const d = retryDelayMs(new ApiError(429, '', 10), attempt);
+      expect(d).toBeGreaterThanOrEqual(10_000);
+      expect(d).toBeLessThanOrEqual(12_500);
+    }
+  });
+
+  it('backs off from the base when the error carries no hint', () => {
+    const d = retryDelayMs(new TypeError('Failed to fetch'), 1);
+    expect(d).toBeGreaterThanOrEqual(2_000);
+    expect(d).toBeLessThanOrEqual(2_500);
+  });
+
+  it('never waits past the ceiling, hint or jitter', () => {
+    expect(retryDelayMs(new ApiError(429, '', 60), 0)).toBe(60_000);
+    expect(retryDelayMs(new ApiError(429, '', 600), 0)).toBe(60_000);
+    expect(retryDelayMs(new ApiError(503, ''), 10)).toBe(60_000);
   });
 });
 

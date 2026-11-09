@@ -28,17 +28,16 @@ import { derivedHmacKey, hmacSecret } from '../r2/hmac-key';
 // wrangler.jsonc), each on or off by itself, and unset means off: local dev and
 // the e2e suites create far more accounts from one address than any person would.
 //
-// OBSERVE BY DEFAULT. A cap that is on counts every signup, but it refuses one
-// only where SIGNUP_CAP_ENFORCE is "1". Without it, a network past its cap is
-// logged and let through, and the daily report (services/signup-report.ts) says
-// how many went past and how busy the busiest was. Any fixed number per network
-// is a guess, and a wrong one turns away real people on shared wifi without
-// anyone hearing about it, while a night of bulk accounts without a cap is
-// visible the next morning, and each free account's storage is capped anyway.
-// So production observes until the report shows a source worth refusing and a
-// number that would refuse it; switching to enforce is then one setting, with
-// the 429 and the client's "try again tomorrow" already built. Staging enforces,
-// so the refusal path keeps running somewhere it is deployed.
+// A HIGH CAP, ENFORCED, AND A REPORT THAT WATCHES FAR BELOW IT. A cap that is on
+// counts every signup, but it refuses one only where SIGNUP_CAP_ENFORCE is "1".
+// Without it, a network past its cap is logged and let through (observe mode).
+// Any fixed number per network is a guess, and a wrong one turns away real people
+// on shared wifi without anyone hearing about it. So the deployed caps are set
+// far above what a room of people signing up together makes in a day: the cap
+// is the hard stop, not the alarm. The alarm is the daily report
+// (services/signup-report.ts), whose busiest-network figure shows a source long
+// before it reaches the cap. Lower a cap from that figure's history, never on a
+// guess. Observe mode stays for a cap that is being tried out.
 //
 // The count is per UTC calendar day, not a rolling 24 h. One row per (network,
 // day) is the whole state, the cron deletes past days, and a refused caller is

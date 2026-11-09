@@ -28,10 +28,11 @@ import { commitOps, listUserFiles, signUserFileUrls } from '../services/sync';
 // client never names another user's object (the authorization rule in the doc).
 // The per-user op log + size map live in that user's Durable Object (userDataStub).
 //
-// requireAuth also keys the global standard rate-limit per-IP; the authed routes
-// re-key it per-USER (userRateLimitKey) so one account can't multiply its quota
-// across IPs. ops/commit and files/sign are the write/hot paths, so they stack the
-// 'tight' tier on top.
+// Every route here passes the network-wide `standard` baseline (app.ts) and,
+// through requireAuth, the per-account `account` tier — so people behind one
+// address share only the first, and one account can't multiply its quota across
+// IPs. ops/commit and files/sign are the write/hot paths, so they stack the
+// per-user 'tight' tier on top.
 export const syncRoutes = new Hono<AppEnv>()
   .use(filesListEndpoint.path, requireAuth)
   .use(filesSignEndpoint.path, requireAuth)

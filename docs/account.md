@@ -556,6 +556,18 @@ Try again.`, `warn` — the same sentence and the same tone as the username ladd
 > "Checking availability…" and submit is closed, because the button should agree with
 > the sentence rather than with a cached answer the line no longer stands behind.
 >
+> **A refused check is a wait, not a failure.** `check-username` is rate-limited
+> per network, so a room signing up together on one wifi can use up its allowance.
+> `usernameAvailableQueryOptions` retries only what the shared transport policy
+> calls retryable (a 429, a 5xx, a dropped connection), on that policy's timing
+> (`retryDelayMs`, the server's `Retry-After` first,
+> [api-contracts.md](./api-contracts.md), _transport retry_). So a 429 holds the
+> field on "Checking availability…" until its window clears and the answer lands.
+> It doesn't reach `Couldn't check. Try again.`, a rung that says the check is
+> stuck, with submit closed, for a state that clears by itself. The same options
+> ride into the submit-time `fetchQuery`, which would otherwise not retry at all.
+> Only a failure that outlasts the retries reaches the warn rung.
+>
 > **`tone` carries two signals, and is not a severity scale.** `ok` is the gate
 > above. `error` is separately what both forms spell `aria-invalid` / `data-invalid`
 > as — a claim to a screen reader that the value the user _typed_ is rejected
@@ -784,18 +796,18 @@ each caller network creates per UTC day, against that network's cap
 IPv6 /64, because a /64 is what one line or one server holds
 (`networkKeyOf`, `shared/src/net/ip.ts`; the per-second limiters key on it too).
 
-**Production observes the cap; it does not enforce it.** A signup past the cap is
-refused only where `SIGNUP_CAP_ENFORCE` is `"1"`. Anywhere else it is counted,
-logged once per network per day (`signupCap: … went past 50 today (observing,
-not refused)`), and let through. Any fixed number per network is a guess, and a
-wrong one turns away real people on shared wifi without anyone hearing about it.
-A night of bulk accounts, by contrast, shows up in the next morning's report, and
-each free account's storage is capped anyway. So production watches until the
-report shows a source worth refusing and a number that would refuse it, and
-enforcing is then one setting in `wrangler.jsonc` and a deploy: the 429 and the
-forms' "try again tomorrow" are built and stay built. Staging enforces, so that
-path keeps running somewhere it is deployed. Set `SIGNUP_ALERT_PER_DAY` from the
-report's first weeks; that is what turns a flood into an error-level line.
+**A high cap, enforced, with the report watching far below it.** A signup past
+the cap is refused only where `SIGNUP_CAP_ENFORCE` is `"1"`, which both deployed
+envs set. Anywhere else it is counted, logged once per network per day
+(`signupCap: … went past N today (observing, not refused)`), and let through —
+observe mode, kept for trying out a new number. Any fixed number per network is a
+guess, and a wrong one turns away real people on shared wifi without anyone
+hearing about it. So the deployed cap is set far above what a room of people
+signing up together makes in a day: it is the hard stop, not the alarm. The
+alarm is the daily report, whose busiest-network figure shows a source long
+before it reaches the cap. Lower the cap from that figure's history, never on a
+guess. Set `SIGNUP_ALERT_PER_DAY` from the report's first weeks; that is what
+turns a flood into an error-level line.
 
 **Switching to enforce needs no /privacy change, and neither does retuning.**
 /privacy was worded to hold in both modes: its notice says we count "and cap them
@@ -822,8 +834,8 @@ speed bump, since they rotate addresses whatever the number, so its real cost is
 the people it refuses by mistake. Two settings rather than one so each family can
 be tuned from the daily report on its own; anything that isn't a /64 takes the
 IPv4 cap. `SIGNUP_CAP_IPV4_PER_DAY` and `SIGNUP_CAP_IPV6_PER_DAY` are per env:
-production 50 and 50 (observed), staging 200 and 200 (enforced, high enough for
-the e2e suites), development unset, which is off and counts nothing. If bulk
+production and staging 200 and 200, enforced (high enough for a crowd, and for
+the staging e2e suites), development unset, which is off and counts nothing. If bulk
 signups ever get past an enforced cap, the answer is a human check (Turnstile on
 the web, App Attest and Play Integrity in the apps), not a lower number.
 
@@ -836,8 +848,9 @@ keep ourselves) and the counters' line under _How long we keep it_ both say so,
 and a counter kept for days past the period it counts makes both false with
 nothing failing, so /privacy changes first. They deliberately say nothing about
 how a counter is keyed, which would be false of the per-second limiters (/privacy
-itself says they hold the address briefly), nor that the cap limits anything,
-which is false while production only observes.
+itself says they hold the address briefly), nor that the cap always limits
+anything: whether an env enforces it is one setting, and /privacy has to hold
+either way.
 
 The daily cron logs the day's new-account total, how many networks went past
 their cap yesterday (saying whether that was refused or observed), and the

@@ -8,12 +8,13 @@ import { signupCapEnforcedOf } from './signup-cap';
 // the busiest network made. A flood of new accounts shows up here a day before it
 // shows up as storage.
 //
-// The last two are what the cap is decided from (services/signup-cap.ts).
-// Production observes the cap rather than enforcing it, so these say what the
-// cap WOULD have done: a busiest network far above the cap on an ordinary day,
-// with no flood in the total, is a crowd on shared wifi, and a lone network far
-// above it on the day the total jumps is a source worth refusing. Where the cap
-// is enforced, the networks past it are people (or scripts) that were refused.
+// The last two are what the cap is decided from (services/signup-cap.ts). The
+// deployed caps are high and enforced, so the busiest network is the figure to
+// read, well before any network reaches the cap: a busy network on an ordinary
+// day, with no jump in the total, is a crowd on shared wifi, and a lone busy
+// network on the day the total jumps is a source. Networks past an enforced cap
+// are people (or scripts) that were refused; in observe mode they are what the
+// cap WOULD have refused.
 //
 // One console.log every day, so the normal level is on record. That record is
 // what SIGNUP_ALERT_PER_DAY gets set from. Above that threshold the line is a

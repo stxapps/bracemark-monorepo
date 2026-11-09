@@ -2788,18 +2788,23 @@ in that table is `https` and tagged `internet`.
 
 #### ⚠ one IP, one bucket — the local rate limit
 
-`bracemark-api`'s baseline limiter buckets by **IP + path** (`middleware/rate-limit.ts`,
-the `standard` tier). In production that sizes a bucket for one user. Locally
-every client is `127.0.0.1` — both Playwright workers, every tab a case opens,
-the browser extension, both simulators — so the whole machine shares one bucket
-per path, and `/v1/iap/status` carries no query string, so they all collide on a
-single key. The deployed 60 req/60s is therefore **deliberately raised to 6000 in
-the `development` env only** ([`wrangler.jsonc`](../apps/bracemark-api/wrangler.jsonc)).
-Do not lower it back to match the deployed tiers for realism: a full web run
-429s, and nothing in the resulting failure says "rate limit". The binding stays
+`bracemark-api` limits a signed-in request twice (`middleware/rate-limit.ts`): the
+`standard` baseline buckets by **IP + path**, sized for everyone behind one
+address, and the `account` tier, which `requireAuth` applies, buckets by **user +
+path**, sized for one person. Locally every client is `127.0.0.1` — both
+Playwright workers, every tab a case opens, the browser extension, both
+simulators — so the whole machine is one network, and the seeded accounts are
+signed into by every worker and tab at once, so one account's bucket is shared
+by the run. `/v1/iap/status` carries no query string, so they all collide on a
+single key. Both are therefore **deliberately raised to 6000 a minute in the
+`development` env only**, far above the deployed tiers
+([`wrangler.jsonc`](../apps/bracemark-api/wrangler.jsonc)).
+Do not lower either back to match the deployed tiers for realism: a full web run
+429s, and nothing in the resulting failure says "rate limit". The bindings stay
 wired rather than removed so the middleware path and the env's shape still match
 the deployed tiers; the 429 envelope and the client backoff are proved at unit
-level (`app.spec.ts`, `middleware/rate-limit.spec.ts`, shared `api/retry.spec.ts`),
+level (`app.spec.ts`, `middleware/rate-limit.spec.ts`, `middleware/auth.spec.ts`,
+shared `api/retry.spec.ts`),
 never here.
 
 Two specimens, both from one run (web, 2026-09-18, the 23 then-existing cases),

@@ -6,11 +6,17 @@ import {
   type ApiClient,
   canonicalizeUsername,
   checkUsernameEndpoint,
+  isRetryableTransportError,
+  retryDelayMs,
   usernameSchema,
 } from '@stxapps/shared';
 
 import { useApiClient } from '../contexts/api-client-provider';
 import { useDebouncedValue } from './use-debounced-value';
+
+// Retries after the first failure. The count TanStack would use anyway; what
+// changes is which failures get them and how long each waits (below).
+export const USERNAME_CHECK_RETRIES = 3;
 
 // One source of truth for the query so the live hook and the submit-time check
 // share a cache key — when the user pauses on a name, submit gets a cache hit
@@ -32,6 +38,24 @@ export function usernameAvailableQueryOptions(client: ApiClient, username: strin
     // firing for too-short/invalid names. (fetchQuery ignores this on submit.)
     enabled: usernameSchema.safeParse(username).success,
     staleTime: 60_000,
+    // A 429 is a WAIT, not a failure. The endpoint's limit is per network, so a
+    // room signing up together on one wifi can share it out, and the server says
+    // exactly when its window clears (Retry-After). TanStack's own backoff (1 s,
+    // 2 s, 4 s) ignores that hint, spends all three retries inside the window
+    // that refused the first, and lands on "Couldn’t check. Try again." with the
+    // submit disabled — a stuck rung for a state that clears by itself. Waiting
+    // the hint keeps `isFetching` true between tries, so the field reads
+    // "Checking availability…" until the answer lands, which is simply true.
+    //
+    // Only what the shared transport policy calls retryable (a 429, a 5xx, a
+    // dropped connection; api/retry.ts) is retried, on its timing. A 4xx on the
+    // merits fails at once, and an abort from a newer keystroke is never revived.
+    // These options ride into the submit-time `fetchQuery` too (which would
+    // otherwise default to no retry), so a submit that has to re-ask waits out a
+    // 429 under "Creating account…" rather than failing as UsernameCheckError.
+    retry: (failureCount, err) =>
+      failureCount < USERNAME_CHECK_RETRIES && isRetryableTransportError(err),
+    retryDelay: (failureCount, err) => retryDelayMs(err, failureCount),
   });
 }
 
