@@ -20,7 +20,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 import { ArrowGlyph, CheckGlyph } from '../../components/glyphs';
 import { faqById, PRICING_FAQ_IDS } from '../../content/faq';
 import { pageMetadata } from '../../lib/metadata';
-import { formatLinks, linksLimitLabel } from '../../lib/plans';
+import { formatLinks, planLimitsLabel } from '../../lib/plans';
 import { CREATE_ACCOUNT_URL, UPGRADE_URL } from '../../lib/site';
 
 export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise<Metadata> {
@@ -40,24 +40,19 @@ export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise
 // hand-copies quotas is the classic drift" (docs/architecture.md, _apps_), and
 // that file is the same source the paywall UI and the server quota gate read.
 //
-// The one entitlement deliberately NOT published: the byte/file storage quota
-// (`maxBytes` / `maxFiles`). It is a server-hard cost backstop, not a product
-// gate. It was unreachable until the heavy-blob features shipped: the only blob a
-// library stored was the client-extracted preview image, so a maxed 200-link free
-// account is ~16 MB against 100 MiB. Read mode and screenshots now ship
-// (`keptCopies`, Plus — a read-mode copy is ~10–30 KB, a screenshot ~100–250 KB,
-// both estimates in docs/link-extraction-keep.md); page copy is still planned.
-// Publishing the limit before any of them existed was the inverse of the
-// never-promise-what-isn't-built rule, invites the Drive/Dropbox comparison on an
-// axis Bracemark doesn't compete on, and turns a number we still need to retune
-// into a contract we'd have to grandfather. The first heavy blobs have now landed,
-// so whether the row goes back is an OPEN decision rather than a settled one: a
-// Plus library keeping a screenshot of every save reaches its 5 GiB at roughly
-// 15,000–20,000 links (screenshot plus preview image, at the estimates above), which
-// makes the number load-bearing for some readers — and
-// re-measure the sizes from real captures before it is printed anywhere.
-// A user who somehow reaches the ceiling still gets told, in-app, by the "storage
-// full" surfaces the quota gate already drives.
+// The byte ceiling is published where it can bind, and only there. Plus's card
+// says "5 GB of storage" beside its links, read off `maxBytes` through the shared
+// storage helpers (iap/storage.ts) — the same formatter the app's Settings →
+// Subscription readout counts in, so the number a buyer reads is the number they
+// later see filling. It went up because kept copies made it reachable: a
+// screenshot is up to a few hundred KB (measured, e2e `measure:kept-copies`, and
+// docs/link-extraction-keep.md), and /terms says each plan's limits are described
+// on this page. Free's ceiling stays OFF the page: a free library keeps no copies,
+// its link cap binds long before its bytes do, and a "100 MB" here would invite
+// the Drive/Dropbox comparison on an axis Bracemark doesn't compete on, for a
+// limit no free user meets. The file ceiling (`maxFiles`) is printed nowhere: no
+// honest library reaches it. A user who reaches the byte ceiling is told in-app,
+// by the readout and the "storage full" surfaces the quota gate already drives.
 //
 // Which plans appear is likewise data, in both directions: the cards and the
 // comparison COLUMNS are `AVAILABLE_PAID_PLANS`, so putting Pro on sale stays the
@@ -89,7 +84,11 @@ function monthlyEquivalent(usdPerYear: number): string {
 // Only what SHIPS — the same rule the paid card copy in plans.ts follows. Page
 // copies and AI are entitlements without features behind them yet, so they are not
 // promised anywhere on this page. Read mode and screenshots ship (desktop; mobile
-// takes read mode only) and are not named here yet — plans.ts says how they join.
+// takes read mode only) and are Plus, so they are named in the comparison table's
+// gated rows, with that platform scope, and not in this list. The Plus card's
+// feature list (PLAN_CARD_COPY) doesn't name them yet either: that list also
+// feeds both apps' upgrade cards and the store listings, so adding a line there
+// is a store-wide copy change (plans.ts says how).
 //
 // The previews line names the free CLIENT paths on purpose. Free gets the best
 // extractor there is — the browser extension's active tab, or the mobile app's
@@ -215,8 +214,10 @@ const COLUMNS: Plan[] = ['free', ...AVAILABLE_PAID_PLANS];
 type Cell = string | boolean;
 
 const COMPARISON: { label: string; cell: (plan: Plan) => Cell }[] = [
-  // Saved links is the only numeric row, and the only limit a buyer has to
-  // weigh — the storage quota is deliberately absent (see the header note).
+  // Saved links is the only numeric row. Storage is NOT a row: Free's ceiling is
+  // unpublished (see the header note), so its cell would read "—", which says
+  // "Free stores nothing". The Plus card's limit line carries the number instead,
+  // and the two kept-copy rows below say what fills it.
   { label: 'Saved links', cell: formatLinks },
   { label: 'End-to-end encryption', cell: () => true },
   { label: 'Sync across devices', cell: () => true },
@@ -261,6 +262,17 @@ const COMPARISON: { label: string; cell: (plan: Plan) => Cell }[] = [
   { label: 'Nested lists', cell: (p) => entitlementsOf(p).nestedLists },
   { label: 'App lock & hidden lists', cell: (p) => entitlementsOf(p).locks },
   { label: 'Search editor (fields, lists, tags)', cell: (p) => entitlementsOf(p).searchEditor },
+  // Two rows, not one "Read mode & screenshots", because the platforms differ and
+  // a merged row would promise a phone a screenshot it can't take: read mode is
+  // kept from the browser extension and the mobile apps, a screenshot only from
+  // the browser extension, which is where the page is open in a tab
+  // (docs/link-extraction-keep.md, _per client_). The label carries that scope,
+  // the way the server-previews row names the web app.
+  { label: 'Read-mode copies of pages', cell: (p) => entitlementsOf(p).keptCopies },
+  {
+    label: 'Screenshots of pages (browser extension)',
+    cell: (p) => entitlementsOf(p).keptCopies,
+  },
   {
     label: 'Server link previews in the web app',
     cell: (p) => (entitlementsOf(p).serverExtraction ? 'Opt-in' : false),
@@ -389,12 +401,13 @@ export default function Page() {
               </p>
 
               {/* The one line of hard limits under each card, straight from the
-                  entitlements table — the number a buyer would otherwise have to
-                  take on faith. Links are the whole line on purpose: the storage
-                  quota is unpublished (see the header), and the link cap is the
-                  only limit that actually binds a library today. */}
+                  entitlements table — the numbers a buyer would otherwise have to
+                  take on faith. Each card states the limits that can bind on that
+                  plan, and no other: Free's link cap, and Plus's storage, which is
+                  what kept copies fill once the cap is gone. Free's byte ceiling
+                  is left off on purpose (see the header). */}
               <p className={cn('mt-7 border-t border-border pt-5 text-sm font-medium')}>
-                {linksLimitLabel(card.plan)}
+                {planLimitsLabel(card.plan)}
               </p>
               {/* Conditional, NOT a reserved slot like the conditions line above,
                   and the difference is what the band is for. That one is a shared

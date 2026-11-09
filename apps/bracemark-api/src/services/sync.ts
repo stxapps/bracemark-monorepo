@@ -113,6 +113,22 @@ export async function signUserFileUrls(
   );
 }
 
+// What the account stores against the ceiling a put is checked by — the same
+// two reads `signUserFileUrls` makes for a put, in parallel, and nothing else:
+// no R2 call, because the size map in the user's DO is the quota's own record
+// (do/repositories/file-sizes.ts).
+export async function getStorageUsage(
+  env: Bindings,
+  userId: string,
+  time: Timer = untimed,
+): Promise<{ usedBytes: number; maxBytes: number }> {
+  const [usage, ceilings] = await Promise.all([
+    time('do-usage', () => callUserData(env, userId, (stub) => stub.usage())),
+    time('d1-ceilings', () => getQuotaCeilings(env, userId)),
+  ]);
+  return { usedBytes: usage.totalBytes, maxBytes: ceilings.maxBytes };
+}
+
 // Write one object through the blob route (PUT /v1/files/blob), under the grant
 // its verified token carries, and answer with the upload receipt the commit can
 // take instead of asking R2 again whether the object landed

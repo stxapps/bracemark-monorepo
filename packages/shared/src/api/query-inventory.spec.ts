@@ -32,6 +32,7 @@ const INVENTORY: Record<string, readonly string[]> = {
   'GET /v1/iap/prices': [],
   'GET /v1/ops/list': ['since', 'sincePath', 'limit'],
   'GET /v1/files/list': ['pageToken', 'limit'],
+  'GET /v1/files/usage': [],
 };
 
 function isEndpoint(value: unknown): value is ApiEndpoint {

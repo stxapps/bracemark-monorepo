@@ -36,14 +36,26 @@ built to.
 A preview tells you what a link was; a kept copy is what you go back for when the
 page has moved, gone behind a sign-in, or changed. The three are not equal:
 
-| facet      | what it keeps                        | size, one link (est.)           | built     |
-| ---------- | ------------------------------------ | ------------------------------- | --------- |
-| read mode  | the article's words                  | ~10–30 KB gzipped               | extension |
-| screenshot | what was on screen when it was saved | ~100–250 KB, capped JPEG        | extension |
-| page copy  | the page, offline, with its assets   | MBs; tens for media-heavy pages | not built |
+| facet      | what it keeps                        | size as stored, one link                          | built     |
+| ---------- | ------------------------------------ | ------------------------------------------------- | --------- |
+| read mode  | the article's words                  | median 5.5 KB, p90 42 KB, max 270 KB (gzipped)    | extension |
+| screenshot | what was on screen when it was saved | median 135 KB, p90 237 KB, max 271 KB (2× laptop) | extension |
+| page copy  | the page, offline, with its assets   | MBs; tens for media-heavy pages (est.)            | not built |
 
-The sizes are estimates, not measurements — re-derive them from real captures
-before any of them drives a limit. They still settle the order:
+**Measured 2026-11-09** with `measure:kept-copies` ([e2e.md](./e2e.md), _measuring
+kept copies_): 62 public pages, 36 chosen as articles and 26 not, each captured
+with the browser extension's own code and counted as stored — after gzip or the
+re-encode, plus the encryption frame. Read mode was kept on 44 of them: 31 of the
+36 articles, and 13 pages Readability took for one. The screenshot depends on the
+screen: at 1440×900 on a 2× laptop the capture is re-encoded down to the 1600 px
+cap (the figures above); at 1920×1080 on a 1× monitor it is median 105 KB, p90
+187 KB, max 206 KB. Articles screenshot larger than other pages (median 161 KB
+against 124 KB at 2×): text is detail JPEG keeps. For scale, the **preview image**
+every plan stores beside them came to median 32 KB, p90 77 KB, max 217 KB, on the
+38 pages that named one the extension could fetch; a link that keeps all three
+was median 172 KB, p90 315 KB at 2×. The page-copy row is still an estimate.
+
+The figures settle the order:
 
 - **Read mode first.** It is the copy people come back to read, the one highlights
   and notes need, and the only one search can use. Compressed, it is smaller than
@@ -103,7 +115,7 @@ reads the same bytes with fflate.
 laptop — and the first scaffold stored that as PNG, several MB a capture. It now
 asks for JPEG and runs the preview path's `resizeImage` with its own ceiling
 (`SCREENSHOT_MAX_DIMENSION` 1600, `SCREENSHOT_JPEG_QUALITY` 0.8, `@stxapps/shared`
-`image/preview.ts`): wide enough that a price stays legible, a few hundred KB.
+`image/preview.ts`): wide enough that a price stays legible, and up to a few hundred KB (median 135 KB, measured above).
 
 **Full page is not captured.** Scroll-and-stitch runs into Chrome's limit of about
 two `captureVisibleTab` calls a second, repeats sticky headers, and triggers lazy

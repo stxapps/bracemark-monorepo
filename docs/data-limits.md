@@ -54,7 +54,7 @@ mutation hooks, an import — and that is where a new one goes.
 | a read-mode copy      | `READER_DOC_MAX_BLOCKS` 10,000 blocks, `READER_DOC_MAX_CHARS` 1,000,000 | the capture stops at the block that crossed it   | —                       | as written              | accepted (no schema cap)               |
 | a screenshot          | `SCREENSHOT_MAX_DIMENSION` 1600 px                                      | the capture resizes before storing               | —                       | as written              | accepted                               |
 | links                 | the plan's `maxLinks`                                                   | the add form gives way to `LinkQuotaBanner`      | the over-cap prompt     | refused whole           | —                                      |
-| bytes and files       | the plan's `maxBytes`, `maxFiles`                                       | server, at `files/sign`                          | server                  | server                  | server                                 |
+| bytes and files       | the plan's `maxBytes`, `maxFiles` (Plus's bytes published and shown)    | server, at `files/sign`                          | server                  | server                  | server                                 |
 
 **Counts: none per kind.** Every link, list, tag, pin and extraction is one
 `.enc` file, so the server's `maxFiles` and `maxBytes` ([iap.md](./iap.md),

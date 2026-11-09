@@ -4461,6 +4461,52 @@ iOS results were taken by hand on a throwaway simulator, reading the sheet and t
 Passwords app through Maestro ([password-manager.md](./password-manager.md), _naming the account on
 native_).
 
+### measuring kept copies
+
+`e2e/measure/kept-copies.ts` (`npm run measure:kept-copies`) reports how many
+bytes each kind of copy costs the byte quota, taken from real pages: a read-mode
+copy, a screenshot, and the preview image every plan stores beside them. It
+exists because the pricing page prints Plus's storage ceiling, and a ceiling is
+only meaningful next to what fills it. Before it ran, every size in
+[link-extraction-keep.md](./link-extraction-keep.md) was an estimate.
+
+It runs **the browser extension's own code** inside each page, bundled with
+esbuild the way `tools/scripts/generate-reader-capture.ts` bundles the read-mode
+capture: `readerDocFromPage` and `encodeReaderDoc` for read mode, `resizeImage`
+with `SCREENSHOT_MAX_DIMENSION` / `SCREENSHOT_JPEG_QUALITY` for the screenshot,
+and `selectTitleImage` over the page's meta plus `resizeImage` at its defaults
+for the preview. The capture quality is read out of the extension's
+`utils/capture.ts` rather than restated. Every figure includes the encryption
+frame (`web-crypto` `lib/blob.ts`), so it is what R2 stores and the quota counts.
+Two things are not the extension's, and neither moves a figure: the viewport
+comes from `page.screenshot` instead of `captureVisibleTab` (both are Chromium's
+compositor output, re-encoded the same way), and the preview's meta collector is
+a copy of the one inlined in `captureTitleImage`, because an injected function
+can't be imported. Keep that copy in step.
+
+The pages are `measure/kept-copies-pages.ts`: public articles and pages that
+aren't articles, in about the proportion a library saves them, since read mode
+is only kept from an article and the screenshot is the copy for everything else.
+A page that has moved or refuses a headless browser is reported as failed and
+left out. Replace it rather than retrying it.
+
+```sh
+npm run measure:kept-copies                                       # 1440×900 at 2x, a laptop
+npm run measure:kept-copies -- --dpr 1 --width 1920 --height 1080 # a desktop monitor
+npm run measure:kept-copies -- --kind page --limit 10             # ten non-articles
+npm run measure:kept-copies -- --settle 5000                      # wait longer after load
+```
+
+It needs no dev stack and no account: it loads each page once in a fresh
+context of the local Chrome (`E2E_CHROME_PATH`), so a consent banner is in the
+screenshot, as it is in a first save. It reaches real sites, so it never runs in
+CI. It prints one line per page and a summary (median, p90, max and mean per
+facet, and the total for a link that keeps everything), and writes
+`results.json` and `summary.txt` to `.artifacts/measure/<run>/`. Its results are
+kept in [link-extraction-keep.md](./link-extraction-keep.md), _why these three_.
+Re-run it when a capture's cap or quality, the reader format, or the page list
+changes.
+
 ### state today
 
 Web, native, and contract were measured 2026-09-16 from commit

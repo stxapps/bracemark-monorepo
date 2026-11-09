@@ -1,6 +1,6 @@
 import { entitlementsOf } from '@stxapps/shared';
 
-import { formatLinks, linksLimitLabel } from './plans';
+import { formatLinks, linksLimitLabel, planLimitsLabel, storageLimitLabel } from './plans';
 
 // Two things worth pinning, and only two. Both helpers are one line, so the
 // value here is not the arithmetic — it is that the strings a buyer reads stay
@@ -23,5 +23,22 @@ describe('link-limit copy', () => {
     const cap = entitlementsOf('free').maxLinks;
     expect(cap).not.toBeNull();
     expect(linksLimitLabel('free')).toBe(`${cap} links`);
+  });
+});
+
+// The storage half of the card's limit line. A ceiling is printed only where it
+// is published, and printed from the entitlement, so the two ways it can go
+// wrong are the two pinned: a Free card that suddenly quotes "100 MB", and a
+// Plus card whose number no longer matches what the server enforces.
+describe('storage copy', () => {
+  it('prints Plus’s ceiling from the entitlement, beside its links', () => {
+    expect(entitlementsOf('plus').maxBytes).toBe(5 * 1024 ** 3);
+    expect(storageLimitLabel('plus')).toBe('5 GB of storage');
+    expect(planLimitsLabel('plus')).toBe('Unlimited links · 5 GB of storage');
+  });
+
+  it('leaves Free’s ceiling off the card — its link cap is the limit that binds', () => {
+    expect(storageLimitLabel('free')).toBeNull();
+    expect(planLimitsLabel('free')).toBe(linksLimitLabel('free'));
   });
 });

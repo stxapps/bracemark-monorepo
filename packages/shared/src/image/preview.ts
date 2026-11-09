@@ -29,6 +29,7 @@ export const PREVIEW_JPEG_QUALITY = 0.82;
 // saved. Wider than a preview because it is read, not glanced at: a price or a stock
 // line has to stay legible. A browser hands back the viewport at device pixels (a 2×
 // laptop gives ~2880 px), which as a PNG was several MB a capture; capped and
-// JPEG-encoded it is a few hundred KB. JPEG for the reason the preview is.
+// JPEG-encoded it is up to a few hundred KB (median ~135 KB on a 2× laptop,
+// docs/link-extraction-keep.md). JPEG for the reason the preview is.
 export const SCREENSHOT_MAX_DIMENSION = 1600;
 export const SCREENSHOT_JPEG_QUALITY = 0.8;

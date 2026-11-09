@@ -319,17 +319,30 @@ The trade is that the two gates were never defending the same thing:
   walks through it. That cost is accepted, deliberately, in exchange for the
   machinery above.
 
-**Visibility inverts enforcement, and that is not a mistake.** The limit we
-enforce hardest is the one we never advertise, and the one anyone can walk
-through is printed on the pricing page. `maxBytes` / `maxFiles` are a **cost
-backstop, not a product gate** — no plan's copy names a byte figure, on the
-marketing site or in either upgrade card — because until the heavy blobs ship
-nothing can reach them (a maxed free library is ~16 MB against 100 MiB), and an
-advertised ceiling is a promise we'd have to grandfather rather than a number we
-can retune. `maxLinks` is the opposite: it exists **to be seen**, since a
-conversion gate nobody knows about converts nobody. An account that does hit the
-byte ceiling learns it from the `quota_exceeded` → "storage full" surfaces, which
-is where a capacity refusal belongs.
+**Visibility follows reach, not enforcement.** `maxLinks` exists **to be seen**,
+since a conversion gate nobody knows about converts nobody, though anyone can
+walk through it. `maxBytes` / `maxFiles` are a **cost backstop, not a product
+gate**, and each is printed only where an honest library can reach it:
+
+- **Plus's `maxBytes` is published.** Kept copies made it reachable — a
+  screenshot is up to a few hundred KB, measured
+  ([link-extraction-keep.md](./link-extraction-keep.md), _why these three_) — so
+  the pricing card says "5 GB of storage", the `storage` FAQ answer says what
+  fills it, and Settings → Subscription shows usage against it on both apps
+  (`GET /v1/files/usage`, `useStorageReadout`). Which ceilings count as published
+  is one rule in `@stxapps/shared` `iap/storage.ts`, `isPublishedStorageCeiling`
+  (the plans that keep copies), and so is the formatter all three surfaces print
+  through, so the card and the readout can't disagree. The readout follows the
+  high-water ceiling, like the gate, so a lapsed Plus account keeps seeing it.
+- **Free's `maxBytes` and every `maxFiles` are not.** A free library keeps no
+  copies, and its link cap binds long before its bytes (a maxed one is ~16 MB
+  against 100 MiB); no honest library reaches a file ceiling. Printing a ceiling
+  nobody meets would make it a promise to grandfather rather than a number we can
+  retune.
+
+An account that does hit the byte ceiling learns it from the `quota_exceeded` →
+"storage full" surfaces, which is where a capacity refusal belongs, and on Plus
+from the readout as it fills.
 
 The **downgraded** account lands on the client gate, where it always did.
 `useLinkQuota` reads `count >= max`, so an over-cap library is refused new links

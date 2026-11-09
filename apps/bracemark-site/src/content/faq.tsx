@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import {
   entitlementsOf,
+  formatStorageCeiling,
   LIFETIME_ON_SALE,
   LIFETIME_PLAN,
   LIFETIME_SEATS,
@@ -30,6 +31,9 @@ import { PADDLE_REFUND_POLICY_URL, SECURITY_EMAIL, SOURCE, SUPPORT_EMAIL } from 
 // which is why this file is `.tsx` and lives in `content/` rather than `lib/`.
 
 const FREE_LINKS = entitlementsOf('free').maxLinks;
+// Printed the way the pricing card and the app's readout print it (shared
+// iap/storage.ts), rounded down, so the three can't disagree.
+const PLUS_STORAGE = formatStorageCeiling(entitlementsOf('plus').maxBytes);
 
 export type FaqItem = { id: string; q: string; a: React.ReactNode };
 export type FaqGroup = { id: string; title: string; blurb: string; items: FaqItem[] };
@@ -788,6 +792,30 @@ export const FAQ_GROUPS: FaqGroup[] = [
         ),
       },
       {
+        // The ceiling a buyer can read on the Plus card, and the three things a
+        // number alone doesn't say: what fills it, where to see it, and what
+        // happens at the top. The sizes are bounds, not figures — "tens of KB",
+        // "up to a few hundred" — measured on real pages (e2e
+        // `measure:kept-copies`, docs/link-extraction-keep.md), and worded to stay
+        // true as individual captures vary. What happens when full is the quota
+        // gate's (bracemark-api lib/quota.ts): puts wait, reads and deletes don't.
+        // Free's ceiling is not named, deliberately (app/pricing/page.tsx, header).
+        id: 'storage',
+        q: 'Is there a storage limit?',
+        a: (
+          <>
+            On {PLAN_LABELS.plus}, your library can hold {PLUS_STORAGE}. Links and notes take almost
+            none of it. What fills it is each link’s preview image, usually tens of KB, and the
+            copies you keep: a page’s text in read mode is usually a few KB, and a screenshot up to
+            a few hundred. Settings → Subscription shows how much your library uses. If it ever
+            fills up, nothing is deleted and nothing goes out of reach: you keep reading, searching,
+            and exporting, new changes wait to sync, and removing kept copies or deleting links
+            permanently frees space. On {PLAN_LABELS.free}, the {FREE_LINKS}-link limit comes long
+            before storage does.
+          </>
+        ),
+      },
+      {
         // The question every switcher asks and no surface used to answer. The
         // honest version is unflattering in one clause (the file does not all
         // fit) and reassuring in the rest (nothing is written until you say so,
@@ -1441,6 +1469,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
 // is about a specific plan.
 export const PRICING_FAQ_IDS = [
   'free-cap',
+  'storage',
   'import-over-cap',
   'trial',
   'monthly',

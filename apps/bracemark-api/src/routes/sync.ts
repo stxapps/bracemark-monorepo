@@ -6,6 +6,8 @@ import {
   type FilesListResponse,
   filesSignEndpoint,
   type FilesSignResponse,
+  filesUsageEndpoint,
+  type FilesUsageResponse,
   opsCommitEndpoint,
   type OpsCommitResponse,
   opsListEndpoint,
@@ -17,13 +19,15 @@ import type { AppEnv } from '../lib/env';
 import { timerFor } from '../lib/server-timing';
 import { requireAuth } from '../middleware/auth';
 import { rateLimit, userRateLimitKey } from '../middleware/rate-limit';
-import { commitOps, listUserFiles, signUserFileUrls } from '../services/sync';
+import { commitOps, getStorageUsage, listUserFiles, signUserFileUrls } from '../services/sync';
 
 // Local-first sync control plane — the four endpoints the background sync engine
-// drives (docs/local-first-sync.md). Every route carries its own '/v1/…' path from
-// the shared contract, so this sub-app mounts at the root in app.ts (like authRoutes).
+// drives (docs/local-first-sync.md), plus `files/usage`, the one a settings screen
+// reads to show what the library stores. Every route carries its own '/v1/…' path
+// from the shared contract, so this sub-app mounts at the root in app.ts (like
+// authRoutes).
 //
-// ALL FOUR ARE PROTECTED: requireAuth resolves the session onto the context, and
+// ALL FIVE ARE PROTECTED: requireAuth resolves the session onto the context, and
 // every path is namespaced under the authenticated user's prefix server-side — a
 // client never names another user's object (the authorization rule in the doc).
 // The per-user op log + size map live in that user's Durable Object (userDataStub).
@@ -36,6 +40,7 @@ import { commitOps, listUserFiles, signUserFileUrls } from '../services/sync';
 export const syncRoutes = new Hono<AppEnv>()
   .use(filesListEndpoint.path, requireAuth)
   .use(filesSignEndpoint.path, requireAuth)
+  .use(filesUsageEndpoint.path, requireAuth)
   .use(opsListEndpoint.path, requireAuth)
   .use(opsCommitEndpoint.path, requireAuth)
   // --- files/list — fallback R2 listing (paginated) ------------------------
@@ -48,6 +53,14 @@ export const syncRoutes = new Hono<AppEnv>()
     const body: FilesListResponse = await timerFor(c)('r2-list', () =>
       listUserFiles(c.env, userId, pageToken, limit),
     );
+    return c.json(body);
+  })
+  // --- files/usage — the library's stored bytes against its ceiling ----------
+  // Read-only and cheap (one DO RPC, one D1 read), so the `standard` and
+  // per-account tiers are enough; nothing here is worth a tighter one.
+  .get(filesUsageEndpoint.path, async (c) => {
+    const { userId } = c.get('session');
+    const body: FilesUsageResponse = await getStorageUsage(c.env, userId, timerFor(c));
     return c.json(body);
   })
   // --- files/sign — mint signed URL(s): presigned R2, or the blob route ------

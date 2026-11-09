@@ -45,6 +45,7 @@ import {
   storeFailureMessage,
 } from '../../lib/iap';
 import { SettingsHeader, SettingsNotice, SettingsPane } from './settings-kit';
+import { StorageUsage } from './storage-usage';
 
 // The upgrade cards (copy + which plans are on sale) come from PLAN_CARDS in
 // @stxapps/shared iap/plans.ts, next to the entitlements table they render —
@@ -365,6 +366,12 @@ export function SubscriptionSection() {
             </View>
           </View>
         )}
+
+        {/* After what the plan includes, for the reason that block is last: it is
+            reference, with no urgency. Renders nothing on Free, whose ceiling is
+            not published, and nothing until the usage read lands. bracemark-web's
+            box places it the same way. */}
+        <StorageUsage />
       </View>
 
       {notice && (

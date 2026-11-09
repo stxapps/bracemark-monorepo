@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 
 import { SubscriptionSection } from './subscription-section';
 
@@ -68,8 +68,14 @@ jest.mock('@stxapps/web-react', () => ({
   useSync: () => ({ requestSync: mockRequestSync }),
 }));
 
+// The storage readout is its own query; null is what it draws on Free and while
+// it loads. A test that needs it on screen assigns it.
+let mockStorageReadout: { text: string; fraction: number; full: boolean; note: string } | null =
+  null;
+
 jest.mock('@stxapps/react', () => ({
   useApiClient: () => ({ call: mockApiCall }),
+  useStorageReadout: () => mockStorageReadout,
 }));
 
 jest.mock('@/lib/paddle', () => ({
@@ -103,10 +109,36 @@ describe('SubscriptionSection', () => {
     mockRequestSync.mockClear();
     mockApiCall.mockClear();
     mockOpenPaddleCheckout.mockClear();
+    mockStorageReadout = null;
   });
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  // The readout is inside the current-plan group, not beside it: it describes
+  // the plan the box names, and the group's name is what places a line there for
+  // a screen reader and for the e2e flows that read the box by that name.
+  it('shows the storage readout inside the current-plan box', () => {
+    mockSubscription = PLUS;
+    mockStorageReadout = {
+      text: '1.2 GB of 5 GB used',
+      fraction: 0.24,
+      full: false,
+      note: 'Preview images and screenshots take the most room.',
+    };
+
+    render(<SubscriptionSection />);
+
+    const box = within(screen.getByRole('group', { name: 'Current plan' }));
+    expect(box.getByText('Storage')).toBeTruthy();
+    expect(box.getByText('1.2 GB of 5 GB used')).toBeTruthy();
+  });
+
+  it('draws no storage line when the readout has nothing to show', () => {
+    render(<SubscriptionSection />);
+
+    expect(screen.queryByText('Storage')).toBeNull();
   });
 
   it('clears the activation notice when the status is refreshed', async () => {

@@ -39,6 +39,15 @@ jest.mock('../../components/legal-consent', () => ({
   LegalConsent: () => null,
 }));
 
+// The storage readout is its own query; null is what it draws on Free and while
+// it loads. A test that needs it on screen assigns it.
+let mockStorageReadout: { text: string; fraction: number; full: boolean; note: string } | null =
+  null;
+jest.mock('@stxapps/react', () => ({
+  ...jest.requireActual('@stxapps/react'),
+  useStorageReadout: () => mockStorageReadout,
+}));
+
 const useEntitlementsMock = useEntitlements as jest.Mock;
 const useSyncMock = useSync as jest.Mock;
 const fetchStorePlanProductsMock = fetchStorePlanProducts as jest.Mock;
@@ -72,6 +81,7 @@ let subscription: typeof FREE | typeof PLUS_ON_PADDLE = FREE;
 
 beforeEach(() => {
   subscription = FREE;
+  mockStorageReadout = null;
   useEntitlementsMock.mockImplementation(() => ({
     subscription,
     isLoading: false,
@@ -123,4 +133,32 @@ test('shows the mapped sentence for a failed restore, never the thrown message',
 
   expect(getByText('Could not restore your purchases. Please try again.')).toBeTruthy();
   expect(queryByText('Request failed with status 409')).toBeNull();
+});
+
+// Inside the current-plan box, after what the plan includes — bracemark-web's
+// spec pins the same placement against its named group.
+test('shows the storage readout for a plan with a published ceiling', async () => {
+  subscription = PLUS_ON_PADDLE;
+  mockStorageReadout = {
+    text: '1.2 GB of 5 GB used',
+    fraction: 0.24,
+    full: false,
+    note: 'Preview images and screenshots take the most room.',
+  };
+  const { getByTestId, getByText } = render(<SubscriptionSection />);
+  await act(async () => {
+    await Promise.resolve();
+  });
+
+  expect(getByTestId('storage-usage')).toBeTruthy();
+  expect(getByText('1.2 GB of 5 GB used')).toBeTruthy();
+});
+
+test('draws no storage line when the readout has nothing to show', async () => {
+  const { queryByTestId } = render(<SubscriptionSection />);
+  await act(async () => {
+    await Promise.resolve();
+  });
+
+  expect(queryByTestId('storage-usage')).toBeNull();
 });

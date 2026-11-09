@@ -23,11 +23,20 @@
 // The rule both pages carry in their own headers is upstream of all of it — only
 // promise what ships, and never quote a cap the app does not enforce.
 //
-// What is NOT here, deliberately: the byte/file storage quota. It is a
-// server-hard cost backstop rather than a product gate, and the header of
-// `app/pricing/page.tsx` carries the whole argument for leaving it unpublished.
+// The byte ceiling IS here now, but only where it is published:
+// `isPublishedStorageCeiling` (shared iap/storage.ts) says which plans that is —
+// the ones that keep copies, since screenshots are what can fill a library — and
+// `formatStorageCeiling` prints it in the units the app's own readout counts in,
+// rounded down. Free's ceiling stays unpublished, for the reason the header of
+// `app/pricing/page.tsx` gives. The file ceiling (`maxFiles`) is never printed:
+// no honest library reaches it.
 
-import { entitlementsOf, type Plan } from '@stxapps/shared';
+import {
+  entitlementsOf,
+  formatStorageCeiling,
+  isPublishedStorageCeiling,
+  type Plan,
+} from '@stxapps/shared';
 
 /** The cap alone — "Unlimited" or "200" — for a comparison-table cell. */
 export function formatLinks(plan: Plan): string {
@@ -52,4 +61,26 @@ export function formatLinks(plan: Plan): string {
  */
 export function linksLimitLabel(plan: Plan): string {
   return `${formatLinks(plan)} links`;
+}
+
+/**
+ * The plan's published storage — "5 GB of storage" — or null where the ceiling
+ * is not published (Free). Derived from `maxBytes` like the link cap from
+ * `maxLinks`, so a retuned ceiling reprints itself.
+ */
+export function storageLimitLabel(plan: Plan): string | null {
+  const { maxBytes } = entitlementsOf(plan);
+  return isPublishedStorageCeiling(maxBytes)
+    ? `${formatStorageCeiling(maxBytes)} of storage`
+    : null;
+}
+
+/**
+ * The line of hard limits under a pricing card: every limit that can bind on
+ * that plan, and no other. "200 links" on Free, where the link cap binds long
+ * before bytes; "Unlimited links · 5 GB of storage" on Plus, where the cap is
+ * gone and kept copies are what fill a library.
+ */
+export function planLimitsLabel(plan: Plan): string {
+  return [linksLimitLabel(plan), storageLimitLabel(plan)].filter(Boolean).join(' · ');
 }

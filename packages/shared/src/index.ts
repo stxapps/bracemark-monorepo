@@ -37,6 +37,7 @@ export * from './extract/select';
 export * from './html/entities';
 export * from './iap/endpoints';
 export * from './iap/plans';
+export * from './iap/storage';
 export * from './iap/store-products';
 export * from './image/preview';
 export * from './image/sniff';

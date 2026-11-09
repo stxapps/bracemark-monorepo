@@ -266,6 +266,34 @@ export const filesListEndpoint = defineEndpoint({
   response: filesListResponseSchema,
 });
 
+// --- GET /v1/files/usage — what the account's library stores ---------------
+
+// What a library's encrypted files add up to, against the ceiling the server
+// enforces on a put (`checkPutQuota`, bracemark-api lib/quota.ts). The ceiling is
+// the account's HIGH-WATER plan's, not its current one (services/iap.ts
+// foldQuotaCeilings), so it can't be read off `entitlementsOf(plan)` on the
+// client: a lapsed Plus account keeps Plus's ceiling. Hence its own call, made
+// only where it is shown (Settings → Subscription), not folded into iap/status,
+// which every app start reads and which would then pay a Durable Object call
+// for a number almost no screen needs.
+//
+// Bytes are as R2 stores them: ciphertext, encryption frame included, which is
+// what the quota counts.
+export const filesUsageResponseSchema = z.object({
+  usedBytes: z.number().int().nonnegative(),
+  maxBytes: z.number().int().positive(),
+});
+export type FilesUsageResponse = z.infer<typeof filesUsageResponseSchema>;
+
+// GET /v1/files/usage → { usedBytes, maxBytes } (authenticated). No input: the
+// account comes from the session, so nothing rides in the URL.
+export const filesUsageEndpoint = defineEndpoint({
+  method: 'GET',
+  path: `${API_V1}/files/usage`,
+  request: z.object({}),
+  response: filesUsageResponseSchema,
+});
+
 // --- POST /v1/files/sign — mint presigned R2 URL(s) -------------------------
 
 // `put` mints upload URLs (quota-checked at issuance — the only place abuse can be

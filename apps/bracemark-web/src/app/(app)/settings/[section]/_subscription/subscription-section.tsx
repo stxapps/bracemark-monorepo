@@ -38,6 +38,7 @@ import { Button } from '@stxapps/web-ui/components/ui/button';
 import { useTheme } from '@stxapps/web-ui/contexts/theme-provider';
 
 import { SettingsHeader, SettingsNotice, SettingsPane } from '../../_components/settings-kit';
+import { StorageUsage } from './storage-usage';
 import { usePaddlePrices } from './use-paddle-prices';
 
 import { LegalConsent } from '@/components/legal-consent';
@@ -504,6 +505,11 @@ export function SubscriptionSection() {
             </ul>
           </div>
         )}
+
+        {/* After what the plan includes, for the reason that block is last: it is
+            reference, with no urgency. Renders nothing on Free, whose ceiling is
+            not published, and nothing until the usage read lands. */}
+        <StorageUsage />
       </div>
 
       {/* The ONLY pending notice on this surface that gets a spinner, because it

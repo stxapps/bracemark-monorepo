@@ -2150,6 +2150,14 @@ is persisted; the op-log row is just `{ seq, op, path, updated_at }`. The limits
 themselves live in `lib/quota.ts`, checked by `services/sync.ts` against the usage
 the DO's `putGate()` answers before any `put` URL is minted.
 
+**What the gate reads can be read back.** `GET /v1/files/usage` answers
+`{ usedBytes, maxBytes }` — the size map's total from the DO's `usage()` and the
+high-water ceiling from `getQuotaCeilings`, the same two reads a put batch makes,
+and no R2 call. Settings → Subscription reads it, on Plus only
+([iap.md](./iap.md), _enforcement_), so a library that never opens that screen
+never pays for the call. It is its own endpoint rather than a field on
+`iap/status`, which every app start reads and would then pay a DO call for.
+
 **The gate is namespace-blind, and reads only CURRENT usage.** It compares
 `fileCount` and `totalBytes` against the plan's ceilings and ignores what the
 batch is about to add — the same conservatism the byte check always had, since a

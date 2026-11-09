@@ -101,6 +101,9 @@
       },
       "measure:sync:staging": {
         "cache": false
+      },
+      "measure:kept-copies": {
+        "cache": false
       }
     }
   },
@@ -138,7 +141,8 @@
     "measure:password-manager": "tsx measure/password-manager.ts",
     "measure:autofill:android": "tsx measure/autofill-android.ts",
     "measure:sync": "tsx measure/sync.ts",
-    "measure:sync:staging": "E2E_ENVIRONMENT=staging tsx measure/sync.ts"
+    "measure:sync:staging": "E2E_ENVIRONMENT=staging tsx measure/sync.ts",
+    "measure:kept-copies": "tsx measure/kept-copies.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

@@ -5,6 +5,7 @@ import {
   entitlementsOf,
   filesListEndpoint,
   filesSignEndpoint,
+  filesUsageEndpoint,
   opsCommitEndpoint,
   opsListEndpoint,
 } from '@stxapps/shared';
@@ -64,6 +65,7 @@ describe('sync control plane', () => {
       const get = (path: string) => app.request(path, {}, env);
       expect((await get(opsListEndpoint.path)).status).toBe(401);
       expect((await get(filesListEndpoint.path)).status).toBe(401);
+      expect((await get(filesUsageEndpoint.path)).status).toBe(401);
       expect(
         (
           await app.request(
@@ -431,6 +433,50 @@ describe('sync control plane', () => {
       );
 
       expect(res.status).toBe(400);
+    });
+  });
+
+  // The number Settings → Subscription shows against the published ceiling. Both
+  // halves are the put gate's own reads, so a readout that disagreed with the
+  // gate would tell a user they have room the next save is refused for.
+  describe(`GET ${filesUsageEndpoint.path}`, () => {
+    it('reports a fresh account empty, against its plan’s ceiling', async () => {
+      const { auth } = await authFor('sync-usage-fresh');
+
+      const res = await app.request(filesUsageEndpoint.path, { headers: auth }, env);
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ usedBytes: 0, maxBytes: entitlementsOf('free').maxBytes });
+    });
+
+    it('sums what the size map records, against the high-water plan', async () => {
+      // A spent Plus row: the account's plan is free today, but its ceiling, the
+      // one the put gate applies, is still Plus's (services/iap.ts
+      // foldQuotaCeilings) — so that is the one the readout has to show.
+      const { userId, auth } = await authFor('sync-usage-lapsed-plus');
+      await purchasesRepo(env.DIRECTORY_DB).upsertFromProvider({
+        id: newId(),
+        userId,
+        source: 'paddle',
+        externalId: `test-usage-${userId}`,
+        plan: 'plus',
+        status: 'canceled',
+        providerCustomerId: null,
+        expiresAt: Date.now() - 24 * 60 * 60 * 1000,
+        canceledAt: Date.now() - 24 * 60 * 60 * 1000,
+        eventOccurredAt: Date.now(),
+      });
+      await userDataStub(env, userId).commitOps([
+        { op: 'put', path: 'links/a.enc', updatedAt: 1000, size: 1_200 },
+        { op: 'put', path: 'files/b.enc', updatedAt: 1001, size: 230_000 },
+      ]);
+
+      const res = await app.request(filesUsageEndpoint.path, { headers: auth }, env);
+
+      expect(await res.json()).toEqual({
+        usedBytes: 231_200,
+        maxBytes: entitlementsOf('plus').maxBytes,
+      });
     });
   });
 
