@@ -54,6 +54,11 @@ import { openPaddleCheckout } from '@/lib/paddle';
 const ACTIVATION_TRIES = 15;
 const ACTIVATION_INTERVAL_MS = 2000;
 
+// How long the upgrade cards wait for Paddle's price preview before rendering
+// on the USD fallback anyway — see `cardsReady` in the section.
+// bracemark-expo's CATALOG_WAIT_MS is the same wait; change the two together.
+const PRICE_WAIT_MS = 1500;
+
 // Paddle's checkout PAYMENT LINK: `<default payment link>?_ptxn=txn_…`. This
 // page is the default payment link (docs/iap.md, _the payment link_), so it is
 // where Paddle's own emails land: a failed renewal's "update your payment
@@ -135,14 +140,34 @@ export function SubscriptionSection() {
   // one layer over, against the store catalog instead of Paddle's.
   //
   // `isFetched`, not `isPending` or `data === undefined`, is what tells the
-  // fine print below whether the lookup is DONE: loading and failed both leave
-  // `data` undefined, so testing that would flash a dollars disclaimer during a
-  // lookup that is about to render euros. (`isPending` would be worse — a
-  // disabled query stays pending forever.)
+  // cards and the fine print below whether the lookup is DONE: loading and
+  // failed both leave `data` undefined, so testing that would flash a dollars
+  // figure and a dollars disclaimer during a lookup that is about to render
+  // euros. (`isPending` would be worse — a disabled query stays pending
+  // forever.) A failure counts as done (`retry: false`), and renders the USD
+  // fallback.
   const plan = subscription.plan;
-  const { data: prices, isFetched: pricesFetched } = usePaddlePrices({
-    enabled: !isLoading && plan === 'free',
-  });
+  const pricesWanted = !isLoading && plan === 'free';
+  const { data: prices, isFetched: pricesFetched } = usePaddlePrices({ enabled: pricesWanted });
+
+  // The upgrade cards render ONCE, when the lookup settles, rather than
+  // rendering on the base price and then changing under the user: the
+  // preview changes the price figure AND adds the trial line between the
+  // feature list and the button, a ~32px jump of the very control being
+  // aimed at. Holding them costs nothing real — the Upgrade button awaits the
+  // same Paddle.js the preview loads (openPaddleCheckout → getPaddle), so a
+  // card shown earlier would not open a checkout any sooner.
+  //
+  // Capped, though: a slow or stalled Paddle.js must not keep the plans off
+  // the page. Past PRICE_WAIT_MS the cards render on the USD fallback and take
+  // the late update — the old behaviour, now the exception, not the rule.
+  const [priceWaitOver, setPriceWaitOver] = useState(false);
+  useEffect(() => {
+    if (!pricesWanted) return;
+    const timer = setTimeout(() => setPriceWaitOver(true), PRICE_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [pricesWanted]);
+  const cardsReady = pricesFetched || priceWaitOver;
 
   // After a completed payment, re-read `iap/status` until the webhook has
   // landed — `settled` says what "landed" looks like for this payment — then
@@ -350,7 +375,8 @@ export function SubscriptionSection() {
   // create a second live Paddle subscription (double-billing) — a Plus→Pro
   // switch is a subscription UPDATE (proration) and ships as its own flow. The
   // server enforces the same guard at /v1/iap/checkout.
-  const upgradeCards = plan === 'free' ? PLAN_CARDS : [];
+  // `cardsReady` holds them until the price preview settles (see above).
+  const upgradeCards = plan === 'free' && cardsReady ? PLAN_CARDS : [];
 
   // What a PAID plan unlocks, listed inside the current-plan box — the same
   // words the upgrade card sells, read the other way round (PLAN_CARD_COPY in
@@ -554,11 +580,12 @@ export function SubscriptionSection() {
                   <div className="flex items-baseline justify-between">
                     <span className="font-medium">{PLAN_LABELS[cardPlan]}</span>
                     <span className="text-sm text-muted-foreground">
-                      {/* Paddle's number for THIS buyer once it lands — their
-                        currency, their tax, the figure the overlay will repeat.
-                        Until then (and if the lookup failed) the USD base price
-                        from plans.ts, which is what the marketing site shows and
-                        what a buyer in an unpriced country actually pays. */}
+                      {/* Paddle's number for THIS buyer — their currency, their
+                        tax, the figure the overlay will repeat. If the lookup
+                        failed (or outran PRICE_WAIT_MS and hasn't landed yet)
+                        the USD base price from plans.ts, which is what the
+                        marketing site shows and what a buyer in an unpriced
+                        country actually pays. */}
                       {preview ? `${preview.total}/year` : `$${PLAN_USD_PER_YEAR[cardPlan]}/year`}
                     </span>
                   </div>

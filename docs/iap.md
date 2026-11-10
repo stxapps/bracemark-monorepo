@@ -1225,6 +1225,20 @@ a crossgrade inside the existing subscription rather than a second purchase.
   trial out costs a sentence. One that promises a trial the sheet then charges for
   breaks the promise at the moment of payment.
 
+  **The cards render once, when that answer is in.** The line sits between the
+  feature list and the button, so a card drawn on the base price and then
+  updated jumps its own button down ~32px as the trial line arrives, with the
+  price figure changing in the same moment. So both sections hold the upgrade
+  cards until the lookup settles: on web, the price preview (failure counts as
+  settled), and on expo, the products and their trial eligibility, committed
+  together. Committing the products first is what used to enable the button a
+  moment before moving it. The hold costs nothing real, because the button
+  can't act sooner anyway: web's checkout awaits the same Paddle.js the preview
+  loads, and expo's button is disabled until the products land. It is capped at
+  1.5s (`PRICE_WAIT_MS` / `CATALOG_WAIT_MS`), past which the cards render on the
+  base price and take the late update. A stalled third-party script shouldn't
+  keep the plans off the page.
+
   **Only one of the three providers reports the trial as a status.** Paddle has
   `trialing` in `status` and flips it to `active` itself. Apple's status codes
   don't — code 1 is plain "active" whether or not an offer applies — so

@@ -92,8 +92,10 @@ jest.mock('@stxapps/web-ui/contexts/theme-provider', () => ({
 // Undefined by default: the lookup "failed", so the cards show the USD base
 // price. A test that needs Paddle's own preview assigns it.
 let mockPrices: Record<string, { total: string; trial: boolean }> | undefined;
+// True by default: the lookup has settled. False is a lookup still in flight.
+let mockPricesFetched = true;
 jest.mock('./use-paddle-prices', () => ({
-  usePaddlePrices: () => ({ data: mockPrices, isFetched: true }),
+  usePaddlePrices: () => ({ data: mockPrices, isFetched: mockPricesFetched }),
 }));
 
 describe('SubscriptionSection', () => {
@@ -114,6 +116,7 @@ describe('SubscriptionSection', () => {
     mockOpenPaddleCheckout.mockClear();
     mockStorageReadout = null;
     mockPrices = undefined;
+    mockPricesFetched = true;
   });
 
   afterEach(() => {
@@ -143,6 +146,40 @@ describe('SubscriptionSection', () => {
     mockPrices = undefined;
     render(<SubscriptionSection />);
     expect(screen.queryByText(/free trial/)).toBeNull();
+  });
+
+  // The cards render once, on the settled price, rather than on the base price
+  // and then changing under the user: the trial line lands between the feature
+  // list and the button, so a late preview moved the button the user was aiming
+  // at. The wait is capped, so a stalled Paddle.js can't hide the plans.
+  it('holds the upgrade cards until the price preview settles', () => {
+    mockPricesFetched = false;
+    const { rerender } = render(<SubscriptionSection />);
+    expect(screen.queryByRole('group', { name: 'Plus plan' })).toBeNull();
+
+    mockPrices = { plus: { total: '€49.00', trial: true } };
+    mockPricesFetched = true;
+    rerender(<SubscriptionSection />);
+
+    const card = within(screen.getByRole('group', { name: 'Plus plan' }));
+    expect(card.getByText('€49.00/year')).toBeTruthy();
+    expect(card.getByText(/14-day free trial/)).toBeTruthy();
+  });
+
+  it('renders the cards on the base price once the wait runs out', () => {
+    mockPricesFetched = false;
+    render(<SubscriptionSection />);
+    expect(screen.queryByRole('group', { name: 'Plus plan' })).toBeNull();
+
+    act(() => {
+      jest.advanceTimersByTime(1500);
+    });
+
+    const card = within(screen.getByRole('group', { name: 'Plus plan' }));
+    expect(card.getByText('$48/year')).toBeTruthy();
+    expect(card.getByRole('button', { name: 'Upgrade to Plus' })).toBeTruthy();
+    // Still in flight, so no dollars disclaimer yet — it waits for `isFetched`.
+    expect(screen.queryByText(/Shown in US dollars/)).toBeNull();
   });
 
   // The readout is inside the current-plan group, not beside it: it describes

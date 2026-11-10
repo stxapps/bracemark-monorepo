@@ -127,6 +127,36 @@ test('omits the trial line when this store account is not eligible', async () =>
   expect(queryByTestId('subscription-trial-plus')).toBeNull();
 });
 
+// The products and the trial answer land together. Committing the products
+// first enabled the Upgrade button and THEN dropped the trial line in above it,
+// moving the button right after it became pressable.
+test('holds the cards until the trial check answers, then shows price and trial at once', async () => {
+  fetchStorePlanProductsMock.mockResolvedValue({ plus: PLUS_PRODUCT });
+  let answerTrial: (eligible: boolean) => void = () => undefined;
+  storeOffersFreeTrialMock.mockReturnValue(
+    new Promise<boolean>((resolve) => {
+      answerTrial = resolve;
+    }),
+  );
+  const { getByTestId, queryByTestId } = render(<SubscriptionSection />);
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  // Products are in, the eligibility check isn't: nothing drawn yet.
+  expect(storeOffersFreeTrialMock).toHaveBeenCalledWith(PLUS_PRODUCT);
+  expect(queryByTestId('subscription-upgrade-plus')).toBeNull();
+
+  await act(async () => {
+    answerTrial(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  expect(getByTestId('subscription-price-plus')).toHaveTextContent('€49.00/year');
+  expect(getByTestId('subscription-trial-plus')).toBeTruthy();
+  expect(getByTestId('subscription-upgrade-plus')).toBeEnabled();
+});
+
 test('clears the restore notice when the status is refreshed', async () => {
   const { getByText, queryByText } = render(<SubscriptionSection />);
   // Flush the catalog effect, so its setState doesn't land outside act().

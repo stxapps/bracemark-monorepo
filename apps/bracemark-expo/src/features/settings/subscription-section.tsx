@@ -53,6 +53,11 @@ import { StorageUsage } from './storage-usage';
 // @stxapps/shared iap/plans.ts, next to the entitlements table they render —
 // the SAME cards the web section renders, so the two storefronts can't drift.
 
+// How long the upgrade cards wait for the store catalog before rendering on
+// the planning price anyway — see `cardsReady` in the section. Web's
+// PRICE_WAIT_MS; change the two together.
+const CATALOG_WAIT_MS = 1500;
+
 function formatDate(epochMs: number): string {
   return new Date(epochMs).toLocaleDateString(undefined, {
     year: 'numeric',
@@ -80,8 +85,8 @@ export function SubscriptionSection() {
     Record<AvailablePaidPlan, ProductSubscription>
   > | null>(null);
   // The plans this store account would get the free trial on (lib/iap.ts,
-  // `storeOffersFreeTrial`). Empty until checked, so the trial line shows up a
-  // moment after the price and is never there when the store wouldn't give it.
+  // `storeOffersFreeTrial`). Set in the SAME commit as `products` (see the
+  // catalog effect), so the trial line never arrives after the price.
   const [trialPlans, setTrialPlans] = useState<readonly AvailablePaidPlan[]>([]);
   // Store callbacks outlive a navigation away mid-purchase; never set state
   // after unmount. Reset in the effect body, not only initialized: StrictMode's
@@ -97,25 +102,28 @@ export function SubscriptionSection() {
 
   // Load the store catalog only when the upgrade cards will render (free plan)
   // — this is also what lazily opens the store connection (lib/iap.ts).
+  //
+  // The products and their trial eligibility land in ONE commit. Committing
+  // the products first enabled the Upgrade button and THEN, once the iOS
+  // eligibility check answered, dropped the trial line in above it — a
+  // control that moved ~32px right after becoming pressable, and on this
+  // single-column screen everything below it with it. `storeOffersFreeTrial`
+  // never rejects (a failure is `false`, i.e. no line), so it can't hold the
+  // products back.
   const plan = subscription.plan;
+  const catalogWanted = !isLoading && plan === 'free';
   useEffect(() => {
-    if (isLoading || plan !== 'free' || products !== null) return;
+    if (!catalogWanted || products !== null) return;
     let canceled = false;
     fetchStorePlanProducts()
-      .then((byPlan) => {
-        if (canceled) return;
-        setProducts(byPlan);
-        // Settles after this effect re-runs on the `products` it just set, which
-        // marks this run `canceled`. So the result is guarded by the unmount ref
-        // rather than the run flag.
+      .then(async (byPlan) => {
         const entries = Object.entries(byPlan) as [AvailablePaidPlan, ProductSubscription][];
-        void Promise.all(
+        const found = await Promise.all(
           entries.map(async ([p, product]) => ((await storeOffersFreeTrial(product)) ? p : null)),
-        ).then((found) => {
-          if (!unmounted.current) {
-            setTrialPlans(found.filter((p): p is AvailablePaidPlan => p !== null));
-          }
-        });
+        );
+        if (canceled) return;
+        setTrialPlans(found.filter((p): p is AvailablePaidPlan => p !== null));
+        setProducts(byPlan);
       })
       .catch(() => {
         // No store on this device/simulator (or the catalog is missing) — the
@@ -125,7 +133,22 @@ export function SubscriptionSection() {
     return () => {
       canceled = true;
     };
-  }, [isLoading, plan, products]);
+  }, [catalogWanted, products]);
+
+  // The upgrade cards render ONCE, when the catalog settles, rather than on
+  // the planning price and then changing under the user (the web section's
+  // `cardsReady`, same reasoning). It costs nothing here: the button is
+  // disabled until the products land anyway. Capped by CATALOG_WAIT_MS so a
+  // slow store connection can't keep the plans off the screen; past it the
+  // cards render on the planning price with the button disabled, and the
+  // price, trial line and enabled button then arrive together.
+  const [catalogWaitOver, setCatalogWaitOver] = useState(false);
+  useEffect(() => {
+    if (!catalogWanted) return;
+    const timer = setTimeout(() => setCatalogWaitOver(true), CATALOG_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [catalogWanted]);
+  const cardsReady = products !== null || catalogWaitOver;
 
   const startCheckout = async (cardPlan: AvailablePaidPlan) => {
     const product = products?.[cardPlan];
@@ -238,7 +261,9 @@ export function SubscriptionSection() {
   // the customer has already paid for (services/iap.ts). Not to be confused with
   // `purchase_bound`, which is the other direction: one ACCOUNT per store
   // subscription, not one subscription per account.
-  const upgradeCards = plan === 'free' ? PLAN_CARDS : [];
+  //
+  // `cardsReady` holds them until the catalog lookup settles (see above).
+  const upgradeCards = plan === 'free' && cardsReady ? PLAN_CARDS : [];
 
   // What a PAID plan unlocks, listed inside the current-plan box. bracemark-web's
   // section carries the full reasoning (why PLAN_CARD_COPY and not PLAN_CARDS,
@@ -427,8 +452,9 @@ export function SubscriptionSection() {
                       testID={`subscription-price-${cardPlan}`}
                       className="text-sm text-muted-foreground"
                     >
-                      {/* The store's localized price once loaded; the USD
-                          planning price as a placeholder meanwhile. */}
+                      {/* The store's localized price; the USD planning price
+                          only when the store gave no product (or the catalog
+                          outran CATALOG_WAIT_MS and hasn't landed yet). */}
                       {product
                         ? `${product.displayPrice}/year`
                         : `$${PLAN_USD_PER_YEAR[cardPlan]}/year`}
