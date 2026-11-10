@@ -1,6 +1,6 @@
 import { runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { Bindings } from '../lib/env';
 import { opLogsRepo } from './repositories/op-logs';
@@ -454,6 +454,30 @@ describe('UserDataDO transfer count', () => {
     await stub.putGate(30, DEC);
     await stub.refundPuts(30, november); // November's refund, in December
     expect((await row(stub))[0]?.puts).toBe(30);
+  });
+
+  // The count rides in calls whose real work is something else, and commitOps has
+  // already written its ops by the time it counts. A count that throws must cost
+  // the count, never the call: here the table is gone, the worst the counter can
+  // meet, and the commit and the gate still answer.
+  it('never fails the commit or the sign it rides in', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const stub = userDataStub(env, 'transfer-broken');
+    await runInDurableObject(stub, (_instance, state) => {
+      state.storage.sql.exec('DROP TABLE transfer_budget');
+    });
+
+    const committed = await stub.commitOps(
+      [{ op: 'put', path: 'links/a.enc', updatedAt: 1000, size: 3 }],
+      NOV,
+    );
+    expect(committed.results).toEqual([{ path: 'links/a.enc', updatedAt: 1000 }]);
+    expect(committed.commits).toBeUndefined();
+
+    const gate = await stub.putGate(5, NOV);
+    expect(gate.usage).toMatchObject({ totalBytes: 3 });
+    expect(gate.puts).toBeUndefined();
+    expect(error).toHaveBeenCalled();
   });
 
   // The first seam. If this fails, "import, wipe, repeat" resets its own count.

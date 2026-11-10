@@ -35,7 +35,8 @@ export async function scheduled(
   // it runs before the purge that drops them. A failed report must not stop the
   // purge: /privacy promises the per-network rows go shortly after their day,
   // and that outranks a day's totals. A day lost that way has no signup_days
-  // row, which is how it shows.
+  // row, which is how it shows: the next run writes zeros for its own yesterday
+  // only, never for a day whose counts are gone (services/signup-report.ts).
   ctx.waitUntil(
     reportSignups(env)
       .catch((err: unknown) => console.error('scheduled: signup report failed', err))

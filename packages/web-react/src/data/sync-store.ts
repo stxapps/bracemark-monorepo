@@ -67,12 +67,35 @@ export class AccountFencedError extends Error {
 }
 
 // Inside a transaction that includes db.syncMeta: throw unless `username` still
-// owns this device's store. Hands back the row it read, for a caller that has more
-// to do with it in the same transaction.
-export async function assertAccountStillOwnsStore(username: string): Promise<SyncMetaRecord> {
+// owns this device's store. KEY-ONLY: it counts the row, it does not read it.
+// Every local write and every pulled record passes through here, and the row
+// carries the unreadable record (`unreadablePaths` and a stamp per path), which
+// a `get` would clone whole each time, for a question whose answer is one bit.
+// A caller that needs the row uses ownedSyncMeta.
+export async function assertAccountStillOwnsStore(username: string): Promise<void> {
+  const rows = await db.syncMeta.where(':id').equals(username).count();
+  if (rows === 0) throw new AccountFencedError(username);
+}
+
+// The same fence, handing back the row it read, for a caller that has more to do
+// with it in the same transaction.
+export async function ownedSyncMeta(username: string): Promise<SyncMetaRecord> {
   const meta = await db.syncMeta.get(username);
   if (!meta) throw new AccountFencedError(username);
   return meta;
+}
+
+// The unreadable record's paths, as a set. A pull reads it ONCE, as it starts
+// (sync/engine.ts startPull), and its writes then take a path out of the record
+// only when the path is in this set. The other way round, every stored record
+// would read the row and filter the whole list to learn, nearly always, that its
+// path was never in it. The set can only run behind the row in the safe
+// direction: paths join the record when a pull finishes, under the cycle lock,
+// so a pull's own set holds every path it could meet, and a path it misses (a
+// second tab where Web Locks are absent) stays recorded until the recheck
+// fetches it, which costs a sweep that waits.
+export async function unreadablePathSet(username: string): Promise<Set<string>> {
+  return new Set((await db.syncMeta.get(username))?.unreadablePaths);
 }
 
 // Claim the bookkeeping row — only ever under the lifecycle lock: from setSession,
@@ -196,7 +219,7 @@ export async function recordUnreadablePaths(
 ): Promise<void> {
   if (skipped.length === 0) return;
   await db.transaction('rw', db.syncMeta, async () => {
-    const meta = await assertAccountStillOwnsStore(username);
+    const meta = await ownedSyncMeta(username);
     const next = recordSkips(unreadableState(meta), skipped, now);
     if (next) {
       await db.syncMeta.update(username, {
@@ -218,7 +241,7 @@ export async function finishUnreadableRecheck(
   now = Date.now(),
 ): Promise<void> {
   await db.transaction('rw', db.syncMeta, async () => {
-    const meta = await assertAccountStillOwnsStore(username);
+    const meta = await ownedSyncMeta(username);
     const next = afterRecheck(unreadableState(meta), checked, gone, now);
     await db.syncMeta.update(username, {
       unreadablePaths: [...next.paths],
@@ -228,6 +251,7 @@ export async function finishUnreadableRecheck(
 }
 
 // Record that the orphaned-file sweep ran to the end (SyncMetaRecord.lastOrphanSweepAt).
+// `at` is the sweep's stamp (shared's orphanSweepStamp), which a capped run sets back.
 // Fenced: a sweep that outlived its account writes nothing.
 export async function markOrphanSweep(username: string, at: number): Promise<void> {
   await db.transaction('rw', db.syncMeta, async () => {
@@ -236,8 +260,9 @@ export async function markOrphanSweep(username: string, at: number): Promise<voi
   });
 }
 
-// Inside a transaction that includes db.syncMeta, with the row its fence just read:
-// drop paths a pull has now stored or deleted from the unreadable record. A path
+// Inside a transaction that includes db.syncMeta, with the row read in it
+// (ownedSyncMeta): drop paths a pull has now stored or deleted from the unreadable
+// record. A path
 // left in it by mistake costs nothing worse than a dangling extraction the sweep
 // passes over; one dropped by mistake can cost a deleted extraction, so only the
 // pull's own successful writes call this.

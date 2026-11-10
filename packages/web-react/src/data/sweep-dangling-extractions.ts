@@ -50,6 +50,10 @@
 //     not a gap: the sweep refuses to run until a full listing has completed with the
 //     record in place — SyncMetaRecord.unreadableRecordCompleteAt — and the engine
 //     forces that fallback.);
+//   - the same on expo by a DOWNGRADE: a build from before the record, run after a
+//     newer one, opens the migrated database and skips without recording while the
+//     row still says the record is complete. Nothing the older build writes says it
+//     ran, so the newer one can't tell;
 //   - an op log restored beneath this device's cursor and then written to: the next
 //     commit is stamped above the stale cursor, so the cycle is routed incremental
 //     instead of to the fallback and never lists the ops the restore lost. A

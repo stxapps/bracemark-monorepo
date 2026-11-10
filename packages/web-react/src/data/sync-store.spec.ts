@@ -28,6 +28,7 @@ import {
   getSyncMeta,
   isFirstSyncDone,
   markFirstSyncDone as markDone,
+  ownedSyncMeta,
   recordUnreadablePaths,
   resetCursor,
   resetToSeededState,
@@ -180,12 +181,28 @@ describe('the unreadable record', () => {
     expect(await getSyncMeta(USER)).toBeUndefined();
   });
 
+  // The fence every local write and every pulled record passes: key-only, so it
+  // answers without reading the row (and the record on it). The two readers must
+  // agree on what "owns the store" means.
+  it('fences on the row’s existence, with or without reading it', async () => {
+    await db.transaction('rw', db.syncMeta, async () => {
+      await expect(assertAccountStillOwnsStore(USER)).rejects.toBeInstanceOf(AccountFencedError);
+      await expect(ownedSyncMeta(USER)).rejects.toBeInstanceOf(AccountFencedError);
+    });
+    await seedNewAccount(USER);
+
+    await db.transaction('rw', db.syncMeta, async () => {
+      await expect(assertAccountStillOwnsStore(USER)).resolves.toBeUndefined();
+      expect((await ownedSyncMeta(USER)).username).toBe(USER);
+    });
+  });
+
   it('forgets only the paths a pull has since stored or deleted', async () => {
     await seedNewAccount(USER);
     await recordUnreadablePaths(USER, ['links/l_1.enc', 'links/l_2.enc'].map(stamped));
 
     await db.transaction('rw', db.syncMeta, async () => {
-      const meta = await assertAccountStillOwnsStore(USER);
+      const meta = await ownedSyncMeta(USER);
       await forgetUnreadablePaths(meta, ['links/l_1.enc', 'links/l_3.enc']);
     });
 

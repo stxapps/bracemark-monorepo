@@ -92,8 +92,10 @@ export interface SyncMetaRecord {
   // seedNewAccount and the delete-all reset too, which have nothing to skip. Optional
   // and not indexed, like `unreadablePaths`.
   unreadableRecordCompleteAt?: number;
-  // When the orphaned-file sweep last ran to the end for this account on this device
-  // (data/sweep-orphan-files.ts) — its weekly throttle. Device-local bookkeeping, gone
+  // The stamp the orphaned-file sweep's weekly throttle counts from
+  // (data/sweep-orphan-files.ts): when it last ran to the end for this account on
+  // this device — or, for a run its cap cut short, a time set back so the next run
+  // is due in a day (shared's orphanSweepStamp). Device-local bookkeeping, gone
   // with the row on sign-out and with delete-all-data's rewrite. Optional and not
   // indexed, so it needed no schema version, like `unreadablePaths`.
   lastOrphanSweepAt?: number;

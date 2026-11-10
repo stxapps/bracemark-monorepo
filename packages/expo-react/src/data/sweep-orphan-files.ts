@@ -27,6 +27,7 @@ import {
   orphanCandidates,
   orphansToDelete,
   orphanSweepMayRun,
+  orphanSweepStamp,
   pendingWrites,
   strikeEntityReferences,
 } from '@stxapps/shared';
@@ -67,13 +68,15 @@ export async function sweepOrphanFiles(username: string, now = Date.now()): Prom
     if (entityWrittenDuring(before, await queue())) return 0;
   }
 
+  const ids = orphansToDelete(candidates);
   let swept = 0;
-  for (const fileId of orphansToDelete(candidates)) {
+  for (const fileId of ids) {
     await deleteFile(username, fileId);
     swept += 1;
   }
   // Recorded only for a run that got to the end — an unprovable store tries again
-  // next session rather than waiting a week.
-  await markOrphanSweep(username, now);
+  // next session rather than waiting a week. A run the cap cut short is stamped to
+  // come back in a day, not a week (shared's orphanSweepStamp).
+  await markOrphanSweep(username, orphanSweepStamp(now, candidates.size > ids.length));
   return swept;
 }

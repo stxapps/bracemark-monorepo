@@ -49,6 +49,7 @@ import {
   opsCommitEndpoint,
   opsListEndpoint,
   pathFromId,
+  PROOF_RETRY_DELAYS_MS,
   SET_OUTAGE_FAILURES,
   SyncIncompleteError,
   utf8,
@@ -1470,6 +1471,47 @@ describe('a pulled blob that does not open under its path', () => {
       expect(listings).toBe(1);
       expect(await unreadable()).toEqual([LINK_PATH]);
       expect((await getSyncMeta(USER))?.unreadableRecordCompleteAt).toBeGreaterThan(0);
+    });
+
+    // Drift guard for the backoff (web's spec is canonical): a forced fallback that
+    // failed is not forced again on the retry, which the op log routes, and comes
+    // back once the first delay is over. On a phone every foreground wake is a
+    // retry, so without this a stuck cycle re-listed the library on each app open.
+    it('does not force the fallback again until its backoff is over', async () => {
+      getDb()
+        .update(syncMeta)
+        .set({ unreadableRecordCompleteAt: null })
+        .where(eq(syncMeta.username, USER))
+        .run();
+      let at = Date.now();
+      const clock = jest.spyOn(Date, 'now').mockImplementation(() => at);
+      let listings = 0;
+      const opsList = () => ({
+        ops: [],
+        oldestUpdatedAt: 500,
+        newestUpdatedAt: 1000,
+        hasMore: false,
+      });
+      const failing = {
+        opsList,
+        filesList: () => {
+          listings += 1;
+          throw new Error('listing failed');
+        },
+      };
+
+      try {
+        await expect(runIncrementalSync(deps(failing))).rejects.toThrow('listing failed');
+        await runIncrementalSync(deps(failing));
+        expect(listings).toBe(1);
+        expect((await getSyncMeta(USER))?.unreadableRecordCompleteAt).toBeNull();
+
+        at += PROOF_RETRY_DELAYS_MS[0];
+        await runIncrementalSync(deps({ opsList, filesList: () => [] }));
+        expect((await getSyncMeta(USER))?.unreadableRecordCompleteAt).toBeGreaterThan(0);
+      } finally {
+        clock.mockRestore();
+      }
     });
   });
 });

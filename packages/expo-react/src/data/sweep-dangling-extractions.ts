@@ -5,6 +5,14 @@
 // Which extractions are dangling is shared's danglingExtractionPaths, the one rule
 // both platforms run. This file keeps the store reads and the deletes.
 //
+// THE READ IS ONE STATEMENT, where web's is two key scans: the store is asked for
+// the extractions that have no link row (item-store's pathsWithoutShadow), not for
+// every extraction path. The driver here is sync and this runs after the first
+// cycle of every launch, so a read the size of the library would block the JS
+// thread to find, nearly always, nothing. The shared rule still decides: it is
+// handed those paths with no link present, and takes out the ones whose link a
+// pull skipped as unreadable.
+//
 // WHO MAY CALL THIS: a full-sync client, at the end of a completed sync cycle and
 // inside its lock (the engine's SyncDeps.afterCycle). bracemark-expo is a full-sync
 // client and hands it to its SyncProvider (SyncProviderWithSweep), the same way
@@ -21,10 +29,9 @@ import {
   EXTRACTIONS_PREFIX,
   idFromPath,
   LINKS_PREFIX,
-  rekey,
 } from '@stxapps/shared';
 
-import { namespacePaths, presentPaths } from './item-store';
+import { pathsWithoutShadow } from './item-store';
 import { deleteExtraction, deleteFile } from './mutations';
 import { readExtraction } from './queries';
 import { getSyncMeta } from './sync-store';
@@ -40,15 +47,14 @@ export async function sweepDanglingExtractions(username: string): Promise<number
   if (!danglingSweepMayRun(meta ?? undefined)) return 0;
   // Links a pull skipped as unreadable: absent here, not proven absent there.
   const unreadable = new Set(meta?.unreadablePaths);
-  const exPaths = namespacePaths(EXTRACTIONS_PREFIX);
-  if (exPaths.length === 0) return 0;
-
-  const present = presentPaths(
-    exPaths.map((path) => rekey(path, EXTRACTIONS_PREFIX, LINKS_PREFIX)),
-  );
+  // Only the extractions with no link row here, so `present` is empty by
+  // construction and the rule's other half, the unreadable record, is what it
+  // still has to apply.
+  const linkless = pathsWithoutShadow(EXTRACTIONS_PREFIX, LINKS_PREFIX);
+  if (linkless.length === 0) return 0;
 
   let swept = 0;
-  for (const exPath of danglingExtractionPaths(exPaths, present, unreadable)) {
+  for (const exPath of danglingExtractionPaths(linkless, new Set(), unreadable)) {
     // Content before entity, as destroy does: an interruption leaves the extraction
     // still dangling, with its refs intact, for the next run to finish.
     const linkId = idFromPath(exPath, EXTRACTIONS_PREFIX);

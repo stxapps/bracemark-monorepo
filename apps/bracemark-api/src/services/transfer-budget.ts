@@ -39,7 +39,9 @@ import { getHighWaterPlan } from './iap';
 //
 // IT MUST NEVER FAIL A SYNC. The plan read and the write are caught and logged:
 // a lost increment is a total off by one, and a sync that failed for it would be
-// a refusal by the back door.
+// a refusal by the back door. The DO's half holds the same rule (do/user-data.ts
+// countTransfer): a count it can't make comes back as no count, which
+// noteTransfer below passes over.
 
 const DAY_MS = 86_400_000;
 

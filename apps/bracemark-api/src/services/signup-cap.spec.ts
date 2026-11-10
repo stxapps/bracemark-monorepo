@@ -308,10 +308,11 @@ describe('reportSignups', () => {
   });
 
   // What the cron writes down before the purge takes the per-network rows away.
-  // A skipped run skips its purge too, so the next run finds both days still in
-  // signup_counts and writes each exactly, and the day nobody signed up gets a
-  // row of zeros rather than no row: no row is how a cron that didn't run shows.
-  it('keeps every finished day since the last as a row of totals, zeros included', async () => {
+  // A skipped run skips its purge too, so the next run finds that day still in
+  // signup_counts and writes it exactly, and yesterday, which nobody signed up
+  // on, gets a row of zeros rather than no row: no row is how a day the cron
+  // did not see shows.
+  it('keeps every finished day it can still read as a row of totals, zeros for yesterday', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const e = caps('1', '2');
@@ -340,25 +341,55 @@ describe('reportSignups', () => {
     expect(await signupDaysFrom(day)).toEqual(written);
   });
 
-  // A table empty or long idle starts SIGNUP_DAYS_KEPT back, not at the epoch:
-  // a row older than that would be purged on the same run.
-  it('reaches back no further than the rows are kept', async () => {
+  // The failure the zeros must not paper over. A report that fails is followed by
+  // the purge all the same (worker.ts), so the day's counts are gone when the
+  // next run looks. Zeros for it would read as a day nobody signed up, on the one
+  // day the figures were lost; it gets no row, and the gap is what shows.
+  it('writes no row for a day whose counts were purged unreported', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const e = caps('1', '2');
+    const base = NOON + 800 * DAY_MS;
+    const day = Math.floor(base / DAY_MS);
+
+    await reportSignups(e, base);
+    await claimSignupSlot(e, '203.0.113.80', base);
+    await refusal(claimSignupSlot(e, '203.0.113.80', base));
+    // day + 1: the report failed, and the purge ran.
+    await purgeSignupCounts(e, base + DAY_MS);
+
+    await reportSignups(e, base + 2 * DAY_MS);
+
+    expect(await signupDaysFrom(day)).toEqual([
+      { day: day + 1, capped_networks: 0, busiest: 0, cap_ipv4: 1, cap_ipv6: 2, enforced: 1 },
+    ]);
+  });
+
+  // A table empty or long idle looks SIGNUP_DAYS_KEPT back, not to the epoch: a
+  // row older than that would be purged on the same run. And it writes only what
+  // it can read. The days in between have no counts left, and get no row, not
+  // zeros: the first run after the table was created never counted them.
+  it('reaches back no further than the rows are kept, and invents no zeros on the way', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const e = caps('5', '5', OBSERVE);
     const at = NOON + 900 * DAY_MS;
     const today = Math.floor(at / DAY_MS);
+    await claimSignupSlot(e, '203.0.113.90', at - (SIGNUP_DAYS_KEPT + 1) * DAY_MS);
+    await claimSignupSlot(e, '203.0.113.90', at - SIGNUP_DAYS_KEPT * DAY_MS);
 
-    await reportSignups(caps(undefined, undefined, OBSERVE), at);
+    await reportSignups(e, at);
 
-    const written = await signupDaysFrom(today - SIGNUP_DAYS_KEPT - 1);
-    expect(written[0]?.day).toBe(today - SIGNUP_DAYS_KEPT);
-    expect(written.at(-1)).toEqual({
-      day: today - 1,
-      capped_networks: 0,
-      busiest: 0,
-      cap_ipv4: null,
-      cap_ipv6: null,
-      enforced: 0,
-    });
+    expect(await signupDaysFrom(today - SIGNUP_DAYS_KEPT - 1)).toEqual([
+      {
+        day: today - SIGNUP_DAYS_KEPT,
+        capped_networks: 0,
+        busiest: 1,
+        cap_ipv4: 5,
+        cap_ipv6: 5,
+        enforced: 0,
+      },
+      { day: today - 1, capped_networks: 0, busiest: 0, cap_ipv4: 5, cap_ipv6: 5, enforced: 0 },
+    ]);
   });
 });
 
@@ -367,12 +398,19 @@ describe('purgeSignupDays', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const at = NOON + 1200 * DAY_MS;
     const today = Math.floor(at / DAY_MS);
+    // A row at each end of the kept range, and yesterday's.
+    await claimSignupSlot(capped('5'), '203.0.113.95', at - SIGNUP_DAYS_KEPT * DAY_MS);
+    await claimSignupSlot(capped('5'), '203.0.113.95', at - (SIGNUP_DAYS_KEPT - 1) * DAY_MS);
     await reportSignups(capped('5'), at);
+    expect((await signupDaysFrom(today - SIGNUP_DAYS_KEPT)).map((r) => r.day)).toEqual([
+      today - SIGNUP_DAYS_KEPT,
+      today + 1 - SIGNUP_DAYS_KEPT,
+      today - 1,
+    ]);
 
     await purgeSignupDays(capped('5'), at + DAY_MS);
 
     const kept = await signupDaysFrom(today - SIGNUP_DAYS_KEPT);
-    expect(kept[0]?.day).toBe(today + 1 - SIGNUP_DAYS_KEPT);
-    expect(kept.at(-1)?.day).toBe(today - 1);
+    expect(kept.map((r) => r.day)).toEqual([today + 1 - SIGNUP_DAYS_KEPT, today - 1]);
   });
 });

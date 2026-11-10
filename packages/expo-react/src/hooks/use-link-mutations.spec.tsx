@@ -16,12 +16,15 @@ const mockWriteLink = jest.fn((_username: string, _link: LinkItem, _patch: objec
   Promise.resolve(),
 );
 const mockDeleteFile = jest.fn((_username: string, _fileId: string) => Promise.resolve());
+const mockRequestSync = jest.fn();
 
 jest.mock('@stxapps/expo-crypto', () => ({ newId: () => 'new-id' }));
 jest.mock('expo-file-system', () => ({ File: jest.fn() }));
 jest.mock('../lib/image', () => ({ resizeImage: jest.fn() }));
 jest.mock('../contexts/auth-provider', () => ({ useAuth: () => ({ username: 'alice' }) }));
-jest.mock('../contexts/sync-provider', () => ({ useSync: () => ({ requestSync: jest.fn() }) }));
+jest.mock('../contexts/sync-provider', () => ({
+  useSync: () => ({ requestSync: () => mockRequestSync() }),
+}));
 jest.mock('../data/mutations', () => ({
   writeLink: (username: string, link: LinkItem, patch: object) =>
     mockWriteLink(username, link, patch),
@@ -45,6 +48,7 @@ const link = (customImageId?: string): LinkItem => ({
 beforeEach(() => {
   mockWriteLink.mockClear();
   mockDeleteFile.mockClear();
+  mockRequestSync.mockClear();
 });
 
 it('deletes the image the write replaced, read off the stored record, not the snapshot', async () => {
@@ -74,4 +78,24 @@ it('deletes nothing when the patch leaves the image alone, or names the one it h
 
   expect(mockWriteLink).toHaveBeenCalledTimes(2);
   expect(mockDeleteFile).not.toHaveBeenCalled();
+});
+
+// The link write has landed by the time the reclaim runs. A delete that throws
+// still fails the call, but the edit must be pushed: before the reclaim moved into
+// `update`, the sync was asked for ahead of the delete.
+it('asks for a sync even when the reclaim throws', async () => {
+  mockStored = link('f_old');
+  mockDeleteFile.mockRejectedValueOnce(new Error('store closed'));
+  const { result } = renderHook(() => useLinkMutations());
+
+  // `rejects` inside `act`, not around it (docs/testing.md, _an `act()` that a
+  // matcher can't await_).
+  await act(async () => {
+    await expect(result.current.update(link('f_old'), { customImageId: 'f_new' })).rejects.toThrow(
+      'store closed',
+    );
+  });
+
+  expect(mockWriteLink).toHaveBeenCalledTimes(1);
+  expect(mockRequestSync).toHaveBeenCalledTimes(1);
 });

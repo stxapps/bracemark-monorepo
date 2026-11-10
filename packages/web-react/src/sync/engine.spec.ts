@@ -21,6 +21,7 @@ import {
   filesSignEndpoint,
   opsCommitEndpoint,
   opsListEndpoint,
+  PROOF_RETRY_DELAYS_MS,
   SET_OUTAGE_FAILURES,
   SETTINGS_GENERAL_PATH,
   SyncIncompleteError,
@@ -2457,7 +2458,56 @@ describe('a pulled blob that does not open under its path', () => {
         expect(listings).toBe(1);
       });
 
-      it('stays unproven when the fallback fails, and the next cycle forces it again', async () => {
+      // A fallback lists the whole namespace before it does anything else, and a
+      // cycle that fails after that listing fails the same way on its retry. Forced
+      // on every cycle, a stuck device re-listed its library on each retry and each
+      // foreground wake. So a forced fallback that failed waits out a backoff
+      // (shared's PROOF_RETRY_DELAYS_MS), and until then the op log routes the cycle.
+      it('waits out a backoff after a forced fallback fails, and is routed by the op log meanwhile', async () => {
+        await db.syncMeta.update(USER, { unreadableRecordCompleteAt: undefined });
+        let at = Date.now();
+        const clock = jest.spyOn(Date, 'now').mockImplementation(() => at);
+        let listings = 0;
+        const failing = {
+          opsList: () => NO_OPS,
+          filesList: () => {
+            listings += 1;
+            throw new Error('listing failed');
+          },
+        };
+        const proven = async () => (await getSyncMeta(USER))?.unreadableRecordCompleteAt;
+
+        try {
+          await expect(runIncrementalSync(deps(failing))).rejects.toThrow('listing failed');
+          expect(listings).toBe(1);
+
+          // The retry: incremental, as the op log says. It succeeds and proves nothing.
+          await runIncrementalSync(deps(failing));
+          expect(listings).toBe(1);
+          expect(await proven()).toBeUndefined();
+
+          // The first delay over: forced again, and it fails again.
+          at += PROOF_RETRY_DELAYS_MS[0];
+          await expect(runIncrementalSync(deps(failing))).rejects.toThrow('listing failed');
+          expect(listings).toBe(2);
+
+          // The delays grow: the first one is no longer enough.
+          at += PROOF_RETRY_DELAYS_MS[0];
+          await runIncrementalSync(deps(failing));
+          expect(listings).toBe(2);
+
+          at += PROOF_RETRY_DELAYS_MS[1];
+          await runIncrementalSync(deps({ opsList: () => NO_OPS, filesList: () => [] }));
+          expect(await proven()).toBeGreaterThan(0);
+        } finally {
+          clock.mockRestore();
+        }
+      });
+
+      // While the forced one waits, the op log can still send a cycle to the
+      // fallback for its own reasons (here an emptied log). That is the same full
+      // listing, so it proves the store as well, and nothing is left to force.
+      it('is completed by a fallback the op log routed while the forced one waited', async () => {
         await db.syncMeta.update(USER, { unreadableRecordCompleteAt: undefined });
         let listings = 0;
         const failing = {
@@ -2467,12 +2517,24 @@ describe('a pulled blob that does not open under its path', () => {
             throw new Error('listing failed');
           },
         };
-
         await expect(runIncrementalSync(deps(failing))).rejects.toThrow('listing failed');
-        expect((await getSyncMeta(USER))?.unreadableRecordCompleteAt).toBeUndefined();
 
-        await runIncrementalSync(deps({ opsList: () => NO_OPS, filesList: () => [] }));
-        expect(listings).toBe(1);
+        await runIncrementalSync(
+          deps({
+            opsList: () => ({
+              ops: [],
+              oldestUpdatedAt: null,
+              newestUpdatedAt: null,
+              hasMore: false,
+            }),
+            filesList: () => {
+              listings += 1;
+              return [];
+            },
+          }),
+        );
+
+        expect(listings).toBe(2);
         expect((await getSyncMeta(USER))?.unreadableRecordCompleteAt).toBeGreaterThan(0);
       });
     });

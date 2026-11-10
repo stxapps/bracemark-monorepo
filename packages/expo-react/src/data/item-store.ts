@@ -163,13 +163,27 @@ export function namespaceRowsPage(prefix: string, after: string, limit: number):
 // keys and stamps only, so no `data` blob comes off a page for a scan that is
 // normally answered without one.
 
-// Every path under one namespace, in path order.
-export function namespacePaths(prefix: string): string[] {
+// The paths under `prefix` with no co-keyed row under `shadowPrefix` — the
+// dangling-extraction sweep's read (`extractions/{id}` with no `links/{id}`), as
+// ONE statement that returns only the misses. The answer is normally no rows,
+// and the sweep runs after the first cycle of every launch, on a driver that is
+// sync: reading every extraction path across and then probing for its link in
+// `IN` batches blocked the JS thread for the whole library, to learn nothing.
+// Here the range scan and the probes both stay on the primary-key index, inside
+// SQLite. The prefix swap is `rekey`'s, with the length from the constant
+// (queries.ts extractionPathSql is the same swap the other way).
+export function pathsWithoutShadow(prefix: string, shadowPrefix: string): string[] {
+  const path = sql.identifier(items.path.name);
   return getDb()
-    .select({ path: items.path })
-    .from(items)
-    .where(and(gte(items.path, prefix), lt(items.path, prefixEnd(prefix))))
-    .all()
+    .all<{ path: string }>(
+      sql`SELECT e.${path} AS path FROM ${items} e
+          WHERE e.${path} >= ${prefix} AND e.${path} < ${prefixEnd(prefix)}
+            AND NOT EXISTS (
+              SELECT 1 FROM ${items} l
+              WHERE l.${path} = ${shadowPrefix} || substr(e.${path}, ${prefix.length + 1})
+            )
+          ORDER BY e.${path}`,
+    )
     .map((row) => row.path);
 }
 
@@ -180,20 +194,6 @@ export function namespaceStamps(prefix: string): { path: string; updatedAt: numb
     .from(items)
     .where(and(gte(items.path, prefix), lt(items.path, prefixEnd(prefix))))
     .all();
-}
-
-// Which of `paths` have a row here.
-export function presentPaths(paths: string[]): Set<string> {
-  const present = new Set<string>();
-  for (const batch of chunk(paths, IN_BATCH)) {
-    const rows = getDb()
-      .select({ path: items.path })
-      .from(items)
-      .where(inArray(items.path, batch))
-      .all();
-    for (const row of rows) present.add(row.path);
-  }
-  return present;
 }
 
 // Up to `limit` ENTITY rows (every namespace but `files/`) whose path sorts after
@@ -302,7 +302,20 @@ export function putItemsTx(tx: DbTx, input: ItemRecord[]): void {
 // AccountFencedError), in the same transaction: a cycle that outlived a sign-out
 // or an account switch must not write the old account's plaintext into the new
 // store.
-export async function putItemsUnqueued(username: string, records: ItemRecord[]): Promise<string[]> {
+//
+// `recorded` is the unreadable record's paths as the caller's pull read them at
+// its start (sync-store's unreadablePathSet). Given it, a stored path is taken
+// out of the record only if it is in that set, which on an ordinary pull is
+// never. This runs once per pulled record, and without the set each call reads
+// and parses the record's two JSON columns to filter a list its path is almost
+// never in. Left out, every stored path is checked against the row, which is
+// always right and costs the size of the record: fine for a one-off caller, not
+// for the pull.
+export async function putItemsUnqueued(
+  username: string,
+  records: ItemRecord[],
+  recorded?: ReadonlySet<string>,
+): Promise<string[]> {
   if (records.length === 0) return [];
   return getDb().transaction((tx) => {
     assertAccountOwnsStoreTx(tx, username);
@@ -316,7 +329,8 @@ export async function putItemsUnqueued(username: string, records: ItemRecord[]):
     const stored = writable.map((r) => r.path);
     // A path stored is no longer one a pull could not read (sync-store's
     // forgetUnreadablePathsTx), in the same transaction as the store.
-    forgetUnreadablePathsTx(tx, username, stored);
+    const settled = recorded ? stored.filter((path) => recorded.has(path)) : stored;
+    if (settled.length > 0) forgetUnreadablePathsTx(tx, username, settled);
     return stored;
   });
 }

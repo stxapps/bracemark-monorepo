@@ -383,14 +383,19 @@ Two rules:
   - **any string in any entity is a reference** — not just the fields this build
     knows (`EXTRACTION_FILE_REF_FIELDS`, `customImageId`), because a newer client's
     field or namespace may name a blob, and an older device would otherwise delete
-    it for everyone. A record that won't decode, or has no bytes, stops the run;
+    it for everyone. An object's keys count as much as its values (a newer client
+    may keep a map keyed by blob id). A record that won't decode, or has no bytes,
+    stops the run;
   - never a blob with a **pending op** (a local unpushed write carries `updatedAt:
 0`, so age alone can't exclude it), never one younger than **30 days** by its
     server stamp (`ORPHAN_GRACE_MS` — content is written before its reference, and
     a stalled device gets that long to push the rest), and **nothing written during
     the scan** (an entity put queued while it yields aborts the run);
   - at most **weekly** per account per device (`SyncMetaRecord.lastOrphanSweepAt`)
-    and **500 deletes** a run.
+    and **500 deletes** a run. A run the cap cut short comes back in **a day**
+    (`ORPHAN_SWEEP_BACKLOG_INTERVAL_MS`; it writes its stamp set back, so the one
+    field carries both schedules): at 500 a week, an account full of blobs that
+    older builds leaked stayed at its byte ceiling for months.
 
   The dangling sweep's known gaps (a store missing an entity the server holds) apply
   and cost more here: a blob only that entity names would go. Accepted for the same

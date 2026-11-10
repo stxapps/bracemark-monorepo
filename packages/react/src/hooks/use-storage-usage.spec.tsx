@@ -38,7 +38,7 @@ it('reads usage against the published ceiling, in the pricing page’s units', a
 
   await waitFor(() => expect(result.current).not.toBeNull());
   expect(result.current).toMatchObject({
-    text: '1.3 GB of 5 GB used',
+    text: '1.2 GB of 5 GB used',
     fraction: 0.25,
     full: false,
   });

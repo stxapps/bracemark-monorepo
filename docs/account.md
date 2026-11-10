@@ -852,11 +852,15 @@ anything: whether an env enforces it is one setting, and /privacy has to hold
 either way.
 
 The daily cron keeps the cap's figures as totals, then drops past days
-(`services/signup-report.ts`). For every finished day since its last run it
-writes one `signup_days` row: how many networks went past their cap (with the
-caps in force and whether they refused or observed) and the busiest network's
-signups — no network and no hash, zeros on a day nobody signed up, so a missing
-day means the cron didn't run. The rows are kept 40 days, long enough to read a
+(`services/signup-report.ts`). For each finished day since its last run whose
+counts it can still read, it writes one `signup_days` row: how many networks
+went past their cap (with the caps in force and whether they refused or
+observed) and the busiest network's signups — no network and no hash. ⚠ A row
+means the cron saw that day's counts, so zeros are written for yesterday only,
+where finding none means nobody signed up. An older day with no counts left gets
+no row: a skipped run leaves its counts in place and they are written exactly,
+but after a report that failed the purge has taken them, and zeros there would
+read as a quiet day. A missing day is one the cron did not see. The rows are kept 40 days, long enough to read a
 whole past month back, and are what the report reads; the per-network rows they
 come from still go the next day, as /privacy says. It also logs one line with
 yesterday's figures and the last 24 h of new accounts, for an incident. The

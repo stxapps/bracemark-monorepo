@@ -379,7 +379,11 @@ deletion: `sweepDanglingExtractions` (web-react and expo-react, one rule between
 them: shared's `danglingExtractionPaths`, `sync/sweeps.ts`) scans extraction paths
 against their co-keyed links (keys only — blobs are read only when a dangling is
 actually found) and tears each one down content-before-entity through the normal
-delete mutations, queuing the server deletes. **bracemark-web and bracemark-expo**
+delete mutations, queuing the server deletes. Expo asks its store for the
+extractions with no link row in one statement (`pathsWithoutShadow`), not for
+every extraction path: its driver is synchronous and the sweep runs after the
+first cycle of every launch, so a read the size of the library would block the JS
+thread to find, nearly always, nothing. **bracemark-web and bracemark-expo**
 both run it, at the **end of a successful sync cycle and inside that cycle's lock**
 (the engine's `afterCycle`, handed to the app's `SyncProvider` by its
 `SyncProviderWithSweep`; the cycle runs once more to push the deletes). Web runs it
@@ -415,10 +419,19 @@ the sweep then deletes that link's extraction and its `files/` for every device:
   row predates the record is no longer a gap: until a full listing (a first sync
   or a fallback) has completed with the record in place
   (`unreadableRecordCompleteAt` on the bookkeeping row), both sweeps refuse to
-  run, and the engines force that fallback on the next cycle. The fallback
+  run, and the engines force that fallback on the next cycle (and, if it fails,
+  again on a backoff rather than on every retry —
+  [local-first-sync.md](./local-first-sync.md), _crypto boundary_). The fallback
   downloads every path missing here, so a link an older build skipped fails
   again and is recorded this time. Every web row from before the record and
   every expo row migration 1 brought up starts that way.
+- **An expo build from before the record, run after a newer one** (a downgrade:
+  a sideloaded Android build, an older TestFlight one). It opens the migrated
+  database, reads past the columns it doesn't know, and skips without recording
+  while `unreadable_record_complete_at` stays set. After the update comes back,
+  the sweeps trust a record that is missing those skips. The newer build can't
+  see that it happened, since the older one writes nothing that says so. The
+  same shape as the tab above, and as rare.
 - **An op log restored beneath a device's cursor, then written to.** The next
   commit is stamped above the stale cursor, so the cycle is routed incremental
   rather than to the fallback and never lists the ops the restore lost; the

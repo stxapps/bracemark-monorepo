@@ -343,17 +343,40 @@ export class UserDataDO extends DurableObject<Bindings> {
   }
 
   // Count a call, and set the alarm when it opens the month's row.
+  //
+  // ⚠ IT MUST NEVER FAIL THE CALL IT RIDES IN, the Worker half's rule
+  // (services/transfer-budget.ts) held on this side too. commitOps has already
+  // appended its ops when this runs, and putGate's answer is what a sign waits
+  // on: a throw from here would reject an RPC whose real work is done, and the
+  // client would see a failed commit that landed. So a count that can't be made
+  // is logged and answered as `undefined`, which every caller already reads as
+  // "nothing counted" (a get-only sign, a delete-only commit).
+  //
+  // A row whose alarm could not be set is dropped again: nothing else would ever
+  // remove it once the account stopped syncing, and /privacy promises it goes
+  // shortly after its month. The next counted call opens the month afresh.
   private async countTransfer(
     counter: 'puts' | 'commits',
     n: number,
     now: number,
-  ): Promise<TransferCount> {
-    const period = transferPeriodOf(now);
-    const { opened, ...count } = transferBudgetRepo(this.sql).add(counter, n, period);
-    if (opened) {
-      await this.ctx.storage.setAlarm(transferPeriodEndMs(period) + TRANSFER_ALARM_GRACE_MS);
+  ): Promise<TransferCount | undefined> {
+    try {
+      const budget = transferBudgetRepo(this.sql);
+      const period = transferPeriodOf(now);
+      const { opened, ...count } = budget.add(counter, n, period);
+      if (opened) {
+        try {
+          await this.ctx.storage.setAlarm(transferPeriodEndMs(period) + TRANSFER_ALARM_GRACE_MS);
+        } catch (err) {
+          budget.clear();
+          throw err;
+        }
+      }
+      return count;
+    } catch (err) {
+      console.error(`transferBudget: could not count ${counter}`, err);
+      return undefined;
     }
-    return count;
   }
 
   // RPC: delete-all-data — clear the op log AND the quota map in one serialized

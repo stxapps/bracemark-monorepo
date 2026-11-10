@@ -27,7 +27,9 @@
 //     that asked only EXTRACTION_FILE_REF_FIELDS and `customImageId` would delete
 //     that client's blobs for everyone, the selective-sync hazard in a new form. So
 //     every non-file entity is decoded and every string in it, at any depth, counts
-//     as a reference. A record that won't decode, or has no bytes, stops the run.
+//     as a reference — an object's keys as much as its values, since a newer client
+//     may keep a map keyed by blob id. A record that won't decode, or has no bytes,
+//     stops the run.
 //   - NEVER A BLOB WITH A PENDING OP, and never one younger than ORPHAN_GRACE_MS.
 //     Content is written before the reference that names it: on this device a
 //     capture writes the blob, then the extraction, and another tab's capture can be
@@ -42,7 +44,10 @@
 //     the end of the scan aborts the run instead of trusting a stale answer.
 //   - BOUNDED: at most once a week per account on this device
 //     (`SyncMetaRecord.lastOrphanSweepAt`), at most ORPHAN_SWEEP_MAX deletes a run,
-//     yielding to the main thread between chunks of the scan.
+//     yielding to the main thread between chunks of the scan. A run that hit the
+//     cap comes back in a day instead (ORPHAN_SWEEP_BACKLOG_INTERVAL_MS): at 500 a
+//     week, an account full of blobs older builds leaked stayed at its ceiling for
+//     months.
 //
 // The dangling sweep's KNOWN GAPS apply here too and cost more: a successful cycle
 // can still lack an entity the server holds (a skip by a tab still running a build
@@ -60,6 +65,7 @@ import {
   orphanCandidates,
   orphansToDelete,
   orphanSweepMayRun,
+  orphanSweepStamp,
   pendingWrites,
   strikeEntityReferences,
 } from '@stxapps/shared';
@@ -114,13 +120,15 @@ export async function sweepOrphanFiles(username: string, now = Date.now()): Prom
     if (entityWrittenDuring(before, await queue())) return 0;
   }
 
+  const ids = orphansToDelete(candidates);
   let swept = 0;
-  for (const fileId of orphansToDelete(candidates)) {
+  for (const fileId of ids) {
     await deleteFile(username, fileId);
     swept += 1;
   }
   // Recorded only for a run that got to the end — an unprovable store tries again
-  // next session rather than waiting a week.
-  await markOrphanSweep(username, now);
+  // next session rather than waiting a week. A run the cap cut short is stamped to
+  // come back in a day, not a week (shared's orphanSweepStamp).
+  await markOrphanSweep(username, orphanSweepStamp(now, candidates.size > ids.length));
   return swept;
 }

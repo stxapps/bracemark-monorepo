@@ -36,6 +36,7 @@ import {
   resetCursor,
   resetToSeededStateTx,
   seedNewAccount,
+  unreadablePathSet,
 } from './sync-store';
 
 // The one seam that would reach native sqlite. Everything above it — getDb, the PRAGMA,
@@ -298,6 +299,26 @@ describe('the unreadable record and the sweep stamp', () => {
     await recordUnreadablePaths(USER, ['links/l_a.enc'].map(stamped));
     await markOrphanSweep(USER, 1234);
   }
+
+  // putItemsUnqueued's gate. A pull hands it the record's paths as it read them
+  // at its start, and a stored path leaves the record only if it is in that set:
+  // without the set each pulled row read and parsed the whole record. The set
+  // must be what decides, or the gate is not there; and a caller with no set
+  // still gets every stored path checked against the row.
+  it('takes a stored path out of the record only when the pull’s set holds it', async () => {
+    await withRecord();
+    const pulled = () => [toItemRecord('links/l_a.enc', 2000, new TextEncoder().encode('{}'))];
+
+    await putItemsUnqueued(USER, pulled(), new Set());
+    expect((await recorded())[0]).toEqual(['links/l_a.enc']);
+
+    await putItemsUnqueued(USER, pulled(), await unreadablePathSet(USER));
+    expect((await recorded())[0]).toBeNull();
+
+    await recordUnreadablePaths(USER, ['links/l_a.enc'].map(stamped));
+    await putItemsUnqueued(USER, pulled());
+    expect((await recorded())[0]).toBeNull();
+  });
 
   it('adds to the record without repeating a path', async () => {
     await withRecord();

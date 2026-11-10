@@ -1,7 +1,7 @@
 // expo's two sweeps — drift guards. The rules are shared's sync/sweeps.ts, and
 // web-react's sweep specs are canonical for what each rule means. What is expo's
 // own, and so only pinned here, is how this store is READ and how a delete lands:
-// the key-only scans (namespacePaths / presentPaths / namespaceStamps), the paged
+// the key-only scans (pathsWithoutShadow / namespaceStamps), the paged
 // entity scan with its yields, the plaintext file on disk that goes with a row, and
 // the writes that can land mid-scan from outside a cycle (the Android share
 // activity shares this process and database). Every case that says "keeps" has a
@@ -18,7 +18,9 @@ import {
   MY_LIST_ID,
   newFacet,
   ORPHAN_GRACE_MS,
+  ORPHAN_SWEEP_BACKLOG_INTERVAL_MS,
   ORPHAN_SWEEP_INTERVAL_MS,
+  ORPHAN_SWEEP_MAX,
   pathFromId,
 } from '@stxapps/shared';
 
@@ -133,6 +135,26 @@ describe('sweepDanglingExtractions', () => {
     expect(blobExists('shot-here')).toBe(true);
   });
 
+  // The link is found by its WHOLE id, in SQL (item-store's pathsWithoutShadow): an
+  // extraction whose id is the start of a present link's id is still dangling, and
+  // a row co-keyed in another namespace is not a link.
+  it('matches an extraction to its link by the whole id, and to a link only', async () => {
+    await pushedLink('l_ab');
+    await pushedFile('shot-ab');
+    await pushedExtraction('l_ab', 'shot-ab');
+    await pushedFile('shot-a');
+    await pushedExtraction('l_a', 'shot-a');
+    // Co-keyed with l_a, but under files/, not links/.
+    await pushedFile('l_a');
+
+    await expect(sweepDanglingExtractions(USER)).resolves.toBe(1);
+
+    expect(rowExists(pathFromId('l_a', EXTRACTIONS_PREFIX))).toBe(false);
+    expect(blobExists('shot-a')).toBe(false);
+    expect(rowExists(pathFromId('l_ab', EXTRACTIONS_PREFIX))).toBe(true);
+    expect(blobExists('shot-ab')).toBe(true);
+  });
+
   // A store migration 1 brought up: every released build skipped without recording,
   // so until a full listing completes with the record, an absent link proves nothing.
   it('does nothing until a full listing has completed with the record in place', async () => {
@@ -236,6 +258,36 @@ describe('sweepOrphanFiles', () => {
 
     await expect(sweepOrphanFiles(USER, NOW + ORPHAN_SWEEP_INTERVAL_MS - 1)).resolves.toBe(0);
     await expect(sweepOrphanFiles(USER, NOW + ORPHAN_SWEEP_INTERVAL_MS)).resolves.toBe(1);
+  });
+
+  // Drift guards for two shared rules this file's sweep has to hand on (web's spec
+  // is canonical): a blob id that is an object KEY is a reference, and a run its
+  // cap cut short is stamped to come back in a day.
+  it('spares a blob named only as an object key', async () => {
+    await pushedFile('f_keyed');
+    await pushedFile('f_orphan');
+    await pushedLink('l_1', { someNewerClientsMap: { f_keyed: { width: 1 } } });
+
+    await expect(sweepOrphanFiles(USER, NOW)).resolves.toBe(1);
+
+    expect(blobExists('f_keyed')).toBe(true);
+    expect(blobExists('f_orphan')).toBe(false);
+  });
+
+  it('comes back in a day, not a week, after a run its cap cut short', async () => {
+    const ids = Array.from({ length: ORPHAN_SWEEP_MAX + 1 }, (_, i) => `backlog-${i}`);
+    getDb().transaction((tx) =>
+      putItemsTx(
+        tx,
+        ids.map((id) => toItemRecord(filePath(id), OLD)),
+      ),
+    );
+
+    await expect(sweepOrphanFiles(USER, NOW)).resolves.toBe(ORPHAN_SWEEP_MAX);
+
+    const day = ORPHAN_SWEEP_BACKLOG_INTERVAL_MS;
+    await expect(sweepOrphanFiles(USER, NOW + day - 1)).resolves.toBe(0);
+    await expect(sweepOrphanFiles(USER, NOW + day)).resolves.toBe(1);
   });
 });
 

@@ -20,13 +20,27 @@ describe('formatStorageCeiling', () => {
 describe('formatStorageBytes', () => {
   it.each([
     [0, '0 KB'],
-    [512, '1 KB'],
+    [512, '0 KB'],
+    [1024, '1 KB'],
     [48 * 1024, '48 KB'],
     [3.44 * 1024 ** 2, '3.4 MB'],
     [830 * 1024 ** 2, '830 MB'],
-    [1.25 * 1024 ** 3, '1.3 GB'],
+    [1.25 * 1024 ** 3, '1.2 GB'],
     [12.4 * 1024 ** 3, '12 GB'],
   ])('%d bytes reads %s', (bytes, shown) => {
+    expect(formatStorageBytes(bytes)).toBe(shown);
+  });
+
+  // Rounded DOWN, as the ceiling is. To nearest, the last stretch below the
+  // ceiling read "5 GB of 5 GB used" over a bar that was not full, and the top
+  // of a unit printed as 1024 of it.
+  it.each([
+    [5 * 1024 ** 3 - 1, '4.9 GB'],
+    [4.96 * 1024 ** 3, '4.9 GB'],
+    [9.99 * 1024 ** 2, '9.9 MB'],
+    [1024 ** 2 - 1, '1023 KB'],
+    [1024 ** 3 - 1, '1023 MB'],
+  ])('%d bytes rounds down to %s, never up to the next figure', (bytes, shown) => {
     expect(formatStorageBytes(bytes)).toBe(shown);
   });
 

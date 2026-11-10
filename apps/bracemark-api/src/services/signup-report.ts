@@ -25,12 +25,20 @@ import { signupCapEnforcedOf, signupCapsOf } from './signup-cap';
 // month back. The figures are read from that table, not from the log line,
 // which Workers Logs keeps for about a week.
 //
-// EVERY FINISHED DAY GETS A ROW, ZEROS INCLUDED, from the day after the newest
-// row to yesterday. A day nobody signed up has no signup_counts rows, and
-// without a zero row it would look the same as a day the cron never ran. And
-// a skipped run skips its purge too, so its days are still in signup_counts
-// when the next run comes, and are written exactly. `INSERT OR REPLACE` makes
-// a re-run on the same day write the same rows again.
+// A ROW SAYS "THE CRON SAW THIS DAY'S COUNTS", AND A ZERO ROW SAYS IT SAW NONE.
+// So zeros are written for YESTERDAY only: its per-network rows are whole when
+// this runs (a purge only drops days before its own today, and today's comes
+// after this), and finding none means nobody signed up. The one way that is
+// wrong is a run repeated by hand on the day its first try failed here and
+// purged anyway. An OLDER day since the newest row gets
+// a row only if signup_counts still holds it. That is the day of a skipped
+// run, whose purge was skipped with it, and it is written exactly. A day with
+// nothing left to read gets NO row, because nothing here can tell "nobody
+// signed up" from "the counts are gone": a report that failed is followed by
+// the purge all the same (worker.ts), and the first run after the table was
+// created has 40 days behind it that it never counted. Zeros there would be a
+// figure nobody measured. No row is how a day the cron did not see shows.
+// `INSERT OR REPLACE` makes a re-run on the same day write the same rows again.
 //
 // The one log line stays, for an incident: Workers Logs is where it is read
 // next to everything else that happened.
@@ -56,7 +64,8 @@ export async function reportSignups(
   const oldest = today - SIGNUP_DAYS_KEPT;
   const latest = await days.latestDay();
   // From the day after the newest row, but never before the oldest kept day,
-  // and always at least yesterday, so a re-run rewrites it.
+  // and always at least yesterday, so a re-run rewrites it. An empty table looks
+  // back the whole kept range, for counts a paused cron may have left.
   const from = Math.min(Math.max(latest === null ? oldest : latest + 1, oldest), yesterday);
 
   // Each row carries the cap it was counted against, so the two families' caps
@@ -69,6 +78,9 @@ export async function reportSignups(
   const rows: SignupDay[] = [];
   for (let day = from; day <= yesterday; day++) {
     const t = totals.get(day);
+    // Zeros only for yesterday; an older day with no counts left is unknown, not
+    // empty (the header).
+    if (!t && day !== yesterday) continue;
     rows.push({
       day,
       cappedNetworks: Number(t?.cappedNetworks ?? 0),

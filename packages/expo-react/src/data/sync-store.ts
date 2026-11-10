@@ -242,6 +242,20 @@ function unreadableStateTx(tx: DbTx, username: string): UnreadableState {
   return { paths: meta?.paths ?? [], recheck: meta?.recheck ?? undefined };
 }
 
+// The unreadable record's paths, as a set — web-react sync-store's
+// unreadablePathSet, which carries why a pull reads it once and what a stale one
+// costs. A pull's stores then take a path out of the record only when it is in
+// here (item-store's putItemsUnqueued), so an ordinary pull neither reads nor
+// parses the record per row. Only the one column: the stamps stay unparsed.
+export async function unreadablePathSet(username: string): Promise<Set<string>> {
+  const meta = getDb()
+    .select({ paths: syncMeta.unreadablePaths })
+    .from(syncMeta)
+    .where(eq(syncMeta.username, username))
+    .get();
+  return new Set(meta?.paths);
+}
+
 // Write a record shared's rules returned. An empty one is NULL, as web's absent field.
 function writeUnreadableTx(tx: DbTx, username: string, next: UnreadableState): void {
   tx.update(syncMeta)
@@ -308,6 +322,7 @@ export async function finishUnreadableRecheck(
 }
 
 // Record that the orphaned-file sweep ran to the end (SyncMetaRecord.lastOrphanSweepAt).
+// `at` is the sweep's stamp (shared's orphanSweepStamp), which a capped run sets back.
 // Fenced: a sweep that outlived its account writes nothing.
 export async function markOrphanSweep(username: string, at: number): Promise<void> {
   getDb().transaction((tx) => {

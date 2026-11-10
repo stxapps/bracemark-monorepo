@@ -15,17 +15,23 @@ const MB = 1024 * KB;
 const GB = 1024 * MB;
 
 // One decimal below ten of a unit, whole numbers from ten up: "1.2 GB",
-// "12 GB", "830 MB". A trailing ".0" is dropped. Never rounds UP past the unit's
-// true value by more than the shown precision.
+// "12 GB", "830 MB". A trailing ".0" is dropped.
+//
+// ROUNDED DOWN, like the ceiling beside it, never to nearest. The readout prints
+// usage against the ceiling, and to nearest, 4.96 GB of a 5 GB ceiling read
+// "5 GB of 5 GB used" over a bar that wasn't full and a note that said so; a
+// unit's last stretch printed as "1024 MB". Rounded down, the text reaches the
+// ceiling only when the bytes do, and the last value of a unit is 1023.
+// Integer math (bytes × 10 first): a byte count is exact, and the units are
+// powers of two, so the tenth it floors to is exact too.
 function scaled(bytes: number, unit: number, name: string): string {
-  const value = bytes / unit;
-  const shown = value < 10 ? Math.round(value * 10) / 10 : Math.round(value);
+  const shown = bytes < 10 * unit ? Math.floor((bytes * 10) / unit) / 10 : Math.floor(bytes / unit);
   return `${Number.isInteger(shown) ? shown : shown.toFixed(1)} ${name}`;
 }
 
 /** What a library uses, for a person: "0 KB", "48 KB", "3.4 MB", "1.2 GB". */
 export function formatStorageBytes(bytes: number): string {
-  if (bytes < MB) return `${Math.round(bytes / KB)} KB`;
+  if (bytes < MB) return `${Math.floor(bytes / KB)} KB`;
   if (bytes < GB) return scaled(bytes, MB, 'MB');
   return scaled(bytes, GB, 'GB');
 }

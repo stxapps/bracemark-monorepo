@@ -155,11 +155,22 @@ export function useLinkMutations(): LinkMutations {
       // write, so the reference has moved off the blob first (metadata before
       // content on the way down). A write landing between the re-read and the put
       // can still leave one behind, which the orphaned-file sweep reclaims.
-      const replaced = current.customImageId;
-      if ('customImageId' in patch && replaced !== undefined && replaced !== patch.customImageId) {
-        await deleteFile(username, replaced);
+      //
+      // `finally`, because the link write has landed whatever the reclaim does: a
+      // delete that throws still rejects this call, but the edit it follows must
+      // not sit unpushed until something else asks for a sync.
+      try {
+        const replaced = current.customImageId;
+        if (
+          'customImageId' in patch &&
+          replaced !== undefined &&
+          replaced !== patch.customImageId
+        ) {
+          await deleteFile(username, replaced);
+        }
+      } finally {
+        requestSync();
       }
-      requestSync();
     },
     [username, requestSync],
   );

@@ -65,6 +65,9 @@ import {
   opsListEndpoint,
   type OpsListResponse,
   type ProgressFn,
+  proofAttemptDue,
+  proofAttemptFailed,
+  type ProofBackoff,
   type PushedChunk,
   recheckBatch,
   recordBlocked,
@@ -116,6 +119,7 @@ import {
   markUnreadableRecordComplete,
   recordUnreadablePaths,
   resetCursor,
+  unreadablePathSet,
 } from '../data/sync-store';
 import { BlobRequestError, getBlob, getBlobToFile, putBlob, putBlobFromFile } from './r2';
 
@@ -406,6 +410,10 @@ const inflightSyncs = new Map<string, Promise<SyncOutcome>>();
 const rerunRequests = new Set<string>();
 // Who is watching the in-flight run's progress — web engine's cycleListeners.
 const cycleListeners = new Map<string, Set<SyncCycleProgressFn>>();
+// When each account's proving fallback may next be forced, after one failed
+// (runCycle; shared's ProofBackoff, sync/sweeps.ts, carries why it is in memory).
+// No entry means it may be forced now.
+const proofBackoffs = new Map<string, ProofBackoff>();
 
 const NO_PROGRESS: SyncCycleProgressFn = () => undefined;
 
@@ -591,7 +599,8 @@ export async function recheckUnreadable(deps: SyncDeps, now = Date.now()): Promi
     if (local !== undefined && stamp !== undefined && local > stamp) gone.push(path);
     else if (stamp !== undefined) healed.push(toItemRecord(path, stamp, data));
   });
-  await putItemsUnqueued(deps.username, healed);
+  // Every healed path is in the record, by what a batch is.
+  await putItemsUnqueued(deps.username, healed, new Set(batch));
   await finishUnreadableRecheck(deps.username, batch, gone, now);
 }
 
@@ -645,7 +654,7 @@ async function runCycle(deps: SyncDeps, report: SyncCycleProgressFn): Promise<Sy
         limit: OPS_PAGE,
       });
 
-      // A store the unreadable record can't vouch for yet goes to the fallback once,
+      // A store the unreadable record can't vouch for yet goes to the fallback,
       // whatever the op log says: its row predates the record, so a build from
       // before it may have skipped paths without recording them, behind the cursor.
       // The fallback downloads every path missing here, a skipped one fails again
@@ -653,17 +662,38 @@ async function runCycle(deps: SyncDeps, report: SyncCycleProgressFn): Promise<Sy
       // (shared's unreadableRecordComplete, sync/sweeps.ts).
       // No row is no store to vouch for (a torn-down account's stale cycle), and
       // nothing to force.
-      const mustProve = meta !== undefined && !unreadableRecordComplete(meta);
-      if (mustProve || needsFallback(since, first)) {
+      //
+      // FORCED ON A BACKOFF, not on every cycle (shared's proofAttemptDue): a
+      // fallback that fails after its listing would otherwise re-list the whole
+      // namespace on each retry and each foreground wake, for a failure the
+      // incremental path costs one peek. While it waits the cycle is routed as the
+      // op log says and the store stays unproven, which only keeps the sweeps off.
+      const unproven = meta !== undefined && !unreadableRecordComplete(meta);
+      if (!unproven) proofBackoffs.delete(deps.username);
+      const forced = unproven && proofAttemptDue(proofBackoffs.get(deps.username), Date.now());
+      if (forced || needsFallback(since, first)) {
         note({ kind: 'fallback' });
         // `first` was answered before the listing the fallback is about to take,
         // so its newest stamp is the high-water mark that listing will reflect.
-        await fallbackCycle(deps, pending, outcome, first.newestUpdatedAt ?? 0, report);
+        try {
+          await fallbackCycle(deps, pending, outcome, first.newestUpdatedAt ?? 0, report);
+        } catch (err) {
+          if (forced) {
+            proofBackoffs.set(
+              deps.username,
+              proofAttemptFailed(proofBackoffs.get(deps.username), Date.now()),
+            );
+          }
+          throw err;
+        }
         // A fallback is a full listing, whichever reason routed it, so it completes
-        // the record for a store not yet proven. After the fallback's own claim, and
-        // only if it got there: one that throws leaves the store unproven, and the
-        // next cycle forces another.
-        if (mustProve) await markUnreadableRecordComplete(deps.username);
+        // the record for a store not yet proven: one the op log sent here while the
+        // forced one waited counts as much. After the fallback's own claim, and only
+        // if it got there: one that throws leaves the store unproven.
+        if (unproven) {
+          await markUnreadableRecordComplete(deps.username);
+          proofBackoffs.delete(deps.username);
+        }
       } else {
         note({ kind: 'incremental' });
         await incrementalCycle(deps, since, sincePath, first, pending, outcome, report);
@@ -1648,6 +1678,13 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
   // all. Once, at the end, as web's: web engine's startPull carries why.
   const unreadable: SkippedPath[] = [];
 
+  // The record as it stood when this pull started, read once and on first use —
+  // web engine's startPull. A stored path leaves the record only if it is in
+  // here, so an ordinary pull never reads or parses the record per row.
+  let recorded: Promise<ReadonlySet<string>> | undefined;
+  const recordedPaths = (): Promise<ReadonlySet<string>> =>
+    (recorded ??= unreadablePathSet(deps.username));
+
   // `finally`, so the two skips below tick the counter too: an entry dropped
   // for a mid-pull 404 or a blob that will not open still leaves the pull with
   // one fewer thing to do, and a counter that ignored them would stop short of
@@ -1704,8 +1741,9 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
       // largest group that can share one transaction with its queue check without
       // holding decrypted blobs in memory or losing the resume-where-interrupted
       // property the staleness skip in `add` depends on.
+      const held = await recordedPaths();
       await trace.span('blob.store', () =>
-        putItemsUnqueued(deps.username, [toItemRecord(e.path, e.updatedAt, data)]),
+        putItemsUnqueued(deps.username, [toItemRecord(e.path, e.updatedAt, data)], held),
       );
     } catch (err) {
       if (lastPass || !isSecondPassFailure(err)) throw err;
@@ -1771,6 +1809,7 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
       const stored = await putItemsUnqueued(
         deps.username,
         content.map((e) => toItemRecord(e.path, e.updatedAt)),
+        await recordedPaths(),
       );
       deleteDataFiles(stored);
 

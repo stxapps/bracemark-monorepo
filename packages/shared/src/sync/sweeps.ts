@@ -24,6 +24,13 @@ export const ORPHAN_SWEEP_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
 // The most blobs one run deletes. A backlog clears over runs rather than in
 // one burst of queued deletes.
 export const ORPHAN_SWEEP_MAX = 500;
+// How soon the sweep runs again after a run that hit ORPHAN_SWEEP_MAX and left
+// orphans behind. At the weekly interval a backlog drained at 500 a week: an
+// account full of blobs that older builds leaked sat at its byte ceiling for
+// months, with nothing the user could delete to make room. A day keeps the
+// burst bounded and the scan to one a day, and clears the same backlog in
+// about a seventh of the time.
+export const ORPHAN_SWEEP_BACKLOG_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 // The extractions whose link is absent here, minus those whose link a pull
 // skipped as unreadable (absent here, not proven absent there). One link blob
@@ -61,6 +68,46 @@ export interface SweepMeta {
 export function unreadableRecordComplete(meta: SweepMeta | undefined): boolean {
   const at = meta?.unreadableRecordCompleteAt;
   return at !== undefined && at !== null && at > 0;
+}
+
+// THE PROVING FALLBACK'S BACKOFF. A store whose record is not complete is sent
+// to the fallback whatever the op log says (above), and a fallback lists the
+// whole namespace and scans every local key before it pushes or pulls. A cycle
+// that fails after that listing fails the same way on its retry — a blob in a
+// format this build can't read, a queued op that will not push — and the
+// engines' retry timer and every foreground wake would pay the listing again,
+// for a failure the incremental path had cost one peek. So after a forced
+// fallback fails, the next one waits. In between, a cycle is routed as the op
+// log says, and the record just stays unproven: that only keeps the two sweeps
+// off, which is the safe side, and nothing they do is urgent.
+//
+// In memory, per engine (one map per JS context), not on the bookkeeping row:
+// what it bounds is a retry loop inside one session, and a new launch trying
+// once more is cheap next to a migration to remember that it shouldn't.
+export const PROOF_RETRY_DELAYS_MS: readonly number[] = [
+  15 * 60 * 1000,
+  60 * 60 * 1000,
+  6 * 60 * 60 * 1000,
+  24 * 60 * 60 * 1000,
+];
+
+export interface ProofBackoff {
+  // Forced fallbacks that have failed in a row, which picks the next delay.
+  failures: number;
+  // When the next one may be forced (epoch ms).
+  nextAt: number;
+}
+
+// May a cycle force the proving fallback now? Always, until one has failed.
+export function proofAttemptDue(backoff: ProofBackoff | undefined, now: number): boolean {
+  return !backoff || now >= backoff.nextAt;
+}
+
+// The backoff after a forced fallback failed. The last delay repeats.
+export function proofAttemptFailed(backoff: ProofBackoff | undefined, now: number): ProofBackoff {
+  const failures = (backoff?.failures ?? 0) + 1;
+  const delays = PROOF_RETRY_DELAYS_MS;
+  return { failures, nextAt: now + delays[Math.min(failures, delays.length) - 1] };
 }
 
 // May a dangling-extraction sweep start now? Not before the first sync, and not
@@ -117,7 +164,9 @@ export function orphanCandidates(
 // Strike every candidate one stored entity names. ANY STRING AT ANY DEPTH is a
 // reference, not just the fields this build knows: a newer client may add a
 // field or a namespace that names a blob, and an older device would otherwise
-// delete it for everyone. False when the entity can't be read (no bytes, or
+// delete it for everyone. An object's KEYS count as much as its values, for
+// the same reason: a newer client may keep a map keyed by blob id, and striking
+// one string too many only ever spares a blob. False when the entity can't be read (no bytes, or
 // bytes that aren't JSON): nothing can then be proven unreferenced, and the run
 // must stop.
 export function strikeEntityReferences(
@@ -142,7 +191,10 @@ function strikeReferences(value: unknown, candidates: Set<string>): void {
   } else if (Array.isArray(value)) {
     for (const item of value) strikeReferences(item, candidates);
   } else if (value !== null && typeof value === 'object') {
-    for (const item of Object.values(value)) strikeReferences(item, candidates);
+    for (const [key, item] of Object.entries(value)) {
+      candidates.delete(key);
+      strikeReferences(item, candidates);
+    }
   }
 }
 
@@ -157,6 +209,16 @@ export function entityWrittenDuring(
     if (!before.has(key) && !key.startsWith(FILES_PREFIX)) return true;
   }
   return false;
+}
+
+// The stamp a run that got to the end writes (SyncMetaRecord.lastOrphanSweepAt),
+// which orphanSweepMayRun counts ORPHAN_SWEEP_INTERVAL_MS from. `now` for a run
+// that deleted everything it found. A run the cap cut short (`capped`: orphans
+// were left behind) writes a stamp that far in the past that the next run is due
+// in ORPHAN_SWEEP_BACKLOG_INTERVAL_MS instead: the one field carries both
+// schedules, so neither store needed a second one.
+export function orphanSweepStamp(now: number, capped: boolean): number {
+  return capped ? now - ORPHAN_SWEEP_INTERVAL_MS + ORPHAN_SWEEP_BACKLOG_INTERVAL_MS : now;
 }
 
 // What one run deletes: at most ORPHAN_SWEEP_MAX of the candidates left.

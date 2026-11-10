@@ -1574,7 +1574,8 @@ sync window (last-writer-wins keeps one extraction, and the other's blob loses
 its reference), two custom-image picks racing on one link, a device that pushed
 a blob and stalled before the entity naming it. The sweep reclaims them, but
 conservatively: only a blob 30 days old by its server stamp, at most weekly and
-500 a run, and not at all on a device with a recorded unreadable path. Until
+500 a run (daily while a run still hits that cap, so a backlog clears in weeks,
+not months), and not at all on a device with a recorded unreadable path. Until
 then an orphan counts against the quota, and an account at its byte ceiling
 can't release it by deleting the links it can see.
 
@@ -2023,7 +2024,11 @@ skip is one way it can lack a path the server holds, and not the only one
 dangling-extraction sweep has to live with them). On both platforms the pull records skipped paths
 on the account's bookkeeping row (`unreadablePaths`), each with the stamp it was
 listed at, as it finishes, before the cursor or the first-sync flag is claimed,
-and drops a path again once a later pull stores or deletes it;
+and drops a path again once a later pull stores or deletes it (a pull reads the
+record's paths once, as it starts, and a store touches the record only for a
+path in that set: read per stored row, the record made every pulled row cost
+its own size, and on web so did the account fence, which is key-only for the
+same reason);
 `markFirstSyncDone` updates that row rather than rewriting it, or a fresh
 sign-in would lose the record it has just made. ⚠ Any logic that reads local
 absence as server absence has to consult the record, **and has to wait until
@@ -2034,9 +2039,17 @@ and the cursor is past those paths. The record is complete once a full listing,
 a first sync or a fallback, has finished on this device with the record in
 place. A new account and the delete-all reset start complete, having nothing to
 skip. For any other row, the engines route the next cycle to the fallback
-whatever the op log says, and mark the record complete only when that fallback
+whatever the op log says, and mark the record complete only when a fallback
 finishes. The fallback downloads every path missing here, so a skipped one
-fails again and is recorded this time. That covers every web row from before
+fails again and is recorded this time. ⚠ The fallback is forced on a backoff,
+not on every cycle (shared's `PROOF_RETRY_DELAYS_MS`, 15 minutes up to a day,
+held in memory per engine): a fallback lists the whole namespace before it
+pushes or pulls, and a cycle that fails after the listing — a blob in a format
+this build can't read, an op that won't push — fails the same way on the retry
+timer and on every foreground wake, so forcing each one re-listed the library
+each time for a failure the incremental path costs one peek. While it waits,
+the op log routes the cycle and the store stays unproven, which only keeps the
+sweeps off; a fallback the op log routes meanwhile completes the record as well. That covers every web row from before
 the record and every expo row migration 1 brought up. What it can't cover is a
 web tab still running a pre-record build, which skips into a store this build
 has already proven. The two sweeps, the only
@@ -2167,7 +2180,9 @@ names, added inside `putGate` (the call the sign path already makes) and handed
 back with `refundPuts` when the quota check then refuses the batch, so a full
 library whose queue re-asks every cycle isn't counted each time. `commits` is
 the put ops a `commitOps` writes, added in that same call; deletes and stale
-batches add nothing. A call in a new month resets the row and is counted in it.
+batches add nothing. A call in a new month resets the row and is counted in it. A
+count that can't be made is logged and skipped, never thrown: `commitOps` has
+already written its ops by then, and a throw would fail a commit that landed.
 **Nothing refuses a call on the count yet.** `services/transfer-budget.ts`
 compares each counted call against thresholds per high-water plan, from the env,
 and the first call past one in a month writes a log line naming the account's

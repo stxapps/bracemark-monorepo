@@ -3,12 +3,15 @@ import {
   LINKS_PREFIX,
   MY_LIST_ID,
   ORPHAN_GRACE_MS,
+  ORPHAN_SWEEP_BACKLOG_INTERVAL_MS,
   ORPHAN_SWEEP_INTERVAL_MS,
+  ORPHAN_SWEEP_MAX,
   pathFromId,
 } from '@stxapps/shared';
 
 import { db } from './db';
 import { writeExtraction, writeFile, writeLink } from './mutations';
+import { toItemRecord } from './projection';
 import { sweepOrphanFiles } from './sweep-orphan-files';
 import { getSyncMeta, recordUnreadablePaths, seedNewAccount } from './sync-store';
 
@@ -88,6 +91,20 @@ it('counts a reference in a field this build does not know — a newer client’
   expect(await exists('future')).toBe(true);
 });
 
+// The same rule one step further: a newer client may keep a MAP keyed by blob id,
+// and then the id is never a value anywhere. A key is a string in the entity like
+// any other, and striking it can only spare a blob.
+it('counts a blob id used as an object key, not only as a value', async () => {
+  await pushedFile('keyed');
+  await pushedFile('orphan');
+  await link('l1', { someNewerClientsMap: { keyed: { width: 1 } } });
+
+  await expect(sweepOrphanFiles(USER, NOW)).resolves.toBe(1);
+
+  expect(await exists('keyed')).toBe(true);
+  expect(await exists('orphan')).toBe(false);
+});
+
 it('spares a blob younger than the grace, and one with a write still queued', async () => {
   await pushedFile('young', NOW - 1000);
   await writeFile(USER, 'unpushed', BYTES); // updatedAt 0, a pending put
@@ -137,3 +154,32 @@ it('runs at most once a week', async () => {
   await expect(sweepOrphanFiles(USER, NOW + ORPHAN_SWEEP_INTERVAL_MS)).resolves.toBe(1);
   expect(await exists('b')).toBe(false);
 });
+
+// A backlog. At the weekly interval it drained at ORPHAN_SWEEP_MAX a week, and an
+// account full of blobs older builds leaked sat at its byte ceiling for months,
+// with nothing the user could delete to make room. A run the cap cut short comes
+// back in a day; the run that empties the backlog puts the week back.
+//
+// The long timeout is the fake's, not the sweep's: each of the 500 deletes is its
+// own transaction, and fake-indexeddb takes a couple of seconds over them alone
+// and past jest's five beside the other suites (sync/engine.spec.ts, _the put
+// chunk_, has the same reason).
+const SLOW_MS = 30_000;
+it(
+  'comes back in a day, not a week, after a run its cap cut short',
+  async () => {
+    const ids = Array.from({ length: ORPHAN_SWEEP_MAX + 1 }, (_, i) => `backlog-${i}`);
+    await db.items.bulkPut(ids.map((id) => toItemRecord(filePath(id), OLD)));
+
+    await expect(sweepOrphanFiles(USER, NOW)).resolves.toBe(ORPHAN_SWEEP_MAX);
+
+    const day = ORPHAN_SWEEP_BACKLOG_INTERVAL_MS;
+    await expect(sweepOrphanFiles(USER, NOW + day - 1)).resolves.toBe(0);
+    await expect(sweepOrphanFiles(USER, NOW + day)).resolves.toBe(1);
+
+    await pushedFile('later');
+    await expect(sweepOrphanFiles(USER, NOW + 2 * day)).resolves.toBe(0);
+    expect(await exists('later')).toBe(true);
+  },
+  SLOW_MS,
+);

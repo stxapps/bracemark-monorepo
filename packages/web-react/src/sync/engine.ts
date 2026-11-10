@@ -47,6 +47,9 @@ import {
   opsListEndpoint,
   type OpsListResponse,
   type ProgressFn,
+  proofAttemptDue,
+  proofAttemptFailed,
+  type ProofBackoff,
   type PushedChunk,
   recheckBatch,
   recordBlocked,
@@ -81,8 +84,10 @@ import {
   isFirstSyncDone,
   markFirstSyncDone,
   markUnreadableRecordComplete,
+  ownedSyncMeta,
   recordUnreadablePaths,
   resetCursor,
+  unreadablePathSet,
 } from '../data/sync-store';
 import { BlobRequestError, getBlob, putBlob } from './r2';
 
@@ -382,6 +387,10 @@ const rerunRequests = new Set<string>();
 // reporter here rather than getting a promise with no numbers behind it; every
 // reporter hears every leg from the moment it joined, reruns included.
 const cycleListeners = new Map<string, Set<SyncCycleProgressFn>>();
+// When each account's proving fallback may next be forced, after one failed
+// (runCycle; shared's ProofBackoff, sync/sweeps.ts, carries why it is in memory).
+// No entry means it may be forced now.
+const proofBackoffs = new Map<string, ProofBackoff>();
 
 const NO_PROGRESS: SyncCycleProgressFn = () => undefined;
 
@@ -583,7 +592,8 @@ export async function recheckUnreadable(deps: SyncDeps, now = Date.now()): Promi
     if (local !== undefined && stamp !== undefined && local > stamp) gone.push(path);
     else if (stamp !== undefined) healed.push(toItemRecord(path, stamp, data));
   });
-  await putPulled(deps.username, healed);
+  // Every healed path is in the record, by what a batch is.
+  await putPulled(deps.username, healed, new Set(batch));
   await finishUnreadableRecheck(deps.username, batch, gone, now);
 }
 
@@ -629,7 +639,7 @@ async function runCycle(deps: SyncDeps, report: SyncCycleProgressFn): Promise<Sy
         limit: OPS_PAGE,
       });
 
-      // A store the unreadable record can't vouch for yet goes to the fallback once,
+      // A store the unreadable record can't vouch for yet goes to the fallback,
       // whatever the op log says: its row predates the record, so a build from
       // before it may have skipped paths without recording them, behind the cursor.
       // The fallback downloads every path missing here, a skipped one fails again
@@ -637,18 +647,39 @@ async function runCycle(deps: SyncDeps, report: SyncCycleProgressFn): Promise<Sy
       // (shared's unreadableRecordComplete, sync/sweeps.ts).
       // No row is no store to vouch for (a torn-down account's stale cycle), and
       // nothing to force.
-      const mustProve = meta !== undefined && !unreadableRecordComplete(meta);
-      if (mustProve || needsFallback(since, first)) {
+      //
+      // FORCED ON A BACKOFF, not on every cycle (shared's proofAttemptDue): a
+      // fallback that fails after its listing would otherwise re-list the whole
+      // namespace on each retry and each foreground wake, for a failure the
+      // incremental path costs one peek. While it waits the cycle is routed as the
+      // op log says and the store stays unproven, which only keeps the sweeps off.
+      const unproven = meta !== undefined && !unreadableRecordComplete(meta);
+      if (!unproven) proofBackoffs.delete(deps.username);
+      const forced = unproven && proofAttemptDue(proofBackoffs.get(deps.username), Date.now());
+      if (forced || needsFallback(since, first)) {
         note({ kind: 'fallback' });
         // `first` was answered before the listing the fallback is about to take,
         // so its newest stamp is the high-water mark that listing will reflect —
         // the same read logWatermark makes for a first sync, already in hand.
-        await fallbackCycle(deps, pending, outcome, first.newestUpdatedAt ?? 0, report);
+        try {
+          await fallbackCycle(deps, pending, outcome, first.newestUpdatedAt ?? 0, report);
+        } catch (err) {
+          if (forced) {
+            proofBackoffs.set(
+              deps.username,
+              proofAttemptFailed(proofBackoffs.get(deps.username), Date.now()),
+            );
+          }
+          throw err;
+        }
         // A fallback is a full listing, whichever reason routed it, so it completes
-        // the record for a store not yet proven. After the fallback's own claim, and
-        // only if it got there: one that throws leaves the store unproven, and the
-        // next cycle forces another.
-        if (mustProve) await markUnreadableRecordComplete(deps.username);
+        // the record for a store not yet proven: one the op log sent here while the
+        // forced one waited counts as much. After the fallback's own claim, and only
+        // if it got there: one that throws leaves the store unproven.
+        if (unproven) {
+          await markUnreadableRecordComplete(deps.username);
+          proofBackoffs.delete(deps.username);
+        }
       } else {
         note({ kind: 'incremental' });
         await incrementalCycle(deps, since, sincePath, first, pending, outcome, report);
@@ -1694,6 +1725,14 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
   // per-skip write would rewrite a growing list once per path.
   const unreadable: SkippedPath[] = [];
 
+  // The record as it stood when this pull started, read once and on first use
+  // (sync-store's unreadablePathSet, which carries why once is enough). A stored
+  // path leaves the record only if it is in here, so an ordinary pull never
+  // touches the record at all, however long it has grown.
+  let recorded: Promise<ReadonlySet<string>> | undefined;
+  const recordedPaths = (): Promise<ReadonlySet<string>> =>
+    (recorded ??= unreadablePathSet(deps.username));
+
   // `finally`, so the two skips below tick the counter too: an entry dropped
   // for a mid-pull 404 or a blob that will not open still leaves the pull with
   // one fewer thing to do, and a counter that ignored them would stop short of
@@ -1746,8 +1785,9 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
         unreadable.push({ path: e.path, updatedAt: e.updatedAt });
         return;
       }
+      const held = await recordedPaths();
       await trace.span('blob.store', () =>
-        putPulled(deps.username, [toItemRecord(e.path, e.updatedAt, data)]),
+        putPulled(deps.username, [toItemRecord(e.path, e.updatedAt, data)], held),
       );
     } catch (err) {
       if (lastPass || !isSecondPassBlobError(err)) throw err;
@@ -1824,6 +1864,7 @@ function startPull(deps: SyncDeps, onProgress?: InitialSyncProgressFn): PullRun 
       await putPulled(
         deps.username,
         content.map((e) => toItemRecord(e.path, e.updatedAt)),
+        await recordedPaths(),
       );
 
       if (index.length === 0) return;
@@ -1944,19 +1985,29 @@ async function contentAtStamp(entries: Entry[]): Promise<Set<string>> {
 // an account switch in any tab must not write the old account's plaintext into the
 // new store. And a path it stores is no longer one a pull could not read, so it
 // leaves the account's unreadable record in the same transaction.
-async function putPulled(username: string, records: ItemRecord[]): Promise<void> {
+//
+// `recorded` is the record's paths as the caller's pull read them at its start
+// (sync-store's unreadablePathSet). The fence is key-only and the row is read
+// only for a stored path that is in that set, which on an ordinary pull is
+// never: this runs once per pulled record, and reading the row to filter the
+// whole record each time made every store cost the size of the record.
+async function putPulled(
+  username: string,
+  records: ItemRecord[],
+  recorded: ReadonlySet<string>,
+): Promise<void> {
   if (records.length === 0) return;
   await db.transaction('rw', db.items, db.pendingOps, db.syncMeta, async () => {
-    const meta = await assertAccountStillOwnsStore(username);
+    await assertAccountStillOwnsStore(username);
     const ops = await db.pendingOps.bulkGet(
       records.map((r) => [username, r.path] as [string, string]),
     );
     const writable = records.filter((_, i) => ops[i] === undefined);
     if (writable.length > 0) await db.items.bulkPut(writable);
-    await forgetUnreadablePaths(
-      meta,
-      writable.map((r) => r.path),
-    );
+    const settled = writable.map((r) => r.path).filter((path) => recorded.has(path));
+    if (settled.length > 0) {
+      await forgetUnreadablePaths(await ownedSyncMeta(username), settled);
+    }
   });
 }
 
@@ -1992,7 +2043,9 @@ async function applyDeletes(username: string, paths: string[]): Promise<void> {
 
 async function applyDeletesTx(username: string, paths: string[]): Promise<void> {
   await db.transaction('rw', db.items, db.pendingOps, db.syncMeta, async () => {
-    const meta = await assertAccountStillOwnsStore(username);
+    // The row itself, not just the fence: this runs once per cycle, for the whole
+    // set, so reading it costs nothing a gate would save (putPulled's does).
+    const meta = await ownedSyncMeta(username);
     const ops = await db.pendingOps.bulkGet(
       paths.map((path) => [username, path] as [string, string]),
     );
