@@ -29,11 +29,16 @@ function emptyCopy(selection: Selection): {
   body: string;
   cta?: boolean;
 } {
+  // Says what the box searches, because a miss on a word the user knows is in
+  // a NOTE otherwise reads as a lost note or broken search. Notes are reachable
+  // only from the Plus editor's "Note contains" (docs/search.md). The wording is
+  // the marketing site's /faq `link-note` answer verbatim, and there's no upsell
+  // here: this line explains, it doesn't sell.
   if (selection.kind === 'none') {
     return {
       icon: <SearchX />,
       title: 'No links match',
-      body: 'Try fewer or different words, or clear the search to see everything again.',
+      body: 'The search box matches titles and addresses. Try fewer or different words, or clear the search to see everything again.',
     };
   }
   if (selection.kind === 'tag') {

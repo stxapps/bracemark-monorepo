@@ -170,7 +170,11 @@ note is the only field with no read-only surface at all.
 site tells readers what search does and does not reach. It is written to match this
 split (free text search over titles and addresses; the note reachable from the Plus
 editor), so folding `note` into `text` — or gating it differently — has to move that
-answer in the same change.
+answer in the same change. The search empty state ("No links match", in both apps'
+`emptyCopy`) quotes the same answer's first clause, "The search box matches titles
+and addresses.", because a miss on a word the user knows is in a note otherwise reads
+as a lost note or broken search. That line moves with the FAQ too. It explains and
+doesn't sell: no "Note search is part of Plus" in an empty state.
 
 ### two writers, not a mirror
 
