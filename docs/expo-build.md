@@ -330,8 +330,8 @@ Two notes:
   that isn't a file — signing — comes from `APPLE_TEAM_ID` in `.env.local`
   (see the app config section below), and it takes **two** plugins to reach both
   targets: core config-plugins' `withDevelopmentTeam` for the app, and the local
-  `with-share-extension-build-settings` for the iOS share extension — see _ios
-  share extension build settings_ below. With both in place Xcode's automatic
+  `with-share-extension` plugin, which creates the iOS share extension's target
+  with the same team — see _ios share extension build settings_ below. With both in place Xcode's automatic
   signing takes it from there and no manual team pick is needed. If Xcode still
   asks on the **app** target, that's the signal `.env.local` wasn't loaded — fix
   the env, don't fix the pbxproj.
@@ -451,7 +451,7 @@ things and disagreeing costs nothing until late.
 | reads                                                        | takes                         |
 | ------------------------------------------------------------ | ----------------------------- |
 | the app's `Info.plist` / `versionName`                       | `ios.version`, else `version` |
-| `expo-share-extension` → the extension's `MARKETING_VERSION` | `version` only, always        |
+| `with-share-extension` → the extension's `MARKETING_VERSION` | `version` only, always        |
 | `expo-constants` → Settings → **About**                      | `version` only, always        |
 
 Scaffolded, this repo had `version: '0.0.0'` with `1.0.0` on both platform
@@ -466,7 +466,7 @@ So: **bump `version`, and nothing else.** `ios.buildNumber` and
 `android.versionCode` stay per-platform because they are genuinely different
 concepts (a string iOS increments per upload, an integer Play orders builds by),
 and About prints whichever the running platform has. Belt and braces:
-`plugins/with-share-extension-build-settings.js` copies the app target's shipped
+`plugins/with-share-extension/identity.js` copies the app target's shipped
 version onto the extension regardless, so re-adding `ios.version` can't
 resurrect the mismatch — see below.
 
@@ -479,8 +479,8 @@ exists ([release-notes/README.md](../release-notes/README.md)).
 **bracemark-expo ships for phones AND tablets, in every orientation, and half of
 that is not in this repo.** iOS is `ios.supportsTablet: true`, which prebuilds to
 `TARGETED_DEVICE_FAMILY = "1,2"` on the app target — and on the iOS share
-extension's target, which only `plugins/with-share-extension-build-settings.js`
-puts there (_ios share extension build settings_, below). Android has no manifest
+extension's target, which only `plugins/with-share-extension/identity.js` puts
+there (_ios share extension build settings_, below). Android has no manifest
 switch for form factors at all; what the Play Store offers to which device is the
 **Play Console**'s, and this section is the only record of it.
 
@@ -644,134 +644,98 @@ last compatible build, still talking to an api that moves on.
 
 #### ios share extension build settings ⚠
 
-**The `BracemarkShareExtension` target is born with five values wrong that are
-right on the app target**, and nothing downstream reports any of them: prebuild
-succeeds, the config is valid, and no lint, type or test reads a pbxproj or a
-plist. `expo-share-extension` creates the target from a hardcoded build-settings
-map (`plugin/build/xcode/addToXCConfigurationList.js`) and a hardcoded
-`Info.plist` (`plugin/build/withShareExtensionInfoPlist.js`), and all five gaps
-come from those two files:
+**The `BracemarkShareExtension` target is ours, and it must agree with the app
+target on five values that fail silently when they don't**: prebuild succeeds,
+the config is valid, and no lint, type or test reads a pbxproj or a plist. The
+target is created by `plugins/with-share-extension` — vendored on 2026-11-09
+from `expo-share-extension`, whose hardcoded build-settings map and Info.plist
+got all five wrong and needed a local patch plugin to repair them
+([dependency-upgrades.md](./dependency-upgrades.md), _the app-side blocker_,
+for why it is ours now). Three are set when the target is created; two are
+written onto the app target by other plugins, so they are copied across
+afterwards:
 
-| value                                          | app target      | share extension, unfixed          | symptom                                                       |
-| ---------------------------------------------- | --------------- | --------------------------------- | ------------------------------------------------------------- |
-| `DEVELOPMENT_TEAM`                             | `APPLE_TEAM_ID` | absent                            | empty **Team** in Signing & Capabilities                      |
-| `IPHONEOS_DEPLOYMENT_TARGET`                   | `26.0`          | literal `15.1`                    | Pods built for a newer iOS than the target links for          |
-| `TARGETED_DEVICE_FAMILY`                       | `"1,2"`         | absent — Xcode's default, iPhone  | on an iPad, the share sheet in iPhone compatibility mode      |
-| `MARKETING_VERSION`, `CURRENT_PROJECT_VERSION` | `ios.version`   | top-level `version`               | App Store rejects the upload on a version the app won't share |
-| `CFBundleDisplayName` (plist)                  | `Bracemark`     | `$(PRODUCT_NAME) Share Extension` | "BracemarkShareExtension Share Extension" in the share sheet  |
+| value                                          | app target      | share extension — how it gets there                         | symptom if it doesn't                                         |
+| ---------------------------------------------- | --------------- | ----------------------------------------------------------- | ------------------------------------------------------------- |
+| `DEVELOPMENT_TEAM`                             | `APPLE_TEAM_ID` | at creation, from `ios.appleTeamId` (`target.js`)           | empty **Team** in Signing & Capabilities                      |
+| `MARKETING_VERSION`, `CURRENT_PROJECT_VERSION` | `version`       | at creation, then re-copied from the app's plist            | App Store rejects the upload on a version the app won't share |
+| `CFBundleDisplayName` (plist)                  | `Bracemark`     | at creation, `config.name` (`files.js`)                     | the share sheet's label is something else                     |
+| `IPHONEOS_DEPLOYMENT_TARGET`                   | `26.0`          | **copied** from the app target, `finalized` (`identity.js`) | Pods built for a newer iOS than the target links for          |
+| `TARGETED_DEVICE_FAMILY`                       | `"1,2"`         | **copied** from the app target, `finalized`                 | on an iPad, the share sheet in iPhone compatibility mode      |
 
-The local `plugins/with-share-extension-build-settings.js` supplies all five;
-the file carries the full reasoning, so this is the short version.
-
-**They have different causes, and only two are about order — the same order.**
+**Why the last two are copied rather than set, and why the first had to be set
+by us at all:**
 
 - **`DEVELOPMENT_TEAM` — order.** Core config-plugins' `withDevelopmentTeam`
   does walk _every_ native target, but it runs before this one exists. `withMod`
   chains mods under the same key so the **last registered runs first**, and
   `getPrebuildConfig` reads `app.config.ts` (registering every entry in
-  `plugins`, `expo-share-extension` included) _before_ it applies
-  `withIosExpoPlugins`, which is what registers `withDevelopmentTeam`. So it is
-  registered last, runs first, and walks a pbxproj that still has exactly one
-  native target.
+  `plugins`) _before_ it applies `withIosExpoPlugins`, which is what registers
+  `withDevelopmentTeam`. So it is registered last, runs first, and walks a
+  pbxproj that still has exactly one native target. Hence `target.js` writes
+  the team itself, from the same `ios.appleTeamId`.
 - **`TARGETED_DEVICE_FAMILY` — order, the same way.** Core `withDeviceFamily`
   writes `ios.supportsTablet` onto every target that exists when it runs, which
-  is before this one does, and `expo-share-extension`'s settings map names no
-  family. It only mattered once the app went iPad-native (_devices_, above): a
-  prebuild before the plugin copied it left the extension with no
-  `TARGETED_DEVICE_FAMILY` line at all.
+  is before this one does. Left out, the extension builds for Xcode's default,
+  iPhone only.
 - **`IPHONEOS_DEPLOYMENT_TARGET` — product type.** `expo-build-properties`
   filters its targets to `TargetType.APPLICATION` (`build/ios.js`,
   `updateDeploymentTargetXcodeProject`), so a `com.apple.product-type.app-extension`
   target is skipped **by design** and would still be skipped if it ran last.
   Meanwhile `ios.deploymentTarget` also lands in `Podfile.properties.json`, so
-  every Pod _is_ built at 26.0.
+  every Pod _is_ built at 26.0. Left alone the extension inherits the project
+  level's `15.1`.
 - **The versions — a second config key.** The extension's plist takes
-  `CFBundleShortVersionString` from `$(MARKETING_VERSION)`, which
-  `expo-share-extension` seeds from the **top-level** `config.version`, while the
-  app's plist is written from `ios.version`. Nothing is skipped or mistimed; the
-  two targets simply read different keys. → _versions_, above.
-- **The display name — a hardcoded string.** `"$(PRODUCT_NAME) Share Extension"`,
-  and `PRODUCT_NAME` is the target name, so it resolves to "BracemarkShareExtension
-  Share Extension" — the label under the icon in the **iOS share sheet**, which
-  the Android half of the feature renders as plain "Bracemark" (its
-  `ShareActivity` carries no `android:label`, so it inherits the app's).
+  `CFBundleShortVersionString` from `$(MARKETING_VERSION)`, seeded from the
+  **top-level** `config.version`, while the app's plist is written from
+  `ios.version`, else `version`. → _versions_, above.
 
-The consequence worth remembering: **reordering `plugins` fixes neither.** Nor
-does fixing it in Xcode — `ios/` is CNG output, so a hand-picked team or a
-retyped deployment target dies at the next `--clean`, with a clean working tree
-throughout. Left unnoticed, the signing half fails an archive after the wait.
-
-**The fix is a `finalized` mod, deliberately.** A `withXcodeProject` mod would
-work for the team, but only if the plugin were listed _before_
-`expo-share-extension` in `plugins` — reverse order, per the chaining above — so
-a later innocent reorder of that array would silently undo it. Mod **keys**,
-unlike mods within a key, have a fixed precedence (`mod-compiler.js`:
-`dangerous: -2`, `xcodeproj: -1`, `finalized: 1`), so `finalized` runs after the
-whole xcodeproj chain has run and written the file, wherever the array puts it.
-It re-reads the pbxproj from disk because by `finalized` there is no
-`modResults` to take.
+**The copy is a `finalized` mod, deliberately.** Mod **keys**, unlike mods
+within a key, have a fixed precedence (`mod-compiler.js`: `dangerous: -2`,
+`xcodeproj: -1`, `finalized: 1`), so `finalized` runs after the whole xcodeproj
+chain has run and written the file, wherever `plugins` puts the entry. It
+re-reads the pbxproj and both plists from disk because by `finalized` there is
+no `modResults` to take — and what is on disk is the post-resolution truth.
+Copying from the app target, rather than restating values here, keeps
+`app.config.ts` the only place any of them live. The versions are written to
+**every** target, the app included: on the app target they change nothing that
+ships (its plist carries literals), but the scaffold leaves `MARKETING_VERSION =
+1.0` there forever and Xcode's target → General → Identity reads the build
+setting rather than the plist. The project-level build configurations keep the
+template's `15.1` on purpose: target-level settings win.
 
 **Re-registering `withDevelopmentTeam` yourself is the tempting alternative —
 don't.** Putting `IOSConfig.DevelopmentTeam.withDevelopmentTeam` first in
-`plugins` would make a second copy of it run last, and that is a real one-liner.
-It buys a silent dependency on array position in exchange, covers only the
-signing half, and still leaves a local plugin entry to explain. Expo offers no
-knob to re-time its own registration; `finalized` is the supported way to say
-"after everything".
+`plugins` would make a second copy of it run last. It buys a silent dependency
+on array position, and the target writing its own team needs no position at
+all.
 
-**Everything is copied from the app target, not restated.** The deployment
-target from its build settings; the versions and the display name from the
-`Info.plist` it actually ships, which is the post-resolution truth — every
-earlier mod has had its say by `finalized`. So `app.config.ts` stays the only
-place any of these live, and a bump can't leave the extension behind. The
-versions are written to **every** target, the app included: on the app target
-they change nothing that ships (its plist carries literals), but the scaffold
-leaves `MARKETING_VERSION = 1.0` there forever and Xcode's target → General →
-Identity reads the build setting rather than the plist — so the app target
-displays a version it does not ship until they are aligned. The project-level build
-configurations keep the template's `15.1` and that is deliberate: target-level
-settings win, and upstream leaves the project level alone for the app target
-too.
-
-The plugin then asserts, for every `PBXNativeTarget` × build configuration, that
-`DEVELOPMENT_TEAM` is present, that `IPHONEOS_DEPLOYMENT_TARGET` matches the app
-target's, and that the target's plist — with its `$(BUILD_SETTING)` references
-resolved, which is what actually ships — carries the app's version, build and
-display name. A loud prebuild failure in place of a silent empty dropdown.
-The assertions pass unchanged if either problem is fixed upstream, since the
-writes are idempotent; what they catch is a write that missed a target.
+`identity.js` then asserts, for each of the extension's build configurations,
+that `DEVELOPMENT_TEAM` is present, that `IPHONEOS_DEPLOYMENT_TARGET` and
+`TARGETED_DEVICE_FAMILY` match the app target's, and that its plist — with its
+`$(BUILD_SETTING)` references resolved, which is what actually ships — carries
+the app's version, build and display name. A loud prebuild failure in place of
+a silent empty dropdown.
 
 Unset `APPLE_TEAM_ID` stays safe, matching `withDevelopmentTeam`: a falsy id is
 skipped and no team is written, so a fresh clone still prebuilds and you pick
 both teams by hand. → [env-files.md](./env-files.md), _the one
 non-`EXPO_PUBLIC_` var_.
 
-**A fifth thing the target is born with wrong, and it is SOURCE rather than
-settings.** `expo-share-extension` also copies its own
-`ShareExtensionViewController.swift` into the target on every prebuild
-(`plugin/build/xcode/addPbxGroup.js`), and that file sizes React Native's root
-view to `UIScreen.main.bounds` while adding it to a view the share presentation
-has already pushed 72pt down the screen — a frame is in its **superview's**
-coordinates, so the whole sheet renders 72pt below the bottom of the display and
-the Save button is cut in half. `plugins/with-share-extension-root-view.js`
-rewrites that one branch to `frame = view.bounds`. It is a second `finalized`
-mod for exactly the reasons above — `ios/` is CNG output and the `.swift` is
-re-copied on every prebuild, so an edit in Xcode dies at the next `--clean` —
-and it throws rather than no-ops if upstream rewords the branch, because the
-failure it prevents is invisible to prebuild, the Swift compiler, lint, types
-and every test. Full derivation, and the before/after measurements, in
-[share-sheet.md](./share-sheet.md), _the host view is full-screen_.
-
-**And a sixth, which is something the file lacks rather than gets wrong.**
-`plugins/with-share-extension-swipe-hold.js` adds one notification observer to
-that same controller's `setupNotificationCenterObserver`, beside the library's
-own `close` observer: it sets `isModalInPresentation` when our
-`BracemarkShareSwipeGuard` module posts, which is how the share sheet's pickers
-hold the system's swipe-to-dismiss off. Same `finalized` mod, same reasons, and
-it throws if upstream rewords the method — unpatched, the module posts into
-nothing and the only symptom is a picker that can be swiped away on a device.
-→ [share-sheet.md](./share-sheet.md), _the pickers hold the system's swipe
-off_.
+**The target's SOURCES are referenced in place, not copied into `ios/`.** Its
+controller (`modules/bracemark-share/ios-extension/ShareViewController.swift`),
+the Inter font (`assets/fonts/`) and Safari's `share-extension/preprocessing.js`
+are file references with `sourceTree = SOURCE_ROOT`, relative to `ios/`. So an
+edit made in Xcode to the controller lands in the tracked file and survives
+`--clean`, which is the one exception to "nothing hand-edited in Xcode
+survives" above. Under `expo-share-extension` the controller was re-copied out
+of `node_modules` on every prebuild, and two of its bugs — a root view sized to
+the screen that hung the sheet 72pt off the bottom, and no way for our swipe
+guard to reach `isModalInPresentation` — had to be fixed by `finalized` plugins
+rewriting the copy. Both are ordinary code in the controller now
+([share-sheet.md](./share-sheet.md), _"Full-screen" is a SIZE_, and _the
+pickers hold the system's swipe off_). Only two files are generated into
+`ios/BracemarkShareExtension/`: its `Info.plist` and its entitlements.
 
 #### android release minification — R8
 

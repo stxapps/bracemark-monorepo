@@ -12,13 +12,11 @@ import Foundation
 //
 // `isModalInPresentation` is UIKit's own lever for exactly this, and it lives
 // on the presented VIEW CONTROLLER — which this module cannot name: the
-// controller is expo-share-extension's `ShareExtensionViewController`, compiled
-// into the extension target rather than this pod, and there is no window to
-// walk down from (`UIApplication.shared` does not exist in an app-extension
-// process). So this module only POSTS, and the controller sets its own flag:
-// plugins/with-share-extension-swipe-hold.js patches an observer for this
-// notification into it, beside the `close` observer the library already
-// carries. That is the library's own module-to-controller channel, reused.
+// controller is `ShareViewController` (modules/bracemark-share/ios-extension/),
+// compiled into the extension target rather than this pod, and there is no
+// window to walk down from (`UIApplication.shared` does not exist in an
+// app-extension process). So the controller registers itself as
+// `ShareExtensionHost.current` and this module asks it to set its own flag.
 //
 // ⚠ IT IS A FUNCTION AND NOT A VIEW, and the first version was a view. A
 // sizeless Expo view whose `didMoveToWindow` walked the responder chain to the
@@ -32,25 +30,17 @@ import Foundation
 // spend memory like that; a module function costs nothing measurable.
 //
 // iOS-only, and only the share extension calls it — the pod is linked into the
-// app target too (BracemarkShare.podspec), where nothing observes the name.
+// app target too (BracemarkShare.podspec), where `ShareExtensionHost.current` is
+// nil and the call does nothing.
 public final class BracemarkShareSwipeGuardModule: Module {
-  // Part of the contract with plugins/with-share-extension-swipe-hold.js, which
-  // spells the same string into the controller.
-  private static let holdNotification = Notification.Name("bracemarkShareSwipeHold")
-
   public func definition() -> ModuleDefinition {
     // The name is part of the JS contract (share-swipe-guard.tsx).
     Name("BracemarkShareSwipeGuard")
 
     Function("setHeld") { (held: Bool) in
-      // Posted on main because the observer flips a UIKit property; the
-      // controller's observer is registered on the main queue as well.
+      // On main because the controller flips a UIKit property.
       DispatchQueue.main.async {
-        NotificationCenter.default.post(
-          name: BracemarkShareSwipeGuardModule.holdNotification,
-          object: nil,
-          userInfo: ["held": held]
-        )
+        ShareExtensionHost.current?.setSwipeHeld(held)
       }
     }
   }

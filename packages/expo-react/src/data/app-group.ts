@@ -10,8 +10,10 @@
 
 import { Directory, Paths } from 'expo-file-system';
 
-// expo-share-extension's default group id: `group.` + the bundle identifier
-// (app.config.ts `ios.bundleIdentifier`).
+// `group.` + the bundle identifier — the id expo-share-extension defaulted to,
+// and the one both targets are entitled to. Stated again in bracemark-expo's
+// app.config.ts (`ios.entitlements`), which a package cannot import;
+// share-app-group.spec.ts there pins the two together.
 export const APP_GROUP_ID = 'group.com.bracemark.app';
 
 // The App Group container directory, or null off-iOS / before entitlements

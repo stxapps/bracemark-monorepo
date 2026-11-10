@@ -39,20 +39,21 @@ them.** A Swift `let` and a TypeScript `const` holding the same byte have no
 relationship a compiler, a linter or a type can see.
 
 **The same rule holds one layer down, where the shared value is a NAME and no
-native suite can reach it.** The iOS share sheet's swipe hold is one chain across
-JS, a Swift module, and an observer a config plugin writes into
-`expo-share-extension`'s controller, and each link is a string: the module's
-name, its function, a notification's name, a `userInfo` key, a class listed in
-`expo-module.config.json`. A mismatch at any of them is not an error anywhere —
-the lookup is optional and the post lands on nobody — so jest holds the strings
-to each other instead, by reading the Swift as text and running the plugins for
-real against the INSTALLED library's file
-(`features/share/share-swipe-hold-wiring.spec.ts`, and the third case of
-`share-swipe-guard.spec.tsx`). Running them against the installed file rather
-than a fixture is the point: the anchors the plugins rewrite are upstream's
-text, so a dependency bump that rewords them fails `npm run test`, not the next
-prebuild. What that leaves is whether UIKit honours the flag, which is a device
-question and `SHARE-IOS-003`'s ([e2e.md](./e2e.md)).
+native suite can reach it.** The iOS share sheet's swipe hold and `close()` are
+each one chain across JS, a Swift module in the `BracemarkShare` pod, and the
+share extension's controller. The last hop is a protocol the compiler checks
+(`ShareExtensionHosting`); the rest are strings and lines that merely have to be
+there: the module's name, its function, a class listed in
+`expo-module.config.json`, the controller registering itself as
+`ShareExtensionHost.current`, the principal class the Info.plist names. A
+mismatch at any of them is not an error anywhere — the lookup is optional and
+the call lands on a nil host — so jest holds them to each other instead, by
+reading the Swift as text (`features/share/share-extension-host-wiring.spec.ts`,
+and the third case of `share-swipe-guard.spec.tsx`). What that leaves is whether
+UIKit honours the flag, which is a device question and `SHARE-IOS-003`'s
+([e2e.md](./e2e.md)). (Before the controller was vendored, the hold was a
+notification observer a config plugin patched into the installed library's
+file, and the spec ran that plugin against it.)
 
 The typecheck+lint layer is easy to forget in a testing doc, but it is the one
 that catches the largest class of mistake here: `@nx/enforce-module-boundaries` turns

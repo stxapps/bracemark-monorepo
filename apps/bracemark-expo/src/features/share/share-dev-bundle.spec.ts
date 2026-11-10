@@ -8,8 +8,8 @@
 // A Debug build's share extension asks Metro for a dev bundle, and that bundle
 // does not fit under the extension's 120 MB cap on an iPhone 12: the sheet was
 // killed on its first render with no error anywhere. The config rewrites ONLY
-// the share extension's requests (tagged `shareExtension=true` by
-// expo-share-extension's controller) to a minified production bundle with no
+// the share extension's requests (tagged `shareExtension=true` by its
+// controller, ShareViewController) to a minified production bundle with no
 // `transform.bytecode` — which would skip minification and serve 8 MB of text.
 // Every way this breaks is silent until a device: a rewrite that stops matching
 // serves the dev bundle again; one that matches too much serves the APP a

@@ -63,14 +63,118 @@ installed (#121) — a blank sheet when sharing from third-party apps (#122), an
 an `RCTThirdPartyComponentsProvider` crash on the New Architecture (#117).
 
 **Decided 2026-11-06: vendor it** (MIT). The share UI is already ours
-(`ShareRoot`/`ShareScreen`); what the package supplies is the config plugin that
+(`ShareRoot`/`ShareScreen`); what the package supplied was the config plugin that
 adds the extension target to the Xcode project, the Swift view controller that
 boots an RN instance in the extension process, and the `withShareExtension`
-Metro wrapper. Four local plugins (`plugins/with-share-extension-*`) already
-patch its output, so part of it is ours already. Bring it into
-`apps/bracemark-expo` — the iOS twin of `modules/bracemark-share` on Android —
-**while still on SDK 54**, prove the sheet behaves exactly as before, and only
-then fix it forward to 58, using #117/#119/#121 as the map. Not yet started.
+Metro wrapper — and four local plugins already patched its output. Bring it into
+`apps/bracemark-expo` **while still on SDK 54**, prove the sheet behaves exactly
+as before, and only then fix it forward to 58, using #117/#119/#121 as the map.
+
+**The shape (designed 2026-11-09).** In the app, not a `packages/` package: it
+has one consumer, its geometry is the other half of `share-kit.tsx`, the
+Android twin (`ShareActivity`) already lives in `modules/bracemark-share`, and
+no `type:` tag fits code that nothing imports across a layer.
+
+- **The controller** —
+  `modules/bracemark-share/ios-extension/ShareViewController.swift`, the iOS
+  twin of `ShareActivity.kt`. Upstream's, trimmed to a web URL, Safari's
+  preprocessing results and text (no image/video/file branches, Firebase,
+  `openHostApp`, plist-driven height or colour). It sits outside the pod's glob
+  and is compiled into the extension target only, **referenced in place** — so
+  an Xcode edit lands in the tracked file.
+- **A typed seam instead of notifications** — `ShareExtensionHost` in the
+  `BracemarkShare` pod: the controller registers itself as `current` and
+  conforms to `ShareExtensionHosting`; `BracemarkShare.close()` (now the same
+  module name on both platforms, so `share-host.ts` is one call) and
+  `BracemarkShareSwipeGuard` call it. Nil in the app process, so a stray call
+  is a no-op.
+- **One plugin**, `plugins/with-share-extension/` (`files.js`, `podfile.js`,
+  `target.js`, `identity.js`), replacing upstream's and the four patch plugins.
+  It writes correct output rather than patching it: team, versions and display
+  name at creation; deployment target and device family copied from the app
+  target in a `finalized` pass with the old guards
+  ([expo-build.md](./expo-build.md), _ios share extension build settings_); the
+  Podfile block built from the app's own autolinking command and
+  `use_react_native!` call, with the community-module filter in it from the
+  start. The App Group is `app.config.ts`'s `ios.entitlements`.
+- **Metro** — upstream's 15-line wrapper inlined into the existing
+  `shareExtension=true` rewrite in `metro.config.js`.
+
+**Three phases**, each provable on its own:
+
+1. **Parity on SDK 54 — no behaviour change.** Same RN factory, same
+   `shareExtension` registry name, same spinner, every Info.plist key kept but
+   the three nothing reads (`ShareExtensionBackgroundColor`, `HostAppScheme`,
+   `WithFirebase`). Gates: a `prebuild --clean` diff against `main`'s, then the
+   device checks in [share-sheet.md](./share-sheet.md) — the `SHARE-IOS-*`
+   flows, `SHARE-IOS-MEMORY-RELEASE-001` on the iPhone 12, the iPad pass both
+   ways round, a real **Archive** and `ios:check-archive`, and the "Bracemark"
+   label in the share sheet.
+2. **Clean-ups, still on 54.** Boot with `ExpoReactNativeFactory` /
+   `ExpoReactNativeFactoryDelegate`, as the app's AppDelegate does — the
+   extension uses bare `RCTReactNativeFactory`, and that divergence is the
+   likely cause of #121 (`globalThis.expo` never installed) once a later SDK
+   stops installing Expo by the older route. A hypothesis until it boots; from
+   then on the controller's boot code tracks the SDK template's
+   `AppDelegate.swift`, diffed at every bump. Then: one registry name for both
+   hosts (`bracemarkShare`); try dropping the `share.js` source extension
+   against the bundle's module count; decide `UIDesignRequiresCompatibility` and
+   the localhost ATS exception.
+3. **SDK 58**, following the template diff. #117 is the nil-class crash the
+   linking rule already covers ([share-sheet.md](./share-sheet.md), _the share
+   extension has almost no memory to spare_, rule 3).
+
+The cost taken on: generating the Xcode target is ours now, and it is the part
+that breaks across Xcode versions. If that becomes a recurring bill,
+`@bacons/apple-targets` (below) replaces `target.js` alone.
+
+**Phase 1, 2026-11-09 — in, and green on the simulator; the hardware gates
+remain.** `prebuild --clean` against `main`'s output: the app's Info.plist and
+entitlements byte-identical; the extension's plist differs only by the
+principal class's name and the three dropped keys; the pbxproj, compared by
+structure rather than UUIDs, has identical build settings, phase order and
+dependencies, with the files referenced in place and one embed phase on the app
+where upstream left an empty one beside a "Copy Files"; the Podfile block
+differs only in that its autolinking command is now the app's (`node --eval
+require('expo/bin/autolinking')` where upstream had `npx
+expo-modules-autolinking`). `pod install` links the same set into the extension,
+and drops the `ExpoShareExtension` pod. A Debug simulator build compiles
+`import BracemarkShare` from the extension target, and `SHARE-IOS-001`, `-002`
+and `-003` pass on the iPhone 17 Pro simulator (iOS 26.5): 20 of 20 flows,
+Save and `close()`, the signed-out sheet, and the swipe hold through
+`ShareExtensionHost`. **Not yet run**: the iPad pass, a real Archive and
+`ios:check-archive`.
+
+**The iPhone 12, iOS 26.5, `ios:release:staging`, 2026-11-09 — survived, but not
+yet a pass.** Two shares of an article from Safari, title and URL on the sheet
+(the `readMode` fix, below, on hardware), Save closing the sheet itself, no kill
+and no crash report. The launch cost is unchanged — `compose` on open
+**21.2 MB** against 21.1 on 2026-10-28 — so the vendored controller adds nothing
+at boot. **The growth across screens is not**: each return to `compose` added
+8–15 MB (21 → 43 → 50 → 65 → 73), peaking at **73.0 MB, 47.0 available**, where
+2026-10-28's five full laps added 10 MB in all (31.6 MB, 88.2 available); and the
+run was SHORTER than `SHARE-IOS-MEMORY-RELEASE-001` asks — three list and two
+tag visits, not five laps of both. Not yet attributed. It is the first device run
+in which the sheet carries an article copy (the old script sent none, and from
+2026-11-08 the new one sent nothing at all), though `ShareScreen` touches
+`readMode` only at Save; it may equally be something else on `main` since
+2026-10-28, or a larger taxonomy. **The discriminator**: the same account sharing
+a page that is not an article (no copy), the full five laps. Growth back near
+10 MB pins it on the copy; otherwise compare against a device build of the old
+`expo-share-extension` setup carrying the fixed script.
+
+⚠ **That first e2e pass needed the old `preprocessing.js`, and the reason was
+not the vendoring.** With the file `8a1b93e3` (2026-11-08) generated, Safari
+handed the extension a property list it could not load —
+`NSItemProviderErrorDomain -1000 "Cannot load representation of type
+com.apple.property-list"` — so the sheet opened on _No link in this share_; the
+upstream controller compiled into the same build failed identically, and the
+2026-11-06 staging artifact, embedding the old 1 KB script, succeeded on the same
+simulator and page. The new script returned `readMode: null` on a page that is
+not an article, and a property list has no null. **Fixed 2026-11-09** in the
+generator: the key is omitted, and any other null is dropped
+([link-extraction-keep.md](./link-extraction-keep.md), the iOS preprocessing
+entry).
 
 Weighed and set aside:
 

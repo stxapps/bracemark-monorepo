@@ -168,7 +168,7 @@ behavior="padding"` around the centring box in `DialogOverlay` — the container
   the lift arithmetic (bullet after next).
 - **Why the share sheet can't use it at all** (the stronger constraint):
   keyboard-controller's iOS layer is built on `UIApplication.shared`, which
-  doesn't exist in an app-extension process — expo-share-extension's
+  doesn't exist in an app-extension process — the Podfile's
   `APPLICATION_EXTENSION_API_ONLY=No` only makes such pods compile, not work.
   Even nesting a fresh `KeyboardProvider` wouldn't help. Android's
   `ShareActivity` runs in the app's own process and could technically differ,

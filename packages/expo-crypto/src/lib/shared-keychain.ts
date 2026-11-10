@@ -11,8 +11,8 @@ import { requireNativeModule } from 'expo-modules-core';
 //
 // `group` is an App Group id (e.g. `group.com.bracemark.app`): iOS accepts App Group
 // ids as keychain access groups, so the App Group entitlement the app and the
-// extension already share (expo-share-extension's plugin writes it into both
-// targets) covers this — no keychain-sharing entitlement, no team-id prefix.
+// extension already share (bracemark-expo's app.config.ts states it, and its
+// share-extension plugin writes it into both targets) covers this — no keychain-sharing entitlement, no team-id prefix.
 // Items are stored AFTER_FIRST_UNLOCK, matching the session-store entry they
 // mirror.
 //

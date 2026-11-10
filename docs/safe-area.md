@@ -954,8 +954,8 @@ and both apps' surfaces are edge-to-edge by default (iOS always was; Android
     placed 72pt down, so the panel bottom-anchored itself to an edge 72pt below
     the display. `useSafeAreaInsets()` reported a clean 34 throughout — that is
     what `UIView.safeAreaInsets` says for such a view — and the Save button had
-    its full clearance, all of it off-screen. Fixed in native, by
-    `plugins/with-share-extension-root-view.js`; the point to carry away is that
+    its full clearance, all of it off-screen. Fixed in native, in our own
+    controller's `configureRootView` (vendored since); the point to carry away is that
     the inset hook answers for the view it is in, and says nothing about where
     that view is. → [share-sheet.md](./share-sheet.md), _the host view is
     full-screen_.

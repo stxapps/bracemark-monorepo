@@ -303,6 +303,20 @@ chromium` (~550 MB into `~/Library/Caches/ms-playwright/`) if it is absent.
   and the measurement. The same recipe did not reproduce on `bracemark-web` in
   three tries, so its cache was left on; if a rule that is in `globals.css` is
   not on the page there, clear the directory before debugging the rule.
+
+  **On `bracemark-web` it has since shown a third face: a route that exists
+  answering 404.** On 2026-11-09 a freshly started `npm run dev` served
+  `/settings`, `/links` and `/create-account` at 200, and every
+  `/settings/<section>` — the `[section]` dynamic route, `lists` and `account`
+  alike, all valid ids in `sections.tsx` — at **404** "Page not found", in tens
+  of milliseconds, with nothing in the dev log but `GET /settings/lists 404`. It
+  surfaced as an e2e failure that names neither: the native runner's account
+  setup timing out on `getByLabel('New list name')` (`e2e/web/fixtures/taxonomy.ts`)
+  before any device step. Stopping the stack, removing
+  `apps/bracemark-web/.next/dev/cache/turbopack` (399 MB) and restarting brought
+  both sections back at 200. The cache and the restart were not separated — a
+  plain restart was not tried first — so treat a 404 on a route whose page and
+  id plainly exist as this, and clear the directory before reading the router.
 - **A hydration error on `localhost:3001` is your browser, not the site.** Under
   `npm run dev:site`, visiting the marketing site can log "Hydration failed…" with
   `+ <main className="flex-1">` / `- <div className="px-safe">`. It is not an app

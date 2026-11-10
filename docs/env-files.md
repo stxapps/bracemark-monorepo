@@ -607,8 +607,9 @@ interpolation. At prebuild it is written into `DEVELOPMENT_TEAM`, which is what
 keeps local device signing from needing a manual team pick in Xcode after each
 regenerate of `ios/`. That takes **two** plugins, not one:
 `@expo/config-plugins`' `withDevelopmentTeam` covers the app target, and the
-local `plugins/with-share-extension-build-settings.js` covers the iOS **share
-extension** target, which the first one runs too early to see — see
+local `plugins/with-share-extension` writes it onto the iOS **share
+extension** target as it creates it, since the first one runs too early to see
+that target — see
 [expo-build.md](./expo-build.md), _ios share extension build settings_. Three
 things follow:
 

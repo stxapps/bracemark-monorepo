@@ -20,8 +20,8 @@ const config: ExpoConfig = {
   name: 'Bracemark',
   slug: 'bracemark',
   // ONE version string, and it has to be this key rather than `ios.version` /
-  // `android.version`: `expo-share-extension` reads the top-level `config.version`
-  // for the share extension target's MARKETING_VERSION, `expo-constants` hands
+  // `android.version`: plugins/with-share-extension seeds the iOS share extension
+  // target's MARKETING_VERSION from the top-level `config.version`, `expo-constants` hands
   // that same value to Settings → About, and only the app target takes
   // `ios.version`. Scaffolded as 0.0.0 here with 1.0.0 on both platform blocks,
   // the three disagreed SILENTLY: the app bundle said 1.0.0, the iOS share
@@ -59,6 +59,16 @@ const config: ExpoConfig = {
     bundleIdentifier: 'com.bracemark.app',
     appleTeamId: process.env.APPLE_TEAM_ID,
     buildNumber: '1',
+    // The App Group the app and the iOS share extension share: the snapshot and
+    // outbox files live in its container, and its id doubles as the keychain
+    // access group for the session mirror (docs/share-sheet.md). Stated here
+    // once — Expo writes it into the app's entitlements, and
+    // plugins/with-share-extension into the extension's, and reads it from here.
+    // ⚠ packages/expo-react/src/data/app-group.ts restates the id for JS, and
+    // src/features/share/share-app-group.spec.ts pins the two together.
+    entitlements: {
+      'com.apple.security.application-groups': ['group.com.bracemark.app'],
+    },
   },
   android: {
     adaptiveIcon: {
@@ -93,9 +103,9 @@ const config: ExpoConfig = {
     // Inter, and no font-medium/font-semibold anywhere.
     //
     // It stays the TOP-LEVEL `fonts` key rather than `ios.fonts`, even though
-    // `ios.fonts` would describe it better: expo-share-extension reads exactly
-    // `fonts` off this entry to embed Inter in the iOS share extension target,
-    // and would silently get nothing. The Android copy that comes with it is
+    // `ios.fonts` would describe it better: plugins/with-share-extension reads
+    // exactly `fonts` off this entry to embed Inter in the iOS share extension
+    // target, and would silently get nothing. The Android copy that comes with it is
     // deleted again by the plugin below.
     ['expo-font', { fonts: ['./assets/fonts/InterVariable.ttf'] }],
     [
@@ -140,46 +150,28 @@ const config: ExpoConfig = {
       },
     ],
     [
-      'expo-share-extension',
+      // The iOS SHARE EXTENSION target (not the browser extension) — vendored
+      // from expo-share-extension and now ours: the plugin builds the target,
+      // its Info.plist, entitlements and Podfile block; the controller is
+      // modules/bracemark-share/ios-extension/ShareViewController.swift. Its
+      // position in this array does not matter (identity.js is `finalized`).
+      // docs/share-sheet.md, docs/dependency-upgrades.md.
+      //
+      // Two things the old options said, which are now code in that controller
+      // rather than config: the root view is CLEAR (share-kit.tsx draws its own
+      // panel inside it, over the host app under the system's dimming), and it
+      // FILLS ITS SUPERVIEW — no fixed height. A 520pt container used to make
+      // the keyboard unsurvivable (a ~520pt picker above a ~340pt keyboard),
+      // and a screen-sized one hung the sheet 72pt off the bottom. Nothing in
+      // JS may assume the surface's origin: the lift is the share frame's own
+      // overlap with the keyboard, measured natively against the frame itself
+      // (features/share/share-keyboard.ts), because on an iPad this container
+      // is a form sheet that floats mid-screen and that the host moves for the
+      // keyboard on its own.
+      './plugins/with-share-extension',
       {
         activationRules: [{ type: 'url', max: 1 }, { type: 'text' }],
-        // The surface the extension mounts into, and it must NOT paint. Left
-        // undefined the plugin writes no `ShareExtensionBackgroundColor`, and
-        // ShareExtensionViewController falls back to `.systemBackground` — an
-        // opaque slab with square corners. The sheet's four screens are not all
-        // one height (compose and saved are ~280, the pickers ~520), and the
-        // difference showed as dead white above the header. Alpha 0 makes it
-        // clear so the sheet draws its OWN panel inside it, the way the Android
-        // half already does; what shows through is the host app under the
-        // system's dimming. `features/share/share-kit.tsx` is the other half of
-        // this and says so. (`alpha` is 0–1 in the Swift, unlike the 0–255
-        // channels beside it.)
-        backgroundColor: { red: 0, green: 0, blue: 0, alpha: 0 },
-        // NO `height`, and that is a decision rather than an omission.
-        //
-        // The plugin writes `ShareExtensionHeight` into the extension's
-        // Info.plist, and ShareExtensionViewController turns it into a root
-        // view of exactly that many points pinned to the bottom of the screen
-        // (`y = screenBounds.height - height`); with the key absent it uses
-        // `screenBounds` — the full screen — instead. This used to say 520,
-        // "sized for the PICKERS", and it is what made the keyboard
-        // unsurvivable on this surface: a picker is ~520pt of chrome and list,
-        // the keyboard covers ~340pt of the screen, and a 520pt container
-        // cannot hold the first above the second no matter how correctly the
-        // sheet lifts itself. The panel is bottom-anchored and draws its own
-        // background, so a full-screen container changes NOTHING visually while
-        // the keyboard is down — it only stops being the ceiling when it is up.
-        //
-        // Two consequences worth knowing. The transparent root now covers the
-        // screen and still takes touches, which is why share-kit.tsx's
-        // `share-backdrop` (already there for the band) matters more: it is the
-        // tap-outside-to-close for the whole screen now. And nothing in JS may
-        // assume the surface's origin any more — the lift is the share frame's
-        // own overlap with the keyboard, measured natively against the frame
-        // itself (features/share/share-keyboard.ts), because on an iPad this
-        // container is a form sheet that floats mid-screen and that the host
-        // moves for the keyboard on its own.
-        excludedPackages: [
+        excludedExpoModules: [
           'expo-dev-client',
           'expo-splash-screen',
           'expo-updates',
@@ -210,9 +202,10 @@ const config: ExpoConfig = {
           // bundle only probes `NativeModules.EXDevLauncher` behind a guard).
           // Expo modules are safe to drop per target — each target gets its own
           // ExpoModulesProvider — unlike the community ones, which
-          // plugins/with-share-extension-native-links.js can only partly drop
-          // (see its ⚠). NOT expo-router, though the sheet never routes: its
-          // Swift pod ExpoHead is what makes Expo's autolinking build
+          // excludedCommunityModules below can only partly drop (see the ⚠ in
+          // plugins/with-share-extension/podfile.js). NOT expo-router, though
+          // the sheet never routes: its Swift pod ExpoHead is what makes Expo's
+          // autolinking build
           // react-native-screens with modular headers in this target, and
           // Screens has to stay linked here (that same ⚠), so without
           // expo-router `pod install` fails ("ExpoHead depends upon RNScreens,
@@ -229,6 +222,17 @@ const config: ExpoConfig = {
           'expo-local-authentication',
           'expo-font',
           'expo-system-ui',
+        ],
+        // Linked into the share extension and never called from it. Only a
+        // library that registers NO Fabric component can go here: codegen's
+        // shared RCTThirdPartyComponentsProvider crashes the extension at start
+        // on an unlinked component class (plugins/with-share-extension/podfile.js,
+        // its ⚠). Worklets is the one that matters — Nitro's optional require
+        // would otherwise build a second Hermes runtime in this process.
+        excludedCommunityModules: [
+          'react-native-reanimated',
+          'react-native-worklets',
+          '@react-native-community/netinfo',
         ],
         preprocessingFile: './share-extension/preprocessing.js',
       },
@@ -280,42 +284,6 @@ const config: ExpoConfig = {
     // activities nothing in release starts. See the plugin, and
     // docs/expo-build.md.
     './plugins/with-android-release-trim',
-    // DEVELOPMENT_TEAM and IPHONEOS_DEPLOYMENT_TARGET for the iOS SHARE
-    // EXTENSION target, neither of which reaches it: withDevelopmentTeam runs
-    // before expo-share-extension creates the target, and expo-build-properties
-    // skips it by product type. Without this, Xcode's Signing & Capabilities
-    // Team is empty on BracemarkShareExtension after every prebuild, and that
-    // target builds for iOS 15.1 against Pods built for the 26.0 set above.
-    // Position in this array does not matter: it is a `finalized` mod, which
-    // runs after the whole chain. See the plugin.
-    './plugins/with-share-extension-build-settings',
-    // One line of the share extension's generated ShareExtensionViewController:
-    // it sizes React Native's root view to `UIScreen.main.bounds` while adding
-    // it to a view the share presentation has already pushed 72pt down the
-    // screen, so the whole sheet hangs that far off the BOTTOM and the Save
-    // button is cut in half. `ios/` is CNG output and the file is re-copied out
-    // of node_modules on every prebuild, so this cannot be an edit. Also a
-    // `finalized` mod, also position-independent. See the plugin, and
-    // docs/share-sheet.md — the host view is full-screen.
-    './plugins/with-share-extension-root-view',
-    // One observer in that same generated controller: it sets
-    // `isModalInPresentation` when our BracemarkShareSwipeGuard module posts,
-    // which is how the share sheet's pickers hold the system's swipe-to-dismiss
-    // off. The module cannot reach the controller itself, and a native view
-    // that could costs more memory than the share extension has. Same
-    // `finalized` mod, same reason it cannot be an edit. See the plugin, and
-    // docs/share-sheet.md — the pickers hold the system's swipe off.
-    './plugins/with-share-extension-swipe-hold',
-    // The share extension's own autolinking pass links every community module
-    // the app does — Reanimated and Worklets among them, and Worklets builds a
-    // second JS runtime the moment Nitro's optional require finds it. This
-    // drops the ones the sheet never calls AND that register no Fabric
-    // component (an unlinked component class crashes the shared codegen
-    // provider), between the pass's list and link halves so codegen's shared
-    // autolinking.json stays the app's. Same
-    // `finalized` mod, same reason it cannot be an edit. See the plugin, and
-    // docs/share-sheet.md — the share extension has almost no memory to spare.
-    './plugins/with-share-extension-native-links',
   ],
 };
 

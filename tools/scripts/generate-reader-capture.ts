@@ -100,19 +100,46 @@ export async function renderReaderCapture(): Promise<{
   const preprocessing = `// ${banner}
 //
 // The NSExtensionJavaScriptPreprocessingFile of the iOS share extension (wired by
-// the \`preprocessingFile\` option of expo-share-extension, in app.config.ts). Safari runs it
+// the \`preprocessingFile\` option of plugins/with-share-extension, in app.config.ts). Safari runs it
 // inside the shared page; the result lands on the RN root of the sheet as
 // \`preprocessingResults\` and is read by src/features/share/share-url.ts.
 // docs/share-sheet.md, the section on what the sheet does.
 /* eslint-disable */
 ${code}
+// ⚠ NO null MAY REACH completionFunction. Safari hands the result to the share
+// extension as a PROPERTY LIST, and a property list has no null: a JS null becomes
+// NSNull, the whole representation fails to load in the extension
+// ("Cannot load representation of type com.apple.property-list"), and the sheet
+// opens on "No link in this share" with nothing in any log of ours. So the copy is
+// OMITTED when there is none (share-url.ts reads absent and null alike), and any
+// other null is dropped on the way out — every ReaderDoc field it could stand for
+// is optional. docs/link-extraction-keep.md, the iOS preprocessing entry.
+function bracemarkPlistSafe(value) {
+  if (Array.isArray(value)) {
+    var list = [];
+    for (var i = 0; i < value.length; i++) {
+      if (value[i] !== null && value[i] !== undefined) list.push(bracemarkPlistSafe(value[i]));
+    }
+    return list;
+  }
+  if (value !== null && typeof value === 'object') {
+    var out = {};
+    for (var key in value) {
+      if (value[key] !== null && value[key] !== undefined) out[key] = bracemarkPlistSafe(value[key]);
+    }
+    return out;
+  }
+  return value;
+}
 var ExtensionPreprocessingJS = {
   run: function (args) {
     var readMode = null;
     try {
       readMode = globalThis.__bracemarkReaderDoc();
     } catch (e) {}
-    args.completionFunction({ title: document.title, url: window.location.href, readMode: readMode });
+    var result = { title: document.title, url: window.location.href };
+    if (readMode) result.readMode = readMode;
+    args.completionFunction(bracemarkPlistSafe(result));
   },
 };
 `;

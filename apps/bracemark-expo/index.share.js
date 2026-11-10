@@ -1,6 +1,7 @@
 // The iOS share-extension entry — a SEPARATE Metro bundle from index.js
-// (expo-share-extension's convention; the name 'shareExtension' is the
-// library's contract). Registers only the share root: the extension process
+// (metro.config.js serves it for the extension's requests; the name
+// 'shareExtension' is what ShareViewController mounts, in
+// modules/bracemark-share/ios-extension). Registers only the share root: the extension process
 // never loads the router or the app tree, which keeps its boot and memory
 // inside the extension budget (docs/share-sheet.md). Polyfills first, same
 // rule as index.js.

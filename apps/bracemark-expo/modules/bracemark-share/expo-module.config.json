@@ -5,6 +5,7 @@
   },
   "apple": {
     "modules": [
+      "BracemarkShareModule",
       "BracemarkShareKeyboardModule",
       "BracemarkShareMemoryModule",
       "BracemarkShareSwipeGuardModule"

@@ -30,7 +30,7 @@ const {
  * plugin writes it instead.
  *
  * expo-font still receives the same file under its top-level `fonts` key, because
- * expo-share-extension reads that key to embed Inter in the iOS share extension
+ * plugins/with-share-extension reads that key to embed Inter in the iOS share extension
  * (app.config.ts says so at the entry). On Android that key leaves an unusable
  * second copy in `assets/fonts/` — nothing resolves a family called
  * "InterVariable" — so this plugin deletes it in a `finalized` mod, which runs

@@ -66,8 +66,9 @@ export const MAX_FONT_SIZE_MULTIPLIER = 1.3;
 // tree is fully populated — `maestro hierarchy` reads back "List: My List",
 // "Save", the page title — so every automated check passes while the sheet shows
 // a mark, two rows of icons and an unlabelled blue bar. Only a screenshot shows
-// it. (expo-share-extension ships `Text`/`TextInput` wrappers for this and its
-// README calls it "a font scaling issue"; we set the same flag at our own
+// it. (expo-share-extension, which the sheet's iOS host was vendored from,
+// shipped `Text`/`TextInput` wrappers for this and its README called it "a font
+// scaling issue"; we set the same flag at our own
 // chokepoints instead, so the app's Inter/TextClassContext/role behaviour is
 // kept — see docs/accessibility.md.)
 //

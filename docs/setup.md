@@ -109,8 +109,8 @@ of what the values were:
 What replaced each, all in [expo-build.md](./expo-build.md): the keystore and
 its four Gradle properties by `plugins/with-android-signing.js` (_android
 release signing_); the team, the minimum iOS, both versions and the display
-name by `plugins/with-share-extension-build-settings.js` (_ios share extension
-build settings_), which copies them from the app target so `app.config.ts` is
+name by `plugins/with-share-extension` (_ios share extension build settings_),
+which sets or copies them from the app target so `app.config.ts` is
 the only place they live (_versions_). Two of the values above did not survive
 the move, deliberately: the share extension target is `BracemarkShareExtension`
 and its display name is now **Bracemark**, matching the app and matching

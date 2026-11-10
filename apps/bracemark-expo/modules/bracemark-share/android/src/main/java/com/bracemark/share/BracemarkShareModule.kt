@@ -4,7 +4,8 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 // The share sheet's one JS-callable control: dismiss the ShareActivity
-// (share-host.ts's Android half — iOS uses expo-share-extension's close()).
+// (share-host.ts's one call; the iOS module of the same name completes the share
+// extension's request instead).
 // Guarded to the ShareActivity so a stray call from the main app can never
 // finish the wrong activity.
 class BracemarkShareModule : Module() {

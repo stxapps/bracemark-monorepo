@@ -1,6 +1,8 @@
 // The native entry (package.json `main`). This used to be `expo-router/entry`
-// directly; expo-share-extension requires a literal index.js, so the router
-// entry moved behind this shim (docs/share-sheet.md). Two things live here:
+// directly; the iOS share extension's bundle request is the app's own
+// `index.bundle` renamed to `index.share.bundle` (metro.config.js), which needs
+// a literal index.js, so the router entry moved behind this shim
+// (docs/share-sheet.md). Two things live here:
 //
 //  - the router app, exactly as before (`expo-router/entry` registers the root
 //    component itself), with the polyfills evaluated FIRST — same rule as the

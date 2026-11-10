@@ -2,7 +2,7 @@
 // payload — pure, so it's spec-able (the native halves aren't). Two shapes
 // arrive here (docs/share-sheet.md):
 //
-//  - iOS (expo-share-extension InitialProps): `url` for a URL attachment,
+//  - iOS (ShareViewController's initial props): `url` for a URL attachment,
 //    `text` for a text attachment, and `preprocessingResults` from our
 //    preprocessing.js (`{ title, url }` captured in Safari's page context —
 //    the only place a page title exists without fetching).

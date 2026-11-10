@@ -10,7 +10,6 @@ const { withNxMetro } = require('@nx/expo');
 // start/prebuild executors require.resolve() — hence its root devDependency.
 const { getDefaultConfig } = require('@expo/metro-config');
 const { mergeConfig } = require('metro-config');
-const { withShareExtension } = require('expo-share-extension/metro');
 const { withUniwindConfig } = require('uniwind/metro');
 
 // THE PRODUCTION GUARD — a release bundle that would not talk to production fails
@@ -107,18 +106,25 @@ const nxConfig = withNxMetro(mergeConfig(defaultConfig, customConfig), {
   watchFolders: [],
 });
 
-// withShareExtension points the iOS share-extension target's bundle at
-// index.share.js (docs/share-sheet.md); withUniwindConfig must stay the
-// outermost wrapper.
-const shareConfig = withShareExtension(nxConfig);
-
-// THE iOS SHARE EXTENSION'S BUNDLE, AS A DEV BUILD REQUESTS IT. iOS kills an app
-// extension at a hard per-process cap — 120 MB on an iPhone 12, iOS 26.5 — and
-// Hermes compiles whatever Metro serves inside that process, from source
-// (docs/share-sheet.md, _the share extension has almost no memory to spare_).
-// expo-share-extension's controller builds its URL with RCTBundleURLProvider and
-// tags it `shareExtension=true`, so only the share extension is rewritten here;
-// the app's requests pass through untouched. Two rewrites:
+// THE iOS SHARE EXTENSION'S BUNDLE, AS A DEV BUILD REQUESTS IT. Its controller
+// (modules/bracemark-share/ios-extension/ShareViewController.swift) builds its
+// URL with RCTBundleURLProvider for the app's own entry and tags it
+// `shareExtension=true`, so only the share extension is rewritten here; the
+// app's requests pass through untouched. withUniwindConfig must stay the
+// outermost wrapper. Three rewrites:
+//
+//   - `index.bundle` → `index.share.bundle` — THE SHARE ENTRY, not the app's
+//     (docs/share-sheet.md). Vendored from expo-share-extension's `metro.js`,
+//     with the `share.js` source extension it added beside it. That one is
+//     kept only because the vendoring's first phase changes no behaviour: the
+//     entry resolves as plain `index.share` + `.js` without it, and the second
+//     phase drops it against the bundle's module count
+//     (docs/dependency-upgrades.md, _the app-side blocker_).
+//
+// The other two exist because iOS kills an app extension at a hard per-process
+// cap — 120 MB on an iPhone 12, iOS 26.5 — and Hermes compiles whatever Metro
+// serves inside that process, from source (docs/share-sheet.md, _the share
+// extension has almost no memory to spare_):
 //
 //   - `dev=false&minify=true` — A PRODUCTION BUNDLE, EVEN FROM A DEV BUILD. The
 //     controller asks for `dev=true&minify=false` in every Debug build, and that
@@ -136,10 +142,16 @@ const shareConfig = withShareExtension(nxConfig);
 //     stays (and is set here if Expo ever stops adding it): this process does
 //     run Hermes, and a release build bundles for it.
 const productionShareBundle = process.env.BRACEMARK_SHARE_DEV_BUNDLE !== '1';
-const rewriteShareRequest = shareConfig.server.rewriteRequestUrl;
+const shareConfig = {
+  ...nxConfig,
+  resolver: { ...nxConfig.resolver, sourceExts: [...nxConfig.resolver.sourceExts, 'share.js'] },
+  server: { ...nxConfig.server },
+};
+const rewriteAppRequest = nxConfig.server?.rewriteRequestUrl ?? ((url) => url);
 shareConfig.server.rewriteRequestUrl = (url) => {
-  const rewritten = rewriteShareRequest(url);
-  if (!url.includes('shareExtension=true')) return rewritten;
+  const appRewritten = rewriteAppRequest(url);
+  if (!url.includes('shareExtension=true')) return appRewritten;
+  const rewritten = appRewritten.replace('index.bundle', 'index.share.bundle');
   // Metro passes either a path or a full URL; parse against a dummy origin and
   // hand back the same shape.
   const parsed = new URL(rewritten, 'http://localhost');

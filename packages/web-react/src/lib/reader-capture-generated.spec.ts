@@ -83,9 +83,45 @@ test('a page that is not an article hands over no copy — and still the title',
   )() as {
     run: (args: { completionFunction: (result: unknown) => void }) => void;
   };
-  const result = await new Promise<{ title: string; readMode: unknown }>((resolve) =>
+  const result = await new Promise<{ title: string; readMode?: unknown }>((resolve) =>
     preprocessing.run({ completionFunction: resolve as (r: unknown) => void }),
   );
 
-  expect(result).toMatchObject({ title: 'Shop', readMode: null });
+  expect(result.title).toBe('Shop');
+  // Absent, not null — see the next test.
+  expect(result).not.toHaveProperty('readMode');
+  expect(nullsIn(result)).toEqual([]);
+});
+
+// ⚠ Safari hands the result to the share extension as a PROPERTY LIST, which has no
+// null: a JS null becomes NSNull, the extension cannot load the representation at all,
+// and the sheet opens on "No link in this share" — for every page the result carries a
+// null for, silently (docs/link-extraction-keep.md, the iOS preprocessing entry). This
+// shipped once, as `readMode: null` on every page that is not an article.
+function nullsIn(value: unknown, path = '$'): string[] {
+  if (value === null) return [path];
+  if (typeof value !== 'object' || value === undefined) return [];
+  return Object.entries(value as Record<string, unknown>).flatMap(([key, child]) =>
+    nullsIn(child, `${path}.${key}`),
+  );
+}
+
+test('nothing the Safari preprocessing file hands over contains a null, at any depth', async () => {
+  const prose =
+    'A copy of the words is the part that lasts, long after the page has moved. '.repeat(8);
+  document.title = 'A post';
+  // A byline-less, date-less article: what Readability reports as null metadata.
+  document.body.innerHTML = `<article><h1>A post</h1><p>${prose}</p><p>${prose}</p></article>`;
+
+  // eslint-disable-next-line no-new-func -- evaluating the shipped file the way Safari does
+  const preprocessing = new Function(
+    `${read(PREPROCESSING)}; return ExtensionPreprocessingJS;`,
+  )() as {
+    run: (args: { completionFunction: (result: unknown) => void }) => void;
+  };
+  const result = await new Promise<unknown>((resolve) =>
+    preprocessing.run({ completionFunction: resolve }),
+  );
+
+  expect(nullsIn(result)).toEqual([]);
 });

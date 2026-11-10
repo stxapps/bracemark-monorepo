@@ -266,6 +266,18 @@ and Android's WebView has its own `CookieManager`, apart from Chrome's. So, in o
    beside its title. The share extension carries it on the draft untouched; the
    app's drain stores it at `expo:fg` when the plan and the save setting say so
    ([share-sheet.md](./share-sheet.md), _what the sheet does and doesn't do_).
+   ⚠ **Nothing it hands Safari may contain a `null`.** Safari passes the result
+   to the share extension as a property list, which has no null: a JS `null`
+   becomes `NSNull`, the extension cannot load the representation at all
+   (`NSItemProviderErrorDomain -1000`, "Cannot load representation of type
+   com.apple.property-list"), and the sheet opens on _No link in this share_ —
+   URL and title lost with the copy. So the copy is **omitted** when there is
+   none, and the file drops any other null on the way out
+   (`bracemarkPlistSafe`); `reader-capture-generated.spec.ts` holds both. It
+   shipped once as `readMode: null` on every page that is not an article, from
+   2026-11-08 to 2026-11-09, and only a share from Safari shows it — jsdom and
+   Chrome both pass the null along happily. The WebView path is JSON and has no
+   such limit.
 2. **A capture screen — built for read mode** (`/capture?link=<id>`,
    `features/capture/capture-screen.tsx`), opened from a link's menu (_Keep a
    copy_): the page in a `react-native-webview` WebView with _Keep read mode_ under
@@ -393,6 +405,9 @@ Two rules:
   client doesn't know fails its parse. New states ride as passthrough fields
   (`reason`, `removedAt`) on an existing status.
 - **Blocks, never HTML; no remote URL rendered** (above).
+- **No `null` in what Safari's preprocessing hands over** — a property list has
+  none, and one null loses the whole share on iOS (_per client_, the iOS
+  preprocessing entry).
 
 ### deferred
 

@@ -9,6 +9,11 @@ package = JSON.parse(File.read(File.join(__dir__, '..', 'package.json')))
 # BracemarkShareKeyboardModule and BracemarkShareSwipeGuardModule inside the
 # share extension's process, which is the only process that needs them.
 #
+# The share extension's view controller is NOT in this pod: it lives in
+# ../ios-extension, outside this spec's `**/*` glob on purpose, and
+# plugins/with-share-extension compiles it into the extension target alone. A
+# copy here would put a second principal-class candidate into both binaries.
+#
 # `author` is not optional even for a never-published pod: CocoaPods validates
 # every spec it installs, and a missing `authors` is an ERROR (not a warning)
 # that fails `pod install` outright. Worse, `expo prebuild` reports the failure
@@ -25,7 +30,7 @@ Pod::Spec.new do |s|
   s.version        = package['version']
   # Hand-written and short rather than `package['description']`: CocoaPods warns
   # when the summary runs past 140 characters or merely repeats the description.
-  s.summary        = 'Native halves of the bracemark share sheet (iOS: keyboard frames and the swipe guard inside the share extension)'
+  s.summary        = 'Native halves of the bracemark share sheet (iOS: close, keyboard frames, memory and the swipe guard inside the share extension)'
   s.description    = package['description']
   s.author         = 'stxapps'
   s.homepage       = 'https://bracemark.com'

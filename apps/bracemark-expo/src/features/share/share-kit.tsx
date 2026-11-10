@@ -82,17 +82,18 @@ const INITIAL_METRICS = {
 // The sheet's frame. Two very different native hosts, one tree below this
 // point (docs/share-sheet.md):
 //
-//   - iOS — expo-share-extension hands us a root view that fills the host's
-//     presentation, with square corners and, since `backgroundColor` alpha 0
-//     (app.config.ts), no fill of its own. It is a layout container, not a
+//   - iOS — the share extension's controller (ShareViewController,
+//     modules/bracemark-share/ios-extension) hands us a root view that fills
+//     the host's presentation, with square corners and no fill of its own
+//     (it is `.clear`). It is a layout container, not a
 //     sheet: the panel below is ours — rounded, its own background — and what
 //     shows around it is the host app under the system's own dimming, which is
 //     what every other iOS sheet does. It used to be a fixed 520pt BAND pinned
 //     to the screen bottom, and that number is what made a keyboard
 //     unsurvivable rather than merely awkward: a picker is ~520 of chrome and
 //     list, the keyboard takes ~340 of the screen, and no amount of correct
-//     lifting fits the first into what is left of the second. app.config.ts's
-//     `height` note is the other half of this.
+//     lifting fits the first into what is left of the second. The
+//     controller's `configureRootView` is the other half of this.
 //
 //     THAT PRESENTATION HAS TWO SHAPES, and the frame only learns which from
 //     the native module that measures it (share-keyboard.ts). On an iPhone it is

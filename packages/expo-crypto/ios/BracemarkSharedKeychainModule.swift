@@ -7,7 +7,7 @@ import Security
 //
 // The group is an App Group id (e.g. `group.com.bracemark.app`): iOS accepts App
 // Group ids as keychain access groups, so the App Group entitlement both targets
-// already carry from expo-share-extension covers it — no keychain-sharing
+// already carry (bracemark-expo's app.config.ts) covers it — no keychain-sharing
 // entitlement, no team-id prefix. This is what lets the share extension, a
 // separate process that cannot read the app's own Keychain entries, see the
 // session the main app mirrors there (docs/share-sheet.md).

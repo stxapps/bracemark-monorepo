@@ -185,7 +185,7 @@ Four things that aren't in its README:
   simulator that shows every ask. Its flows import and export, which neither
   count nor ask; one that saved ten links through the add panel would meet the
   sheet.
-- **It is in the iOS share extension's `excludedPackages`.** Its Swift reaches
+- **It is in the iOS share extension's `excludedExpoModules`.** Its Swift reaches
   the host app's window scene through `UIApplication.shared`, which an app
   extension can't use, and the extension never asks anyway. After a prebuild,
   `ios/Podfile` should list it in the `BracemarkShareExtension` target's
@@ -218,11 +218,11 @@ browser extension and the iOS Safari share run.
 
 ⚠ **It stays LINKED in the iOS share extension**, which never uses it. It
 registers a Fabric component (`RNCWebView`), and
-`plugins/with-share-extension-native-links.js` explains why such a library can't
+`plugins/with-share-extension/podfile.js` explains why such a library can't
 be dropped from that target: the shared component provider would insert a nil class
-and the share extension would die before its first screen. So it is NOT on that
-plugin's list, and not in `app.config.ts`'s `excludedPackages` (which is Expo
-modules only). Linked is not instantiated — nothing in the sheet creates a WebView
+and the share extension would die before its first screen. So it is NOT in
+`app.config.ts`'s `excludedCommunityModules`, and
+`share-extension-podfile.spec.ts` fails if a Fabric library is ever added there. Linked is not instantiated — nothing in the sheet creates a WebView
 — but re-check the share extension's memory on a device after the first prebuild
 with it ([share-sheet.md](./share-sheet.md), _the share extension has almost no
 memory to spare_).
@@ -407,7 +407,7 @@ Three properties worth keeping if this is ever touched:
   here that isn't cosmetic and it has no symptom in jest or on device short of a
   brick.
 
-`expo-splash-screen` is in the iOS share extension's `excludedPackages`
+`expo-splash-screen` is in the iOS share extension's `excludedExpoModules`
 (`app.config.ts`): that process has no splash, and it never loads `_layout.tsx`
 anyway — it boots `index.share.js`, which registers the share root and nothing
 else ([share-sheet.md](./share-sheet.md)).
@@ -518,7 +518,7 @@ no splash gate, and no flash. Wiring (already done):
   required for the expo-crypto native module). Keep `expo-font` in
   `package.json` dependencies even though nothing imports it in JS: the config
   plugin resolves from the package. It must stay the **top-level `fonts`** key,
-  not `ios.fonts`: `expo-share-extension` reads exactly that key to embed Inter
+  not `ios.fonts`: `plugins/with-share-extension` reads exactly that key to embed Inter
   in the iOS share extension target ([share-sheet.md](./share-sheet.md)), and
   finds nothing under `ios`.
 - **plugin (Android)**: `plugins/with-android-variable-font.js`, because the
