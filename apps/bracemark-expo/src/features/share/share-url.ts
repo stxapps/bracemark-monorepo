@@ -4,8 +4,8 @@
 //
 //  - iOS (ShareViewController's initial props): `url` for a URL attachment,
 //    `text` for a text attachment, and `preprocessingResults` from our
-//    preprocessing.js (`{ title, url }` captured in Safari's page context —
-//    the only place a page title exists without fetching).
+//    preprocessing.js (`{ title, url, readMode }` captured in Safari's page
+//    context — the only place a page title exists without fetching).
 //  - Android (ShareActivity launch options): `text` (EXTRA_TEXT — Chrome
 //    sometimes wraps the URL in prose) and `subject` (EXTRA_SUBJECT — often
 //    the page title).
@@ -27,9 +27,13 @@ export interface SharePayload {
   url: string | null;
   title?: string;
   // The page's read-mode copy, when Safari's preprocessing found an article
-  // (share-extension/preprocessing.js). Opaque here — the app validates it where it
-  // stores it (expo-react store-read-mode.ts) — and carried through the draft only.
-  readMode?: unknown;
+  // (share-extension/preprocessing.js) — a `ReaderDoc` as JSON TEXT, and it stays
+  // text all the way to the app's drain. Never parsed here: the sheet only writes
+  // it to the draft, and an article as an object graph is memory the iOS share
+  // extension does not have (docs/share-sheet.md, _what the sheet does and
+  // doesn't do_). The app parses and validates it where it stores it (expo-react
+  // store-read-mode.ts).
+  readMode?: string;
 }
 
 const URL_IN_TEXT_RE = /https?:\/\/\S+/i;
@@ -64,8 +68,12 @@ export function payloadFromInitialProps(props: ShareInitialProps): SharePayload 
     urlFromSharedText(props.text);
 
   const title = cleanText(pre.title) ?? cleanText(props.subject);
+  // Text or nothing. An OBJECT here is a preprocessing.js older than this bundle
+  // (a dev build's JS reloaded ahead of a native rebuild — the two ship together
+  // otherwise), and it is dropped rather than carried: the copy is optional, the
+  // memory is not.
   const readMode =
-    pre.readMode !== null && typeof pre.readMode === 'object' ? pre.readMode : undefined;
+    typeof pre.readMode === 'string' && pre.readMode !== '' ? pre.readMode : undefined;
   return {
     url,
     ...(title !== undefined ? { title } : {}),

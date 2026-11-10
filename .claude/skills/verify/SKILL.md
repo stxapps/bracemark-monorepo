@@ -317,6 +317,7 @@ chromium` (~550 MB into `~/Library/Caches/ms-playwright/`) if it is absent.
   both sections back at 200. The cache and the restart were not separated — a
   plain restart was not tried first — so treat a 404 on a route whose page and
   id plainly exist as this, and clear the directory before reading the router.
+
 - **A hydration error on `localhost:3001` is your browser, not the site.** Under
   `npm run dev:site`, visiting the marketing site can log "Hydration failed…" with
   `+ <main className="flex-1">` / `- <div className="px-safe">`. It is not an app

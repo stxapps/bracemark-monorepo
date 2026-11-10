@@ -62,15 +62,20 @@ test('the Safari preprocessing file hands the sheet the title, the URL and the c
   )() as {
     run: (args: { completionFunction: (result: unknown) => void }) => void;
   };
-  const result = await new Promise<{
-    title: string;
-    url: string;
-    readMode: { blocks: unknown[] } | null;
-  }>((resolve) => preprocessing.run({ completionFunction: resolve as (r: unknown) => void }));
+  const result = await new Promise<{ title: string; url: string; readMode?: unknown }>((resolve) =>
+    preprocessing.run({ completionFunction: resolve as (r: unknown) => void }),
+  );
 
   expect(result.title).toBe('A post');
   expect(result.url).toBe(window.location.href);
-  expect(result.readMode?.blocks.length).toBeGreaterThan(0);
+  // ⚠ The copy is JSON TEXT, not the doc. Safari's result becomes the React root's
+  // initial props in the iOS share extension, where an article as an object graph is
+  // memory that process does not have (docs/share-sheet.md, _what the sheet does and
+  // doesn't do_); the app parses it at the drain.
+  expect(typeof result.readMode).toBe('string');
+  const doc = JSON.parse(result.readMode as string) as { version: number; blocks: unknown[] };
+  expect(doc.version).toBe(1);
+  expect(doc.blocks.length).toBeGreaterThan(0);
 });
 
 test('a page that is not an article hands over no copy — and still the title', async () => {
@@ -106,12 +111,21 @@ function nullsIn(value: unknown, path = '$'): string[] {
   );
 }
 
-test('nothing the Safari preprocessing file hands over contains a null, at any depth', async () => {
+test('the Safari preprocessing file hands over strings and nothing else — no null, no object', async () => {
   const prose =
     'A copy of the words is the part that lasts, long after the page has moved. '.repeat(8);
   document.title = 'A post';
   // A byline-less, date-less article: what Readability reports as null metadata.
   document.body.innerHTML = `<article><h1>A post</h1><p>${prose}</p><p>${prose}</p></article>`;
+  // What a page can do to the objects a script in it builds: an enumerable property
+  // on Object.prototype shows up in every `for…in`. Nothing in the file may walk an
+  // object and copy this — a function is no more a property-list value than a null.
+  // eslint-disable-next-line no-extend-native -- standing in for a page that did
+  Object.defineProperty(Object.prototype, 'pagePolyfill', {
+    value: () => undefined,
+    enumerable: true,
+    configurable: true,
+  });
 
   // eslint-disable-next-line no-new-func -- evaluating the shipped file the way Safari does
   const preprocessing = new Function(
@@ -119,9 +133,16 @@ test('nothing the Safari preprocessing file hands over contains a null, at any d
   )() as {
     run: (args: { completionFunction: (result: unknown) => void }) => void;
   };
-  const result = await new Promise<unknown>((resolve) =>
-    preprocessing.run({ completionFunction: resolve }),
-  );
+  let result: unknown;
+  try {
+    result = await new Promise<unknown>((resolve) =>
+      preprocessing.run({ completionFunction: resolve }),
+    );
+  } finally {
+    delete (Object.prototype as Record<string, unknown>).pagePolyfill;
+  }
 
   expect(nullsIn(result)).toEqual([]);
+  expect(Object.keys(result as object).sort()).toEqual(['readMode', 'title', 'url']);
+  for (const value of Object.values(result as object)) expect(typeof value).toBe('string');
 });

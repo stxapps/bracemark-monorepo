@@ -5,9 +5,10 @@
 //   apps/bracemark-expo/share-extension/preprocessing.js
 //       The iOS share extension's NSExtensionJavaScriptPreprocessingFile. Safari runs
 //       it INSIDE the page being shared, before the sheet opens, and hands its result
-//       to the sheet as `preprocessingResults` — `{ title, url, readMode }`. It has to
-//       be a self-contained file Safari can evaluate (no Metro, no imports) whose
-//       `ExtensionPreprocessingJS` is a GLOBAL-object property, hence the `var`.
+//       to the sheet as `preprocessingResults` — `{ title, url, readMode }`, the copy
+//       as JSON text. It has to be a self-contained file Safari can evaluate (no
+//       Metro, no imports) whose `ExtensionPreprocessingJS` is a GLOBAL-object
+//       property, hence the `var`.
 //
 //   apps/bracemark-expo/src/features/capture/reader-capture-script.generated.ts
 //       The same bundle as a string, for expo's capture screen to inject into its
@@ -55,13 +56,23 @@ export function readerCaptureSourceHash(root = ROOT): string {
 // on a pathological page — and the share extension has ~120 MB to work in.
 const MAX_PAYLOAD_CHARS = 3_000_000;
 
+// ONE function, returning the copy as JSON TEXT — serialised once, here, in the page's
+// own process. Both scripts want text: the WebView's message is a string, and the
+// share extension must not be handed the copy as an object graph. Safari gives its
+// result to the share extension as a property list, which becomes the React root's
+// initial props: as an object the copy is thousands of small allocations three times
+// over (an NSDictionary, the surface's folly::dynamic, the JS heap) for the life of a
+// sheet that only ever writes it to a file, in a process iOS kills at 120 MB. As text
+// it is one buffer each (docs/share-sheet.md, _what the sheet does and doesn't do_).
+// The length the cap needs is the same string's, so nothing is serialised twice.
 const ENTRY = `
 import { readerDocFromPage } from '@stxapps/web-react/lib/reader-doc-from-page';
-globalThis.__bracemarkReaderDoc = function () {
+globalThis.__bracemarkReaderDocJson = function () {
   try {
     var doc = readerDocFromPage(document);
-    if (doc && JSON.stringify(doc).length > ${MAX_PAYLOAD_CHARS}) return null;
-    return doc;
+    if (!doc) return null;
+    var json = JSON.stringify(doc);
+    return json.length > ${MAX_PAYLOAD_CHARS} ? null : json;
   } catch (e) {
     return null;
   }
@@ -110,47 +121,37 @@ ${code}
 // extension as a PROPERTY LIST, and a property list has no null: a JS null becomes
 // NSNull, the whole representation fails to load in the extension
 // ("Cannot load representation of type com.apple.property-list"), and the sheet
-// opens on "No link in this share" with nothing in any log of ours. So the copy is
-// OMITTED when there is none (share-url.ts reads absent and null alike), and any
-// other null is dropped on the way out — every ReaderDoc field it could stand for
-// is optional. docs/link-extraction-keep.md, the iOS preprocessing entry.
-function bracemarkPlistSafe(value) {
-  if (Array.isArray(value)) {
-    var list = [];
-    for (var i = 0; i < value.length; i++) {
-      if (value[i] !== null && value[i] !== undefined) list.push(bracemarkPlistSafe(value[i]));
-    }
-    return list;
-  }
-  if (value !== null && typeof value === 'object') {
-    var out = {};
-    for (var key in value) {
-      if (value[key] !== null && value[key] !== undefined) out[key] = bracemarkPlistSafe(value[key]);
-    }
-    return out;
-  }
-  return value;
-}
+// opens on "No link in this share" with nothing in any log of ours. So the result
+// is built from STRINGS ONLY, each coerced or type-checked here, and the copy is
+// OMITTED when there is none. The copy itself is JSON text (above), so whatever
+// nulls a ReaderDoc holds are characters inside one string, and nothing walks an
+// object the page could have reached. docs/link-extraction-keep.md, the iOS
+// preprocessing entry.
 var ExtensionPreprocessingJS = {
   run: function (args) {
+    var result = { title: String(document.title), url: String(window.location.href) };
     var readMode = null;
     try {
-      readMode = globalThis.__bracemarkReaderDoc();
+      readMode = globalThis.__bracemarkReaderDocJson();
     } catch (e) {}
-    var result = { title: document.title, url: window.location.href };
-    if (readMode) result.readMode = readMode;
-    args.completionFunction(bracemarkPlistSafe(result));
+    if (typeof readMode === 'string') result.readMode = readMode;
+    args.completionFunction(result);
   },
 };
 `;
 
+  // The message is assembled around the copy's own text rather than by a second
+  // JSON.stringify over the parsed object: the same `{ type, doc }` the capture
+  // screen has always parsed, `doc` null when there is no copy.
   const injected = `${code}
 ;(function () {
-  var doc = null;
+  var json = null;
   try {
-    doc = globalThis.__bracemarkReaderDoc();
+    json = globalThis.__bracemarkReaderDocJson();
   } catch (e) {}
-  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'bracemark-read-mode', doc: doc }));
+  window.ReactNativeWebView.postMessage(
+    '{"type":"bracemark-read-mode","doc":' + (typeof json === 'string' ? json : 'null') + '}'
+  );
 })();
 true;`;
 

@@ -176,6 +176,23 @@ generator: the key is omitted, and any other null is dropped
 ([link-extraction-keep.md](./link-extraction-keep.md), the iOS preprocessing
 entry).
 
+**After phase 1, 2026-11-10 — three changes that are not parity, so the
+hardware gates above now have to pass against THEM.** (1) The article copy
+crosses as JSON text and is never parsed in the share extension
+([share-sheet.md](./share-sheet.md), _what the sheet does and doesn't do_) —
+which also replaces the null-dropping walk with a result of three strings.
+(2) The controller starts the React Native host from `viewDidLoad`, before the
+item providers answer, instead of inside their completion (share-sheet.md,
+_the runtime boots while the share is read_). (3) It removes the root view it
+holds on cleanup, where upstream's `is RCTRootView` search never matched.
+A Debug simulator build compiles all three; **none has run on a device**, and
+the iPhone 12 numbers above predate them — the 21 → 73 MB growth was measured
+with the copy still an object graph in the sheet's props, so re-take it before
+attributing it, and keep the non-article run as the discriminator.
+`share-extension-prebuild.spec.ts` now runs `target.js`, `files.js` and
+`identity.js` against the SDK 54 template project, the way the Podfile spec
+runs `podfile.js`.
+
 Weighed and set aside:
 
 - **`@bacons/apple-targets`** (MIT, by an Expo team member, 5.0.0 in July 2026)

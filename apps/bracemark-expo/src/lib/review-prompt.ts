@@ -12,7 +12,7 @@
 // (share-store counts them as they land) but never ask themselves: on Android the
 // sheet is a translucent activity closing over someone else's app, and the iOS
 // share extension can't raise the sheet at all (it is in that target's
-// `excludedPackages` — app.config.ts). Their ask comes on the next save in the app.
+// `excludedExpoModules` — app.config.ts). Their ask comes on the next save in the app.
 //
 // NOT after an import. An import is usually the first session — someone moving
 // their bookmarks in from somewhere else — so it would ask them to rate the move

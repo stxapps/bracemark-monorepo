@@ -70,9 +70,9 @@ const BLOB_FRAME_BYTES = 1 + AES_GCM_IV_BYTES + GCM_TAG_BYTES;
 async function pageBundle(): Promise<string> {
   const file = (path: string) => JSON.stringify(join(ROOT, path));
   const entry = `
-import { readerDocFromPage } from ${file("packages/web-react/src/lib/reader-doc-from-page.ts")};
-import { encodeReaderDoc } from ${file("packages/web-react/src/lib/reader-doc-bytes.ts")};
-import { resizeImage } from ${file("packages/web-react/src/lib/resize-image.ts")};
+import { readerDocFromPage } from ${file('packages/web-react/src/lib/reader-doc-from-page.ts')};
+import { encodeReaderDoc } from ${file('packages/web-react/src/lib/reader-doc-bytes.ts')};
+import { resizeImage } from ${file('packages/web-react/src/lib/resize-image.ts')};
 import { selectTitleImage, sniffImageMime } from "@stxapps/shared";
 
 // The extension"s cap on a preview image carried back from the page (capture.ts).

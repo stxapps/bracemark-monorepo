@@ -43,7 +43,23 @@ it('stores the copy gzipped and records it at the active-page tier', async () =>
   expect(JSON.parse(new TextDecoder().decode(gunzipSync(bytes)))).toEqual(DOC);
 });
 
+// A Safari share's draft carries the copy as JSON text: the iOS share extension
+// passes it along unparsed, and this is where it first becomes objects.
+it('stores a copy handed over as JSON text, the same as the doc itself', async () => {
+  await expect(storeReadModeCopy(USER, 'l1', JSON.stringify(DOC))).resolves.toBe(true);
+
+  expect((await readExtraction('l1'))?.readModeId).toBe('copy-1');
+  const bytes = readFileBytes(dataFileFor(pathFromId('copy-1', FILES_PREFIX)).uri);
+  expect(JSON.parse(new TextDecoder().decode(gunzipSync(bytes)))).toEqual(DOC);
+});
+
 it('stores nothing for a copy that is not a ReaderDoc', async () => {
   await expect(storeReadModeCopy(USER, 'l1', { html: '<p>x</p>' })).resolves.toBe(false);
+  expect(await readExtraction('l1')).toBeUndefined();
+});
+
+it('stores nothing for text that is not JSON, or is JSON of something else', async () => {
+  await expect(storeReadModeCopy(USER, 'l1', '{"version":1,"blocks":[')).resolves.toBe(false);
+  await expect(storeReadModeCopy(USER, 'l1', '"a string"')).resolves.toBe(false);
   expect(await readExtraction('l1')).toBeUndefined();
 });

@@ -32,18 +32,22 @@ describe('payloadFromInitialProps', () => {
     expect(payloadFromInitialProps({ text: 'https://c.example' }).url).toBe('https://c.example');
   });
 
-  it('carries Safari’s read-mode copy through untouched, and nothing that isn’t an object', () => {
-    const doc = { version: 1, capturedAt: 1, blocks: [] };
-    expect(
-      payloadFromInitialProps({ url: 'https://a.example', preprocessingResults: { readMode: doc } })
-        .readMode,
-    ).toBe(doc);
+  // Text in, the same text out — never parsed in the sheet, which only writes it
+  // to the draft. An object is what a preprocessing.js older than this bundle
+  // sent, and the iOS share extension has no memory for an article as a graph.
+  it('carries Safari’s read-mode copy through as the text it arrived as, and nothing else', () => {
+    const json = JSON.stringify({ version: 1, capturedAt: 1, blocks: [] });
     expect(
       payloadFromInitialProps({
         url: 'https://a.example',
-        preprocessingResults: { readMode: null },
-      }),
-    ).not.toHaveProperty('readMode');
+        preprocessingResults: { readMode: json },
+      }).readMode,
+    ).toBe(json);
+    for (const readMode of [null, '', { version: 1, capturedAt: 1, blocks: [] }, 7]) {
+      expect(
+        payloadFromInitialProps({ url: 'https://a.example', preprocessingResults: { readMode } }),
+      ).not.toHaveProperty('readMode');
+    }
   });
 
   it('takes the title from preprocessing, else the Android subject', () => {

@@ -7,7 +7,8 @@
 # Store and sends it. docs/expo-build.md, _the npm scripts_.
 #
 #   1. prebuild --clean --platform ios, so ios/ can't be stale against
-#      app.config.ts (version, buildNumber, plugins, excludedPackages).
+#      app.config.ts (version, buildNumber, plugins, the iOS share extension's
+#      excludedExpoModules / excludedCommunityModules).
 #   2. the build number, against App Store Connect — a read, before the
 #      multi-minute archive rather than after an upload rejects it.
 #   3. archive (`asc xcode archive`): Release, generic iOS device, automatic

@@ -288,8 +288,9 @@ export function ShareScreen({ url, title, readMode }: SharePayload) {
       // means it IS the destination — the guard is belt-and-bracemarks.
       newLists: newList && newList.id === listId ? [newList] : [],
       sharedAt: Date.now(),
-      // Safari's read-mode copy, carried to the app's drain, which decides whether
-      // the account keeps it (share-store's drainShareOutbox). Nothing here reads it.
+      // Safari's read-mode copy — JSON text, and it goes into the draft as that
+      // text — carried to the app's drain, which decides whether the account
+      // keeps it (share-store's drainShareOutbox). Nothing here reads or parses it.
       ...(readMode !== undefined ? { readMode } : {}),
     };
     try {

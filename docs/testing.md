@@ -55,6 +55,18 @@ UIKit honours the flag, which is a device question and `SHARE-IOS-003`'s
 notification observer a config plugin patched into the installed library's
 file, and the spec ran that plugin against it.)
 
+**What the share extension's plugin GENERATES is held the other way — by
+running it.** `plugins/with-share-extension` writes a Podfile block, an Xcode
+target, an Info.plist and entitlements, and no lint, type or test reads any of
+them once written. `share-extension-podfile.spec.ts` runs the Podfile mod
+against the SDK's template Podfile, and `share-extension-prebuild.spec.ts` runs
+the other three mods against its template `project.pbxproj`
+(`__fixtures__/expo-sdk54.*`), into a throwaway directory: the target embedded
+in the app's PlugIns, its files referenced in place and present on disk, no
+object id left dangling, a file `plutil` can parse, the activation rule that
+makes Safari run the preprocessing file, the guards that stop a prebuild. Both
+fixtures are the template verbatim — refresh them when the SDK moves.
+
 The typecheck+lint layer is easy to forget in a testing doc, but it is the one
 that catches the largest class of mistake here: `@nx/enforce-module-boundaries` turns
 an illegal cross-package import into a lint failure rather than a silent

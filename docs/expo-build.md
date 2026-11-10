@@ -737,6 +737,17 @@ rewriting the copy. Both are ordinary code in the controller now
 pickers hold the system's swipe off_). Only two files are generated into
 `ios/BracemarkShareExtension/`: its `Info.plist` and its entitlements.
 
+**All of this section is run by jest, against the SDK template's own project.**
+`src/features/share/share-extension-prebuild.spec.ts` runs `files.js`,
+`target.js` and `identity.js` in mod order over
+`__fixtures__/expo-sdk54.pbxproj` (`expo/template.tgz`'s, verbatim) and reads
+back what a prebuild would leave: the embed phase and dependency on the app,
+the in-place references resolving to files that exist, every object id
+defined, the two copied values and the versions, and each guard above
+throwing. It is the cheap half — whether Xcode builds the result is still a
+build — but it is where a hand-written pbxproj object goes wrong first.
+Refresh the fixture from the new template when the SDK moves.
+
 #### android release minification — R8
 
 Release Android builds run **R8** (shrink + obfuscate) with resource shrinking,

@@ -8,10 +8,10 @@ import BracemarkShare
 // THE iOS SHARE EXTENSION'S VIEW CONTROLLER — the iOS twin of
 // android/…/ShareActivity.kt (docs/share-sheet.md, _the shape_).
 //
-// It is the extension's NSExtensionPrincipalClass. It reads what the host
-// shared, boots a React Native instance in the extension's own process, and
-// mounts the root registered as `shareExtension` (index.share.js) with the
-// share as its initial props.
+// It is the extension's NSExtensionPrincipalClass. It boots a React Native
+// instance in the extension's own process, reads what the host shared WHILE
+// that boots, and mounts the root registered as `shareExtension`
+// (index.share.js) with the share as its initial props.
 //
 // ⚠ THIS FILE IS COMPILED INTO THE EXTENSION TARGET ONLY. It sits outside the
 // BracemarkShare pod's glob on purpose, and plugins/with-share-extension adds it
@@ -70,6 +70,11 @@ class ShareViewController: UIViewController, ShareExtensionHosting {
   private let loadingIndicator = UIActivityIndicatorView(style: .large)
   private var reactNativeFactory: RCTReactNativeFactory?
   private var reactNativeFactoryDelegate: RCTReactNativeFactoryDelegate?
+  // The React Native root, held so cleanup can remove THIS view. Upstream looked
+  // for it among the subviews with `is RCTRootView`, which never matches: under
+  // the new architecture the factory returns an RCTSurfaceHostingProxyRootView,
+  // and that is not an RCTRootView — so the root was never removed at all.
+  private var rootView: UIView?
   private var isCleanedUp = false
 
   deinit {
@@ -84,6 +89,9 @@ class ShareViewController: UIViewController, ShareExtensionHosting {
 
     self.view.contentScaleFactor = UIScreen.main.scale
 
+    // In this order: the runtime starts first, and the share is read while it
+    // boots (`startReactNative`).
+    startReactNative()
     loadReactNativeContent()
   }
 
@@ -117,15 +125,35 @@ class ShareViewController: UIViewController, ShareExtensionHosting {
 
   // MARK: React Native
 
+  // ⚠ THE RUNTIME STARTS HERE, FROM viewDidLoad — BEFORE THE SHARE IS READ, not
+  // after it. `initializeReactHost` creates the RCTHost and starts it: Hermes
+  // comes up and index.share.js loads and runs, with no view yet. Upstream
+  // created the factory inside `getShareData`'s completion, so all of that sat
+  // behind the item providers — and for a share from Safari the provider that
+  // carries the preprocessing results answers only once Safari has run
+  // share-extension/preprocessing.js in the page, Readability included. The two
+  // waits are independent, so they overlap now; the sheet's first frame is the
+  // longer of them rather than their sum. `view(withModuleName:)` below finds
+  // the host already there and only starts the surface on it.
+  //
+  // Nothing fails if this is moved back into the completion — the sheet opens
+  // later, and only a device shows by how much.
+  private func startReactNative() {
+    let delegate = ShareReactNativeDelegate()
+    delegate.dependencyProvider = RCTAppDependencyProvider()
+    let factory = RCTReactNativeFactory(delegate: delegate)
+    reactNativeFactoryDelegate = delegate
+    reactNativeFactory = factory
+    factory.rootViewFactory.initializeReactHost(launchOptions: nil)
+  }
+
   private func loadReactNativeContent() {
     getShareData { [weak self] sharedData in
-      guard let self = self else { return }
-
-      let delegate = ShareReactNativeDelegate()
-      delegate.dependencyProvider = RCTAppDependencyProvider()
-      let factory = RCTReactNativeFactory(delegate: delegate)
-      reactNativeFactoryDelegate = delegate
-      reactNativeFactory = factory
+      // Dismissed while the providers were still loading: cleanup has already
+      // let the factory go, and there is nothing left to mount a root on.
+      guard let self = self, !self.isCleanedUp, let factory = self.reactNativeFactory else {
+        return
+      }
 
       var initialProps = sharedData ?? [:]
       // The container's size and scale, for JS that wants them
@@ -139,8 +167,9 @@ class ShareViewController: UIViewController, ShareExtensionHosting {
         withModuleName: "shareExtension",
         initialProperties: initialProps
       )
-      configureRootView(rootView)
-      view.addSubview(rootView)
+      self.configureRootView(rootView)
+      self.view.addSubview(rootView)
+      self.rootView = rootView
 
       self.loadingIndicator.stopAnimating()
       self.loadingIndicator.removeFromSuperview()
@@ -182,11 +211,11 @@ class ShareViewController: UIViewController, ShareExtensionHosting {
       ShareExtensionHost.current = nil
     }
 
-    view.subviews.forEach { subview in
-      if subview is RCTRootView {
-        subview.removeFromSuperview()
-      }
-    }
+    // The root first: RCTSurfaceHostingView stops its surface as it goes, and
+    // that wants the host the surface runs on still alive. Letting the factory
+    // go is what then tears the host — the runtime — down.
+    rootView?.removeFromSuperview()
+    rootView = nil
 
     reactNativeFactory = nil
     reactNativeFactoryDelegate = nil

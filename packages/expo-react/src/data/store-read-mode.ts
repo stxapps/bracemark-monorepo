@@ -23,6 +23,13 @@ import { writeExtraction, writeFile } from './mutations';
 // container, and a WebView message is whatever the page's context posted.
 // docs/link-extraction-keep.md, _expo_.
 //
+// `readMode` is the doc, or the doc as JSON TEXT. A share draft carries text — the
+// iOS share extension passes the copy along without ever parsing it, and this is
+// where it first becomes objects (docs/share-sheet.md, _what the sheet does and
+// doesn't do_). The capture screen hands over the parsed doc, and so does a draft
+// written before the sheet carried text. Text that isn't JSON is a copy that can't
+// be stored, like any other.
+//
 // Returns whether a copy was written. Never throws: a copy that can't be stored
 // costs the link its copy, never the caller the rest of its work.
 const tempFileFor = (id: string) => new File(Paths.cache, `read-mode-${id}.gz`);
@@ -32,7 +39,15 @@ export async function storeReadModeCopy(
   linkId: string,
   readMode: unknown,
 ): Promise<boolean> {
-  const parsed = readerDocSchema.safeParse(readMode);
+  let candidate = readMode;
+  if (typeof readMode === 'string') {
+    try {
+      candidate = JSON.parse(readMode);
+    } catch {
+      return false;
+    }
+  }
+  const parsed = readerDocSchema.safeParse(candidate);
   if (!parsed.success) return false;
 
   const fileId = newId();

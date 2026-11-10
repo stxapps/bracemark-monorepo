@@ -65,6 +65,52 @@ test('the controller registers itself as the host as it loads, and lets go on cl
   );
 });
 
+// Cleanup must remove the root it was GIVEN. Upstream searched the subviews for
+// `is RCTRootView`, and under the new architecture the factory returns an
+// RCTSurfaceHostingProxyRootView, which is not one — the check compiled, never
+// matched, and the root stayed in the hierarchy with its surface running until
+// the process went. Nothing reports it.
+test('cleanup removes the root view it holds, then lets the factory go', () => {
+  const source = controller();
+  const cleanup = body(source, /private func cleanupAfterClose\(\)/);
+
+  expect(source).not.toMatch(/\bis RCTRootView\b/);
+  expect(body(source, /private func loadReactNativeContent\(\)/)).toContain(
+    'self.rootView = rootView',
+  );
+  const removed = cleanup.indexOf('rootView?.removeFromSuperview()');
+  expect(removed).toBeGreaterThan(-1);
+  // The surface stops on a host that is still there.
+  expect(cleanup.indexOf('reactNativeFactory = nil')).toBeGreaterThan(removed);
+  // …and it must not reach for `view`: deinit runs this too, and loading a
+  // view from a deallocating controller re-enters viewDidLoad.
+  expect(cleanup).not.toMatch(/\bview\./);
+});
+
+// The runtime boots WHILE the item providers load, not after them: for a share
+// from Safari the property list arrives only once the page has run
+// preprocessing.js (Readability and all), and Hermes starting behind that is
+// the two waits added together. Moved back, the sheet just opens later.
+test('React Native starts from viewDidLoad, before the share is read', () => {
+  const source = controller();
+  const didLoad = body(source, /override func viewDidLoad\(\)/);
+  const start = didLoad.indexOf('startReactNative()');
+  expect(start).toBeGreaterThan(-1);
+  expect(didLoad.indexOf('loadReactNativeContent()')).toBeGreaterThan(start);
+
+  const boot = body(source, /private func startReactNative\(\)/);
+  expect(boot).toContain('RCTReactNativeFactory(delegate: delegate)');
+  expect(boot).toContain('rootViewFactory.initializeReactHost(launchOptions: nil)');
+
+  // The completion mounts on the factory that is already there, and on nothing
+  // if the sheet was dismissed while the providers were loading.
+  const mount = body(source, /private func loadReactNativeContent\(\)/);
+  expect(mount).not.toContain('RCTReactNativeFactory(');
+  expect(mount).toMatch(
+    /guard let self = self, !self\.isCleanedUp, let factory = self\.reactNativeFactory/,
+  );
+});
+
 test('the swipe hold reaches isModalInPresentation, and close() completes the request', () => {
   const source = controller();
   expect(body(source, /func setSwipeHeld\(_ held: Bool\)/)).toContain(

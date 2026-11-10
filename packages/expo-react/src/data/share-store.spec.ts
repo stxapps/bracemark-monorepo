@@ -401,7 +401,12 @@ describe('drainShareOutbox', () => {
   it('stores a draft’s read-mode copy only when the caller keeps it', async () => {
     const { storeReadModeCopy } =
       jest.requireMock<typeof import('./store-read-mode')>('./store-read-mode');
-    const withCopy = { ...draft, readMode: { version: 1, capturedAt: 1, blocks: [] } };
+    // As the sheet writes it: the copy is JSON text inside the draft's JSON, and
+    // the drain hands that text on unparsed (store-read-mode parses it).
+    const withCopy = {
+      ...draft,
+      readMode: JSON.stringify({ version: 1, capturedAt: 1, blocks: [] }),
+    };
 
     jest.mocked(storeReadModeCopy).mockClear();
     mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify(withCopy));

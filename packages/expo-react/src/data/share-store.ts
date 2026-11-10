@@ -142,10 +142,15 @@ const shareDraftSchema = z.object({
   newLists: z.array(shareNewEntitySchema),
   sharedAt: z.number().int(),
   // The page's read-mode copy, from the iOS preprocessing file's run inside Safari —
-  // a `ReaderDoc`, carried as-is and validated where it is stored
-  // (store-read-mode.ts), so a copy that doesn't parse costs the copy and never the
-  // draft. Optional: absent for a share that isn't from Safari, or whose page has no
-  // article. The upload path ignores it — only the app's drain stores a copy.
+  // a `ReaderDoc` as JSON TEXT, a string inside this draft's own JSON: the share
+  // extension never holds the article as objects (its process has no room for one),
+  // so it is parsed for the first time in the app, where it is stored
+  // (store-read-mode.ts). `z.unknown()` and not `z.string()` on purpose, twice over:
+  // a copy that doesn't parse must cost the copy and never the draft, and a draft
+  // written by a build from before 2026-11-10 carries the doc as an OBJECT — still
+  // in the outbox across an app update, and store-read-mode takes either. Optional:
+  // absent for a share that isn't from Safari, or whose page has no article. The
+  // upload path ignores it — only the app's drain stores a copy.
   readMode: z.unknown().optional(),
 });
 export type ShareDraft = z.infer<typeof shareDraftSchema>;
