@@ -269,6 +269,23 @@ context that has to reach the data:
   popup-driven today; keep it that way, or mirror the clear through a message to
   the popup/offscreen context.
 
+  **The background is plan-blind today, and that's why the exception holds.**
+  Every plan decision happens in the popup or on the server. The kept-copies
+  gate runs at save time in `popup/Editor.tsx` (`keepRequestedAtSave`), so
+  `EXTRACT` reaches the background only for an entitled account. The library-cap
+  banner also lives only in the popup. The byte and object ceilings are enforced
+  at `files/sign`, and the runner passes that refusal on as a `blocked-*` status
+  without checking any plan itself. **Revisit when the background needs the plan**
+  — for example a quota pre-check before it drains the sync queue, or extraction
+  gated by plan inside the worker. When that happens, have the background fetch
+  the status and mirror it into `browser.storage.local`, the way the sync status
+  is mirrored. Leave the popup's synchronous `localStorage` seed as it is, and
+  don't convert the shared web-react store. Don't read the cached plan from
+  background code either: `readCachedStatus()` returns `null` in Chrome's service
+  worker (it has no `localStorage`), while Firefox's event page does have
+  `localStorage`. The same code would then see the plan on Firefox and treat
+  every account as free on Chrome, with no error in either.
+
 ### a cycle outlives the idle timeout
 
 **Both browsers kill the background 30 s after its last extension-API call** —
