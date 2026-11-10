@@ -5,7 +5,7 @@ import { queryOptions, useQuery } from '@tanstack/react-query';
 import { useApiClient } from '@stxapps/react';
 import { type ApiClient, type AvailablePaidPlan, iapPricesEndpoint } from '@stxapps/shared';
 
-import { previewPaddlePrices } from '@/lib/paddle';
+import { type PaddlePricePreview, previewPaddlePrices } from '@/lib/paddle';
 
 // What each on-sale plan costs THIS buyer — their currency, their tax, the
 // figure Paddle's overlay will repeat — for the upgrade cards. The Paddle-side
@@ -44,7 +44,7 @@ export function paddlePricesQueryOptions(client: ApiClient) {
       // `canceled` flag this replaced, which also couldn't stop it.
       const totals = await previewPaddlePrices(prices.map((p) => p.priceId));
 
-      const byPlan: Partial<Record<AvailablePaidPlan, string>> = {};
+      const byPlan: Partial<Record<AvailablePaidPlan, PaddlePricePreview>> = {};
       for (const { plan, priceId } of prices) {
         const total = totals[priceId];
         if (total) byPlan[plan] = total;

@@ -29,6 +29,7 @@ import {
   PLAN_CARDS,
   PLAN_LABELS,
   PLAN_USD_PER_YEAR,
+  TRIAL_DAYS,
 } from '@stxapps/shared';
 
 import { FirstLineSlot } from '../../components/first-line-slot';
@@ -43,6 +44,7 @@ import {
   restoreStorePurchases,
   STORE_SOURCE,
   storeFailureMessage,
+  storeOffersFreeTrial,
 } from '../../lib/iap';
 import { SettingsHeader, SettingsNotice, SettingsPane } from './settings-kit';
 import { StorageUsage } from './storage-usage';
@@ -77,6 +79,10 @@ export function SubscriptionSection() {
   const [products, setProducts] = useState<Partial<
     Record<AvailablePaidPlan, ProductSubscription>
   > | null>(null);
+  // The plans this store account would get the free trial on (lib/iap.ts,
+  // `storeOffersFreeTrial`). Empty until checked, so the trial line shows up a
+  // moment after the price and is never there when the store wouldn't give it.
+  const [trialPlans, setTrialPlans] = useState<readonly AvailablePaidPlan[]>([]);
   // Store callbacks outlive a navigation away mid-purchase; never set state
   // after unmount. Reset in the effect body, not only initialized: StrictMode's
   // mount → cleanup → mount reuses the ref, and a cleanup-only ref would then
@@ -97,7 +103,19 @@ export function SubscriptionSection() {
     let canceled = false;
     fetchStorePlanProducts()
       .then((byPlan) => {
-        if (!canceled) setProducts(byPlan);
+        if (canceled) return;
+        setProducts(byPlan);
+        // Settles after this effect re-runs on the `products` it just set, which
+        // marks this run `canceled`. So the result is guarded by the unmount ref
+        // rather than the run flag.
+        const entries = Object.entries(byPlan) as [AvailablePaidPlan, ProductSubscription][];
+        void Promise.all(
+          entries.map(async ([p, product]) => ((await storeOffersFreeTrial(product)) ? p : null)),
+        ).then((found) => {
+          if (!unmounted.current) {
+            setTrialPlans(found.filter((p): p is AvailablePaidPlan => p !== null));
+          }
+        });
       })
       .catch(() => {
         // No store on this device/simulator (or the catalog is missing) — the
@@ -400,6 +418,7 @@ export function SubscriptionSection() {
           <View className="gap-4">
             {upgradeCards.map(({ plan: cardPlan, blurb, features }) => {
               const product = products?.[cardPlan];
+              const trial = product !== undefined && trialPlans.includes(cardPlan);
               return (
                 <View key={cardPlan} className="rounded-lg border border-border p-4">
                   <View className="flex-row items-baseline justify-between">
@@ -429,8 +448,22 @@ export function SubscriptionSection() {
                       </View>
                     ))}
                   </View>
+                  {/* The trial, in the form App Review expects next to the button
+                      (3.1.2: the billed amount stays the most prominent price, and
+                      the trial is stated with what follows it). Shown only when
+                      this store account would actually get it. bracemark-web's
+                      card has the same line, at the same 16/12 steps; change the
+                      two together. */}
+                  {trial && product && (
+                    <Text
+                      testID={`subscription-trial-${cardPlan}`}
+                      className="mt-4 text-sm text-muted-foreground"
+                    >
+                      {`${TRIAL_DAYS}-day free trial, then ${product.displayPrice}/year. Cancel any time.`}
+                    </Text>
+                  )}
                   <Button
-                    className="mt-4"
+                    className={trial ? 'mt-3' : 'mt-4'}
                     testID={`subscription-upgrade-${cardPlan}`}
                     disabled={busy !== null || !product}
                     onPress={() => void startCheckout(cardPlan)}

@@ -89,8 +89,11 @@ jest.mock('@stxapps/web-ui/contexts/theme-provider', () => ({
   useTheme: () => ({ effectiveTheme: 'dark' }),
 }));
 
+// Undefined by default: the lookup "failed", so the cards show the USD base
+// price. A test that needs Paddle's own preview assigns it.
+let mockPrices: Record<string, { total: string; trial: boolean }> | undefined;
 jest.mock('./use-paddle-prices', () => ({
-  usePaddlePrices: () => ({ data: undefined, isFetched: true }),
+  usePaddlePrices: () => ({ data: mockPrices, isFetched: true }),
 }));
 
 describe('SubscriptionSection', () => {
@@ -110,10 +113,36 @@ describe('SubscriptionSection', () => {
     mockApiCall.mockClear();
     mockOpenPaddleCheckout.mockClear();
     mockStorageReadout = null;
+    mockPrices = undefined;
   });
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  // The card used to show only the price, which reads as "charged today". The
+  // trial line follows Paddle's preview (the trial is catalog config), so it's
+  // there exactly when the checkout will give the trial, and absent when the
+  // preview didn't land.
+  it('states the free trial on the upgrade card when the price carries one', () => {
+    mockPrices = { plus: { total: '€49.00', trial: true } };
+
+    render(<SubscriptionSection />);
+
+    const card = within(screen.getByRole('group', { name: 'Plus plan' }));
+    expect(card.getByText('€49.00/year')).toBeTruthy();
+    expect(card.getByText('14-day free trial, then €49.00/year. Cancel any time.')).toBeTruthy();
+  });
+
+  it('promises no trial the preview does not confirm', () => {
+    mockPrices = { plus: { total: '€49.00', trial: false } };
+    const { unmount } = render(<SubscriptionSection />);
+    expect(screen.queryByText(/free trial/)).toBeNull();
+    unmount();
+
+    mockPrices = undefined;
+    render(<SubscriptionSection />);
+    expect(screen.queryByText(/free trial/)).toBeNull();
   });
 
   // The readout is inside the current-plan group, not beside it: it describes

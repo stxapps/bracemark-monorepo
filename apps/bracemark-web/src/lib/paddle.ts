@@ -82,7 +82,16 @@ function getPaddle(): Promise<Paddle | undefined> {
 // overlay's number binds. What it cannot do is change what anyone pays: the
 // transaction is created server-side from the server's own price id, and no
 // price crosses the wire from here.
-export async function previewPaddlePrices(priceIds: string[]): Promise<Record<string, string>> {
+//
+// `trial` is whether the catalog price carries a trial period. That's the
+// condition for the upgrade card's trial line: the trial lives in Paddle's
+// catalog, not in code (docs/iap.md, _the trial is catalog config_), so the card
+// only promises it when Paddle says the price has one.
+export type PaddlePricePreview = { total: string; trial: boolean };
+
+export async function previewPaddlePrices(
+  priceIds: string[],
+): Promise<Record<string, PaddlePricePreview>> {
   if (priceIds.length === 0) return {};
 
   const paddle = await getPaddle();
@@ -92,9 +101,12 @@ export async function previewPaddlePrices(priceIds: string[]): Promise<Record<st
     items: priceIds.map((priceId) => ({ priceId, quantity: 1 })),
   });
 
-  const totals: Record<string, string> = {};
+  const totals: Record<string, PaddlePricePreview> = {};
   for (const item of preview.data.details.lineItems) {
-    totals[item.price.id] = item.formattedTotals.total;
+    totals[item.price.id] = {
+      total: item.formattedTotals.total,
+      trial: Boolean(item.price.trialPeriod),
+    };
   }
   return totals;
 }

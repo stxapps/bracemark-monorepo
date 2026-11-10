@@ -32,6 +32,7 @@ import {
   PLAN_LABELS,
   PLAN_USD_PER_YEAR,
   type SubscriptionStatus,
+  TRIAL_DAYS,
 } from '@stxapps/shared';
 import { useEntitlements, useSync } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
@@ -541,52 +542,68 @@ export function SubscriptionSection() {
       {upgradeCards.length > 0 && (
         <div className="flex flex-col gap-3">
           <div className="grid gap-4 sm:grid-cols-2">
-            {upgradeCards.map(({ plan: cardPlan, blurb, features }) => (
-              <div
-                key={cardPlan}
-                role="group"
-                aria-label={`${PLAN_LABELS[cardPlan]} plan`}
-                className="flex flex-col rounded-lg border border-border p-4"
-              >
-                <div className="flex items-baseline justify-between">
-                  <span className="font-medium">{PLAN_LABELS[cardPlan]}</span>
-                  <span className="text-sm text-muted-foreground">
-                    {/* Paddle's number for THIS buyer once it lands — their
+            {upgradeCards.map(({ plan: cardPlan, blurb, features }) => {
+              const preview = prices?.[cardPlan];
+              return (
+                <div
+                  key={cardPlan}
+                  role="group"
+                  aria-label={`${PLAN_LABELS[cardPlan]} plan`}
+                  className="flex flex-col rounded-lg border border-border p-4"
+                >
+                  <div className="flex items-baseline justify-between">
+                    <span className="font-medium">{PLAN_LABELS[cardPlan]}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {/* Paddle's number for THIS buyer once it lands — their
                         currency, their tax, the figure the overlay will repeat.
                         Until then (and if the lookup failed) the USD base price
                         from plans.ts, which is what the marketing site shows and
                         what a buyer in an unpriced country actually pays. */}
-                    {prices?.[cardPlan]
-                      ? `${prices[cardPlan]}/year`
-                      : `$${PLAN_USD_PER_YEAR[cardPlan]}/year`}
-                  </span>
-                </div>
-                {/* 2, matching the title/description step the rest of this surface
+                      {preview ? `${preview.total}/year` : `$${PLAN_USD_PER_YEAR[cardPlan]}/year`}
+                    </span>
+                  </div>
+                  {/* 2, matching the title/description step the rest of this surface
                     uses — SettingsRow's `gap-0.5`, and the current-plan block above,
                     which is the same bordered box with the same font-medium line over
                     the same text-sm muted one. Kept as a margin rather than folded
                     into a gap column because the card's three steps differ (2/12/16).
                     bracemark-expo's card is the same line; change the two together. */}
-                <p className="mt-0.5 text-sm text-muted-foreground">{blurb}</p>
-                <ul className="mt-3 flex flex-1 flex-col gap-1.5">
-                  {features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2 text-sm">
-                      <Check className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-                <Button
-                  className="mt-4"
-                  disabled={busy !== null}
-                  onClick={() => void startCheckout(cardPlan)}
-                >
-                  {busy === `checkout:${cardPlan}`
-                    ? 'Opening checkout…'
-                    : `Upgrade to ${PLAN_LABELS[cardPlan]}`}
-                </Button>
-              </div>
-            ))}
+                  <p className="mt-0.5 text-sm text-muted-foreground">{blurb}</p>
+                  <ul className="mt-3 flex flex-1 flex-col gap-1.5">
+                    {features.map((feature) => (
+                      <li key={feature} className="flex items-start gap-2 text-sm">
+                        <Check className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+                  {/* The trial, said where the decision is made. The marketing site's
+                    /pricing card already says it, but this card had only the
+                    price, which reads as "charged today". Shown only when Paddle's
+                    preview says this price carries a trial (the trial is catalog
+                    config — docs/iap.md), so the card never promises one the
+                    checkout won't give. The price stays the larger number in the
+                    header, and this line is its fine print, so it sits at the
+                    card's 12 step above the button rather than the 16 the button
+                    takes from the list. bracemark-expo's card has the same line;
+                    change the two together. */}
+                  {preview?.trial && (
+                    <p className="mt-4 text-sm text-muted-foreground">
+                      {`${TRIAL_DAYS}-day free trial, then ${preview.total}/year. Cancel any time.`}
+                    </p>
+                  )}
+                  <Button
+                    className={preview?.trial ? 'mt-3' : 'mt-4'}
+                    disabled={busy !== null}
+                    onClick={() => void startCheckout(cardPlan)}
+                  >
+                    {busy === `checkout:${cardPlan}`
+                      ? 'Opening checkout…'
+                      : `Upgrade to ${PLAN_LABELS[cardPlan]}`}
+                  </Button>
+                </div>
+              );
+            })}
           </div>
 
           {/* Shown ONLY while a card is still displaying the base price rather

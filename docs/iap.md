@@ -1207,6 +1207,24 @@ a crossgrade inside the existing subscription rather than a second purchase.
   is both dishonest and the opposite of what EU/UK distance-selling assumes was
   disclosed.
 
+  **The upgrade card states the trial, but only when the provider confirms it.**
+  Both subscription sections print "14-day free trial, then <price>/year. Cancel
+  any time." between the feature list and the Upgrade button. That's the form
+  App Review 3.1.2 expects, with the billed amount still the larger number in the
+  card's header. Without the line the card showed only the price, which reads as
+  "charged today", while `/pricing` on the marketing site promised the trial. The
+  length is `TRIAL_DAYS`, but whether the line shows is the **provider's**
+  answer, never a constant's. On web it shows when `Paddle.PricePreview` returns
+  a `trialPeriod` on the price (`previewPaddlePrices` in `lib/paddle.ts`). On
+  expo it shows when `storeOffersFreeTrial` (`lib/iap.ts`) says this store account
+  would get the trial: on Play, the tagged offer being listed, since Play lists
+  only offers the buyer is eligible for; on the App Store,
+  `isEligibleForIntroOfferIOS` for the product's subscription group, since an
+  intro offer is once per Apple ID per group and is listed to everyone. Any
+  failure, or a preview that didn't land, means no line. A card that leaves the
+  trial out costs a sentence. One that promises a trial the sheet then charges for
+  breaks the promise at the moment of payment.
+
   **Only one of the three providers reports the trial as a status.** Paddle has
   `trialing` in `status` and flips it to `active` itself. Apple's status codes
   don't — code 1 is plain "active" whether or not an offer applies — so

@@ -3,7 +3,7 @@ import { act, fireEvent, render } from '@testing-library/react-native';
 
 import { useEntitlements, useSync } from '@stxapps/expo-react';
 
-import { fetchStorePlanProducts, restoreStorePurchases } from '../../lib/iap';
+import { fetchStorePlanProducts, restoreStorePurchases, storeOffersFreeTrial } from '../../lib/iap';
 import { SubscriptionSection } from './subscription-section';
 
 // The native half of bracemark-web's `subscription-section.spec.tsx`: on both
@@ -33,6 +33,7 @@ jest.mock('../../lib/iap', () => ({
   openStoreSubscriptionManagement: jest.fn(),
   restoreStorePurchases: jest.fn(),
   storeFailureMessage: jest.fn(() => 'Could not restore your purchases. Please try again.'),
+  storeOffersFreeTrial: jest.fn(),
 }));
 
 jest.mock('../../components/legal-consent', () => ({
@@ -52,6 +53,7 @@ const useEntitlementsMock = useEntitlements as jest.Mock;
 const useSyncMock = useSync as jest.Mock;
 const fetchStorePlanProductsMock = fetchStorePlanProducts as jest.Mock;
 const restoreStorePurchasesMock = restoreStorePurchases as jest.Mock;
+const storeOffersFreeTrialMock = storeOffersFreeTrial as jest.Mock;
 
 const FREE = {
   plan: 'free',
@@ -92,6 +94,37 @@ beforeEach(() => {
   // cards render at the planning price with a disabled button.
   fetchStorePlanProductsMock.mockResolvedValue({});
   restoreStorePurchasesMock.mockResolvedValue(null);
+  storeOffersFreeTrialMock.mockResolvedValue(false);
+});
+
+// The card used to show only the price, which reads as "charged today" to
+// someone the store is about to give 14 free days. The line is shown only when
+// the store says THIS account gets the trial (lib/iap.ts, storeOffersFreeTrial),
+// since a store trial is once per account.
+const PLUS_PRODUCT = { id: 'plus', platform: 'ios', displayPrice: '€49.00' };
+
+test('states the free trial on the upgrade card when the store offers it', async () => {
+  fetchStorePlanProductsMock.mockResolvedValue({ plus: PLUS_PRODUCT });
+  storeOffersFreeTrialMock.mockResolvedValue(true);
+  const { getByTestId, getByText } = render(<SubscriptionSection />);
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  expect(storeOffersFreeTrialMock).toHaveBeenCalledWith(PLUS_PRODUCT);
+  expect(getByTestId('subscription-price-plus')).toHaveTextContent('€49.00/year');
+  expect(getByText('14-day free trial, then €49.00/year. Cancel any time.')).toBeTruthy();
+});
+
+test('omits the trial line when this store account is not eligible', async () => {
+  fetchStorePlanProductsMock.mockResolvedValue({ plus: PLUS_PRODUCT });
+  const { getByTestId, queryByTestId } = render(<SubscriptionSection />);
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  expect(getByTestId('subscription-price-plus')).toHaveTextContent('€49.00/year');
+  expect(queryByTestId('subscription-trial-plus')).toBeNull();
 });
 
 test('clears the restore notice when the status is refreshed', async () => {

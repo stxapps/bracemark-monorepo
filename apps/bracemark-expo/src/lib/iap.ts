@@ -6,6 +6,7 @@ import {
   finishTransaction,
   getAvailablePurchases,
   initConnection,
+  isEligibleForIntroOfferIOS,
   type ProductSubscription,
   type Purchase,
   purchaseErrorListener,
@@ -240,6 +241,39 @@ export async function fetchStorePlanProducts(): Promise<
     }
   }
   return byPlan;
+}
+
+// Whether THIS store account would get the free trial on a plan's product. The
+// upgrade card shows its trial line only when this returns true. The marketing
+// site can state the trial outright, but a store trial is once per account, and
+// telling a returning subscriber "14-day free trial" when the sheet then charges
+// them on day one is worse than not mentioning it. Each store answers that
+// differently:
+//  - Play lists only the offers this buyer is ELIGIBLE for, so the trial offer
+//    being present (found by its tag, as `openStoreCheckout` finds it) is the
+//    answer.
+//  - The App Store lists the introductory offer to everyone. Eligibility is a
+//    separate StoreKit question, asked per subscription group.
+// Never throws: any failure means "don't promise it", and the card still has its
+// price.
+export async function storeOffersFreeTrial(product: ProductSubscription): Promise<boolean> {
+  try {
+    if (product.platform === 'android') {
+      return (product.subscriptionOffers ?? []).some((o) =>
+        o.offerTagsAndroid?.includes(PLAY_FREE_TRIAL_OFFER_TAG),
+      );
+    }
+    const hasTrialOffer =
+      product.introductoryPricePaymentModeIOS === 'free-trial' ||
+      (product.subscriptionOffers ?? []).some(
+        (o) => o.type === 'introductory' && o.paymentMode === 'free-trial',
+      );
+    const groupId = product.subscriptionGroupIdIOS;
+    if (!hasTrialOffer || !groupId) return false;
+    return await isEligibleForIntroOfferIOS(groupId);
+  } catch {
+    return false;
+  }
 }
 
 // Open the store's purchase sheet for a plan. `onCompleted` fires after the

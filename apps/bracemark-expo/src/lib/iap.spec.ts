@@ -15,6 +15,7 @@ const mockGetAvailablePurchases = jest.fn();
 const mockRequestPurchase = jest.fn<Promise<void>, [unknown]>();
 const mockDeepLinkToSubscriptions = jest.fn<Promise<void>, [unknown]>();
 const mockApiCall = jest.fn();
+const mockIsEligibleForIntroOffer = jest.fn<Promise<boolean>, [string]>();
 
 let purchaseUpdated: ((purchase: Record<string, unknown>) => void) | undefined;
 let purchaseFailed: ((error: { code: string; message: string }) => void) | undefined;
@@ -32,6 +33,7 @@ jest.mock('expo-iap', () => ({
     UserCancelled: 'user-cancelled',
   },
   initConnection: () => mockInitConnection(),
+  isEligibleForIntroOfferIOS: (groupId: string) => mockIsEligibleForIntroOffer(groupId),
   fetchProducts: (options: unknown) => mockFetchProducts(options),
   finishTransaction: (options: unknown) => mockFinishTransaction(options),
   getAvailablePurchases: () => mockGetAvailablePurchases(),
@@ -503,5 +505,79 @@ describe('storeFailureMessage', () => {
     );
     expect(new Set(sentences).size).toBe(3);
     for (const sentence of sentences) expect(sentence).toMatch(/^Could not .* Please try again\.$/);
+  });
+});
+
+// The upgrade card's trial line asks this, and a wrong `true` promises a trial
+// the store sheet won't give. Play lists only the offers the buyer is eligible
+// for, so the tagged offer being there IS the answer. The App Store lists the
+// intro offer to everyone, so eligibility is StoreKit's separate per-group
+// question.
+describe('storeOffersFreeTrial', () => {
+  beforeEach(() => {
+    mockIsEligibleForIntroOffer.mockReset();
+  });
+
+  const android = (offers: unknown[]) =>
+    ({ id: STORE_PRODUCT_IDS.plus, platform: 'android', subscriptionOffers: offers }) as never;
+  const ios = (extra: Record<string, unknown>) =>
+    ({
+      id: STORE_PRODUCT_IDS.plus,
+      platform: 'ios',
+      introductoryPricePaymentModeIOS: 'empty',
+      subscriptionOffers: [],
+      subscriptionGroupIdIOS: 'group-1',
+      ...extra,
+    }) as never;
+
+  test('is true on Play when the tagged trial offer is listed', async () => {
+    const { storeOffersFreeTrial } = load();
+    await expect(
+      storeOffersFreeTrial(
+        android([{ offerTagsAndroid: [] }, { offerTagsAndroid: [PLAY_FREE_TRIAL_OFFER_TAG] }]),
+      ),
+    ).resolves.toBe(true);
+  });
+
+  test('is false on Play when only the base plan is listed', async () => {
+    const { storeOffersFreeTrial } = load();
+    await expect(storeOffersFreeTrial(android([{ offerTagsAndroid: [] }]))).resolves.toBe(false);
+  });
+
+  test('asks StoreKit for the group when the App Store product has a free-trial intro offer', async () => {
+    mockIsEligibleForIntroOffer.mockResolvedValue(true);
+    const { storeOffersFreeTrial } = load();
+    await expect(
+      storeOffersFreeTrial(
+        ios({ subscriptionOffers: [{ type: 'introductory', paymentMode: 'free-trial' }] }),
+      ),
+    ).resolves.toBe(true);
+    expect(mockIsEligibleForIntroOffer).toHaveBeenCalledWith('group-1');
+  });
+
+  test('is false for an App Store account that already used its intro offer', async () => {
+    mockIsEligibleForIntroOffer.mockResolvedValue(false);
+    const { storeOffersFreeTrial } = load();
+    await expect(
+      storeOffersFreeTrial(ios({ introductoryPricePaymentModeIOS: 'free-trial' })),
+    ).resolves.toBe(false);
+  });
+
+  test('does not ask StoreKit when the product has no free-trial intro offer', async () => {
+    const { storeOffersFreeTrial } = load();
+    await expect(
+      storeOffersFreeTrial(
+        ios({ subscriptionOffers: [{ type: 'introductory', paymentMode: 'pay-up-front' }] }),
+      ),
+    ).resolves.toBe(false);
+    expect(mockIsEligibleForIntroOffer).not.toHaveBeenCalled();
+  });
+
+  test('is false, not a throw, when the eligibility check fails', async () => {
+    mockIsEligibleForIntroOffer.mockRejectedValue(new Error('StoreKit unavailable'));
+    const { storeOffersFreeTrial } = load();
+    await expect(
+      storeOffersFreeTrial(ios({ introductoryPricePaymentModeIOS: 'free-trial' })),
+    ).resolves.toBe(false);
   });
 });
