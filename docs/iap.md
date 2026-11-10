@@ -327,7 +327,9 @@ gate**, and each is printed only where an honest library can reach it:
 - **Plus's `maxBytes` is published.** Kept copies made it reachable — a
   screenshot is up to a few hundred KB, measured
   ([link-extraction-keep.md](./link-extraction-keep.md), _why these three_) — so
-  the pricing card says "5 GB of storage", the `storage` FAQ answer says what
+  the pricing card says "5 GB of storage", a note under the pricing page's
+  comparison table repeats it (the table has no storage row, since Free's cell
+  would have nothing true to print), the `storage` FAQ answer says what
   fills it, and Settings → Subscription shows usage against it on both apps
   (`GET /v1/files/usage`, `useStorageReadout`). Which ceilings count as published
   is one rule in `@stxapps/shared` `iap/storage.ts`, `isPublishedStorageCeiling`

@@ -69,6 +69,22 @@ describe('FAQ answers that link to other FAQ answers', () => {
     }
   });
 
+  // The page's OWN fragments, which the cases above never see: they walk the
+  // answers, and /pricing also links to an answer from outside the grid — the
+  // storage note under the comparison table points at `storage`. Same silent
+  // failure, so the same check, against the rendered page: every fragment on it
+  // has an element to land on.
+  it('/pricing renders no fragment link without a target on the page', () => {
+    const { container } = render(<PricingPage />);
+    const targets = Array.from(container.querySelectorAll('a[href^="#"]')).map((a) =>
+      (a.getAttribute('href') ?? '').slice(1),
+    );
+    expect(targets).toContain('storage');
+    for (const target of targets) {
+      expect(container.querySelector(`[id="${target}"]`)).not.toBeNull();
+    }
+  });
+
   // The absolute form is correct from a surface that is NOT the FAQ (/security
   // points at `compelled` that way) and wrong between two answers, where it
   // throws a /pricing reader off the page they are deciding on.

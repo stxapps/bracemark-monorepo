@@ -36,6 +36,7 @@ import {
   formatStorageCeiling,
   isPublishedStorageCeiling,
   type Plan,
+  PLAN_LABELS,
 } from '@stxapps/shared';
 
 /** The cap alone — "Unlimited" or "200" — for a comparison-table cell. */
@@ -83,4 +84,26 @@ export function storageLimitLabel(plan: Plan): string | null {
  */
 export function planLimitsLabel(plan: Plan): string {
   return [linksLimitLabel(plan), storageLimitLabel(plan)].filter(Boolean).join(' · ');
+}
+
+/**
+ * "Plus includes 5 GB of storage" — the clause the note under /pricing's
+ * comparison table opens with, or null when no plan in the list publishes a
+ * ceiling (then there is no note). The table itself has no storage row, because
+ * Free's cell would have nothing true to say: its ceiling is unpublished, and a
+ * dash reads as "Free stores nothing". The note carries the number to a reader
+ * who skipped the cards and went straight to the table, where "Unlimited" sits
+ * in the links row with no ceiling beside it.
+ *
+ * Takes the storefront's columns rather than naming a plan, so a second paid
+ * plan adds its own clause the way it adds its own column.
+ */
+export function storageIncludedLabel(plans: readonly Plan[]): string | null {
+  const clauses = plans.flatMap((plan) => {
+    const storage = storageLimitLabel(plan);
+    return storage ? [`${PLAN_LABELS[plan]} includes ${storage}`] : [];
+  });
+  if (clauses.length === 0) return null;
+  if (clauses.length <= 2) return clauses.join(' and ');
+  return `${clauses.slice(0, -1).join(', ')}, and ${clauses[clauses.length - 1]}`;
 }

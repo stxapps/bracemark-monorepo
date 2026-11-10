@@ -20,7 +20,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 import { ArrowGlyph, CheckGlyph } from '../../components/glyphs';
 import { faqById, PRICING_FAQ_IDS } from '../../content/faq';
 import { pageMetadata } from '../../lib/metadata';
-import { formatLinks, planLimitsLabel } from '../../lib/plans';
+import { formatLinks, planLimitsLabel, storageIncludedLabel } from '../../lib/plans';
 import { CREATE_ACCOUNT_URL, UPGRADE_URL } from '../../lib/site';
 
 export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise<Metadata> {
@@ -53,6 +53,10 @@ export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise
 // limit no free user meets. The file ceiling (`maxFiles`) is printed nowhere: no
 // honest library reaches it. A user who reaches the byte ceiling is told in-app,
 // by the readout and the "storage full" surfaces the quota gate already drives.
+//
+// The same number is repeated once, in a note under the comparison table
+// (`STORAGE_NOTE` below), for the reader who skips the cards: the table's links
+// row says "Unlimited" and nothing beside it said there is a ceiling at all.
 //
 // Which plans appear is likewise data, in both directions: the cards and the
 // comparison COLUMNS are `AVAILABLE_PAID_PLANS`, so putting Pro on sale stays the
@@ -217,7 +221,8 @@ const COMPARISON: { label: string; cell: (plan: Plan) => Cell }[] = [
   // Saved links is the only numeric row. Storage is NOT a row: Free's ceiling is
   // unpublished (see the header note), so its cell would read "—", which says
   // "Free stores nothing". The Plus card's limit line carries the number instead,
-  // and the two kept-copy rows below say what fills it.
+  // the two kept-copy rows below say what fills it, and the note under the table
+  // (`STORAGE_NOTE`) repeats the number where a table reader will meet it.
   { label: 'Saved links', cell: formatLinks },
   { label: 'End-to-end encryption', cell: () => true },
   { label: 'Sync across devices', cell: () => true },
@@ -268,9 +273,18 @@ const COMPARISON: { label: string; cell: (plan: Plan) => Cell }[] = [
   // the browser extension, which is where the page is open in a tab
   // (docs/link-extraction-keep.md, _per client_). The label carries that scope,
   // the way the server-previews row names the web app.
+  //
+  // The screenshot's label also says WHAT is captured, and "of pages" did not: it
+  // is the visible part of the tab at the moment of the save, never the page top
+  // to bottom (docs/link-extraction-keep.md, _the screenshot is a capped JPEG of
+  // the fold_). A reader arriving from a full-page capture tool, or from a
+  // service that keeps a permanent copy, fills "screenshots of pages" with the
+  // whole page — the same silence the search row above stopped leaving about its
+  // fields. "What’s on screen" is the in-app register too: the paywall and the
+  // reader both say a screenshot keeps how the page looked.
   { label: 'Read-mode copies of pages', cell: (p) => entitlementsOf(p).keptCopies },
   {
-    label: 'Screenshots of pages (browser extension)',
+    label: 'Screenshot of what’s on screen when you save (browser extension)',
     cell: (p) => entitlementsOf(p).keptCopies,
   },
   {
@@ -278,6 +292,19 @@ const COMPARISON: { label: string; cell: (plan: Plan) => Cell }[] = [
     cell: (p) => (entitlementsOf(p).serverExtraction ? 'Opt-in' : false),
   },
 ];
+
+// The note under the table: the published byte ceiling, for whichever columns
+// publish one, or null when none does (then nothing renders). Built from the
+// columns so it cannot name a plan the table does not show.
+const STORAGE_NOTE = storageIncludedLabel(COLUMNS);
+
+// Where the note's link lands: the `storage` answer in the grid further down this
+// page. A fragment with no element behind it scrolls nowhere and reports nothing
+// (content/faq.tsx, HashLink), so the id is held to the list twice — `satisfies`
+// fails the typecheck if `storage` leaves PRICING_FAQ_IDS, and
+// faq-cross-links.spec.tsx checks every fragment this page renders against the
+// rendered page.
+const STORAGE_FAQ_ID = 'storage' satisfies (typeof PRICING_FAQ_IDS)[number];
 
 // The lifetime launch lever — $149 once, for Plus forever, capped at
 // LIFETIME_SEATS buyers. Renders NOTHING until the offer is actually on sale:
@@ -526,6 +553,29 @@ export default function Page() {
               </tbody>
             </table>
           </div>
+          {/* Outside the scroller, so it wraps to the viewport on a narrow screen
+              instead of running 480px wide with the table. Left-aligned like the
+              feature column it annotates, not centred like the headings.
+
+              "What fills it" is the FAQ answer's own phrase, kept so the two read
+              as one statement; the link text names the question a ceiling raises
+              and the answer it lands on opens the same way. No Free clause, for
+              the reason there is no Free cell: that answer says what holds on
+              Free, in the one place it can be said in a full sentence. */}
+          {STORAGE_NOTE && (
+            <p className={cn('mt-5 text-sm leading-6 text-muted-foreground')}>
+              {STORAGE_NOTE}. Preview images and the copies you keep are what fill it —{' '}
+              <a
+                className={cn(
+                  'rounded-sm text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
+                )}
+                href={`#${STORAGE_FAQ_ID}`}
+              >
+                what happens if it fills up
+              </a>
+              .
+            </p>
+          )}
         </section>
 
         {/* The billing questions, pulled by id from the shared FAQ. Deliberately

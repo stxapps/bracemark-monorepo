@@ -1,6 +1,12 @@
-import { entitlementsOf } from '@stxapps/shared';
+import { entitlementsOf, PLAN_LABELS } from '@stxapps/shared';
 
-import { formatLinks, linksLimitLabel, planLimitsLabel, storageLimitLabel } from './plans';
+import {
+  formatLinks,
+  linksLimitLabel,
+  planLimitsLabel,
+  storageIncludedLabel,
+  storageLimitLabel,
+} from './plans';
 
 // Two things worth pinning, and only two. Both helpers are one line, so the
 // value here is not the arithmetic — it is that the strings a buyer reads stay
@@ -40,5 +46,16 @@ describe('storage copy', () => {
   it('leaves Free’s ceiling off the card — its link cap is the limit that binds', () => {
     expect(storageLimitLabel('free')).toBeNull();
     expect(planLimitsLabel('free')).toBe(linksLimitLabel('free'));
+  });
+
+  // The note under the comparison table. Free is IN the list it is given (the
+  // table's columns), so the case worth pinning is that Free contributes no
+  // clause — a note reading "Free includes …" would publish the ceiling the card
+  // leaves off.
+  it('names only the plans whose ceiling is published in the table’s note', () => {
+    expect(storageIncludedLabel(['free', 'plus'])).toBe(
+      `${PLAN_LABELS.plus} includes ${storageLimitLabel('plus')}`,
+    );
+    expect(storageIncludedLabel(['free'])).toBeNull();
   });
 });
