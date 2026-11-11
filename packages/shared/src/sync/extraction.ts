@@ -62,6 +62,26 @@ export function isFacetEligible(facet: Facet | undefined, now: number): boolean 
   return now >= (facet.extractedAt ?? 0) + backoff(facet.attempts);
 }
 
+// A `failed` facet's passthrough `reason` when a PHONE could not fetch a plain-HTTP link
+// over either `https://` (the upgrade it tries first) or `http://` (which its release
+// builds refuse — Android forbids cleartext, iOS's App Transport Security refuses it).
+// docs/link-extraction.md, _plain-HTTP links on a phone_.
+//
+// Deliberately a TRANSIENT `failed`, never `permanent`: permanent is synced and settles
+// the link on EVERY device, and bracemark-web's server path fetches plain HTTP fine — it
+// is what fills these links in today. So the reason is a note from one kind of client to
+// itself: the phone stops retrying a link it cannot fetch (`isFacetEligibleOnPhone` in
+// expo-react) and counts it as won't-retry, while every other client reads an ordinary
+// `failed` and retries on its backoff. A newer, successful write replaces the state and
+// the reason with it.
+export const INSECURE_HTTP_REASON = 'insecure-http';
+
+export function isInsecureHttpFailure(facet: Facet | undefined): boolean {
+  return (
+    facet?.status === 'failed' && (facet as { reason?: unknown }).reason === INSECURE_HTTP_REASON
+  );
+}
+
 // Normalize a discovered title to satisfy `extractionSchema.title`'s `LINK_TITLE_MAX`
 // cap (entities.ts): collapse internal whitespace, trim, drop-if-empty, then cap. The
 // single normalizer every title WRITER runs before the value lands in the schema — the

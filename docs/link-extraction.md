@@ -1188,6 +1188,51 @@ free answer beside the paid one. Nothing catches a regression: the copy type-che
 lints, renders, and reads plausibly, which is how it survived the first public
 stretch.
 
+#### plain-HTTP links on a phone — https first, then stop asking
+
+⚠ **A release build of bracemark-expo cannot make a plain-HTTP request.** Android
+forbids cleartext traffic (only the debug manifest sets `usesCleartextTraffic`), and
+iOS's App Transport Security refuses it (`NSAllowsArbitraryLoads` is false; only local
+networking is excepted). The refusal happens on the device: no request leaves, and the
+fetch fails like any network error, with nothing that says why. Until 2026-11-11 a link
+saved as `http://` therefore got no title or preview on a phone and was recorded a
+transient `failed` — retried up to daily, for good, under "Will retry". A debug build
+reaches plain HTTP, which is why nothing on a developer's device showed it.
+
+What the phone does instead (`lib/device-extraction.ts`, expo-react):
+
+- **`https://` first.** A plain-HTTP link with no explicit port (`httpsUpgradeOf`,
+  `@stxapps/shared` url/url.ts) is fetched over `https://` first — page, preview image,
+  and an article's images (`lib/reader-images.ts`) — and the capture screen's WebView
+  loads the https twin first, falling back on a load error — and when the saved address
+  fails too (on a release build, a plain-HTTP-only site always does), both of its
+  actions go off and it says the page didn't load, rather than offering a tap that can
+  only fail. Verified on a staging Android release build 2026-11-11. Most sites still saved as
+  `http://` answer on `https://`, so this is what gets them a preview. If the https twin
+  isn't the page, the saved address is tried, and its answer stands.
+- **An https answer that isn't the page is not the link's verdict.** A 404 or a bot wall
+  over `https://` is a different URL's answer; settled `permanent` it would stop every
+  device, the server path included, from fetching the page the saved address names.
+- **Then stop asking — on this device only.** A plain-HTTP link reached over neither,
+  while the device is online, is tagged `reason: 'insecure-http'` on its **third**
+  failure in a row (about an hour and a quarter up the backoff ladder — enough to rule
+  out a site that was briefly down). The facet stays a transient `failed`: `permanent`
+  is synced and would stop bracemark-web's server path too, and that path fetches plain
+  HTTP fine — it is what fills these links in. So the tag is a note from the phone to
+  itself (`INSECURE_HTTP_REASON`, shared sync/extraction.ts): expo's picks go through
+  `isFacetEligibleOnPhone` (queries.ts), which skips it, and its Settings counts move it
+  from "Will retry" to "Won't retry" through a second facet token beside `failed`
+  (projection.ts) — whose line names the cause. Every other client reads an ordinary
+  `failed`. A later success replaces the state and the tag with it; the capture screen's
+  _Update preview_ is the manual route.
+- **An insecure preview image settles title-only.** A plain-HTTP `og:image` reached over
+  neither is `none`, not `transient`: the title already landed, and a retry would fail
+  the same way.
+
+Not done: allowing plain HTTP for page fetches (an Android network-security config that
+keeps the api on TLS; an ATS exception on iOS, which Apple asks a reason for). The
+upgrade covers most of what it would buy without widening what the app may fetch.
+
 #### the links-page offer — same banner, two different asks
 
 Both apps put a one-time, dismissible banner on the links screen, armed on nearly the

@@ -259,7 +259,11 @@ export function ExtractionSection() {
               : `${doneCount} of ${total} link${total === 1 ? '' : 's'} previewed.`}
           </Text>
 
-          {/* What "Won't retry" COVERS — the web pane's twin, same wording. It
+          {/* What "Won't retry" COVERS — the web pane's twin, plus ONE cause web
+              doesn't have: a site that answers only over plain HTTP, which this app's
+              release builds can't fetch (docs/link-extraction.md, _plain-HTTP links on a
+              phone_; counted here by queries.ts readExtractionFacetCounts). Web's server
+              path fetches those, so its line doesn't name it. It
               is the one stat here that never drains on its own, so it is the one
               a user reads as broken; the label carries the fact that we have
               stopped, leaving this line only the causes. They track
@@ -276,8 +280,9 @@ export function ExtractionSection() {
           {failedPermanentCount > 0 && (
             <Text className="mt-4 text-sm text-muted-foreground">
               Won’t retry means the page gave us nothing to use — it sits behind a login or a
-              paywall, it isn’t a web page, or it turns away automated requests. Those links are
-              saved either way, and you can give them a title of your own.
+              paywall, it isn’t a web page, it turns away automated requests, or it only answers
+              over plain HTTP, which this app can’t fetch. Those links are saved either way, and you
+              can give them a title of your own.
             </Text>
           )}
 

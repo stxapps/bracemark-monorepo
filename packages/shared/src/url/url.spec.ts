@@ -3,6 +3,7 @@ import {
   displayUrl,
   hostFromText,
   hostFromUrl,
+  httpsUpgradeOf,
   normalizeUrl,
   openableUrl,
   waybackUrl,
@@ -190,6 +191,21 @@ describe('openableUrl', () => {
     expect(openableUrl('mailto:someone@example.com')).toBeUndefined();
     expect(openableUrl('javascript:alert(1)')).toBeUndefined();
     expect(openableUrl('ftp://files.example.com/a')).toBeUndefined();
+  });
+});
+
+describe('httpsUpgradeOf', () => {
+  it('turns a plain-HTTP address into its https twin, path and query intact', () => {
+    expect(httpsUpgradeOf('http://example.com/a/b?q=1#f')).toBe('https://example.com/a/b?q=1#f');
+  });
+
+  // An explicit port is a server speaking plain HTTP THERE; TLS on that port is not
+  // the same address, so nothing is guessed.
+  it('leaves an explicit port, and anything not http:, alone', () => {
+    expect(httpsUpgradeOf('http://example.com:8080/a')).toBeUndefined();
+    expect(httpsUpgradeOf('https://example.com/a')).toBeUndefined();
+    expect(httpsUpgradeOf('ftp://example.com/a')).toBeUndefined();
+    expect(httpsUpgradeOf('not a url')).toBeUndefined();
   });
 });
 

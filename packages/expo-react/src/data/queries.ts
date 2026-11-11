@@ -65,7 +65,9 @@ import {
   FILES_PREFIX,
   getCachedExtraction,
   getCachedLink,
+  INSECURE_HTTP_REASON,
   isFacetEligible,
+  isInsecureHttpFailure,
   LINKS_PREFIX,
   linkSchema,
   LISTS_PREFIX,
@@ -484,6 +486,21 @@ const extractionPathSql = sql`${EXTRACTIONS_PREFIX} || substr(${items.path}, ${L
 const DONE_TOKEN = 'done:titleImage';
 const FAILED_TOKEN = 'failed:titleImage';
 const PERMANENT_TOKEN = 'permanent:titleImage';
+// Beside FAILED_TOKEN, never instead of it (projection.ts): a plain-HTTP link this device
+// cannot fetch.
+const INSECURE_HTTP_TOKEN = `${INSECURE_HTTP_REASON}:titleImage`;
+
+// Is a link's titleImage worth fetching ON THIS DEVICE? The shared rule, minus a
+// plain-HTTP link this build has already shown it cannot fetch — over `https://` or
+// `http://`, several times (INSECURE_HTTP_REASON, shared sync/extraction.ts). Every
+// device-side pick goes through this, so the drain, Generate all and the wake read stop
+// asking for it; the synced facet stays an ordinary `failed` for clients that can.
+function isFacetEligibleOnPhone(
+  facet: Parameters<typeof isFacetEligible>[0],
+  now: number,
+): boolean {
+  return !isInsecureHttpFailure(facet) && isFacetEligible(facet, now);
+}
 
 // "This link's extraction carries one of `tokens` for titleImage" — the correlated
 // subquery both the tally join and the pending scan build on.
@@ -549,6 +566,7 @@ function readTrashedTitleImageCounts(): {
   done: number;
   failedTransient: number;
   failedPermanent: number;
+  insecureHttp: number;
 } {
   // The join is restricted to the three titleImage tokens, so at most ONE junction row
   // can match a link (a facet has exactly one status) and `COUNT(*)` stays the trashed
@@ -574,11 +592,27 @@ function readTrashedTitleImageCounts(): {
     .where(eq(items.itemListId, TRASH_ID))
     .get();
   // SUM over zero rows is NULL — normalize (COUNT is already 0).
+  // The insecure-HTTP token sits BESIDE a `failed` token on the same facet, so it is
+  // counted apart rather than added to the join above, where a second matching row
+  // would count its trashed link twice.
+  const insecure = getDb()
+    .select({ n: count() })
+    .from(items)
+    .innerJoin(
+      itemFacetStatuses,
+      and(
+        eq(itemFacetStatuses.path, extractionPathSql),
+        eq(itemFacetStatuses.token, INSECURE_HTTP_TOKEN),
+      ),
+    )
+    .where(eq(items.itemListId, TRASH_ID))
+    .get();
   return {
     total: row?.total ?? 0,
     done: row?.done ?? 0,
     failedTransient: row?.failedTransient ?? 0,
     failedPermanent: row?.failedPermanent ?? 0,
+    insecureHttp: insecure?.n ?? 0,
   };
 }
 
@@ -590,8 +624,12 @@ export async function readExtractionFacetCounts(): Promise<ExtractionFacetCounts
   // would inflate the denominator of "N of M links previewed".
   const liveLinks = totalLinks - trashed.total;
   const liveDone = countToken(DONE_TOKEN) - trashed.done;
-  const liveFailedTransient = countToken(FAILED_TOKEN) - trashed.failedTransient;
-  const liveFailedPermanent = countToken(PERMANENT_TOKEN) - trashed.failedPermanent;
+  // A plain-HTTP link this device cannot fetch is `failed` in the synced state, and
+  // counted under "won't retry" HERE, because this device won't (isFacetEligibleOnPhone).
+  // It moves between the two failure buckets; the total and `pending` don't change.
+  const liveInsecure = countToken(INSECURE_HTTP_TOKEN) - trashed.insecureHttp;
+  const liveFailedTransient = countToken(FAILED_TOKEN) - trashed.failedTransient - liveInsecure;
+  const liveFailedPermanent = countToken(PERMANENT_TOKEN) - trashed.failedPermanent + liveInsecure;
   return {
     done: liveDone,
     failedTransient: liveFailedTransient,
@@ -689,7 +727,7 @@ export async function readLinksPendingTitleImagePage(
       const exRows = await bulkGetItems(failedPaths);
       exRows.forEach((exRow, i) => {
         const facet = exRow ? decodeCachedExtraction(exRow)?.facets.titleImage : undefined;
-        if (!isFacetEligible(facet, now)) cooling.add(failedPaths[i]);
+        if (!isFacetEligibleOnPhone(facet, now)) cooling.add(failedPaths[i]);
       });
     }
 
@@ -743,7 +781,7 @@ export async function readLinksPendingTitleImageForLinkPaths(
 
     const exRow = exRows[i];
     const facet = exRow ? decodeCachedExtraction(exRow)?.facets.titleImage : undefined;
-    if (isFacetEligible(facet, now)) pending.push(row);
+    if (isFacetEligibleOnPhone(facet, now)) pending.push(row);
   }
   return decodeLinks(pending);
 }

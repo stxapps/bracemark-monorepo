@@ -3,6 +3,7 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
 import { newId } from '@stxapps/expo-crypto/lib/ids';
 import {
+  httpsUpgradeOf,
   isReaderImageTooSmall,
   READER_IMAGE_JPEG_QUALITY,
   READER_IMAGE_MAX_DIMENSION,
@@ -50,6 +51,24 @@ function deleteQuietly(file: File | undefined): void {
   }
 }
 
+// One image's response — `https://` first for a plain-HTTP address, then the address
+// itself: this app's release builds cannot make a plain-HTTP request (Android forbids
+// cleartext, iOS's App Transport Security refuses it), and most image hosts answer both.
+// docs/link-extraction.md, _plain-HTTP links on a phone_. Undefined when neither gave an
+// ok response; the figure is then a placeholder, like any image that can't be had.
+async function fetchHttpsFirst(url: string, signal: AbortSignal): Promise<Response | undefined> {
+  for (const candidate of [httpsUpgradeOf(url), url]) {
+    if (!candidate || signal.aborted) continue;
+    try {
+      const res = await fetch(candidate, { headers: { 'User-Agent': USER_AGENT }, signal });
+      if (res.ok) return res;
+    } catch {
+      // Refused or unreachable — the next candidate, if there is one.
+    }
+  }
+  return undefined;
+}
+
 async function encodeOne(
   source: ReaderImageSource,
   signal: AbortSignal,
@@ -57,8 +76,8 @@ async function encodeOne(
   let temp: File | undefined;
   let saved: File | undefined;
   try {
-    const res = await fetch(source.url, { headers: { 'User-Agent': USER_AGENT }, signal });
-    if (!res.ok) return undefined;
+    const res = await fetchHttpsFirst(source.url, signal);
+    if (!res) return undefined;
     const bytes = new Uint8Array(await res.arrayBuffer());
     if (bytes.byteLength === 0 || bytes.byteLength > READER_IMAGE_MAX_SOURCE_BYTES) {
       return undefined;

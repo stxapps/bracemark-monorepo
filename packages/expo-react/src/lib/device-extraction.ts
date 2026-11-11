@@ -5,7 +5,9 @@ import { newId } from '@stxapps/expo-crypto';
 import {
   type ExtractVerdict,
   hostFromUrl,
+  httpsUpgradeOf,
   idFromPath,
+  INSECURE_HTTP_REASON,
   isRenderableIconBytes,
   LINKS_PREFIX,
   mapLimit,
@@ -117,6 +119,13 @@ const IMAGE_TIMEOUT_MS = 20_000;
 // this can't abort mid-transfer (the same limitation favicon-provider documents). It
 // still bounds what we DECODE, PARSE and STORE, which is the part that costs.
 const MAX_PAGE_BYTES = 4 * 1024 * 1024;
+
+// A plain-HTTP link this device reached over neither `https://` nor `http://` is tagged
+// `insecure-http` on its THIRD such failure in a row, not its first: one unreachable
+// moment can be a site that is briefly down, and the tag stops this device retrying for
+// good (shared sync/extraction.ts, INSECURE_HTTP_REASON). With the backoff ladder that is
+// about an hour and a quarter of failures — long enough to rule out a blip.
+const INSECURE_HTTP_AFTER_FAILURES = 3;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 // A declared favicon's own cap (and the sniff that goes with it) is `@stxapps/shared`'s
 // `isRenderableIconBytes` — one verdict for every filler on both platforms, so they can't
@@ -144,16 +153,16 @@ export async function runDeviceTitleImageBatch(
 
   // Links whose fetch never reached a server, and the first such error — resolved once
   // the whole batch is in (see _when this throws_).
-  const unreached: LinkItem[][] = [];
+  const unreached: { targets: LinkItem[]; insecure: boolean }[] = [];
   let unreachedErr: unknown;
   let reachedSomething = false;
 
   await mapLimit([...linksByUrl.entries()], CONCURRENCY, async ([url, targets]) => {
     try {
-      const reached = await extractOne(username, url, targets, tier, opts);
-      if (reached) reachedSomething = true;
+      const outcome = await extractOne(username, url, targets, tier, opts);
+      if (outcome.reached) reachedSomething = true;
       else {
-        unreached.push(targets);
+        unreached.push({ targets, insecure: outcome.insecure });
         unreachedErr ??= new TypeError('device extraction: network request failed');
       }
     } catch (err) {
@@ -175,7 +184,14 @@ export async function runDeviceTitleImageBatch(
     if (!reachedSomething && (await deviceIsOffline())) {
       throw unreachedErr ?? new TypeError('device extraction: network request failed');
     }
-    for (const targets of unreached) await settle(username, targets, tier, 'failed');
+    for (const { targets, insecure } of unreached) {
+      // A plain-HTTP link this build cannot fetch, failed often enough to rule out a
+      // passing outage, carries the reason that stops THIS kind of client retrying it —
+      // still a transient `failed`, so a client that can fetch it still will
+      // (INSECURE_HTTP_REASON, shared sync/extraction.ts).
+      const tagged = insecure && (await priorAttempts(targets)) >= INSECURE_HTTP_AFTER_FAILURES - 1;
+      await settle(username, targets, tier, 'failed', tagged ? INSECURE_HTTP_REASON : undefined);
+    }
   }
 
   return links.length;
@@ -200,13 +216,13 @@ async function extractOne(
   targets: LinkItem[],
   tier: DeviceExtractionTier,
   opts: DeviceExtractionOptions,
-): Promise<boolean> {
+): Promise<{ reached: boolean; insecure: boolean }> {
   const page = await fetchPage(url);
-  if (page.kind === 'unreached') return false;
+  if (page.kind === 'unreached') return { reached: false, insecure: page.insecure };
   if (page.kind === 'status') {
     const verdict = await verdictForStatus(page.status, () => priorAttempts(targets));
     await settle(username, targets, tier, verdict);
-    return true;
+    return { reached: true, insecure: false };
   }
 
   // PASS 1 — the title, written on its own with the facet left PENDING, so the list fills
@@ -254,7 +270,7 @@ async function extractOne(
 
   // The carve-out (header): capture the icon this page DECLARED, since we're already here.
   await captureDeclaredFavicon(username, collected, page.finalUrl, opts);
-  return true;
+  return { reached: true, insecure: false };
 }
 
 // --- the fetches -------------------------------------------------------------
@@ -264,12 +280,45 @@ type PageResult =
   // The server answered, but not with a page we can use — classified by status.
   | { kind: 'status'; status: number }
   // No HTTP response at all (offline, DNS, TLS, timeout) — the caller defers this.
-  | { kind: 'unreached' };
+  // `insecure`: the link is plain HTTP and neither its https twin nor the address itself
+  // answered — on a release build the second is refused before it leaves the device.
+  | { kind: 'unreached'; insecure: boolean };
 
-// Fetch a link's HTML. Non-http(s) is reported as a synthetic `0` status (permanent —
+// Fetch a link's HTML — `https://` FIRST for a plain-HTTP link (docs/link-extraction.md,
+// _plain-HTTP links on a phone_). This app's release builds cannot make a plain-HTTP
+// request: Android forbids cleartext and iOS's App Transport Security refuses it, so the
+// `http://` attempt fails on the device, with no response and no error worth reading.
+// Most sites saved as `http://` answer on `https://`, and that answer is used when it is
+// a page. Otherwise the address itself is tried — which a debug build (and a local
+// network host) can still reach — and its answer stands; if neither answered, the result
+// says so, for the batch to tag (INSECURE_HTTP_AFTER_FAILURES).
+//
+// An https answer that isn't a page (a 404, a bot wall) is NOT taken as the link's
+// verdict: the link is the http address, and settling it `permanent` on the strength of
+// a different URL would stop every device, the server path included, from fetching the
+// page that address names.
+async function fetchPage(url: string): Promise<PageResult> {
+  const upgraded = httpsUpgradeOf(url);
+  if (!upgraded) {
+    const page = await fetchPageAt(url);
+    return page.kind === 'unreached' && isPlainHttp(url)
+      ? { kind: 'unreached', insecure: true }
+      : page;
+  }
+  const secure = await fetchPageAt(upgraded);
+  if (secure.kind === 'html') return secure;
+  const plain = await fetchPageAt(url);
+  return plain.kind === 'unreached' ? { kind: 'unreached', insecure: true } : plain;
+}
+
+function isPlainHttp(url: string): boolean {
+  return /^http:\/\//i.test(url);
+}
+
+// One address's HTML. Non-http(s) is reported as a synthetic `0` status (permanent —
 // nothing to fetch); a non-HTML content-type is reported as `415` (also permanent: a PDF
 // or an image URL is never going to become a page with an og:title).
-async function fetchPage(url: string): Promise<PageResult> {
+async function fetchPageAt(url: string): Promise<PageResult> {
   let target: URL;
   try {
     target = new URL(url);
@@ -315,7 +364,7 @@ async function fetchPage(url: string): Promise<PageResult> {
   } catch {
     // Transport: offline, DNS, TLS, or our own abort. Indistinguishable per-link, which
     // is exactly why the batch — not this function — decides what it meant.
-    return { kind: 'unreached' };
+    return { kind: 'unreached', insecure: false };
   } finally {
     clearTimeout(timer);
   }
@@ -326,15 +375,31 @@ type ImageOutcome =
   | { kind: 'file'; file: File }
   // Nothing to fetch, or nothing usable came back — settle `done`, title-only.
   | { kind: 'none' }
-  // Retryable image failure — leave the facet for a retry.
-  | { kind: 'transient' };
+  // Retryable image failure — leave the facet for a retry. `unreached`: no response at
+  // all, as opposed to a 429/5xx.
+  | { kind: 'transient'; unreached?: boolean };
 
 // Fetch the selected preview image and prepare it for `files/`: bytes → temp file → probe
 // dimensions → resize. All three primitives are image.ts's; the PROBE is required, not
 // incidental — see its header for why a downloaded image can't skip it.
+//
+// A plain-HTTP image is tried over `https://` first, as the page is (fetchPage). One the
+// device reached over neither settles the link title-only (`none`) rather than
+// `transient`: on a release build the plain-HTTP attempt never leaves the device, so a
+// retry would fail the same way, daily, for good — while the title had already landed.
 async function loadImage(imageUrl: string | undefined): Promise<ImageOutcome> {
   if (!imageUrl) return { kind: 'none' };
+  if (!isPlainHttp(imageUrl)) return loadImageAt(imageUrl);
+  const upgraded = httpsUpgradeOf(imageUrl);
+  if (upgraded) {
+    const secure = await loadImageAt(upgraded);
+    if (secure.kind === 'file') return secure;
+  }
+  const plain = await loadImageAt(imageUrl);
+  return plain.kind === 'transient' && plain.unreached ? { kind: 'none' } : plain;
+}
 
+async function loadImageAt(imageUrl: string): Promise<ImageOutcome> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), IMAGE_TIMEOUT_MS);
   try {
@@ -353,7 +418,7 @@ async function loadImage(imageUrl: string | undefined): Promise<ImageOutcome> {
   } catch {
     // Transport error on the image alone — the title already landed, so this is worth one
     // more try later rather than settling the link without a preview.
-    return { kind: 'transient' };
+    return { kind: 'transient', unreached: true };
   } finally {
     clearTimeout(timer);
   }
@@ -487,13 +552,18 @@ function writeAll(username: string, links: LinkItem[], patch: ExtractionPatch): 
 }
 
 // Record a terminal outcome with no fields — the "we never got a usable page" write.
+// `reason` rides on the facet as a passthrough field (INSECURE_HTTP_REASON).
 function settle(
   username: string,
   links: LinkItem[],
   tier: DeviceExtractionTier,
   status: ExtractVerdict,
+  reason?: string,
 ): Promise<unknown> {
-  return writeAll(username, links, { facet: 'titleImage', state: newFacet(status, tier) });
+  return writeAll(username, links, {
+    facet: 'titleImage',
+    state: newFacet(status, tier, reason ? { reason } : undefined),
+  });
 }
 
 // A scratch location for one in-transit image. Under the cache dir on purpose (transient by

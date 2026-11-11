@@ -108,6 +108,28 @@ export function openableUrl(url: string): string | undefined {
   }
 }
 
+// The `https://` twin of an `http://` address — what the phone apps try FIRST for a
+// link saved as plain HTTP, because their release builds cannot make a plain-HTTP
+// request at all: Android release builds forbid cleartext traffic and iOS's App
+// Transport Security refuses it (docs/link-extraction.md, _plain-HTTP links on a
+// phone_). Most sites that still get saved as `http://` answer on `https://` too, so the
+// upgrade is what gets them a title and a preview.
+//
+// Undefined when there is nothing to upgrade: not `http:`, or an EXPLICIT port — a
+// server on `:8080` speaks plain HTTP there, and the same port over TLS is a different
+// question the address doesn't answer.
+export function httpsUpgradeOf(url: string): string | undefined {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return undefined;
+  }
+  if (parsed.protocol !== 'http:' || parsed.port !== '') return undefined;
+  parsed.protocol = 'https:';
+  return parsed.toString();
+}
+
 // Where the Internet Archive's Wayback Machine keeps its captures of this address —
 // the row menu's and the reader's "Wayback Machine" exit, for a page that has changed
 // or gone. `savedAt` (the link's `createdAt`) goes in as the 14-digit UTC stamp

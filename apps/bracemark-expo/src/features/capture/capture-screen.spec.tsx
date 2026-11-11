@@ -23,8 +23,11 @@ const mockUpdatePreview = jest.fn(async (_link: unknown, _input: unknown) => ({
 const mockShowPaywall = jest.fn();
 const mockInject = jest.fn();
 let webviewProps: {
+  source: { uri: string };
   onNavigationStateChange: (nav: { url: string; loading: boolean }) => void;
   onMessage: (event: { nativeEvent: { data: string } }) => void;
+  onLoadStart: () => void;
+  onError: () => void;
 };
 
 jest.mock('react-native-webview', () => {
@@ -250,4 +253,36 @@ test('Update preview says when the title the user set still wins', async () => {
     collected: {},
   });
   expect(await screen.findByText('Preview updated. The title you set still shows.')).toBeTruthy();
+});
+
+// A link saved as plain HTTP. Release builds can't load one at all — Android forbids
+// cleartext, iOS's App Transport Security refuses it — so the https twin loads first
+// (docs/link-extraction.md, _plain-HTTP links on a phone_).
+test('loads a plain-HTTP link over https first, and the saved address after a load error', async () => {
+  mockLink = { ...LINK, url: 'http://example.com/post' };
+  render(<CaptureScreen linkId="l1" />);
+  await screen.findByTestId('capture-webview');
+  expect(webviewProps.source.uri).toBe('https://example.com/post');
+
+  act(() => webviewProps.onError());
+  expect(webviewProps.source.uri).toBe('http://example.com/post');
+});
+
+// ⚠ The WebView then shows its own error page. Reading it can only fail, and the
+// failure's "try again" can't help — measured on an Android release build, where a
+// plain-HTTP-only site answered both taps with an alert.
+test('a page that didn’t load: both buttons off, and the line says why', async () => {
+  await onPage();
+  act(() => webviewProps.onError());
+  expect(keep().props.accessibilityState?.disabled).toBe(true);
+  expect(preview().props.accessibilityState?.disabled).toBe(true);
+  expect(
+    screen.getByText('This page didn’t load, so there’s nothing to update or keep from it.'),
+  ).toBeTruthy();
+  fireEvent.press(preview());
+  expect(mockInject).not.toHaveBeenCalled();
+
+  // A new load clears it — the positive control.
+  act(() => webviewProps.onLoadStart());
+  expect(preview().props.accessibilityState?.disabled).toBeFalsy();
 });

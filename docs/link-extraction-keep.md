@@ -593,8 +593,10 @@ and Android's WebView has its own `CookieManager`, apart from Chrome's. So, in o
    says. The page loads on every plan — a preview is free — and only _Keep read
    mode_ is gated, marked Plus and opening the upgrade on a free account. A locked
    list's page stays unloaded; both actions are live only while the WebView is on
-   the link's own page (`canonicalUrlKey`), the address the page reports with its
-   answer is checked again, and the page re-checks it before every image fetch.
+   the link's own page (`canonicalUrlKey`) and only while the page actually loaded
+   (a failed load shows the WebView's own error page, so both go off and the screen
+   says the page didn't load), the address the page reports with its answer is
+   checked again, and the page re-checks it before every image fetch.
    The conversation is one injected request at a time, each with a fresh nonce
    its answers must echo (`features/capture/use-page-capture.ts`, the protocol in
    `@stxapps/shared` `reader/page-capture.ts`); the injected script is a second

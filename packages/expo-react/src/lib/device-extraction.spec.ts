@@ -614,3 +614,91 @@ describe('runDeviceTitleImageBatch', () => {
     expect(queued.some(({ path }) => path.startsWith(LINKS_PREFIX))).toBe(false);
   });
 });
+
+// A link saved as plain HTTP. This app's release builds can't make a plain-HTTP request
+// (Android forbids cleartext; iOS's App Transport Security refuses it), so the https
+// twin is tried first, and a link the device can reach over neither stops being retried
+// HERE — but only here (docs/link-extraction.md, _plain-HTTP links on a phone_).
+describe('plain-HTTP links', () => {
+  const run = (url: string) =>
+    runDeviceTitleImageBatch(USER, [linkItem('l_1', url)], TIER, { optedIn: true });
+
+  it('tries the https twin first, and keeps it when it is the page', async () => {
+    routes({ 'https://example.com/a': () => html('<title>Over TLS</title>') });
+
+    await run('http://example.com/a');
+
+    expect(requestedUrls()).toEqual(['https://example.com/a']);
+    expect((await readExtraction('l_1'))?.title).toBe('Over TLS');
+    expect((await facetOf('l_1'))?.status).toBe('done');
+  });
+
+  // A debug build, or a host on the user's own network, can still reach plain HTTP.
+  it('falls back to the saved address when the https twin isn’t the page', async () => {
+    routes({
+      'https://example.com/a': () => new Response('nope', { status: 404 }),
+      'http://example.com/a': () => html('<title>Plain</title>'),
+    });
+
+    await run('http://example.com/a');
+
+    expect(requestedUrls()).toEqual(['https://example.com/a', 'http://example.com/a']);
+    expect((await readExtraction('l_1'))?.title).toBe('Plain');
+  });
+
+  // ⚠ The https 404 is a different URL's answer. Settled `permanent`, it would stop every
+  // device — the server path, which fetches plain HTTP fine, included.
+  it('never settles the link permanent on the strength of the https twin', async () => {
+    mockConnected = true;
+    routes({ 'https://example.com/a': () => new Response('nope', { status: 404 }) });
+
+    await run('http://example.com/a');
+
+    expect((await facetOf('l_1'))?.status).toBe('failed');
+  });
+
+  // Online, and reached over neither: one moment can be an outage, so the tag — which
+  // stops this device asking — waits for the third failure in a row. Still `failed`, so
+  // a client that CAN fetch it (the web app's server path) keeps retrying.
+  it('tags the third failure as insecure-http, still a transient failure', async () => {
+    mockConnected = true;
+    routes({});
+
+    await run('http://example.com/a');
+    await run('http://example.com/a');
+    expect((await facetOf('l_1')) as { reason?: string }).not.toHaveProperty('reason');
+
+    await run('http://example.com/a');
+    expect(await facetOf('l_1')).toMatchObject({ status: 'failed', reason: 'insecure-http' });
+  });
+
+  // The positive control for the tag: an https link that can't be reached is an ordinary
+  // outage, retried on its backoff on every device.
+  it('never tags a link that is https already', async () => {
+    mockConnected = true;
+    routes({});
+
+    for (let i = 0; i < 3; i++) await run('https://example.com/a');
+
+    expect(await facetOf('l_1')).not.toHaveProperty('reason');
+  });
+
+  // A plain-HTTP og:image on a page that loaded: unreachable over both, it would be a
+  // transient failure retried daily for good — on a link whose title already landed.
+  it('settles title-only when a plain-HTTP preview image can’t be had', async () => {
+    mockConnected = true;
+    routes({
+      'https://example.com/a': () =>
+        html('<title>T</title><meta property="og:image" content="http://img.example/p.png">'),
+    });
+
+    await run('https://example.com/a');
+
+    expect(requestedUrls()).toEqual([
+      'https://example.com/a',
+      'https://img.example/p.png',
+      'http://img.example/p.png',
+    ]);
+    expect(await facetOf('l_1')).toMatchObject({ status: 'done' });
+  });
+});

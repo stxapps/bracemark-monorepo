@@ -34,7 +34,11 @@ import {
 import { getDb } from './db';
 import { putItemsUnqueued } from './item-store';
 import { toItemRecord } from './projection';
-import { readExtractionFacetCounts, readRawPendingTitleImageCount } from './queries';
+import {
+  readExtractionFacetCounts,
+  readLinksPendingTitleImageForLinkPaths,
+  readRawPendingTitleImageCount,
+} from './queries';
 import { seedNewAccount } from './sync-store';
 
 // The one seam that would reach native sqlite — everything above it (getDb, the PRAGMA,
@@ -72,10 +76,14 @@ function seedLink(id: string, listId: string = MY_LIST_ID): Promise<string[]> {
 // title nor an imageId is the NORMAL outcome for a page carrying no og: tags, and it
 // must still count as done — the facet map is the sole authority, never the presence of
 // a title (docs/link-extraction.md — _the extraction entity_).
-function seedFacet(id: string, status: 'done' | 'failed' | 'permanent'): Promise<string[]> {
+function seedFacet(
+  id: string,
+  status: 'done' | 'failed' | 'permanent',
+  extra?: Record<string, unknown>,
+): Promise<string[]> {
   const extraction: Extraction = {
     id,
-    facets: { titleImage: newFacet(status, 'expo:fg') },
+    facets: { titleImage: newFacet(status, 'expo:fg', extra) },
     createdAt: 1000,
     updatedAt: 1000,
   };
@@ -225,5 +233,43 @@ describe('readRawPendingTitleImageCount', () => {
     await seedFacet('b', 'permanent');
 
     expect(await readRawPendingTitleImageCount()).toBe(0);
+  });
+});
+
+// A plain-HTTP link this device reached over neither https nor http, several times:
+// still `failed` in the synced state (a client that can fetch it retries it), but this
+// device won't — so it isn't picked, and it's counted as won't-retry here
+// (docs/link-extraction.md, _plain-HTTP links on a phone_).
+describe('a plain-HTTP link this device cannot fetch', () => {
+  const INSECURE = { reason: 'insecure-http' };
+
+  it('is never picked by this device, however long it has cooled', async () => {
+    await seedLink('a');
+    await seedFacet('a', 'failed', INSECURE);
+    await seedLink('b');
+    await seedFacet('b', 'failed');
+
+    const later = Date.now() + 365 * 24 * 60 * 60 * 1000;
+    const picked = await readLinksPendingTitleImageForLinkPaths(
+      [pathFromId('a', LINKS_PREFIX), pathFromId('b', LINKS_PREFIX)],
+      later,
+    );
+
+    // The untagged failure is the positive control: past its backoff, it IS picked.
+    expect(picked.map((link) => link.url)).toEqual(['https://example.com/b']);
+  });
+
+  it('counts as won’t-retry, live and trashed alike, and the buckets still sum', async () => {
+    await seedLink('a');
+    await seedFacet('a', 'failed', INSECURE);
+    await seedLink('b');
+    await seedFacet('b', 'failed');
+    await seedLink('t', TRASH_ID);
+    await seedFacet('t', 'failed', INSECURE);
+
+    const counts = await readExtractionFacetCounts();
+
+    expect(counts).toEqual({ done: 0, pending: 0, failedTransient: 1, failedPermanent: 1 });
+    expect(counts.done + counts.pending + counts.failedTransient + counts.failedPermanent).toBe(2);
   });
 });

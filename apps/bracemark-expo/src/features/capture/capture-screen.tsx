@@ -17,7 +17,13 @@ import {
   usePagePreview,
 } from '@stxapps/expo-react';
 import { LOCK_COPY } from '@stxapps/react';
-import { canonicalUrlKey, hostFromText, openableUrl, PLAN_LABELS } from '@stxapps/shared';
+import {
+  canonicalUrlKey,
+  hostFromText,
+  httpsUpgradeOf,
+  openableUrl,
+  PLAN_LABELS,
+} from '@stxapps/shared';
 
 import { ErrorText } from '../../components/error-text';
 import { LockPane } from '../../components/lock-pane';
@@ -74,6 +80,7 @@ const StyledSafeAreaView = withUniwind(SafeAreaView);
 const NOTICE = {
   noArticle: 'No article on this page to keep as text.',
   offPage: 'Go back to the saved page to update its preview or keep a copy.',
+  loadFailed: 'This page didn’t load, so there’s nothing to update or keep from it.',
 } as const;
 const FAILURE = {
   keep: 'Could not keep read mode. Please try again.',
@@ -126,18 +133,42 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
   const [kept, setKept] = useState(false);
   const [notice, setNotice] = useState('');
   const [failure, setFailure] = useState('');
+  // Set when the https twin of a plain-HTTP link failed to load (see `source` below).
+  const [secureFailed, setSecureFailed] = useState(false);
+  // Set when the page itself failed to load — no https twin left to try. Both actions
+  // read the page, and a WebView that failed shows its own error page instead: reading
+  // that would answer "couldn't" at best, and a tap that can only fail is a dead end
+  // ("Please try again" can't help a page this build can't open). So the buttons go off
+  // and the status line says why (docs/accessibility.md, _a `disabled` button says
+  // nothing either_). Any new load clears it.
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const settled = link !== undefined && extraction !== undefined && lockStatus === 'ready';
   const locked = settled && link !== null && isListLocked(link.listId);
   const entitled = entitlements.keptCopies;
   const href = link ? openableUrl(link.url) : undefined;
+  // A plain-HTTP link loads over `https://` FIRST: this app's release builds can't load a
+  // plain-HTTP page at all — Android forbids cleartext, iOS's App Transport Security
+  // refuses it — and most such sites answer on https (docs/link-extraction.md,
+  // _plain-HTTP links on a phone_). If that load fails, the saved address is tried, which
+  // a debug build and a local host can still reach. `canonicalUrlKey` treats the two
+  // schemes as one page, so the buttons stay live on either.
+  const secureHref = href ? httpsUpgradeOf(href) : undefined;
+  const sourceUri = secureHref && !secureFailed ? secureHref : href;
+  const fallBackFromSecure = () => {
+    if (sourceUri === secureHref) setSecureFailed(true);
+  };
+  const onLoadError = () => {
+    if (sourceUri === secureHref) setSecureFailed(true);
+    else setLoadFailed(true);
+  };
   const host = link ? hostFromText(link.url) : '';
   const isLinkPage = (url: string | null | undefined): boolean =>
     Boolean(link && url) &&
     canonicalUrlKey(url as string) !== null &&
     canonicalUrlKey(url as string) === canonicalUrlKey((link as LinkItem).url);
   const onLinkPage = isLinkPage(currentUrl);
-  const ready = onLinkPage && !loading && busy === null;
+  const ready = onLinkPage && !loading && !loadFailed && busy === null;
 
   const keep = async () => {
     if (!entitled) {
@@ -224,7 +255,7 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
         <WebView
           ref={webview}
           testID="capture-webview"
-          source={{ uri: href }}
+          source={{ uri: sourceUri as string }}
           // `style`, not `className`: WebView is a composite, not a core host, so
           // Uniwind's className doesn't reach it (the expo-image note in link-media).
           style={{ flex: 1 }}
@@ -237,6 +268,13 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
             setLoading(nav.loading);
           }}
           onMessage={page.onMessage}
+          onLoadStart={() => setLoadFailed(false)}
+          onError={onLoadError}
+          // The https twin answered, but not with the page (a default vhost's 404, a
+          // certificate the server only half has): the saved address is the page.
+          onHttpError={(event) => {
+            if (event.nativeEvent.statusCode >= 400) fallBackFromSecure();
+          }}
         />
         <View className="gap-2 border-t border-border px-4 py-3">
           <View className="flex-row gap-2">
@@ -287,7 +325,8 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
             <ErrorText className="text-center text-xs">{failure}</ErrorText>
           ) : (
             <Text className="text-center text-xs text-muted-foreground" role="status">
-              {notice || (!onLinkPage && !loading ? NOTICE.offPage : '')}
+              {notice ||
+                (loadFailed ? NOTICE.loadFailed : !onLinkPage && !loading ? NOTICE.offPage : '')}
             </Text>
           )}
         </View>

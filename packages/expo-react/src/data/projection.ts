@@ -20,6 +20,8 @@ import {
   EXTRACTIONS_PREFIX,
   extractionSchema,
   FILES_PREFIX,
+  INSECURE_HTTP_REASON,
+  isInsecureHttpFailure,
   LINKS_PREFIX,
   linkSchema,
   LISTS_PREFIX,
@@ -150,6 +152,12 @@ export function toItemRecord(path: string, updatedAt: number, data?: Uint8Array)
       const statuses: string[] = [];
       for (const [facet, state] of Object.entries(extraction.facets)) {
         if (state?.status) statuses.push(`${state.status}:${facet}`);
+        // A SECOND token, beside `failed:<facet>`, for a plain-HTTP link this kind of
+        // client cannot fetch (INSECURE_HTTP_REASON, shared sync/extraction.ts): the
+        // facet is still `failed` — synced, retried by a client that can — but on this
+        // device it won't be, so the Settings counts move it from "will retry" to "won't
+        // retry" (queries.ts readExtractionFacetCounts) without a payload decode.
+        if (isInsecureHttpFailure(state)) statuses.push(`${INSECURE_HTTP_REASON}:${facet}`);
       }
       record.itemFacetStatuses = statuses;
     }

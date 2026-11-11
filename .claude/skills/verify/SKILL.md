@@ -434,6 +434,27 @@ ad-hoc "show me my change" loop.
   foreground, so background them or use a second terminal). App id is
   `com.bracemark.app`. Both native dirs are prebuilt already — only re-run
   `npm run prebuild` after an `app.config.ts`/plugin/native-dep change.
+- **⚠ Check that what is installed IS a dev build before reading anything off it.**
+  The release legs (`e2e:ios:*`/`e2e:android:*` release runs, `android:release`) install
+  a release build under the same `com.bracemark.app`, and it stays there. It launches,
+  signs in and saves like the real thing — but it runs the JS bundled into it on the day
+  it was built, against the api it was built for (staging, often), and it cannot make a
+  plain-HTTP request. Every change you are verifying is simply absent, and what you see
+  reads as a bug in it. One check per platform:
+
+  ```sh
+  adb shell dumpsys package com.bracemark.app | grep -E 'flags=\[|lastUpdateTime'
+  # a dev build has DEBUGGABLE in flags=[ … ]; no DEBUGGABLE = a release build
+  ```
+
+  On either platform the decisive tell is Metro's own log: after `ios:open` /
+  `android:open` it prints `iOS Bundled …` / `Android Bundled …`. No such line means
+  the app did not ask this Metro for anything. A release build's receipt, with the api
+  it was built for, is in `e2e/.artifacts/releases/<tier>-<platform>-<time>/release.json`.
+  Replacing one with a dev build needs `adb uninstall com.bracemark.app` first (the
+  signatures differ) — which also drops that install's data, so it is a deliberate step:
+  say so, and the user re-runs the release leg when they need it back.
+
 - **Android additionally needs `npm run expo:android:reverse`** once per emulator boot,
   unless an `expo:android:emulator:*` script booted it (those set the mappings
   themselves once boot completes), before anything hits the api — it is `adb reverse` for 8081 (Metro), 8787 (api)
