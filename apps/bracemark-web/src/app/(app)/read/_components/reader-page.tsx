@@ -362,8 +362,8 @@ function EmptyCopies({
   return (
     <Notice title="No copy of this page yet">
       <p>
-        A kept copy is the page’s text in read mode, and a screenshot of how it looked — yours to
-        read even if the page changes or disappears.{' '}
+        A kept copy is the page’s text in read mode, and a screenshot of what was on screen when you
+        saved it — yours to read even if the page changes or disappears.{' '}
         {serverAvailable
           ? 'Keep its read mode now — the preview service you turned on in Settings fetches it for you. To keep a screenshot too, open the page and save it with the Bracemark browser extension.'
           : 'Copies are taken from the page itself: open it, then save it with the Bracemark browser extension.'}

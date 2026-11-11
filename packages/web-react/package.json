@@ -22,6 +22,16 @@
       "import": "./src/lib/reader-doc-from-page.ts",
       "default": "./src/lib/reader-doc-from-page.ts"
     },
+    "./lib/page-meta": {
+      "types": "./src/lib/page-meta.ts",
+      "import": "./src/lib/page-meta.ts",
+      "default": "./src/lib/page-meta.ts"
+    },
+    "./lib/webview-capture": {
+      "types": "./src/lib/webview-capture.ts",
+      "import": "./src/lib/webview-capture.ts",
+      "default": "./src/lib/webview-capture.ts"
+    },
     "./package.json": "./package.json"
   },
   "dependencies": {

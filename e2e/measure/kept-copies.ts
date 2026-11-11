@@ -37,9 +37,9 @@ import { KEPT_COPY_PAGES, type MeasuredPage, type PageKind } from './kept-copies
 // a storage number printed for buyers has to be read against both. It takes the
 // extension's path too — the shared `selectTitleImage` over the page's meta, the
 // fetch from the page's own context, `resizeImage` at the preview defaults. The
-// meta COLLECTOR is a copy of the one inlined in the extension's
-// `captureTitleImage` (utils/capture.ts), since an injected function can't be
-// imported; keep the two in step.
+// meta COLLECTOR is the extension's own too — web-react's `collectPageMeta`, which it
+// injects as a bundled file (entrypoints/page-meta.ts) and expo's capture screen runs
+// in its WebView.
 //
 // THE ARTICLE'S IMAGES are measured with the read-mode copy that keeps them
 // (docs/link-extraction-keep.md, _images in read mode_), again on the extension's
@@ -88,42 +88,17 @@ import { encodeReaderDoc } from ${file('packages/web-react/src/lib/reader-doc-by
 import { readerCaptureFromPage } from ${file('packages/web-react/src/lib/reader-doc-from-page.ts')};
 import { encodeReaderImage } from ${file('packages/web-react/src/lib/reader-image.ts')};
 import { resizeImage } from ${file('packages/web-react/src/lib/resize-image.ts')};
+import { collectPageMeta } from ${file('packages/web-react/src/lib/page-meta.ts')};
 import { selectTitleImage, sniffImageMime } from "@stxapps/shared";
 
 // The extension"s cap on a preview image carried back from the page (capture.ts).
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
-function collectMeta() {
-  const collected = {};
-  const setMeta = (key, content) => {
-    if (!key || !content) return;
-    const value = content.trim();
-    if (value === "") return;
-    switch (key.toLowerCase()) {
-      case "og:title": collected.ogTitle ??= value; break;
-      case "og:image": collected.ogImage ??= value; break;
-      case "og:image:url": collected.ogImageUrl ??= value; break;
-      case "og:image:secure_url": collected.ogImageSecure ??= value; break;
-      case "twitter:image":
-      case "twitter:image:src": collected.twitterImage ??= value; break;
-      default: break;
-    }
-  };
-  document.querySelectorAll("meta").forEach((el) => {
-    setMeta(el.getAttribute("property"), el.getAttribute("content"));
-    setMeta(el.getAttribute("name"), el.getAttribute("content"));
-  });
-  const imageSrc = document.querySelector("link[rel~=image_src]")?.getAttribute("href")?.trim();
-  if (imageSrc) collected.imageSrc = imageSrc;
-  if (document.title.trim() !== "") collected.docTitle = document.title;
-  return collected;
-}
-
 globalThis.__bracemarkMeasure = {
   // null: the page names no image. { bytes: null }: it names one this path can’t
   // keep (refused, too large, not an image) — the extension stores nothing then.
   async preview() {
-    const { imageUrl } = selectTitleImage(collectMeta(), new URL(location.href));
+    const { imageUrl } = selectTitleImage(collectPageMeta(document).collected, new URL(location.href));
     if (!imageUrl) return null;
     try {
       const res = await fetch(imageUrl);

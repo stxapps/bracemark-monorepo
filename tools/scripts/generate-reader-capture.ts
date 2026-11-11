@@ -10,9 +10,15 @@
 //       Metro, no imports) whose `ExtensionPreprocessingJS` is a GLOBAL-object
 //       property, hence the `var`.
 //
-//   apps/bracemark-expo/src/features/capture/reader-capture-script.generated.ts
-//       The same bundle as a string, for expo's capture screen to inject into its
-//       WebView; it posts the copy back through `window.ReactNativeWebView`.
+//   apps/bracemark-expo/src/features/capture/page-capture-script.generated.ts
+//       A SECOND, larger bundle, for expo's capture screen to inject into its WebView:
+//       the same converter, plus the page-metadata collector and the in-page image
+//       fetch and encoders (@stxapps/web-react/lib/webview-capture). It answers one
+//       request per injection through `window.ReactNativeWebView` — the protocol is
+//       @stxapps/shared reader/page-capture.ts. Two bundles, not one, because
+//       preprocessing.js runs in EVERY page shared from Safari before the sheet opens
+//       and must stay small (docs/share-sheet.md), while the capture screen's script
+//       runs only on a tap.
 //
 // Both are CHECKED IN and generated, never hand-edited. Each carries a hash of the
 // sources it was built from, and web-react's reader-capture-generated.spec.ts fails
@@ -31,12 +37,21 @@ import { build } from 'esbuild';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-// What the bundle's behaviour depends on. The spec hashes the same list.
+// What the bundles' behaviour depends on. The spec hashes the same list.
 export const READER_CAPTURE_HASH_INPUTS = [
   'packages/web-react/src/lib/reader-doc-from-page.ts',
+  'packages/web-react/src/lib/webview-capture.ts',
+  'packages/web-react/src/lib/page-meta.ts',
+  'packages/web-react/src/lib/reader-images.ts',
+  'packages/web-react/src/lib/reader-image.ts',
+  'packages/web-react/src/lib/resize-image.ts',
   'packages/shared/src/reader/reader-doc-from-dom.ts',
   'packages/shared/src/reader/reader-doc.ts',
   'packages/shared/src/reader/reader-doc-core.ts',
+  'packages/shared/src/reader/reader-images.ts',
+  'packages/shared/src/reader/page-capture.ts',
+  'packages/shared/src/image/sniff.ts',
+  'packages/shared/src/image/preview.ts',
   'node_modules/@mozilla/readability/package.json',
   'tools/scripts/generate-reader-capture.ts',
 ];
@@ -50,46 +65,48 @@ export function readerCaptureSourceHash(root = ROOT): string {
   return hash.digest('hex').slice(0, 16);
 }
 
-// The copy is handed across a process boundary (Safari → the share extension, or the
-// WebView → JS); past this many characters of JSON it is dropped rather than sent.
-// Far above any article (READER_DOC_MAX_CHARS bounds the text at 1M), it only binds
-// on a pathological page — and the share extension has ~120 MB to work in.
-const MAX_PAYLOAD_CHARS = 3_000_000;
-
-// ONE function, returning the copy as JSON TEXT — serialised once, here, in the page's
-// own process. Both scripts want text: the WebView's message is a string, and the
-// share extension must not be handed the copy as an object graph. Safari gives its
-// result to the share extension as a property list, which becomes the React root's
-// initial props: as an object the copy is thousands of small allocations three times
-// over (an NSDictionary, the surface's folly::dynamic, the JS heap) for the life of a
-// sheet that only ever writes it to a file, in a process iOS kills at 120 MB. As text
-// it is one buffer each (docs/share-sheet.md, _what the sheet does and doesn't do_).
-// The length the cap needs is the same string's, so nothing is serialised twice.
+// The preprocessing file's: ONE function, returning the copy as JSON TEXT — serialised
+// once, here, in the page's own process. Safari gives its result to the share extension
+// as a property list, which becomes the React root's initial props: as an object the
+// copy is thousands of small allocations three times over (an NSDictionary, the
+// surface's folly::dynamic, the JS heap) for the life of a sheet that only ever writes it
+// to a file, in a process iOS kills at 120 MB. As text it is one buffer each
+// (docs/share-sheet.md, _what the sheet does and doesn't do_). The length the cap needs
+// is the same string's, so nothing is serialised twice.
 //
 // What it serialises is the CAPTURE, \`{ doc, images }\`: the document, and beside it the
-// address of each figure the walker gave a key to (the function keeps its first name;
-// both scripts and their readers know it by it). The app fetches those addresses
-// natively when the account keeps images, and settles the document against what it
-// kept before storing anything (expo-react data/store-read-mode.ts) — the list never
-// reaches a stored copy. Addresses are a few dozen short strings; the cap is unmoved.
-const ENTRY = `
+// address of each figure the walker gave a key to; past READER_CAPTURE_MAX_PAYLOAD_CHARS
+// it hands over nothing (reader-doc-core.ts). The app fetches those addresses natively
+// when the account keeps images, and settles the document against what it kept before
+// storing anything (expo-react data/store-read-mode.ts) — the list never reaches a stored
+// copy. Addresses are a few dozen short strings; the cap is unmoved.
+const PREPROCESSING_ENTRY = `
 import { readerCaptureFromPage } from '@stxapps/web-react/lib/reader-doc-from-page';
+import { READER_CAPTURE_MAX_PAYLOAD_CHARS } from '@stxapps/shared/reader/reader-doc-core';
 globalThis.__bracemarkReaderDocJson = function () {
   try {
     var capture = readerCaptureFromPage(document);
     if (!capture) return null;
     var json = JSON.stringify(capture);
-    return json.length > ${MAX_PAYLOAD_CHARS} ? null : json;
+    return json.length > READER_CAPTURE_MAX_PAYLOAD_CHARS ? null : json;
   } catch (e) {
     return null;
   }
 };
 `;
 
-async function bundle(): Promise<string> {
+// The capture screen's: one global the per-request tail calls (pageCaptureScript, in the
+// generated module below). Defined again on every injection, so a page the user has
+// navigated to since the last request still has it.
+const CAPTURE_ENTRY = `
+import { runPageCapture } from '@stxapps/web-react/lib/webview-capture';
+globalThis.__bracemarkPageCapture = runPageCapture;
+`;
+
+async function bundle(entry: string): Promise<string> {
   const result = await build({
     stdin: {
-      contents: ENTRY,
+      contents: entry,
       resolveDir: ROOT,
       loader: 'ts',
       sourcefile: 'reader-capture-entry.ts',
@@ -112,7 +129,8 @@ export async function renderReaderCapture(): Promise<{
   captureModule: string;
 }> {
   const hash = readerCaptureSourceHash();
-  const code = await bundle();
+  const code = await bundle(PREPROCESSING_ENTRY);
+  const captureCode = await bundle(CAPTURE_ENTRY);
   const banner = `GENERATED by tools/scripts/generate-reader-capture.ts — do not edit. source-hash: ${hash}`;
 
   const preprocessing = `// ${banner}
@@ -147,31 +165,35 @@ var ExtensionPreprocessingJS = {
 };
 `;
 
-  // The message is assembled around the copy's own text rather than by a second
-  // JSON.stringify over the parsed object: the same `{ type, doc }` the capture
-  // screen has always parsed, `doc` null when there is no copy — and otherwise the
-  // capture, which storeReadModeCopy takes as it is.
-  const injected = `${code}
-;(function () {
-  var json = null;
-  try {
-    json = globalThis.__bracemarkReaderDocJson();
-  } catch (e) {}
-  window.ReactNativeWebView.postMessage(
-    '{"type":"bracemark-read-mode","doc":' + (typeof json === 'string' ? json : 'null') + '}'
-  );
-})();
-true;`;
-
+  // The request is spliced in as JSON, which is a JS expression, and the bundle's global
+  // answers through the WebView's bridge — taken once, before the page's own scripts get
+  // another turn. Every answer carries the request's nonce (shared reader/page-capture.ts).
   const captureModule = `// ${banner}
 /* eslint-disable */
-// prettier-ignore
-export const READER_CAPTURE_SOURCE_HASH = '${hash}';
+import type { PageCaptureRequest } from '@stxapps/shared';
 
-// Inject into a WebView showing the page; it posts \`{ type: 'bracemark-read-mode', doc }\`
-// back through window.ReactNativeWebView, \`doc\` null when the page is not an article.
 // prettier-ignore
-export const READER_CAPTURE_SCRIPT: string = ${JSON.stringify(injected)};
+export const PAGE_CAPTURE_SOURCE_HASH = '${hash}';
+
+// prettier-ignore
+const PAGE_CAPTURE_BUNDLE: string = ${JSON.stringify(captureCode)};
+
+// The script to inject into the WebView for one request: the bundle (Readability, the
+// block converter, the page-metadata collector, the in-page image fetch and encoders —
+// @stxapps/web-react/lib/webview-capture), then a call that answers \`request\` through
+// window.ReactNativeWebView. features/capture/use-page-capture.ts reads the answers.
+export function pageCaptureScript(request: PageCaptureRequest): string {
+  return (
+    PAGE_CAPTURE_BUNDLE +
+    ';(function (request) {' +
+    'var bridge = window.ReactNativeWebView;' +
+    'if (!bridge || typeof globalThis.__bracemarkPageCapture !== "function") return;' +
+    'globalThis.__bracemarkPageCapture(request, function (message) { bridge.postMessage(message); });' +
+    '})(' +
+    JSON.stringify(request) +
+    ');true;'
+  );
+}
 `;
 
   return { preprocessing, captureModule };
@@ -179,7 +201,7 @@ export const READER_CAPTURE_SCRIPT: string = ${JSON.stringify(injected)};
 
 export const PREPROCESSING_PATH = 'apps/bracemark-expo/share-extension/preprocessing.js';
 export const CAPTURE_MODULE_PATH =
-  'apps/bracemark-expo/src/features/capture/reader-capture-script.generated.ts';
+  'apps/bracemark-expo/src/features/capture/page-capture-script.generated.ts';
 
 async function main(): Promise<void> {
   const { preprocessing, captureModule } = await renderReaderCapture();

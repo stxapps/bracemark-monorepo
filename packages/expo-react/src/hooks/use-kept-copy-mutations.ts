@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
 import { type KeptCopyFacet, removeKeptCopy } from '../data/mutations';
 import { linkIdOf, type LinkItem, readSettingsGeneral } from '../data/queries';
-import { storeReadModeCopy } from '../data/store-read-mode';
+import { storeReadModeCopy, type StoreReadModeOptions } from '../data/store-read-mode';
 
 // Keeping and removing copies on expo. Removal is web-react's useKeptCopyMutations
 // on expo's store — never gated on the plan, like reading. Keeping (`keepReadMode`)
@@ -18,8 +18,13 @@ const ALL_KEPT_COPIES: readonly KeptCopyFacet[] = ['readMode', 'screenshot'];
 
 export interface KeptCopyMutations {
   // Store a read-mode copy taken from a live page on this device. Resolves whether
-  // it was stored (false for a payload that isn't a ReaderDoc).
-  keepReadMode: (link: LinkItem, doc: unknown) => Promise<boolean>;
+  // it was stored (false for a payload that isn't a ReaderDoc). `fetchFromPage` is the
+  // capture screen's in-page image fetch (data/store-read-mode.ts).
+  keepReadMode: (
+    link: LinkItem,
+    doc: unknown,
+    options?: Pick<StoreReadModeOptions, 'fetchFromPage'>,
+  ) => Promise<boolean>;
   removeCopy: (link: LinkItem, facet: KeptCopyFacet) => Promise<boolean>;
   removeAllCopies: (links: readonly LinkItem[]) => Promise<number>;
 }
@@ -54,7 +59,7 @@ export function useKeptCopyMutations(): KeptCopyMutations {
   );
 
   const keepReadMode = useCallback(
-    async (link: LinkItem, doc: unknown) => {
+    async (link: LinkItem, doc: unknown, options?: Pick<StoreReadModeOptions, 'fetchFromPage'>) => {
       if (!username) throw new Error('useKeptCopyMutations: no active account');
       // Whether the copy keeps the article's images is the account's setting, read
       // from the STORE at the ask (a render's copy answers the defaults until it
@@ -67,7 +72,10 @@ export function useKeptCopyMutations(): KeptCopyMutations {
       } catch {
         images = false;
       }
-      const stored = await storeReadModeCopy(username, linkIdOf(link), doc, { images });
+      const stored = await storeReadModeCopy(username, linkIdOf(link), doc, {
+        images,
+        fetchFromPage: options?.fetchFromPage,
+      });
       if (stored) requestSync();
       return stored;
     },

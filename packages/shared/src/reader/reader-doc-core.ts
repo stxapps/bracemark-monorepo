@@ -23,6 +23,13 @@ export const READER_DOC_MAX_CHARS = 1_000_000;
 export const READER_TABLE_MAX_COLUMNS = 24;
 export const READER_TABLE_MAX_ROWS = 500;
 
+// The capture crosses a process boundary as JSON TEXT — Safari → the iOS share
+// extension, or a WebView → the app's JS — and past this many characters it is dropped
+// rather than sent. Far above any article (READER_DOC_MAX_CHARS bounds the text at 1M),
+// it only binds on a pathological page; the share extension has ~120 MB to work in.
+// One number for both generated scripts (tools/scripts/generate-reader-capture.ts).
+export const READER_CAPTURE_MAX_PAYLOAD_CHARS = 3_000_000;
+
 // --- images (docs/link-extraction-keep.md, _images in read mode_) -------------------
 //
 // The ceilings on the images a read-mode copy keeps — the capture's, like every cap

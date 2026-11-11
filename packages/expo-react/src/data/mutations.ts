@@ -379,6 +379,9 @@ export async function writeSettingsGeneral(
     linksLayout?: LinksLayout;
     serverExtraction?: boolean;
     deviceExtractionMode?: DeviceExtractionMode;
+    keepReadModeOnSave?: boolean;
+    keepReadModeImages?: boolean;
+    keepScreenshotOnSave?: boolean;
     theme?: ThemeState;
     sortOn?: LinkSortOn;
     sortOrder?: LinkSortOrder;

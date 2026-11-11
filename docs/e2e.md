@@ -4480,9 +4480,9 @@ for the preview. The capture quality is read out of the extension's
 frame (`web-crypto` `lib/blob.ts`), so it is what R2 stores and the quota counts.
 Two things are not the extension's, and neither moves a figure: the viewport
 comes from `page.screenshot` instead of `captureVisibleTab` (both are Chromium's
-compositor output, re-encoded the same way), and the preview's meta collector is
-a copy of the one inlined in `captureTitleImage`, because an injected function
-can't be imported. Keep that copy in step.
+compositor output, re-encoded the same way), and the page is a fresh profile.
+The preview's meta collector is the extension's own as well — web-react's
+`collectPageMeta`, which the extension injects as a bundled file.
 
 **The article's images** are measured with the read-mode copy that keeps them
 ([link-extraction-keep.md](./link-extraction-keep.md), _images in read mode_):

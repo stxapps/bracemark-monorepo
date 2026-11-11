@@ -6,13 +6,15 @@
 // (injected on demand — no persistent content script) and the screenshot via
 // `tabs.captureVisibleTab` (only callable from an extension context).
 //
-// An injected `func` is a dumb COLLECTOR, never a decider: what a page's title/image
+// What is injected is a dumb COLLECTOR, never a decider: what a page's title/image
 // MEAN is `@stxapps/shared` extract/select.ts's call, shared with the other extracting
 // tiers — see captureTitleImage's header for why that survives the page/bundle split.
 //
-// READ MODE is the exception to "an injected func": it needs Readability, so it is a
-// bundled FILE (entrypoints/read-mode.ts) injected by name — see captureReadMode. Its
-// images are then fetched one at a time, from the page, by fetchReaderImage.
+// Two collectors are bundled FILES injected by name rather than inline funcs, because
+// expo's capture screen runs the same code inside its WebView: the title/image
+// candidates (entrypoints/page-meta.ts) and read mode (entrypoints/read-mode.ts, which
+// needs Readability besides). Read mode's images are then fetched one at a time, from
+// the page, by fetchReaderImage.
 //
 // There is no page-copy capture. A serialized DOM without its stylesheets, images and
 // fonts isn't a copy of anything offline, and rendering it would request every remote
@@ -45,19 +47,21 @@ async function dataUrlToBytes(dataUrl: string): Promise<Uint8Array> {
 
 // --- titleImage --------------------------------------------------------------
 
+// Where WXT emits the unlisted script entrypoints/page-meta.ts — its name, at the root.
+export const PAGE_META_SCRIPT = '/page-meta.js';
+
 // COLLECT (in-page) → SELECT (here) → FETCH (in-page). Same three steps, and the same
-// middle step, as every other extracting client: the injected funcs are dumb collectors
-// filling `CollectedMeta`, and WHICH candidate wins is `selectTitleImage`'s call
+// middle step, as every other extracting client: the injected collector fills
+// `CollectedMeta` and decides nothing, and WHICH candidate wins is `selectTitleImage`'s call
 // (@stxapps/shared extract/select.ts), shared with bracemark-extractor's `HTMLRewriter` pass
 // (`html.ts`) and bracemark-expo's head scanner (`parse-html-head.ts`). That's what keeps a
 // tier upgrade an improvement rather than a change — `extension:fg` re-extracting a page
 // a `server` tier already saw must not rewrite `extraction.title`/`imageId` with a
 // DIFFERENT tag's value (docs/link-extraction.md — the extraction entity).
 //
-// Why the selection can't just happen in-page: `scripting.executeScript`'s `func` is
-// serialized into the page's world and can't reach bundle code. But its RESULT comes
-// back here, in the background, where the bundle is — so only the byte FETCH is truly
-// stuck in the page. And it is stuck there: `host_permissions` is the api origin only
+// Why the selection doesn't happen in-page: the collector's RESULT comes back here, in
+// the background, where `selectTitleImage` and the rest of the bundle are — so only the
+// byte FETCH is truly stuck in the page. And it is stuck there: `host_permissions` is the api origin only
 // (no `<all_urls>`, see wxt.config.ts), so a service-worker `fetch` of a third-party
 // image host gets no CORS exemption, while the page's own context usually can read it.
 // Hence the second injection, with the selected URL passed via `args`.
@@ -68,76 +72,12 @@ async function dataUrlToBytes(dataUrl: string): Promise<Uint8Array> {
 export async function captureTitleImage(
   tabId: number,
 ): Promise<{ title?: string; image?: Uint8Array }> {
+  // The collector is a bundled FILE (entrypoints/page-meta.ts → web-react
+  // `lib/page-meta.ts`), not an inline func, so expo's capture screen runs the very same
+  // one inside its WebView: one live-DOM collector, not two kept in step by hand.
   const [collection] = await browser.scripting.executeScript({
     target: { tabId },
-    func: () => {
-      const collected: CollectedMeta = {};
-
-      // The FIRST non-empty value for each key wins (head order ≈ page intent) — hence
-      // the document-order walk below rather than a per-key `querySelector`, which would
-      // impose a preference the other two collectors don't have. `property` (OpenGraph)
-      // and `name` (Twitter/legacy) are both read, since sites use either.
-      //
-      // `twitter:image:src` is the legacy spelling of `twitter:image` and aliases onto
-      // the same slot — a SPELLING, not a rank, which is why select.ts has no field for
-      // it. Keep this switch in step with html.ts / parse-html-head.ts: a tag one
-      // collector accepts and another drops is the same tier disagreement as a
-      // reordered preference chain.
-      //
-      // Blank stays absent, never '': select.ts's chains are `??`, so an empty string
-      // would win over the fallback behind it.
-      //
-      // Nothing here decodes character references, and nothing should: `getAttribute`
-      // and `document.title` are DOM reads, so `&rsquo;` is already `’` by the time we
-      // see it. That is the one thing this collector gets for free — the other two
-      // parse markup themselves and have to call `decodeHtmlEntities` (shared
-      // html/entities.ts) to reach the same value. Calling it HERE would decode a
-      // second time and turn a title that really displays `&amp;` into `&`.
-      const setMeta = (key: string | null, content: string | null): void => {
-        if (!key || !content) return;
-
-        const value = content.trim();
-        if (value === '') return;
-
-        switch (key.toLowerCase()) {
-          case 'og:title':
-            collected.ogTitle ??= value;
-            break;
-          case 'og:image':
-            collected.ogImage ??= value;
-            break;
-          case 'og:image:url':
-            collected.ogImageUrl ??= value;
-            break;
-          case 'og:image:secure_url':
-            collected.ogImageSecure ??= value;
-            break;
-          case 'twitter:image':
-          case 'twitter:image:src':
-            collected.twitterImage ??= value;
-            break;
-          default:
-            break;
-        }
-      };
-
-      document.querySelectorAll('meta').forEach((el) => {
-        setMeta(el.getAttribute('property'), el.getAttribute('content'));
-        setMeta(el.getAttribute('name'), el.getAttribute('content'));
-      });
-
-      const imageSrc = document
-        .querySelector('link[rel~="image_src"]')
-        ?.getAttribute('href')
-        ?.trim();
-      if (imageSrc) collected.imageSrc = imageSrc;
-      if (document.title.trim() !== '') collected.docTitle = document.title;
-
-      // `location.href` rides along as the base: it's the FINAL (post-redirect) URL,
-      // which is what resolves a relative og:image correctly and what the second
-      // injection re-checks against before fetching.
-      return { href: location.href, collected };
-    },
+    files: [PAGE_META_SCRIPT],
   });
 
   const page = collection?.result as { href: string; collected: CollectedMeta } | undefined;

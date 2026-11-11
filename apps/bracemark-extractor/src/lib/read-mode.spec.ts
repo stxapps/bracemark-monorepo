@@ -136,6 +136,14 @@ describe('readModeFromHtml', () => {
     ).toEqual(['https://example.com/blog/x']);
   });
 
+  // ⚠ Readability throws from inside its parse on some trees linkedom builds — an empty
+  // or bare-text body leaves no root element. A throw reached the route's catch-all as a
+  // TRANSIENT failure, asked again forever with the same answer; it is no article.
+  it('answers null, never a throw, for HTML Readability cannot walk', () => {
+    expect(readModeFromHtml('', FINAL)).toBeNull();
+    expect(readModeFromHtml(PROSE.repeat(3), FINAL)).toBeNull();
+  });
+
   it('answers null for a page with no article', () => {
     expect(readModeFromHtml('<html><body><div id="app"></div></body></html>', FINAL)).toBeNull();
     expect(readModeFromHtml('<html><body><p>Short.</p></body></html>', FINAL)).toBeNull();

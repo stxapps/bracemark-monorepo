@@ -34,7 +34,11 @@ export interface SettingMutations {
   // settings/general.enc + syncs, so every device honors the same choice.
   setServerExtraction: (enabled: boolean) => Promise<void>;
   // The synced kept-copies save setting — either half, or both.
-  setKeepOnSave: (patch: { readMode?: boolean; screenshot?: boolean }) => Promise<void>;
+  setKeepOnSave: (patch: {
+    readMode?: boolean;
+    readModeImages?: boolean;
+    screenshot?: boolean;
+  }) => Promise<void>;
   // Set the SYNCED links sort field / direction; writes settings/general.enc + syncs.
   // Global-only (no device variant), so no "Sync"/"Local" split like layout/theme.
   setSortOn: (sortOn: LinkSortOn) => Promise<void>;

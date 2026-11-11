@@ -64,12 +64,16 @@ export const PAYWALL_COPY: Record<
   },
   // Fired from the browser extension's saved screen (which opens the web app's
   // Subscription section instead of rendering this dialog — it has no paywall of
-  // its own) and from the web reader's empty state. The second sentence is the
-  // promise iap/plans.ts's `keptCopies` note makes: only TAKING a copy is gated.
+  // its own), from the web reader's empty state, and from expo's capture screen
+  // (_Keep read mode_ on a free account). The screenshot is scoped to the browser
+  // extension because this one string is read on a phone too, and the phone app
+  // takes no screenshot (docs/brand-assets.md, _only what ships_). The second
+  // sentence is the promise iap/plans.ts's `keptCopies` note makes: only TAKING a
+  // copy is gated.
   keptCopies: {
     plan: 'plus',
     title: 'Keep a copy',
     description:
-      'Keeping the text of a page in read mode, and a screenshot of how it looked, is a Plus feature. Copies you have already kept stay readable on every plan.',
+      'Keeping a copy of a page is a Plus feature — its text in read mode, and with the browser extension, a screenshot of what was on screen when you saved it. Copies you have already kept stay readable on every plan.',
   },
 };

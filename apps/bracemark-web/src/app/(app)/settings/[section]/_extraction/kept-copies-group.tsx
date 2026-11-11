@@ -20,12 +20,14 @@ import { SettingsGroup, SettingsNotice, SettingsRow } from '../../_components/se
 // question asked one step further — what does a save fetch and keep — and because a
 // section with two switches would be the thinnest page in Settings.
 //
-// What the copy must not claim: that THIS app takes copies. It can't — a copy is
-// taken from the page itself, which only the browser extension has open (the web
-// app can't fetch another site; the server path for read mode is not built). So the
-// description names the browser extension, and the setting is synced so the
-// browser extension picks it up wherever it is installed. Saying "when you save"
-// unqualified would promise a copy for a save made here, which never gets one.
+// What the copy must not claim: that a SAVE in this app takes a copy. It can't — a
+// copy on save is taken from the page itself, which only the browser extension has
+// open (the web app can't fetch another site; its server read mode is a per-link ask,
+// never a save's). So the description names the browser extension, and the setting is
+// synced so the browser extension picks it up wherever it is installed — and so does
+// the iOS app, whose share from Safari reads the on-save half (expo's twin,
+// features/settings/kept-copies-group.tsx). Saying "when you save" unqualified would
+// promise a copy for a save made here, which never gets one.
 //
 // On free the switches are shown OFF and disabled, with the upgrade beside them —
 // the same shape as Server previews' upgrade row — rather than hidden: the setting
@@ -49,7 +51,7 @@ export function KeptCopiesGroup() {
   return (
     <SettingsGroup
       title="Kept copies"
-      description="When you save a page with the Bracemark browser extension, it can also keep a copy of it from the open tab: the text in read mode, and a screenshot of how it looked. Read kept copies from a link’s menu. Saving here in the web app can’t keep a copy — the page isn’t open."
+      description="When you save a page with the Bracemark browser extension, it can also keep a copy of it from the open tab: the text in read mode, and a screenshot of what was on screen when you saved it. On an iPhone or iPad, a page you share from Safari to the Bracemark app keeps its read mode the same way. Read kept copies from a link’s menu. Saving here in the web app can’t keep a copy — the page isn’t open."
     >
       <SettingsRow
         title={

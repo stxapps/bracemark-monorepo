@@ -39,6 +39,13 @@ export interface SettingMutations {
   // un-gestured residual plus the per-host favicon cache. Synced, so a second phone
   // inherits the account-level trust decision rather than re-asking.
   setDeviceExtractionMode: (mode: DeviceExtractionMode) => Promise<void>;
+  // The SYNCED kept-copies setting — any of its halves (web-react's twin, verbatim).
+  // Synced, so a switch here changes what the browser extension keeps too.
+  setKeepOnSave: (patch: {
+    readMode?: boolean;
+    readModeImages?: boolean;
+    screenshot?: boolean;
+  }) => Promise<void>;
   // Set the SYNCED links sort field / direction; writes settings/general.enc + syncs.
   // Global-only (no device variant), so no "Sync"/"Local" split like layout/theme.
   setSortOn: (sortOn: LinkSortOn) => Promise<void>;
@@ -95,6 +102,19 @@ export function useSettingMutations(): SettingMutations {
     [username, requestSync],
   );
 
+  const setKeepOnSave = useCallback(
+    async (patch: { readMode?: boolean; readModeImages?: boolean; screenshot?: boolean }) => {
+      if (!username) throw new Error('useSettingMutations: no active account');
+      await writeSettingsGeneral(username, {
+        ...(patch.readMode !== undefined ? { keepReadModeOnSave: patch.readMode } : {}),
+        ...(patch.readModeImages !== undefined ? { keepReadModeImages: patch.readModeImages } : {}),
+        ...(patch.screenshot !== undefined ? { keepScreenshotOnSave: patch.screenshot } : {}),
+      });
+      requestSync();
+    },
+    [username, requestSync],
+  );
+
   const setSortOn = useCallback(
     async (sortOn: LinkSortOn) => {
       if (!username) throw new Error('useSettingMutations: no active account');
@@ -141,6 +161,7 @@ export function useSettingMutations(): SettingMutations {
       setLocalLinksLayout,
       setServerExtraction,
       setDeviceExtractionMode,
+      setKeepOnSave,
       setSortOn,
       setSortOrder,
       setThemeSource,
@@ -154,6 +175,7 @@ export function useSettingMutations(): SettingMutations {
       setLocalLinksLayout,
       setServerExtraction,
       setDeviceExtractionMode,
+      setKeepOnSave,
       setSortOn,
       setSortOrder,
       setThemeSource,

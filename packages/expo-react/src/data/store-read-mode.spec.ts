@@ -2,7 +2,7 @@ import { gunzipSync } from 'fflate';
 
 import { decodeReaderImages, FILES_PREFIX, pathFromId } from '@stxapps/shared';
 
-import { collectReaderImages } from '../lib/reader-images';
+import { collectReaderImages, collectReaderImagesPreferring } from '../lib/reader-images';
 import { readFileBytes, resetFileSystem } from '../testing/memory-file-system';
 import { getDb, items } from './db';
 import { dataFileFor } from './file-store';
@@ -21,7 +21,10 @@ jest.mock('expo-file-system', () => require('../testing/memory-file-system'));
 let mockIds = 0;
 jest.mock('@stxapps/expo-crypto/lib/ids', () => ({ newId: () => `copy-${++mockIds}` }));
 // The native fetch and decode are a seam; the settling and the two writes are real.
-jest.mock('../lib/reader-images', () => ({ collectReaderImages: jest.fn(async () => []) }));
+jest.mock('../lib/reader-images', () => ({
+  collectReaderImages: jest.fn(async () => []),
+  collectReaderImagesPreferring: jest.fn(async () => []),
+}));
 jest.mock('@stxapps/expo-crypto', () => ({ newId: () => globalThis.crypto.randomUUID() }));
 
 const USER = 'alice';
@@ -34,6 +37,7 @@ const DOC = {
 beforeEach(async () => {
   mockIds = 0;
   jest.mocked(collectReaderImages).mockClear();
+  jest.mocked(collectReaderImagesPreferring).mockClear();
   resetFileSystem();
   getDb().delete(items).run();
   await seedNewAccount(USER);
@@ -137,5 +141,50 @@ describe('a capture that carries image addresses', () => {
 
     expect(await readExtraction('l1')).toMatchObject({ readModeId: 'copy-1' });
     expect((await readExtraction('l1'))?.readModeImagesId).toBeUndefined();
+  });
+
+  // The capture screen's path: its WebView can fetch an image with the site's session,
+  // so the page is asked first and the native fetch covers the rest
+  // (lib/reader-images.ts, collectReaderImagesPreferring).
+  describe('with an in-page fetch (the capture screen)', () => {
+    const fromPage = new Map([['i0', JPEG]]);
+
+    it('asks the page for the addresses, then merges with the native fetch', async () => {
+      const fetchFromPage = jest.fn(async () => fromPage);
+
+      await expect(
+        storeReadModeCopy(USER, 'l1', CAPTURE, { images: true, fetchFromPage }),
+      ).resolves.toBe(true);
+
+      expect(fetchFromPage).toHaveBeenCalledWith(CAPTURE.images.slice(0, 2));
+      expect(collectReaderImagesPreferring).toHaveBeenCalledWith(
+        CAPTURE.images.slice(0, 2),
+        fromPage,
+      );
+      expect(collectReaderImages).not.toHaveBeenCalled();
+    });
+
+    // The account's switch decides whether a copy keeps images at all — the page is no
+    // exception, or turning it off would still send a request per picture to the site.
+    it('asks the page for nothing when images are not kept', async () => {
+      const fetchFromPage = jest.fn(async () => fromPage);
+
+      await expect(storeReadModeCopy(USER, 'l1', CAPTURE, { fetchFromPage })).resolves.toBe(true);
+
+      expect(fetchFromPage).not.toHaveBeenCalled();
+      expect(collectReaderImagesPreferring).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the native fetch when the page could not answer', async () => {
+      const fetchFromPage = jest.fn(async () => {
+        throw new Error('the WebView is gone');
+      });
+
+      await expect(
+        storeReadModeCopy(USER, 'l1', CAPTURE, { images: true, fetchFromPage }),
+      ).resolves.toBe(true);
+
+      expect(collectReaderImages).toHaveBeenCalledWith(CAPTURE.images.slice(0, 2));
+    });
   });
 });

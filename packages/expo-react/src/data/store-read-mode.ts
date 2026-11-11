@@ -15,7 +15,7 @@ import {
   withinReaderImageBudget,
 } from '@stxapps/shared';
 
-import { collectReaderImages } from '../lib/reader-images';
+import { collectReaderImages, collectReaderImagesPreferring } from '../lib/reader-images';
 import { writeExtraction, writeFile } from './mutations';
 
 // Store a read-mode copy taken on this device from a LIVE page — the expo half of the
@@ -44,7 +44,9 @@ import { writeExtraction, writeFile } from './mutations';
 // other.
 //
 // IMAGES are fetched here, natively, when `options.images` says the account keeps
-// them and this caller may fetch (lib/reader-images.ts). Whatever is kept goes into
+// them and this caller may fetch (lib/reader-images.ts) — or, for the capture screen,
+// asked of the page first (`options.fetchFromPage`, the WebView's in-page fetch) and
+// fetched natively only where the page could not. Whatever is kept goes into
 // ONE pack beside the text (@stxapps/shared reader/reader-images.ts), and the document
 // is SETTLED against it either way — `applyReaderImages` takes the key off every
 // figure whose picture is not in the pack, so with images off the stored document
@@ -66,6 +68,12 @@ function deleteQuietly(file: File | undefined): void {
 
 export interface StoreReadModeOptions {
   images?: boolean;
+  // The capture screen's: ask the page for these images (fetched and encoded inside it)
+  // and answer what came back by key. Consulted only when `images` is on; whatever it
+  // doesn't answer — or all of it, if it throws — is fetched natively.
+  fetchFromPage?: (
+    sources: readonly ReaderImageSource[],
+  ) => Promise<ReadonlyMap<string, Uint8Array>>;
 }
 
 export async function storeReadModeCopy(
@@ -99,7 +107,17 @@ export async function storeReadModeCopy(
   let images: ReaderImageEntry[] = [];
   if (options.images && sources.length > 0) {
     try {
-      images = await collectReaderImages(sources);
+      let fromPage: ReadonlyMap<string, Uint8Array> | undefined;
+      if (options.fetchFromPage) {
+        try {
+          fromPage = await options.fetchFromPage(sources);
+        } catch {
+          fromPage = undefined;
+        }
+      }
+      images = fromPage
+        ? await collectReaderImagesPreferring(sources, fromPage)
+        : await collectReaderImages(sources);
     } catch {
       images = [];
     }

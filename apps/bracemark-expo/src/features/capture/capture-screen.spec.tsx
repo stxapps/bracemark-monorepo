@@ -2,19 +2,24 @@ import * as React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import { CaptureScreen } from './capture-screen';
-import { READER_CAPTURE_SCRIPT } from './reader-capture-script.generated';
 
-// The capture screen's rules (its header has the reasoning), against a stand-in
-// WebView that records what the screen injects and lets the spec play the page:
-//   - free gets the upgrade, never a page; a locked list's page never loads;
-//   - the button is live only on the link's own page — never another page the user
-//     followed a link to;
-//   - a message counts only while a capture awaits one, and only its first answer.
+// The capture screen's rules (its header and use-page-capture.ts's have the reasoning),
+// against a stand-in WebView that records each request the screen injects and lets the
+// spec play the page:
+//   - free loads the page and gets a preview, but Keep read mode is the upgrade; a
+//     locked list's page never loads;
+//   - the buttons are live only on the link's own page, and an answer from another
+//     page is refused;
+//   - a message counts only while a request awaits one, and only with its nonce.
 
-let mockLink: object | null = null;
+let mockLink: Record<string, unknown> | null = null;
 let mockLocked = false;
 let mockKeptCopies = true;
-const mockKeepReadMode = jest.fn(async (_link: unknown, _doc: unknown) => true);
+const mockKeepReadMode = jest.fn(async (_link: unknown, _doc: unknown, _options?: unknown) => true);
+const mockUpdatePreview = jest.fn(async (_link: unknown, _input: unknown) => ({
+  title: true,
+  image: true,
+}));
 const mockShowPaywall = jest.fn();
 const mockInject = jest.fn();
 let webviewProps: {
@@ -32,6 +37,14 @@ jest.mock('react-native-webview', () => {
   });
   return { WebView };
 });
+// The injected script is the request itself here, so the spec can read what was asked
+// and answer with its nonce. The real script is held by web-react's
+// reader-capture-generated.spec.ts, which runs it in jsdom.
+jest.mock('./page-capture-script.generated', () => ({
+  pageCaptureScript: (request: unknown) => JSON.stringify(request),
+}));
+let mockNextId = 0;
+jest.mock('@stxapps/expo-crypto/lib/ids', () => ({ newId: () => `nonce-${++mockNextId}` }));
 jest.mock('expo-router', () => ({
   router: { canGoBack: () => true, back: jest.fn(), replace: jest.fn() },
 }));
@@ -57,17 +70,26 @@ jest.mock('@stxapps/expo-react', () => {
     useLocks: () => ({ status: 'ready', isListLocked: () => mockLocked, unlockList: jest.fn() }),
     useEntitlements: () => ({ entitlements: { keptCopies: mockKeptCopies } }),
     useKeptCopyMutations: () => ({ keepReadMode: mockKeepReadMode }),
+    usePagePreview: () => ({ updatePreviewFromPage: mockUpdatePreview }),
   };
 });
 
-const LINK = { path: 'links/l1.enc', url: 'https://example.com/post', listId: 'reading' };
-const DOC = { version: 1, capturedAt: 1, blocks: [] };
+const URL_ = 'https://example.com/post';
+const LINK = { path: 'links/l1.enc', url: URL_, listId: 'reading' };
+const CAPTURE = { doc: { version: 1, capturedAt: 1, blocks: [] }, images: [] };
 const keep = () => screen.getByTestId('capture-keep-read-mode');
+const preview = () => screen.getByTestId('capture-update-preview');
 
-async function onPage(url = 'https://example.com/post') {
+async function onPage(url = URL_) {
   render(<CaptureScreen linkId="l1" />);
   await screen.findByTestId('capture-webview');
   act(() => webviewProps.onNavigationStateChange({ url, loading: false }));
+}
+
+// The last request the screen injected.
+function lastRequest(): { kind: string; nonce: string; capturedFrom?: string } {
+  const calls = mockInject.mock.calls;
+  return JSON.parse(calls[calls.length - 1][0] as string);
 }
 
 const post = (data: unknown) =>
@@ -78,16 +100,19 @@ beforeEach(() => {
   mockLocked = false;
   mockKeptCopies = true;
   mockKeepReadMode.mockClear();
+  mockUpdatePreview.mockClear();
   mockInject.mockClear();
   mockShowPaywall.mockClear();
 });
 
-test('free: the upgrade, and no page loaded', async () => {
+test('free: the page loads, and Keep read mode is the upgrade, not a capture', async () => {
   mockKeptCopies = false;
-  render(<CaptureScreen linkId="l1" />);
-  fireEvent.press(await screen.findByTestId('capture-upgrade'));
+  await onPage();
+  // A preview is free on every plan, so the page is there to read it from.
+  expect(preview().props.accessibilityState?.disabled).toBeFalsy();
+  fireEvent.press(keep());
   expect(mockShowPaywall).toHaveBeenCalledWith('keptCopies');
-  expect(screen.queryByTestId('capture-webview')).toBeNull();
+  expect(mockInject).not.toHaveBeenCalled();
 });
 
 test('a link in a locked list: the unlock pane, and no page loaded', async () => {
@@ -97,35 +122,132 @@ test('a link in a locked list: the unlock pane, and no page loaded', async () =>
   expect(screen.queryByTestId('capture-webview')).toBeNull();
 });
 
-test('on the link’s page, keeping injects the capture and stores what comes back', async () => {
+test('on the link’s page, keeping asks the page and stores what comes back', async () => {
   // http vs https and a trailing slash are still the same page.
   await onPage('http://example.com/post/');
   fireEvent.press(keep());
-  expect(mockInject).toHaveBeenCalledWith(READER_CAPTURE_SCRIPT);
+  const request = lastRequest();
+  expect(request.kind).toBe('readMode');
 
-  await post({ type: 'bracemark-read-mode', doc: DOC });
-  expect(mockKeepReadMode).toHaveBeenCalledWith(LINK, DOC);
+  await post({ type: 'bracemark-read-mode', nonce: request.nonce, href: URL_, doc: CAPTURE });
+  expect(mockKeepReadMode).toHaveBeenCalledWith(LINK, CAPTURE, {
+    fetchFromPage: expect.any(Function),
+  });
   expect(await screen.findByText('Kept — read it')).toBeTruthy();
 });
 
-test('on another page the user followed a link to, the button is off', async () => {
+test('the copy’s images are asked of the page that was captured', async () => {
+  // keepReadMode calls the fetch it is handed only when the account keeps images;
+  // here it does, so the spec plays the page's image answers.
+  let images: Promise<Map<string, Uint8Array>> | undefined;
+  mockKeepReadMode.mockImplementationOnce(async (_link, _doc, options) => {
+    const { fetchFromPage } = options as {
+      fetchFromPage: (sources: { key: string; url: string }[]) => Promise<Map<string, Uint8Array>>;
+    };
+    images = fetchFromPage([{ key: 'i0', url: 'https://cdn.example/a.jpg' }]);
+    await images;
+    return true;
+  });
+  await onPage();
+  fireEvent.press(keep());
+  await post({ type: 'bracemark-read-mode', nonce: lastRequest().nonce, href: URL_, doc: CAPTURE });
+
+  const request = lastRequest();
+  expect(request).toMatchObject({ kind: 'readerImages', capturedFrom: URL_ });
+  await post({ type: 'bracemark-page-image', nonce: request.nonce, key: 'i0', base64: 'AQID' });
+  // A key the request didn't ask for is not taken.
+  await post({ type: 'bracemark-page-image', nonce: request.nonce, key: 'i9', base64: 'AQID' });
+  await post({ type: 'bracemark-page-images-done', nonce: request.nonce });
+
+  await expect(images).resolves.toEqual(new Map([['i0', new Uint8Array([1, 2, 3])]]));
+});
+
+test('on another page the user followed a link to, both buttons are off', async () => {
   await onPage('https://elsewhere.example/other');
   expect(keep().props.accessibilityState?.disabled).toBe(true);
+  expect(preview().props.accessibilityState?.disabled).toBe(true);
   fireEvent.press(keep());
+  fireEvent.press(preview());
   expect(mockInject).not.toHaveBeenCalled();
-  expect(screen.getByText('Go back to the saved page to keep its copy.')).toBeTruthy();
+  expect(
+    screen.getByText('Go back to the saved page to update its preview or keep a copy.'),
+  ).toBeTruthy();
+});
+
+// ⚠ The WebView can navigate between the tap and the page's answer; a copy taken then
+// is another page's, filed under this link at the tier nothing outranks.
+test('an answer from a page that is no longer the link’s is refused', async () => {
+  await onPage();
+  fireEvent.press(keep());
+  await post({
+    type: 'bracemark-read-mode',
+    nonce: lastRequest().nonce,
+    href: 'https://elsewhere.example/other',
+    doc: CAPTURE,
+  });
+  expect(mockKeepReadMode).not.toHaveBeenCalled();
+  // A failure that mounts after a tap is an alert (docs/accessibility.md, _the one
+  // rule_), never the quiet status line the screen's other outcomes use.
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'Could not keep read mode. Please try again.',
+  );
 });
 
 test('a message nobody asked for is ignored', async () => {
   await onPage();
-  await post({ type: 'bracemark-read-mode', doc: DOC });
+  await post({ type: 'bracemark-read-mode', nonce: 'nonce-1', href: URL_, doc: CAPTURE });
   expect(mockKeepReadMode).not.toHaveBeenCalled();
+});
+
+test('while a request waits, only a message with its nonce counts', async () => {
+  await onPage();
+  fireEvent.press(keep());
+  const { nonce } = lastRequest();
+  await post({ type: 'bracemark-read-mode', nonce: 'someone-else', href: URL_, doc: CAPTURE });
+  expect(mockKeepReadMode).not.toHaveBeenCalled();
+  // The positive control: the same message with the request's nonce is the answer.
+  await post({ type: 'bracemark-read-mode', nonce, href: URL_, doc: CAPTURE });
+  expect(mockKeepReadMode).toHaveBeenCalledTimes(1);
 });
 
 test('a page with no article says so and stores nothing', async () => {
   await onPage();
   fireEvent.press(keep());
-  await post({ type: 'bracemark-read-mode', doc: null });
+  await post({ type: 'bracemark-read-mode', nonce: lastRequest().nonce, href: URL_, doc: null });
   expect(mockKeepReadMode).not.toHaveBeenCalled();
   expect(screen.getByText('No article on this page to keep as text.')).toBeTruthy();
+});
+
+test('Update preview reads the page’s candidates and hands over only their strings', async () => {
+  await onPage();
+  fireEvent.press(preview());
+  const request = lastRequest();
+  expect(request.kind).toBe('meta');
+
+  await post({
+    type: 'bracemark-page-meta',
+    nonce: request.nonce,
+    href: URL_,
+    // A page's scripts can post anything in these fields.
+    collected: { ogTitle: 'The OG title', ogImage: { toString: 'x' }, docTitle: 7 },
+  });
+  expect(mockUpdatePreview).toHaveBeenCalledWith(LINK, {
+    href: URL_,
+    collected: { ogTitle: 'The OG title' },
+    fetchFromPage: expect.any(Function),
+  });
+  expect(await screen.findByText('Preview updated.')).toBeTruthy();
+});
+
+test('Update preview says when the title the user set still wins', async () => {
+  mockLink = { ...LINK, customTitle: 'Mine' };
+  await onPage();
+  fireEvent.press(preview());
+  await post({
+    type: 'bracemark-page-meta',
+    nonce: lastRequest().nonce,
+    href: URL_,
+    collected: {},
+  });
+  expect(await screen.findByText('Preview updated. The title you set still shows.')).toBeTruthy();
 });

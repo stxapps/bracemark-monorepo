@@ -268,6 +268,7 @@ rule:
 | **mobile / foreground browse**   | at mode `all`, pending displayed links are fetched as they come into view         | active-page | free; each site sees the device's request                              |
 | **web app / visible links**      | with `serverExtraction` on, pending displayed links wake the in-page drain        | server      | server sees the URL — opt-in, off by default (see _server extraction_) |
 | **web or mobile / Generate all** | an explicit full-library pending scan                                             | server / fg | finite user-driven job                                                 |
+| **mobile / Update preview**      | a tap on the capture screen re-reads ONE link from the live page in its WebView   | active-page | free on every plan; written over whatever tier held it                 |
 
 The web row corrects two easy misreads of _the stance_. First, "the web app
 can't extract" is true only of **fetching** — a `bracemark-web` tab can't `fetch`

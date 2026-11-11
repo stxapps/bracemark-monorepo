@@ -51,6 +51,7 @@ import { Icon } from '../../components/ui/icon';
 import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
+import { KeptCopiesGroup } from './kept-copies-group';
 import { SettingsHeader, SettingsNotice, SettingsPane } from './settings-kit';
 
 // The ladder, as copy. Ordered by DEVICE_EXTRACTION_MODES (increasing disclosure),
@@ -314,6 +315,8 @@ export function ExtractionSection() {
           </Text>
         </View>
       ) : null}
+
+      <KeptCopiesGroup />
     </SettingsPane>
   );
 }

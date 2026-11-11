@@ -60,6 +60,15 @@ type ReadabilityDocument = ConstructorParameters<typeof Readability>[0];
 // Null when the page isn't an article (Readability's pre-check, then its parse, then a
 // walker that kept nothing) — the route answers `not-an-article`.
 //
+// NEVER a throw. Readability walks linkedom's tree, and on some pages it trips over a
+// shape linkedom builds differently from a browser — an empty body, a page that is
+// bare text, a document with no element at its root (`documentElement` null) — and
+// throws from inside its own parse. Thrown, it reached the route's catch-all and came
+// back a generic TRANSIENT failure, which the client asks again about, and which the
+// same page answers the same way every time. Measured on 2 of 55 real pages
+// (docs/link-extraction-server.md, _cost on the Worker_). A page Readability can't read
+// is a page with no article we can keep: null.
+//
 // `images` is the address of every figure the document gave a key to — the client's to
 // fetch through the image proxy (routes/image.ts), never this Worker's: fetching thirty
 // images inside the extract request would hold it open past its deadline and inline
@@ -68,6 +77,18 @@ export function readModeFromHtml(
   html: string,
   finalUrl: URL,
   now = Date.now(),
+): { doc: ReaderDoc; images: ReaderImageSource[] } | null {
+  try {
+    return readModeOrThrow(html, finalUrl, now);
+  } catch {
+    return null;
+  }
+}
+
+function readModeOrThrow(
+  html: string,
+  finalUrl: URL,
+  now: number,
 ): { doc: ReaderDoc; images: ReaderImageSource[] } | null {
   const { document } = parseHTML(html);
   setBaseUrl(document, finalUrl);

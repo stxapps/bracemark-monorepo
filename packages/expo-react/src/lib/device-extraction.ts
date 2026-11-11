@@ -337,7 +337,6 @@ async function loadImage(imageUrl: string | undefined): Promise<ImageOutcome> {
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), IMAGE_TIMEOUT_MS);
-  let temp: File | undefined;
   try {
     const res = await fetch(imageUrl, {
       headers: { 'User-Agent': USER_AGENT },
@@ -349,36 +348,56 @@ async function loadImage(imageUrl: string | undefined): Promise<ImageOutcome> {
       return res.status === 429 || res.status >= 500 ? { kind: 'transient' } : { kind: 'none' };
     }
 
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    // The sniff is the real content check: an og:image pointing at an HTML error page has
-    // to become `none`, not a file the UI can't render. It stays the RASTER sniff even
-    // though the icon path's is now wider — a stored preview is measured, capped and
-    // re-encoded on its way in (probeImageSize → resizeImage, both raster-only), so an SVG
-    // accepted here would skip the cap and land whole in the user's quota.
-    if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES) return { kind: 'none' };
-    if (sniffImageMime(bytes) === undefined) return { kind: 'none' };
-
-    temp = newTempFile();
-    temp.write(bytes);
-
-    const size = await probeImageSize(temp.uri);
-    if (!size) return { kind: 'none' }; // decoder refused it — not an image we can show.
-
-    const capped = await resizeImage({ uri: temp.uri, width: size.width, height: size.height });
-    if (capped.uri === temp.uri) {
-      const file = temp;
-      temp = undefined; // handed to the caller; don't delete it here
-      return { kind: 'file', file };
-    }
-    return { kind: 'file', file: new File(capped.uri) };
+    const file = await previewFileFromBytes(new Uint8Array(await res.arrayBuffer()));
+    return file ? { kind: 'file', file } : { kind: 'none' };
   } catch {
     // Transport error on the image alone — the title already landed, so this is worth one
     // more try later rather than settling the link without a preview.
     return { kind: 'transient' };
   } finally {
     clearTimeout(timer);
+  }
+}
+
+// Fetched bytes → a capped preview FILE the caller stores and then deletes, or undefined
+// when they are not a preview image. The one pipeline every preview this device stores
+// goes through, whoever fetched the bytes: the native fetch above, or the capture
+// screen's WebView, which fetches the image inside the page (with the site's session)
+// and posts the bytes across — untrusted, so they get exactly this treatment.
+//
+// The sniff is the real content check: an og:image pointing at an HTML error page has to
+// become nothing, not a file the UI can't render. It stays the RASTER sniff even though
+// the icon path's is now wider — a stored preview is measured, capped and re-encoded on
+// its way in (probeImageSize → resizeImage, both raster-only), so an SVG accepted here
+// would skip the cap and land whole in the user's quota.
+export async function previewFileFromBytes(bytes: Uint8Array): Promise<File | undefined> {
+  if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES) return undefined;
+  if (sniffImageMime(bytes) === undefined) return undefined;
+
+  let temp: File | undefined = newTempFile();
+  try {
+    temp.write(bytes);
+    const size = await probeImageSize(temp.uri);
+    if (!size) return undefined; // decoder refused it — not an image we can show.
+
+    const capped = await resizeImage({ uri: temp.uri, width: size.width, height: size.height });
+    if (capped.uri === temp.uri) {
+      const file = temp;
+      temp = undefined; // handed to the caller; don't delete it here
+      return file;
+    }
+    return new File(capped.uri);
+  } finally {
     if (temp) deleteQuietly(temp);
   }
+}
+
+// The native fetch of one preview image, as a capped file or undefined — for a caller
+// outside the drain (the capture screen's _Update preview_, when the page could not
+// fetch the image itself). The caller stores the file and deletes it.
+export async function fetchPreviewImageFile(imageUrl: string): Promise<File | undefined> {
+  const outcome = await loadImage(imageUrl);
+  return outcome.kind === 'file' ? outcome.file : undefined;
 }
 
 // The page's declared `<link rel="icon">`, cached for the host — the accuracy upgrade over

@@ -54,10 +54,10 @@ import { ReaderArticle } from './reader-article';
 // icon here, at every width: a phone's bar has no room for a second label beside the
 // host, and the row menu carries the words.
 //
-// What it does NOT have yet that web's does: an empty-state upsell. A link reaches
-// this screen only from the row menu's "Read", which appears only on a link with a
-// copy, and this app can't take a copy yet (docs/link-extraction-keep.md, _expo_) —
-// so an empty state here would offer something the device can't do. A copy deleted
+// What it does NOT have that web's does: an empty-state upsell. A link reaches this
+// screen only from the row menu's "Read", which appears only on a link with a copy;
+// taking one is the capture screen's job (`/capture?link=<id>`, the row menu's "Keep a
+// copy" — docs/link-extraction-keep.md, _per client_, bracemark-expo). A copy deleted
 // while the screen is open leaves the plain notice below instead.
 
 const Image = withUniwind(ExpoImage);

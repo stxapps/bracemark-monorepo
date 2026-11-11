@@ -21,12 +21,15 @@
 // Flattened onto white: JPEG has no alpha, and a transparent diagram on the canvas's
 // default black is unreadable.
 
+// Zod-free subpaths, not the barrel: this file is bundled into the script expo's capture
+// screen injects into a page (web-react lib/webview-capture.ts), where the barrel would
+// carry zod and every schema with it — reader-doc-from-page.ts says the same.
+import { sniffImageMime } from '@stxapps/shared/image/sniff';
 import {
   isReaderImageTooSmall,
   READER_IMAGE_JPEG_QUALITY,
   READER_IMAGE_MAX_DIMENSION,
-  sniffImageMime,
-} from '@stxapps/shared';
+} from '@stxapps/shared/reader/reader-doc-core';
 
 export interface ReaderImageOptions {
   maxDimension?: number;

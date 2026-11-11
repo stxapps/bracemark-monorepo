@@ -1,11 +1,13 @@
+import type { ReaderImageEntry, ReaderImageSource } from '@stxapps/shared';
+// Values from zod-free subpaths, types from the barrel (a whole `import type` statement
+// is erased at build): this file is bundled into expo's in-page capture script too
+// (web-react lib/webview-capture.ts).
 import {
   READER_IMAGE_MAX_SOURCE_BYTES,
   READER_IMAGES_MAX_BYTES,
   READER_IMAGES_MAX_COUNT,
-  type ReaderImageEntry,
-  type ReaderImageSource,
-  withinReaderImageBudget,
-} from '@stxapps/shared';
+} from '@stxapps/shared/reader/reader-doc-core';
+import { withinReaderImageBudget } from '@stxapps/shared/reader/reader-images';
 
 import { encodeReaderImage } from './reader-image';
 

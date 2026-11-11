@@ -196,8 +196,8 @@ Four things that aren't in its README:
 
 The embedded browser view the **capture screen** is built on
 (`features/capture/capture-screen.tsx`, `/capture?link=<id>`): the saved page,
-open, with _Keep read mode_ under it — the browser extension's popup rebuilt for a
-phone ([link-extraction-keep.md](./link-extraction-keep.md), _expo_). `13.15.0` at
+open, with _Update preview_ and _Keep read mode_ under it — the browser extension's
+popup rebuilt for a phone ([link-extraction-keep.md](./link-extraction-keep.md), _expo_). `13.15.0` at
 root, the version `expo/bundledNativeModules.json` names for SDK 54, `*` in the
 app. **No config plugin**; native, so `npx expo prebuild` before it exists on a
 device.
@@ -213,8 +213,12 @@ keeps a cookie store of its own, persistent across launches
 (`sharedCookiesEnabled` / `thirdPartyCookiesEnabled`) — so a site behind a
 sign-in is signed in to once, here. The script it injects is generated
 (`tools/scripts/generate-reader-capture.ts` →
-`features/capture/reader-capture-script.generated.ts`), the same converter the
-browser extension and the iOS Safari share run.
+`features/capture/page-capture-script.generated.ts`): the same converter the
+browser extension and the iOS Safari share run, the same page-metadata collector the
+browser extension injects, and the in-page image fetch and encoders, answering one
+request per injection (`features/capture/use-page-capture.ts`). The in-page encode
+leans on `createImageBitmap` + `OffscreenCanvas` inside the WebView; where a WebView
+lacks them every image falls back to the native fetch.
 
 ⚠ **It stays LINKED in the iOS share extension**, which never uses it. It
 registers a Fabric component (`RNCWebView`), and

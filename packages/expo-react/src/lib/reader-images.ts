@@ -146,3 +146,59 @@ export async function collectReaderImages(
   }
   return withinReaderImageBudget(found.filter((entry) => entry !== undefined));
 }
+
+// An image the PAGE fetched and encoded for us — the capture screen's WebView runs
+// web-react's encoder in the page and posts the result (web-react lib/webview-capture.ts)
+// — taken only if it is what that encoder writes: a JPEG, no longer than the pack's
+// dimension cap on either side, and not an icon. The bytes came from a stranger's page,
+// whose scripts can post anything, so their size is MEASURED here rather than taken from
+// the message, and anything else is refused (and fetched natively instead, below).
+export async function readerImageFromPage(
+  key: string,
+  bytes: Uint8Array,
+): Promise<ReaderImageEntry | undefined> {
+  if (bytes.byteLength === 0 || bytes.byteLength > READER_IMAGE_MAX_SOURCE_BYTES) return undefined;
+  if (sniffImageMime(bytes) !== 'image/jpeg') return undefined;
+  let temp: File | undefined;
+  try {
+    temp = newScratchFile(`reader-image-${newId()}`);
+    temp.write(bytes);
+    const size = await probeImageSize(temp.uri);
+    if (!size || isReaderImageTooSmall(size.width, size.height)) return undefined;
+    if (Math.max(size.width, size.height) > READER_IMAGE_MAX_DIMENSION) return undefined;
+    return { key, type: 'image/jpeg', width: size.width, height: size.height, bytes };
+  } catch {
+    return undefined;
+  } finally {
+    deleteQuietly(temp);
+  }
+}
+
+// The capture screen's collector: what the page posted where it is acceptable, and a
+// native fetch for every other address — so each image gets whichever of the two
+// reaches it. The page's fetch carries the site's session (an image behind its sign-in);
+// the native one has no CORS (an image host that refuses the page a cross-origin read).
+// The result is in page order and cut to the pack's budget like any other collection.
+export async function collectReaderImagesPreferring(
+  sources: readonly ReaderImageSource[],
+  fromPage: ReadonlyMap<string, Uint8Array>,
+  options: CollectReaderImagesOptions = {},
+): Promise<ReaderImageEntry[]> {
+  const wanted = sources.slice(0, READER_IMAGES_MAX_COUNT);
+  const kept = new Map<string, ReaderImageEntry>();
+  for (const source of wanted) {
+    const bytes = fromPage.get(source.key);
+    if (!bytes) continue;
+    const entry = await readerImageFromPage(source.key, bytes);
+    if (entry) kept.set(source.key, entry);
+  }
+  const missing = wanted.filter((source) => !kept.has(source.key));
+  if (missing.length > 0) {
+    for (const entry of await collectReaderImages(missing, options)) kept.set(entry.key, entry);
+  }
+  return withinReaderImageBudget(
+    wanted
+      .map((source) => kept.get(source.key))
+      .filter((entry): entry is ReaderImageEntry => entry !== undefined),
+  );
+}

@@ -248,6 +248,14 @@ facet, for read mode only, or only for a rule naming this UA — it is the **sec
   (`readModeVerdictOf`, extract/retry.ts), so nothing re-asks the server; a person who
   opens the page and keeps a copy with the browser extension still can — that is their
   own browser reading the page they are looking at, which no robots rule speaks to.
+- **Never on a device.** Decided 2026-11-11: no capture a user's own device makes reads
+  `robots.txt` — the browser extension's, an iOS share from Safari, the expo capture
+  screen, and an on-device read of a page's raw HTML on a save if one is ever built
+  ([link-extraction-keep.md](./link-extraction-keep.md), _per client_, bracemark-expo).
+  `robots.txt` speaks to crawlers acting for themselves; a device fetching the one page
+  its user just saved, on that save, from that user's address, is the user's agent, and
+  the copy it keeps is encrypted to that user. The rule above is about **our server**
+  keeping a publisher's article body, and stays where that is true.
 
 What is still open: whether the **title** should ever honour a rule that names this UA
 specifically (the third option, a deliberate `bracemark-extractor` block made
@@ -257,7 +265,12 @@ mechanical). Today that block is honoured by a `403`, which the page advises.
 Readability over it, where the title is a streaming head scan. Measured on Node over
 synthetic article pages (not yet on workerd, and not on real pages): ~45 ms of CPU at
 35 KB of HTML, ~0.4 s at 300 KB, ~0.9 s at 1.5 MB — and the read stops at
-`MAX_HTML_BYTES`. Every one of those is past the Workers Free plan's 10 ms CPU limit, so
+`MAX_HTML_BYTES`. Over **real** pages (2026-11-11, the 55 of `measure:kept-copies`'
+62 that answered a plain fetch; Node on an M1, so V8 like workerd but not workerd):
+median 25 ms, p90 127 ms, max 494 ms — and 16 of 54 under 10 ms. Readability also
+threw on 2 of them under linkedom; `readModeFromHtml` now catches that and answers
+`not-an-article`, where the route's catch-all had made it a transient failure the
+client asked again about, forever. Every one of those is past the Workers Free plan's 10 ms CPU limit, so
 ⚠ **read mode needs the Workers Paid plan on the account that serves it** before it is
 turned on for anyone; on Free, the request is killed for CPU and the whole batch comes
 back a 5xx, which the client reads as a transport failure and retries, forever and

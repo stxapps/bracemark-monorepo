@@ -49,6 +49,7 @@ export * from './hooks/use-link-quota';
 export * from './hooks/use-list-mutations';
 export * from './hooks/use-lists';
 export * from './hooks/use-live-read';
+export * from './hooks/use-page-preview';
 export * from './hooks/use-pending-changes-count';
 export * from './hooks/use-pin-mutations';
 export * from './hooks/use-reader-doc';

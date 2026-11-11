@@ -57,6 +57,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  RefreshCw,
   StickyNote,
   Tags,
   Trash2,
@@ -118,15 +119,22 @@ export function LinkRowMenu({
       </DropdownMenuItem>
     ) : null;
 
-  // "Keep a copy" — opens the page in the capture screen to take its read-mode copy
-  // from the live page (features/capture/capture-screen.tsx, which gates on the
-  // plan). On every non-Trash row: a link that already has a copy can take a fresh
-  // one, and the screen says so.
+  // "Keep a copy" and "Update preview" — both open the page in the capture screen
+  // (features/capture/capture-screen.tsx), which has both actions under it: the
+  // read-mode copy (gated on the plan there) and the title and image read from the
+  // live page (every plan). Two entries for one screen because they answer two
+  // different wants — "keep this article", "this preview is wrong" — and a user with
+  // the second would not look under the first. On every non-Trash row: a link that
+  // already has either can take it again.
+  const captureHref = `/capture?link=${encodeURIComponent(linkIdOf(link))}` as const;
+  const updatePreview = (
+    <DropdownMenuItem testID="link-menu-update-preview" onPress={() => router.push(captureHref)}>
+      <Icon as={RefreshCw} className="size-4" />
+      <Text>Update preview</Text>
+    </DropdownMenuItem>
+  );
   const keepCopy = (
-    <DropdownMenuItem
-      testID="link-menu-keep-copy"
-      onPress={() => router.push(`/capture?link=${encodeURIComponent(linkIdOf(link))}`)}
-    >
+    <DropdownMenuItem testID="link-menu-keep-copy" onPress={() => router.push(captureHref)}>
       <Icon as={BookCopy} className="size-4" />
       <Text>Keep a copy</Text>
     </DropdownMenuItem>
@@ -201,6 +209,7 @@ export function LinkRowMenu({
             <>
               {read}
               {keepCopy}
+              {updatePreview}
               {copyLink}
               <DropdownMenuItem testID="link-menu-edit" onPress={() => openEditor()}>
                 <Icon as={Pencil} className="size-4" />

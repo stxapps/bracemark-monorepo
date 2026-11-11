@@ -15,7 +15,9 @@
 // `imageOrientation: 'from-image'` honors EXIF, the one thing such libraries are
 // otherwise useful for here.
 
-import { PREVIEW_JPEG_QUALITY, PREVIEW_MAX_DIMENSION } from '@stxapps/shared';
+// A zod-free subpath, not the barrel: bundled into expo's in-page capture script too
+// (web-react lib/webview-capture.ts).
+import { PREVIEW_JPEG_QUALITY, PREVIEW_MAX_DIMENSION } from '@stxapps/shared/image/preview';
 
 export interface ResizeImageOptions {
   // Cap on the longest side, in CSS pixels. An image already within the cap is

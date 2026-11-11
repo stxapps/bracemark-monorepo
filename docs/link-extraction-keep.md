@@ -22,7 +22,8 @@ read mode is built (_per client_, bracemark-extractor) and reached from bracemar
 as a per-link _Keep read mode_. Removal (one copy, and a selection's in bulk edit) and
 the orphaned-file sweep are built (_removal, cleanup, export_), and so are expo's
 reader, its iOS share-from-Safari read mode and its capture screen (_per client_,
-bracemark-expo). A read-mode copy keeps a page's **tables** as tables (_tables_) and
+bracemark-expo) — which also re-reads a link's title and preview image from the live
+page, _Update preview_, on every plan. A read-mode copy keeps a page's **tables** as tables (_tables_) and
 its **images** in a pack beside the text, on every tier that takes a copy (_images in
 read mode_), and every link has a way to the **Wayback Machine** for the page that is
 gone (_when the page is gone_). None of it has been released yet — which is why the
@@ -30,7 +31,7 @@ table block and the figure's image fields could still go into the format's first
 version.
 
 Not built: a per-link _Keep screenshot_ outside the extension's saved screen, the
-scoped bulk job, expo's switches for the save setting, and — within images — SVG
+scoped bulk job, and — within images — SVG
 (_images in read mode_, _not yet_). Decided against for now, each with its reason in
 _the scope each copy stops at_: a screenshot on expo or on the server, a full-page
 screenshot, and page copy anywhere. Everything below marked _planned_ is the design the
@@ -205,7 +206,8 @@ A read-mode copy keeps the article's pictures with its words. Built on every tie
 that takes a copy, 2026-11-10; before that a figure was only its alt text and caption,
 which loses the chart the paragraph is about. **On by default**, with a switch of its
 own — _Keep images in read mode_, beside the other two in Settings → Link previews →
-Kept copies (`keepReadModeImages`, resolved by `keepOnSaveOf`). Unlike its neighbours
+Kept copies on the web, and on both phones (`keepReadModeImages`, resolved by
+`keepOnSaveOf`). Unlike its neighbours
 it is not "on save": it qualifies **every** read-mode copy the account takes, a
 per-link _Keep read mode_ included, because what it answers is how much of an article
 a copy keeps, not when one is taken.
@@ -302,7 +304,8 @@ an earlier copy's pack and `writeExtraction` reclaims it.
 | client                     | how                                                                                             | what it can't reach                                    |
 | -------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | browser extension          | `fetch` inside the page, one injection per image (`fetchReaderImage`, `utils/capture.ts`)       | an image host that refuses a cross-origin read         |
-| bracemark-expo             | native fetch (`lib/reader-images.ts`), from the capture screen and from a Safari share's drain  | an image behind the page's sign-in                     |
+| bracemark-expo, capture    | `fetch` inside the WebView's page, encoded there; native fetch for whatever the page couldn't   | — each covers the other's gap                          |
+| bracemark-expo, share      | native fetch (`lib/reader-images.ts`), from a Safari share's drain                              | an image behind the page's sign-in                     |
 | bracemark-web (the server) | the extractor's `readModeImages` list, each through the image proxy (`lib/server-read-mode.ts`) | past 12 images, and anything the proxy's limit refuses |
 
 - **The browser extension** reads the setting from the store at the capture, as the
@@ -314,6 +317,18 @@ an earlier copy's pack and `writeExtraction` reclaims it.
   subject to the device's fetch mode — `off` stops it (`share-bridge.tsx`) — since it
   is this app making requests for a link the sheet saved; from the capture screen it
   is an explicit ask on a page the user has open.
+- **On the capture screen the page fetches first.** Its WebView asks the page for the
+  images (web-react `lib/webview-capture.ts`): fetched there with the page's own
+  context — the site's session for an image on its own origin — and re-encoded there
+  by `encodeReaderImage`, so each crosses to the app as the 1024 px JPEG it will be
+  stored as, not an 8 MB original inflated by base64. The app takes a posted picture
+  only as a JPEG whose size it measures itself, within the dimension cap
+  (`readerImageFromPage`, expo-react `lib/reader-images.ts`), and fetches every
+  address the page couldn't answer natively — no CORS there, so the host that refuses
+  the page a cross-origin read answers the app. `credentials` stays at the default:
+  `include` would fail every cross-origin read against a host that answers
+  `Access-Control-Allow-Origin: *`, which is most image CDNs. With images off the page
+  is asked for nothing.
 - **bracemark-extractor** returns the addresses and fetches none: thirty images
   inside the extract request would hold it past its deadline and inline megabytes
   into JSON. The proxy is rate-limited per address and shared with a bulk import's
@@ -365,9 +380,16 @@ pack out, and a figure whose pack is missing is a placeholder.
 - **The server path's reach** — 12 images, and none when the proxy's limit is spent.
   A budget of its own for a read-mode ask would lift both.
 - **On expo, unverified on a device**: what `expo-image-manipulator` puts behind a
-  transparent image when it writes JPEG. The web encoder flattens onto white.
-- **A page's context that can't read an image host** could be covered through the
-  proxy when the user has turned server previews on. Not worth it at 2%.
+  transparent image when it writes JPEG — the native path, a Safari share's drain and
+  the capture screen's fallback. The web encoder flattens onto white, and the capture
+  screen's in-page images go through it.
+- **On expo, unverified on a device**: the capture screen's in-page encode needs
+  `createImageBitmap` and `OffscreenCanvas` in the WebView (WKWebView, Android's
+  Chromium WebView). Where they are missing the page posts nothing and every image
+  falls back to the native fetch — no failure, but no sign-in either.
+- **The browser extension's page context that can't read an image host** could be
+  covered through the proxy when the user has turned server previews on. Not worth it
+  at 2%. (Expo's capture screen covers it with its native fetch.)
 
 ### the screenshot is a capped JPEG of the fold
 
@@ -435,10 +457,16 @@ Three triggers, and deliberately not a fourth:
    shown off and disabled on free beside the upgrade, with the stored value left
    alone so a returning subscriber keeps their choice, and worded so it never claims
    a save made in the web app keeps a copy — it can't, the page isn't open there. It
-   applies only to saves made **on the page**; expo's in-app browser and an iOS share
-   from Safari will read the same two fields when they capture (_planned_), and expo
-   renders no switch until then — a setting with no effect on the device holding it
-   is worse than none.
+   applies only to saves made **on the page**: the browser extension's, and on iOS a
+   share from Safari, whose drain reads `keepReadModeOnSave` at the drain. Expo
+   renders the same group (`features/settings/kept-copies-group.tsx`) with only the
+   switches that change something on the device holding them — a setting with no
+   effect there is worse than none: _Keep images in read mode_ on both platforms (it
+   governs the capture screen's copies too), _Keep read mode on save_ on **iOS only**
+   (an Android share carries no copy, and the on-device read that would have given it
+   one is not built — _per client_, bracemark-expo), and no screenshot switch, since
+   the phone takes none. The setting is synced, so the iOS switch's description says
+   the browser extension's saves follow it too.
 2. **A per-link action**: _Keep read mode_ / _Keep screenshot_ from a link's menu
    and from the reader. On a client that can't capture that link right now, the
    action says what can (open it in the extension, open it in the app).
@@ -549,24 +577,85 @@ and Android's WebView has its own `CookieManager`, apart from Chrome's. So, in o
    page that is not an article, from 2026-11-08 to 2026-11-09, and only a share
    from Safari shows it — jsdom and Chrome both pass the null along happily.
    The WebView path posts JSON text and has no such limit.
-2. **A capture screen — built for read mode** (`/capture?link=<id>`,
+2. **A capture screen — built** (`/capture?link=<id>`,
    `features/capture/capture-screen.tsx`), opened from a link's menu (_Keep a
-   copy_): the page in a `react-native-webview` WebView with _Keep read mode_ under
-   it, injecting the same generated converter. It gates on the plan before loading
-   anything, keeps a locked list's page unloaded, takes a copy only while the
-   WebView is still on the link's own page (`canonicalUrlKey`), and accepts the
-   page's answer only while a capture awaits one. No screenshot, and none planned
-   for now (_the scope each copy stops at_) — it would need
+   copy_, or _Update preview_ — two entries for one screen, because "keep this
+   article" and "this preview is wrong" are different wants): the page in a
+   `react-native-webview` WebView with two actions under it. **Keep read mode**
+   keeps the article and its images (_images in read mode_ — the page fetches them
+   first); **Update preview** re-reads the title and preview image from the live
+   page — the same collector the browser extension injects (web-react
+   `lib/page-meta.ts`), `selectTitleImage` in the app, the image fetched in the
+   page and natively where the page couldn't, and written at `expo:fg` whatever
+   tier held it, since it is a tap (expo-react `data/store-page-preview.ts`). Only
+   what was had is written: a page whose image couldn't be fetched keeps the old
+   one, and a title or image the user set by hand still wins, which the screen
+   says. The page loads on every plan — a preview is free — and only _Keep read
+   mode_ is gated, marked Plus and opening the upgrade on a free account. A locked
+   list's page stays unloaded; both actions are live only while the WebView is on
+   the link's own page (`canonicalUrlKey`), the address the page reports with its
+   answer is checked again, and the page re-checks it before every image fetch.
+   The conversation is one injected request at a time, each with a fresh nonce
+   its answers must echo (`features/capture/use-page-capture.ts`, the protocol in
+   `@stxapps/shared` `reader/page-capture.ts`); the injected script is a second
+   generated bundle, apart from the Safari preprocessing file so that one stays
+   small (`tools/scripts/generate-reader-capture.ts`). No screenshot, and none
+   planned for now (_the scope each copy stops at_) — it would need
    `react-native-view-shot` ([expo-dependencies.md](./expo-dependencies.md),
-   _react-native-webview_). The original plan for it: _Keep read mode_ /
-   _Keep screenshot_ — the extension's popup, rebuilt around a WebView. Its cookie
-   store persists, so a user signs in to a site once. _Planned_: a **visible**
-   batch over a scoped selection, one page after another, with the screen on.
+   _react-native-webview_). Its cookie store persists, so a user signs in to a site
+   once — which is what makes it the fallback for every save that couldn't read the
+   page as the user sees it: an Android share, an iOS share from an app other than
+   Safari, a page behind a sign-in. Not done: a page that redirects on load (an `m.`
+   host, AMP, a shortener) lands somewhere `canonicalUrlKey` doesn't match, and the
+   buttons stay off. Accepting the address the first load settles on is not the fix
+   — a page behind a sign-in redirects to its sign-in page first, and its title would
+   become the link's. _Planned_: a **visible** batch over a scoped selection, one
+   page after another, with the screen on.
 3. **Later, a Safari Web Extension** in the iOS app: the browser extension itself,
    in Safari.
 
 Never a hidden or background WebView: iOS suspends it, offscreen rendering is
 unreliable, and it is invisible work on the user's battery.
+
+**An automatic read on save — measured 2026-11-11, not built.** The saves that reach
+the app with no live-page copy — an Android share, an iOS share from an app other than
+Safari, a link added in the app — could take read mode from the HTML `extractNow`
+already fetches for the title: the server's code (`readModeFromHtml`, linkedom +
+Readability + the shared walker) run on the device, at `expo:bg`, with no extra request.
+A spike ran it over the 62 pages of `measure:kept-copies`, fetched as the app fetches
+(its User-Agent, 15 s, 4 MB), on the **app's own Hermes** (the iOS pod's `hermes`,
+bytecode from its `hermesc`, after the app's Babel preset), against the live-page
+copies of the 2026-11-10 run:
+
+| what                                 | result                                                                         |
+| ------------------------------------ | ------------------------------------------------------------------------------ |
+| pages that answered the app's fetch  | 55 of 62 — 7 refused it with a 403                                             |
+| live-page copies raw HTML also had   | 38 of 42; 29 of the 32 articles fetched. Missed: 1 article, 3 product pages    |
+| raw-HTML copies the live page didn't | 1 (a product page)                                                             |
+| same result on Hermes as on Node     | 54 of 55 (the other is the harness's missing `canvas` shim)                    |
+| Hermes time, one cold run, on an M1  | median 202 ms, p90 1,076 ms, max 4,551 ms; kept articles median 250, p90 1,986 |
+| code it adds to the app's bundle     | ~497 KB minified (linkedom and Readability)                                    |
+
+**It works and it covers the gap — and it can't run where it would have to.** Hermes is
+about 9.5× slower than V8 here, and a low-end Android phone is several times slower
+than an M1 again, so a typical article would hold the JS thread for around a second and
+a long one for several, right as the user reopens the app — which is when the drain
+runs. No size cap saves it: 100 KB keeps the worst case near 200 ms on the M1 and keeps
+10 of the 42 copies. So it waits on a way to run it **off the JS thread**: a worklet
+runtime (`react-native-worklets`, already in the app for Reanimated, whose 0.5 "bundle
+mode" is what would let a second runtime import a library this size — experimental,
+and unverified here) or nothing. Until then the capture screen is the route for those
+saves, and the measurement above is what a build on another thread starts from.
+
+Two facts it turned up for whoever builds it. linkedom loads `canvas` with a
+`require` it expects to fail, falling back to its own `canvas-shim` — which wrangler's
+bundle keeps (in workerd there is no `require`), but Metro resolves every `require` at
+build time, so `canvas` has to be aliased to that shim there, or the build breaks or a
+page with a `<canvas>` throws. And Readability throws on some pages under linkedom (an
+empty or bare-text body), so the call is caught and read as no article — the server's
+`readModeFromHtml` does that now. It reads no `robots.txt`, like every capture a device
+makes ([link-extraction-server.md](./link-extraction-server.md), _robots.txt and read
+mode_).
 
 **bracemark-web — the server's read mode, on a per-link ask.** It can't fetch a page
 (CORS), so its read mode is the extractor's, under `serverExtraction`, and it has no
@@ -592,8 +681,11 @@ The kept copies are a Plus feature, `keptCopies` in `iap/plans.ts`, enforced in 
 client like every per-feature gate (the server can't tell one `files/` blob from
 another); the byte and file ceilings stay the server-hard backstop. It is checked
 where a capture is asked for — the browser extension's save and its saved screen,
-expo's share drain and capture screen, and bracemark-web's server read mode
-(`useServerReadMode`) — and the upgrade dialog's words are `PAYWALL_COPY.keptCopies` (`@stxapps/react`).
+expo's share drain and the capture screen's _Keep read mode_ (not the screen itself,
+which also serves the free _Update preview_), and bracemark-web's server read mode
+(`useServerReadMode`) — and the upgrade dialog's words are `PAYWALL_COPY.keptCopies` (`@stxapps/react`),
+one string read on the web and on a phone, so its screenshot clause is scoped to the
+browser extension: the phone app takes none (_the scope each copy stops at_).
 Two rules:
 
 - **Reading is never gated.** A copy taken while entitled stays readable, exported

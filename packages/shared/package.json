@@ -27,6 +27,26 @@
       "import": "./src/reader/reader-doc-from-dom.ts",
       "default": "./src/reader/reader-doc-from-dom.ts"
     },
+    "./reader/reader-images": {
+      "types": "./src/reader/reader-images.ts",
+      "import": "./src/reader/reader-images.ts",
+      "default": "./src/reader/reader-images.ts"
+    },
+    "./reader/page-capture": {
+      "types": "./src/reader/page-capture.ts",
+      "import": "./src/reader/page-capture.ts",
+      "default": "./src/reader/page-capture.ts"
+    },
+    "./image/sniff": {
+      "types": "./src/image/sniff.ts",
+      "import": "./src/image/sniff.ts",
+      "default": "./src/image/sniff.ts"
+    },
+    "./image/preview": {
+      "types": "./src/image/preview.ts",
+      "import": "./src/image/preview.ts",
+      "default": "./src/image/preview.ts"
+    },
     "./testing": {
       "types": "./src/testing/backup-fixtures.ts",
       "import": "./src/testing/backup-fixtures.ts",

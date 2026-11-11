@@ -1,5 +1,13 @@
+import { collectPageMeta } from '@stxapps/web-react/lib/page-meta';
+
 import { type FakeBrowser, installFakeBrowser } from '../testing/fake-browser';
-import { captureReadMode, captureScreenshot, captureTitleImage, READ_MODE_SCRIPT } from './capture';
+import {
+  captureReadMode,
+  captureScreenshot,
+  captureTitleImage,
+  PAGE_META_SCRIPT,
+  READ_MODE_SCRIPT,
+} from './capture';
 
 // The active-page capture tier. The interesting half of this file is code that never
 // runs in the extension's own bundle: `scripting.executeScript`'s `func` is
@@ -8,7 +16,9 @@ import { captureReadMode, captureScreenshot, captureTitleImage, READ_MODE_SCRIPT
 // the collector reads out of a DOM.
 //
 // So the fake `executeScript` here does what the browser does: call the function
-// with `args` and hand back `[{ result }]`. jsdom is the page. That makes these
+// with `args` and hand back `[{ result }]` — and for the bundled collector file
+// (entrypoints/page-meta.ts), run what WXT bundles into it, web-react's
+// `collectPageMeta`, against this document. jsdom is the page. That makes these
 // specs a real check on the collectors, and on the three decisions the background
 // makes about what comes back:
 //
@@ -33,15 +43,31 @@ let fake: FakeBrowser;
 let responses: Map<string, { ok: boolean; bytes: Uint8Array; type: string }>;
 
 /**
- * The real injection contract: run `func` with `args`, in this document, and return
- * the browser's `[{ result }]` envelope.
+ * The real injection contract: run `func` with `args` — or the named bundled file — in
+ * this document, and return the browser's `[{ result }]` envelope.
  */
 function injectFor(after?: () => void) {
-  return jest.fn(async ({ func, args }: { func: (...a: never[]) => unknown; args?: unknown[] }) => {
-    const result = await func(...((args ?? []) as never[]));
-    after?.();
-    return [{ result }];
-  });
+  return jest.fn(
+    async ({
+      func,
+      args,
+      files,
+    }: {
+      func?: (...a: never[]) => unknown;
+      args?: unknown[];
+      files?: string[];
+    }) => {
+      let result: unknown;
+      if (files) {
+        if (files[0] !== PAGE_META_SCRIPT) throw new Error(`no fake for ${files.join()}`);
+        result = collectPageMeta(document);
+      } else {
+        result = await func?.(...((args ?? []) as never[]));
+      }
+      after?.();
+      return [{ result }];
+    },
+  );
 }
 
 function setPage(head: string, title = ''): void {

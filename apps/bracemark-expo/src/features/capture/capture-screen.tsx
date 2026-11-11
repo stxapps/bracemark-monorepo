@@ -1,64 +1,104 @@
 import { useRef, useState } from 'react';
 import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { WebView, type WebViewMessageEvent } from 'react-native-webview';
+import { WebView } from 'react-native-webview';
 import { router } from 'expo-router';
-import { BookOpen, Check, X } from 'lucide-react-native';
+import { BookOpen, Check, RefreshCw, X } from 'lucide-react-native';
 import { withUniwind } from 'uniwind';
 
 import {
+  type LinkItem,
   readExtraction,
   readLinkById,
   useEntitlements,
   useKeptCopyMutations,
   useLiveRead,
   useLocks,
+  usePagePreview,
 } from '@stxapps/expo-react';
 import { LOCK_COPY } from '@stxapps/react';
-import { canonicalUrlKey, hostFromText, openableUrl } from '@stxapps/shared';
+import { canonicalUrlKey, hostFromText, openableUrl, PLAN_LABELS } from '@stxapps/shared';
 
+import { ErrorText } from '../../components/error-text';
 import { LockPane } from '../../components/lock-pane';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { usePaywall } from '../../contexts/paywall-provider';
-import { READER_CAPTURE_SCRIPT } from './reader-capture-script.generated';
+import { usePageCapture } from './use-page-capture';
 
 // The capture screen — the browser extension's popup, rebuilt around a WebView: the
-// saved page, open, with "Keep read mode" under it. The one way this app takes a
-// copy on its own (an iOS share from Safari is the other, and needs no screen —
-// docs/link-extraction-keep.md, _expo_).
+// saved page, open, with two actions under it. _Update preview_ re-reads the link's
+// title and preview image from the page; _Keep read mode_ keeps its article, with its
+// images. The one way this app takes either from a live page on its own (an iOS share
+// from Safari is the other, for read mode, and needs no screen —
+// docs/link-extraction-keep.md, _per client_, bracemark-expo).
 //
 // A WebView, not an in-app browser: SFSafariViewController and Chrome Custom Tabs
-// can't be scripted, and taking a copy means running the converter inside the page.
-// The cost is that the WebView has its OWN cookie store — the user's Safari or Chrome
-// sign-ins don't carry over — so the first visit to a site behind a sign-in is a
-// sign-in here; the store persists, so it is the only one.
+// can't be scripted, and both actions run code inside the page. The cost is that the
+// WebView has its OWN cookie store — the user's Safari or Chrome sign-ins don't carry
+// over — so the first visit to a site behind a sign-in is a sign-in here; the store
+// persists, so it is the only one. That session is the point of the screen: the page's
+// text, its preview and its pictures are read as the signed-in user sees them, which
+// no fetch of the address alone can do.
 //
 // The rules, each one the browser extension's or the reader's, and each silent if
 // dropped:
 //
 //   - LOCKS FIRST: a link in a locked list doesn't load at all until it's unlocked —
 //     loading the page is reading the list's contents.
-//   - THE PLAN GATES THE CAPTURE, here, before the page is even loaded: a free
-//     account gets the upgrade, not a page with a button that refuses.
+//   - THE PLAN GATES READ MODE, NOT THE PAGE. A preview is free on every plan, so the
+//     page loads for everyone; on a free account _Keep read mode_ is marked Plus and
+//     opens the upgrade instead of capturing (the browser extension's saved screen does
+//     the same).
 //   - THE PAGE MUST STILL BE THE LINK'S. The user can follow links inside the
-//     WebView; a copy taken then would be ANOTHER page's text filed under this link,
-//     permanently (`expo:fg` is the top tier — nothing outranks it later). The
-//     button is live only while the WebView's current URL has the link's canonical
-//     identity (`canonicalUrlKey`, so http→https and a trailing slash still match),
-//     the browser extension's stale-tab guard in another shape.
-//   - A MESSAGE IS ACCEPTED ONLY WHILE ONE IS AWAITED. The page's own scripts can
-//     call `window.ReactNativeWebView.postMessage` too; outside a capture this
-//     screen ignores everything, and inside one it takes the first answer, which
-//     `keepReadMode` validates against the ReaderDoc schema before storing.
+//     WebView; a copy or a preview taken then would be ANOTHER page's, filed under this
+//     link at `expo:fg` — the top tier, which nothing outranks later. The buttons are
+//     live only while the WebView's current URL has the link's canonical identity
+//     (`canonicalUrlKey`, so http→https and a trailing slash still match), and the
+//     address the PAGE reports with its answer is checked again, for a navigation
+//     between the tap and the answer. The page re-checks it before every image fetch
+//     too (web-react lib/webview-capture.ts).
+//   - THE CONVERSATION IS use-page-capture.ts's: one request at a time, an answer
+//     counted only with its request's nonce, every request ending.
 //
 // No screenshot yet: a WebView can't photograph itself, and the module that can
 // (react-native-view-shot) is a second native dependency, not taken in this change.
 
 const StyledSafeAreaView = withUniwind(SafeAreaView);
 
-type Phase = 'idle' | 'capturing' | 'kept' | 'noArticle' | 'failed';
+// The outcome of a tap. A failure is an error that MOUNTS, so it goes to ErrorText
+// (role="alert" — docs/accessibility.md, _the one rule_) in the fixed error shape
+// (docs/brand-assets.md, _errors have a fixed shape_); every other outcome is a quiet
+// status line.
+const NOTICE = {
+  noArticle: 'No article on this page to keep as text.',
+  offPage: 'Go back to the saved page to update its preview or keep a copy.',
+} as const;
+const FAILURE = {
+  keep: 'Could not keep read mode. Please try again.',
+  preview: 'Could not update the preview. Please try again.',
+} as const;
+
+// What _Update preview_ says it did. Only what was had is written (expo-react
+// data/store-page-preview.ts), so a missing image is reported, not hidden — and a title
+// or image the user set by hand still wins over the page's, which the screen says
+// rather than leaving the list looking unchanged.
+function previewNotice(outcome: { title: boolean; image: boolean }, link: LinkItem): string {
+  if (!outcome.title && !outcome.image) return 'No title or image found on this page.';
+  const done =
+    outcome.title && outcome.image
+      ? 'Preview updated.'
+      : outcome.title
+        ? 'Title updated. No preview image could be fetched from this page.'
+        : 'Image updated.';
+  const ownTitle = outcome.title && Boolean(link.customTitle);
+  const ownImage = outcome.image && Boolean(link.customImageId);
+  if (ownTitle && ownImage) return `${done} The title and image you set still show.`;
+  if (ownTitle) return `${done} The title you set still shows.`;
+  if (ownImage) return `${done} The image you set still shows.`;
+  return done;
+}
 
 function close(): void {
   if (router.canGoBack()) router.back();
@@ -70,6 +110,7 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
   const { entitlements } = useEntitlements();
   const paywall = usePaywall();
   const { keepReadMode } = useKeptCopyMutations();
+  const { updatePreviewFromPage } = usePagePreview();
   const link = useLiveRead(() => readLinkById(linkId).then((l) => l ?? null), [linkId], ['items']);
   const extraction = useLiveRead(
     () => readExtraction(linkId).then((e) => e ?? null),
@@ -78,52 +119,82 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
   );
 
   const webview = useRef<WebView>(null);
-  const awaiting = useRef(false);
+  const page = usePageCapture(webview);
   const [currentUrl, setCurrentUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [phase, setPhase] = useState<Phase>('idle');
+  const [busy, setBusy] = useState<'readMode' | 'preview' | null>(null);
+  const [kept, setKept] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [failure, setFailure] = useState('');
 
   const settled = link !== undefined && extraction !== undefined && lockStatus === 'ready';
   const locked = settled && link !== null && isListLocked(link.listId);
+  const entitled = entitlements.keptCopies;
   const href = link ? openableUrl(link.url) : undefined;
   const host = link ? hostFromText(link.url) : '';
-  const onLinkPage =
-    link !== null &&
-    link !== undefined &&
-    currentUrl !== null &&
-    canonicalUrlKey(currentUrl) !== null &&
-    canonicalUrlKey(currentUrl) === canonicalUrlKey(link.url);
+  const isLinkPage = (url: string | null | undefined): boolean =>
+    Boolean(link && url) &&
+    canonicalUrlKey(url as string) !== null &&
+    canonicalUrlKey(url as string) === canonicalUrlKey((link as LinkItem).url);
+  const onLinkPage = isLinkPage(currentUrl);
+  const ready = onLinkPage && !loading && busy === null;
 
-  const capture = () => {
-    if (!onLinkPage || awaiting.current) return;
-    awaiting.current = true;
-    setPhase('capturing');
-    webview.current?.injectJavaScript(READER_CAPTURE_SCRIPT);
+  const keep = async () => {
+    if (!entitled) {
+      paywall.show('keptCopies');
+      return;
+    }
+    if (!link || !ready) return;
+    setBusy('readMode');
+    setNotice('');
+    setFailure('');
+    try {
+      const answer = await page.readMode();
+      if (!answer || !isLinkPage(answer.href)) {
+        setFailure(FAILURE.keep);
+        return;
+      }
+      if (answer.capture === null) {
+        setNotice(NOTICE.noArticle);
+        return;
+      }
+      // The images are asked of the page first (its session reaches what the native
+      // fetch can't) and fetched natively where it couldn't — only when the account
+      // keeps images, which keepReadMode decides.
+      const stored = await keepReadMode(link, answer.capture, {
+        fetchFromPage: (sources) => page.readerImages(sources, answer.href),
+      });
+      if (stored) setKept(true);
+      else setFailure(FAILURE.keep);
+    } catch {
+      setFailure(FAILURE.keep);
+    } finally {
+      setBusy(null);
+    }
   };
 
-  const onMessage = (event: WebViewMessageEvent) => {
-    if (!awaiting.current || !link) return;
-    awaiting.current = false;
-    let message: unknown;
+  const updatePreview = async () => {
+    if (!link || !ready) return;
+    setBusy('preview');
+    setNotice('');
+    setFailure('');
     try {
-      message = JSON.parse(event.nativeEvent.data);
+      const answer = await page.meta();
+      if (!answer || !isLinkPage(answer.href)) {
+        setFailure(FAILURE.preview);
+        return;
+      }
+      const outcome = await updatePreviewFromPage(link, {
+        href: answer.href,
+        collected: answer.collected,
+        fetchFromPage: (url) => page.previewImage(url, answer.href),
+      });
+      setNotice(previewNotice(outcome, link));
     } catch {
-      setPhase('failed');
-      return;
+      setFailure(FAILURE.preview);
+    } finally {
+      setBusy(null);
     }
-    const { type, doc } = (message ?? {}) as { type?: unknown; doc?: unknown };
-    if (type !== 'bracemark-read-mode') {
-      setPhase('failed');
-      return;
-    }
-    if (doc === null) {
-      setPhase('noArticle');
-      return;
-    }
-    void keepReadMode(link, doc).then(
-      (stored) => setPhase(stored ? 'kept' : 'failed'),
-      () => setPhase('failed'),
-    );
   };
 
   let body: React.ReactNode = null;
@@ -146,20 +217,8 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
         onUnlock={(password) => unlockList(link.listId, password)}
       />
     );
-  } else if (!entitlements.keptCopies) {
-    body = (
-      <View className="items-center gap-4 px-6 py-16">
-        <Text className="text-center text-base font-semibold">Keep a copy of this page</Text>
-        <Text className="text-center text-sm text-muted-foreground">
-          Keeping the text of a page in read mode is a Plus feature. Copies you have already kept
-          stay readable on every plan.
-        </Text>
-        <Button testID="capture-upgrade" onPress={() => paywall.show('keptCopies')}>
-          <Text>Keep copies with Plus</Text>
-        </Button>
-      </View>
-    );
   } else {
+    const plus = PLAN_LABELS.plus;
     body = (
       <>
         <WebView
@@ -177,43 +236,60 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
             setCurrentUrl(nav.url);
             setLoading(nav.loading);
           }}
-          onMessage={onMessage}
+          onMessage={page.onMessage}
         />
         <View className="gap-2 border-t border-border px-4 py-3">
-          {phase === 'kept' ? (
+          <View className="flex-row gap-2">
             <Button
               variant="outline"
-              testID="capture-read"
-              onPress={() => router.replace(`/read?link=${encodeURIComponent(linkId)}`)}
+              className="flex-1"
+              testID="capture-update-preview"
+              disabled={!ready}
+              onPress={() => void updatePreview()}
             >
-              <Icon as={Check} className="size-4 text-foreground" />
-              <Text>Kept — read it</Text>
+              <Icon as={RefreshCw} className="size-4 text-foreground" />
+              <Text>{busy === 'preview' ? 'Updating…' : 'Update preview'}</Text>
             </Button>
+            {kept ? (
+              <Button
+                variant="outline"
+                className="flex-1"
+                testID="capture-read"
+                onPress={() => router.replace(`/read?link=${encodeURIComponent(linkId)}`)}
+              >
+                <Icon as={Check} className="size-4 text-foreground" />
+                <Text>Kept — read it</Text>
+              </Button>
+            ) : (
+              <Button
+                className="flex-1"
+                testID="capture-keep-read-mode"
+                // On free the button is the upgrade, so it is never disabled there — and
+                // its name says what it is (the browser extension's saved screen does
+                // the same).
+                aria-label={entitled ? undefined : `Keep read mode — a ${plus} feature`}
+                disabled={entitled && !ready}
+                onPress={() => void keep()}
+              >
+                <Icon as={BookOpen} className="size-4 text-primary-foreground" />
+                <Text>
+                  {busy === 'readMode'
+                    ? 'Keeping…'
+                    : extraction?.readModeId
+                      ? 'Keep a new copy'
+                      : 'Keep read mode'}
+                </Text>
+                {entitled ? null : <Text className="text-xs opacity-80">{plus}</Text>}
+              </Button>
+            )}
+          </View>
+          {failure ? (
+            <ErrorText className="text-center text-xs">{failure}</ErrorText>
           ) : (
-            <Button
-              testID="capture-keep-read-mode"
-              disabled={!onLinkPage || loading || phase === 'capturing'}
-              onPress={capture}
-            >
-              <Icon as={BookOpen} className="size-4 text-primary-foreground" />
-              <Text>
-                {phase === 'capturing'
-                  ? 'Keeping…'
-                  : extraction?.readModeId
-                    ? 'Keep read mode again'
-                    : 'Keep read mode'}
-              </Text>
-            </Button>
+            <Text className="text-center text-xs text-muted-foreground" role="status">
+              {notice || (!onLinkPage && !loading ? NOTICE.offPage : '')}
+            </Text>
           )}
-          <Text className="text-center text-xs text-muted-foreground" role="status">
-            {phase === 'noArticle'
-              ? 'No article on this page to keep as text.'
-              : phase === 'failed'
-                ? 'Couldn’t keep a copy. Try again.'
-                : !onLinkPage && !loading
-                  ? 'Go back to the saved page to keep its copy.'
-                  : ''}
-          </Text>
         </View>
       </>
     );

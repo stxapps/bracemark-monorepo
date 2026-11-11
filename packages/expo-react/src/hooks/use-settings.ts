@@ -13,6 +13,7 @@ import {
   coerceThemeState,
   DEFAULT_THEME,
   type DeviceExtractionMode,
+  keepOnSaveOf,
   type LinksLayout,
   type ThemeState,
 } from '@stxapps/shared';
@@ -47,6 +48,11 @@ export interface Settings {
   localTheme: ThemeState;
   // Device-local: has the first-run link-previews offer been dismissed here?
   previewsPromptDismissed: boolean;
+  // The synced kept-copies setting, RESOLVED (`keepOnSaveOf`: read mode on, its images
+  // on, screenshot off) — web-react's twin. A RENDER's copy: it answers the defaults
+  // until the blob's read lands, so a capture reads the store at the ask instead
+  // (docs/link-extraction-keep.md, _when a copy is taken_). For switches only.
+  keepOnSave: { readMode: boolean; readModeImages: boolean; screenshot: boolean };
 }
 
 export function useSettings(): Settings {
@@ -82,6 +88,14 @@ export function useSettings(): Settings {
   const localTheme = useMemo(() => coerceThemeState(local?.theme ?? DEFAULT_THEME), [local?.theme]);
   const theme = themeSource === 'local' ? localTheme : syncTheme;
 
+  const keepReadModeOnSave = general?.keepReadModeOnSave;
+  const keepReadModeImages = general?.keepReadModeImages;
+  const keepScreenshotOnSave = general?.keepScreenshotOnSave;
+  const keepOnSave = useMemo(
+    () => keepOnSaveOf({ keepReadModeOnSave, keepReadModeImages, keepScreenshotOnSave }),
+    [keepReadModeOnSave, keepReadModeImages, keepScreenshotOnSave],
+  );
+
   return {
     linksLayout,
     linksLayoutSource,
@@ -96,5 +110,6 @@ export function useSettings(): Settings {
     syncTheme,
     localTheme,
     previewsPromptDismissed: local?.previewsPromptDismissed ?? false,
+    keepOnSave,
   };
 }
