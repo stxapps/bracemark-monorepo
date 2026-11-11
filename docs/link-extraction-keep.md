@@ -39,7 +39,10 @@ unbuilt pieces are built to.
 
 **Naming.** "Page copy", never "archive" — the word is the Archive system list's
 ([link-extraction.md](./link-extraction.md), the opening note). "Read mode" in prose,
-`readMode` in code. "Kept copies" is this file's name for the three together.
+`readMode` in code. "Kept copies" is this file's name for the three together, and
+the code's (`keptCopies`); what a user reads is "copies", never "kept copies" as a
+label nor "page copies" for the three — [brand-assets.md](./brand-assets.md),
+_terminology_.
 
 ### why these three, and in this order
 

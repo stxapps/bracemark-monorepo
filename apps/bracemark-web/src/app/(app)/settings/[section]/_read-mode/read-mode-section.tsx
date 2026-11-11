@@ -59,7 +59,7 @@ export function ReadModeSection() {
     <SettingsPane>
       <SettingsHeader
         title="Read mode"
-        description="When you save a page with the Bracemark browser extension, it can also keep a copy of it from the open tab: the text in read mode, and a screenshot of what was on screen when you saved it. On an iPhone or iPad, a page you share from Safari to the Bracemark app keeps its read mode the same way. Read kept copies from a link’s menu. Saving here in the web app can’t keep a copy — the page isn’t open."
+        description="When you save a page with the Bracemark browser extension, it can also keep a copy of it from the open tab: the text in read mode, and a screenshot of what was on screen when you saved it. On an iPhone or iPad, a page you share from Safari to the Bracemark app keeps its read mode the same way. Choose Read in a link’s menu to open a copy. Saving here in the web app can’t keep a copy — the page isn’t open."
       />
       <div className="flex flex-col gap-3">
         <SettingsRow

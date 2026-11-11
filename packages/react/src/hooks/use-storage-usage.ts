@@ -51,7 +51,7 @@ export type StorageReadout = {
 const NOTE_ROOM =
   'Images take the most room: previews, the pictures in read-mode copies, and screenshots.';
 const NOTE_FULL =
-  'Full — new changes wait to sync until there’s room. Removing kept copies or deleting links permanently frees space.';
+  'Full — new changes wait to sync until there’s room. Deleting copies you’ve kept, or links in Trash, frees space.';
 
 // The readout both settings screens draw, or null when there is nothing to show:
 // still loading, failed (the screen has nothing else that depends on it, so it is

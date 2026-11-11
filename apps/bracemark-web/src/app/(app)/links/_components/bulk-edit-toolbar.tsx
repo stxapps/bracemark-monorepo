@@ -493,7 +493,7 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
         <AlertDialogContent>
           <AlertDialogHeader className="place-items-start text-left">
             <AlertDialogTitle>
-              Delete the kept copies of {withCopies.length} link
+              Delete the copies kept with {withCopies.length} link
               {withCopies.length === 1 ? '' : 's'}?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-pretty">

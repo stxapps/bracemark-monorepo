@@ -810,9 +810,9 @@ export const FAQ_GROUPS: FaqGroup[] = [
             it a few hundred KB (a few MB for a long article full of them), and a screenshot up to a
             few hundred KB. Settings → Subscription shows how much your library uses. If it ever
             fills up, nothing is deleted and nothing goes out of reach: you keep reading, searching,
-            and exporting, new changes wait to sync, and removing kept copies or deleting links
-            permanently frees space. On {PLAN_LABELS.free}, the {FREE_LINKS}-link limit comes long
-            before storage does.
+            and exporting, new changes wait to sync, and deleting copies you’ve kept, or links in
+            Trash, frees space. On {PLAN_LABELS.free}, the {FREE_LINKS}-link limit comes long before
+            storage does.
           </>
         ),
       },
