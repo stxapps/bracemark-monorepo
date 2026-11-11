@@ -17,7 +17,7 @@ automatically on a save when the plan has `keptCopies`, and offers read mode and
 screenshot as taps on its saved screen (`popup/Editor.tsx`, `popup/KeptCopies.tsx`;
 captures in `utils/capture.ts`, `extraction-worker.ts`); bracemark-web reads both at
 `/read?link=<id>` ([reader.md](./reader.md), _the web reader_), and the synced save
-setting chooses what a save keeps (Settings → Link previews → Kept copies). Server
+setting chooses what a save keeps (Settings → Read mode). Server
 read mode is built (_per client_, bracemark-extractor) and reached from bracemark-web
 as a per-link _Keep read mode_. Removal (one copy, and a selection's in bulk edit) and
 the orphaned-file sweep are built (_removal, cleanup, export_), and so are expo's
@@ -205,8 +205,8 @@ shipped client has to skip it.
 A read-mode copy keeps the article's pictures with its words. Built on every tier
 that takes a copy, 2026-11-10; before that a figure was only its alt text and caption,
 which loses the chart the paragraph is about. **On by default**, with a switch of its
-own — _Keep images in read mode_, beside the other two in Settings → Link previews →
-Kept copies on the web, and on both phones (`keepReadModeImages`, resolved by
+own — _Keep images in read mode_, beside the other two in Settings → Read mode on
+the web, and on both phones (`keepReadModeImages`, resolved by
 `keepOnSaveOf`). Unlike its neighbours
 it is not "on save": it qualifies **every** read-mode copy the account takes, a
 per-link _Keep read mode_ included, because what it answers is how much of an article
@@ -452,14 +452,17 @@ Three triggers, and deliberately not a fourth:
    without writing anything (the tab moved on), and a line suggesting the screenshot
    when read mode came back "not an article", the page a screenshot is for. A free
    account sees the same buttons marked Plus, and a tap opens the web app's
-   Subscription section. The setting itself is two switches in bracemark-web's
-   Settings → Link previews → _Kept copies_ (`_extraction/kept-copies-group.tsx`):
+   Subscription section. The setting itself is switches in bracemark-web's
+   Settings → _Read mode_ (`_read-mode/read-mode-section.tsx`), a section of its own
+   rather than a group under Link previews — a preview and a kept copy answer
+   different questions, and the previews section's plan gate and drain controls say
+   nothing about this one:
    shown off and disabled on free beside the upgrade, with the stored value left
    alone so a returning subscriber keeps their choice, and worded so it never claims
    a save made in the web app keeps a copy — it can't, the page isn't open there. It
    applies only to saves made **on the page**: the browser extension's, and on iOS a
    share from Safari, whose drain reads `keepReadModeOnSave` at the drain. Expo
-   renders the same group (`features/settings/kept-copies-group.tsx`) with only the
+   renders the same section (`features/settings/read-mode-section.tsx`) with only the
    switches that change something on the device holding them — a setting with no
    effect there is worse than none: _Keep images in read mode_ on both platforms (it
    governs the capture screen's copies too), _Keep read mode on save_ on **iOS only**

@@ -168,7 +168,7 @@ async function prepareAccount(
 // rather than thirty seconds later as a wall of monograms that looks like a bad
 // URL list.
 async function enableServerExtraction(page: Page): Promise<void> {
-  await page.goto('/settings/extraction');
+  await page.goto('/settings/link-previews');
   const toggle = page.getByRole('switch', { name: 'Server previews' });
   await expect(toggle).toBeVisible();
   if ((await toggle.getAttribute('data-state')) !== 'checked') await toggle.click();
@@ -205,13 +205,13 @@ async function useListLayout(page: Page): Promise<void> {
 // which failure taught us that.
 async function fillPreviews(page: Page): Promise<void> {
   const total = SHOT_USER.links;
-  await page.goto('/settings/extraction');
+  await page.goto('/settings/link-previews');
 
   // PHASE 1 — the extract-all job, watched WITHOUT navigating.
   //
   // `extractAll()` is client state on the provider, so a full page load ENDS it.
   // That matters more than it sounds: an earlier version of this function polled
-  // by re-visiting `/settings/extraction` every thirty seconds, which cancelled
+  // by re-visiting `/settings/link-previews` every thirty seconds, which cancelled
   // the job on every pass and restarted nothing — it sat at 0 of 24 while the
   // log looked like a slow network. So this phase stays on the page it started
   // on and watches the section's own controls change under it; everything here
@@ -327,7 +327,7 @@ async function fillPreviews(page: Page): Promise<void> {
     await page.goto('/links?list=all');
     await scrollThroughList(page);
 
-    await page.goto('/settings/extraction');
+    await page.goto('/settings/link-previews');
     progress = await readPreviewedCount(page);
     const line = report(progress, total);
     if (line !== lastReport) {

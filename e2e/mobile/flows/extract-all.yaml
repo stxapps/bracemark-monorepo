@@ -22,7 +22,7 @@ tags: [EXTRACT-NATIVE-ALL-001, full, online, internet, ios, android]
 - runFlow:
     file: subflows/open-settings.yaml
     env:
-      SECTION: extraction
+      SECTION: link-previews
 - tapOn:
     id: 'extraction-mode-all'
 - runFlow:

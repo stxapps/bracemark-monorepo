@@ -802,8 +802,8 @@ retry`, which is why its copy says the count won't come down _on its own_ rather
   `no-title-image` (`apps/bracemark-site/src/content/faq.tsx`) at length, and —
   now that the label carries the "we have stopped" half — one line of causes
   beside the stats in each settings pane
-  (`apps/bracemark-web/src/app/(app)/settings/[section]/_extraction/`,
-  `apps/bracemark-expo/src/features/settings/extraction-section.tsx`). Widen or
+  (`apps/bracemark-web/src/app/(app)/settings/[section]/_link-previews/`,
+  `apps/bracemark-expo/src/features/settings/link-previews-section.tsx`). Widen or
   narrow the permanent set in `extract/retry.ts` and all three describe a product
   that no longer exists, with no lint error, type error or failing test — the
   copy names login/paywall pages, non-HTML targets and hosts that turn away
@@ -1136,7 +1136,7 @@ billed — it gets a button, a progress readout, and Pause, and says it uses the
 connection), and the per-session auto backstop can sit looser than web's, since
 overshooting spends the user's battery rather than the project's money. The
 _settings section_ shape follows from the same swap: expo gets the section
-bracemark-web's `_extraction/extraction-section.tsx` header anticipates being dropped —
+bracemark-web's `_link-previews/link-previews-section.tsx` header anticipates being dropped —
 same "Link previews" surface, but no plan gate and no upsell branch (on-device
 extraction is free on every plan), no two-step confirm, and in place of a toggle it
 renders `deviceExtractionMode` as three radios. The default is also **offered**

@@ -3,6 +3,7 @@
 // truth keeps the menu, the labels, and the content switch from drifting apart.
 
 import {
+  BookOpen,
   CreditCard,
   Database,
   Folders,
@@ -14,7 +15,15 @@ import {
 } from 'lucide-react';
 
 export type SettingsSectionId =
-  'account' | 'subscription' | 'data' | 'extraction' | 'lists' | 'tags' | 'misc' | 'about';
+  | 'account'
+  | 'subscription'
+  | 'data'
+  | 'link-previews'
+  | 'read-mode'
+  | 'lists'
+  | 'tags'
+  | 'misc'
+  | 'about';
 
 export interface SettingsSection {
   id: SettingsSectionId;
@@ -26,7 +35,8 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   { id: 'account', label: 'Account', icon: <User className="size-4" /> },
   { id: 'subscription', label: 'Subscription', icon: <CreditCard className="size-4" /> },
   { id: 'data', label: 'Data', icon: <Database className="size-4" /> },
-  { id: 'extraction', label: 'Link previews', icon: <Link className="size-4" /> },
+  { id: 'link-previews', label: 'Link previews', icon: <Link className="size-4" /> },
+  { id: 'read-mode', label: 'Read mode', icon: <BookOpen className="size-4" /> },
   { id: 'lists', label: 'Lists', icon: <Folders className="size-4" /> },
   { id: 'tags', label: 'Tags', icon: <Tags className="size-4" /> },
   { id: 'misc', label: 'Misc.', icon: <SlidersHorizontal className="size-4" /> },

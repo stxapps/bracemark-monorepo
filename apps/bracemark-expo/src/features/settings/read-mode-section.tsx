@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { useEntitlements, useSettingMutations, useSettings } from '@stxapps/expo-react';
 import { PLAN_LABELS } from '@stxapps/shared';
@@ -8,12 +8,13 @@ import { Button } from '../../components/ui/button';
 import { Switch } from '../../components/ui/switch';
 import { Text } from '../../components/ui/text';
 import { usePaywall } from '../../contexts/paywall-provider';
-import { SettingsGroup, SettingsNotice, SettingsRow } from './settings-kit';
+import { SettingsHeader, SettingsNotice, SettingsPane, SettingsRow } from './settings-kit';
 
-// Settings → Link previews → Kept copies — the expo half of bracemark-web's
-// `_extraction/kept-copies-group.tsx`: the SYNCED kept-copies setting, resolved by
-// `keepOnSaveOf` (read mode on, its images on, screenshot off by default).
-// docs/link-extraction-keep.md, _when a copy is taken_.
+// Settings → Read mode — the expo half of bracemark-web's
+// `_read-mode/read-mode-section.tsx` (its header says why this is a section of its
+// own rather than a group under Link previews): the SYNCED kept-copies setting,
+// resolved by `keepOnSaveOf` (read mode on, its images on, screenshot off by
+// default). docs/link-extraction-keep.md, _when a copy is taken_.
 //
 // A switch is rendered only where it changes something ON THIS DEVICE — a setting with
 // no effect on the device holding it is worse than none:
@@ -37,7 +38,7 @@ import { SettingsGroup, SettingsNotice, SettingsRow } from './settings-kit';
 // shape, and its reason: the setting is the clearest description of what the plan
 // adds. The stored value is left alone, so an account that downgrades and comes back
 // keeps its choice.
-export function KeptCopiesGroup() {
+export function ReadModeSection() {
   const { entitlements } = useEntitlements();
   const { keepOnSave, deviceExtractionMode } = useSettings();
   const { setKeepOnSave } = useSettingMutations();
@@ -55,69 +56,72 @@ export function KeptCopiesGroup() {
   };
 
   return (
-    <SettingsGroup
-      title="Kept copies"
-      description={
-        ios
-          ? 'Read mode keeps a page’s article — its text and pictures — with the link. Keep one from a link’s menu with Keep a copy, or when you share a page from Safari.'
-          : 'Read mode keeps a page’s article — its text and pictures — with the link. Keep one from a link’s menu with Keep a copy.'
-      }
-    >
-      {ios ? (
+    <SettingsPane>
+      <SettingsHeader
+        title="Read mode"
+        description={
+          ios
+            ? 'Read mode keeps a page’s article — its text and pictures — with the link. Keep one from a link’s menu with Keep a copy, or when you share a page from Safari.'
+            : 'Read mode keeps a page’s article — its text and pictures — with the link. Keep one from a link’s menu with Keep a copy.'
+        }
+      />
+      <View className="gap-3">
+        {ios ? (
+          <SettingsRow
+            title="Keep read mode on save"
+            description="Keeps a page’s text when you share it from Safari to Bracemark. The setting syncs, so saves with the browser extension follow it too."
+            action={
+              <Switch
+                testID="keep-read-mode-on-save"
+                accessibilityLabel="Keep read mode on save"
+                value={entitled && keepOnSave.readMode}
+                disabled={!entitled}
+                onValueChange={(readMode) => set({ readMode })}
+              />
+            }
+          />
+        ) : null}
         <SettingsRow
-          title="Keep read mode on save"
-          description="Keeps a page’s text when you share it from Safari to Bracemark. The setting syncs, so saves with the browser extension follow it too."
+          title="Keep images in read mode"
+          description="The pictures in the article, kept with its text. They take far more room than the text does — turn this off to keep words only."
           action={
             <Switch
-              testID="keep-read-mode-on-save"
-              accessibilityLabel="Keep read mode on save"
-              value={entitled && keepOnSave.readMode}
+              testID="keep-read-mode-images"
+              accessibilityLabel="Keep images in read mode"
+              value={entitled && keepOnSave.readModeImages}
               disabled={!entitled}
-              onValueChange={(readMode) => set({ readMode })}
+              onValueChange={(readModeImages) => set({ readModeImages })}
             />
           }
         />
-      ) : null}
-      <SettingsRow
-        title="Keep images in read mode"
-        description="The pictures in the article, kept with its text. They take far more room than the text does — turn this off to keep words only."
-        action={
-          <Switch
-            testID="keep-read-mode-images"
-            accessibilityLabel="Keep images in read mode"
-            value={entitled && keepOnSave.readModeImages}
-            disabled={!entitled}
-            onValueChange={(readModeImages) => set({ readModeImages })}
+        {!entitled ? (
+          <SettingsRow
+            title={`A ${PLAN_LABELS.plus} feature`}
+            description="Copies you have already kept stay readable on every plan."
+            action={
+              <Button
+                variant="outline"
+                size="sm"
+                testID="kept-copies-upgrade"
+                onPress={() => paywall.show('keptCopies')}
+              >
+                <Text>Upgrade to {PLAN_LABELS.plus}</Text>
+              </Button>
+            }
           />
-        }
-      />
+        ) : null}
+      </View>
       {/* With the device's fetch mode at `off`, a Safari share's images are not fetched
           (share-bridge.tsx — they are this app's requests to the saved site), while
           Keep a copy, an explicit ask on a page the user has open, still fetches them.
           Standing text, so no role. iOS only: Android has no share that carries a copy. */}
       {ios && entitled && keepOnSave.readModeImages && deviceExtractionMode === 'off' ? (
         <SettingsNotice tone="info">
-          With previews off, a page shared from Safari keeps its text only. Keep a copy still keeps
-          its pictures.
+          With Link previews off, a page shared from Safari keeps its text only. Keep a copy still
+          keeps its pictures.
         </SettingsNotice>
       ) : null}
-      {!entitled ? (
-        <SettingsRow
-          title={`A ${PLAN_LABELS.plus} feature`}
-          description="Copies you have already kept stay readable on every plan."
-          action={
-            <Button
-              variant="outline"
-              size="sm"
-              testID="kept-copies-upgrade"
-              onPress={() => paywall.show('keptCopies')}
-            >
-              <Text>Upgrade to {PLAN_LABELS.plus}</Text>
-            </Button>
-          }
-        />
-      ) : null}
       {error && <SettingsNotice tone="error">{error}</SettingsNotice>}
-    </SettingsGroup>
+    </SettingsPane>
   );
 }

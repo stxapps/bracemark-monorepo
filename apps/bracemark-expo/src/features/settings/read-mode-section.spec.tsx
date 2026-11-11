@@ -2,9 +2,9 @@ import * as React from 'react';
 import { Platform } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
-import { KeptCopiesGroup } from './kept-copies-group';
+import { ReadModeSection } from './read-mode-section';
 
-// Settings → Link previews → Kept copies on the phone (its header has the reasoning).
+// Settings → Read mode on the phone (its header has the reasoning).
 // A switch exists only where it changes something on THIS device:
 //   - the images switch on both platforms (it qualifies every copy, the capture
 //     screen's included);
@@ -47,7 +47,7 @@ beforeEach(() => {
 
 test('iOS: the on-save switch and the images switch — and no screenshot switch', () => {
   Platform.OS = 'ios';
-  render(<KeptCopiesGroup />);
+  render(<ReadModeSection />);
   expect(screen.getByTestId('keep-read-mode-on-save')).toBeTruthy();
   expect(screen.getByTestId('keep-read-mode-images')).toBeTruthy();
   expect(screen.queryByText(/screenshot/i)).toBeNull();
@@ -57,7 +57,7 @@ test('iOS: the on-save switch and the images switch — and no screenshot switch
 // the device holding it — while still changing the browser extension's saves.
 test('Android: only the images switch', () => {
   Platform.OS = 'android';
-  render(<KeptCopiesGroup />);
+  render(<ReadModeSection />);
   expect(screen.queryByTestId('keep-read-mode-on-save')).toBeNull();
   expect(screen.getByTestId('keep-read-mode-images')).toBeTruthy();
   expect(screen.queryByText(/Safari/)).toBeNull();
@@ -65,7 +65,7 @@ test('Android: only the images switch', () => {
 
 test('a switch writes the synced setting', () => {
   Platform.OS = 'ios';
-  render(<KeptCopiesGroup />);
+  render(<ReadModeSection />);
   fireEvent(screen.getByTestId('keep-read-mode-on-save'), 'valueChange', false);
   fireEvent(screen.getByTestId('keep-read-mode-images'), 'valueChange', false);
   expect(mockSetKeepOnSave).toHaveBeenNthCalledWith(1, { readMode: false });
@@ -75,7 +75,7 @@ test('a switch writes the synced setting', () => {
 test('free: the switches show off and disabled, beside the upgrade', () => {
   Platform.OS = 'ios';
   mockKeptCopies = false;
-  render(<KeptCopiesGroup />);
+  render(<ReadModeSection />);
   for (const id of ['keep-read-mode-on-save', 'keep-read-mode-images']) {
     const control = screen.getByTestId(id);
     expect(control.props.value).toBe(false);
@@ -88,6 +88,6 @@ test('free: the switches show off and disabled, beside the upgrade', () => {
 test('iOS with previews off: says a Safari share keeps its text only', () => {
   Platform.OS = 'ios';
   mockMode = 'off';
-  render(<KeptCopiesGroup />);
+  render(<ReadModeSection />);
   expect(screen.getByText(/keeps its text only/)).toBeTruthy();
 });

@@ -23,7 +23,7 @@ tags: [EXTRACT-NATIVE-001, full, online, internet, ios, android]
 - runFlow:
     file: subflows/open-settings.yaml
     env:
-      SECTION: extraction
+      SECTION: link-previews
 - runFlow:
     file: subflows/assert-radio-checked.yaml
     env:

@@ -16,7 +16,16 @@ import { checkpoint, layoutOf, useLayout } from './fixtures/checkpoint';
 // view changes by URL, which is the view's own address (docs/search.md) — and
 // asserts only what it must to know the state has arrived.
 
-const SETTINGS_SECTIONS = ['account', 'data', 'extraction', 'lists', 'tags', 'misc', 'about'];
+const SETTINGS_SECTIONS = [
+  'account',
+  'data',
+  'link-previews',
+  'read-mode',
+  'lists',
+  'tags',
+  'misc',
+  'about',
+];
 
 function fixturePath(name: string): string {
   const runId = process.env.E2E_RUN_ID ?? 'visual-direct';

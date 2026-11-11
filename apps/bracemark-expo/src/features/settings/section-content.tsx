@@ -7,9 +7,10 @@
 import { AboutSection } from './about-section';
 import { AccountSection } from './account-section';
 import { DataSection } from './data-section';
-import { ExtractionSection } from './extraction-section';
+import { LinkPreviewsSection } from './link-previews-section';
 import { ListsSection } from './lists-section';
 import { MiscSection } from './misc-section';
+import { ReadModeSection } from './read-mode-section';
 import { type SettingsSectionId } from './sections';
 import { SubscriptionSection } from './subscription-section';
 import { TagsSection } from './tags-section';
@@ -18,7 +19,8 @@ const SECTIONS: Record<SettingsSectionId, () => React.ReactNode> = {
   account: () => <AccountSection />,
   subscription: () => <SubscriptionSection />,
   data: () => <DataSection />,
-  extraction: () => <ExtractionSection />,
+  'link-previews': () => <LinkPreviewsSection />,
+  'read-mode': () => <ReadModeSection />,
   lists: () => <ListsSection />,
   tags: () => <TagsSection />,
   misc: () => <MiscSection />,

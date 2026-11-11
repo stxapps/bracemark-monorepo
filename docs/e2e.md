@@ -1273,7 +1273,7 @@ All of them are in the app:
 | `measure-stall-reading`       | `src/features/settings/data-section.tsx` — measurement bundles only (`measure:data:<platform>`)  |
 | `measure-begin-<label>`       | `src/components/measure-probe.tsx` — also `measure-end`; measurement bundles only                |
 | `export-data-format-<format>` | ” — `bracemark` `netscape` `csv` `text` export radio rows                                        |
-| `extraction-mode-<mode>`      | `src/features/settings/extraction-section.tsx` — `off` `saves` `all` radio rows                  |
+| `extraction-mode-<mode>`      | `src/features/settings/link-previews-section.tsx` — `off` `saves` `all` radio rows               |
 | `extraction-count-<bucket>`   | ” — the number in `done` `pending` `will-retry` `wont-retry`                                     |
 | `extraction-progress`         | ” — "N of M links previewed."                                                                    |
 | `extraction-generate-all`     | ” — also `extraction-pause`, which replaces it while the job runs                                |

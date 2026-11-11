@@ -32,7 +32,7 @@ tags: [SHARE-EXTRACT-ANDROID-001, SHARE-EXTRACT-IOS-001, full, online, internet,
 - runFlow:
     file: subflows/open-settings.yaml
     env:
-      SECTION: extraction
+      SECTION: link-previews
 - runFlow:
     file: subflows/assert-radio-checked.yaml
     env:

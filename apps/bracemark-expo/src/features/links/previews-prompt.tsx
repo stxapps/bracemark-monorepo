@@ -49,7 +49,7 @@
 
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
-// ImageDown, not Sparkles — see the note in settings/extraction-section.tsx:
+// ImageDown, not Sparkles — see the note in settings/link-previews-section.tsx:
 // Sparkles is held for the parked `aiTier`, and previews involve no model.
 import { ImageDown, X } from 'lucide-react-native';
 

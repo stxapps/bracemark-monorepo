@@ -1,5 +1,5 @@
 // The Link previews settings section — the expo port of bracemark-web's
-// `(app)/settings/[section]/_extraction/extraction-section.tsx` (that header is
+// `(app)/settings/[section]/_link-previews/link-previews-section.tsx` (that header is
 // canonical: a thin controls surface over the provider's drain, with the opt-in
 // colocated beside the controls it governs rather than split off into Misc).
 // Same three parts — the toggle, the exact facet counts, the full-library
@@ -51,7 +51,6 @@ import { Icon } from '../../components/ui/icon';
 import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
-import { KeptCopiesGroup } from './kept-copies-group';
 import { SettingsHeader, SettingsNotice, SettingsPane } from './settings-kit';
 
 // The ladder, as copy. Ordered by DEVICE_EXTRACTION_MODES (increasing disclosure),
@@ -138,7 +137,7 @@ function Stat({ label, value, testID }: { label: string; value: number; testID: 
   );
 }
 
-export function ExtractionSection() {
+export function LinkPreviewsSection() {
   const { enabled, isRunning, isExtractingAll, autoLimitReached, extractAll, pause } =
     useExtraction();
   const {
@@ -320,8 +319,6 @@ export function ExtractionSection() {
           </Text>
         </View>
       ) : null}
-
-      <KeptCopiesGroup />
     </SettingsPane>
   );
 }

@@ -46,7 +46,16 @@ const MAX_FRAMES = 12;
 
 const LOCK_PASSWORD = 'visual-lock-password';
 
-const SETTINGS_SECTIONS = ['account', 'data', 'extraction', 'lists', 'tags', 'misc', 'about'];
+const SETTINGS_SECTIONS = [
+  'account',
+  'data',
+  'link-previews',
+  'read-mode',
+  'lists',
+  'tags',
+  'misc',
+  'about',
+];
 
 interface Mask {
   kind: string;

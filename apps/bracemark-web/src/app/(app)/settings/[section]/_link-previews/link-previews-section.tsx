@@ -1,6 +1,6 @@
 'use client';
 
-// The Extraction settings section: the opt-in toggle + link enrichment progress
+// The Link previews settings section: the opt-in toggle + link enrichment progress
 // + the explicit full-library controls. Server extraction fills in a saved
 // link's title/image via bracemark-extractor; the drain loop itself lives in
 // web-react's ExtractionProvider (mounted in (app)/layout.tsx), so this section
@@ -47,7 +47,6 @@ import {
   SettingsPane,
   SettingsRow,
 } from '../../_components/settings-kit';
-import { KeptCopiesGroup } from './kept-copies-group';
 
 // One labelled count in a bordered tile.
 function Stat({ label, value }: { label: string; value: number }) {
@@ -59,7 +58,7 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
-export function ExtractionSection() {
+export function LinkPreviewsSection() {
   const { enabled, isRunning, isExtractingAll, autoLimitReached, extractAll, pause } =
     useExtraction();
   const {
@@ -169,7 +168,6 @@ export function ExtractionSection() {
             </Button>
           }
         />
-        <KeptCopiesGroup />
       </SettingsPane>
     );
   }
@@ -317,8 +315,6 @@ export function ExtractionSection() {
           </div>
         </div>
       ) : null}
-
-      <KeptCopiesGroup />
     </SettingsPane>
   );
 }

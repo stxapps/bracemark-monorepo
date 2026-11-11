@@ -411,7 +411,7 @@ function ImportView({ onBack }: { onBack: () => void }) {
           `inline-flex shrink-0`, but a direct flex child gets `align-self:
           stretch` — as a bare child of the pane this one filled the whole 672px
           measure, the only settings action in the app that did. Same wrapper the
-          other seven use (account-section, extraction-section). */}
+          other seven use (account-section, link-previews-section). */}
       <div className="flex flex-col gap-3">
         <div>
           <Button variant="outline" onClick={() => inputRef.current?.click()} disabled={running}>

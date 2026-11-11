@@ -122,8 +122,17 @@
       "gate": false
     },
     {
-      "id": "settings-extraction",
+      "id": "settings-link-previews",
       "title": "Settings: Link previews",
+      "case": "VISUAL-APP-001",
+      "platforms": ["web", "ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "settings-read-mode",
+      "title": "Settings: Read mode",
       "case": "VISUAL-APP-001",
       "platforms": ["web", "ios", "android"],
       "appearances": ["light", "dark"],
@@ -291,8 +300,18 @@
       "gate": false
     },
     {
-      "id": "large-font-settings-extraction",
+      "id": "large-font-settings-link-previews",
       "title": "Settings: Link previews at a large font size",
+      "case": "VISUAL-FONT-001",
+      "platforms": ["ios", "android"],
+      "appearances": ["light"],
+      "fontScale": "large",
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "large-font-settings-read-mode",
+      "title": "Settings: Read mode at a large font size",
       "case": "VISUAL-FONT-001",
       "platforms": ["ios", "android"],
       "appearances": ["light"],

@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
-import { KeptCopiesGroup } from './kept-copies-group';
+import { ReadModeSection } from './read-mode-section';
 
-// The kept-copies save setting. What matters is what each switch WRITES and what an
+// Settings → Read mode: the kept-copies save setting. What matters is what each switch WRITES and what an
 // unentitled account sees — the stored value and the plan are separate facts, and
 // the screen must not blur them:
 //
@@ -31,13 +31,13 @@ beforeEach(() => {
 });
 
 test('shows the resolved setting: read mode on, screenshot off', () => {
-  render(<KeptCopiesGroup />);
+  render(<ReadModeSection />);
   expect(readMode().getAttribute('aria-checked')).toBe('true');
   expect(screenshot().getAttribute('aria-checked')).toBe('false');
 });
 
 test('each switch writes only its own half', async () => {
-  render(<KeptCopiesGroup />);
+  render(<ReadModeSection />);
 
   await act(async () => {
     fireEvent.click(screenshot());
@@ -54,7 +54,7 @@ test('free: both off and disabled whatever is stored, with the upgrade beside th
   mockKeptCopies = false;
   mockKeepOnSave = { readMode: true, screenshot: true };
 
-  render(<KeptCopiesGroup />);
+  render(<ReadModeSection />);
 
   for (const sw of [readMode(), screenshot()]) {
     expect(sw.getAttribute('aria-checked')).toBe('false');
@@ -67,7 +67,7 @@ test('free: both off and disabled whatever is stored, with the upgrade beside th
 });
 
 test('says copies come from the browser extension, not from saving in the web app', () => {
-  render(<KeptCopiesGroup />);
+  render(<ReadModeSection />);
   expect(screen.getByText(/browser extension/)).not.toBeNull();
   expect(screen.getByText(/web app can’t keep a copy/)).not.toBeNull();
 });

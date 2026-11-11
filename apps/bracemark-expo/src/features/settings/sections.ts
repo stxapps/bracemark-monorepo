@@ -6,15 +6,16 @@
 // `LucideIcon` components (rendered through the ui `Icon` wrapper), not JSX, so
 // this stays a .ts file.
 //
-// `extraction` IS here, and means something different than it does on web: web's
-// section governs SERVER extraction (a paid Plus path through bracemark-extractor),
-// while this one governs ON-DEVICE extraction — the app fetching pages itself,
-// free on every plan, with the toggle gating only the un-gestured residual
-// (links that arrived by sync or import). See docs/link-extraction.md — _expo
-// drains in the foreground_ — and extraction-section.tsx for what that changes
-// in the surface.
+// `link-previews` IS here, and means something different than it does on web:
+// web's section governs SERVER extraction (a paid Plus path through
+// bracemark-extractor), while this one governs ON-DEVICE extraction — the app
+// fetching pages itself, free on every plan, with the toggle gating only the
+// un-gestured residual (links that arrived by sync or import). See
+// docs/link-extraction.md — _expo drains in the foreground_ — and
+// link-previews-section.tsx for what that changes in the surface.
 
 import {
+  BookOpen,
   CreditCard,
   Database,
   Folders,
@@ -27,7 +28,15 @@ import {
 } from 'lucide-react-native';
 
 export type SettingsSectionId =
-  'account' | 'subscription' | 'data' | 'extraction' | 'lists' | 'tags' | 'misc' | 'about';
+  | 'account'
+  | 'subscription'
+  | 'data'
+  | 'link-previews'
+  | 'read-mode'
+  | 'lists'
+  | 'tags'
+  | 'misc'
+  | 'about';
 
 export interface SettingsSection {
   id: SettingsSectionId;
@@ -39,7 +48,8 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   { id: 'account', label: 'Account', icon: User },
   { id: 'subscription', label: 'Subscription', icon: CreditCard },
   { id: 'data', label: 'Data', icon: Database },
-  { id: 'extraction', label: 'Link previews', icon: Link },
+  { id: 'link-previews', label: 'Link previews', icon: Link },
+  { id: 'read-mode', label: 'Read mode', icon: BookOpen },
   { id: 'lists', label: 'Lists', icon: Folders },
   { id: 'tags', label: 'Tags', icon: Tags },
   { id: 'misc', label: 'Misc.', icon: SlidersHorizontal },

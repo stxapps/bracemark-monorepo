@@ -544,7 +544,7 @@ export function SubscriptionSection() {
           against `iap/status`, running for up to 30 seconds behind a screen where
           the checkout overlay has just closed and nothing else moves. Motion is
           what makes a strip read as pending; no background value does that job.
-          Deliberately not on the two in _extraction (both are standing states —
+          Deliberately not on the two in _link-previews (both are standing states —
           previews unavailable, auto-previews paused — and a spinner would promise
           progress that isn't happening), nor on `notice` below, which is a RESULT
           ("You're on Plus now") or the timeout's advice, never a wait. */}
