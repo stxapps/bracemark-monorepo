@@ -325,7 +325,8 @@ walk through it. `maxBytes` / `maxFiles` are a **cost backstop, not a product
 gate**, and each is printed only where an honest library can reach it:
 
 - **Plus's `maxBytes` is published.** Kept copies made it reachable — a
-  screenshot is up to a few hundred KB, measured
+  read-mode copy's images are a few hundred KB an article and on by default, a
+  screenshot is up to a few hundred KB, both measured
   ([link-extraction-keep.md](./link-extraction-keep.md), _why these three_) — so
   the pricing card says "5 GB of storage", a note under the pricing page's
   comparison table repeats it (the table has no storage row, since Free's cell

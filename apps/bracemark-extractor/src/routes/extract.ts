@@ -147,12 +147,16 @@ async function extractOne(requestedUrl: string, plan: ExtractPlan): Promise<Extr
         if (verdict !== 'allowed') {
           result.readModeReason = robotsReason(verdict);
         } else {
-          const doc = readModeFromHtml(
+          const capture = readModeFromHtml(
             decodeHtml(html, response.headers.get('content-type')),
             finalUrl,
           );
-          if (doc) result.readMode = doc;
-          else result.readModeReason = READ_MODE_REASONS.notAnArticle;
+          if (capture) {
+            result.readMode = capture.doc;
+            if (capture.images.length > 0) result.readModeImages = capture.images;
+          } else {
+            result.readModeReason = READ_MODE_REASONS.notAnArticle;
+          }
         }
       }
     }

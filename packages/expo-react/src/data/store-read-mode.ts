@@ -2,8 +2,20 @@ import { File, Paths } from 'expo-file-system';
 import { gzipSync } from 'fflate';
 
 import { newId } from '@stxapps/expo-crypto/lib/ids';
-import { newFacet, readerDocSchema, utf8 } from '@stxapps/shared';
+import {
+  applyReaderImages,
+  encodeReaderImages,
+  isReaderHref,
+  newFacet,
+  readerDocSchema,
+  type ReaderImageEntry,
+  readerImageKeys,
+  type ReaderImageSource,
+  utf8,
+  withinReaderImageBudget,
+} from '@stxapps/shared';
 
+import { collectReaderImages } from '../lib/reader-images';
 import { writeExtraction, writeFile } from './mutations';
 
 // Store a read-mode copy taken on this device from a LIVE page — the expo half of the
@@ -13,7 +25,7 @@ import { writeExtraction, writeFile } from './mutations';
 //
 //   - drainShareOutbox, for a copy a Safari share carried: the iOS share extension's
 //     preprocessing ran the converter inside the shared page (share-extension/
-//     preprocessing.js) and the draft brought the `ReaderDoc` across;
+//     preprocessing.js) and the draft brought the capture across;
 //   - the capture screen, for a copy taken from its WebView
 //     (features/capture/capture-screen.tsx), through useKeptCopyMutations.
 //
@@ -23,21 +35,44 @@ import { writeExtraction, writeFile } from './mutations';
 // container, and a WebView message is whatever the page's context posted.
 // docs/link-extraction-keep.md, _expo_.
 //
-// `readMode` is the doc, or the doc as JSON TEXT. A share draft carries text — the
-// iOS share extension passes the copy along without ever parsing it, and this is
-// where it first becomes objects (docs/share-sheet.md, _what the sheet does and
-// doesn't do_). The capture screen hands over the parsed doc, and so does a draft
-// written before the sheet carried text. Text that isn't JSON is a copy that can't
-// be stored, like any other.
+// `readMode` is the CAPTURE — `{ doc, images }`, the document and beside it the
+// address of each figure it gave a key to — or that as JSON TEXT, or a bare document
+// (what a draft written before captures carried images holds). A share draft carries
+// text — the iOS share extension passes the copy along without ever parsing it, and
+// this is where it first becomes objects (docs/share-sheet.md, _what the sheet does
+// and doesn't do_). Text that isn't JSON is a copy that can't be stored, like any
+// other.
+//
+// IMAGES are fetched here, natively, when `options.images` says the account keeps
+// them and this caller may fetch (lib/reader-images.ts). Whatever is kept goes into
+// ONE pack beside the text (@stxapps/shared reader/reader-images.ts), and the document
+// is SETTLED against it either way — `applyReaderImages` takes the key off every
+// figure whose picture is not in the pack, so with images off the stored document
+// names none. The addresses are used for that one fetch and dropped.
 //
 // Returns whether a copy was written. Never throws: a copy that can't be stored
-// costs the link its copy, never the caller the rest of its work.
-const tempFileFor = (id: string) => new File(Paths.cache, `read-mode-${id}.gz`);
+// costs the link its copy, never the caller the rest of its work — and a picture that
+// can't be had costs the copy that picture, never its words.
+const tempFileFor = (id: string, extension: string) =>
+  new File(Paths.cache, `read-mode-${id}.${extension}`);
+
+function deleteQuietly(file: File | undefined): void {
+  try {
+    if (file?.exists) file.delete();
+  } catch {
+    // A leftover in the cache directory is the OS's to reclaim.
+  }
+}
+
+export interface StoreReadModeOptions {
+  images?: boolean;
+}
 
 export async function storeReadModeCopy(
   username: string,
   linkId: string,
   readMode: unknown,
+  options: StoreReadModeOptions = {},
 ): Promise<boolean> {
   let candidate = readMode;
   if (typeof readMode === 'string') {
@@ -47,16 +82,54 @@ export async function storeReadModeCopy(
       return false;
     }
   }
-  const parsed = readerDocSchema.safeParse(candidate);
+  // A capture has `doc`; a bare document has `blocks`.
+  const capture = candidate as { doc?: unknown; images?: unknown } | null;
+  const isCapture = typeof capture === 'object' && capture !== null && 'doc' in capture;
+  const parsed = readerDocSchema.safeParse(isCapture ? capture.doc : candidate);
   if (!parsed.success) return false;
 
+  const sources: ReaderImageSource[] =
+    isCapture && Array.isArray(capture.images)
+      ? capture.images.filter(
+          (source: Partial<ReaderImageSource> | null): source is ReaderImageSource =>
+            typeof source?.key === 'string' && isReaderHref(source.url),
+        )
+      : [];
+
+  let images: ReaderImageEntry[] = [];
+  if (options.images && sources.length > 0) {
+    try {
+      images = await collectReaderImages(sources);
+    } catch {
+      images = [];
+    }
+  }
+  const kept = withinReaderImageBudget(images);
+  const doc = applyReaderImages(
+    parsed.data,
+    new Map(kept.map(({ key, width, height }) => [key, { width, height }])),
+  );
+  const named = new Set(readerImageKeys(doc));
+  const packed = kept.filter((entry) => named.has(entry.key));
+
   const fileId = newId();
-  const temp = tempFileFor(fileId);
+  const temp = tempFileFor(fileId, 'gz');
+  let packTemp: File | undefined;
   try {
-    temp.write(gzipSync(utf8(JSON.stringify(parsed.data))));
-    await writeFile(username, fileId, temp); // content before metadata
+    // Content before metadata: the pack, then the text, then the one extraction write
+    // that points at both. `readModeImagesId` is written even when undefined, so a
+    // re-capture clears an earlier copy's pack and writeExtraction reclaims it.
+    let readModeImagesId: string | undefined;
+    if (packed.length > 0) {
+      readModeImagesId = newId();
+      packTemp = tempFileFor(readModeImagesId, 'pack');
+      packTemp.write(encodeReaderImages(packed));
+      await writeFile(username, readModeImagesId, packTemp);
+    }
+    temp.write(gzipSync(utf8(JSON.stringify(doc))));
+    await writeFile(username, fileId, temp);
     await writeExtraction(username, linkId, {
-      fields: { readModeId: fileId },
+      fields: { readModeId: fileId, readModeImagesId },
       facet: 'readMode',
       state: newFacet('done', 'expo:fg'),
     });
@@ -64,10 +137,7 @@ export async function storeReadModeCopy(
   } catch {
     return false;
   } finally {
-    try {
-      if (temp.exists) temp.delete();
-    } catch {
-      // A leftover in the cache directory is the OS's to reclaim.
-    }
+    deleteQuietly(temp);
+    deleteQuietly(packTemp);
   }
 }

@@ -1,21 +1,25 @@
 import {
+  keepOnSaveOf,
   newFacet,
   normalizeUrl,
+  type ReaderImageEntry,
   SCREENSHOT_JPEG_QUALITY,
   SCREENSHOT_MAX_DIMENSION,
 } from '@stxapps/shared';
 import { newId } from '@stxapps/web-crypto';
 import {
-  encodeReaderDoc,
+  collectReaderImages,
   type ExtractionFacet,
   type ExtractionFields,
   readLinkById,
+  readSettingsGeneral,
   resizeImage,
+  storeReadModeCopy,
   writeExtraction,
   writeFile,
 } from '@stxapps/web-react';
 
-import { captureReadMode, captureScreenshot, captureTitleImage } from './capture';
+import { captureReadMode, captureScreenshot, captureTitleImage, fetchReaderImage } from './capture';
 
 // `extractedBy` is a `platform:env` string, NOT a device id (entities.ts): quality is
 // DERIVED from it by `tierOf()`, so there's no stored `tier` field. The extension only
@@ -98,8 +102,8 @@ export async function runExtraction(
         break;
       }
       case 'readMode': {
-        const doc = await captureReadMode(tabId);
-        if (!doc) {
+        const capture = await captureReadMode(tabId);
+        if (!capture) {
           // Not an article — a product page, an app, a feed. That is the answer for this
           // page, from the best tier there is, so it's settled rather than retried: a
           // `failed` would have every drain re-ask it. The reason rides on the facet so a
@@ -112,9 +116,27 @@ export async function runExtraction(
           break;
         }
 
-        const readModeId = newId();
-        await writeFile(username, readModeId, await encodeReaderDoc(doc)); // content first
-        await markDone(username, linkId, facet, { fields: { readModeId } });
+        // The article's images, when the account keeps them — read from the STORE, at
+        // the capture, for the reason Editor.tsx reads the save setting there: a
+        // render's copy answers the defaults until the blob's read lands. Fetched from
+        // the page, a few at a time, under one deadline: the text is already in hand
+        // and must not wait on a slow image host. Anything that goes wrong in here
+        // costs the copy its pictures and never its words — storeReadModeCopy turns
+        // every figure without a kept image back into a placeholder.
+        let images: ReaderImageEntry[] = [];
+        if (capture.images.length > 0) {
+          try {
+            if (keepOnSaveOf(await readSettingsGeneral()).readModeImages) {
+              const capturedFrom = capture.doc.sourceUrl ?? tabUrl;
+              images = await collectReaderImages(capture.images, (url) =>
+                fetchReaderImage(tabId, url, capturedFrom),
+              );
+            }
+          } catch {
+            images = [];
+          }
+        }
+        await storeReadModeCopy(username, linkId, capture.doc, images, EXTRACTED_BY);
         break;
       }
       case 'screenshot': {

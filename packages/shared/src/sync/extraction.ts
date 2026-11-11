@@ -111,6 +111,7 @@ export function newFacet(
 export const EXTRACTION_FILE_REF_FIELDS = [
   'imageId',
   'readModeId',
+  'readModeImagesId',
   'screenshotId',
   'pageCopyId',
 ] as const satisfies readonly (keyof Extraction)[];
@@ -154,13 +155,27 @@ export function replacedExtractionFileIds(
 // malformed one (the schema's `.catch`) all land on the default. This answers what
 // the user ASKED for; whether the plan allows a capture is `keptCopies`, checked
 // separately by the caller. docs/link-extraction-keep.md, _when a copy is taken_.
-export const KEEP_ON_SAVE_DEFAULTS = { readMode: true, screenshot: false } as const;
+//
+// `readModeImages` is not a third copy but what a read-mode copy INCLUDES: the
+// article's pictures, packed beside its text (reader/reader-images.ts). On by default —
+// a chart is often what the paragraph is about — and its own switch because it is the
+// largest thing a library keeps: a hundred times the text. It qualifies EVERY read-mode
+// capture this account makes, not only a save's: a per-link _Keep read mode_ reads it
+// too, since the question it answers is "how much of an article do I keep", not "when".
+export const KEEP_ON_SAVE_DEFAULTS = {
+  readMode: true,
+  readModeImages: true,
+  screenshot: false,
+} as const;
 
 export function keepOnSaveOf(
-  settings: Pick<SettingsGeneral, 'keepReadModeOnSave' | 'keepScreenshotOnSave'> | undefined,
-): { readMode: boolean; screenshot: boolean } {
+  settings:
+    | Pick<SettingsGeneral, 'keepReadModeOnSave' | 'keepReadModeImages' | 'keepScreenshotOnSave'>
+    | undefined,
+): { readMode: boolean; readModeImages: boolean; screenshot: boolean } {
   return {
     readMode: settings?.keepReadModeOnSave ?? KEEP_ON_SAVE_DEFAULTS.readMode,
+    readModeImages: settings?.keepReadModeImages ?? KEEP_ON_SAVE_DEFAULTS.readModeImages,
     screenshot: settings?.keepScreenshotOnSave ?? KEEP_ON_SAVE_DEFAULTS.screenshot,
   };
 }

@@ -11,7 +11,8 @@
 // tiers — see captureTitleImage's header for why that survives the page/bundle split.
 //
 // READ MODE is the exception to "an injected func": it needs Readability, so it is a
-// bundled FILE (entrypoints/read-mode.ts) injected by name — see captureReadMode.
+// bundled FILE (entrypoints/read-mode.ts) injected by name — see captureReadMode. Its
+// images are then fetched one at a time, from the page, by fetchReaderImage.
 //
 // There is no page-copy capture. A serialized DOM without its stylesheets, images and
 // fonts isn't a copy of anything offline, and rendering it would request every remote
@@ -20,8 +21,11 @@
 
 import {
   type CollectedMeta,
+  isReaderHref,
+  READER_IMAGE_MAX_SOURCE_BYTES,
   type ReaderDoc,
   readerDocSchema,
+  type ReaderImageSource,
   selectTitleImage,
   sniffImageMime,
 } from '@stxapps/shared';
@@ -203,13 +207,75 @@ export const READ_MODE_SCRIPT = '/read-mode.js';
 // rather than trusted: a page can't reach the injected script's scope, but this is the
 // boundary where the bytes stop being the page's and start being the user's, and it
 // costs one schema pass.
-export async function captureReadMode(tabId: number): Promise<ReaderDoc | undefined> {
+//
+// `images` is the address of each figure the document gave a key to, for
+// `fetchReaderImage` below. Checked the same way and for the same reason: a key is a
+// string, an address is absolute http(s), and anything else is dropped here rather
+// than handed to a fetch.
+export async function captureReadMode(
+  tabId: number,
+): Promise<{ doc: ReaderDoc; images: ReaderImageSource[] } | undefined> {
   const [injection] = await browser.scripting.executeScript({
     target: { tabId },
     files: [READ_MODE_SCRIPT],
   });
-  const parsed = readerDocSchema.safeParse(injection?.result);
-  return parsed.success ? parsed.data : undefined;
+  const result = injection?.result as { doc?: unknown; images?: unknown } | null | undefined;
+  const parsed = readerDocSchema.safeParse(result?.doc);
+  if (!parsed.success) return undefined;
+  const images = Array.isArray(result?.images)
+    ? result.images.filter(
+        (source: Partial<ReaderImageSource> | null): source is ReaderImageSource =>
+          typeof source?.key === 'string' && isReaderHref(source.url),
+      )
+    : [];
+  return { doc: parsed.data, images };
+}
+
+// One article image's bytes, fetched FROM THE PAGE — the read-mode copy's counterpart
+// of the preview image's second injection in captureTitleImage, and for the same
+// reason: `host_permissions` is the api origin only, so the service worker gets no
+// CORS exemption for a third-party image host, while the page's own context can
+// usually read what it is already showing. "Usually": a host that refuses a
+// cross-origin read costs that one image, which stays a placeholder
+// (docs/link-extraction-keep.md, _images in read mode_).
+//
+// `capturedFrom` is the page the document was taken from. The tab can navigate between
+// the capture and this fetch, and a fetch made then would run in ANOTHER page's
+// context, with its cookies — so it bails. Undefined for any image it couldn't get;
+// never a throw.
+const READER_IMAGE_FETCH_TIMEOUT_MS = 15_000;
+
+export async function fetchReaderImage(
+  tabId: number,
+  url: string,
+  capturedFrom: string,
+): Promise<Uint8Array | undefined> {
+  const [download] = await browser.scripting.executeScript({
+    target: { tabId },
+    args: [url, capturedFrom, READER_IMAGE_MAX_SOURCE_BYTES, READER_IMAGE_FETCH_TIMEOUT_MS],
+    func: async (target: string, from: string, maxBytes: number, timeoutMs: number) => {
+      if (location.href !== from) return '';
+      try {
+        const res = await fetch(target, { signal: AbortSignal.timeout(timeoutMs) });
+        if (!res.ok) return '';
+        const blob = await res.blob();
+        // Measured here, in the page, so an oversized image is dropped BEFORE it is
+        // base64-inflated and copied across the boundary.
+        if (blob.size === 0 || blob.size > maxBytes) return '';
+        return await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+          reader.onerror = () => resolve('');
+          reader.readAsDataURL(blob);
+        });
+      } catch {
+        // A host that refuses the read, or a timeout — this image is a placeholder.
+        return '';
+      }
+    },
+  });
+  const dataUrl = (download?.result as string | undefined) ?? '';
+  return dataUrl ? dataUrlToBytes(dataUrl) : undefined;
 }
 
 // --- screenshot --------------------------------------------------------------

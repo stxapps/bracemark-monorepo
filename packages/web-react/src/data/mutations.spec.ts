@@ -446,6 +446,48 @@ describe('removeKeptCopy', () => {
     expect(await db.items.get(pathFromId('shot-1', FILES_PREFIX))).toBeDefined();
   });
 
+  it('removes a read-mode copy’s image pack with its text', async () => {
+    // Two blobs, one copy. A pack left behind would count against the quota with no
+    // document naming it, until the orphan sweep found it a month later.
+    await writeFile(USER, 'read-1', bytes);
+    await writeFile(USER, 'pack-1', bytes);
+    await writeExtraction(USER, LINK_ID, {
+      fields: { readModeId: 'read-1', readModeImagesId: 'pack-1' },
+      facet: 'readMode',
+      state: newFacet('done', 'extension:fg'),
+    });
+
+    await expect(removeKeptCopy(USER, LINK_ID, 'readMode')).resolves.toBe(true);
+
+    const extraction = await readExtraction(LINK_ID);
+    expect(extraction?.readModeId).toBeUndefined();
+    expect(extraction?.readModeImagesId).toBeUndefined();
+    for (const id of ['read-1', 'pack-1']) {
+      const path = pathFromId(id, FILES_PREFIX);
+      expect(await db.items.get(path)).toBeUndefined();
+      expect(await pendingFor(path)).toMatchObject({ op: 'delete' });
+    }
+  });
+
+  it('a re-capture without images reclaims the earlier copy’s pack', async () => {
+    await writeFile(USER, 'read-1', bytes);
+    await writeFile(USER, 'pack-1', bytes);
+    await writeExtraction(USER, LINK_ID, {
+      fields: { readModeId: 'read-1', readModeImagesId: 'pack-1' },
+    });
+    await writeFile(USER, 'read-2', bytes);
+
+    // What storeReadModeCopy writes when the new copy kept no image: the field
+    // present and undefined, so the old ref is CLEARED rather than left standing.
+    await writeExtraction(USER, LINK_ID, {
+      fields: { readModeId: 'read-2', readModeImagesId: undefined },
+    });
+
+    expect((await readExtraction(LINK_ID))?.readModeImagesId).toBeUndefined();
+    expect(await db.items.get(pathFromId('pack-1', FILES_PREFIX))).toBeUndefined();
+    expect(await db.items.get(pathFromId('read-2', FILES_PREFIX))).toBeDefined();
+  });
+
   it('writes nothing when there is no such copy — and never creates an extraction', async () => {
     await expect(removeKeptCopy(USER, LINK_ID, 'screenshot')).resolves.toBe(false);
     expect(await db.items.get(PATH)).toBeUndefined();

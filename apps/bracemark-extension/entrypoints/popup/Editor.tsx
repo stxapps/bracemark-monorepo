@@ -71,7 +71,11 @@ import { openWebApp } from '@/utils/open-web-app';
 async function keepRequestedAtSave(entitled: boolean): Promise<KeepRequest> {
   if (!entitled) return NO_KEEP_REQUEST;
   try {
-    return keepOnSaveOf(await readSettingsGeneral());
+    // Which COPIES the save takes. Whether a read-mode copy keeps the article's
+    // images is the same setting's third answer, and it is the capture's to read
+    // (extraction-worker.ts), not the popup's to carry.
+    const { readMode, screenshot } = keepOnSaveOf(await readSettingsGeneral());
+    return { readMode, screenshot };
   } catch {
     return NO_KEEP_REQUEST;
   }

@@ -2,9 +2,17 @@ import { z } from '../zod';
 
 export {
   isReaderHref,
+  isReaderImageTooSmall,
   READER_DOC_MAX_BLOCKS,
   READER_DOC_MAX_CHARS,
   READER_DOC_VERSION,
+  READER_IMAGE_JPEG_QUALITY,
+  READER_IMAGE_MAX_DIMENSION,
+  READER_IMAGE_MAX_SOURCE_BYTES,
+  READER_IMAGE_MIN_AREA,
+  READER_IMAGE_MIN_SIDE,
+  READER_IMAGES_MAX_BYTES,
+  READER_IMAGES_MAX_COUNT,
   READER_TABLE_MAX_COLUMNS,
   READER_TABLE_MAX_ROWS,
 } from './reader-doc-core';
@@ -39,7 +47,7 @@ export const READER_BLOCK_KINDS = [
   'quote', // `runs` — one block per paragraph of a blockquote
   'listItem', // `runs`, `ordered`, `level` = nesting depth from 0
   'code', // `text`, whitespace preserved
-  'figure', // an image the copy does NOT carry: `text` = its alt, `runs` = its caption
+  'figure', // `text` = its alt, `runs` = its caption; `image` + `width`/`height` when kept
   'table', // `rows` of `cells`, a rectangular grid; `runs` = its caption; `truncated`
   'rule', // a thematic break, no content
 ] as const;
@@ -100,6 +108,20 @@ export const readerBlockSchema = z.looseObject({
   // `table` only: the page's table had more rows than the capture keeps
   // (READER_TABLE_MAX_ROWS), and this is the first part of it.
   truncated: z.boolean().optional(),
+  // `figure` only, and only when the picture was KEPT: `image` is its key in the
+  // copy's image pack (`extraction.readModeImagesId`, reader/reader-images.ts) and
+  // `width`/`height` its stored size in pixels — what lets a reader reserve the space
+  // before the pack has arrived, so the text never jumps. A figure without `image` is
+  // the placeholder it always was.
+  //
+  // ⚠ A KEY, NEVER AN ADDRESS. The image's URL is known at capture and is handed to the
+  // client BESIDE the document (`ReaderImageSource`), fetched once, and dropped. If it
+  // were a field here, a writer that forgot to strip it would store a remote URL in a
+  // copy — a request to the saved site on every view, the leak this format exists to
+  // prevent — and every ordinary article would render exactly the same.
+  image: z.string().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
 });
 export type ReaderBlock = z.infer<typeof readerBlockSchema>;
 

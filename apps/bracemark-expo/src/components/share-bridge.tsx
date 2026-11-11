@@ -10,7 +10,7 @@ import {
   useExtraction,
   useSync,
 } from '@stxapps/expo-react';
-import { keepOnSaveOf } from '@stxapps/shared';
+import { coerceDeviceExtractionMode, keepOnSaveOf } from '@stxapps/shared';
 
 // The MAIN APP's half of the share sheet (docs/share-sheet.md), as a renderless
 // component mounted inside <SyncProvider> (it reads useSync): keeps the two App
@@ -50,12 +50,22 @@ import { keepOnSaveOf } from '@stxapps/shared';
 // writes and reads the store live), the handoff one on iOS. All of it is
 // failure-tolerant: this bridge must never take the app tree down over a share
 // artifact — a missed pass self-heals on the next signal.
-// The synced kept-copies setting's read-mode half, from the store.
-async function readModeOnSave(): Promise<boolean> {
+// The synced kept-copies setting's read-mode half, from the store: whether a shared
+// page's copy is kept, and whether it keeps the article's images too. The second is
+// also this device's FETCH mode — the text arrived in the draft, but the images are
+// requests this app makes to the saved site's hosts, and `off` stops all of those
+// (docs/link-extraction.md, _the stance_). A read that fails keeps nothing.
+async function readModeOnSave(): Promise<{ copy: boolean; images: boolean }> {
   try {
-    return keepOnSaveOf(await readSettingsGeneral()).readMode;
+    const settings = await readSettingsGeneral();
+    const keep = keepOnSaveOf(settings);
+    return {
+      copy: keep.readMode,
+      images:
+        keep.readModeImages && coerceDeviceExtractionMode(settings?.deviceExtractionMode) !== 'off',
+    };
   } catch {
-    return false;
+    return { copy: false, images: false };
   }
 }
 
@@ -101,9 +111,16 @@ export function ShareBridge() {
         // setting, read from the STORE now rather than a render's copy that answers
         // the defaults until it loads (docs/link-extraction-keep.md, the
         // read-at-the-save tripwire). A read that fails keeps nothing.
-        const keepReadMode = ready && entitledRef.current && (await readModeOnSave());
+        const keep =
+          ready && entitledRef.current ? await readModeOnSave() : { copy: false, images: false };
         const applied = ready
-          ? [...(await drainShareOutbox({ keepReadMode })), ...takeShareHandoffs()]
+          ? [
+              ...(await drainShareOutbox({
+                keepReadMode: keep.copy,
+                keepReadModeImages: keep.images,
+              })),
+              ...takeShareHandoffs(),
+            ]
           : [];
         await refreshShareTaxonomy();
         if (applied.length > 0) {

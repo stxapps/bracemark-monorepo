@@ -87,6 +87,67 @@ test('a figure loads nothing — the copy keeps words, not images', () => {
   expect(screen.getByText('Figure 1')).not.toBeNull();
 });
 
+test('a kept image is drawn from the caller’s map, in a box of its stored size', () => {
+  const { container } = render(
+    <ReaderArticle
+      doc={doc([
+        { id: 'b0', kind: 'figure', text: 'A chart', image: 'i0', width: 800, height: 400 },
+      ])}
+      title="A post"
+      images={new Map([['i0', { url: 'blob:kept-i0', width: 800, height: 400 }]])}
+    />,
+  );
+
+  const img = screen.getByRole('img', { name: 'A chart' });
+  expect(img.getAttribute('src')).toBe('blob:kept-i0');
+  expect((img.parentElement as HTMLElement).style.aspectRatio).toBe('800 / 400');
+  expect(container.querySelectorAll('img')).toHaveLength(1);
+});
+
+test('a figure whose pack is still on its way holds its space; settled without it, its words', () => {
+  const figure = doc([
+    { id: 'b0', kind: 'figure', text: 'A chart', image: 'i0', width: 800, height: 400 },
+  ]);
+
+  const waiting = render(
+    <ReaderArticle doc={figure} title="A post" images={new Map()} imagesSettled={false} />,
+  );
+  expect(waiting.container.querySelector('img')).toBeNull();
+  expect(waiting.container.querySelector('[style*="aspect-ratio"]')).not.toBeNull();
+  expect(screen.queryByText('A chart')).toBeNull();
+  waiting.unmount();
+
+  const settled = render(<ReaderArticle doc={figure} title="A post" images={new Map()} />);
+  expect(settled.container.querySelector('img')).toBeNull();
+  expect(screen.getByText('A chart')).not.toBeNull();
+});
+
+test('nothing in a document can name an image address — only a key into the pack', () => {
+  // A copy is stored bytes. Whatever a figure block carries, the only `src` this
+  // renderer writes is one the caller minted.
+  const { container } = render(
+    <ReaderArticle
+      doc={doc([
+        {
+          id: 'b0',
+          kind: 'figure',
+          text: 'x',
+          image: 'https://tracker.example/p.gif',
+          url: 'https://tracker.example/p.gif',
+          src: 'https://tracker.example/p.gif',
+          width: 10,
+          height: 10,
+        },
+      ])}
+      title="A post"
+      images={new Map([['i0', { url: 'blob:kept-i0', width: 10, height: 10 }]])}
+    />,
+  );
+
+  expect(container.querySelector('img')).toBeNull();
+  expect(container.innerHTML).not.toContain('tracker.example');
+});
+
 test('a block kind from a newer version is skipped, and the rest still renders', () => {
   mount(
     doc([

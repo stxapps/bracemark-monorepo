@@ -83,10 +83,11 @@ export function useSettingMutations(): SettingMutations {
   );
 
   const setKeepOnSave = useCallback(
-    async (patch: { readMode?: boolean; screenshot?: boolean }) => {
+    async (patch: { readMode?: boolean; readModeImages?: boolean; screenshot?: boolean }) => {
       if (!username) throw new Error('useSettingMutations: no active account');
       await writeSettingsGeneral(username, {
         ...(patch.readMode !== undefined ? { keepReadModeOnSave: patch.readMode } : {}),
+        ...(patch.readModeImages !== undefined ? { keepReadModeImages: patch.readModeImages } : {}),
         ...(patch.screenshot !== undefined ? { keepScreenshotOnSave: patch.screenshot } : {}),
       });
       requestSync();

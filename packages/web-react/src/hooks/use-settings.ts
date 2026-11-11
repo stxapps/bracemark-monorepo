@@ -68,7 +68,7 @@ export interface Settings {
   // screenshot off by default). For DISPLAY: a capture decided at a save reads the
   // store at that moment instead (the browser extension's Editor), because this is a
   // render's copy and answers the defaults until the blob's read lands.
-  keepOnSave: { readMode: boolean; screenshot: boolean };
+  keepOnSave: { readMode: boolean; readModeImages: boolean; screenshot: boolean };
   // The SYNCED links sort — global-only (no device split), so the synced value IS
   // the applied one. Typed `string` for the same forward-compat reason as
   // `linksLayout`: a newer client's value round-trips and reaches the Settings UI
@@ -105,10 +105,11 @@ export function useSettings(): Settings {
   // Off by default: absent (older client / never toggled) reads as opted-out.
   const serverExtraction = general?.serverExtraction ?? false;
   const keepReadModeOnSave = general?.keepReadModeOnSave;
+  const keepReadModeImages = general?.keepReadModeImages;
   const keepScreenshotOnSave = general?.keepScreenshotOnSave;
   const keepOnSave = useMemo(
-    () => keepOnSaveOf({ keepReadModeOnSave, keepScreenshotOnSave }),
-    [keepReadModeOnSave, keepScreenshotOnSave],
+    () => keepOnSaveOf({ keepReadModeOnSave, keepReadModeImages, keepScreenshotOnSave }),
+    [keepReadModeOnSave, keepReadModeImages, keepScreenshotOnSave],
   );
 
   // Global-only: the synced value is the applied one (no source resolution like

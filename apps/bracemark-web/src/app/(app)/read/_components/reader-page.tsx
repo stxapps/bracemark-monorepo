@@ -25,6 +25,7 @@ import {
   useKeptCopyMutations,
   useLocks,
   useReaderDoc,
+  useReaderImages,
   useServerReadMode,
 } from '@stxapps/web-react';
 import { ReaderArticle } from '@stxapps/web-ui/components/reader/reader-article';
@@ -125,8 +126,22 @@ function Notice({ title, children }: { title: string; children?: React.ReactNode
   );
 }
 
-function ReadModeTab({ fileId, title, host }: { fileId: string; title: string; host: string }) {
+function ReadModeTab({
+  fileId,
+  imagesFileId,
+  title,
+  host,
+}: {
+  fileId: string;
+  // The copy's image pack, when it kept any (`extraction.readModeImagesId`). Asked for
+  // beside the text, not after it: the figures hold their space either way, and the
+  // pack is the slower of the two.
+  imagesFileId: string | undefined;
+  title: string;
+  host: string;
+}) {
   const state = useReaderDoc(fileId);
+  const { images, settled: imagesSettled } = useReaderImages(imagesFileId);
   const slow = useSlow(state.status === 'loading');
 
   if (state.status === 'loading') {
@@ -160,7 +175,15 @@ function ReadModeTab({ fileId, title, host }: { fileId: string; title: string; h
   ]
     .filter(Boolean)
     .join(' · ');
-  return <ReaderArticle doc={doc} title={title || doc.title || host} meta={meta} />;
+  return (
+    <ReaderArticle
+      doc={doc}
+      title={title || doc.title || host}
+      meta={meta}
+      images={images}
+      imagesSettled={imagesSettled}
+    />
+  );
 }
 
 function ScreenshotTab({ fileId, title }: { fileId: string; title: string }) {
@@ -417,6 +440,7 @@ export function ReaderPage() {
   const href = link ? openableUrl(link.url) : undefined;
   const waybackHref = link ? waybackUrl(link.url, link.createdAt) : undefined;
   const readModeId = locked ? undefined : (extraction?.readModeId ?? undefined);
+  const readModeImagesId = locked ? undefined : (extraction?.readModeImagesId ?? undefined);
   const screenshotId = locked ? undefined : (extraction?.screenshotId ?? undefined);
 
   let body: React.ReactNode;
@@ -451,7 +475,12 @@ export function ReaderPage() {
           </TabsTrigger>
         </TabsList>
         <TabsContent value="read">
-          <ReadModeTab fileId={readModeId} title={title} host={host} />
+          <ReadModeTab
+            fileId={readModeId}
+            imagesFileId={readModeImagesId}
+            title={title}
+            host={host}
+          />
           <DeleteCopy link={link} facet="readMode" />
         </TabsContent>
         <TabsContent value="screenshot">
@@ -463,7 +492,12 @@ export function ReaderPage() {
   } else if (readModeId) {
     body = (
       <>
-        <ReadModeTab fileId={readModeId} title={title} host={host} />
+        <ReadModeTab
+          fileId={readModeId}
+          imagesFileId={readModeImagesId}
+          title={title}
+          host={host}
+        />
         <DeleteCopy link={link} facet="readMode" />
       </>
     );

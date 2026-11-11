@@ -29,7 +29,10 @@ const mockWriteExtraction = jest.fn<Promise<void>, unknown[]>();
 const mockWriteFile = jest.fn<Promise<void>, unknown[]>();
 const mockResizeImage = jest.fn<Promise<Uint8Array>, unknown[]>();
 const mockNewId = jest.fn<string, unknown[]>();
-const mockEncodeReaderDoc = jest.fn<Promise<Uint8Array>, unknown[]>();
+const mockStoreReadModeCopy = jest.fn<Promise<void>, unknown[]>();
+const mockCollectReaderImages = jest.fn<Promise<unknown[]>, unknown[]>();
+const mockReadSettingsGeneral = jest.fn<Promise<unknown>, unknown[]>();
+const mockFetchReaderImage = jest.fn<Promise<Uint8Array | undefined>, unknown[]>();
 
 const mockCaptureTitleImage = jest.fn<Promise<unknown>, unknown[]>();
 const mockCaptureReadMode = jest.fn<Promise<unknown>, unknown[]>();
@@ -53,8 +56,14 @@ jest.mock('@stxapps/web-react', () => ({
   get resizeImage() {
     return mockResizeImage;
   },
-  get encodeReaderDoc() {
-    return mockEncodeReaderDoc;
+  get storeReadModeCopy() {
+    return mockStoreReadModeCopy;
+  },
+  get collectReaderImages() {
+    return mockCollectReaderImages;
+  },
+  get readSettingsGeneral() {
+    return mockReadSettingsGeneral;
   },
 }));
 jest.mock('@stxapps/web-crypto', () => ({
@@ -72,13 +81,17 @@ jest.mock('./capture', () => ({
   get captureScreenshot() {
     return mockCaptureScreenshot;
   },
+  get fetchReaderImage() {
+    return mockFetchReaderImage;
+  },
 }));
 
 const URL_ = 'https://example.com/post';
 const IMAGE = new Uint8Array([1, 2, 3]);
 const BYTES = new Uint8Array([4, 5, 6]);
-const GZIPPED = new Uint8Array([0x1f, 0x8b, 7]);
-const DOC = { version: 1, capturedAt: 1, blocks: [] };
+const DOC = { version: 1, capturedAt: 1, sourceUrl: URL_, blocks: [] };
+const SOURCES = [{ key: 'i0', url: 'https://cdn.example/a.jpg' }];
+const ENTRY = { key: 'i0', type: 'image/jpeg', width: 800, height: 400, bytes: BYTES };
 
 let fake: FakeBrowser;
 
@@ -109,8 +122,10 @@ beforeEach(() => {
   mockResizeImage.mockImplementation(async (bytes) => bytes as Uint8Array);
   mockNewId.mockReturnValue('new-file-id');
   mockCaptureTitleImage.mockResolvedValue({});
-  mockCaptureReadMode.mockResolvedValue(DOC);
-  mockEncodeReaderDoc.mockResolvedValue(GZIPPED);
+  mockCaptureReadMode.mockResolvedValue({ doc: DOC, images: SOURCES });
+  mockStoreReadModeCopy.mockResolvedValue(undefined);
+  mockCollectReaderImages.mockResolvedValue([ENTRY]);
+  mockReadSettingsGeneral.mockResolvedValue(undefined);
   mockCaptureScreenshot.mockResolvedValue(BYTES);
   onThePage();
 });
@@ -217,20 +232,43 @@ describe('titleImage', () => {
 });
 
 describe('the file-backed facets', () => {
-  it('stores the read-mode document gzipped, under its own display field', async () => {
+  // The two blobs and the extraction fields are storeReadModeCopy's (web-react, with
+  // its own spec). What is this file's is what it is HANDED: the document as captured,
+  // the images this tab could give, and the tier.
+  it('hands the read-mode capture and its images to the one writer, at this tier', async () => {
     await run('readMode');
 
-    expect(mockEncodeReaderDoc).toHaveBeenCalledWith(DOC);
-    expect(mockWriteFile).toHaveBeenCalledWith('alice', 'new-file-id', GZIPPED);
-    // A display field, not a facet passthrough: the backup, the exporters, the
-    // destroy paths and the sweep find blobs through EXTRACTION_FILE_REF_FIELDS, and a
-    // ref anywhere else is a blob none of them knows exists.
-    expect(writes()[0]).toEqual({
-      fields: { readModeId: 'new-file-id' },
-      facet: 'readMode',
-      state: expect.objectContaining({ status: 'done', extractedBy: 'extension:fg' }),
-    });
-    expect(writes()[0].state).not.toHaveProperty('fileId');
+    expect(mockStoreReadModeCopy).toHaveBeenCalledWith(
+      'alice',
+      'link-1',
+      DOC,
+      [ENTRY],
+      'extension:fg',
+    );
+    // Fetched FROM THE PAGE the document was taken from, so a tab that has moved on
+    // is not asked for another page's images.
+    const fetchBytes = mockCollectReaderImages.mock.calls[0][1] as (url: string) => unknown;
+    expect(mockCollectReaderImages.mock.calls[0][0]).toEqual(SOURCES);
+    await fetchBytes('https://cdn.example/a.jpg');
+    expect(mockFetchReaderImage).toHaveBeenCalledWith(11, 'https://cdn.example/a.jpg', URL_);
+  });
+
+  it('keeps the words alone when the account has images off — nothing is fetched', async () => {
+    mockReadSettingsGeneral.mockResolvedValue({ keepReadModeImages: false });
+
+    await run('readMode');
+
+    expect(mockCollectReaderImages).not.toHaveBeenCalled();
+    expect(mockStoreReadModeCopy).toHaveBeenCalledWith('alice', 'link-1', DOC, [], 'extension:fg');
+  });
+
+  it('a failure fetching images costs the copy its pictures, never its words', async () => {
+    mockCollectReaderImages.mockRejectedValue(new Error('tab closed'));
+
+    await run('readMode');
+
+    expect(mockStoreReadModeCopy).toHaveBeenCalledWith('alice', 'link-1', DOC, [], 'extension:fg');
+    expect(writes()).toEqual([]);
   });
 
   it('settles a page that is not an article, storing nothing', async () => {

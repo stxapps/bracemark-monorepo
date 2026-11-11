@@ -35,6 +35,7 @@ jest.mock('@stxapps/expo-react', () => {
     }),
     useImageFileUri: (id: string | undefined) => (id ? `file:///${id}` : undefined),
     useKeptCopyMutations: () => ({ removeCopy: mockRemoveCopy }),
+    useReaderImages: () => ({ images: new Map(), settled: true }),
     useReaderDoc: (id: string | undefined) =>
       id
         ? {

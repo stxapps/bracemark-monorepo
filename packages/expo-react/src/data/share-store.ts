@@ -662,8 +662,11 @@ function quarantine(group: Directory, entry: File): void {
 // `keepReadMode` — whether a draft's read-mode copy is stored as it lands: the
 // caller's verdict on the plan (`keptCopies`) and the synced save setting, read at
 // the drain (ShareBridge). The draft is the gesture; the account decides what it keeps.
+// `keepReadModeImages` — whether that copy also keeps the article's images, which this
+// app then FETCHES: the caller's verdict on the synced setting and on whether this
+// device may fetch for a save at all.
 export async function drainShareOutbox(
-  options: { keepReadMode?: boolean } = {},
+  options: { keepReadMode?: boolean; keepReadModeImages?: boolean } = {},
 ): Promise<string[]> {
   if (Platform.OS !== 'ios') return [];
   const session = getSession();
@@ -686,7 +689,9 @@ export async function drainShareOutbox(
     }
     await applyShareDraft(session.username, draft);
     if (options.keepReadMode && draft.readMode !== undefined) {
-      await storeReadMode().storeReadModeCopy(session.username, draft.id, draft.readMode);
+      await storeReadMode().storeReadModeCopy(session.username, draft.id, draft.readMode, {
+        images: options.keepReadModeImages === true,
+      });
     }
     applied.push(pathFromId(draft.id, LINKS_PREFIX));
     entry.delete();

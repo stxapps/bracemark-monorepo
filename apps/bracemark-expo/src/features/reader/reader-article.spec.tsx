@@ -108,6 +108,38 @@ test('a table whose stored rows are not the shape the capture writes renders not
   expect(screen.getByText('still here')).toBeTruthy();
 });
 
+test('a kept image is drawn from the caller’s map; with none, the figure is its words', () => {
+  const figure = doc([
+    { id: 'b0', kind: 'figure', text: 'A chart', image: 'i0', width: 800, height: 400 },
+  ]);
+
+  const kept = render(
+    <ReaderArticle
+      doc={figure}
+      title="A post"
+      images={new Map([['i0', { uri: 'data:image/jpeg;base64,AAAA', width: 800, height: 400 }]])}
+    />,
+  );
+  // expo-image hands its native view the source as a list.
+  expect(screen.getByTestId('reader-figure-image').props.source).toEqual([
+    { uri: 'data:image/jpeg;base64,AAAA' },
+  ]);
+  kept.unmount();
+
+  // Still on its way: the space is held, and neither a picture nor the words show.
+  const waiting = render(
+    <ReaderArticle doc={figure} title="A post" images={new Map()} imagesSettled={false} />,
+  );
+  expect(screen.queryByTestId('reader-figure-image')).toBeNull();
+  expect(screen.queryByText('A chart')).toBeNull();
+  waiting.unmount();
+
+  // Settled without it: the placeholder.
+  render(<ReaderArticle doc={figure} title="A post" images={new Map()} />);
+  expect(screen.queryByTestId('reader-figure-image')).toBeNull();
+  expect(screen.getByText('A chart')).toBeTruthy();
+});
+
 test('a figure is its words, not an image', () => {
   mount(doc([{ id: 'b0', kind: 'figure', text: 'A chart', runs: [{ text: 'Figure 1' }] }]));
   expect(screen.getByText('A chart')).toBeTruthy();

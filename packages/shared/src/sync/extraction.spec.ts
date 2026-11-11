@@ -296,17 +296,28 @@ describe('extractionFileIds', () => {
 });
 
 describe('keepOnSaveOf', () => {
-  it('defaults to read mode on and the screenshot off', () => {
-    // Not `?? false` for both: an absent setting must keep read mode, which is why
-    // every reader goes through this function.
-    expect(keepOnSaveOf(undefined)).toEqual({ readMode: true, screenshot: false });
+  it('defaults to read mode on, with its images, and the screenshot off', () => {
+    // Not `?? false` for all three: an absent setting must keep read mode and its
+    // images, which is why every reader goes through this function.
+    expect(keepOnSaveOf(undefined)).toEqual({
+      readMode: true,
+      readModeImages: true,
+      screenshot: false,
+    });
     expect(keepOnSaveOf({})).toEqual(KEEP_ON_SAVE_DEFAULTS);
   });
 
   it('honours an explicit choice either way', () => {
     expect(keepOnSaveOf({ keepReadModeOnSave: false, keepScreenshotOnSave: true })).toEqual({
       readMode: false,
+      readModeImages: true,
       screenshot: true,
+    });
+    // Its own switch: a copy can keep the words and leave the pictures.
+    expect(keepOnSaveOf({ keepReadModeImages: false })).toEqual({
+      readMode: true,
+      readModeImages: false,
+      screenshot: false,
     });
   });
 });

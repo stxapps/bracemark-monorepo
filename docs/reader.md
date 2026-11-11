@@ -106,10 +106,16 @@ and the renderer's whole job is to keep it that way:
   same exit a link row takes.
 - **figures** are placeholders with the alt text and caption. No image loads,
   because there is no image in the copy and the remote URL was never kept
-  ([link-extraction-keep.md](./link-extraction-keep.md), the format tripwire). Kept
-  images are designed and next (_images in read mode_ there): a figure will then show
-  the picture from the copy's own image pack, in space reserved from the dimensions
-  the block carries, and stay a placeholder when the pack has none for it.
+  ([link-extraction-keep.md](./link-extraction-keep.md), the format tripwire).
+- **a figure that kept its picture** shows it, from the copy's own image pack
+  (`extraction.readModeImagesId`; _images in read mode_ there). The reader asks for
+  the pack beside the text (`useReaderImages`, on both platforms) and hands the
+  renderer a map from key to a local image — a `blob:` URL on web, a `data:` URI on
+  expo — so the only source a figure can have is one minted on this device from
+  decrypted bytes. Three states: the picture, in a box of the block's stored aspect
+  ratio and never wider than the image; the same box empty while the pack is on its
+  way, so the text below does not move when it lands; and the words, when the pack is
+  read and has no picture for that key, or can't be read at all.
 - **tables** are tables: a real `<table>` in a focusable sideways scroller on web, a
   horizontal scroll of fixed-width columns on expo, each cell's strings rendered like
   any other ([link-extraction-keep.md](./link-extraction-keep.md), _tables_). The grid

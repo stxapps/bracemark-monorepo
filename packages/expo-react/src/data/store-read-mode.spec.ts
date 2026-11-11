@@ -1,7 +1,8 @@
 import { gunzipSync } from 'fflate';
 
-import { FILES_PREFIX, pathFromId } from '@stxapps/shared';
+import { decodeReaderImages, FILES_PREFIX, pathFromId } from '@stxapps/shared';
 
+import { collectReaderImages } from '../lib/reader-images';
 import { readFileBytes, resetFileSystem } from '../testing/memory-file-system';
 import { getDb, items } from './db';
 import { dataFileFor } from './file-store';
@@ -16,7 +17,11 @@ import { seedNewAccount } from './sync-store';
 
 jest.mock('expo-sqlite', () => require('../testing/node-sqlite'));
 jest.mock('expo-file-system', () => require('../testing/memory-file-system'));
-jest.mock('@stxapps/expo-crypto/lib/ids', () => ({ newId: () => 'copy-1' }));
+// The text copy's id is minted first, then the pack's: `copy-1`, `copy-2`.
+let mockIds = 0;
+jest.mock('@stxapps/expo-crypto/lib/ids', () => ({ newId: () => `copy-${++mockIds}` }));
+// The native fetch and decode are a seam; the settling and the two writes are real.
+jest.mock('../lib/reader-images', () => ({ collectReaderImages: jest.fn(async () => []) }));
 jest.mock('@stxapps/expo-crypto', () => ({ newId: () => globalThis.crypto.randomUUID() }));
 
 const USER = 'alice';
@@ -27,6 +32,8 @@ const DOC = {
 };
 
 beforeEach(async () => {
+  mockIds = 0;
+  jest.mocked(collectReaderImages).mockClear();
   resetFileSystem();
   getDb().delete(items).run();
   await seedNewAccount(USER);
@@ -62,4 +69,73 @@ it('stores nothing for text that is not JSON, or is JSON of something else', asy
   await expect(storeReadModeCopy(USER, 'l1', '{"version":1,"blocks":[')).resolves.toBe(false);
   await expect(storeReadModeCopy(USER, 'l1', '"a string"')).resolves.toBe(false);
   expect(await readExtraction('l1')).toBeUndefined();
+});
+
+describe('a capture that carries image addresses', () => {
+  const CAPTURE = {
+    doc: {
+      version: 1,
+      capturedAt: 1,
+      blocks: [
+        { id: 'b0', kind: 'paragraph', runs: [{ text: 'Kept from Safari.' }] },
+        { id: 'b1', kind: 'figure', text: 'A chart', image: 'i0' },
+        { id: 'b2', kind: 'figure', text: 'A photo', image: 'i1' },
+      ],
+    },
+    images: [
+      { key: 'i0', url: 'https://cdn.example/chart.png' },
+      { key: 'i1', url: 'https://cdn.example/photo.jpg' },
+      // Not an address a fetch may be handed; dropped at this boundary.
+      { key: 'i2', url: ['javascript', 'steal()'].join(':') },
+    ],
+  };
+  const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 1, 2, 3]);
+  const storedDoc = () =>
+    JSON.parse(
+      new TextDecoder().decode(
+        gunzipSync(readFileBytes(dataFileFor(pathFromId('copy-1', FILES_PREFIX)).uri)),
+      ),
+    ) as { blocks: unknown[] };
+
+  it('keeps what it could fetch in one pack, and settles the document against it', async () => {
+    jest
+      .mocked(collectReaderImages)
+      .mockResolvedValue([{ key: 'i0', type: 'image/jpeg', width: 640, height: 320, bytes: JPEG }]);
+
+    await expect(
+      storeReadModeCopy(USER, 'l1', JSON.stringify(CAPTURE), { images: true }),
+    ).resolves.toBe(true);
+
+    expect(collectReaderImages).toHaveBeenCalledWith(CAPTURE.images.slice(0, 2));
+    const extraction = await readExtraction('l1');
+    expect(extraction).toMatchObject({ readModeId: 'copy-1', readModeImagesId: 'copy-2' });
+    expect(
+      decodeReaderImages(readFileBytes(dataFileFor(pathFromId('copy-2', FILES_PREFIX)).uri)),
+    ).toEqual([{ key: 'i0', type: 'image/jpeg', width: 640, height: 320, bytes: JPEG }]);
+    expect(storedDoc().blocks).toEqual([
+      CAPTURE.doc.blocks[0],
+      { id: 'b1', kind: 'figure', text: 'A chart', image: 'i0', width: 640, height: 320 },
+      { id: 'b2', kind: 'figure', text: 'A photo' },
+    ]);
+    // The addresses were for the fetch; nothing stored names one.
+    expect(JSON.stringify(storedDoc())).not.toContain('cdn.example');
+    expect(JSON.stringify(extraction)).not.toContain('cdn.example');
+  });
+
+  it('fetches nothing unless the caller says images are kept — and names none', async () => {
+    await expect(storeReadModeCopy(USER, 'l1', CAPTURE)).resolves.toBe(true);
+
+    expect(collectReaderImages).not.toHaveBeenCalled();
+    expect((await readExtraction('l1'))?.readModeImagesId).toBeUndefined();
+    expect(JSON.stringify(storedDoc())).not.toMatch(/"image"/);
+  });
+
+  it('keeps the words when fetching the images throws', async () => {
+    jest.mocked(collectReaderImages).mockRejectedValue(new Error('offline'));
+
+    await expect(storeReadModeCopy(USER, 'l1', CAPTURE, { images: true })).resolves.toBe(true);
+
+    expect(await readExtraction('l1')).toMatchObject({ readModeId: 'copy-1' });
+    expect((await readExtraction('l1'))?.readModeImagesId).toBeUndefined();
+  });
 });

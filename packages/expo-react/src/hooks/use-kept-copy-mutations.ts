@@ -1,9 +1,11 @@
 import { useCallback, useMemo } from 'react';
 
+import { keepOnSaveOf } from '@stxapps/shared';
+
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
 import { type KeptCopyFacet, removeKeptCopy } from '../data/mutations';
-import { linkIdOf, type LinkItem } from '../data/queries';
+import { linkIdOf, type LinkItem, readSettingsGeneral } from '../data/queries';
 import { storeReadModeCopy } from '../data/store-read-mode';
 
 // Keeping and removing copies on expo. Removal is web-react's useKeptCopyMutations
@@ -54,7 +56,18 @@ export function useKeptCopyMutations(): KeptCopyMutations {
   const keepReadMode = useCallback(
     async (link: LinkItem, doc: unknown) => {
       if (!username) throw new Error('useKeptCopyMutations: no active account');
-      const stored = await storeReadModeCopy(username, linkIdOf(link), doc);
+      // Whether the copy keeps the article's images is the account's setting, read
+      // from the STORE at the ask (a render's copy answers the defaults until it
+      // loads). This is an explicit ask on a page the user has open, so it is not
+      // subject to the device's fetch mode the way a share's drain is. A read that
+      // fails keeps the words only.
+      let images = false;
+      try {
+        images = keepOnSaveOf(await readSettingsGeneral()).readModeImages;
+      } catch {
+        images = false;
+      }
+      const stored = await storeReadModeCopy(username, linkIdOf(link), doc, { images });
       if (stored) requestSync();
       return stored;
     },

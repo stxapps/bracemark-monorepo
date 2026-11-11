@@ -16,6 +16,7 @@ import {
   useLiveRead,
   useLocks,
   useReaderDoc,
+  useReaderImages,
 } from '@stxapps/expo-react';
 import { LOCK_COPY } from '@stxapps/react';
 import { hostFromText, readerPublishedAt, waybackUrl } from '@stxapps/shared';
@@ -108,8 +109,20 @@ function Loading({ what, slow }: { what: string; slow: boolean }) {
   );
 }
 
-function ReadModeCopy({ fileId, title, host }: { fileId: string; title: string; host: string }) {
+function ReadModeCopy({
+  fileId,
+  imagesFileId,
+  title,
+  host,
+}: {
+  fileId: string;
+  // The copy's image pack, when it kept any (`extraction.readModeImagesId`).
+  imagesFileId: string | undefined;
+  title: string;
+  host: string;
+}) {
   const state = useReaderDoc(fileId);
+  const { images, settled: imagesSettled } = useReaderImages(imagesFileId);
   const slow = useSlow(state.status === 'loading');
   if (state.status === 'loading') return <Loading what="copy" slow={slow} />;
   if (state.status !== 'ready') {
@@ -132,7 +145,15 @@ function ReadModeCopy({ fileId, title, host }: { fileId: string; title: string; 
   ]
     .filter(Boolean)
     .join(' · ');
-  return <ReaderArticle doc={doc} title={title || doc.title || host} meta={meta} />;
+  return (
+    <ReaderArticle
+      doc={doc}
+      title={title || doc.title || host}
+      meta={meta}
+      images={images}
+      imagesSettled={imagesSettled}
+    />
+  );
 }
 
 function ScreenshotCopy({ fileId, title }: { fileId: string; title: string }) {
@@ -226,6 +247,7 @@ export function ReaderScreen({ linkId }: { linkId: string }) {
   const title = link ? (link.customTitle ?? extraction?.title ?? host) : '';
   const waybackHref = link && !locked ? waybackUrl(link.url, link.createdAt) : undefined;
   const readModeId = locked ? undefined : (extraction?.readModeId ?? undefined);
+  const readModeImagesId = locked ? undefined : (extraction?.readModeImagesId ?? undefined);
   const screenshotId = locked ? undefined : (extraction?.screenshotId ?? undefined);
 
   let body: React.ReactNode = null;
@@ -259,7 +281,12 @@ export function ReaderScreen({ linkId }: { linkId: string }) {
           </TabsTrigger>
         </TabsList>
         <TabsContent value="read">
-          <ReadModeCopy fileId={readModeId} title={title} host={host} />
+          <ReadModeCopy
+            fileId={readModeId}
+            imagesFileId={readModeImagesId}
+            title={title}
+            host={host}
+          />
           <DeleteCopy link={link} facet="readMode" />
         </TabsContent>
         <TabsContent value="screenshot">
@@ -271,7 +298,12 @@ export function ReaderScreen({ linkId }: { linkId: string }) {
   } else if (readModeId) {
     body = (
       <>
-        <ReadModeCopy fileId={readModeId} title={title} host={host} />
+        <ReadModeCopy
+          fileId={readModeId}
+          imagesFileId={readModeImagesId}
+          title={title}
+          host={host}
+        />
         <DeleteCopy link={link} facet="readMode" />
       </>
     );

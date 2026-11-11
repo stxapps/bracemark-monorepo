@@ -34,6 +34,7 @@ import {
   type DeviceExtractionMode,
   dropCachedPath,
   type Extraction,
+  type ExtractionFileRefField,
   EXTRACTIONS_PREFIX,
   extractionSchema,
   type Facet,
@@ -437,7 +438,10 @@ export async function deletePin(username: string, linkId: string): Promise<void>
 // write-back's payload — web-react mutations.ts's types, verbatim.
 export type ExtractionFacet = keyof Extraction['facets'];
 export type ExtractionFields = Partial<
-  Pick<Extraction, 'title' | 'imageId' | 'readModeId' | 'screenshotId' | 'pageCopyId'>
+  Pick<
+    Extraction,
+    'title' | 'imageId' | 'readModeId' | 'readModeImagesId' | 'screenshotId' | 'pageCopyId'
+  >
 >;
 export interface ExtractionPatch {
   fields?: ExtractionFields;
@@ -496,7 +500,12 @@ export async function writeExtraction(
 // `done` with a `removedAt` marker rather than being deleted, and why a copy that is
 // already gone ABORTS the write instead of writing the extraction back.
 export type KeptCopyFacet = 'readMode' | 'screenshot';
-const KEPT_COPY_FIELD = { readMode: 'readModeId', screenshot: 'screenshotId' } as const;
+// A read-mode copy is two blobs — the text and its image pack — and removing the copy
+// removes both (web-react mutations.ts, KEPT_COPY_FIELDS).
+const KEPT_COPY_FIELDS = {
+  readMode: ['readModeId', 'readModeImagesId'],
+  screenshot: ['screenshotId'],
+} as const satisfies Record<KeptCopyFacet, readonly ExtractionFileRefField[]>;
 const NOTHING_TO_REMOVE = Symbol('nothing to remove');
 
 export async function removeKeptCopy(
@@ -504,18 +513,18 @@ export async function removeKeptCopy(
   linkId: string,
   facet: KeptCopyFacet,
 ): Promise<boolean> {
-  const field = KEPT_COPY_FIELD[facet];
+  const fields = KEPT_COPY_FIELDS[facet];
   const path = pathFromId(linkId, EXTRACTIONS_PREFIX);
   const now = Date.now();
   let removed: string[] = [];
   try {
     writeEntityWith(username, path, (existing) => {
       const current = parseBlob(existing?.data ?? undefined, extractionSchema);
-      if (!current?.[field]) throw NOTHING_TO_REMOVE;
+      if (!current || !fields.some((field) => current[field])) throw NOTHING_TO_REMOVE;
       const prior = current.facets[facet];
       const next: Extraction = {
         ...current,
-        [field]: undefined,
+        ...Object.fromEntries(fields.map((field) => [field, undefined])),
         facets: {
           ...current.facets,
           [facet]: {

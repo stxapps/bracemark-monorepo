@@ -1,4 +1,5 @@
 import { Linking, ScrollView, useWindowDimensions, View } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { ImageOff } from 'lucide-react-native';
 
 import {
@@ -23,7 +24,10 @@ import { cn } from '../../lib/utils';
 //
 //   - A link is a nested `<Text>` whose press opens the target in the system browser —
 //     only when `isReaderHref` passes HERE, at render (a backup is an outside file).
-//   - A figure is a placeholder; the copy keeps no image and never the URL.
+//   - A figure's picture comes from the CALLER's `images` map — the copy's own image
+//     pack, read off disk (expo-react useReaderImages) — by the key the block names.
+//     The document holds no address and this file builds none; a figure with no kept
+//     image is its words (`FigureBlock`, below).
 //   - A table is rows of Views in a sideways scroller — React Native has no table —
 //     with each column's width sized from its longest line (`TableBlock`, below).
 //   - An unknown block kind renders nothing, and the rest of the copy still renders.
@@ -168,7 +172,90 @@ function TableBlock({ block, rtl }: { block: ReaderBlock; rtl: boolean }) {
   );
 }
 
-function Block({ block, rtl, number }: { block: ReaderBlock; rtl: boolean; number?: number }) {
+// One kept image by the key its figure names — expo-react's `ReaderImageView` fits.
+export interface ReaderArticleImage {
+  uri: string;
+  width: number;
+  height: number;
+}
+
+interface ImageContext {
+  images: ReadonlyMap<string, ReaderArticleImage>;
+  // False while the pack may still arrive: a figure then holds its space.
+  settled: boolean;
+}
+
+const NO_IMAGES: ImageContext = { images: new Map(), settled: true };
+
+// A figure — web-ui's `Figure`, natively, with the same three states: the picture in
+// a box of its stored aspect ratio (never wider than the image itself), the same box
+// empty while the pack is on its way, or the words when there is no kept image.
+function FigureBlock({ block, context }: { block: ReaderBlock; context: ImageContext }) {
+  const runs = block.runs ?? [];
+  const { width, height } = block;
+  const sized =
+    typeof block.image === 'string' &&
+    typeof width === 'number' &&
+    typeof height === 'number' &&
+    width > 0 &&
+    height > 0;
+  const view = sized ? context.images.get(block.image as string) : undefined;
+
+  if (sized && (view || !context.settled)) {
+    return (
+      <View className="my-4">
+        <View
+          className="w-full self-center overflow-hidden rounded-lg bg-muted"
+          style={{ aspectRatio: (width as number) / (height as number), maxWidth: width }}
+        >
+          {view ? (
+            <ExpoImage
+              source={{ uri: view.uri }}
+              contentFit="contain"
+              style={{ width: '100%', height: '100%' }}
+              accessibilityLabel={block.text || undefined}
+              accessible={Boolean(block.text)}
+              testID="reader-figure-image"
+            />
+          ) : null}
+        </View>
+        {runs.length > 0 ? (
+          <Text selectable className="mt-2 text-sm text-muted-foreground">
+            <Runs runs={runs} />
+          </Text>
+        ) : null}
+      </View>
+    );
+  }
+
+  return (
+    <View className="my-4 flex-row items-start gap-3 rounded-lg border border-dashed border-border px-4 py-3">
+      <Icon as={ImageOff} className="mt-0.5 size-4 text-muted-foreground" />
+      <View className="min-w-0 flex-1">
+        <Text selectable className="text-sm">
+          {block.text || 'Image not kept'}
+        </Text>
+        {runs.length > 0 ? (
+          <Text selectable className="mt-1 text-sm text-muted-foreground">
+            <Runs runs={runs} />
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function Block({
+  block,
+  rtl,
+  number,
+  context,
+}: {
+  block: ReaderBlock;
+  rtl: boolean;
+  number?: number;
+  context: ImageContext;
+}) {
   const runs = block.runs ?? [];
   const textStyle = { writingDirection: rtl ? ('rtl' as const) : ('ltr' as const) };
   switch (block.kind) {
@@ -225,21 +312,7 @@ function Block({ block, rtl, number }: { block: ReaderBlock; rtl: boolean; numbe
         </View>
       );
     case 'figure':
-      return (
-        <View className="my-4 flex-row items-start gap-3 rounded-lg border border-dashed border-border px-4 py-3">
-          <Icon as={ImageOff} className="mt-0.5 size-4 text-muted-foreground" />
-          <View className="min-w-0 flex-1">
-            <Text selectable className="text-sm">
-              {block.text || 'Image not kept'}
-            </Text>
-            {runs.length > 0 ? (
-              <Text selectable className="mt-1 text-sm text-muted-foreground">
-                <Runs runs={runs} />
-              </Text>
-            ) : null}
-          </View>
-        </View>
-      );
+      return <FigureBlock block={block} context={context} />;
     case 'table':
       return <TableBlock block={block} rtl={rtl} />;
     case 'rule':
@@ -268,11 +341,18 @@ export function ReaderArticle({
   doc,
   title,
   meta,
+  images,
+  imagesSettled,
 }: {
   doc: ReaderDoc;
   title: string;
   meta?: string;
+  // The copy's kept images by key, and whether the pack has been read yet. Absent:
+  // every figure is its words.
+  images?: ReadonlyMap<string, ReaderArticleImage>;
+  imagesSettled?: boolean;
 }) {
+  const context: ImageContext = images ? { images, settled: imagesSettled ?? true } : NO_IMAGES;
   const rtl = doc.dir === 'rtl';
   return (
     <View>
@@ -281,7 +361,7 @@ export function ReaderArticle({
       </Text>
       {meta ? <Text className="mt-2 mb-4 text-sm text-muted-foreground">{meta}</Text> : null}
       {numberOrderedItems(doc.blocks).map(({ block, number }) => (
-        <Block key={block.id} block={block} rtl={rtl} number={number} />
+        <Block key={block.id} block={block} rtl={rtl} number={number} context={context} />
       ))}
     </View>
   );

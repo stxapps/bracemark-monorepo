@@ -197,7 +197,33 @@ export default function Page() {
             bullet also points at /terms, which gained the allowance the count
             is for, because /terms promises to highlight a material change on
             this website and has no notice of its own. Per _Changes to this
-            policy_, deploy bracemark-site BEFORE the api that counts. */}
+            policy_, deploy bracemark-site BEFORE the api that counts.
+
+            10 NOVEMBER 2026 WENT UP ABOVE THEM, newest first, and may come out on
+            or after 10 December 2026. Like 8 November it changes HOW WE USE
+            addresses, not what we keep: a read-mode copy now keeps the article's
+            pictures with its text (docs/link-extraction-keep.md, _images in read
+            mode_), on by default with a switch of its own. Three sentences of
+            _How link previews are fetched_ moved with it, one per path, because
+            each named what is fetched: the browser extension's tab now fetches
+            the article's pictures as it already fetched the preview image; the
+            mobile apps fetch them themselves; and the link-preview service is
+            sent the pictures' addresses and passes the bytes through, as it does
+            a preview image's. The invariants in that paragraph did not move — it
+            still keeps nothing and logs no address. Per _Changes to this policy_,
+            deploy bracemark-site BEFORE the releases that fetch them. */}
+        <h2>What changed on 10 November 2026</h2>
+        <ul>
+          <li>
+            A read-mode copy of a link now keeps the pictures in the article as well as its text,
+            unless you turn that off in Settings. The browser extension and the mobile apps fetch
+            those pictures themselves. For a copy you ask the web app for, our link-preview service
+            is sent the addresses of the pictures and passes them through to your device, as it
+            already does for a preview image, and keeps none of them.{' '}
+            <em>How link previews are fetched</em> now says so.
+          </li>
+        </ul>
+
         <h2>What changed on 9 November 2026</h2>
         <ul>
           <li>
@@ -689,11 +715,13 @@ export default function Page() {
           every time you save. The mobile apps fetch pages themselves: by default they cover links
           saved on that device, and the All links setting also covers links synced from another
           device or added by import as they come into view. With All links selected, Generate all
-          works through every pending link. Neither path involves our servers. The browser extension
-          asks for the narrowest permission that does its job: it can read a tab only in the moment
-          you click to save it, and it holds no standing access to your browsing. Its background
-          service talks only to our API; during the save, code in that tab may fetch the preview
-          image named by the page.
+          works through every pending link. When a mobile app keeps a read-mode copy with the
+          article’s pictures, it fetches those pictures itself too. Neither path involves our
+          servers. The browser extension asks for the narrowest permission that does its job: it can
+          read a tab only in the moment you click to save it, and it holds no standing access to
+          your browsing. Its background service talks only to our API; during the save, code in that
+          tab may fetch the preview image named by the page, and the pictures in the article when
+          you keep a read-mode copy with them.
         </p>
         <p>
           Browsers do not allow one web page to fetch another site, so the web app has an{' '}
@@ -701,12 +729,13 @@ export default function Page() {
           it. It is off unless you turn it on. When it is on, newly saved links and older pending
           links are sent as they come into view while you browse; Generate all sends every pending
           link. The service receives the address, fetches the page, returns the title and preview
-          image — and, when you ask for a read-mode copy of a link, the article’s text — and keeps
-          no page data: it stores no URLs, writes none to its logs, holds no key, and is not told
-          which account asked. Its rate limiter briefly holds the requesting IP address so that a
-          single source cannot abuse it. The same service is described from the other side — for the
-          people who run the sites it fetches — on <Link href="/extractor">its own page</Link>,
-          including the caps it holds itself to and how to turn it away.
+          image — and, when you ask for a read-mode copy of a link, the article’s text and the
+          pictures in it, whose addresses the web app sends it one by one — and keeps no page data:
+          it stores no URLs, writes none to its logs, holds no key, and is not told which account
+          asked. Its rate limiter briefly holds the requesting IP address so that a single source
+          cannot abuse it. The same service is described from the other side — for the people who
+          run the sites it fetches — on <Link href="/extractor">its own page</Link>, including the
+          caps it holds itself to and how to turn it away.
         </p>
 
         <h3>If you contact us</h3>

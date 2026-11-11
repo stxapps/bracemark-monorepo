@@ -9,7 +9,9 @@
 //     and a server `failed` never overwrites a better tier's settled answer;
 //   - a transport failure records nothing.
 import {
+  decodeReaderImages,
   type ExtractClient,
+  extractionFileIds,
   type ExtractResult,
   FILES_PREFIX,
   type LinkItem,
@@ -20,11 +22,16 @@ import {
 } from '@stxapps/shared';
 
 import { db } from '../data/db';
-import { writeExtraction } from '../data/mutations';
+import { writeExtraction, writeSettingsGeneral } from '../data/mutations';
 import { readExtraction } from '../data/queries';
 import { seedNewAccount } from '../data/sync-store';
 import { decodeReaderDoc } from './reader-doc-bytes';
+import { encodeReaderImage } from './reader-image';
 import { runServerReadMode } from './server-read-mode';
+
+// The image encoder needs a canvas jsdom doesn't have; a seam, so the storing around
+// it runs for real (store-read-mode.ts, through the real mutations).
+jest.mock('./reader-image', () => ({ encodeReaderImage: jest.fn() }));
 
 const USER = 'alice';
 const URL_A = 'https://example.com/a';
@@ -68,6 +75,101 @@ it('stores the copy as a gzipped blob the extraction names, at the server tier',
   const bytes = await readFileBytes(extraction?.readModeId ?? '');
   expect(bytes).toBeDefined();
   expect(await decodeReaderDoc(bytes ?? new Uint8Array())).toEqual(DOC);
+});
+
+describe('the article’s images', () => {
+  const ILLUSTRATED: ReaderDoc = {
+    version: 1,
+    capturedAt: 5,
+    sourceUrl: URL_A,
+    blocks: [
+      { id: 'b0', kind: 'paragraph', runs: [{ text: 'Kept words.' }] },
+      { id: 'b1', kind: 'figure', text: 'A chart', image: 'i0' },
+      { id: 'b2', kind: 'figure', text: 'A photo', image: 'i1' },
+    ],
+  };
+  const SOURCES = [
+    { key: 'i0', url: 'https://cdn.example/chart.png' },
+    { key: 'i1', url: 'https://cdn.example/photo.jpg' },
+  ];
+  const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 1, 2, 3]);
+
+  function illustrated(fetchImage: ExtractClient['fetchImage']): ExtractClient {
+    return {
+      extractReadMode: jest.fn(async () => ({
+        url: URL_A,
+        ok: true,
+        readMode: ILLUSTRATED,
+        readModeImages: SOURCES,
+      })),
+      fetchImage,
+    } as unknown as ExtractClient;
+  }
+
+  beforeEach(() => {
+    jest
+      .mocked(encodeReaderImage)
+      .mockResolvedValue({ bytes: JPEG, type: 'image/jpeg', width: 640, height: 320 });
+  });
+
+  it('keeps what the proxy could fetch in ONE pack the extraction names', async () => {
+    const fetchImage = jest.fn(async (url: string) => {
+      if (url.endsWith('photo.jpg')) throw new Error('429');
+      return new Uint8Array([9]);
+    });
+
+    expect(await runServerReadMode(USER, LINK, illustrated(fetchImage))).toEqual({ kind: 'kept' });
+
+    const extraction = await readExtraction('l_1');
+    // A field of the EXTRACTION: the orphan sweep, the backup and the destroy paths
+    // find a blob's references there, and nowhere inside the document.
+    expect(extraction?.readModeImagesId).toEqual(expect.any(String));
+    expect(extractionFileIds(extraction)).toContain(extraction?.readModeImagesId);
+    const pack = decodeReaderImages(
+      (await readFileBytes(extraction?.readModeImagesId ?? '')) ?? new Uint8Array(),
+    );
+    expect(pack).toEqual([{ key: 'i0', type: 'image/jpeg', width: 640, height: 320, bytes: JPEG }]);
+
+    const doc = await decodeReaderDoc(
+      (await readFileBytes(extraction?.readModeId ?? '')) ?? new Uint8Array(),
+    );
+    expect(doc?.blocks).toEqual([
+      { id: 'b0', kind: 'paragraph', runs: [{ text: 'Kept words.' }] },
+      { id: 'b1', kind: 'figure', text: 'A chart', image: 'i0', width: 640, height: 320 },
+      // The proxy refused this one: a placeholder, with no key to a picture it lacks.
+      { id: 'b2', kind: 'figure', text: 'A photo' },
+    ]);
+    // The addresses were for the fetch. Nothing stored names one.
+    expect(JSON.stringify(doc)).not.toContain('cdn.example');
+    expect(JSON.stringify(extraction)).not.toContain('cdn.example');
+  });
+
+  it('with images off, fetches none and stores a document that names none', async () => {
+    await writeSettingsGeneral(USER, { keepReadModeImages: false });
+    const fetchImage = jest.fn(async () => new Uint8Array([9]));
+
+    await runServerReadMode(USER, LINK, illustrated(fetchImage));
+
+    expect(fetchImage).not.toHaveBeenCalled();
+    const extraction = await readExtraction('l_1');
+    expect(extraction?.readModeImagesId).toBeUndefined();
+    const doc = await decodeReaderDoc(
+      (await readFileBytes(extraction?.readModeId ?? '')) ?? new Uint8Array(),
+    );
+    expect(JSON.stringify(doc)).not.toMatch(/"image"/);
+  });
+
+  it('keeps the words when every image fails', async () => {
+    const fetchImage = jest.fn(async () => {
+      throw new Error('offline');
+    });
+
+    expect(await runServerReadMode(USER, LINK, illustrated(fetchImage))).toEqual({ kind: 'kept' });
+
+    const extraction = await readExtraction('l_1');
+    expect(extraction?.readModeId).toEqual(expect.any(String));
+    expect(extraction?.readModeImagesId).toBeUndefined();
+  });
 });
 
 it('never replaces a copy that exists, and asks the server nothing for it', async () => {

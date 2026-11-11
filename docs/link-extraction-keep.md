@@ -22,14 +22,16 @@ read mode is built (_per client_, bracemark-extractor) and reached from bracemar
 as a per-link _Keep read mode_. Removal (one copy, and a selection's in bulk edit) and
 the orphaned-file sweep are built (_removal, cleanup, export_), and so are expo's
 reader, its iOS share-from-Safari read mode and its capture screen (_per client_,
-bracemark-expo). A read-mode copy keeps a page's **tables** as tables (_tables_), and
-every link has a way to the **Wayback Machine** for the page that is gone (_when the
-page is gone_). None of it has been released yet — which is why the table block could
-still go into the format's first version.
+bracemark-expo). A read-mode copy keeps a page's **tables** as tables (_tables_) and
+its **images** in a pack beside the text, on every tier that takes a copy (_images in
+read mode_), and every link has a way to the **Wayback Machine** for the page that is
+gone (_when the page is gone_). None of it has been released yet — which is why the
+table block and the figure's image fields could still go into the format's first
+version.
 
-Not built: **images in read mode** (designed — _images in read mode_ — and next), a
-per-link _Keep screenshot_ outside the extension's saved screen, the scoped bulk job,
-and expo's switch for the save setting. Decided against for now, each with its reason in
+Not built: a per-link _Keep screenshot_ outside the extension's saved screen, the
+scoped bulk job, expo's switches for the save setting, and — within images — SVG
+(_images in read mode_, _not yet_). Decided against for now, each with its reason in
 _the scope each copy stops at_: a screenshot on expo or on the server, a full-page
 screenshot, and page copy anywhere. Everything below marked _planned_ is the design the
 unbuilt pieces are built to.
@@ -43,11 +45,11 @@ unbuilt pieces are built to.
 A preview tells you what a link was; a kept copy is what you go back for when the
 page has moved, gone behind a sign-in, or changed. The three are not equal:
 
-| facet      | what it keeps                        | size as stored, one link                          | built     |
-| ---------- | ------------------------------------ | ------------------------------------------------- | --------- |
-| read mode  | the article's words                  | median 5.5 KB, p90 42 KB, max 270 KB (gzipped)    | extension |
-| screenshot | what was on screen when it was saved | median 135 KB, p90 237 KB, max 271 KB (2× laptop) | extension |
-| page copy  | the page, offline, with its assets   | MBs; tens for media-heavy pages (est.)            | not built |
+| facet      | what it keeps                        | size as stored, one link                                                                   | built     |
+| ---------- | ------------------------------------ | ------------------------------------------------------------------------------------------ | --------- |
+| read mode  | the article's words, and its images  | text: median 5.5 KB, p90 42 KB (gzipped); with images, a pack of median 127 KB, p90 1.6 MB | extension |
+| screenshot | what was on screen when it was saved | median 135 KB, p90 237 KB, max 271 KB (2× laptop)                                          | extension |
+| page copy  | the page, offline, with its assets   | MBs; tens for media-heavy pages (est.)                                                     | not built |
 
 **Measured 2026-11-09** with `measure:kept-copies` ([e2e.md](./e2e.md), _measuring
 kept copies_): 62 public pages, 36 chosen as articles and 26 not, each captured
@@ -82,9 +84,9 @@ Each line is a place the feature deliberately ends, and the reason, so the next 
 does not extend one by reflex.
 
 - **Read mode is the archive.** For an article it is the copy that lasts: small, readable
-  on every device, the only one highlights and search can use. So the next work on kept
-  copies goes into what a read-mode copy keeps — tables (built), images (designed) — and
-  not into taking screenshots in more places.
+  on every device, the only one highlights and search can use. So the work on kept
+  copies went into what a read-mode copy keeps — tables, then images — and not into
+  taking screenshots in more places.
 - **The screenshot is the fold, from the browser extension, and nothing more.** It is a
   record of **what was on screen when the page was saved** — a price, a listing, a
   dashboard — for the page where read mode answers "not an article". That is narrower
@@ -105,7 +107,7 @@ does not extend one by reflex.
 - **Page copy is deferred, and may never be built.** It is the expensive one — capture
   on the order of SingleFile, a viewer on an origin of its own, megabytes a page — and
   the two cheaper answers cover most of what it is for: read mode keeps an article's
-  content, and for a public page the Wayback Machine usually has the page as it was
+  content and its pictures, and for a public page the Wayback Machine usually has the page as it was
   (_when the page is gone_). What only a page copy would add is a faithful copy of a
   **signed-in** page, or of a public page the Wayback Machine missed. Revisit if people
   ask for that, in those words.
@@ -197,16 +199,20 @@ shipped client has to skip it.
 - **Not yet:** column alignment, a highlight anchored inside a cell
   ([reader.md](./reader.md), _highlights_), and blocks inside a cell.
 
-### images in read mode — designed, not built
+### images in read mode
 
-A figure is a placeholder today: the alt text and the caption, no picture. That loses
-the chart the paragraph is about, so it is the next thing a read-mode copy gains.
-Decided 2026-11-10: **on by default**, with a switch beside the other two. The shape
-below is the design to build to; nothing of it exists yet except the placeholder.
+A read-mode copy keeps the article's pictures with its words. Built on every tier
+that takes a copy, 2026-11-10; before that a figure was only its alt text and caption,
+which loses the chart the paragraph is about. **On by default**, with a switch of its
+own — _Keep images in read mode_, beside the other two in Settings → Link previews →
+Kept copies (`keepReadModeImages`, resolved by `keepOnSaveOf`). Unlike its neighbours
+it is not "on save": it qualifies **every** read-mode copy the account takes, a
+per-link _Keep read mode_ included, because what it answers is how much of an article
+a copy keeps, not when one is taken.
 
-**One pack per article, beside the text.** The article's images are stored as a single
-second blob, `files/{id}.enc`, named by **one new display field on the extraction**
-(working name `readModeImagesId`, in `EXTRACTION_FILE_REF_FIELDS`). Not inlined into the
+**One pack per article, beside the text.** The images are a single second blob,
+`files/{id}.enc`, named by **one display field on the extraction**:
+`readModeImagesId`, in `EXTRACTION_FILE_REF_FIELDS`. Not inlined into the
 `ReaderDoc`, and not a blob per image:
 
 - **Not inside the text copy**, because the text is a few KB and must stay that way: it
@@ -225,57 +231,143 @@ second blob, `files/{id}.enc`, named by **one new display field on the extractio
   rows) per image. The cost of a pack is that the first image waits for all of them;
   at the sizes below that is one small download.
 
-**In the document**, a `figure` block gains a key into the pack and the image's `width`
-and `height`. The dimensions are what let the reader reserve the space before the pack
-arrives, so the text does not jump and the reading position holds. A figure with no key
-stays the placeholder it is today — which is also how a reader that predates images
-shows one, with no version bump.
+**The pack's format** (`@stxapps/shared` `reader/reader-images.ts`,
+`encodeReaderImages` / `decodeReaderImages`) is the contract between platforms — web
+writes packs expo reads, and the other way round. Four bytes `BMRI`, a version byte,
+the index's length, the index as ASCII JSON (`key`, `type`, `width`, `height`,
+`length` per image), then each image's bytes end to end. Not gzip, since images don't
+compress, and not base64 in JSON, which is a third larger and parsed whole. The index
+is ASCII so it decodes without a `TextDecoder`. A pack that isn't one — damaged, or a
+newer version — decodes to nothing, never a throw: the article keeps its words.
 
-⚠ **The image addresses travel beside the document, never in it.** A capture returns
-the `ReaderDoc` and, separately, the list of image addresses to fetch; the client
-fetches, re-encodes, packs, and drops the list. If the address were a field of the
-block, a writer that forgot to strip it would store a remote URL in a copy — the leak
-the format exists to prevent — and every test of an ordinary article would still pass.
+**In the document**, a `figure` block that kept its picture carries `image` (its key
+in the pack, `i0`, `i1`, …) and the stored `width` and `height`. The dimensions let the
+reader hold the space before the pack arrives, so the text does not jump and the
+reading position holds. A figure with no `image` is the placeholder it always was.
 
-**Which images, and how they are kept.** Raster only, checked by their bytes as the
-preview path does (never SVG: it is markup). An image smaller than about 100 px on
-either side is an icon or a tracking pixel and is skipped. The address is the best
-candidate the page offers at the reader's width — `srcset`, a `<picture>` source, or the
-lazy-loading attribute a page uses in place of `src`. Each is re-encoded to a capped
-JPEG on the preview path's `resizeImage`, flattened onto white. An article has a count
-and a byte budget; past either, the remaining figures stay placeholders. An image that
-cannot be fetched is a placeholder, never a failed capture.
+⚠ **The image addresses travel beside the document, never in it.** A capture that
+keeps images runs the walker as `readerCaptureFromArticle` (`readerCaptureFromPage`
+in a live page), which returns the `ReaderDoc` and, separately, `images` — a
+`{ key, url }` per figure it gave a key to. The client fetches what it can, and the
+list is dropped. If the address were a field of the block, a writer that forgot to
+strip it would store a remote URL in a copy — the leak the format exists to prevent —
+and every test of an ordinary article would still pass. Both renderers take a figure's
+picture only from the map their caller built from the pack; a spec on each holds that
+nothing a block carries can become a `src`.
+
+⚠ **Every capture settles its document before storing it** — `applyReaderImages`,
+called by the one writer on each platform (`storeReadModeCopy`: web-react
+`lib/store-read-mode.ts` for the browser extension and bracemark-web, expo-react
+`data/store-read-mode.ts`). It gives each kept figure its stored size and takes the
+key off every figure whose picture is not in the pack, so with images off, or none
+fetched, the stored document names no picture at all. A capture that wrote the
+walker's document as it came would promise pictures the pack doesn't hold. The same
+writer stores `readModeImagesId` even when it is undefined, so a re-capture **clears**
+an earlier copy's pack and `writeExtraction` reclaims it.
+
+**Which images, and how they are kept** (the constants are in
+`reader/reader-doc-core.ts`; all are the capture's, never the schema's):
+
+- **An image alone in its element is a figure; an image among words is not.**
+  `<figure>`, `<picture>`, a bare `<img>` between blocks, and the usual wrappers
+  (`<p><img></p>`, `<a><img></a>`) become figures. An emoji or an inline icon inside a
+  sentence is left out, as every image used to be: promoting it would cut the sentence
+  in two around a placeholder.
+- **The address** is the smallest `srcset` candidate that still fills the stored
+  size, so the fetch is not a 4000 px original thrown away in the resize; then a
+  `<picture>` source, skipping types no client is sure to decode (AVIF, HEIC, JPEG
+  XL); then `src`, or a lazy-loader's attribute in its place. A `data:` URI is not an
+  address. At most `READER_IMAGES_MAX_COUNT` (30) leave the walker, one per distinct
+  URL.
+- **Raster only**, by the bytes (`sniffImageMime`), as the preview path checks. ⚠ An
+  SVG is markup and is refused — see the measurement for what that costs.
+- **Not an icon**: smaller than 100 × 100 in area, or thinner than 32 px on a side, is
+  dropped after the decode (`isReaderImageTooSmall`). Area, so a wide formula or a
+  sparkline is kept and an avatar is not.
+- **Re-encoded** to JPEG, at most `READER_IMAGE_MAX_DIMENSION` (1024 px) on its
+  longest side at quality 0.8, flattened onto white — even when already within the
+  cap, unless it is a JPEG the re-encode did not make smaller. A preview within its cap
+  is stored unchanged; an article is thirty images against one budget, and a 900 px PNG
+  or an animated GIF is megabytes as it stands.
+- **One budget for the pack**: `READER_IMAGES_MAX_BYTES` (4 MiB). Images are taken in
+  page order until one doesn't fit, and everything after it stays a placeholder
+  (`withinReaderImageBudget`) — "the pictures stop here", not a scatter of gaps.
+- **A picture that can't be had is a placeholder, never a failed capture.** The fetch
+  runs a few at a time under one deadline for the article; the text is already in
+  hand and does not wait on a slow image host.
 
 **Who fetches the bytes** — the same split as the preview image
 ([link-extraction.md](./link-extraction.md), _the preview image is a downloaded blob_):
 
-| client                     | how                                                      | what it can't reach                                                                |
-| -------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| browser extension          | `fetch` inside the page, as the preview image is fetched | an image host that refuses a cross-origin read                                     |
-| bracemark-expo             | native fetch of the listed addresses (no CORS)           | an image behind the page's sign-in                                                 |
-| bracemark-web (the server) | bracemark-extractor's existing `/image` proxy, per image | needs a rate budget of its own: an article is many requests where a preview is one |
+| client                     | how                                                                                             | what it can't reach                                    |
+| -------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| browser extension          | `fetch` inside the page, one injection per image (`fetchReaderImage`, `utils/capture.ts`)       | an image host that refuses a cross-origin read         |
+| bracemark-expo             | native fetch (`lib/reader-images.ts`), from the capture screen and from a Safari share's drain  | an image behind the page's sign-in                     |
+| bracemark-web (the server) | the extractor's `readModeImages` list, each through the image proxy (`lib/server-read-mode.ts`) | past 12 images, and anything the proxy's limit refuses |
 
-The server path's robots.txt answer for `readMode` covers the article's images with it:
-they are the body. The extension's gap could be closed through the same proxy when the
-user has turned server previews on; that is a later choice, made on the measurement.
+- **The browser extension** reads the setting from the store at the capture, as the
+  popup reads the save setting, and bails on an image if the tab has left the page
+  the document came from — a fetch made then would run in another page's context.
+- **bracemark-expo**'s capture is `{ doc, images }` as JSON text from both generated
+  scripts (the Safari preprocessing file and the WebView capture), so the addresses
+  ride the same one string the document does. From a share's drain the fetch is also
+  subject to the device's fetch mode — `off` stops it (`share-bridge.tsx`) — since it
+  is this app making requests for a link the sheet saved; from the capture screen it
+  is an explicit ask on a page the user has open.
+- **bracemark-extractor** returns the addresses and fetches none: thirty images
+  inside the extract request would hold it past its deadline and inline megabytes
+  into JSON. The proxy is rate-limited per address and shared with a bulk import's
+  previews, so the web path asks for at most 12, three at a time. The robots.txt
+  answer for `readMode` covers the article's images with it: they are the body.
 
-**Size, and what it does to storage.** An estimate, not a measurement: an illustrated
-article at 0.3–0.8 MB, against a few KB of text — larger than a screenshot, and the
-largest thing a library would hold by default. That is why it gets its own switch
-(`keepReadModeImagesOnSave`, default on, in Settings → Link previews → Kept copies) and
-why the readout in Settings → Subscription has to say so when it ships.
+**Measured 2026-11-10** with `measure:kept-copies` ([e2e.md](./e2e.md)), on the
+browser extension's path, over the 42 pages a copy was kept on:
 
-**Before any of it is built, measure** — extend `measure:kept-copies`
-([e2e.md](./e2e.md)) to report, per article: how many images it has, how many the
-in-page fetch can actually read, and the pack's size at two or three encode settings.
-The first number sizes the budgets, the second says whether the extension's gap is
-tolerable, the third picks the encode. Then, in order: the browser extension (the best
-tier, and where most copies are taken), bracemark-expo, the server path.
+| what                                   | figure                                             |
+| -------------------------------------- | -------------------------------------------------- |
+| image addresses found per copy         | median 2, p90 14, the cap of 30 on four pages      |
+| copies that kept at least one image    | 22 of 42                                           |
+| addresses kept                         | 197 of 232 (85%)                                   |
+| not kept: SVG                          | 26 (11%)                                           |
+| not kept: an icon                      | 5                                                  |
+| not kept: the page could not read them | 4 (2% of all, 3% of those on another origin)       |
+| one image, as stored                   | median 41 KB, p90 142 KB, max 282 KB               |
+| a pack                                 | median 127 KB, p90 1.6 MB, max 4.0 MB (the budget) |
+| a link with images on, no screenshot   | median 37 KB, p90 334 KB, mean 216 KB              |
+
+Three readings. **The cross-origin gap is small**: 4 of 232, all on one site whose
+image host sends no CORS header — tolerable, and the reason the extension does not
+route images through the server. **SVG is the real loss**: nearly all of the 26 were
+diagrams in technical documentation, and on three of those pages they were every
+image the article had. **The encode stays at 1024 px, quality 0.8**: quality 0.7 would have
+made the mean pack 14% smaller and 800 px 22% smaller, and neither moves the long
+tail, which is the count of images, not their quality.
+
+**What it does to storage.** A link saved with the defaults (preview, read mode with
+images, no screenshot) is a mean of ~216 KB, against ~43 KB with images off; the pack
+is the largest thing a library holds by default. The readout in Settings →
+Subscription and the storage answer in the FAQ say so.
 
 **What stays as it is.** A copy is never replaced on its own to add images: a
 re-capture renumbers the blocks highlights are anchored to (_when a copy is taken_), so
-adding pictures to an old copy is the user's _Keep read mode_ again. Removing a copy
-removes its pack. The backup carries it through `extractionFileIds`.
+adding pictures to a copy taken before this is the user's _Keep read mode_ again.
+Removing a copy removes its pack (`removeKeptCopy` clears both fields). The backup
+carries it through `extractionFileIds`. A client from before the field round-trips it
+(the extraction is a `looseObject`) and its orphan sweep counts any string in an
+entity as a reference, so it never deletes a pack; its own backup would leave the
+pack out, and a figure whose pack is missing is a placeholder.
+
+**Not yet:**
+
+- **SVG**, the measured gap. Rasterizing needs an image element, which the browser
+  extension's service worker doesn't have; bracemark-web could, and expo's decoder
+  might. Never stored as SVG.
+- **The server path's reach** — 12 images, and none when the proxy's limit is spent.
+  A budget of its own for a read-mode ask would lift both.
+- **On expo, unverified on a device**: what `expo-image-manipulator` puts behind a
+  transparent image when it writes JPEG. The web encoder flattens onto white.
+- **A page's context that can't read an image host** could be covered through the
+  proxy when the user has turned server previews on. Not worth it at 2%.
 
 ### the screenshot is a capped JPEG of the fold
 
@@ -635,9 +727,11 @@ covers the pages we never copied; it is the reason page copy can wait.
   expanded at capture, and a renderer trusts neither that nor the row shape (_tables_).
 - **Nothing is asked of the Wayback Machine before the press, and nothing is ever
   submitted to it** (_when the page is gone_).
-- **When images are built: the pack is a field of the extraction, and an image's
-  address never enters the document** (_images in read mode_) — the first loses the
-  images to the orphan sweep a month later, the second stores a remote URL in a copy.
+- **The image pack is a field of the extraction, an image's address never enters the
+  document, and every capture settles its document with `applyReaderImages` before
+  storing it** (_images in read mode_). Break the first and the orphan sweep deletes
+  the images a month later; the second stores a remote URL in a copy; the third
+  leaves figures naming pictures the pack doesn't hold.
 - **No `null` in what Safari's preprocessing hands over — strings only** — a
   property list has none, and one null loses the whole share on iOS. And the
   copy stays JSON **text** until the app's drain: parsed in the share
@@ -646,7 +740,7 @@ covers the pages we never copied; it is the reason page copy can wait.
 
 ### deferred
 
-- **Images in read mode** — designed and next (_images in read mode_); measure first.
+- **SVG images, and the server path's reach** (_images in read mode_, _not yet_).
 - **More of a table**: column alignment, blocks inside a cell, a highlight anchored in
   a cell (_tables_).
 - **A visible Read control on a row that has a copy**, so the copy is not only in the

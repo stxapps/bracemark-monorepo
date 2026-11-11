@@ -40,7 +40,7 @@ browser that can't fetch for itself. It is a **separate app**, not a route in
   can't reach your private network or cloud IMDS (`169.254.169.254`), which
   neutralizes the classic server-side-fetch SSRF.
 - **Pure function, never a writer.** `bracemark-extractor` takes
-  `POST { urls, facets? } → [{ url, ok, title?, imageUrl?, readMode?, readModeReason?, error? }]`
+  `POST { urls, facets? } → [{ url, ok, title?, imageUrl?, readMode?, readModeImages?, readModeReason?, error? }]`
   — a **per-URL result array** (partial success, never all-or-nothing, so each link's facet records
   its own `done` / `failed` / `permanent`) — **plaintext**, and returns it to
   the requesting client. The **client** (which holds the data key) does the E2E

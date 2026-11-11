@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { readerDocFromPage } from './reader-doc-from-page';
+import { readerCaptureFromPage, readerDocFromPage } from './reader-doc-from-page';
 
 // The read-mode converter, against jsdom as the page — the same DOM Readability's own
 // test suite runs on. What matters is what comes OUT: blocks of plain text, because the
@@ -98,6 +98,96 @@ it('stands an image in as a placeholder with its words, never its URL', () => {
 
   expect(figure).toMatchObject({ text: 'A chart', runs: [{ text: 'Figure 1' }] });
   expect(JSON.stringify(figure)).not.toContain('cdn.example');
+});
+
+// --- images -------------------------------------------------------------------
+
+it('a capture hands back each figure’s address beside the document, never in it', () => {
+  setArticle(
+    `<p>${PROSE}</p><figure><img src="https://cdn.example/chart.png" alt="A chart">` +
+      `<figcaption>Figure 1</figcaption></figure>` +
+      // The usual wrapping: an image alone in a paragraph, inside a link.
+      `<p><a href="https://example.com/full"><img src="https://cdn.example/photo.jpg"></a></p>` +
+      `<p>${PROSE}</p>`,
+  );
+
+  const capture = readerCaptureFromPage(document);
+
+  expect(capture?.images).toEqual([
+    { key: 'i0', url: 'https://cdn.example/chart.png' },
+    { key: 'i1', url: 'https://cdn.example/photo.jpg' },
+  ]);
+  expect(capture?.doc.blocks.filter((b) => b.kind === 'figure')).toMatchObject([
+    { text: 'A chart', image: 'i0' },
+    // No alt and no caption: kept as a block only because it has a picture to show.
+    { image: 'i1' },
+  ]);
+  expect(JSON.stringify(capture?.doc)).not.toContain('cdn.example');
+});
+
+it('a plain document names no picture — keys are only handed out to a capture', () => {
+  setArticle(
+    `<p>${PROSE}</p><figure><img src="https://cdn.example/a.jpg" alt="A chart"></figure><p>${PROSE}</p>`,
+  );
+
+  const figure = readerDocFromPage(document)?.blocks.find((b) => b.kind === 'figure');
+
+  expect(figure).toMatchObject({ text: 'A chart' });
+  expect(figure).not.toHaveProperty('image');
+});
+
+it('picks the candidate that fills the stored size, and skips what is not worth asking for', () => {
+  setArticle(
+    `<p>${PROSE}</p>` +
+      // The smallest candidate at or above the cap, not the 4000 px original; and a
+      // comma inside a URL is not a separator.
+      `<p><img srcset="https://cdn.example/w_480,q_70/a.jpg 480w, https://cdn.example/w_1200,q_70/a.jpg 1200w, https://cdn.example/w_4000,q_70/a.jpg 4000w" src="https://cdn.example/w_480,q_70/a.jpg"></p>` +
+      // A format no client here is sure to decode: the <img> is the page's own fallback.
+      `<picture><source type="image/avif" srcset="https://cdn.example/b.avif"><img src="https://cdn.example/b.jpg" alt="B"></picture>` +
+      // A lazy-loader's blank in src, the real address beside it.
+      `<p><img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" data-src="https://cdn.example/c.jpg"></p>` +
+      // An icon by its declared size, and an image with no address but a data: one.
+      `<p><img src="https://cdn.example/icon.png" width="24" height="24"></p>` +
+      `<p><img src="data:image/png;base64,AAAA"></p>` +
+      // The same image again is fetched once.
+      `<p><img src="https://cdn.example/b.jpg"></p>` +
+      `<p>${PROSE}</p>`,
+  );
+
+  expect(readerCaptureFromPage(document)?.images).toEqual([
+    { key: 'i0', url: 'https://cdn.example/w_1200,q_70/a.jpg' },
+    { key: 'i1', url: 'https://cdn.example/b.jpg' },
+    { key: 'i2', url: 'https://cdn.example/c.jpg' },
+  ]);
+});
+
+it('leaves an image that sits among words where it was — it is not a figure', () => {
+  // An emoji or an inline icon. Promoting it would cut the sentence in two around a
+  // placeholder, and fetch a picture nobody would miss.
+  setArticle(
+    `<p>${PROSE} <img src="https://cdn.example/smile.png" alt=":)"> and on it goes.</p><p>${PROSE}</p>`,
+  );
+
+  const capture = readerCaptureFromPage(document);
+
+  expect(capture?.images).toEqual([]);
+  expect(capture?.doc.blocks.some((b) => b.kind === 'figure')).toBe(false);
+});
+
+it('asks for no more images than a pack may hold', () => {
+  const many = Array.from(
+    { length: 40 },
+    (_, i) => `<p><img src="https://cdn.example/${i}.jpg" alt="n${i}"></p>`,
+  ).join('');
+  setArticle(`<p>${PROSE}</p>${many}<p>${PROSE}</p>`);
+
+  const capture = readerCaptureFromPage(document);
+
+  expect(capture?.images).toHaveLength(30);
+  // Past the cap a figure is still a figure — a placeholder with its words.
+  const figures = capture?.doc.blocks.filter((b) => b.kind === 'figure') ?? [];
+  expect(figures).toHaveLength(40);
+  expect(figures[39]).not.toHaveProperty('image');
 });
 
 // --- tables -------------------------------------------------------------------

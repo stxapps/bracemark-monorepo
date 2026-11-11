@@ -206,7 +206,7 @@ test('shows the storage readout for a plan with a published ceiling', async () =
     text: '1.2 GB of 5 GB used',
     fraction: 0.24,
     full: false,
-    note: 'Preview images and screenshots take the most room.',
+    note: 'Images take the most room: previews, the pictures in read-mode copies, and screenshots.',
   };
   const { getByTestId, getByText } = render(<SubscriptionSection />);
   await act(async () => {

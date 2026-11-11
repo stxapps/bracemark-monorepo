@@ -1,10 +1,13 @@
 import { isProbablyReaderable, Readability } from '@mozilla/readability';
 
-import type { ReaderDoc } from '@stxapps/shared';
+import type { ReaderDoc, ReaderImageSource } from '@stxapps/shared';
 // Values from zod-free subpaths, types from the barrel (erased at build): this file is
 // bundled into scripts that run inside a page, and the barrel would carry zod and every
 // schema in the package with it (reader-doc-core.ts says so too).
-import { readerDocFromArticle } from '@stxapps/shared/reader/reader-doc-from-dom';
+import {
+  readerCaptureFromArticle,
+  readerDocFromArticle,
+} from '@stxapps/shared/reader/reader-doc-from-dom';
 
 // The read-mode capture from a LIVE page, run INSIDE that page, because Readability
 // needs a DOM:
@@ -40,4 +43,22 @@ export function readerDocFromPage(page: Document, now = Date.now()): ReaderDoc |
 
   const parsed = new DOMParser().parseFromString(article.content, 'text/html');
   return readerDocFromArticle(parsed.body, article, page.URL, now);
+}
+
+// The same capture with the article's images: the document, whose figures carry a key
+// each, and BESIDE it the address every key's bytes are at. The caller fetches what it
+// can and settles the document with `applyReaderImages` (@stxapps/shared
+// reader/reader-images.ts) before storing it; the addresses are for that fetch and are
+// never stored. Null as above.
+export function readerCaptureFromPage(
+  page: Document,
+  now = Date.now(),
+): { doc: ReaderDoc; images: ReaderImageSource[] } | null {
+  if (!isProbablyReaderable(page)) return null;
+
+  const article = new Readability(page.cloneNode(true) as Document).parse();
+  if (!article?.content) return null;
+
+  const parsed = new DOMParser().parseFromString(article.content, 'text/html');
+  return readerCaptureFromArticle(parsed.body, article, page.URL, now);
 }

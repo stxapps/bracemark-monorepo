@@ -23,7 +23,11 @@ const FINAL = new URL('https://example.com/blog/post');
 
 describe('readModeFromHtml', () => {
   it('turns an article into a ReaderDoc of numbered plain-text blocks', () => {
-    const doc = readModeFromHtml(page(`<p>${PROSE}</p><h2>Second</h2><p>${PROSE}</p>`), FINAL, 7);
+    const doc = readModeFromHtml(
+      page(`<p>${PROSE}</p><h2>Second</h2><p>${PROSE}</p>`),
+      FINAL,
+      7,
+    )?.doc;
 
     expect(readerDocSchema.safeParse(doc).success).toBe(true);
     expect(doc).toMatchObject({
@@ -50,7 +54,7 @@ describe('readModeFromHtml', () => {
           `</table><p>${PROSE}</p>`,
       ),
       FINAL,
-    );
+    )?.doc;
     const table = doc?.blocks.find((b) => b.kind === 'table');
 
     expect(readerDocSchema.safeParse(doc).success).toBe(true);
@@ -73,15 +77,40 @@ describe('readModeFromHtml', () => {
           `<p>${PROSE}<img src="https://tracker.example/p.gif" onerror="steal()" alt="A chart"></p>`,
       ),
       FINAL,
-    );
+    )?.doc;
     const json = JSON.stringify(doc);
     expect(json).not.toMatch(/steal|<script|onerror|onclick|tracker\.example/);
+  });
+
+  // The addresses go to the client BESIDE the document — resolved against the final
+  // URL, here over linkedom — and the document itself names a key and nothing else.
+  it('hands back each figure’s address beside the document, never inside it', () => {
+    const capture = readModeFromHtml(
+      page(
+        `<p>${PROSE}</p><figure><img src="/img/chart.png" alt="A chart"><figcaption>Fig. 1</figcaption></figure>` +
+          `<p><img srcset="https://cdn.example/a-480.jpg 480w, https://cdn.example/a-1200.jpg 1200w" src="https://cdn.example/a-480.jpg"></p>` +
+          `<p>${PROSE} <img src="https://cdn.example/emoji.png" alt=":)"> inline</p>` +
+          `<p>${PROSE}</p>`,
+      ),
+      FINAL,
+    );
+
+    expect(capture?.images).toEqual([
+      { key: 'i0', url: 'https://example.com/img/chart.png' },
+      { key: 'i1', url: 'https://cdn.example/a-1200.jpg' },
+    ]);
+    const figures = capture?.doc.blocks.filter((b) => b.kind === 'figure');
+    expect(figures).toMatchObject([
+      { text: 'A chart', image: 'i0', runs: [{ text: 'Fig. 1' }] },
+      { image: 'i1' },
+    ]);
+    expect(JSON.stringify(capture?.doc)).not.toMatch(/cdn\.example|chart\.png/);
   });
 
   it('resolves relative links against the page, or its own <base>', () => {
     const hrefs = (html: string) =>
       readModeFromHtml(html, FINAL)
-        ?.blocks.flatMap((b) => b.runs ?? [])
+        ?.doc.blocks.flatMap((b) => b.runs ?? [])
         .map((r) => r.href)
         .filter(Boolean);
 

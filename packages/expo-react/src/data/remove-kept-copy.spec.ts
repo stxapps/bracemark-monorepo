@@ -62,6 +62,24 @@ it('drops the ref, deletes the blob, and marks the facet removed — still done'
   expect(rowExists(pathFromId('shot-1', FILES_PREFIX))).toBe(true);
 });
 
+it('removes a read-mode copy’s image pack with its text', async () => {
+  await file('read-1');
+  await file('pack-1');
+  await writeExtraction(USER, LINK_ID, {
+    fields: { readModeId: 'read-1', readModeImagesId: 'pack-1' },
+    facet: 'readMode',
+    state: newFacet('done', 'expo:fg'),
+  });
+
+  await expect(removeKeptCopy(USER, LINK_ID, 'readMode')).resolves.toBe(true);
+
+  const extraction = await readExtraction(LINK_ID);
+  expect(extraction?.readModeId).toBeUndefined();
+  expect(extraction?.readModeImagesId).toBeUndefined();
+  expect(rowExists(pathFromId('read-1', FILES_PREFIX))).toBe(false);
+  expect(rowExists(pathFromId('pack-1', FILES_PREFIX))).toBe(false);
+});
+
 it('writes nothing when there is no such copy — and never creates an extraction', async () => {
   await expect(removeKeptCopy(USER, LINK_ID, 'screenshot')).resolves.toBe(false);
   expect(rowExists(pathFromId(LINK_ID, EXTRACTIONS_PREFIX))).toBe(false);

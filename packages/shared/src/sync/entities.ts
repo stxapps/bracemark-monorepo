@@ -284,6 +284,13 @@ export const extractionSchema = z.looseObject({
   // nothing a page wrote can reach the app's origin as markup. See
   // docs/link-extraction-keep.md.
   readModeId: z.string().optional(),
+  // The images that read-mode copy keeps (`files/{id}.enc`) — ONE pack for the article,
+  // its format in reader/reader-images.ts. Written with `readModeId`, by the same
+  // capture, and absent when the article has no image worth keeping or images are
+  // off. A field HERE and not an id inside the `ReaderDoc`, because this record is
+  // where the orphan sweep, the backup and the destroy paths look for a blob's
+  // references (EXTRACTION_FILE_REF_FIELDS).
+  readModeImagesId: z.string().optional(),
   // The saved copy of the page's content (`files/{id}.enc`), from the `pageCopy` facet.
   // Named "page copy", never "archive": `archive` is the ARCHIVE_ID system list (a link
   // filed away), an unrelated concept — see sync/system-lists.ts.
@@ -505,6 +512,9 @@ export const settingsGeneralSchema = z.looseObject({
   // see DEVICE_EXTRACTION_MODES for why the tolerant parse matters here.
   deviceExtractionMode: z.string().optional().catch(undefined),
   keepReadModeOnSave: z.boolean().optional().catch(undefined),
+  // Whether a read-mode copy keeps the article's images too — absent means ON
+  // (`keepOnSaveOf`, sync/extraction.ts, which says why it has a switch of its own).
+  keepReadModeImages: z.boolean().optional().catch(undefined),
   keepScreenshotOnSave: z.boolean().optional().catch(undefined),
   // The SYNCED links sort — the two orthogonal axes (see LINK_SORT_ONS /
   // LINK_SORT_ORDERS above): `sortOn` the field (date modified vs. added),

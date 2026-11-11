@@ -7,6 +7,10 @@ import { build } from 'esbuild';
 
 import {
   AES_GCM_IV_BYTES,
+  READER_IMAGE_JPEG_QUALITY,
+  READER_IMAGE_MAX_DIMENSION,
+  READER_IMAGE_MAX_SOURCE_BYTES,
+  READER_IMAGES_MAX_BYTES,
   SCREENSHOT_JPEG_QUALITY,
   SCREENSHOT_MAX_DIMENSION,
 } from '@stxapps/shared';
@@ -36,6 +40,15 @@ import { KEPT_COPY_PAGES, type MeasuredPage, type PageKind } from './kept-copies
 // meta COLLECTOR is a copy of the one inlined in the extension's
 // `captureTitleImage` (utils/capture.ts), since an injected function can't be
 // imported; keep the two in step.
+//
+// THE ARTICLE'S IMAGES are measured with the read-mode copy that keeps them
+// (docs/link-extraction-keep.md, _images in read mode_), again on the extension's
+// path: the shared walker hands back the address of every figure it found
+// (`readerCaptureFromPage`), each is fetched FROM THE PAGE'S OWN CONTEXT — which is
+// where a host that refuses a cross-origin read shows up, the gap this leg exists to
+// size — and what comes back goes through `encodeReaderImage`. Each image is encoded
+// at several settings in one run, so the cap and the quality can be chosen from one
+// table rather than from three runs against sites that changed in between.
 //
 // What differs from the extension, and why it doesn't move the figure:
 //   - The viewport comes from Playwright's `page.screenshot` rather than
@@ -72,6 +85,8 @@ async function pageBundle(): Promise<string> {
   const entry = `
 import { readerDocFromPage } from ${file('packages/web-react/src/lib/reader-doc-from-page.ts')};
 import { encodeReaderDoc } from ${file('packages/web-react/src/lib/reader-doc-bytes.ts')};
+import { readerCaptureFromPage } from ${file('packages/web-react/src/lib/reader-doc-from-page.ts')};
+import { encodeReaderImage } from ${file('packages/web-react/src/lib/reader-image.ts')};
 import { resizeImage } from ${file('packages/web-react/src/lib/resize-image.ts')};
 import { selectTitleImage, sniffImageMime } from "@stxapps/shared";
 
@@ -128,6 +143,44 @@ globalThis.__bracemarkMeasure = {
     const stored = await encodeReaderDoc(doc);
     return { blocks: doc.blocks.length, jsonChars: JSON.stringify(doc).length, bytes: stored.length };
   },
+  // One entry per image address the walker found. \`outcome\` is why it was or was not
+  // kept; \`bytes\` is its stored size at each of \`settings\`, in order.
+  async images(settings, maxSourceBytes) {
+    const capture = readerCaptureFromPage(document);
+    if (!capture) return null;
+    const one = async ({ url }) => {
+      const sameOrigin = new URL(url).origin === location.origin;
+      let source;
+      try {
+        const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+        if (!res.ok) return { sameOrigin, outcome: "http-" + res.status };
+        const blob = await res.blob();
+        if (blob.size === 0 || blob.size > maxSourceBytes) return { sameOrigin, outcome: "too-large" };
+        source = new Uint8Array(await blob.arrayBuffer());
+      } catch {
+        // A cross-origin read the host refuses, a timeout, a blocked request.
+        return { sameOrigin, outcome: "refused" };
+      }
+      const bytes = [];
+      let size;
+      for (const { maxDimension, quality } of settings) {
+        const encoded = await encodeReaderImage(source, { maxDimension, quality });
+        if (typeof encoded === "string") return { sameOrigin, outcome: encoded };
+        bytes.push(encoded.bytes.length);
+        size ??= { width: encoded.width, height: encoded.height };
+      }
+      return { sameOrigin, outcome: "kept", sourceBytes: source.length, bytes, ...size };
+    };
+    const results = [];
+    const queue = [...capture.images];
+    await Promise.all(
+      Array.from({ length: 4 }, async () => {
+        for (let next = queue.shift(); next; next = queue.shift()) results.push(await one(next));
+      }),
+    );
+    const figures = capture.doc.blocks.filter((b) => b.kind === "figure").length;
+    return { figures, images: results };
+  },
   async screenshot(base64, maxDimension, quality) {
     const captured = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
     const stored = await resizeImage(captured, { maxDimension, quality });
@@ -171,6 +224,31 @@ interface ScreenshotResult {
   height: number;
 }
 
+// The encode settings every article image is measured at. The FIRST is what ships
+// (reader-doc-core.ts); the others are the alternatives the table is read against.
+const IMAGE_SETTINGS = [
+  { maxDimension: READER_IMAGE_MAX_DIMENSION, quality: READER_IMAGE_JPEG_QUALITY },
+  { maxDimension: READER_IMAGE_MAX_DIMENSION, quality: 0.7 },
+  { maxDimension: 800, quality: 0.75 },
+] as const;
+
+interface ImageResult {
+  sameOrigin: boolean;
+  // "kept", or why not: "refused" (the page's context could not read it), "http-404",
+  // "too-large", "not-an-image", "undecodable", "too-small".
+  outcome: string;
+  sourceBytes?: number;
+  // Stored size at each of IMAGE_SETTINGS.
+  bytes?: number[];
+  width?: number;
+  height?: number;
+}
+
+interface ImagesResult {
+  figures: number;
+  images: ImageResult[];
+}
+
 interface PreviewResult {
   // Null when the page names an image the extension couldn't keep.
   bytes: number | null;
@@ -184,6 +262,8 @@ interface PageResult extends MeasuredPage {
   screenshot?: ScreenshotResult;
   // Null when the page names no preview image at all.
   preview?: PreviewResult | null;
+  // Null when the page is not an article: no copy, so no images.
+  images?: ImagesResult | null;
 }
 
 function parseOptions(args: string[]): Options {
@@ -281,6 +361,11 @@ async function capture(
   const preview = await page.evaluate(() =>
     (globalThis as unknown as MeasureGlobal).__bracemarkMeasure.preview(),
   );
+  const images = await page.evaluate(
+    ([settings, maxSourceBytes]) =>
+      (globalThis as unknown as MeasureGlobal).__bracemarkMeasure.images(settings, maxSourceBytes),
+    [IMAGE_SETTINGS, READER_IMAGE_MAX_SOURCE_BYTES] as const,
+  );
 
   return {
     ...target,
@@ -290,12 +375,31 @@ async function capture(
     preview: preview && {
       bytes: preview.bytes === null ? null : preview.bytes + BLOB_FRAME_BYTES,
     },
+    images,
   };
+}
+
+// The pack an article's kept images make at one setting: the images in page order
+// until the byte budget is spent (the rest stay placeholders), plus the encryption
+// frame. The index is a few dozen bytes an image and is left out. Zero for no pack.
+function packBytes(images: ImagesResult, setting: number): number {
+  let total = 0;
+  for (const image of images.images) {
+    const bytes = image.bytes?.[setting];
+    if (image.outcome !== 'kept' || bytes === undefined) continue;
+    if (total + bytes > READER_IMAGES_MAX_BYTES) break;
+    total += bytes;
+  }
+  return total === 0 ? 0 : total + BLOB_FRAME_BYTES;
 }
 
 interface MeasureGlobal {
   __bracemarkMeasure: {
     preview(): Promise<PreviewResult | null>;
+    images(
+      settings: readonly { maxDimension: number; quality: number }[],
+      maxSourceBytes: number,
+    ): Promise<ImagesResult | null>;
     readMode(): Promise<ReadModeResult | null>;
     screenshot(base64: string, maxDimension: number, quality: number): Promise<ScreenshotResult>;
   };
@@ -347,6 +451,37 @@ function summarize(results: PageResult[], options: Options): string {
   const everything = ok.map(
     (r) => (r.preview?.bytes ?? 0) + (r.readMode?.bytes ?? 0) + (r.screenshot?.bytes ?? 0),
   );
+  // --- the article's images, over every page read mode was kept on --------------
+  const withCopy = ok.flatMap((r) => (r.readMode && r.images ? [r.images] : []));
+  const allImages = withCopy.flatMap((i) => i.images);
+  const count = (outcome: (o: string) => boolean, among = allImages) =>
+    among.filter((i) => outcome(i.outcome)).length;
+  const crossOrigin = allImages.filter((i) => !i.sameOrigin);
+  const packs = IMAGE_SETTINGS.map((_, s) =>
+    withCopy.map((i) => packBytes(i, s)).filter((bytes) => bytes > 0),
+  );
+  const perImage = IMAGE_SETTINGS.map((_, s) =>
+    allImages.flatMap((i) => (i.outcome === 'kept' && i.bytes ? [i.bytes[s]] : [])),
+  );
+  const keptPerArticle = withCopy.map((i) => count((o) => o === 'kept', i.images));
+  const foundPerArticle = withCopy.map((i) => i.images.length);
+  const share = (n: number, of: number) => (of === 0 ? '—' : `${Math.round((n / of) * 100)}%`);
+  const counts = (values: number[]) =>
+    values.length === 0
+      ? '—'
+      : `median ${percentile(values, 50)}, p90 ${percentile(values, 90)}, max ${Math.max(...values)}`;
+  const outcomes = new Map<string, number>();
+  for (const image of allImages) {
+    outcomes.set(image.outcome, (outcomes.get(image.outcome) ?? 0) + 1);
+  }
+  // What a link costs with images on and screenshots off — the default.
+  const defaults = ok.map(
+    (r) =>
+      (r.preview?.bytes ?? 0) +
+      (r.readMode?.bytes ?? 0) +
+      (r.readMode && r.images ? packBytes(r.images, 0) : 0),
+  );
+
   const articlesRead = ok.filter((r) => r.kind === 'article' && r.readMode).length;
   const pagesRead = ok.filter((r) => r.kind === 'page' && r.readMode).length;
 
@@ -362,6 +497,26 @@ function summarize(results: PageResult[], options: Options): string {
     line('preview image', distribution(previews)),
     line('a link with every copy', distribution(everything)),
     `preview image kept on ${previews.length} of ${ok.length} pages`,
+    '',
+    `Images in read mode, over the ${withCopy.length} pages a copy was kept on:`,
+    `  addresses found per copy: ${counts(foundPerArticle)}; kept per copy: ${counts(keptPerArticle)}`,
+    `  ${allImages.length} addresses in all: ${[...outcomes.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([outcome, n]) => `${outcome} ${n}`)
+      .join(', ')}`,
+    `  the page’s context could not read ${count((o) => o === 'refused')} (${share(
+      count((o) => o === 'refused'),
+      allImages.length,
+    )}); of the ${crossOrigin.length} on another origin, ${count((o) => o === 'refused', crossOrigin)} (${share(
+      count((o) => o === 'refused', crossOrigin),
+      crossOrigin.length,
+    )})`,
+    `  copies with at least one image kept: ${packs[0].length} of ${withCopy.length}`,
+    ...IMAGE_SETTINGS.flatMap((setting, s) => [
+      line(`one image, ${setting.maxDimension}px q${setting.quality}`, distribution(perImage[s])),
+      line(`a pack, ${setting.maxDimension}px q${setting.quality}`, distribution(packs[s])),
+    ]),
+    line('a link, images on, no shot', distribution(defaults)),
   ];
   const failed = results.filter((r) => !r.ok);
   if (failed.length > 0) {
@@ -403,7 +558,11 @@ async function main(): Promise<void> {
       results.push(result);
       const preview = result.preview?.bytes;
       const detail = result.ok
-        ? `preview ${preview != null ? kb(preview) : '—'}, read mode ${result.readMode ? kb(result.readMode.bytes) : '— (not an article)'}, screenshot ${kb(result.screenshot?.bytes ?? 0)}`
+        ? `preview ${preview != null ? kb(preview) : '—'}, read mode ${result.readMode ? kb(result.readMode.bytes) : '— (not an article)'}, screenshot ${kb(result.screenshot?.bytes ?? 0)}${
+            result.readMode && result.images
+              ? `, images ${result.images.images.filter((i) => i.outcome === 'kept').length} of ${result.images.images.length} (${kb(packBytes(result.images, 0))})`
+              : ''
+          }`
         : `FAILED: ${result.error}`;
       console.log(`[${i + 1}/${pages.length}] ${target.url}\n    ${detail}`);
     }

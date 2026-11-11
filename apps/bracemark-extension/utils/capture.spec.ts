@@ -258,12 +258,38 @@ describe('captureReadMode', () => {
   };
 
   it('injects the read-mode script into the tab and returns its document', async () => {
-    fake.scripting.executeScript = jest.fn(async () => [{ result: doc }]);
+    fake.scripting.executeScript = jest.fn(async () => [{ result: { doc, images: [] } }]);
 
-    await expect(captureReadMode(4)).resolves.toEqual(doc);
+    await expect(captureReadMode(4)).resolves.toEqual({ doc, images: [] });
     expect(fake.scripting.executeScript).toHaveBeenCalledWith({
       target: { tabId: 4 },
       files: [READ_MODE_SCRIPT],
+    });
+  });
+
+  // The addresses cross from the page's world like the document does, and they are
+  // about to be handed to a fetch — so the same boundary check: a key that is a
+  // string, an address that is absolute http(s), and nothing else.
+  it('keeps only image addresses that are http(s), dropping the rest', async () => {
+    fake.scripting.executeScript = jest.fn(async () => [
+      {
+        result: {
+          doc,
+          images: [
+            { key: 'i0', url: 'https://cdn.example/a.jpg' },
+            { key: 'i1', url: 'javascript:steal()' },
+            { key: 'i2', url: 'data:image/png;base64,AAAA' },
+            { key: 3, url: 'https://cdn.example/b.jpg' },
+            null,
+            'https://cdn.example/c.jpg',
+          ],
+        },
+      },
+    ]);
+
+    await expect(captureReadMode(4)).resolves.toEqual({
+      doc,
+      images: [{ key: 'i0', url: 'https://cdn.example/a.jpg' }],
     });
   });
 

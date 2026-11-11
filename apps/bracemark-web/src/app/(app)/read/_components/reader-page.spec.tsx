@@ -53,6 +53,7 @@ jest.mock('@stxapps/web-react', () => ({
     isListLocked: () => mockLocked,
     unlockList: jest.fn(),
   }),
+  useReaderImages: () => ({ images: new Map(), settled: true }),
   useReaderDoc: (id: string | undefined) =>
     id
       ? {

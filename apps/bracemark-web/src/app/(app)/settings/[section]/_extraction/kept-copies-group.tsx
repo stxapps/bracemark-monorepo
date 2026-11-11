@@ -12,8 +12,8 @@ import { Switch } from '@stxapps/web-ui/components/ui/switch';
 import { SettingsGroup, SettingsNotice, SettingsRow } from '../../_components/settings-kit';
 
 // Settings → Link previews → Kept copies: the synced save setting
-// (`keepReadModeOnSave` / `keepScreenshotOnSave`, resolved by `keepOnSaveOf` — read
-// mode on, screenshot off by default). docs/link-extraction-keep.md, _when a copy is
+// (`keepReadModeOnSave` / `keepReadModeImages` / `keepScreenshotOnSave`, resolved by
+// `keepOnSaveOf` — read mode on, its images on, screenshot off by default). docs/link-extraction-keep.md, _when a copy is
 // taken_.
 //
 // It lives in Link previews rather than a section of its own because it is the same
@@ -39,7 +39,7 @@ export function KeptCopiesGroup() {
 
   const entitled = entitlements.keptCopies;
 
-  const set = (patch: { readMode?: boolean; screenshot?: boolean }) => {
+  const set = (patch: { readMode?: boolean; readModeImages?: boolean; screenshot?: boolean }) => {
     setError(null);
     void setKeepOnSave(patch).catch((e: unknown) =>
       setError(e instanceof Error ? e.message : String(e)),
@@ -64,6 +64,27 @@ export function KeptCopiesGroup() {
             checked={entitled && keepOnSave.readMode}
             disabled={!entitled}
             onCheckedChange={(readMode) => set({ readMode })}
+          />
+        }
+      />
+      {/* Not "on save": this one qualifies EVERY read-mode copy the account takes — a
+          save's, and a per-link Keep read mode here or in the mobile app — because
+          what it answers is how much of an article a copy keeps, not when one is
+          taken (keepOnSaveOf, @stxapps/shared). So it stays switchable with the row
+          above turned off: a copy asked for by hand still reads it. */}
+      <SettingsRow
+        title={
+          <Label htmlFor="keep-read-mode-images" className="text-base font-medium">
+            Keep images in read mode
+          </Label>
+        }
+        description="The pictures in the article, kept with its text. They take far more room than the text does — turn this off to keep words only."
+        action={
+          <Switch
+            id="keep-read-mode-images"
+            checked={entitled && keepOnSave.readModeImages}
+            disabled={!entitled}
+            onCheckedChange={(readModeImages) => set({ readModeImages })}
           />
         }
       />

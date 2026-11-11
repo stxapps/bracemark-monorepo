@@ -65,6 +65,15 @@ export type ExtractFacet = z.infer<typeof extractFacetSchema>;
 // apps/bracemark-site/src/app/extractor/page.tsx prints this number: move both.
 export const MAX_EXTRACT_READ_MODE_URLS = 5;
 
+// How many of an article's images a client asks the image proxy for when it keeps a
+// read-mode copy with its pictures (`readModeImages` on the result, below) — where a
+// title's preview is one. The CLIENT's cap, in web-react `lib/server-read-mode.ts`,
+// and here rather than there because it is a number a site operator is told: each is
+// one more request to wherever the page says its images are. The proxy's own per-
+// address rate limit is what the Worker enforces; this is what our app asks for.
+// apps/bracemark-site/src/app/extractor/page.tsx prints this number: move both.
+export const MAX_READ_MODE_PROXY_IMAGES = 12;
+
 // Why a result that was asked for `readMode` carries none, when the page itself was
 // fetched (`ok: true`). A free STRING on the wire, not an enum, so a newer server's
 // reason never fails an older client's parse of the whole response; a client narrows
@@ -162,6 +171,15 @@ export const extractResultSchema = z.object({
   // Parsed with the stored-bytes schema (no `.max()`), and the client re-parses it before
   // it encrypts anything.
   readMode: readerDocSchema.optional(),
+  // The article's images, beside the copy and only with one: the address of each
+  // figure the walker gave a key to (`block.image` in `readMode`). The client that
+  // keeps images fetches these through the image proxy, packs what it could keep, and
+  // settles the document with `applyReaderImages` before it stores anything; a client
+  // that doesn't settles it with nothing kept. Either way the list is DROPPED — it is
+  // never stored, and the address is deliberately not a field of the document
+  // (reader/reader-doc.ts, `image`). Optional, so an extractor that predates it is a
+  // copy with no pictures rather than a failed parse.
+  readModeImages: z.array(z.object({ key: z.string(), url: httpUrlSchema })).optional(),
   // Why `readMode` is absent on an `ok` result that asked for it (READ_MODE_REASONS).
   readModeReason: z.string().optional(),
 });

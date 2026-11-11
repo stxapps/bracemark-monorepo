@@ -4484,6 +4484,18 @@ compositor output, re-encoded the same way), and the preview's meta collector is
 a copy of the one inlined in `captureTitleImage`, because an injected function
 can't be imported. Keep that copy in step.
 
+**The article's images** are measured with the read-mode copy that keeps them
+([link-extraction-keep.md](./link-extraction-keep.md), _images in read mode_):
+`readerCaptureFromPage` hands back the address of every figure, each is fetched from
+the page's own context — which is where an image host that refuses a cross-origin
+read shows up, the gap this leg sizes — and `encodeReaderImage` encodes what came
+back. Every image is encoded at several settings in one run (`IMAGE_SETTINGS`, the
+first being what ships), so the cap and the quality are chosen from one table rather
+than from runs against sites that changed in between. The summary reports the
+addresses found and kept per copy, why the rest were not kept, one image's stored
+size, a pack's, and a link's with the defaults. A run with images takes about six
+minutes.
+
 The pages are `measure/kept-copies-pages.ts`: public articles and pages that
 aren't articles, in about the proportion a library saves them, since read mode
 is only kept from an article and the screenshot is the copy for everything else.

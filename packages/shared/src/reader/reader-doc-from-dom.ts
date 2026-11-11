@@ -1,12 +1,16 @@
 import type { ReaderBlock, ReaderCell, ReaderDoc, ReaderRun } from './reader-doc';
 import {
   isReaderHref,
+  isReaderImageTooSmall,
   READER_DOC_MAX_BLOCKS,
   READER_DOC_MAX_CHARS,
   READER_DOC_VERSION,
+  READER_IMAGE_MAX_DIMENSION,
+  READER_IMAGES_MAX_COUNT,
   READER_TABLE_MAX_COLUMNS,
   READER_TABLE_MAX_ROWS,
 } from './reader-doc-core';
+import type { ReaderImageSource } from './reader-images';
 
 // The second half of every read-mode capture: Readability's article HTML, already parsed
 // into an inert DOM, turned into `ReaderDoc` blocks — plain strings with marks — so no
@@ -114,13 +118,49 @@ type Marks = Pick<ReaderRun, 'bold' | 'italic' | 'code' | 'href'>;
 // the schema is a looseObject, and Omit over its index signature keeps only that.
 type BlockBody = Pick<
   ReaderBlock,
-  'kind' | 'level' | 'ordered' | 'runs' | 'text' | 'rows' | 'truncated'
+  'kind' | 'level' | 'ordered' | 'runs' | 'text' | 'rows' | 'truncated' | 'image'
 >;
+
+// Hands out the keys. One per distinct address (an image used twice is fetched once),
+// and no more than READER_IMAGES_MAX_COUNT: past it a figure gets no key and stays a
+// placeholder. Addresses are resolved against the page — Readability has made `src`
+// and `srcset` absolute already, but a lazy-loading attribute it didn't recognise is
+// still as the page wrote it — and anything that isn't http(s) afterwards is refused.
+class ImageCollector {
+  readonly sources: ReaderImageSource[] = [];
+  private readonly byUrl = new Map<string, string>();
+
+  constructor(private readonly base: string) {}
+
+  keyFor(raw: string | undefined): string | undefined {
+    if (!raw) return undefined;
+    let url: string;
+    try {
+      url = new URL(raw.trim(), this.base).toString();
+    } catch {
+      return undefined;
+    }
+    if (!isReaderHref(url)) return undefined;
+    const known = this.byUrl.get(url);
+    if (known) return known;
+    if (this.sources.length >= READER_IMAGES_MAX_COUNT) return undefined;
+    const key = `i${this.sources.length}`;
+    this.sources.push({ key, url });
+    this.byUrl.set(url, key);
+    return key;
+  }
+}
 type BlockShape = Pick<BlockBody, 'kind' | 'level' | 'ordered' | 'text'>;
 
 class Builder {
   readonly blocks: ReaderBlock[] = [];
   private chars = 0;
+
+  // Present only on the document's own builder, and only when the caller asked for
+  // images (`readerCaptureFromArticle`). The scratch builders a caption or a table
+  // cell is collected in have none, so nothing inside them is ever given a key.
+  constructor(readonly images?: ImageCollector) {}
+
   // The inline runs of the block being collected, and what kind it becomes when closed.
   private runs: ReaderRun[] = [];
   private pending: BlockShape = { kind: 'paragraph' };
@@ -247,6 +287,115 @@ function inlineMarks(el: DomElement, marks: Marks): Marks {
     default:
       return marks;
   }
+}
+
+// --- images -------------------------------------------------------------------
+
+type SrcsetCandidate = { url: string; w?: number; x?: number };
+
+// `srcset` as its candidates. Split on a comma FOLLOWED BY whitespace, not on every
+// comma: image CDNs put commas inside the URL itself (`/w_800,q_70/a.jpg`).
+function srcsetCandidates(srcset: string | null): SrcsetCandidate[] {
+  if (!srcset) return [];
+  return srcset.split(/,\s+/).flatMap((part): SrcsetCandidate[] => {
+    const [url, descriptor] = part.trim().split(/\s+/);
+    if (!url) return [];
+    const match = /^(\d+(?:\.\d+)?)([wx])$/.exec(descriptor ?? '');
+    if (!match) return [{ url }];
+    return [match[2] === 'w' ? { url, w: Number(match[1]) } : { url, x: Number(match[1]) }];
+  });
+}
+
+// The candidate to keep: the SMALLEST one that still fills the stored size, so the
+// fetch is not a 4000 px original that is thrown away in the resize; failing that the
+// largest there is. For density descriptors, 2× at most.
+function pickCandidate(candidates: SrcsetCandidate[]): string | undefined {
+  const widths = candidates.filter((c): c is SrcsetCandidate & { w: number } => c.w !== undefined);
+  if (widths.length > 0) {
+    widths.sort((a, b) => a.w - b.w);
+    return (widths.find((c) => c.w >= READER_IMAGE_MAX_DIMENSION) ?? widths[widths.length - 1]).url;
+  }
+  const densities = candidates.filter(
+    (c): c is SrcsetCandidate & { x: number } => c.x !== undefined,
+  );
+  if (densities.length > 0) {
+    densities.sort((a, b) => a.x - b.x);
+    return ([...densities].reverse().find((c) => c.x <= 2) ?? densities[0]).url;
+  }
+  return candidates[0]?.url;
+}
+
+// The attributes a lazy-loading page writes in place of `srcset` / `src`. Readability
+// moves the common ones into place itself; these are for the page it didn't recognise.
+const SRCSET_ATTRIBUTES = ['srcset', 'data-srcset', 'data-lazy-srcset'];
+const SRC_ATTRIBUTES = ['src', 'data-src', 'data-lazy-src', 'data-original'];
+// A `<source type>` no client here is sure to decode. The `<img>` beside it is the
+// page's own fallback for exactly that case.
+const UNDECODABLE_SOURCE = /avif|heic|heif|jxl|svg/i;
+
+function fromSrcset(el: DomElement): string | undefined {
+  for (const name of SRCSET_ATTRIBUTES) {
+    const url = pickCandidate(srcsetCandidates(el.getAttribute(name)));
+    if (url) return url;
+  }
+  return undefined;
+}
+
+// Where an image's bytes are, as the page wrote it — or undefined for one not worth
+// asking for: no address but an inline `data:` one (a lazy-loader's blank), or a
+// declared size that says icon. The real floor is applied again after the decode,
+// since most pages size their images in CSS and declare nothing.
+function imageAddress(img: DomElement, picture: DomElement | null): string | undefined {
+  const width = Number(img.getAttribute('width'));
+  const height = Number(img.getAttribute('height'));
+  if (width > 0 && height > 0 && isReaderImageTooSmall(width, height)) return undefined;
+
+  const own = fromSrcset(img);
+  if (own) return own;
+  if (picture) {
+    for (const source of Array.from(picture.querySelectorAll('source'))) {
+      if (UNDECODABLE_SOURCE.test(source.getAttribute('type') ?? '')) continue;
+      const url = fromSrcset(source);
+      if (url) return url;
+    }
+  }
+  for (const name of SRC_ATTRIBUTES) {
+    const value = img.getAttribute(name)?.trim();
+    if (value && !/^data:/i.test(value)) return value;
+  }
+  return undefined;
+}
+
+// One image as a `figure` block: its alt, its caption, and — when the caller collects
+// images — the key its bytes will be packed under. With none of the three there is
+// nothing to show and no block. False when `el` holds no image at all, so the caller
+// walks it as the container it is (a figure around a code listing, a quote).
+function pushFigure(el: DomElement, tag: string, builder: Builder): boolean {
+  const img = tag === 'IMG' ? el : el.querySelector('img');
+  if (!img) return false;
+  if (builder.full) return true;
+  const picture = tag === 'PICTURE' ? el : tag === 'FIGURE' ? el.querySelector('picture') : null;
+  const alt = (img.getAttribute('alt') ?? '').trim();
+  const runs = tag === 'FIGURE' ? captionOf(el) : [];
+  const image = builder.images?.keyFor(imageAddress(img, picture));
+  if (alt !== '' || runs.length > 0 || image) {
+    builder.push({
+      kind: 'figure',
+      ...(alt ? { text: alt } : {}),
+      runs,
+      ...(image ? { image } : {}),
+    });
+  }
+  return true;
+}
+
+// The images in an element that holds NOTHING ELSE — `<p><img></p>`, `<a><img></a>`,
+// the way most pages wrap a picture. Those are figures. An image in among words (an
+// emoji, an inline icon) is not: promoting it would cut the sentence in two around a
+// placeholder, so it is left where every image used to be left, out of the copy.
+function imagesAlone(el: DomElement): DomElement[] {
+  if ((el.textContent ?? '').trim() !== '') return [];
+  return Array.from(el.querySelectorAll('img'));
 }
 
 function captionOf(figure: DomElement): ReaderRun[] {
@@ -408,8 +557,18 @@ function walkBlocks(node: DomNode, builder: Builder, ctx: { quote: boolean; dept
     const tag = tagOf(el);
     if (isSkipped(el)) continue;
     if (!BLOCKS.has(tag) && tag !== 'IMG') {
-      if (tag === 'BR') builder.text('\n', {}, true);
-      else walkInline(el, builder, inlineMarks(el, {}));
+      if (tag === 'BR') {
+        builder.text('\n', {}, true);
+        continue;
+      }
+      const images = imagesAlone(el);
+      if (images.length === 0) {
+        walkInline(el, builder, inlineMarks(el, {}));
+        continue;
+      }
+      builder.close();
+      for (const img of images) pushFigure(img, 'IMG', builder);
+      builder.open({ kind: paragraphKind });
       continue;
     }
 
@@ -419,8 +578,13 @@ function walkBlocks(node: DomNode, builder: Builder, ctx: { quote: boolean; dept
       builder.open({ kind: 'heading', level });
       walkInline(el, builder, {});
     } else if (tag === 'P') {
-      builder.open({ kind: paragraphKind });
-      walkInline(el, builder, {});
+      const images = imagesAlone(el);
+      if (images.length > 0) {
+        for (const img of images) pushFigure(img, 'IMG', builder);
+      } else {
+        builder.open({ kind: paragraphKind });
+        walkInline(el, builder, {});
+      }
     } else if (tag === 'BLOCKQUOTE') {
       walkBlocks(el, builder, { ...ctx, quote: true });
     } else if (tag === 'UL' || tag === 'OL') {
@@ -435,20 +599,14 @@ function walkBlocks(node: DomNode, builder: Builder, ctx: { quote: boolean; dept
     } else if (tag === 'HR') {
       builder.push({ kind: 'rule' });
     } else if (tag === 'IMG' || tag === 'FIGURE' || tag === 'PICTURE') {
-      // The copy carries no image bytes and never a remote URL (rendering one would be
-      // a request to the site per view): a placeholder with what words it had. A
-      // figure wrapping something other than an image (a code listing, a quote) is
-      // walked as a container instead.
-      const img = tag === 'IMG' ? el : el.querySelector('img');
-      if (img) {
-        const alt = (img.getAttribute('alt') ?? '').trim();
-        const runs = tag === 'FIGURE' ? captionOf(el) : [];
-        if (alt !== '' || runs.length > 0) {
-          builder.push({ kind: 'figure', ...(alt ? { text: alt } : {}), runs });
-        }
-      } else {
-        walkBlocks(el, builder, ctx);
-      }
+      // The document never carries a remote URL (rendering one would be a request to
+      // the site per view): a figure is the words the image had, and a KEY when the
+      // caller is collecting images to keep (_images_, above). A figure wrapping
+      // something other than an image (a code listing, a quote) is walked as a
+      // container instead, and so is one holding several images — a gallery — so each
+      // becomes a figure of its own.
+      const gallery = tag === 'FIGURE' && el.querySelectorAll('img').length > 1;
+      if (gallery || !pushFigure(el, tag, builder)) walkBlocks(el, builder, ctx);
     } else if (tag === 'TABLE') {
       // A data table is one `table` block; anything else written with `<table>` is
       // walked as the containers it is (_tables_, above).
@@ -523,7 +681,34 @@ export function readerDocFromArticle(
   sourceUrl: string,
   now = Date.now(),
 ): ReaderDoc | null {
-  const builder = new Builder();
+  return build(body, article, sourceUrl, now, undefined);
+}
+
+// The same document, with the images it could keep: every figure the walker found an
+// address for carries a key (`block.image`), and `images` pairs each key with that
+// address. A capture that keeps images calls this, fetches what it can, and then runs
+// the document through `applyReaderImages` (reader-images.ts) — which is what removes
+// the key from a figure whose image was not kept. The addresses are for that one
+// fetch; they are not in the document and must never be stored.
+export function readerCaptureFromArticle(
+  body: DomNode,
+  article: ReaderArticleMeta,
+  sourceUrl: string,
+  now = Date.now(),
+): { doc: ReaderDoc; images: ReaderImageSource[] } | null {
+  const collector = new ImageCollector(sourceUrl);
+  const doc = build(body, article, sourceUrl, now, collector);
+  return doc ? { doc, images: collector.sources } : null;
+}
+
+function build(
+  body: DomNode,
+  article: ReaderArticleMeta,
+  sourceUrl: string,
+  now: number,
+  images: ImageCollector | undefined,
+): ReaderDoc | null {
+  const builder = new Builder(images);
   walkBlocks(body, builder, { quote: false, depth: 0 });
   if (builder.blocks.length === 0) return null;
 

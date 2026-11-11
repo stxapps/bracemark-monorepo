@@ -1,8 +1,8 @@
 import { isProbablyReaderable, Readability } from '@mozilla/readability';
 import { parseHTML } from 'linkedom';
 
-import type { ReaderDoc } from '@stxapps/shared';
-import { type DomNode, readerDocFromArticle } from '@stxapps/shared/reader/reader-doc-from-dom';
+import type { ReaderDoc, ReaderImageSource } from '@stxapps/shared';
+import { type DomNode, readerCaptureFromArticle } from '@stxapps/shared/reader/reader-doc-from-dom';
 
 // Server read mode: the page's HTML → a `ReaderDoc`, with the SAME two steps every
 // live-page capture takes (web-react lib/reader-doc-from-page.ts) — Readability finds
@@ -59,7 +59,16 @@ type ReadabilityDocument = ConstructorParameters<typeof Readability>[0];
 
 // Null when the page isn't an article (Readability's pre-check, then its parse, then a
 // walker that kept nothing) — the route answers `not-an-article`.
-export function readModeFromHtml(html: string, finalUrl: URL, now = Date.now()): ReaderDoc | null {
+//
+// `images` is the address of every figure the document gave a key to — the client's to
+// fetch through the image proxy (routes/image.ts), never this Worker's: fetching thirty
+// images inside the extract request would hold it open past its deadline and inline
+// megabytes into a JSON response. The walker has resolved each against the final URL.
+export function readModeFromHtml(
+  html: string,
+  finalUrl: URL,
+  now = Date.now(),
+): { doc: ReaderDoc; images: ReaderImageSource[] } | null {
   const { document } = parseHTML(html);
   setBaseUrl(document, finalUrl);
 
@@ -71,7 +80,7 @@ export function readModeFromHtml(html: string, finalUrl: URL, now = Date.now()):
   if (!article?.content) return null;
 
   const parsed = parseHTML(`<!doctype html><html><body>${article.content}</body></html>`);
-  return readerDocFromArticle(
+  return readerCaptureFromArticle(
     parsed.document.body as unknown as DomNode,
     article,
     finalUrl.toString(),

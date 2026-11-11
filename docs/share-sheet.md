@@ -947,7 +947,8 @@ available 51.1 MB`**, with no memory warning at any point. `saved` comes
   writes the copy to a file (_the share extension has almost no memory to
   spare_, above). So the page serialises it once, where memory is free
   (`__bracemarkReaderDocJson`, which needed the string anyway to apply its 3M
-  cap), `share-url.ts` accepts a string and nothing else, the draft holds that
+  cap — the text is the capture, `{ doc, images }`: the document and the address of
+  each figure's picture, which the app fetches after the drain and never stores), `share-url.ts` accepts a string and nothing else, the draft holds that
   string inside its own JSON, and it is parsed for the first time in the app
   (`storeReadModeCopy`, which also takes the parsed doc — the capture screen's,
   and a draft from before 2026-11-10 still in the outbox across an update).

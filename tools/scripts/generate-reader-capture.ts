@@ -65,13 +65,20 @@ const MAX_PAYLOAD_CHARS = 3_000_000;
 // sheet that only ever writes it to a file, in a process iOS kills at 120 MB. As text
 // it is one buffer each (docs/share-sheet.md, _what the sheet does and doesn't do_).
 // The length the cap needs is the same string's, so nothing is serialised twice.
+//
+// What it serialises is the CAPTURE, \`{ doc, images }\`: the document, and beside it the
+// address of each figure the walker gave a key to (the function keeps its first name;
+// both scripts and their readers know it by it). The app fetches those addresses
+// natively when the account keeps images, and settles the document against what it
+// kept before storing anything (expo-react data/store-read-mode.ts) — the list never
+// reaches a stored copy. Addresses are a few dozen short strings; the cap is unmoved.
 const ENTRY = `
-import { readerDocFromPage } from '@stxapps/web-react/lib/reader-doc-from-page';
+import { readerCaptureFromPage } from '@stxapps/web-react/lib/reader-doc-from-page';
 globalThis.__bracemarkReaderDocJson = function () {
   try {
-    var doc = readerDocFromPage(document);
-    if (!doc) return null;
-    var json = JSON.stringify(doc);
+    var capture = readerCaptureFromPage(document);
+    if (!capture) return null;
+    var json = JSON.stringify(capture);
     return json.length > ${MAX_PAYLOAD_CHARS} ? null : json;
   } catch (e) {
     return null;
@@ -142,7 +149,8 @@ var ExtensionPreprocessingJS = {
 
   // The message is assembled around the copy's own text rather than by a second
   // JSON.stringify over the parsed object: the same `{ type, doc }` the capture
-  // screen has always parsed, `doc` null when there is no copy.
+  // screen has always parsed, `doc` null when there is no copy — and otherwise the
+  // capture, which storeReadModeCopy takes as it is.
   const injected = `${code}
 ;(function () {
   var json = null;

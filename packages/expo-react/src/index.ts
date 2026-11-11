@@ -52,6 +52,7 @@ export * from './hooks/use-live-read';
 export * from './hooks/use-pending-changes-count';
 export * from './hooks/use-pin-mutations';
 export * from './hooks/use-reader-doc';
+export * from './hooks/use-reader-images';
 export * from './hooks/use-recovery-code';
 export * from './hooks/use-setting-mutations';
 export * from './hooks/use-settings';

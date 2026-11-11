@@ -17,6 +17,7 @@
 import {
   dropCachedPath,
   type Extraction,
+  type ExtractionFileRefField,
   EXTRACTIONS_PREFIX,
   extractionSchema,
   type Facet,
@@ -474,6 +475,7 @@ export async function writeSettingsGeneral(
     linksLayout?: LinksLayout;
     serverExtraction?: boolean;
     keepReadModeOnSave?: boolean;
+    keepReadModeImages?: boolean;
     keepScreenshotOnSave?: boolean;
     theme?: ThemeState;
     sortOn?: LinkSortOn;
@@ -507,7 +509,10 @@ export type ExtractionFacet = keyof Extraction['facets'];
 // The machine-written display fields on `extractions/{id}.enc` — the extracted
 // counterparts of the user's `customTitle`/`customImageId` on the link.
 export type ExtractionFields = Partial<
-  Pick<Extraction, 'title' | 'imageId' | 'readModeId' | 'screenshotId' | 'pageCopyId'>
+  Pick<
+    Extraction,
+    'title' | 'imageId' | 'readModeId' | 'readModeImagesId' | 'screenshotId' | 'pageCopyId'
+  >
 >;
 
 // What one extraction write-back carries: an optional display-field patch and/or one
@@ -592,7 +597,15 @@ export async function writeExtraction(
 // The kept copies a user can remove one at a time, and the display field each one's
 // blob hangs off. Page copy joins when it exists.
 export type KeptCopyFacet = 'readMode' | 'screenshot';
-const KEPT_COPY_FIELD = { readMode: 'readModeId', screenshot: 'screenshotId' } as const;
+// A read-mode copy is two blobs — the text and, when it kept any, the pack of its
+// images — and removing the copy removes both: a pack left behind would be bytes
+// against the quota that no document names.
+const KEPT_COPY_FIELDS = {
+  readMode: ['readModeId', 'readModeImagesId'],
+  screenshot: ['screenshotId'],
+} as const satisfies Record<KeptCopyFacet, readonly ExtractionFileRefField[]>;
+const hasKeptCopy = (extraction: Extraction | undefined, facet: KeptCopyFacet): boolean =>
+  KEPT_COPY_FIELDS[facet].some((field) => extraction?.[field]);
 
 // Remove one kept copy of one link: drop its ref from `extractions/{id}.enc`, mark
 // the facet REMOVED, then delete the blob (metadata before content on the way down,
@@ -615,10 +628,9 @@ export async function removeKeptCopy(
   linkId: string,
   facet: KeptCopyFacet,
 ): Promise<boolean> {
-  const field = KEPT_COPY_FIELD[facet];
   const path = pathFromId(linkId, EXTRACTIONS_PREFIX);
   const existing = await readExtractionRecord(path);
-  if (!existing?.[field]) return false;
+  if (!hasKeptCopy(existing, facet)) return false;
 
   const now = Date.now();
   let removed: string[] = [];
@@ -629,11 +641,11 @@ export async function removeKeptCopy(
       // above and this write. Nothing to remove now — ABORT, never write back: the
       // extraction may have been deleted meanwhile, and writing the earlier copy
       // would resurrect it (the dangling-extraction race, made by us).
-      if (!current?.[field]) throw NOTHING_TO_REMOVE;
+      if (!current || !hasKeptCopy(current, facet)) throw NOTHING_TO_REMOVE;
       const prior = current.facets[facet];
       const next: Extraction = {
         ...current,
-        [field]: undefined,
+        ...Object.fromEntries(KEPT_COPY_FIELDS[facet].map((field) => [field, undefined])),
         facets: {
           ...current.facets,
           [facet]: {

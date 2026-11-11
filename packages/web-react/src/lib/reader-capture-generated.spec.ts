@@ -54,7 +54,9 @@ test('the Safari preprocessing file hands the sheet the title, the URL and the c
   const prose =
     'A copy of the words is the part that lasts, long after the page has moved. '.repeat(8);
   document.title = 'A post';
-  document.body.innerHTML = `<article><h1>A post</h1><p>${prose}</p><p>${prose}</p></article>`;
+  document.body.innerHTML =
+    `<article><h1>A post</h1><p>${prose}</p>` +
+    `<figure><img src="https://cdn.example/chart.png" alt="A chart"></figure><p>${prose}</p></article>`;
 
   // eslint-disable-next-line no-new-func -- evaluating the shipped file the way Safari does
   const preprocessing = new Function(
@@ -73,9 +75,18 @@ test('the Safari preprocessing file hands the sheet the title, the URL and the c
   // memory that process does not have (docs/share-sheet.md, _what the sheet does and
   // doesn't do_); the app parses it at the drain.
   expect(typeof result.readMode).toBe('string');
-  const doc = JSON.parse(result.readMode as string) as { version: number; blocks: unknown[] };
+  // The text is the CAPTURE: the document, and beside it the address of each figure
+  // it gave a key to. The app fetches those natively and never stores them; the
+  // document itself names a key and nothing else.
+  const { doc, images } = JSON.parse(result.readMode as string) as {
+    doc: { version: number; blocks: { kind: string; image?: string }[] };
+    images: { key: string; url: string }[];
+  };
   expect(doc.version).toBe(1);
   expect(doc.blocks.length).toBeGreaterThan(0);
+  expect(images).toEqual([{ key: 'i0', url: 'https://cdn.example/chart.png' }]);
+  expect(doc.blocks.find((b) => b.kind === 'figure')?.image).toBe('i0');
+  expect(JSON.stringify(doc)).not.toContain('cdn.example');
 });
 
 test('a page that is not an article hands over no copy — and still the title', async () => {

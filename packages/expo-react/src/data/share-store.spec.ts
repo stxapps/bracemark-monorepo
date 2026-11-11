@@ -415,8 +415,18 @@ describe('drainShareOutbox', () => {
 
     mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify(withCopy));
     await expect(drainShareOutbox({ keepReadMode: true })).resolves.toEqual(['links/link-1.enc']);
-    expect(storeReadModeCopy).toHaveBeenCalledWith('alice', 'link-1', withCopy.readMode);
+    // Images are a second verdict, and off unless the caller says so: fetching them
+    // is this app making requests, which the device's fetch mode may forbid.
+    expect(storeReadModeCopy).toHaveBeenCalledWith('alice', 'link-1', withCopy.readMode, {
+      images: false,
+    });
     expect([...mockFiles.keys()]).toEqual([]);
+
+    mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify(withCopy));
+    await drainShareOutbox({ keepReadMode: true, keepReadModeImages: true });
+    expect(storeReadModeCopy).toHaveBeenLastCalledWith('alice', 'link-1', withCopy.readMode, {
+      images: true,
+    });
   });
 
   it('applies a valid draft and deletes its file', async () => {

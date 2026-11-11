@@ -22,8 +22,11 @@ import { cn } from '../../lib/utils';
 //   - a link is an `<a>` only when `isReaderHref` passes at RENDER time too (a
 //     backup is an outside file), and it leaves for a new tab with no referrer —
 //     the saved site learns nothing about where it was read;
-//   - a figure is a placeholder: the copy keeps no image bytes and never the URL,
-//     so nothing here can make a request;
+//   - a figure's picture comes from the CALLER's `images` map — `blob:` URLs of the
+//     copy's own image pack, decrypted on this device (web-react useReaderImages) —
+//     looked up by the key the block carries. The document holds no address and this
+//     file never builds one, so nothing here can make a request to the saved site; a
+//     figure with no kept image is its words, as before;
 //   - a table is a real `<table>` built from the copy's cells, each cell's strings
 //     children like any other — the page's own table markup never arrives here;
 //   - a block kind this version doesn't know renders nothing, and the rest of the
@@ -209,7 +212,95 @@ function Table({ block }: { block: ReaderBlock }) {
   );
 }
 
-function Block({ block }: { block: ReaderBlock }) {
+// One kept image, by the key its figure names. Structural, so this package needs
+// nothing from the data layer: web-react's `ReaderImageView` fits it.
+export interface ReaderArticleImage {
+  url: string;
+  width: number;
+  height: number;
+}
+
+interface ImageContext {
+  images: ReadonlyMap<string, ReaderArticleImage>;
+  // False while the pack may still arrive: a figure then holds its space instead of
+  // falling back to its words, so the text below it does not move when it lands.
+  settled: boolean;
+}
+
+const NO_IMAGES: ImageContext = { images: new Map(), settled: true };
+
+// A figure. Three states, decided by the block and the pack together:
+//
+//   - the block names an image the pack HAS → the picture, in a box of the stored
+//     aspect ratio, never wider than the image itself (a 300 px diagram is not blown
+//     up to the column);
+//   - it names one and the pack is still on its way → the same box, empty. The size
+//     is on the block for exactly this, so the reading position holds;
+//   - it names none, or the pack is settled without it → the words: alt text and
+//     caption, under the icon that says a picture was here.
+function Figure({ block, context }: { block: ReaderBlock; context: ImageContext }) {
+  const runs = runsOf(block);
+  const caption =
+    runs.length > 0 ? (
+      <figcaption className={cn('mt-2 text-sm whitespace-pre-line text-muted-foreground')}>
+        <Runs runs={runs} />
+      </figcaption>
+    ) : null;
+
+  const { width, height } = block;
+  const sized =
+    typeof block.image === 'string' &&
+    typeof width === 'number' &&
+    typeof height === 'number' &&
+    width > 0 &&
+    height > 0;
+  const view = sized ? context.images.get(block.image as string) : undefined;
+
+  if (sized && (view || !context.settled)) {
+    return (
+      <figure className={cn('my-6')}>
+        <div
+          className={cn('mx-auto w-full overflow-hidden rounded-lg bg-muted')}
+          style={{ aspectRatio: `${width} / ${height}`, maxWidth: `${width}px` }}
+        >
+          {view ? (
+            <img
+              src={view.url}
+              alt={block.text ?? ''}
+              width={width}
+              height={height}
+              className={cn('size-full object-contain')}
+            />
+          ) : null}
+        </div>
+        {caption}
+      </figure>
+    );
+  }
+
+  return (
+    <figure
+      className={cn(
+        'my-6 flex items-start gap-3 rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted-foreground',
+      )}
+    >
+      <ImageOff className={cn('mt-0.5 size-4 shrink-0')} aria-hidden="true" />
+      <div className={cn('min-w-0')}>
+        {/* The alt text stands in for the picture; the caption, if any, is
+            what the page printed under it. "Image not kept" is the honest
+            label when there is neither. */}
+        <p className={cn('text-foreground')}>{block.text || 'Image not kept'}</p>
+        {runs.length > 0 && (
+          <figcaption className={cn('mt-1 whitespace-pre-line')}>
+            <Runs runs={runs} />
+          </figcaption>
+        )}
+      </div>
+    </figure>
+  );
+}
+
+function Block({ block, context }: { block: ReaderBlock; context: ImageContext }) {
   const runs = runsOf(block);
   switch (block.kind) {
     case 'heading': {
@@ -245,26 +336,7 @@ function Block({ block }: { block: ReaderBlock }) {
         </pre>
       );
     case 'figure':
-      return (
-        <figure
-          className={cn(
-            'my-6 flex items-start gap-3 rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted-foreground',
-          )}
-        >
-          <ImageOff className={cn('mt-0.5 size-4 shrink-0')} aria-hidden="true" />
-          <div className={cn('min-w-0')}>
-            {/* The alt text stands in for the picture; the caption, if any, is
-                what the page printed under it. "Image not kept" is the honest
-                label when there is neither. */}
-            <p className={cn('text-foreground')}>{block.text || 'Image not kept'}</p>
-            {runs.length > 0 && (
-              <figcaption className={cn('mt-1 whitespace-pre-line')}>
-                <Runs runs={runs} />
-              </figcaption>
-            )}
-          </div>
-        </figure>
-      );
+      return <Figure block={block} context={context} />;
     case 'table':
       return <Table block={block} />;
     case 'rule':
@@ -278,6 +350,8 @@ export function ReaderArticle({
   doc,
   title,
   meta,
+  images,
+  imagesSettled,
 }: {
   doc: ReaderDoc;
   // What the reader prints as the article's `<h1>` — the caller resolves it (the
@@ -285,7 +359,12 @@ export function ReaderArticle({
   title: string;
   // A line under the title: site, byline, when it was kept. Plain text.
   meta?: ReactNode;
+  // The copy's kept images by key, and whether the pack has been read yet. Absent:
+  // every figure is its words (a copy with no pack, or a caller that shows none).
+  images?: ReadonlyMap<string, ReaderArticleImage>;
+  imagesSettled?: boolean;
 }) {
+  const context: ImageContext = images ? { images, settled: imagesSettled ?? true } : NO_IMAGES;
   const dir = doc.dir === 'rtl' ? 'rtl' : 'ltr';
   return (
     <article
@@ -318,7 +397,7 @@ export function ReaderArticle({
         }
         return (
           <Fragment key={item.block.id}>
-            <Block block={item.block} />
+            <Block block={item.block} context={context} />
           </Fragment>
         );
       })}

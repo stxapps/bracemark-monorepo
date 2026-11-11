@@ -23,6 +23,37 @@ export const READER_DOC_MAX_CHARS = 1_000_000;
 export const READER_TABLE_MAX_COLUMNS = 24;
 export const READER_TABLE_MAX_ROWS = 500;
 
+// --- images (docs/link-extraction-keep.md, _images in read mode_) -------------------
+//
+// The ceilings on the images a read-mode copy keeps — the capture's, like every cap
+// here. They bound three different things:
+//
+//   - WHICH images are asked for: at most READER_IMAGES_MAX_COUNT addresses leave the
+//     walker, so an article that is a gallery of 400 thumbnails is 30 fetches, not 400;
+//   - what one image may cost to FETCH: READER_IMAGE_MAX_SOURCE_BYTES, the preview
+//     path's own ceiling, checked before the bytes are decoded;
+//   - what is STORED: each image is re-encoded to a JPEG no longer than
+//     READER_IMAGE_MAX_DIMENSION on its longest side, and the pack stops taking images
+//     at READER_IMAGES_MAX_BYTES — past it, a figure stays the placeholder it would be
+//     with images off. The dimension is the preview's: a reader column is ~700 CSS px,
+//     so 1024 is what a 1.5× screen can show and a 2× screen barely misses.
+//
+// And one floor: an image smaller than READER_IMAGE_MIN_AREA, or thinner than
+// READER_IMAGE_MIN_SIDE on either side, is an icon, an avatar, a spacer or a tracking
+// pixel — never the figure a paragraph is about. Area rather than a square, so a wide
+// formula or a sparkline (300×40) is kept and a 48×48 avatar is not.
+export const READER_IMAGES_MAX_COUNT = 30;
+export const READER_IMAGES_MAX_BYTES = 4 * 1024 * 1024;
+export const READER_IMAGE_MAX_SOURCE_BYTES = 8 * 1024 * 1024;
+export const READER_IMAGE_MAX_DIMENSION = 1024;
+export const READER_IMAGE_JPEG_QUALITY = 0.8;
+export const READER_IMAGE_MIN_AREA = 100 * 100;
+export const READER_IMAGE_MIN_SIDE = 32;
+
+export function isReaderImageTooSmall(width: number, height: number): boolean {
+  return width * height < READER_IMAGE_MIN_AREA || Math.min(width, height) < READER_IMAGE_MIN_SIDE;
+}
+
 // Is this a link target a reader may render as a link? Absolute http(s) only: no
 // `javascript:`, no `data:`, nothing relative (there is no base to resolve against in
 // the app). Used by the capture to drop a target and by a renderer to refuse one.
