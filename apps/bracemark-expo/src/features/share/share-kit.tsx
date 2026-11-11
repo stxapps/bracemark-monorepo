@@ -104,7 +104,9 @@ const INITIAL_METRICS = {
 //     there is a card glued to the floor of an invisible box. So when the
 //     frame is `detached` the panel centres and rounds all four corners: the
 //     iPadOS idiom for a form sheet, and what the app's own add panel does from
-//     768 (docs/soft-keyboard.md, _the add panel's two shapes_).
+//     768 (docs/soft-keyboard.md, _the add panel's two shapes_). It also caps
+//     at `max-w-lg` rather than filling the host's 580pt card, so it is the
+//     same width as that add panel and as Android's card below.
 //   - Android — the activity is translucent and full-screen, so the panel was
 //     already ours: same rounded top and background, plus its own scrim. And
 //     so is its shape, which no host picks here: from 768 (lib/window-class.ts)
@@ -229,8 +231,11 @@ function ShareSheetFrame({ children, holdSwipe }: { children: ReactNode; holdSwi
   // which picks the panel's shape (the header).
   const { lift, detached: hostDetached } = useShareKeyboard(insets.bottom);
   // Android's own card on a wide window (the header). Only Android: the iPad's
-  // card is the host's, already 580 wide, and the extension's window size is
-  // not to be trusted (docs/share-sheet.md, _On an iPad the sheet floats_).
+  // card is the host's, and the extension's window size is not to be trusted
+  // (docs/share-sheet.md, _On an iPad the sheet floats_). Both detached shapes
+  // share one width, though — `max-w-lg` on the panel below — because the host's
+  // form sheet is 580 wide in either orientation, and filling it made the iPad
+  // the one tablet whose card was wider than the app's own add panel.
   const wide = useWideWindow();
   const card = isAndroid && wide;
   const detached = hostDetached || card;
@@ -290,7 +295,7 @@ function ShareSheetFrame({ children, holdSwipe }: { children: ReactNode; holdSwi
       className={cn(
         'min-h-0 shrink border-border bg-popover px-4 pt-4',
         detached ? 'rounded-2xl border' : 'rounded-t-2xl border-t',
-        card && 'w-full max-w-lg self-center',
+        detached && 'w-full max-w-lg self-center',
       )}
     >
       {/* Tap-anywhere-dead to drop the keyboard, and it WRAPS the children

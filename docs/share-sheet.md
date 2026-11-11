@@ -395,8 +395,12 @@ card. The navigation bar's inset moves outside the card, under its bottom gap,
 where a sheet keeps it inside as Save's clearance. The width is read reactively,
 so a split screen or a fold that crosses 768 changes the shape under an open
 sheet; rotation does not, a tablet being wide both ways round. iOS keeps the
-host's word alone: the iPad's card is already 580 wide, and the extension's
-window size is not to be trusted (above). `SHARE-ANDROID-001`,
+host's word alone on _whether_ the sheet is a card — the extension's window size
+is not to be trusted (above) — but not on its width: the host's form sheet is
+580 wide in both orientations, and a panel filling it was the one tablet card
+wider than the rest. So every detached panel, iPad and Android alike, caps at
+`max-w-lg` and centres; on the iPad that leaves ~34pt of the transparent root
+either side, which the backdrop covers like the gap above. `SHARE-ANDROID-001`,
 `SHARE-CREATE-001` and `VIEWPORT-KEYBOARD-001` drive the card on the tablet AVD
 ([e2e.md](./e2e.md), _narrow and wide_).
 
