@@ -108,6 +108,55 @@ export function openableUrl(url: string): string | undefined {
   }
 }
 
+// Where the Internet Archive's Wayback Machine keeps its captures of this address —
+// the row menu's and the reader's "Wayback Machine" exit, for a page that has changed
+// or gone. `savedAt` (the link's `createdAt`) goes in as the 14-digit UTC stamp
+// Wayback reads, and it answers with the capture NEAREST that moment — the page as it
+// was around the day it was saved, which is the one the user means. Without a usable
+// time the address has no stamp, and Wayback shows its latest capture.
+//
+// ⚠ BUILT ON THE DEVICE, OPENED ONLY BY A PRESS. Nothing is asked of archive.org
+// before the user chooses to go there: no "is there a capture?" lookup, no prefetch,
+// no badge that depends on the answer. A lookup per link would hand a third party the
+// library's addresses one by one, which is the leak the whole extraction design
+// exists to avoid (docs/link-extraction.md, _the stance_) — and nothing would report
+// it. For the same reason this never SUBMITS a page to be archived.
+//
+// Undefined for an address a public archive cannot hold, so no surface offers the exit
+// for it: anything `openableUrl` refuses, and a host that only resolves on the user's
+// own network (localhost, an IP literal, a dotless or `.local`-style name). Sending
+// those would tell the archive about a private host and show the user nothing.
+const PRIVATE_HOST = /(^|\.)(localhost|local|localdomain|internal|lan|home|corp|invalid|test)$/i;
+
+export function waybackUrl(url: string, savedAt?: number): string | undefined {
+  const href = openableUrl(url);
+  if (!href) return undefined;
+  let host: string;
+  try {
+    host = new URL(href).hostname;
+  } catch {
+    return undefined;
+  }
+  // An IPv6 literal keeps its brackets in `hostname`; an IPv4 one is all digits and dots.
+  if (host.startsWith('[') || /^[\d.]+$/.test(host)) return undefined;
+  if (!host.includes('.') || PRIVATE_HOST.test(host)) return undefined;
+
+  let stamp = '';
+  if (savedAt !== undefined && Number.isFinite(savedAt) && savedAt > 0) {
+    try {
+      // "2026-11-10T12:34:56.789Z" → "20261110123456".
+      stamp = new Date(savedAt).toISOString().replace(/\D/g, '').slice(0, 14);
+    } catch {
+      stamp = '';
+    }
+  }
+  // The address goes in RAW, not percent-encoded: that is the form Wayback's own
+  // links take, query string and all.
+  return stamp
+    ? `https://web.archive.org/web/${stamp}/${href}`
+    : `https://web.archive.org/web/${href}`;
+}
+
 // The DISPLAY url for a link that has no title — the title-line fallback across
 // every layout. Unlike `hostFromText`, it KEEPS THE PATH, so several untitled
 // links from the same site (e.g. three medium.com articles) stay distinguishable

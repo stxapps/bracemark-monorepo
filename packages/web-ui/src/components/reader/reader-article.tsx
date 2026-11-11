@@ -1,7 +1,13 @@
 import { Fragment, type ReactNode } from 'react';
 import { ImageOff } from 'lucide-react';
 
-import { isReaderHref, type ReaderBlock, type ReaderDoc, type ReaderRun } from '@stxapps/shared';
+import {
+  isReaderHref,
+  type ReaderBlock,
+  type ReaderCell,
+  type ReaderDoc,
+  type ReaderRun,
+} from '@stxapps/shared';
 
 import { cn } from '../../lib/utils';
 
@@ -18,6 +24,8 @@ import { cn } from '../../lib/utils';
 //     the saved site learns nothing about where it was read;
 //   - a figure is a placeholder: the copy keeps no image bytes and never the URL,
 //     so nothing here can make a request;
+//   - a table is a real `<table>` built from the copy's cells, each cell's strings
+//     children like any other — the page's own table markup never arrives here;
 //   - a block kind this version doesn't know renders nothing, and the rest of the
 //     document still renders — a newer client's copy must not blank this screen.
 //
@@ -100,6 +108,107 @@ function group(blocks: ReaderBlock[]): Group[] {
   return out;
 }
 
+// A table's rows as the renderer reads them. The capture writes a rectangular grid
+// (shared reader/reader-doc.ts), but a copy is stored bytes and a backup is an outside
+// file, so nothing here trusts the shape: a row that isn't an object with a `cells`
+// array contributes no cells, and a table left with none renders nothing.
+type TableCell = { runs: ReaderRun[]; header: boolean };
+
+function tableRows(block: ReaderBlock): TableCell[][] {
+  const rows: unknown = block.rows;
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((row: unknown): TableCell[] => {
+      const cells = (row as { cells?: unknown } | null)?.cells;
+      if (!Array.isArray(cells)) return [];
+      // A cell with no readable runs is an EMPTY cell, not a missing one: dropping it
+      // would shift every cell after it one column to the left.
+      return cells.map((cell: ReaderCell | null | undefined) => ({
+        runs: Array.isArray(cell?.runs) ? cell.runs : [],
+        header: cell?.header === true,
+      }));
+    })
+    .filter((cells) => cells.length > 0);
+}
+
+const CELL_CLASS = 'min-w-28 border-b border-border px-3 py-2 text-start align-top';
+
+// The scroller, not the table, is the focusable region: a table wider than the
+// column scrolls sideways, and a keyboard user needs something to focus before the
+// arrow keys can scroll it. `min-w-28` on the cells is what
+// makes a many-column table scroll rather than squeeze — on a phone six columns
+// would otherwise be six unreadable slivers.
+function Table({ block }: { block: ReaderBlock }) {
+  const rows = tableRows(block);
+  if (rows.length === 0) return null;
+  const caption = runsOf(block);
+  // The leading rows that are headers throughout are the table's `<thead>` — but
+  // never ALL of them: a table with no body is not one a screen reader can read.
+  let headCount = 0;
+  while (headCount < rows.length - 1 && rows[headCount].every((cell) => cell.header)) {
+    headCount++;
+  }
+  const label = caption.map((run) => run.text).join('') || 'Table';
+
+  const renderRow = (cells: TableCell[], r: number, inHead: boolean) => (
+    <tr key={r}>
+      {cells.map((cell, c) =>
+        cell.header ? (
+          <th
+            key={c}
+            scope={inHead ? 'col' : 'row'}
+            className={cn(CELL_CLASS, 'font-semibold whitespace-pre-line text-foreground')}
+          >
+            <Runs runs={cell.runs} />
+          </th>
+        ) : (
+          <td key={c} className={cn(CELL_CLASS, 'whitespace-pre-line')}>
+            <Runs runs={cell.runs} />
+          </td>
+        ),
+      )}
+    </tr>
+  );
+
+  return (
+    <div className={cn('my-6')}>
+      <div
+        role="region"
+        aria-label={label}
+        tabIndex={0}
+        className={cn(
+          'overflow-x-auto rounded-lg border border-border focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
+        )}
+      >
+        <table className={cn('w-full border-collapse text-sm leading-6')}>
+          {caption.length > 0 && (
+            <caption
+              className={cn(
+                'border-b border-border px-3 py-2 text-start whitespace-pre-line text-muted-foreground',
+              )}
+            >
+              <Runs runs={caption} />
+            </caption>
+          )}
+          {headCount > 0 && (
+            <thead className={cn('bg-muted/50')}>
+              {rows.slice(0, headCount).map((cells, r) => renderRow(cells, r, true))}
+            </thead>
+          )}
+          <tbody className={cn('[&>tr:last-child>*]:border-b-0')}>
+            {rows.slice(headCount).map((cells, r) => renderRow(cells, r, false))}
+          </tbody>
+        </table>
+      </div>
+      {block.truncated === true && (
+        <p className={cn('mt-2 text-sm text-muted-foreground')}>
+          The rest of this table wasn’t kept.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function Block({ block }: { block: ReaderBlock }) {
   const runs = runsOf(block);
   switch (block.kind) {
@@ -156,6 +265,8 @@ function Block({ block }: { block: ReaderBlock }) {
           </div>
         </figure>
       );
+    case 'table':
+      return <Table block={block} />;
     case 'rule':
       return <hr className={cn('my-8 border-border')} />;
     default:

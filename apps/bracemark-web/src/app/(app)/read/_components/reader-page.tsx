@@ -2,12 +2,18 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowUpRight, BookOpen, Image as ImageIcon, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, BookOpen, History, Image as ImageIcon, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { LOCK_COPY } from '@stxapps/react';
-import { hostFromText, openableUrl, READ_MODE_REASONS } from '@stxapps/shared';
+import {
+  hostFromText,
+  openableUrl,
+  READ_MODE_REASONS,
+  readerPublishedAt,
+  waybackUrl,
+} from '@stxapps/shared';
 import {
   type KeptCopyFacet,
   type LinkItem,
@@ -64,6 +70,14 @@ import { readLinksReturn } from '@/lib/links-return';
 // opt-in on, on a plan with `keptCopies`). The row menu's _Keep read mode_ opens this
 // page with `&keep=readMode`, which runs that once and is then dropped from the
 // address, so a reload or a history entry can't fetch the page again on its own.
+//
+// TWO WAYS OUT, both in the top bar and both hidden behind a lock (the host is the
+// locked list's contents): _Open page_, the live page, and _Wayback Machine_, the
+// Internet Archive's capture nearest the day the link was saved — for the page that
+// has changed or gone, which is the moment a reader is opened at all. The second is
+// an address built on this device (`waybackUrl`, @stxapps/shared url.ts); nothing
+// is asked of the archive until the click, and nothing may be: a lookup would tell
+// a third party which pages are in the library.
 
 // The ✕'s target: where the links page was, read after mount because
 // sessionStorage isn't there during the static render (settings' topbar does the
@@ -135,7 +149,15 @@ function ReadModeTab({ fileId, title, host }: { fileId: string; title: string; h
   }
 
   const { doc } = state;
-  const meta = [doc.siteName ?? host, doc.byline, `Kept ${formatDay(doc.capturedAt)}`]
+  // Site, author, when the page says it was published, when this copy was taken.
+  // The last is the one a kept copy exists for: it is the page AS IT WAS that day.
+  const published = readerPublishedAt(doc);
+  const meta = [
+    doc.siteName ?? host,
+    doc.byline,
+    published !== undefined ? `Published ${formatDay(published)}` : undefined,
+    `Kept ${formatDay(doc.capturedAt)}`,
+  ]
     .filter(Boolean)
     .join(' · ');
   return <ReaderArticle doc={doc} title={title || doc.title || host} meta={meta} />;
@@ -302,10 +324,12 @@ function KeepReadMode({ link, auto }: { link: LinkItem; auto: boolean }) {
 function EmptyCopies({
   link,
   href,
+  waybackHref,
   autoKeep,
 }: {
   link: LinkItem;
   href: string | undefined;
+  waybackHref: string | undefined;
   autoKeep: boolean;
 }) {
   const { entitlements } = useEntitlements();
@@ -321,12 +345,29 @@ function EmptyCopies({
           ? 'Keep its read mode now — the preview service you turned on in Settings fetches it for you. To keep a screenshot too, open the page and save it with the Bracemark browser extension.'
           : 'Copies are taken from the page itself: open it, then save it with the Bracemark browser extension.'}
       </p>
+      {/* Only where the exit exists. With no copy of our own this is the one place
+          the page as it was might still be, so it is said in a sentence rather than
+          left to a button's two words. "May": we have not asked, and must not. */}
+      {waybackHref ? (
+        <p>
+          If the page has changed or gone, the Internet Archive’s Wayback Machine may have it as it
+          was around the day you saved it.
+        </p>
+      ) : null}
       <div className={cn('flex flex-wrap justify-center gap-2')}>
         {serverAvailable ? <KeepReadMode link={link} auto={autoKeep} /> : null}
         {href ? (
           <Button asChild variant="outline" size="sm">
             <a href={href} target="_blank" rel="noreferrer">
               Open the page
+              <ArrowUpRight data-icon="inline-end" />
+            </a>
+          </Button>
+        ) : null}
+        {waybackHref ? (
+          <Button asChild variant="outline" size="sm">
+            <a href={waybackHref} target="_blank" rel="noreferrer">
+              Wayback Machine
               <ArrowUpRight data-icon="inline-end" />
             </a>
           </Button>
@@ -374,6 +415,7 @@ export function ReaderPage() {
   const host = link ? hostFromText(link.url) : '';
   const title = link ? (link.customTitle ?? extraction?.title ?? host) : '';
   const href = link ? openableUrl(link.url) : undefined;
+  const waybackHref = link ? waybackUrl(link.url, link.createdAt) : undefined;
   const readModeId = locked ? undefined : (extraction?.readModeId ?? undefined);
   const screenshotId = locked ? undefined : (extraction?.screenshotId ?? undefined);
 
@@ -433,7 +475,7 @@ export function ReaderPage() {
       </>
     );
   } else {
-    body = <EmptyCopies link={link} href={href} autoKeep={autoKeep} />;
+    body = <EmptyCopies link={link} href={href} waybackHref={waybackHref} autoKeep={autoKeep} />;
   }
 
   return (
@@ -454,6 +496,24 @@ export function ReaderPage() {
               <a href={href} target="_blank" rel="noreferrer">
                 Open page
                 <ArrowUpRight data-icon="inline-end" />
+              </a>
+            </Button>
+          ) : null}
+          {/* Icon-only below `sm`: with the host, _Open page_ and the ✕ there is no
+              room for a second label on a phone, and the label is one tap away in
+              the row menu and in the empty state. The accessible name is the full
+              phrase at every width. */}
+          {waybackHref && !locked ? (
+            <Button asChild variant="ghost" size="sm">
+              <a
+                href={waybackHref}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Open in Wayback Machine"
+                title="Open in Wayback Machine"
+              >
+                <History data-icon="inline-start" />
+                <span className={cn('hidden sm:inline')}>Wayback Machine</span>
               </a>
             </Button>
           ) : null}

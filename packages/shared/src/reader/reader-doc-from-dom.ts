@@ -1,9 +1,11 @@
-import type { ReaderBlock, ReaderDoc, ReaderRun } from './reader-doc';
+import type { ReaderBlock, ReaderCell, ReaderDoc, ReaderRun } from './reader-doc';
 import {
   isReaderHref,
   READER_DOC_MAX_BLOCKS,
   READER_DOC_MAX_CHARS,
   READER_DOC_VERSION,
+  READER_TABLE_MAX_COLUMNS,
+  READER_TABLE_MAX_ROWS,
 } from './reader-doc-core';
 
 // The second half of every read-mode capture: Readability's article HTML, already parsed
@@ -110,8 +112,11 @@ const isSkipped = (el: DomElement): boolean => SKIP.has(tagOf(el)) || el.localNa
 type Marks = Pick<ReaderRun, 'bold' | 'italic' | 'code' | 'href'>;
 // A block before it is numbered. Spelled out rather than `Omit<ReaderBlock, 'id'>`:
 // the schema is a looseObject, and Omit over its index signature keeps only that.
-type BlockBody = Pick<ReaderBlock, 'kind' | 'level' | 'ordered' | 'runs' | 'text'>;
-type BlockShape = Omit<BlockBody, 'runs'>;
+type BlockBody = Pick<
+  ReaderBlock,
+  'kind' | 'level' | 'ordered' | 'runs' | 'text' | 'rows' | 'truncated'
+>;
+type BlockShape = Pick<BlockBody, 'kind' | 'level' | 'ordered' | 'text'>;
 
 class Builder {
   readonly blocks: ReaderBlock[] = [];
@@ -131,14 +136,34 @@ class Builder {
   }
 
   text(raw: string, marks: Marks, preserve = false): void {
-    const text = preserve ? raw : raw.replace(/\s+/g, ' ');
-    if (text === '') return;
+    let text = preserve ? raw : raw.replace(/\s+/g, ' ');
     const last = this.runs[this.runs.length - 1];
+    // Collapsed whitespace at the start of a LINE is the source's indentation, not
+    // content: the space after a `<br>`, or between two block children of a table
+    // cell. CSS drops it on web; a native `<Text>` would draw it as an indent.
+    if (!preserve && (!last || last.text.endsWith('\n'))) text = text.replace(/^ /, '');
+    if (text === '') return;
     if (last && sameMarks(last, marks)) {
       last.text += text;
       return;
     }
     this.runs.push({ text, ...definedMarks(marks) });
+  }
+
+  // A line break between two pieces that were separate blocks on the page — the
+  // paragraphs or list items inside one table cell, which a cell holds as ONE run
+  // list. Never doubled, never leading: two block boundaries in a row are one break,
+  // and the space the source had before it goes.
+  lineBreak(): void {
+    let last = this.runs[this.runs.length - 1];
+    while (last) {
+      last.text = last.text.replace(/[ \t]+$/, '');
+      if (last.text !== '') break;
+      this.runs.pop();
+      last = this.runs[this.runs.length - 1];
+    }
+    if (!last || last.text.endsWith('\n')) return;
+    this.text('\n', {}, true);
   }
 
   // Close the open block: trim its edges, drop it if nothing is left, number it.
@@ -155,6 +180,11 @@ class Builder {
     if (this.full) return;
     this.chars += (block.text ?? '').length;
     for (const run of block.runs ?? []) this.chars += run.text.length;
+    for (const row of block.rows ?? []) {
+      for (const cell of row.cells ?? []) {
+        for (const run of cell.runs ?? []) this.chars += run.text.length;
+      }
+    }
     this.blocks.push({ id: `b${this.blocks.length}`, ...block });
   }
 }
@@ -241,6 +271,127 @@ function walkInline(node: DomNode, builder: Builder, marks: Marks, preserve = fa
   }
 }
 
+// --- tables -------------------------------------------------------------------
+//
+// A data table becomes ONE `table` block: a rectangular grid of cells, each cell a run
+// list. Everything else that is written with `<table>` — a layout table, a one-column
+// or one-row "table", a table holding another table, a grid wider than the column cap
+// — is not a grid a reader should draw, and its cells are walked as ordinary content
+// (`walkBlocks`, which descends through TBODY/TR/TD like any container).
+
+// A cell's content as one run list. Inline content is walked as anywhere else; a
+// block-level child (a `<p>`, an `<li>`, a `<div>`) and a `<br>` become line breaks,
+// so two paragraphs in a cell don't run together as one word.
+function walkCell(node: DomNode, builder: Builder, marks: Marks): void {
+  for (const child of Array.from(node.childNodes)) {
+    if (child.nodeType === TEXT_NODE) {
+      builder.text(child.textContent ?? '', marks);
+    } else if (isElement(child)) {
+      if (isSkipped(child)) continue;
+      const tag = tagOf(child);
+      if (tag === 'BR') {
+        builder.lineBreak();
+      } else if (BLOCKS.has(tag)) {
+        builder.lineBreak();
+        walkCell(child, builder, marks);
+        builder.lineBreak();
+      } else {
+        walkCell(child, builder, inlineMarks(child, marks));
+      }
+    }
+  }
+}
+
+function cellRuns(cell: DomElement): ReaderRun[] {
+  const builder = new Builder();
+  builder.open({ kind: 'paragraph' });
+  walkCell(cell, builder, {});
+  builder.close();
+  return builder.blocks[0]?.runs ?? [];
+}
+
+// The table's OWN rows, head first and foot last whatever order the source wrote them
+// in — never `querySelectorAll('tr')`, which would also return the rows of a table
+// nested inside a cell.
+function tableRows(table: DomElement): { row: DomElement; head: boolean }[] {
+  const head: { row: DomElement; head: boolean }[] = [];
+  const body: { row: DomElement; head: boolean }[] = [];
+  const foot: { row: DomElement; head: boolean }[] = [];
+  for (const child of Array.from(table.children)) {
+    const tag = tagOf(child);
+    if (tag === 'TR') {
+      body.push({ row: child, head: false });
+    } else if (tag === 'THEAD' || tag === 'TBODY' || tag === 'TFOOT') {
+      const into = tag === 'THEAD' ? head : tag === 'TFOOT' ? foot : body;
+      for (const row of Array.from(child.children)) {
+        if (tagOf(row) === 'TR') into.push({ row, head: tag === 'THEAD' });
+      }
+    }
+  }
+  return [...head, ...body, ...foot];
+}
+
+function spanOf(cell: DomElement, name: 'colspan' | 'rowspan'): number {
+  const span = Number.parseInt(cell.getAttribute(name) ?? '', 10);
+  return Number.isFinite(span) && span > 1 ? span : 1;
+}
+
+// The `table` block for a data table, or null when this is not one (above). Spans are
+// EXPANDED here, at the one writer: a cell spanning three columns is its content
+// followed by two empty cells, and a rowspan leaves an empty cell in each row below —
+// so the stored grid is rectangular and neither renderer (an HTML table on web, plain
+// Views on expo, which has no table at all) ever has to lay a span out.
+function tableBlock(table: DomElement): BlockBody | null {
+  if (table.querySelector('table')) return null;
+  const source = tableRows(table);
+  if (source.length < 2) return null;
+
+  const truncated = source.length > READER_TABLE_MAX_ROWS;
+  const count = Math.min(source.length, READER_TABLE_MAX_ROWS);
+  const grid: (ReaderCell | undefined)[][] = Array.from({ length: count }, () => []);
+  for (let r = 0; r < count; r++) {
+    const line = grid[r];
+    let c = 0;
+    for (const cell of Array.from(source[r].row.children)) {
+      const tag = tagOf(cell);
+      if (tag !== 'TD' && tag !== 'TH') continue;
+      // Skip the slots a rowspan from above already filled.
+      while (line[c] !== undefined) c++;
+      const colSpan = spanOf(cell, 'colspan');
+      const rowSpan = spanOf(cell, 'rowspan');
+      if (c + colSpan > READER_TABLE_MAX_COLUMNS) return null;
+      const header = tag === 'TH' || source[r].head;
+      for (let dr = 0; dr < rowSpan && r + dr < count; dr++) {
+        for (let dc = 0; dc < colSpan; dc++) {
+          const first = dr === 0 && dc === 0;
+          grid[r + dr][c + dc] ??= {
+            runs: first ? cellRuns(cell) : [],
+            ...(header ? { header: true } : {}),
+          };
+        }
+      }
+      c += colSpan;
+    }
+  }
+
+  const width = Math.max(...grid.map((line) => line.length));
+  if (width < 2) return null;
+  // Pad short rows and fill the holes a ragged source left, so every row is `width`.
+  const rows = grid.map((line) => ({
+    cells: Array.from({ length: width }, (_, c): ReaderCell => line[c] ?? { runs: [] }),
+  }));
+  if (rows.every((row) => row.cells.every((cell) => (cell.runs ?? []).length === 0))) return null;
+
+  const caption = Array.from(table.children).find((child) => tagOf(child) === 'CAPTION');
+  const runs = caption ? cellRuns(caption) : [];
+  return {
+    kind: 'table',
+    rows,
+    ...(runs.length > 0 ? { runs } : {}),
+    ...(truncated ? { truncated: true } : {}),
+  };
+}
+
 // Walk a container's children: inline content accumulates into the open block, and a
 // block-level child closes it and is handled by kind.
 function walkBlocks(node: DomNode, builder: Builder, ctx: { quote: boolean; depth: number }): void {
@@ -299,16 +450,11 @@ function walkBlocks(node: DomNode, builder: Builder, ctx: { quote: boolean; dept
         walkBlocks(el, builder, ctx);
       }
     } else if (tag === 'TABLE') {
-      // v1 has no table block: one paragraph per row, cells joined. Readable, not
-      // tabular — a `table` kind is the obvious next block, and older readers skip it.
-      for (const row of Array.from(el.querySelectorAll('tr'))) {
-        builder.open({ kind: paragraphKind });
-        Array.from(row.children).forEach((cell, i) => {
-          if (i > 0) builder.text(' · ', {}, true);
-          walkInline(cell, builder, {});
-        });
-        builder.close();
-      }
+      // A data table is one `table` block; anything else written with `<table>` is
+      // walked as the containers it is (_tables_, above).
+      const table = tableBlock(el);
+      if (table) builder.push(table);
+      else walkBlocks(el, builder, ctx);
     } else {
       walkBlocks(el, builder, ctx);
     }

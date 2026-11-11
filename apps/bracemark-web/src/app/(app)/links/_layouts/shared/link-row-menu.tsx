@@ -9,6 +9,7 @@ import {
   BookPlus,
   Copy,
   FolderInput,
+  History,
   MoreHorizontal,
   Pencil,
   Pin,
@@ -20,7 +21,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-import { ARCHIVE_ID, DEFAULT_LIST_ID, TRASH_ID } from '@stxapps/shared';
+import { ARCHIVE_ID, DEFAULT_LIST_ID, TRASH_ID, waybackUrl } from '@stxapps/shared';
 import {
   linkIdOf,
   type LinkView,
@@ -92,6 +93,17 @@ const EXCLUDE_IDS = [TRASH_ID];
 // order filtered per view, so the neighbour, not an index, names the slot — and
 // is disabled where there is none.
 //
+// OPEN IN WAYBACK MACHINE is the last of the ordinary actions, on every plan and on
+// every link a public archive could hold (`waybackUrl` answers nothing for the rest,
+// and the item is then absent). It is the exit for a page that has changed or gone,
+// which is mostly a link with NO kept copy — an import, a free account — so it
+// cannot live in the reader alone. Rare, hence last; and it sits ABOVE the separator
+// so it is never read as one of the pair below it, where "Archive" means this app's
+// own list (docs/link-extraction.md, the opening note on that word). A plain `<a>`
+// to another origin, opened in a new tab with no referrer, like the row itself: the
+// address is built here and nothing is requested until the click (url.ts,
+// `waybackUrl`).
+//
 // The menu is a sibling of the row's link, never nested inside the `<a>` — a
 // button inside an anchor is invalid and would also fire the navigation. The
 // wrapper stops click/keydown from bubbling so opening the menu never triggers the
@@ -155,6 +167,16 @@ export function LinkRowMenu({
       Copy link
     </DropdownMenuItem>
   );
+
+  const waybackHref = waybackUrl(link.url, link.createdAt);
+  const wayback = waybackHref ? (
+    <DropdownMenuItem asChild>
+      <a href={waybackHref} target="_blank" rel="noreferrer">
+        <History className="size-4" />
+        Open in Wayback Machine
+      </a>
+    </DropdownMenuItem>
+  ) : null;
 
   return (
     <DropdownMenu open={open} onOpenChange={handleOpenChange}>
@@ -284,6 +306,7 @@ export function LinkRowMenu({
                 Pin to top
               </DropdownMenuItem>
             )}
+            {wayback}
             <DropdownMenuSeparator />
             {inArchive ? (
               <DropdownMenuItem onSelect={() => void update(link, { listId: DEFAULT_LIST_ID })}>

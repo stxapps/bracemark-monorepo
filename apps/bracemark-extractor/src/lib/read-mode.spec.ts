@@ -38,6 +38,34 @@ describe('readModeFromHtml', () => {
     );
   });
 
+  // The table block is built by the SHARED walker, but over linkedom's DOM here, not a
+  // browser's — `children`, `getAttribute('colspan')`, `querySelector('table')` are
+  // each a place the two could differ, and a server copy has to read like a page one.
+  it('keeps a data table as a rectangular grid, as a live-page capture does', () => {
+    const doc = readModeFromHtml(
+      page(
+        `<p>${PROSE}</p><table><caption>Prices</caption>` +
+          `<thead><tr><th>Plan</th><th colspan="2">Price</th></tr></thead>` +
+          `<tbody><tr><td>Plus</td><td><p>$48</p><p>a year</p></td><td>USD</td></tr></tbody>` +
+          `</table><p>${PROSE}</p>`,
+      ),
+      FINAL,
+    );
+    const table = doc?.blocks.find((b) => b.kind === 'table');
+
+    expect(readerDocSchema.safeParse(doc).success).toBe(true);
+    expect(
+      table?.rows?.map((row) =>
+        (row.cells ?? []).map((c) => (c.runs ?? []).map((r) => r.text).join('')),
+      ),
+    ).toEqual([
+      ['Plan', 'Price', ''],
+      ['Plus', '$48\na year', 'USD'],
+    ]);
+    expect(table?.rows?.[0].cells?.every((c) => c.header === true)).toBe(true);
+    expect(table?.runs).toEqual([{ text: 'Prices' }]);
+  });
+
   it('keeps no markup, and no remote image URL', () => {
     const doc = readModeFromHtml(
       page(

@@ -29,7 +29,13 @@ it('reads an unknown block kind and field rather than dropping the copy', async 
   // A newer client's document, through an older reader: it renders what it knows.
   const future = {
     ...DOC,
-    blocks: [...DOC.blocks, { id: 'b2', kind: 'table', rows: [['a']] }],
+    blocks: [
+      ...DOC.blocks,
+      { id: 'b2', kind: 'poll', options: [['a']] },
+      // And a KNOWN kind carrying what this version doesn't write: a table cell with
+      // no runs, a row with no cells. The copy must still read (reader-doc.ts).
+      { id: 'b3', kind: 'table', rows: [{ cells: [{ blocks: [] }, { runs: [] }] }, { note: 1 }] },
+    ],
   } as ReaderDoc;
   await expect(decodeReaderDoc(await encodeReaderDoc(future))).resolves.toEqual(future);
 });

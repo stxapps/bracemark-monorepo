@@ -36,6 +36,18 @@ the row can't keep. The ✕ returns to the links view the user left
   swaps in the unlock pane before reading the copy — and drops the _Open page_
   link, since the host is contents too ([locks.md](./locks.md), _the two enforcement
   edges_). Otherwise a `/read?link=` URL in the history would be a way round a lock.
+- **Two ways out, in the top bar.** _Open page_, the live page, and _Wayback
+  Machine_ — the Internet Archive's capture nearest the day the link was saved, for
+  the page that has changed or gone ([link-extraction-keep.md](./link-extraction-keep.md),
+  _when the page is gone_). Below `sm` the second is its icon alone, under the full
+  accessible name; the words are in the row menu and in the empty state, which also
+  says in a sentence what the Wayback Machine may have. The address is built on the
+  device and nothing is asked of the archive before the click. Behind a lock both are
+  gone.
+- **The line under the title** is the site, the author, _Published_ and the date the
+  page gave (`readerPublishedAt` — dropped when the page gave none, one that can't be
+  read, or one later than the copy), and _Kept_ with the day the copy was taken. The
+  last is the one a kept copy is for: this is the page as it was that day.
 - **Deleting a copy.** Under each copy, _Delete this read-mode copy_ / _Delete this
   screenshot_, behind a confirmation ([link-extraction-keep.md](./link-extraction-keep.md),
   _removal, cleanup, export_). Bulk edit's _Delete copies_ does the same for a
@@ -62,7 +74,9 @@ the row can't keep. The ✕ returns to the links view the user left
 `apps/bracemark-expo/src/app/(app)/read.tsx` over `features/reader/reader-screen.tsx`:
 the same address as web's, a pushed Stack screen behind the (app) gates, reached from
 the row menu's **Read** under the same rule (only on a link with a copy). Same three
-rules as web — locks first, reading and deleting never gated, text only — and the same
+rules as web — locks first, reading and deleting never gated, text only — the same two
+ways out in the top bar (the Wayback Machine as an icon at every width, a phone's bar
+having no room for a second label), the same line under the title, and the same
 states, read through expo-react's `useReaderDoc`, which reads the decrypted file off
 disk and gunzips it with fflate (Hermes has no DecompressionStream). The screenshot is
 expo-image over the same file. Unlike web it has no empty-state upsell: a link only
@@ -92,7 +106,14 @@ and the renderer's whole job is to keep it that way:
   same exit a link row takes.
 - **figures** are placeholders with the alt text and caption. No image loads,
   because there is no image in the copy and the remote URL was never kept
-  ([link-extraction-keep.md](./link-extraction-keep.md), the format tripwire).
+  ([link-extraction-keep.md](./link-extraction-keep.md), the format tripwire). Kept
+  images are designed and next (_images in read mode_ there): a figure will then show
+  the picture from the copy's own image pack, in space reserved from the dimensions
+  the block carries, and stay a placeholder when the pack has none for it.
+- **tables** are tables: a real `<table>` in a focusable sideways scroller on web, a
+  horizontal scroll of fixed-width columns on expo, each cell's strings rendered like
+  any other ([link-extraction-keep.md](./link-extraction-keep.md), _tables_). The grid
+  is rectangular as stored, and neither renderer trusts that.
 - **direction and language** come from the document's `dir` and `lang`, so an RTL
   article lays out right and a screen reader picks the right voice.
 
@@ -138,6 +159,10 @@ highlights, the dangling sweep learns the namespace, the backup carries it, and 
 import drops a highlight whose link is in neither the archive nor the library. A
 `.max()` on `note` is a writer cap, never a schema one ([data-limits.md](./data-limits.md)).
 
+A table's cells are not anchorable in the first version: a highlight anchors to a
+block with `runs` or `text`, and a `table` block's content is in its `rows`
+([link-extraction-keep.md](./link-extraction-keep.md), _tables_).
+
 ### re-anchoring
 
 `blockId` and the offsets are exact only for the copy they were made on. A
@@ -173,11 +198,23 @@ every device syncs eagerly, so searching their quotes and notes is cheap. Search
 the copies needs them downloaded, and `files/` is lazy — see
 [link-extraction-keep.md](./link-extraction-keep.md), _deferred_.
 
+### a row's press opens the page
+
+Decided 2026-11-10, on both apps: **a row's press opens the page itself, whether or
+not the link has a copy**, and the reader is reached from the row. Two reasons. Most
+links are not articles — something to watch, buy or visit — so the page is what a
+press is for. And a press that opens the reader on some rows and leaves the app on
+others is one the user cannot predict from the row.
+
+The cost is that a copy is only in the menu (**Read**), which hides the one thing the
+copy is for. _Planned, not built_: a visible Read control on a row that has a copy, a
+sibling of the row's link like the menu trigger, in every layout on both apps.
+
+The reader is therefore where someone goes when the page let them down, which is why
+its top bar carries both ways out — the page, and the Wayback Machine.
+
 ### open
 
-- On expo: whether a row with a copy should open the reader on its own press. Today
-  both apps keep a row's press for the page itself and reach the reader through the
-  menu.
 - Highlight colours: one, a few, or user-defined.
 - Whether a quote can be a highlight's own share target on expo (the share sheet
   going the other way).

@@ -5,6 +5,8 @@ export {
   READER_DOC_MAX_BLOCKS,
   READER_DOC_MAX_CHARS,
   READER_DOC_VERSION,
+  READER_TABLE_MAX_COLUMNS,
+  READER_TABLE_MAX_ROWS,
 } from './reader-doc-core';
 
 // The read-mode copy of a page — what `extraction.readModeId` names. A `files/{id}.enc`
@@ -38,6 +40,7 @@ export const READER_BLOCK_KINDS = [
   'listItem', // `runs`, `ordered`, `level` = nesting depth from 0
   'code', // `text`, whitespace preserved
   'figure', // an image the copy does NOT carry: `text` = its alt, `runs` = its caption
+  'table', // `rows` of `cells`, a rectangular grid; `runs` = its caption; `truncated`
   'rule', // a thematic break, no content
 ] as const;
 export type ReaderBlockKind = (typeof READER_BLOCK_KINDS)[number];
@@ -54,6 +57,30 @@ export const readerRunSchema = z.looseObject({
 });
 export type ReaderRun = z.infer<typeof readerRunSchema>;
 
+// A table's cell: inline runs, exactly what a paragraph holds — a cell that was several
+// paragraphs or a list on the page is ONE run list with `\n` between the pieces. No
+// blocks inside a cell: nesting would give the format a second tree to walk, cap and
+// anchor into, for the few tables that need it. `header` is a `<th>` or any cell of a
+// `<thead>` row.
+//
+// `runs` and a row's `cells` are OPTIONAL in the schema though the capture always
+// writes them, for the reason `kind` is a free string: this parses stored bytes, and
+// a parse that fails drops the WHOLE copy as unreadable. A newer client that gives a
+// cell something other than runs must cost an older reader that cell, not the article.
+export const readerCellSchema = z.looseObject({
+  runs: z.array(readerRunSchema).optional(),
+  header: z.boolean().optional(),
+});
+export type ReaderCell = z.infer<typeof readerCellSchema>;
+
+// A row is an object, not a bare array of cells, for the reason every level here is a
+// looseObject: a newer client may hang a field on a row, and an array has nowhere to
+// put one.
+export const readerRowSchema = z.looseObject({
+  cells: z.array(readerCellSchema).optional(),
+});
+export type ReaderRow = z.infer<typeof readerRowSchema>;
+
 export const readerBlockSchema = z.looseObject({
   // Stable within ONE document ('b0', 'b1', …, in reading order) — the anchor a
   // highlight stores. A re-capture renumbers, which is why a highlight also keeps the
@@ -65,6 +92,14 @@ export const readerBlockSchema = z.looseObject({
   ordered: z.boolean().optional(),
   runs: z.array(readerRunSchema).optional(),
   text: z.string().optional(),
+  // `table` only. The grid is RECTANGULAR as written: the capture expands every
+  // colspan/rowspan into empty cells and pads short rows, so every row has the same
+  // number of cells and a renderer never computes a span. A renderer still must not
+  // ASSUME it (a backup is an outside file) — it reads each row's own cells.
+  rows: z.array(readerRowSchema).optional(),
+  // `table` only: the page's table had more rows than the capture keeps
+  // (READER_TABLE_MAX_ROWS), and this is the first part of it.
+  truncated: z.boolean().optional(),
 });
 export type ReaderBlock = z.infer<typeof readerBlockSchema>;
 
@@ -86,11 +121,35 @@ export const readerDocSchema = z.looseObject({
 });
 export type ReaderDoc = z.infer<typeof readerDocSchema>;
 
+const runsText = (runs: ReaderRun[] | undefined): string =>
+  (runs ?? []).map((run) => run.text).join('');
+
+// When the page says the article was published, as a time — or undefined when it gave
+// none, gave one `Date.parse` can't read (pages write this field every way there is),
+// or gave one later than the copy itself, which is a page's mistake rather than a
+// date worth printing. For the reader's line under the title; nothing sorts on it.
+export function readerPublishedAt(
+  doc: Pick<ReaderDoc, 'publishedTime' | 'capturedAt'>,
+): number | undefined {
+  if (!doc.publishedTime) return undefined;
+  const at = Date.parse(doc.publishedTime);
+  if (!Number.isFinite(at) || at <= 0) return undefined;
+  // A day of slack for a page that stamps its local date without a zone.
+  return at <= doc.capturedAt + 24 * 60 * 60 * 1000 ? at : undefined;
+}
+
 // The document's text in reading order, one block per line — what search would index
-// and what a word count reads. Unknown kinds contribute what text they carry.
+// and what a word count reads. Unknown kinds contribute what text they carry. A table
+// is its caption, then one line per row with a tab between cells (a cell's own line
+// breaks become spaces, so a row stays one line).
 export function readerDocText(doc: Pick<ReaderDoc, 'blocks'>): string {
   return doc.blocks
-    .map((block) => block.text ?? (block.runs ?? []).map((run) => run.text).join(''))
-    .filter((line) => line !== '')
+    .flatMap((block) => [
+      block.text ?? runsText(block.runs),
+      ...(block.rows ?? []).map((row) =>
+        (row.cells ?? []).map((cell) => runsText(cell.runs).replace(/\s*\n\s*/g, ' ')).join('\t'),
+      ),
+    ])
+    .filter((line) => line.trim() !== '')
     .join('\n');
 }

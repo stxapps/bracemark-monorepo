@@ -90,12 +90,61 @@ test('a figure loads nothing — the copy keeps words, not images', () => {
 test('a block kind from a newer version is skipped, and the rest still renders', () => {
   mount(
     doc([
-      { id: 'b0', kind: 'table', rows: [['x']] },
+      { id: 'b0', kind: 'poll', options: [['x']] },
       { id: 'b1', kind: 'paragraph', runs: [{ text: 'still here' }] },
     ]),
   );
 
   expect(screen.getByText('still here')).not.toBeNull();
+});
+
+test('a table is a real table: header cells scoped, the caption its name', () => {
+  mount(
+    doc([
+      {
+        id: 'b0',
+        kind: 'table',
+        runs: [{ text: 'Prices' }],
+        rows: [
+          {
+            cells: [
+              { runs: [{ text: 'Plan' }], header: true },
+              { runs: [{ text: 'Price' }], header: true },
+            ],
+          },
+          {
+            cells: [{ runs: [{ text: 'Plus' }], header: true }, { runs: [{ text: '<b>$48</b>' }] }],
+          },
+        ],
+      },
+    ]),
+  );
+
+  const table = screen.getByRole('table', { name: 'Prices' });
+  expect(table.querySelector('b')).toBeNull();
+  expect(screen.getAllByRole('columnheader').map((c) => c.textContent)).toEqual(['Plan', 'Price']);
+  expect(screen.getByRole('rowheader', { name: 'Plus' })).not.toBeNull();
+  expect(screen.getByRole('cell', { name: '<b>$48</b>' })).not.toBeNull();
+  // The scroller is what a keyboard reaches, so a wide table can be scrolled.
+  expect(screen.getByRole('region', { name: 'Prices' }).getAttribute('tabindex')).toBe('0');
+});
+
+test('a table that was cut says so, and one with no readable rows renders nothing', () => {
+  const { container } = mount(
+    doc([
+      {
+        id: 'b0',
+        kind: 'table',
+        truncated: true,
+        rows: [{ cells: [{ runs: [{ text: 'a' }] }, { runs: [{ text: 'b' }] }] }],
+      },
+      // Stored bytes are not trusted to be the shape the capture writes.
+      { id: 'b1', kind: 'table', rows: [['x'], null, { cells: 'no' }] } as never,
+    ]),
+  );
+
+  expect(screen.getByText('The rest of this table wasn’t kept.')).not.toBeNull();
+  expect(container.querySelectorAll('table')).toHaveLength(1);
 });
 
 test('direction and language come from the copy', () => {

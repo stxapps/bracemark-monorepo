@@ -5,6 +5,7 @@ import {
   hostFromUrl,
   normalizeUrl,
   openableUrl,
+  waybackUrl,
 } from './url';
 
 describe('normalizeUrl', () => {
@@ -189,6 +190,43 @@ describe('openableUrl', () => {
     expect(openableUrl('mailto:someone@example.com')).toBeUndefined();
     expect(openableUrl('javascript:alert(1)')).toBeUndefined();
     expect(openableUrl('ftp://files.example.com/a')).toBeUndefined();
+  });
+});
+
+describe('waybackUrl', () => {
+  const SAVED = Date.UTC(2026, 10, 9, 8, 7, 6);
+
+  it('asks for the capture nearest the day the link was saved', () => {
+    expect(waybackUrl('https://example.com/a?b=1&c=2', SAVED)).toBe(
+      'https://web.archive.org/web/20261109080706/https://example.com/a?b=1&c=2',
+    );
+    // A bare-domain link opens as it would from its row.
+    expect(waybackUrl('example.com/post', SAVED)).toBe(
+      'https://web.archive.org/web/20261109080706/http://example.com/post',
+    );
+  });
+
+  it('leaves the stamp off when there is no usable time', () => {
+    for (const at of [undefined, 0, -1, Number.NaN, Number.POSITIVE_INFINITY, 9e15]) {
+      expect(waybackUrl('https://example.com/a', at)).toBe(
+        'https://web.archive.org/web/https://example.com/a',
+      );
+    }
+  });
+
+  it('offers nothing for an address a public archive cannot hold', () => {
+    for (const url of [
+      'note to self',
+      'mailto:someone@example.com',
+      'http://localhost:3000/admin',
+      'http://192.168.1.1/',
+      'http://[::1]:8080/',
+      'http://nas.home.invalid:5000/photo',
+      'http://printer.local/',
+      'http://intranet/wiki',
+    ]) {
+      expect(waybackUrl(url, SAVED)).toBeUndefined();
+    }
   });
 });
 

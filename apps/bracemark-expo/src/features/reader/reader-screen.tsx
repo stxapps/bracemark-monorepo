@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import { router } from 'expo-router';
-import { ArrowUpRight, Trash2, X } from 'lucide-react-native';
+import { ArrowUpRight, History, Trash2, X } from 'lucide-react-native';
 import { withUniwind } from 'uniwind';
 
 import {
@@ -18,7 +18,7 @@ import {
   useReaderDoc,
 } from '@stxapps/expo-react';
 import { LOCK_COPY } from '@stxapps/react';
-import { hostFromText } from '@stxapps/shared';
+import { hostFromText, readerPublishedAt, waybackUrl } from '@stxapps/shared';
 
 import { LockPane } from '../../components/lock-pane';
 import {
@@ -34,7 +34,7 @@ import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Text } from '../../components/ui/text';
-import { openLink } from '../links/shared';
+import { openLink, openWayback } from '../links/shared';
 import { ReaderArticle } from './reader-article';
 
 // The reader — one link's kept copies, on expo. The twin of bracemark-web's
@@ -46,6 +46,12 @@ import { ReaderArticle } from './reader-article';
 //     host is contents too (docs/locks.md, _the two enforcement edges_).
 //   - READING AND DELETING ARE NEVER GATED on the plan (iap/plans.ts, `keptCopies`).
 //   - THE COPY IS TEXT — ReaderArticle turns strings into `<Text>`, nothing else.
+//
+// Two ways out in the top bar, as on web and for web's reasons: _Open page_, and the
+// Wayback Machine — the Internet Archive's capture nearest the day the link was
+// saved, an address built on this device and opened only by the press. It is an
+// icon here, at every width: a phone's bar has no room for a second label beside the
+// host, and the row menu carries the words.
 //
 // What it does NOT have yet that web's does: an empty-state upsell. A link reaches
 // this screen only from the row menu's "Read", which appears only on a link with a
@@ -69,6 +75,10 @@ function useSlow(active: boolean): boolean {
     return () => clearTimeout(timer);
   }, [active]);
   return slow;
+}
+
+function formatDay(ms: number): string {
+  return new Date(ms).toLocaleDateString(undefined, { dateStyle: 'medium' });
 }
 
 function close(): void {
@@ -111,8 +121,17 @@ function ReadModeCopy({ fileId, title, host }: { fileId: string; title: string; 
     );
   }
   const { doc } = state;
-  const kept = new Date(doc.capturedAt).toLocaleDateString(undefined, { dateStyle: 'medium' });
-  const meta = [doc.siteName ?? host, doc.byline, `Kept ${kept}`].filter(Boolean).join(' · ');
+  // Site, author, when the page says it was published, when this copy was taken —
+  // web's line (reader-page.tsx).
+  const published = readerPublishedAt(doc);
+  const meta = [
+    doc.siteName ?? host,
+    doc.byline,
+    published !== undefined ? `Published ${formatDay(published)}` : undefined,
+    `Kept ${formatDay(doc.capturedAt)}`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   return <ReaderArticle doc={doc} title={title || doc.title || host} meta={meta} />;
 }
 
@@ -205,6 +224,7 @@ export function ReaderScreen({ linkId }: { linkId: string }) {
   const locked = settled && link !== null && isListLocked(link.listId);
   const host = link ? hostFromText(link.url) : '';
   const title = link ? (link.customTitle ?? extraction?.title ?? host) : '';
+  const waybackHref = link && !locked ? waybackUrl(link.url, link.createdAt) : undefined;
   const readModeId = locked ? undefined : (extraction?.readModeId ?? undefined);
   const screenshotId = locked ? undefined : (extraction?.screenshotId ?? undefined);
 
@@ -279,6 +299,18 @@ export function ReaderScreen({ linkId }: { linkId: string }) {
           <Button variant="ghost" size="sm" onPress={() => openLink(link.url)}>
             <Text>Open page</Text>
             <Icon as={ArrowUpRight} className="size-4 text-foreground" />
+          </Button>
+        ) : null}
+        {waybackHref ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-9"
+            aria-label="Open in Wayback Machine"
+            testID="reader-wayback"
+            onPress={() => openWayback(waybackHref)}
+          >
+            <Icon as={History} className="size-5 text-foreground" />
           </Button>
         ) : null}
         <Button

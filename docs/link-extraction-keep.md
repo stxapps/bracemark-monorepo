@@ -22,10 +22,17 @@ read mode is built (_per client_, bracemark-extractor) and reached from bracemar
 as a per-link _Keep read mode_. Removal (one copy, and a selection's in bulk edit) and
 the orphaned-file sweep are built (_removal, cleanup, export_), and so are expo's
 reader, its iOS share-from-Safari read mode and its capture screen (_per client_,
-bracemark-expo). Not built: a per-link _Keep screenshot_ outside the extension's saved
-screen, the scoped bulk job, expo's screenshot and its switch for the save setting, and
-page copy anywhere. Everything below marked _planned_ is the design those pieces are
-built to.
+bracemark-expo). A read-mode copy keeps a page's **tables** as tables (_tables_), and
+every link has a way to the **Wayback Machine** for the page that is gone (_when the
+page is gone_). None of it has been released yet — which is why the table block could
+still go into the format's first version.
+
+Not built: **images in read mode** (designed — _images in read mode_ — and next), a
+per-link _Keep screenshot_ outside the extension's saved screen, the scoped bulk job,
+and expo's switch for the save setting. Decided against for now, each with its reason in
+_the scope each copy stops at_: a screenshot on expo or on the server, a full-page
+screenshot, and page copy anywhere. Everything below marked _planned_ is the design the
+unbuilt pieces are built to.
 
 **Naming.** "Page copy", never "archive" — the word is the Archive system list's
 ([link-extraction.md](./link-extraction.md), the opening note). "Read mode" in prose,
@@ -68,14 +75,49 @@ The figures settle the order:
   "how it looked". A real page copy costs far more than either (_page copy_, below),
   so it waits for evidence that people want it on top of them.
 
+### the scope each copy stops at
+
+Decided 2026-11-10, after the three were built or designed and before any was released.
+Each line is a place the feature deliberately ends, and the reason, so the next person
+does not extend one by reflex.
+
+- **Read mode is the archive.** For an article it is the copy that lasts: small, readable
+  on every device, the only one highlights and search can use. So the next work on kept
+  copies goes into what a read-mode copy keeps — tables (built), images (designed) — and
+  not into taking screenshots in more places.
+- **The screenshot is the fold, from the browser extension, and nothing more.** It is a
+  record of **what was on screen when the page was saved** — a price, a listing, a
+  dashboard — for the page where read mode answers "not an article". That is narrower
+  than an archive (an article's fold is its headline) and it is not a preview either:
+  it shows what the user saw, signed in, that day, where a preview is the picture the
+  publisher chose. Every surface says so in those words; a bare "screenshots of pages"
+  reads as the whole page, top to bottom.
+  - **Not on the server**, for the reasons under _per client_, and one more that makes
+    it a non-feature rather than a cost: a server render is what a bot saw later, from a
+    data-centre address, signed out and behind the consent banner. It is not the thing
+    this copy is — and it fails on exactly the pages a screenshot is for.
+  - **Not on expo, for now.** It is the cheapest unbuilt piece (`react-native-view-shot`
+    on the capture screen that already exists) and the weakest: the WebView has its own
+    cookie store, so a signed-in page shows its login wall; it takes a second, deliberate
+    gesture after the save, so it is not "when it was saved"; and a phone's fold is
+    mostly header and banner. Build it when people ask, not before.
+  - **Not the full page** (_the screenshot is a capped JPEG of the fold_).
+- **Page copy is deferred, and may never be built.** It is the expensive one — capture
+  on the order of SingleFile, a viewer on an origin of its own, megabytes a page — and
+  the two cheaper answers cover most of what it is for: read mode keeps an article's
+  content, and for a public page the Wayback Machine usually has the page as it was
+  (_when the page is gone_). What only a page copy would add is a faithful copy of a
+  **signed-in** page, or of a public page the Wayback Machine missed. Revisit if people
+  ask for that, in those words.
+
 ### ⚠ the read-mode copy is blocks, never HTML
 
 `extraction.readModeId` names a `files/{id}.enc` blob whose plaintext is a
 `ReaderDoc` (`@stxapps/shared` `reader/reader-doc.ts`) as gzipped UTF-8 JSON (the
 codec is web-react `lib/reader-doc-bytes.ts`). A `ReaderDoc` is a list of typed
-blocks — `heading`, `paragraph`, `quote`, `listItem`, `code`, `figure`, `rule` —
-each holding plain strings with inline marks (bold, italic, code, an http(s) link
-target). There is no markup in it anywhere.
+blocks — `heading`, `paragraph`, `quote`, `listItem`, `code`, `figure`, `table`,
+`rule` — each holding plain strings with inline marks (bold, italic, code, an http(s)
+link target). There is no markup in it anywhere.
 
 That is the whole safety argument, and nothing would report its loss. A page is the
 least trusted input the product handles, and the copy is rendered inside the app
@@ -93,8 +135,9 @@ So, for anyone tempted to "just keep the HTML" for fidelity:
 
 - **No field of a `ReaderDoc` is markup**, and no renderer may hand one to
   `innerHTML`, `dangerouslySetInnerHTML`, `srcdoc` or a WebView's `source.html`.
-  A block the format can't express (a table, today) is flattened at capture or is a
-  new block kind — older readers skip a kind they don't know.
+  A block the format can't express is flattened at capture or becomes a new block
+  kind — a reader skips a kind it doesn't know, which is why a new kind is best added
+  before a reader that lacks it has shipped (_tables_ was).
 - **No remote URL is rendered.** Images become `figure` placeholders carrying the
   alt text and caption; the bytes are not kept in v1 and the URL never is. A link
   target is data the user may choose to open, re-checked with `isReaderHref`
@@ -109,6 +152,131 @@ compresses three- to five-fold. The format is gzip, not an API: the extension's
 service worker encodes with `CompressionStream`, and expo, which has no such global,
 reads the same bytes with fflate.
 
+### tables
+
+A page's data table is **one `table` block**: `rows` of `cells`, each cell the same
+inline runs a paragraph holds, with `header` on a `<th>` or on any cell of a `<thead>`
+row, the `<caption>` as the block's `runs`, and `truncated` when the capture cut it.
+Until 2026-11-10 a table was flattened to one paragraph per row, cells joined by a dot —
+readable, and no longer a table. The block went in before any reader was released, so no
+shipped client has to skip it.
+
+- **The grid is rectangular as written.** The capture expands every `colspan` and
+  `rowspan` into empty cells and pads short rows (`tableBlock`,
+  `reader/reader-doc-from-dom.ts`). So a renderer never lays a span out — which matters
+  on expo, where there is no table element and a row is a line of Views. The cost is
+  that a merged heading reads as its text followed by blanks; that was judged better
+  than two renderers each implementing spans.
+- **A cell holds runs, never blocks.** Two paragraphs or a list inside one cell become
+  one run list with a line break between the pieces (`walkCell`), not nested blocks.
+  Nesting would give the format a second tree to walk, cap and anchor highlights into,
+  for the few tables that need it.
+- **Only a data table is kept as one.** A `<table>` with fewer than two rows or two
+  columns, one holding another table, or one wider than `READER_TABLE_MAX_COLUMNS`
+  (24) is layout or a spreadsheet, not a figure in an article: its cells are walked as
+  ordinary content, so its words are kept and its grid is not. A table nested in such a
+  cell is judged on its own.
+- **A long table is cut, and says so.** Past `READER_TABLE_MAX_ROWS` (500) the block
+  stops and carries `truncated`; both readers print that the rest was not kept. Both
+  caps are the capture's, never the schema's ([data-limits.md](./data-limits.md)).
+- **Rendering.** Web: a real `<table>` — `<thead>` for the leading all-header rows,
+  `scope` on header cells, the caption as its name — inside a focusable sideways
+  scroller, since a keyboard can only scroll what it can focus. Expo: a horizontal
+  `ScrollView` of rows, each column as wide as its longest line wants (between a floor
+  and a ceiling, scaled with the OS text size), laid out in the **copy's** direction,
+  not the phone's. Both read `rows` defensively: stored bytes are not trusted to be
+  the shape the capture writes, a cell with no readable runs is an empty cell (never
+  dropped, which would shift its row a column left), and a table with no readable row
+  renders nothing.
+- **The schema asks for less than the capture writes.** A row's `cells` and a cell's
+  `runs` are optional in `readerDocSchema`, because a parse that fails drops the whole
+  copy as unreadable: a newer client that gives a cell something else must cost an
+  older reader that cell, not the article.
+- **As text** (`readerDocText`, what search would index): the caption, then a line per
+  row with a tab between cells.
+- **Not yet:** column alignment, a highlight anchored inside a cell
+  ([reader.md](./reader.md), _highlights_), and blocks inside a cell.
+
+### images in read mode — designed, not built
+
+A figure is a placeholder today: the alt text and the caption, no picture. That loses
+the chart the paragraph is about, so it is the next thing a read-mode copy gains.
+Decided 2026-11-10: **on by default**, with a switch beside the other two. The shape
+below is the design to build to; nothing of it exists yet except the placeholder.
+
+**One pack per article, beside the text.** The article's images are stored as a single
+second blob, `files/{id}.enc`, named by **one new display field on the extraction**
+(working name `readModeImagesId`, in `EXTRACTION_FILE_REF_FIELDS`). Not inlined into the
+`ReaderDoc`, and not a blob per image:
+
+- **Not inside the text copy**, because the text is a few KB and must stay that way: it
+  opens at once, parses in a process with little memory (the iOS share drain), and is
+  what a device would download in bulk to search. Images are a hundred times the bytes
+  and wanted only when the article is on screen.
+- ⚠ **Not ids kept only inside the `ReaderDoc`.** The orphaned-file sweep finds a blob's
+  references in **entities**; the read-mode copy is a `files/` blob, not an entity, so a
+  blob named only in it is unreferenced as far as the sweep can tell and is **deleted
+  after the 30-day grace, on every device** (_removal, cleanup, export_). The reference
+  has to be a field of the extraction. Nothing would report getting this wrong for a
+  month.
+- **Not a blob per image.** One field naming one blob rides every rule that already
+  exists — destroy, replace, remove a copy, the backup, the sweep — where N ids would
+  need an array in the always-resident extraction record and a put (and its server-side
+  rows) per image. The cost of a pack is that the first image waits for all of them;
+  at the sizes below that is one small download.
+
+**In the document**, a `figure` block gains a key into the pack and the image's `width`
+and `height`. The dimensions are what let the reader reserve the space before the pack
+arrives, so the text does not jump and the reading position holds. A figure with no key
+stays the placeholder it is today — which is also how a reader that predates images
+shows one, with no version bump.
+
+⚠ **The image addresses travel beside the document, never in it.** A capture returns
+the `ReaderDoc` and, separately, the list of image addresses to fetch; the client
+fetches, re-encodes, packs, and drops the list. If the address were a field of the
+block, a writer that forgot to strip it would store a remote URL in a copy — the leak
+the format exists to prevent — and every test of an ordinary article would still pass.
+
+**Which images, and how they are kept.** Raster only, checked by their bytes as the
+preview path does (never SVG: it is markup). An image smaller than about 100 px on
+either side is an icon or a tracking pixel and is skipped. The address is the best
+candidate the page offers at the reader's width — `srcset`, a `<picture>` source, or the
+lazy-loading attribute a page uses in place of `src`. Each is re-encoded to a capped
+JPEG on the preview path's `resizeImage`, flattened onto white. An article has a count
+and a byte budget; past either, the remaining figures stay placeholders. An image that
+cannot be fetched is a placeholder, never a failed capture.
+
+**Who fetches the bytes** — the same split as the preview image
+([link-extraction.md](./link-extraction.md), _the preview image is a downloaded blob_):
+
+| client                     | how                                                      | what it can't reach                                                                |
+| -------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| browser extension          | `fetch` inside the page, as the preview image is fetched | an image host that refuses a cross-origin read                                     |
+| bracemark-expo             | native fetch of the listed addresses (no CORS)           | an image behind the page's sign-in                                                 |
+| bracemark-web (the server) | bracemark-extractor's existing `/image` proxy, per image | needs a rate budget of its own: an article is many requests where a preview is one |
+
+The server path's robots.txt answer for `readMode` covers the article's images with it:
+they are the body. The extension's gap could be closed through the same proxy when the
+user has turned server previews on; that is a later choice, made on the measurement.
+
+**Size, and what it does to storage.** An estimate, not a measurement: an illustrated
+article at 0.3–0.8 MB, against a few KB of text — larger than a screenshot, and the
+largest thing a library would hold by default. That is why it gets its own switch
+(`keepReadModeImagesOnSave`, default on, in Settings → Link previews → Kept copies) and
+why the readout in Settings → Subscription has to say so when it ships.
+
+**Before any of it is built, measure** — extend `measure:kept-copies`
+([e2e.md](./e2e.md)) to report, per article: how many images it has, how many the
+in-page fetch can actually read, and the pack's size at two or three encode settings.
+The first number sizes the budgets, the second says whether the extension's gap is
+tolerable, the third picks the encode. Then, in order: the browser extension (the best
+tier, and where most copies are taken), bracemark-expo, the server path.
+
+**What stays as it is.** A copy is never replaced on its own to add images: a
+re-capture renumbers the blocks highlights are anchored to (_when a copy is taken_), so
+adding pictures to an old copy is the user's _Keep read mode_ again. Removing a copy
+removes its pack. The backup carries it through `extractionFileIds`.
+
 ### the screenshot is a capped JPEG of the fold
 
 `captureVisibleTab` returns the viewport at device pixels — ~2880 px wide on a 2×
@@ -122,11 +290,15 @@ two `captureVisibleTab` calls a second, repeats sticky headers, and triggers laz
 loaders and infinite scroll on the page the user is reading; the DevTools protocol's
 beyond-viewport capture needs the `debugger` permission, which brings an install
 warning and a banner across the tab. If it is ever built, it is capped at a few
-screens and is a separate decision, not a change to this one.
+screens and is a separate decision, not a change to this one. (Firefox's capture call
+is reported to take a rectangle in page coordinates, which would be a one-call
+full-page capture there. Not verified, and Chrome would still need the stitch, so it
+would be a feature of one browser.)
 
 ### page copy
 
-Not built, and the extension's scaffold for it — `XMLSerializer` over the live DOM
+Deferred, and possibly for good (_the scope each copy stops at_). Not built, and the
+extension's scaffold for it — `XMLSerializer` over the live DOM
 — was removed: a serialized document without its stylesheets, images and fonts is
 not a copy of anything offline, and opening it would request every resource it
 names from the saved site. A real one needs:
@@ -291,7 +463,8 @@ and Android's WebView has its own `CookieManager`, apart from Chrome's. So, in o
    it, injecting the same generated converter. It gates on the plan before loading
    anything, keeps a locked list's page unloaded, takes a copy only while the
    WebView is still on the link's own page (`canonicalUrlKey`), and accepts the
-   page's answer only while a capture awaits one. No screenshot yet — that needs
+   page's answer only while a capture awaits one. No screenshot, and none planned
+   for now (_the scope each copy stops at_) — it would need
    `react-native-view-shot` ([expo-dependencies.md](./expo-dependencies.md),
    _react-native-webview_). The original plan for it: _Keep read mode_ /
    _Keep screenshot_ — the extension's popup, rebuilt around a WebView. Its cookie
@@ -335,10 +508,12 @@ Two rules:
   and deletable after a downgrade; only new captures stop. Hiding someone's own data
   behind a lapsed plan reads as holding it hostage.
 - **The upgrade card names only what ships**, per `plans.ts`'s copy rule. Read mode
-  and the screenshot now ship on desktop, but the plan cards, /pricing and the store
-  listings don't name them yet — adding them is a copy change for those surfaces
-  (with the brand review it needs), not something this gate implies. Page copy not
-  before it exists.
+  and the screenshot are built on desktop. /pricing names them in its comparison
+  table — the screenshot as "what’s on screen when you save", with its platform, so
+  the row cannot be read as a full-page capture — and has to go live with or after the
+  release that carries them. The plan cards and the store listings don't name them
+  yet — adding them is a copy change for those surfaces (with the brand review it
+  needs), not something this gate implies. Page copy not before it exists.
 
 ### removal, cleanup, export
 
@@ -407,6 +582,45 @@ Two rules:
 - **Import.** None. No supported source exports article text; Readwise- and
   Omnivore-style highlight files are a later importer.
 
+### when the page is gone — the Wayback Machine link
+
+Most links have no kept copy: everything imported, everything on a free account,
+everything saved before copies existed. For those — and for any page that has since
+changed — the answer is not ours to store. It is a link: **Open in Wayback Machine**,
+to the Internet Archive's capture of that address nearest the day the link was saved.
+
+- **Where.** The row menu on both apps, as the last ordinary action, on every plan; the
+  reader's top bar, beside _Open page_; and the web reader's empty state, where it is
+  said in a sentence ([reader.md](./reader.md)). Behind a lock it is hidden with _Open
+  page_: the address is the locked list's contents.
+- **The address** is `https://web.archive.org/web/{stamp}/{url}`, built by `waybackUrl`
+  (`@stxapps/shared` `url/url.ts`): `stamp` is the link's `createdAt` as fourteen UTC
+  digits, and the Wayback Machine answers with the capture nearest it — the page as it
+  was around the day it was saved, which for an imported link is the day it was first
+  bookmarked. The URL goes in raw, as the archive's own links write it.
+- **No address for a page a public archive cannot hold** — anything `openableUrl`
+  refuses, localhost, an IP literal, a dotless or `.local`-style host. The item is then
+  absent, so nothing tells the archive about a host on the user's own network.
+- ⚠ **Built on the device, opened only by a press.** Nothing is asked of archive.org
+  before the user goes there: no "is there a capture?" lookup, no prefetch, no badge
+  that depends on the answer. A lookup per link would hand a third party the library's
+  addresses one at a time — the leak [link-extraction.md](./link-extraction.md), _the
+  stance_, is built to avoid — and the feature would look better for it, which is why
+  it is written down. What the user gets when no capture exists is the archive's own
+  page saying so.
+- ⚠ **Never submit a page to be archived.** The archive's _Save Page Now_ publishes
+  the address for good, share tokens and all, and takes the user's private reading
+  list public one URL at a time. Not as a default, not as a setting.
+- **The word is "Wayback Machine", never "archive".** _Archive_ is the system list's
+  ([link-extraction.md](./link-extraction.md), the opening note), and in the row menu
+  the two sit a separator apart.
+
+**Why it is a complement and not the copy.** The Wayback Machine holds what a crawler
+saw of the public web: nothing behind a sign-in, uneven on small sites, poor at pages
+built in the browser, gone when a site asks, and not on the device. A kept copy is what
+the user saw, encrypted with their key, readable offline. The link costs nothing and
+covers the pages we never copied; it is the reason page copy can wait.
+
 ### ⚠ tripwires
 
 - **A facet's blob is a display field in `EXTRACTION_FILE_REF_FIELDS`**, never a
@@ -417,6 +631,13 @@ Two rules:
   client doesn't know fails its parse. New states ride as passthrough fields
   (`reason`, `removedAt`) on an existing status.
 - **Blocks, never HTML; no remote URL rendered** (above).
+- **A table's grid is rectangular at the writer, and read defensively** — spans are
+  expanded at capture, and a renderer trusts neither that nor the row shape (_tables_).
+- **Nothing is asked of the Wayback Machine before the press, and nothing is ever
+  submitted to it** (_when the page is gone_).
+- **When images are built: the pack is a field of the extraction, and an image's
+  address never enters the document** (_images in read mode_) — the first loses the
+  images to the orphan sweep a month later, the second stores a remote URL in a copy.
 - **No `null` in what Safari's preprocessing hands over — strings only** — a
   property list has none, and one null loses the whole share on iOS. And the
   copy stays JSON **text** until the app's drain: parsed in the share
@@ -425,12 +646,13 @@ Two rules:
 
 ### deferred
 
-- **Images in read mode.** v1 keeps placeholders. Downscaled images inlined into
-  the copy (or as sibling blobs the document names) is the next step; never the
-  remote URL.
-- **A `table` block.** Tables flatten to one paragraph per row today.
-- **Full-page screenshot** (_the screenshot is a capped JPEG of the fold_).
-- **Page copy** (_page copy_).
+- **Images in read mode** — designed and next (_images in read mode_); measure first.
+- **More of a table**: column alignment, blocks inside a cell, a highlight anchored in
+  a cell (_tables_).
+- **A visible Read control on a row that has a copy**, so the copy is not only in the
+  menu ([reader.md](./reader.md), _a row's press opens the page_).
+- **A screenshot on expo; a full-page screenshot** (_the scope each copy stops at_).
+- **Page copy** (_page copy_) — possibly never.
 - **Search over read mode.** Client-only under E2E, and a device can only index a
   copy it has downloaded — `files/` blobs are lazy. A per-device _keep copies
   offline_ option is the prerequisite ([client-queries.md](./client-queries.md)).

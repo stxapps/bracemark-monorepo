@@ -33,6 +33,10 @@
 //    engagement count still holds while it's open (web's controlled-menu
 //    reason, the CommandItem submenu, doesn't apply here).
 //
+//  - Open in Wayback Machine is web's item (its header has the reasoning: last of
+//    the ordinary actions, absent where `waybackUrl` answers nothing), opened in
+//    the system browser like the page itself.
+//
 // Nested inside the item's Pressable — fine on this platform: RN's responder
 // hands the touch to the innermost pressable, so opening the menu never fires
 // the item (web needed the trigger outside the row's <a> instead).
@@ -48,6 +52,7 @@ import {
   BookOpen,
   Copy,
   FolderInput,
+  History,
   MoreHorizontal,
   Pencil,
   Pin,
@@ -59,7 +64,7 @@ import {
 } from 'lucide-react-native';
 
 import { linkIdOf, type LinkView, useLinkMutations, usePinMutations } from '@stxapps/expo-react';
-import { ARCHIVE_ID, DEFAULT_LIST_ID, TRASH_ID } from '@stxapps/shared';
+import { ARCHIVE_ID, DEFAULT_LIST_ID, TRASH_ID, waybackUrl } from '@stxapps/shared';
 
 import { Button } from '../../components/ui/button';
 import {
@@ -73,7 +78,7 @@ import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { useLinkEdit } from './link-edit-host';
 import { MoveToDialog } from './move-to-dialog';
-import { useEngagedOpen } from './shared';
+import { openWayback, useEngagedOpen } from './shared';
 import { useLinksViewActions } from './view-state-provider';
 
 export function LinkRowMenu({
@@ -133,6 +138,14 @@ export function LinkRowMenu({
       <Text>Copy link</Text>
     </DropdownMenuItem>
   );
+
+  const waybackHref = waybackUrl(link.url, link.createdAt);
+  const wayback = waybackHref ? (
+    <DropdownMenuItem testID="link-menu-wayback" onPress={() => openWayback(waybackHref)}>
+      <Icon as={History} className="size-4" />
+      <Text>Open in Wayback Machine</Text>
+    </DropdownMenuItem>
+  ) : null;
 
   return (
     <>
@@ -238,6 +251,7 @@ export function LinkRowMenu({
                   <Text>Pin to top</Text>
                 </DropdownMenuItem>
               )}
+              {wayback}
               <DropdownMenuSeparator />
               {inArchive ? (
                 <DropdownMenuItem

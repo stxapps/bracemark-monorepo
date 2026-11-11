@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Linking } from 'react-native';
 import { PortalHost } from '@rn-primitives/portal';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
@@ -57,6 +58,7 @@ const LINK = {
   url: 'https://example.com/post',
   listId: 'reading',
   customTitle: 'A post',
+  createdAt: Date.UTC(2026, 10, 9, 8, 7, 6),
 };
 
 beforeEach(() => {
@@ -75,6 +77,23 @@ test('a link in a locked list shows the unlock pane and none of the copy', async
   await waitFor(() => expect(screen.getByTestId('lock-pane')).toBeTruthy());
   expect(screen.queryByText('The kept words.')).toBeNull();
   expect(screen.queryByText('Open page')).toBeNull();
+  expect(screen.queryByTestId('reader-wayback')).toBeNull();
+});
+
+test('the Wayback Machine opens the capture nearest the day the link was saved', async () => {
+  mockExtraction = { readModeId: 'r1', facets: {} };
+  const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+
+  render(<ReaderScreen linkId="l1" />);
+  await screen.findByText('The kept words.');
+  // Built on the device; nothing is opened, or asked, before the press.
+  expect(openURL).not.toHaveBeenCalled();
+
+  fireEvent.press(screen.getByTestId('reader-wayback'));
+  expect(openURL).toHaveBeenCalledWith(
+    'https://web.archive.org/web/20261109080706/https://example.com/post',
+  );
+  openURL.mockRestore();
 });
 
 test('reads a copy the link has', async () => {

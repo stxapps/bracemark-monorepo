@@ -67,10 +67,44 @@ test('numbers each run of ordered items from 1', () => {
 test('a block kind from a newer version is skipped, and the rest still renders', () => {
   mount(
     doc([
-      { id: 'b0', kind: 'table', rows: [['x']] },
+      { id: 'b0', kind: 'poll', options: [['x']] },
       { id: 'b1', kind: 'paragraph', runs: [{ text: 'still here' }] },
     ]),
   );
+  expect(screen.getByText('still here')).toBeTruthy();
+});
+
+test('a table is rows of cells in a sideways scroller, its markup printed as text', () => {
+  mount(
+    doc([
+      {
+        id: 'b0',
+        kind: 'table',
+        runs: [{ text: 'Prices' }],
+        truncated: true,
+        rows: [
+          { cells: [{ runs: [{ text: 'Plan' }], header: true }, { runs: [{ text: 'Price' }] }] },
+          { cells: [{ runs: [{ text: 'Plus' }] }, { runs: [{ text: '<b>$48</b>' }] }] },
+        ],
+      },
+    ]),
+  );
+
+  expect(screen.getByTestId('reader-table').props.horizontal).toBe(true);
+  for (const text of ['Prices', 'Plan', 'Price', 'Plus', '<b>$48</b>']) {
+    expect(screen.getByText(text)).toBeTruthy();
+  }
+  expect(screen.getByText('The rest of this table wasn’t kept.')).toBeTruthy();
+});
+
+test('a table whose stored rows are not the shape the capture writes renders nothing', () => {
+  mount(
+    doc([
+      { id: 'b0', kind: 'table', rows: [['x'], null, { cells: 'no' }] } as never,
+      { id: 'b1', kind: 'paragraph', runs: [{ text: 'still here' }] },
+    ]),
+  );
+  expect(screen.queryByTestId('reader-table')).toBeNull();
   expect(screen.getByText('still here')).toBeTruthy();
 });
 

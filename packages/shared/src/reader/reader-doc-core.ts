@@ -14,6 +14,15 @@ export const READER_DOC_VERSION = 1;
 export const READER_DOC_MAX_BLOCKS = 10_000;
 export const READER_DOC_MAX_CHARS = 1_000_000;
 
+// A `table` block's own ceilings — the capture's too, never the schema's. The two bind
+// differently, on purpose. A table WIDER than the column cap is not kept as a grid at
+// all: a reader scrolls a grid sideways, and past a couple of dozen columns that is a
+// spreadsheet, not a figure in an article, so its cells are walked as ordinary content
+// instead. A table LONGER than the row cap is cut there and marked `truncated`, so the
+// reader can say the rest was not kept rather than end as if the table did.
+export const READER_TABLE_MAX_COLUMNS = 24;
+export const READER_TABLE_MAX_ROWS = 500;
+
 // Is this a link target a reader may render as a link? Absolute http(s) only: no
 // `javascript:`, no `data:`, nothing relative (there is no base to resolve against in
 // the app). Used by the capture to drop a target and by a renderer to refuse one.

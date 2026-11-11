@@ -1,10 +1,17 @@
-import { Linking, View } from 'react-native';
+import { Linking, ScrollView, useWindowDimensions, View } from 'react-native';
 import { ImageOff } from 'lucide-react-native';
 
-import { isReaderHref, type ReaderBlock, type ReaderDoc, type ReaderRun } from '@stxapps/shared';
+import {
+  isReaderHref,
+  type ReaderBlock,
+  type ReaderCell,
+  type ReaderDoc,
+  type ReaderRun,
+} from '@stxapps/shared';
 
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
+import { MAX_FONT_SIZE_MULTIPLIER } from '../../lib/font-scale';
 import { cn } from '../../lib/utils';
 
 // A read-mode copy, rendered natively — the expo twin of web-ui's ReaderArticle
@@ -17,6 +24,8 @@ import { cn } from '../../lib/utils';
 //   - A link is a nested `<Text>` whose press opens the target in the system browser —
 //     only when `isReaderHref` passes HERE, at render (a backup is an outside file).
 //   - A figure is a placeholder; the copy keeps no image and never the URL.
+//   - A table is rows of Views in a sideways scroller — React Native has no table —
+//     with each column's width sized from its longest line (`TableBlock`, below).
 //   - An unknown block kind renders nothing, and the rest of the copy still renders.
 //   - Everything is `selectable` and scales with the OS text size through the app's
 //     own Text (lib/font-scale.ts) — a reader that ignored Dynamic Type would be the
@@ -55,6 +64,107 @@ function Runs({ runs }: { runs: ReaderRun[] }) {
         );
       })}
     </>
+  );
+}
+
+// A table's rows as the renderer reads them — web-ui's `tableRows`, for the same
+// reason: the capture writes a rectangular grid, but a copy is stored bytes and a
+// backup is an outside file, so a row that isn't `{ cells: [...] }` contributes none.
+type TableCell = { runs: ReaderRun[]; header: boolean };
+
+function tableRows(block: ReaderBlock): TableCell[][] {
+  const rows: unknown = block.rows;
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((row: unknown): TableCell[] => {
+      const cells = (row as { cells?: unknown } | null)?.cells;
+      if (!Array.isArray(cells)) return [];
+      // A cell with no readable runs is an EMPTY cell, not a missing one: dropping it
+      // would shift every cell after it one column to the left.
+      return cells.map((cell: ReaderCell | null | undefined) => ({
+        runs: Array.isArray(cell?.runs) ? cell.runs : [],
+        header: cell?.header === true,
+      }));
+    })
+    .filter((cells) => cells.length > 0);
+}
+
+// Column widths, in dp at the default text size. There is no table layout to ask —
+// each cell is a View with a fixed width — so a column is as wide as its LONGEST
+// LINE wants, between a floor that keeps a short column tappable to select and a
+// ceiling past which the text wraps instead. ~7.5dp a character is the app's 14pt
+// face; it is an estimate, and wrapping absorbs the error.
+const COLUMN_MIN = 72;
+const COLUMN_MAX = 240;
+const CHAR_WIDTH = 7.5;
+const CELL_PADDING = 24;
+
+function columnWidths(rows: TableCell[][]): number[] {
+  const columns = Math.max(...rows.map((cells) => cells.length));
+  return Array.from({ length: columns }, (_, c) => {
+    let longest = 0;
+    for (const cells of rows) {
+      const text = (cells[c]?.runs ?? []).map((run) => run.text).join('');
+      for (const line of text.split('\n')) longest = Math.max(longest, line.length);
+    }
+    return Math.min(Math.max(longest * CHAR_WIDTH + CELL_PADDING, COLUMN_MIN), COLUMN_MAX);
+  });
+}
+
+function TableBlock({ block, rtl }: { block: ReaderBlock; rtl: boolean }) {
+  // The widths are dp and the text is not: it grows with the OS text size, up to the
+  // app's cap (lib/font-scale.ts). Scale the columns by the same factor, or a large
+  // text setting wraps every cell to a word a line.
+  const { fontScale } = useWindowDimensions();
+  const rows = tableRows(block);
+  if (rows.length === 0) return null;
+  const scale = Math.min(Math.max(fontScale, 1), MAX_FONT_SIZE_MULTIPLIER);
+  const widths = columnWidths(rows).map((width) => Math.round(width * scale));
+  const caption = block.runs ?? [];
+  const textStyle = { writingDirection: rtl ? ('rtl' as const) : ('ltr' as const) };
+
+  return (
+    <View className="my-4">
+      {caption.length > 0 ? (
+        <Text selectable style={textStyle} className="mb-2 text-sm text-muted-foreground">
+          <Runs runs={caption} />
+        </Text>
+      ) : null}
+      <ScrollView horizontal testID="reader-table">
+        <View className="rounded-lg border border-border">
+          {rows.map((cells, r) => (
+            <View
+              key={r}
+              className={cn('border-border', r > 0 && 'border-t')}
+              // The document's direction, not the app's: an RTL article's first
+              // column is on the right whatever language the phone is in.
+              style={{ flexDirection: rtl ? 'row-reverse' : 'row' }}
+            >
+              {cells.map((cell, c) => (
+                <View
+                  key={c}
+                  style={{ width: widths[c] }}
+                  className={cn('px-3 py-2', cell.header && 'bg-muted/50')}
+                >
+                  <Text
+                    selectable
+                    style={textStyle}
+                    className={cn('text-sm leading-5', cell.header && 'font-semibold')}
+                  >
+                    <Runs runs={cell.runs} />
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+      {block.truncated === true ? (
+        <Text className="mt-2 text-sm text-muted-foreground">
+          The rest of this table wasn’t kept.
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -130,6 +240,8 @@ function Block({ block, rtl, number }: { block: ReaderBlock; rtl: boolean; numbe
           </View>
         </View>
       );
+    case 'table':
+      return <TableBlock block={block} rtl={rtl} />;
     case 'rule':
       return <View className="my-6 h-px bg-border" />;
     default:

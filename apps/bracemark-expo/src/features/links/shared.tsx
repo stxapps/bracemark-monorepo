@@ -89,6 +89,15 @@ export function openLink(url: string): void {
   if (href) void Linking.openURL(href).catch(() => undefined);
 }
 
+// The Internet Archive's capture of a link's page nearest the day it was saved — the
+// row menu's and the reader's exit for a page that has changed or gone. The address
+// is built on the device (`waybackUrl`, @stxapps/shared url.ts, which says why
+// nothing may ask the archive anything before this press) and opened in the system
+// browser, like the page itself.
+export function openWayback(href: string): void {
+  void Linking.openURL(href).catch(() => undefined);
+}
+
 // Both badges are labelled with `accessibilityLabel`, NOT web's `aria-label`: an
 // `Icon` is react-native-svg's `Svg`, which hands its props to the native view
 // without RN's aria → accessibility translation, so `aria-label` is silently

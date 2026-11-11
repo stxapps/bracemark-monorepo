@@ -132,14 +132,15 @@ asymmetry drives the whole result/queue design.
 | extension — **icon click, active tab** | ✅ live DOM        | ✅ Readability     | ✅ `captureVisibleTab`, the fold | ▹ not built |
 | ~~extension — background, queued URL~~ | —                  | —                  | —                                | —           |
 | mobile — **share sheet**               | ⚠️ host-provided   | ▹ Safari, iOS only | ❌                               | ❌          |
-| mobile — **foreground**                | ✅                 | ▹ WebView          | ▹ WebView                        | ▹ not built |
+| mobile — **foreground**                | ✅                 | ▹ WebView          | ❌ not planned for now           | ▹ not built |
 | mobile — **background queue**          | ⚠️ best-effort     | ⚠️                 | ❌                               | ❌          |
 | `bracemark-extractor` Worker           | ✅                 | ▹ raw HTML         | ❌                               | ❌          |
 | import                                 | ⚠️ export-provided | ❌                 | ❌                               | ❌          |
 
 ▹ marks a cell designed but not built; the read-mode, screenshot and page-copy
 columns are [link-extraction-keep.md](./link-extraction-keep.md)'s subject, cell by
-cell. The title + image column is this file's.
+cell — including why the screenshot stays with the browser extension and page copy is
+deferred (_the scope each copy stops at_). The title + image column is this file's.
 
 The struck row is the **decision below**: the extension _could_ bg-fetch queued
 URLs with an `<all_urls>` host grant, but we **don't** — that capability moves to

@@ -72,7 +72,14 @@ jest.mock('@/contexts/paywall-provider', () => ({
   usePaywall: () => ({ show: mockShowPaywall }),
 }));
 
-const LINK = { url: 'https://example.com/post', listId: 'reading', customTitle: 'A post' };
+const LINK = {
+  url: 'https://example.com/post',
+  listId: 'reading',
+  customTitle: 'A post',
+  createdAt: Date.UTC(2026, 10, 9, 8, 7, 6),
+};
+// The Internet Archive's capture nearest the day the link was saved (shared url.ts).
+const WAYBACK = 'https://web.archive.org/web/20261109080706/https://example.com/post';
 
 beforeEach(() => {
   mockLink = LINK;
@@ -97,6 +104,48 @@ test('a link in a locked list shows the unlock pane and none of the copy', async
   expect(screen.queryByText('The kept words.')).toBeNull();
   // Not even the way out to the page itself: the host is the list's contents too.
   expect(screen.queryByRole('link', { name: /open page/i })).toBeNull();
+  expect(screen.queryByRole('link', { name: /wayback/i })).toBeNull();
+});
+
+test('beside a copy, the Wayback Machine is one press away — built here, asked nothing', async () => {
+  mockExtraction = { readModeId: 'r1', facets: {} };
+  const fetchSpy = jest.fn();
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = fetchSpy as never;
+
+  try {
+    render(<ReaderPage />);
+
+    const link = await screen.findByRole('link', { name: 'Open in Wayback Machine' });
+    expect(link.getAttribute('href')).toBe(WAYBACK);
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toContain('noreferrer');
+    // No lookup: whether a capture exists is the archive's to say after the click.
+    expect(fetchSpy).not.toHaveBeenCalled();
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('no copy: the Wayback Machine is offered in words, beside the page itself', async () => {
+  mockExtraction = { facets: {} };
+
+  render(<ReaderPage />);
+
+  await screen.findByText('No copy of this page yet');
+  expect(screen.getByText(/Wayback Machine may have it/)).not.toBeNull();
+  expect(screen.getByRole('link', { name: /^Wayback Machine/ }).getAttribute('href')).toBe(WAYBACK);
+});
+
+test('a link no public archive could hold gets no Wayback exit', async () => {
+  mockLink = { ...LINK, url: 'http://localhost:3000/admin' };
+  mockExtraction = { facets: {} };
+
+  render(<ReaderPage />);
+
+  await screen.findByText('No copy of this page yet');
+  expect(screen.queryByRole('link', { name: /wayback/i })).toBeNull();
+  expect(screen.queryByText(/Wayback Machine/)).toBeNull();
 });
 
 test('a free account reads a copy it already has — reading is never gated', async () => {
