@@ -3,6 +3,7 @@ import {
   encodeReaderImages,
   newFacet,
   type ReaderDoc,
+  readerDocWithinCaps,
   type ReaderImageEntry,
   readerImageKeys,
   withinReaderImageBudget,
@@ -39,7 +40,7 @@ export async function storeReadModeCopy(
   doc: ReaderDoc,
   images: readonly ReaderImageEntry[],
   extractedBy: string,
-): Promise<void> {
+): Promise<boolean> {
   // Before any blob: a refusal later would leave the pack and the text uploaded with no
   // extraction naming them.
   await assertExtractionWritable(username, linkId);
@@ -48,6 +49,10 @@ export async function storeReadModeCopy(
     doc,
     new Map(kept.map(({ key, width, height }) => [key, { width, height }])),
   );
+  // Not an article, whoever wrote the document (READER_STORE_*): nothing is kept, and no blob
+  // has been written yet. The extension's walker runs in the page's isolated world and the
+  // server's answer is another machine's, so the walker's own caps are not the guarantee.
+  if (!readerDocWithinCaps(settled)) return false;
   const named = new Set(readerImageKeys(settled));
   const packed = kept.filter((entry) => named.has(entry.key));
 
@@ -63,4 +68,5 @@ export async function storeReadModeCopy(
     facet: 'readMode',
     state: newFacet('done', extractedBy),
   });
+  return true;
 }

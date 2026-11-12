@@ -142,7 +142,15 @@ export async function runExtraction(
             images = [];
           }
         }
-        await storeReadModeCopy(username, linkId, capture.doc, images, EXTRACTED_BY);
+        const kept = await storeReadModeCopy(username, linkId, capture.doc, images, EXTRACTED_BY);
+        if (!kept) {
+          // Past the store edge's size ceilings: not an article, whatever the walker made of
+          // it. Settled like the page that has no article, so no drain asks again.
+          await writeExtraction(username, linkId, {
+            facet,
+            state: newFacet('permanent', EXTRACTED_BY, { reason: 'not-an-article' }),
+          });
+        }
         break;
       }
       case 'screenshot': {

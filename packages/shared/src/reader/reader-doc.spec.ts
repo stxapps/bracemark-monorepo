@@ -1,4 +1,14 @@
-import { type ReaderDoc, readerDocSchema, readerDocText, readerPublishedAt } from './reader-doc';
+import {
+  READER_STORE_MAX_BLOCKS,
+  READER_STORE_MAX_CHARS,
+  READER_TABLE_MAX_COLUMNS,
+  READER_TABLE_MAX_ROWS,
+  type ReaderDoc,
+  readerDocSchema,
+  readerDocText,
+  readerDocWithinCaps,
+  readerPublishedAt,
+} from './reader-doc';
 
 const doc = (blocks: ReaderDoc['blocks'], extra: Partial<ReaderDoc> = {}): ReaderDoc => ({
   version: 1,
@@ -57,5 +67,54 @@ describe('readerPublishedAt', () => {
     expect(at('')).toBeUndefined();
     expect(at('last Tuesday')).toBeUndefined();
     expect(at('2031-01-01T00:00:00Z')).toBeUndefined();
+  });
+});
+
+// The STORE EDGE's size ceilings. The schema has no `.max()` (a cap there silently empties an old
+// copy), and the walker's caps bind only where the walker is trusted; on the WebView and Safari
+// doors it runs in the page. So a copy the store accepts, and a blob the reader opens, is held to
+// these, and each is a way a few KB could cost a reader a gigabyte.
+describe('readerDocWithinCaps', () => {
+  const para = (text: string, id = 'b0') => ({ id, kind: 'paragraph', runs: [{ text }] });
+
+  it('accepts an ordinary article and a table at the ceilings', () => {
+    expect(readerDocWithinCaps(doc([para('Hello.'), TABLE]))).toBe(true);
+    const grid = {
+      id: 'b0',
+      kind: 'table',
+      rows: Array.from({ length: READER_TABLE_MAX_ROWS }, () => ({
+        cells: Array.from({ length: READER_TABLE_MAX_COLUMNS }, () => ({ runs: [{ text: 'x' }] })),
+      })),
+    };
+    expect(readerDocWithinCaps(doc([grid]))).toBe(true);
+  });
+
+  it('refuses more blocks than the walker ever writes', () => {
+    const blocks = Array.from({ length: READER_STORE_MAX_BLOCKS + 1 }, (_, i) =>
+      para('x', `b${i}`),
+    );
+    expect(readerDocWithinCaps(doc(blocks))).toBe(false);
+    expect(readerDocWithinCaps(doc(blocks.slice(1)))).toBe(true);
+  });
+
+  it('counts every string a reader would draw: runs, text, cells, the title', () => {
+    const big = 'x'.repeat(READER_STORE_MAX_CHARS);
+    expect(readerDocWithinCaps(doc([para(big)]))).toBe(true);
+    expect(readerDocWithinCaps(doc([para(big), para('y')]))).toBe(false);
+    expect(readerDocWithinCaps(doc([{ id: 'b0', kind: 'code', text: big + 'y' }]))).toBe(false);
+    expect(readerDocWithinCaps(doc([para(big)], { title: 'y' }))).toBe(false);
+    const cell = { id: 'b0', kind: 'table', rows: [{ cells: [{ runs: [{ text: big + 'y' }] }] }] };
+    expect(readerDocWithinCaps(doc([cell]))).toBe(false);
+  });
+
+  it('refuses a table longer or wider than the walker keeps', () => {
+    const rows = Array.from({ length: READER_TABLE_MAX_ROWS + 1 }, () => ({ cells: [] }));
+    expect(readerDocWithinCaps(doc([{ id: 'b0', kind: 'table', rows }]))).toBe(false);
+    const wide = {
+      cells: Array.from({ length: READER_TABLE_MAX_COLUMNS + 1 }, () => ({
+        runs: [{ text: 'x' }],
+      })),
+    };
+    expect(readerDocWithinCaps(doc([{ id: 'b0', kind: 'table', rows: [wide] }]))).toBe(false);
   });
 });

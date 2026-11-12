@@ -1,10 +1,18 @@
 import { z } from '../zod';
+import {
+  READER_STORE_MAX_BLOCKS,
+  READER_STORE_MAX_CHARS,
+  READER_TABLE_MAX_COLUMNS,
+  READER_TABLE_MAX_ROWS,
+} from './reader-doc-core';
 
 export {
   isReaderHref,
   isReaderImageTooSmall,
+  READER_CAPTURE_MAX_PAYLOAD_CHARS,
   READER_DOC_MAX_BLOCKS,
   READER_DOC_MAX_CHARS,
+  READER_DOC_MAX_JSON_BYTES,
   READER_DOC_VERSION,
   READER_IMAGE_JPEG_QUALITY,
   READER_IMAGE_MAX_DIMENSION,
@@ -13,6 +21,9 @@ export {
   READER_IMAGE_MIN_SIDE,
   READER_IMAGES_MAX_BYTES,
   READER_IMAGES_MAX_COUNT,
+  READER_IMAGES_MAX_INDEX_BYTES,
+  READER_STORE_MAX_BLOCKS,
+  READER_STORE_MAX_CHARS,
   READER_TABLE_MAX_COLUMNS,
   READER_TABLE_MAX_ROWS,
 } from './reader-doc-core';
@@ -36,8 +47,10 @@ export {
 // must round-trip the document rather than drop it. A renderer SKIPS a kind it doesn't
 // know. And, as in entities.ts, no `.max()` anywhere: this schema parses stored bytes,
 // so a cap here is a reader cap that silently empties a copy written before it
-// (docs/data-limits.md — the tripwire). The caps live at the one writer, the capture
-// (READER_DOC_MAX_BLOCKS / READER_DOC_MAX_CHARS, in reader-doc-core.ts).
+// (docs/data-limits.md — the tripwire). The walker's caps (READER_DOC_MAX_BLOCKS /
+// READER_DOC_MAX_CHARS, in reader-doc-core.ts) bind where the walker is trusted. Where it
+// is not (it runs in the page on the WebView and Safari doors), the STORE EDGE re-applies
+// ceilings with `readerDocWithinCaps` below, and the decode applies them again.
 
 // The block kinds this version writes. A reader's switch is over these; anything else
 // is a future kind and is skipped.
@@ -53,9 +66,11 @@ export const READER_BLOCK_KINDS = [
 ] as const;
 export type ReaderBlockKind = (typeof READER_BLOCK_KINDS)[number];
 
-// A run of inline text with its marks. `href` is a link target and is only ever an
-// absolute http(s) URL — the capture drops anything else, and a renderer re-checks with
-// `isReaderHref` rather than trusting stored bytes (a backup is an outside file).
+// A run of inline text with its marks. `href` is a link target and is an absolute
+// http(s) URL when the walker wrote it, which drops anything else; a forged capture or a
+// backup can carry any string, so the schema does not promise it and a renderer re-checks
+// with `isReaderHref` rather than trusting stored bytes. That render-time check is what
+// holds on every door.
 export const readerRunSchema = z.looseObject({
   text: z.string(),
   bold: z.boolean().optional(),
@@ -174,4 +189,34 @@ export function readerDocText(doc: Pick<ReaderDoc, 'blocks'>): string {
     ])
     .filter((line) => line.trim() !== '')
     .join('\n');
+}
+
+// Is this copy inside the store edge's ceilings (reader-doc-core.ts, READER_STORE_*)? Counts
+// blocks, the characters of every string a reader would draw, and a table's rows and columns.
+// Shape is the schema's job; this is size. A copy outside it is not an article and is not
+// kept, whoever wrote it. Also what the decode checks, so a blob that got past a store edge
+// (a backup written verbatim, a copy from another device) still cannot be opened.
+export function readerDocWithinCaps(doc: ReaderDoc): boolean {
+  const blocks = doc.blocks ?? [];
+  if (blocks.length > READER_STORE_MAX_BLOCKS) return false;
+  let chars = 0;
+  const addRuns = (runs: readonly ReaderRun[] | undefined) => {
+    for (const run of runs ?? []) chars += run.text.length;
+  };
+  for (const key of ['title', 'byline', 'siteName', 'excerpt', 'publishedTime'] as const) {
+    chars += (doc[key] ?? '').length;
+  }
+  for (const block of blocks) {
+    chars += (block.text ?? '').length;
+    addRuns(block.runs);
+    const rows = block.rows ?? [];
+    if (rows.length > READER_TABLE_MAX_ROWS) return false;
+    for (const row of rows) {
+      const cells = row.cells ?? [];
+      if (cells.length > READER_TABLE_MAX_COLUMNS) return false;
+      for (const cell of cells) addRuns(cell.runs);
+    }
+    if (chars > READER_STORE_MAX_CHARS) return false;
+  }
+  return chars <= READER_STORE_MAX_CHARS;
 }

@@ -5,7 +5,9 @@ import {
   LINKS_PREFIX,
   MAX_READ_MODE_PROXY_IMAGES,
   newFacet,
+  READ_MODE_REASONS,
   readerDocSchema,
+  readerDocWithinCaps,
   type ReaderImageEntry,
   readModeVerdictOf,
 } from '@stxapps/shared';
@@ -69,7 +71,7 @@ export async function runServerReadMode(
   await assertExtractionWritable(username, linkId);
 
   const result = await client.extractReadMode(link.url);
-  const verdict = await readModeVerdictOf(
+  let verdict = await readModeVerdictOf(
     result,
     async () => (await readExtraction(linkId))?.facets.readMode?.attempts ?? 0,
   );
@@ -79,11 +81,16 @@ export async function runServerReadMode(
   const current = await readExtraction(linkId);
   if (current?.readModeId) return { kind: 'exists' };
 
-  if (verdict.status === 'done') {
-    // The response was parsed against the contract already; parsed again here because
-    // this is the boundary where a server's bytes become the user's stored copy.
-    const doc = readerDocSchema.parse(result.readMode);
+  // The response was parsed against the contract already; parsed again here because this is
+  // the boundary where a server's bytes become the user's stored copy. And held to the store
+  // edge's size ceilings (READER_STORE_*): a document past them is not an article, and settles
+  // as one rather than being kept or retried.
+  const doc = verdict.status === 'done' ? readerDocSchema.parse(result.readMode) : undefined;
+  if (doc && !readerDocWithinCaps(doc)) {
+    verdict = { status: 'permanent', reason: READ_MODE_REASONS.notAnArticle };
+  }
 
+  if (doc && verdict.status === 'done') {
     // The images, when the account keeps them. A failure in here is a copy without
     // pictures, never a failed keep: the text is the copy.
     let images: ReaderImageEntry[] = [];
@@ -110,8 +117,15 @@ export async function runServerReadMode(
 
     // Settles the document against what was kept, so no figure names a picture the
     // pack doesn't hold — with no images at all, every key comes off.
-    await storeReadModeCopy(username, linkId, doc, images, EXTRACTED_BY);
-    return { kind: 'kept' };
+    const stored = await storeReadModeCopy(username, linkId, doc, images, EXTRACTED_BY);
+    return stored
+      ? { kind: 'kept' }
+      : { kind: 'none', status: 'permanent', reason: READ_MODE_REASONS.notAnArticle };
+  }
+
+  // Every `done` verdict with a document returned above; the one without was never a copy.
+  if (verdict.status === 'done') {
+    return { kind: 'none', status: 'permanent', reason: READ_MODE_REASONS.notAnArticle };
   }
 
   // A settled answer from a better tier stays: a server `failed` must not overwrite an

@@ -19,6 +19,7 @@ import {
   LINKS_PREFIX,
   MY_LIST_ID,
   pathFromId,
+  READER_STORE_MAX_BLOCKS,
   type ReaderDoc,
   UnreadablePathError,
 } from '@stxapps/shared';
@@ -30,6 +31,7 @@ import { recordUnreadablePaths, seedNewAccount } from '../data/sync-store';
 import { decodeReaderDoc } from './reader-doc-bytes';
 import { encodeReaderImage } from './reader-image';
 import { runServerReadMode } from './server-read-mode';
+import { storeReadModeCopy } from './store-read-mode';
 
 // The image encoder needs a canvas jsdom doesn't have; a seam, so the storing around
 // it runs for real (store-read-mode.ts, through the real mutations).
@@ -94,6 +96,38 @@ it('asks nothing of the extractor, and stores nothing, for a link whose extracti
   expect(await db.pendingOps.count()).toBe(0);
 });
 
+it('keeps nothing, and writes no blob, when the store itself is handed a copy past the ceilings', async () => {
+  // The browser extension's walker runs in the page's isolated world and calls the store
+  // directly, so the store applies the ceilings itself, before any blob is written.
+  const blocks = Array.from({ length: READER_STORE_MAX_BLOCKS + 1 }, (_, i) => ({
+    id: `b${i}`,
+    kind: 'rule',
+  }));
+
+  await expect(
+    storeReadModeCopy(USER, 'l_1', { ...DOC, blocks }, [], 'extension:fg'),
+  ).resolves.toBe(false);
+
+  expect(await db.items.count()).toBe(0);
+  expect(await db.pendingOps.count()).toBe(0);
+});
+
+it('settles a document past the store edge’s size ceilings as not an article, storing nothing', async () => {
+  // The extractor is another machine; what it returns is held to the same ceilings as a capture.
+  const blocks = Array.from({ length: READER_STORE_MAX_BLOCKS + 1 }, (_, i) => ({
+    id: `b${i}`,
+    kind: 'rule',
+  }));
+
+  const outcome = await runServerReadMode(USER, LINK, client({ readMode: { ...DOC, blocks } }));
+
+  expect(outcome).toEqual({ kind: 'none', status: 'permanent', reason: 'not-an-article' });
+  const extraction = await readExtraction('l_1');
+  expect(extraction?.readModeId).toBeUndefined();
+  expect(extraction?.facets.readMode).toMatchObject({ status: 'permanent', extractedBy: 'server' });
+  expect(await db.items.where('path').startsWith('files/').count()).toBe(0);
+});
+
 describe('the article’s images', () => {
   const ILLUSTRATED: ReaderDoc = {
     version: 1,
@@ -109,7 +143,9 @@ describe('the article’s images', () => {
     { key: 'i0', url: 'https://cdn.example/chart.png' },
     { key: 'i1', url: 'https://cdn.example/photo.jpg' },
   ];
-  const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 1, 2, 3]);
+  const JPEG = new Uint8Array([
+    0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1, 2, 3,
+  ]);
 
   function illustrated(fetchImage: ExtractClient['fetchImage']): ExtractClient {
     return {

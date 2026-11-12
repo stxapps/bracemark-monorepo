@@ -73,6 +73,35 @@ type ReadabilityDocument = ConstructorParameters<typeof Readability>[0];
 // fetch through the image proxy (routes/image.ts), never this Worker's: fetching thirty
 // images inside the extract request would hold it open past its deadline and inline
 // megabytes into a JSON response. The walker has resolved each against the final URL.
+// The most work a page may ask of the parse before it is called "not an article". The
+// byte cap (MAX_HTML_BYTES) bounds what is READ, not what it COSTS: Readability on a linkedom
+// tree is super-linear in nesting depth (measured about cubic: 11 KB of nested `<div>`s is
+// 3 s at depth 800 and 6 s at 1000, and a 1 MB page of nesting does not finish), and a
+// stranger picks the page. Real articles sit far inside both: a page is a few dozen levels
+// deep, and tens of thousands of elements is a heavy one.
+export const MAX_READ_MODE_DEPTH = 256;
+export const MAX_READ_MODE_ELEMENTS = 60_000;
+
+// Is this document inside those bounds? One iterative walk (no recursion: the page chooses
+// the depth), stopping at the first element that crosses one.
+export function withinReadModeBounds(root: { firstElementChild: unknown }): boolean {
+  type El = { firstElementChild: El | null; nextElementSibling: El | null };
+  const stack: { el: El; depth: number }[] = [];
+  const push = (parent: { firstElementChild: unknown }, depth: number) => {
+    for (let c = parent.firstElementChild as El | null; c; c = c.nextElementSibling) {
+      stack.push({ el: c, depth });
+    }
+  };
+  push(root, 1);
+  let count = 0;
+  while (stack.length > 0) {
+    const { el, depth } = stack.pop() as { el: El; depth: number };
+    if (depth > MAX_READ_MODE_DEPTH || ++count > MAX_READ_MODE_ELEMENTS) return false;
+    push(el, depth + 1);
+  }
+  return true;
+}
+
 export function readModeFromHtml(
   html: string,
   finalUrl: URL,
@@ -91,6 +120,8 @@ function readModeOrThrow(
   now: number,
 ): { doc: ReaderDoc; images: ReaderImageSource[] } | null {
   const { document } = parseHTML(html);
+  // Before anything walks it: Readability's cost is not bounded by the bytes (above).
+  if (!withinReadModeBounds(document as unknown as { firstElementChild: unknown })) return null;
   setBaseUrl(document, finalUrl);
 
   const page = document as unknown as ReadabilityDocument;

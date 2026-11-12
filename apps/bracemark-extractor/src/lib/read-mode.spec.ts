@@ -1,8 +1,15 @@
+import { parseHTML } from 'linkedom';
 import { describe, expect, it } from 'vitest';
 
 import { readerDocSchema } from '@stxapps/shared';
 
-import { decodeHtml, readModeFromHtml } from './read-mode';
+import {
+  decodeHtml,
+  MAX_READ_MODE_DEPTH,
+  MAX_READ_MODE_ELEMENTS,
+  readModeFromHtml,
+  withinReadModeBounds,
+} from './read-mode';
 
 // Server read mode, in workerd itself — so linkedom and Readability are exercised in the
 // runtime they ship to, not in Node. What comes OUT is the point: the same blocks of
@@ -160,5 +167,40 @@ describe('decodeHtml', () => {
 
     expect(decodeHtml(new TextEncoder().encode('naïve'), null)).toBe('naïve');
     expect(decodeHtml(new TextEncoder().encode('ok'), 'text/html; charset=x-made-up')).toBe('ok');
+  });
+});
+
+// The page is a stranger's, and Readability on a linkedom tree is super-linear in nesting depth
+// (about cubic: 11 KB of nested <div>s took 3 s at depth 800 on Node, and a 1 MB page of nesting
+// did not finish). The byte cap bounds what is read, not what it costs, so a document deeper or
+// larger than a real page is answered "not an article" before Readability runs. This is workerd.
+describe('the work a page may ask of the parse', () => {
+  it('answers not-an-article at once for a page nested far past any real one', () => {
+    const deep = `<!doctype html><html><body>${'<div>'.repeat(1000)}<p>${PROSE}</p>${'</div>'.repeat(1000)}</body></html>`;
+
+    const started = Date.now();
+    const result = readModeFromHtml(deep, FINAL, 7);
+
+    expect(result).toBeNull();
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  it('answers not-an-article for a page with more elements than a heavy real one', () => {
+    const wide = `<!doctype html><html><body>${'<span>x</span>'.repeat(MAX_READ_MODE_ELEMENTS + 1)}<article><p>${PROSE}</p></article></body></html>`;
+
+    expect(readModeFromHtml(wide, FINAL, 7)).toBeNull();
+  });
+
+  it('still reads an article wrapped in a realistic stack of containers', () => {
+    const wrapped = `<!doctype html><html><body>${'<div>'.repeat(40)}<article><h1>A post</h1><p>${PROSE}</p><p>${PROSE}</p></article>${'</div>'.repeat(40)}</body></html>`;
+
+    expect(readModeFromHtml(wrapped, FINAL, 7)?.doc.blocks.length).toBeGreaterThan(0);
+  });
+
+  it('measures depth without recursion, so the page cannot choose the stack', () => {
+    const depth = MAX_READ_MODE_DEPTH + 1;
+    const { document } = parseHTML(`<html><body>${'<div>'.repeat(depth)}x</body></html>`);
+
+    expect(withinReadModeBounds(document as unknown as { firstElementChild: unknown })).toBe(false);
   });
 });

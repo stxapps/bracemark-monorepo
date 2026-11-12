@@ -35,6 +35,14 @@ export const ROBOTS_TIMEOUT_MS = 3_000;
 // moving it moves that row (apps/bracemark-site/src/app/extractor/page.tsx).
 export const MAX_ROBOTS_BYTES = 512_000;
 
+// The most steps one verdict may spend matching a URL against a file's rules. The matcher is
+// linear per rule in the path's length times the pattern's, the file may hold tens of
+// thousands of rules, and its operator chooses all of it: 500 rules of 1,000 characters
+// against a 2,000-character path was 3.4 s of CPU for one answer. Real files cost a few
+// thousand steps. Past the budget the answer is a disallow: nothing is fetched for a file
+// this service cannot afford to read, the way an unreachable file reads.
+export const MAX_ROBOTS_MATCH_STEPS = 2_000_000;
+
 export type RobotsVerdict = 'allowed' | 'disallowed' | 'unavailable';
 
 interface Rule {
@@ -119,7 +127,7 @@ export function parseRobots(text: string): RobotsRules {
 // Does `pattern` (with `*` wildcards and an optional trailing `$`) match the START of
 // `path`? A linear scan with single-star backtracking — never a RegExp built from the
 // file, which a pattern of many stars could make catastrophically slow on a Worker.
-function matches(pattern: string, path: string): boolean {
+function matches(pattern: string, path: string, budget: { left: number }): boolean {
   const anchored = pattern.endsWith('$');
   const pat = anchored ? pattern.slice(0, -1) : pattern;
   let p = 0;
@@ -127,6 +135,7 @@ function matches(pattern: string, path: string): boolean {
   let star = -1;
   let mark = 0;
   while (s < path.length) {
+    if (--budget.left < 0) return false; // the caller reads an empty budget as a disallow
     if (p < pat.length && pat[p] === '*') {
       star = p++;
       mark = s;
@@ -154,8 +163,11 @@ export function robotsVerdictFor(rules: RobotsRules, url: URL): 'allowed' | 'dis
   const path = normalizePath(`${url.pathname}${url.search}`);
   if (path === '/robots.txt') return 'allowed';
   let best: Rule | null = null;
+  const budget = { left: MAX_ROBOTS_MATCH_STEPS };
   for (const rule of rules) {
-    if (!matches(rule.pattern, path)) continue;
+    const hit = matches(rule.pattern, path, budget);
+    if (budget.left < 0) return 'disallowed';
+    if (!hit) continue;
     if (
       !best ||
       rule.pattern.length > best.pattern.length ||

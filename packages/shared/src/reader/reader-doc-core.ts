@@ -30,6 +30,18 @@ export const READER_TABLE_MAX_ROWS = 500;
 // One number for both generated scripts (tools/scripts/generate-reader-capture.ts).
 export const READER_CAPTURE_MAX_PAYLOAD_CHARS = 3_000_000;
 
+// The STORE EDGE's ceilings, for a copy that did not come from this build's walker: a
+// forged WebView message, a Safari draft, a backup, a blob from another device. The
+// walker's caps above bind where the walker is trusted to run; on the WebView and Safari
+// doors it runs in the page, so they bind nothing there (docs/link-extraction-keep.md,
+// _the format tripwire_). What every honest writer's output stays inside, with room: the
+// blocks the walker stops at, the payload cap the crossings enforce, the table ceilings.
+// A copy past one is not an article, and is not kept. The decompressed size is the
+// reader's own ceiling, so a few KB of gzip cannot become a gigabyte at open.
+export const READER_STORE_MAX_BLOCKS = READER_DOC_MAX_BLOCKS;
+export const READER_STORE_MAX_CHARS = 3_000_000;
+export const READER_DOC_MAX_JSON_BYTES = 32 * 1024 * 1024;
+
 // --- images (docs/link-extraction-keep.md, _images in read mode_) -------------------
 //
 // The ceilings on the images a read-mode copy keeps — the capture's, like every cap
@@ -56,6 +68,9 @@ export const READER_IMAGE_MAX_DIMENSION = 1024;
 export const READER_IMAGE_JPEG_QUALITY = 0.8;
 export const READER_IMAGE_MIN_AREA = 100 * 100;
 export const READER_IMAGE_MIN_SIDE = 32;
+// The pack's index is ~100 bytes an image; this is far past 30 of them. A decoder reads
+// the index into a string, so its length is a bound worth having.
+export const READER_IMAGES_MAX_INDEX_BYTES = 64 * 1024;
 
 export function isReaderImageTooSmall(width: number, height: number): boolean {
   return width * height < READER_IMAGE_MIN_AREA || Math.min(width, height) < READER_IMAGE_MIN_SIDE;

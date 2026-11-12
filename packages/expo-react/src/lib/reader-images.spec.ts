@@ -1,7 +1,7 @@
 import { READER_IMAGE_MAX_DIMENSION } from '@stxapps/shared';
 
 import { probeImageSize } from './image';
-import { collectReaderImagesPreferring } from './reader-images';
+import { collectReaderImagesPreferring, readBodyWithin } from './reader-images';
 
 // The capture screen's image collection: the bytes the PAGE fetched and encoded, where
 // they are what web-react's encoder writes, and a native fetch for every other address.
@@ -52,4 +52,64 @@ it('refuses what the page’s encoder never writes, and fetches it natively inst
 
   expect(fetchMock).toHaveBeenCalledTimes(2);
   expect(fetchMock).toHaveBeenCalledWith(SOURCES[0].url, expect.anything());
+});
+
+// A page names these addresses, so a response that never ends must cost a cancelled request, not
+// the phone's memory: the ceiling is checked BEFORE the body is buffered.
+describe('readBodyWithin', () => {
+  const chunk = (n: number) => new Uint8Array(n).fill(1);
+  const streamed = (chunks: Uint8Array[], headers: Record<string, string> = {}) => {
+    let i = 0;
+    const cancel = jest.fn(async () => undefined);
+    const res = {
+      headers: { get: (name: string) => headers[name.toLowerCase()] ?? null },
+      body: {
+        getReader: () => ({
+          read: async () =>
+            i < chunks.length
+              ? { done: false, value: chunks[i++] }
+              : { done: true, value: undefined },
+          cancel,
+        }),
+      },
+      arrayBuffer: jest.fn(async () => {
+        throw new Error('must not buffer the whole body');
+      }),
+    } as unknown as Response;
+    return { res, cancel };
+  };
+
+  it('refuses on a declared length past the ceiling, reading nothing', async () => {
+    const { res } = streamed([chunk(10)], { 'content-length': '1000' });
+
+    await expect(readBodyWithin(res, 100)).resolves.toBeUndefined();
+  });
+
+  it('cancels a stream the moment it passes the ceiling, with no length declared', async () => {
+    const { res, cancel } = streamed([chunk(60), chunk(60), chunk(60)]);
+
+    await expect(readBodyWithin(res, 100)).resolves.toBeUndefined();
+
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns the whole body when it fits', async () => {
+    const { res } = streamed([chunk(40), chunk(40)]);
+
+    const bytes = await readBodyWithin(res, 100);
+
+    expect(bytes?.byteLength).toBe(80);
+  });
+
+  it('falls back to a buffered read where the response has no stream, and still enforces the ceiling', async () => {
+    const buffered = (n: number) =>
+      ({
+        headers: { get: () => null },
+        body: null,
+        arrayBuffer: async () => chunk(n).buffer,
+      }) as unknown as Response;
+
+    await expect(readBodyWithin(buffered(50), 100)).resolves.toHaveLength(50);
+    await expect(readBodyWithin(buffered(150), 100)).resolves.toBeUndefined();
+  });
 });

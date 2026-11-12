@@ -19,8 +19,9 @@ import { cn } from '../../lib/utils';
 //     no `dangerouslySetInnerHTML` here and there must never be one — the copy is
 //     a stranger's page, rendered in the origin that holds the data key
 //     (docs/link-extraction-keep.md, the format tripwire);
-//   - a link is an `<a>` only when `isReaderHref` passes at RENDER time too (a
-//     backup is an outside file), and it leaves for a new tab with no referrer —
+//   - a link is an `<a>` only when `isReaderHref` passes at RENDER time (the walker drops
+//     other targets when it writes, but a forged capture or a backup is an outside file, so
+//     this check is the one that holds on every door), and it leaves for a new tab with no referrer —
 //     the saved site learns nothing about where it was read;
 //   - a figure's picture comes from the CALLER's `images` map — `blob:` URLs of the
 //     copy's own image pack, decrypted on this device (web-react useReaderImages) —

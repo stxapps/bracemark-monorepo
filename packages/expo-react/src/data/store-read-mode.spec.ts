@@ -1,6 +1,12 @@
 import { gunzipSync } from 'fflate';
 
-import { decodeReaderImages, EXTRACTIONS_PREFIX, FILES_PREFIX, pathFromId } from '@stxapps/shared';
+import {
+  decodeReaderImages,
+  EXTRACTIONS_PREFIX,
+  FILES_PREFIX,
+  pathFromId,
+  READER_STORE_MAX_BLOCKS,
+} from '@stxapps/shared';
 
 import { collectReaderImages, collectReaderImagesPreferring } from '../lib/reader-images';
 import { readFileBytes, resetFileSystem } from '../testing/memory-file-system';
@@ -64,6 +70,20 @@ it('stores a copy handed over as JSON text, the same as the doc itself', async (
   expect(JSON.parse(new TextDecoder().decode(gunzipSync(bytes)))).toEqual(DOC);
 });
 
+it('keeps nothing, and writes no blob, for a copy past the store edge’s size ceilings', async () => {
+  // On this door the walker is the page's own code, so a forged capture can be any size; the
+  // ceilings are re-applied here, before any image is fetched or blob written.
+  const blocks = Array.from({ length: READER_STORE_MAX_BLOCKS + 1 }, (_, i) => ({
+    id: `b${i}`,
+    kind: 'rule',
+  }));
+
+  await expect(storeReadModeCopy(USER, 'l1', { ...DOC, blocks })).resolves.toBe(false);
+
+  expect(getDb().select().from(items).all()).toEqual([]);
+  expect(jest.mocked(collectReaderImages)).not.toHaveBeenCalled();
+});
+
 it('stores nothing for a copy that is not a ReaderDoc', async () => {
   await expect(storeReadModeCopy(USER, 'l1', { html: '<p>x</p>' })).resolves.toBe(false);
   expect(await readExtraction('l1')).toBeUndefined();
@@ -93,7 +113,9 @@ describe('a capture that carries image addresses', () => {
       { key: 'i2', url: ['javascript', 'steal()'].join(':') },
     ],
   };
-  const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 1, 2, 3]);
+  const JPEG = new Uint8Array([
+    0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1, 2, 3,
+  ]);
   const storedDoc = () =>
     JSON.parse(
       new TextDecoder().decode(

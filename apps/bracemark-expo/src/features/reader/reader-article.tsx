@@ -104,7 +104,9 @@ const CHAR_WIDTH = 7.5;
 const CELL_PADDING = 24;
 
 function columnWidths(rows: TableCell[][]): number[] {
-  const columns = Math.max(...rows.map((cells) => cells.length));
+  // A reduce, not `Math.max(...rows.map())`: a spread of a hostile table's rows is an argument
+  // list as long as the table, and past ~100k elements it throws.
+  const columns = rows.reduce((most, cells) => Math.max(most, cells.length), 0);
   return Array.from({ length: columns }, (_, c) => {
     let longest = 0;
     for (const cells of rows) {

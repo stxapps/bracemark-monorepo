@@ -116,3 +116,30 @@ describe('createRobotsReader', () => {
     expect(await createRobotsReader()(new URL('https://example.com/a'))).toBe('unavailable');
   });
 });
+
+// The file is the site operator's, and the matcher is linear per rule in path x pattern length:
+// 500 rules of 1,000 characters against a 2,000-character path was 3.4 s of CPU for one verdict on
+// Node. A verdict has a step budget; past it the answer is a disallow, the way an unreadable file
+// reads, and a real file costs nowhere near it.
+describe('the cost of a verdict', () => {
+  it('answers a disallow, quickly, for a file built to be slow', () => {
+    const rules = Array.from({ length: 500 }, () => `Disallow: *${'a'.repeat(1000)}b`);
+    const rules_ = parseRobots(['User-agent: *', ...rules].join('\n'));
+    const url = new URL(`https://example.com/${'a'.repeat(2000)}`);
+
+    const started = Date.now();
+    const result = robotsVerdictFor(rules_, url);
+
+    expect(result).toBe('disallowed');
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  it('is unchanged for an ordinary file with thousands of short rules', () => {
+    const rules = Array.from({ length: 5000 }, (_, i) => `Disallow: /private-${i}/`);
+    const text = ['User-agent: *', ...rules, 'Allow: /private-7/public'].join('\n');
+
+    expect(verdict(text, 'https://example.com/post')).toBe('allowed');
+    expect(verdict(text, 'https://example.com/private-4999/a')).toBe('disallowed');
+    expect(verdict(text, 'https://example.com/private-7/public')).toBe('allowed');
+  });
+});

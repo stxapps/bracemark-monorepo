@@ -28,8 +28,10 @@ import { USER_AGENT } from './user-agent';
 //
 // What differs is the platform. The fetch is NATIVE — no CORS, so the host that
 // refuses a browser's cross-origin read answers here — but it is this app's request,
-// not the page's: it carries no cookie of the site's, so an image behind the page's
-// sign-in is a placeholder. And the decode is the native one, through a file: bytes →
+// not the page's: it is sent with `credentials: 'omit'`, so it carries no cookie of the
+// site's (React Native's fetch is credentialed by default, and the capture WebView shares
+// its cookies with the native side), and an image behind the page's sign-in is a
+// placeholder. And the decode is the native one, through a file: bytes →
 // a scratch file → `probeImageSize` → expo-image-manipulator, which hands back a JPEG
 // on disk that is read once into the pack.
 //
@@ -56,11 +58,54 @@ function deleteQuietly(file: File | undefined): void {
 // cleartext, iOS's App Transport Security refuses it), and most image hosts answer both.
 // docs/link-extraction.md, _plain-HTTP links on a phone_. Undefined when neither gave an
 // ok response; the figure is then a placeholder, like any image that can't be had.
+// The response's body, or undefined when it is past `limit`. The ceiling is checked BEFORE the
+// body is buffered: from `content-length` when the host sends one, and otherwise by reading
+// the stream chunk by chunk and cancelling it the moment it passes (React Native's fetch has no
+// stream on some builds, and then the whole body is read, bounded by the article's deadline). A
+// page names these addresses, so a body that never ends must cost a cancelled request, not the
+// phone's memory.
+export async function readBodyWithin(
+  res: Response,
+  limit: number,
+): Promise<Uint8Array | undefined> {
+  const declared = Number(res.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > limit) return undefined;
+  const reader = res.body?.getReader?.();
+  if (!reader) {
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    return bytes.byteLength > limit ? undefined : bytes;
+  }
+  const parts: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > limit) {
+      await reader.cancel();
+      return undefined;
+    }
+    parts.push(value);
+  }
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const part of parts) {
+    out.set(part, at);
+    at += part.byteLength;
+  }
+  return out;
+}
+
 async function fetchHttpsFirst(url: string, signal: AbortSignal): Promise<Response | undefined> {
   for (const candidate of [httpsUpgradeOf(url), url]) {
     if (!candidate || signal.aborted) continue;
     try {
-      const res = await fetch(candidate, { headers: { 'User-Agent': USER_AGENT }, signal });
+      const res = await fetch(candidate, {
+        headers: { 'User-Agent': USER_AGENT },
+        // No cookie of the site's: this is the app's request, not the page's.
+        credentials: 'omit',
+        signal,
+      });
       if (res.ok) return res;
     } catch {
       // Refused or unreachable — the next candidate, if there is one.
@@ -78,10 +123,8 @@ async function encodeOne(
   try {
     const res = await fetchHttpsFirst(source.url, signal);
     if (!res) return undefined;
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    if (bytes.byteLength === 0 || bytes.byteLength > READER_IMAGE_MAX_SOURCE_BYTES) {
-      return undefined;
-    }
+    const bytes = await readBodyWithin(res, READER_IMAGE_MAX_SOURCE_BYTES);
+    if (!bytes || bytes.byteLength === 0) return undefined;
     // Raster only: an SVG is markup, and an HTML error page is not a picture.
     const sourceType = sniffImageMime(bytes);
     if (sourceType === undefined) return undefined;

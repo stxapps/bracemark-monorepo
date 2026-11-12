@@ -25,7 +25,9 @@ import { readFileBytes } from '../data/queries';
 //
 // The object URLs live exactly as long as the bytes they were minted from, in one
 // effect, for the reasons use-object-url.ts gives. They are `blob:` URLs of bytes
-// decrypted on this device; nothing here can make a request to the saved site.
+// decrypted on this device; nothing here can make a request to the saved site. Each one's
+// type is what the bytes ARE (decodeReaderImages sniffs; an entry that is not a raster image
+// is dropped), never a type the pack claims.
 export interface ReaderImageView {
   url: string;
   width: number;

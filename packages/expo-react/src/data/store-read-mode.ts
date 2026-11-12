@@ -8,6 +8,7 @@ import {
   isReaderHref,
   newFacet,
   readerDocSchema,
+  readerDocWithinCaps,
   type ReaderImageEntry,
   readerImageKeys,
   type ReaderImageSource,
@@ -105,6 +106,11 @@ export async function storeReadModeCopy(
   const isCapture = typeof capture === 'object' && capture !== null && 'doc' in capture;
   const parsed = readerDocSchema.safeParse(isCapture ? capture.doc : candidate);
   if (!parsed.success) return false;
+  // A forged capture is as likely as a real one on this door (the walker runs in the page's
+  // WebView, and a Safari draft is a string off the App Group), so the size ceilings are
+  // re-applied here, before any image is fetched or blob written. Past them it is not an
+  // article and is not kept.
+  if (!readerDocWithinCaps(parsed.data)) return false;
 
   const sources: ReaderImageSource[] =
     isCapture && Array.isArray(capture.images)

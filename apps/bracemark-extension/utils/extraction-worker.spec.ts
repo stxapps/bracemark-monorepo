@@ -33,7 +33,7 @@ const mockAssertExtractionWritable = jest.fn<Promise<void>, unknown[]>();
 const mockWriteFile = jest.fn<Promise<void>, unknown[]>();
 const mockResizeImage = jest.fn<Promise<Uint8Array>, unknown[]>();
 const mockNewId = jest.fn<string, unknown[]>();
-const mockStoreReadModeCopy = jest.fn<Promise<void>, unknown[]>();
+const mockStoreReadModeCopy = jest.fn<Promise<boolean>, unknown[]>();
 const mockCollectReaderImages = jest.fn<Promise<unknown[]>, unknown[]>();
 const mockReadSettingsGeneral = jest.fn<Promise<unknown>, unknown[]>();
 const mockFetchReaderImage = jest.fn<Promise<Uint8Array | undefined>, unknown[]>();
@@ -132,7 +132,7 @@ beforeEach(() => {
   mockNewId.mockReturnValue('new-file-id');
   mockCaptureTitleImage.mockResolvedValue({});
   mockCaptureReadMode.mockResolvedValue({ doc: DOC, images: SOURCES });
-  mockStoreReadModeCopy.mockResolvedValue(undefined);
+  mockStoreReadModeCopy.mockResolvedValue(true);
   mockCollectReaderImages.mockResolvedValue([ENTRY]);
   mockReadSettingsGeneral.mockResolvedValue(undefined);
   mockCaptureScreenshot.mockResolvedValue(BYTES);
@@ -276,6 +276,19 @@ describe('the file-backed facets', () => {
     expect(mockCollectReaderImages.mock.calls[0][0]).toEqual(SOURCES);
     await fetchBytes('https://cdn.example/a.jpg');
     expect(mockFetchReaderImage).toHaveBeenCalledWith(11, 'https://cdn.example/a.jpg', URL_);
+  });
+
+  it('settles a copy the store refused as too large like a page that is not an article', async () => {
+    // The walker runs in the page's isolated world and the store re-applies the size ceilings;
+    // a copy past them is not kept, and must not be retried by every drain after it.
+    mockStoreReadModeCopy.mockResolvedValue(false);
+
+    await run('readMode');
+
+    expect(writes().at(-1)).toMatchObject({
+      facet: 'readMode',
+      state: { status: 'permanent', extractedBy: 'extension:fg', reason: 'not-an-article' },
+    });
   });
 
   it('keeps the words alone when the account has images off — nothing is fetched', async () => {

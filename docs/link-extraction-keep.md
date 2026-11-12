@@ -145,7 +145,7 @@ So, for anyone tempted to "just keep the HTML" for fidelity:
   kind — a reader skips a kind it doesn't know, which is why a new kind is best added
   before a reader that lacks it has shipped (_tables_ was).
 - **No remote URL is rendered.** Images become `figure` placeholders carrying the
-  alt text and caption; the bytes are not kept in v1 and the URL never is. A link
+  alt text and caption; the bytes are kept when the account keeps images (_images in read mode_) and the URL never is. A link
   target is data the user may choose to open, re-checked with `isReaderHref`
   (absolute http(s) only) at render as well as at capture, because a backup is an
   outside file.
@@ -861,7 +861,7 @@ Two rules:
 - **Export.** The Bracemark backup carries every kept copy, because it walks
   `extractionFileIds`; the interop formats carry none. A Markdown export of read
   mode with its highlights is the planned interop answer ([reader.md](./reader.md)).
-- **Import.** None. No supported source exports article text; Readwise- and
+- **Import.** None from another app: no supported source exports article text; a Bracemark backup restores a copy's blobs as they are, and the reader holds them to the size ceilings and the image-type rule when it opens them; Readwise- and
   Omnivore-style highlight files are a later importer.
 
 ### when the page is gone — the Wayback Machine link

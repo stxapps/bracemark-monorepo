@@ -1,5 +1,10 @@
+import { sniffImageMime } from '../image/sniff';
 import type { ReaderBlock, ReaderDoc } from './reader-doc';
-import { READER_IMAGES_MAX_BYTES, READER_IMAGES_MAX_COUNT } from './reader-doc-core';
+import {
+  READER_IMAGES_MAX_BYTES,
+  READER_IMAGES_MAX_COUNT,
+  READER_IMAGES_MAX_INDEX_BYTES,
+} from './reader-doc-core';
 
 // The images a read-mode copy keeps — `extraction.readModeImagesId`, a `files/{id}.enc`
 // blob beside the text copy (`readModeId`). docs/link-extraction-keep.md, _images in
@@ -108,8 +113,14 @@ const isIndexEntry = (value: unknown): value is IndexEntry => {
 
 // The pack's images, or undefined when the bytes are not a pack this build can read —
 // the wrong magic, a newer version, an index that isn't one, lengths that run past the
-// end. Never a throw: stored bytes are not trusted (a backup is an outside file), and
-// a bad pack must cost the article its pictures, not the reader its screen.
+// end, more images or more bytes than a writer ever packs. Never a throw: stored bytes are
+// not trusted (a backup is an outside file), and a bad pack must cost the article its
+// pictures, not the reader its screen.
+//
+// An entry's `type` is NOT read from the index: it is what the bytes are (sniffImageMime),
+// and an entry whose bytes are not a raster image is dropped. A reader mints a Blob or a
+// data URI with this type, and a type the pack merely claimed (`text/html`) would make a
+// document of it in the app's own origin.
 export function decodeReaderImages(pack: Uint8Array): ReaderImageEntry[] | undefined {
   if (pack.length < HEADER_BYTES) return undefined;
   if (MAGIC.some((byte, i) => pack[i] !== byte)) return undefined;
@@ -119,6 +130,9 @@ export function decodeReaderImages(pack: Uint8Array): ReaderImageEntry[] | undef
   );
   const indexEnd = HEADER_BYTES + indexLength;
   if (indexEnd > pack.length) return undefined;
+  // Past what a writer packs: the index is ~100 bytes an image, the images stop at the budget.
+  if (indexLength > READER_IMAGES_MAX_INDEX_BYTES) return undefined;
+  if (pack.length - indexEnd > READER_IMAGES_MAX_BYTES) return undefined;
 
   let json = '';
   for (let i = HEADER_BYTES; i < indexEnd; i++) json += String.fromCharCode(pack[i]);
@@ -129,13 +143,16 @@ export function decodeReaderImages(pack: Uint8Array): ReaderImageEntry[] | undef
     return undefined;
   }
   if (!Array.isArray(images) || !images.every(isIndexEntry)) return undefined;
+  if (images.length > READER_IMAGES_MAX_COUNT) return undefined;
 
   const entries: ReaderImageEntry[] = [];
   let offset = indexEnd;
-  for (const { key, type, width, height, length } of images) {
+  for (const { key, width, height, length } of images) {
     if (offset + length > pack.length) return undefined;
-    entries.push({ key, type, width, height, bytes: pack.subarray(offset, offset + length) });
+    const bytes = pack.subarray(offset, offset + length);
     offset += length;
+    const type = sniffImageMime(bytes);
+    if (type) entries.push({ key, type, width, height, bytes });
   }
   return entries;
 }

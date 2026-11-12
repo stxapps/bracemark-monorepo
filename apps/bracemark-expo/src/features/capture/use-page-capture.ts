@@ -8,6 +8,7 @@ import {
   PAGE_CAPTURE_MESSAGE,
   PAGE_CAPTURE_PREVIEW_KEY,
   type PageCaptureRequest,
+  READER_CAPTURE_MAX_PAYLOAD_CHARS,
   READER_IMAGE_MAX_SOURCE_BYTES,
   type ReaderImageSource,
 } from '@stxapps/shared';
@@ -29,9 +30,19 @@ import { pageCaptureScript } from './page-capture-script.generated';
 //   - EVERY REQUEST ENDS. A timeout resolves it with what it has (nothing, or the
 //     images so far), so a page that hangs or navigates away mid-answer never leaves a
 //     button spinning.
-//   - NOTHING THE PAGE SENDS IS TRUSTED. Shapes are checked here; the document, the
-//     images and the preview are each validated again where they are stored
-//     (expo-react store-read-mode.ts, lib/reader-images.ts, lib/device-link-previews.ts).
+//   - NOTHING THE PAGE SENDS IS TRUSTED. Its length is bounded and its shape checked here
+//     (MAX_MESSAGE_CHARS); the document, the images and the preview are each
+//     validated again where they are stored — the document for shape and size
+//     (expo-react store-read-mode.ts), the images by sniff and probe (lib/reader-images.ts),
+//     the preview in lib/device-link-previews.ts. A link in a stored document is checked
+//     again where it is drawn, not here.
+
+// The longest message an honest capture sends: a read-mode document is held to
+// READER_CAPTURE_MAX_PAYLOAD_CHARS by the page's own script, and an image message is the
+// base64 of one image no larger than the source ceiling the app would accept anyway.
+const MAX_MESSAGE_CHARS =
+  Math.max(READER_CAPTURE_MAX_PAYLOAD_CHARS, Math.ceil((READER_IMAGE_MAX_SOURCE_BYTES * 4) / 3)) +
+  4096;
 
 const READ_MODE_TIMEOUT_MS = 30_000;
 const META_TIMEOUT_MS = 10_000;
@@ -138,6 +149,9 @@ export function usePageCapture(webview: RefObject<WebView | null>): PageCapture 
     const current = pending.current;
     if (!current) return;
     let message: unknown;
+    // The page can send anything, at any length, as often as it likes; a string past the
+    // largest message a real capture sends is dropped unparsed.
+    if (event.nativeEvent.data.length > MAX_MESSAGE_CHARS) return;
     try {
       message = JSON.parse(event.nativeEvent.data);
     } catch {

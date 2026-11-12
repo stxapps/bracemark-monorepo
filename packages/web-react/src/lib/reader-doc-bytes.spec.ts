@@ -1,4 +1,10 @@
-import { READER_DOC_VERSION, type ReaderDoc, utf8 } from '@stxapps/shared';
+import {
+  READER_DOC_MAX_JSON_BYTES,
+  READER_DOC_VERSION,
+  READER_STORE_MAX_BLOCKS,
+  type ReaderDoc,
+  utf8,
+} from '@stxapps/shared';
 
 import { decodeReaderDoc, encodeReaderDoc } from './reader-doc-bytes';
 
@@ -44,4 +50,34 @@ it('answers undefined, never a throw, for bytes that are not a copy', async () =
   await expect(decodeReaderDoc(utf8('not gzip'))).resolves.toBeUndefined();
   const notADoc = await encodeReaderDoc({ nope: true } as unknown as ReaderDoc);
   await expect(decodeReaderDoc(notADoc)).resolves.toBeUndefined();
+});
+
+// The blob is not trusted: a backup is an outside file, and on the WebView door the walker is the
+// page's own code. So the inflate has a ceiling, and a document that parses is held to the store
+// edge's size ceilings; either way the copy is simply unreadable, like any other bad blob.
+async function gzip(bytes: Uint8Array): Promise<Uint8Array> {
+  const piped = new Blob([bytes as BlobPart]).stream().pipeThrough(new CompressionStream('gzip'));
+  return new Uint8Array(await new Response(piped).arrayBuffer());
+}
+
+it('stops inflating at the ceiling: a few KB of gzip cannot become a gigabyte', async () => {
+  // A VALID document followed by whitespace past the ceiling: it parses, and is within the size
+  // caps, so only the ceiling on the inflate can refuse it.
+  const padded = new Uint8Array(READER_DOC_MAX_JSON_BYTES + 1).fill(0x20);
+  padded.set(utf8(JSON.stringify(DOC)));
+  const bomb = await gzip(padded);
+  expect(bomb.length).toBeLessThan(200 * 1024);
+
+  await expect(decodeReaderDoc(bomb)).resolves.toBeUndefined();
+  // And the same document without the padding reads.
+  await expect(decodeReaderDoc(await encodeReaderDoc(DOC))).resolves.toEqual(DOC);
+});
+
+it('refuses a document past the store edge’s size ceilings, whoever stored it', async () => {
+  const blocks = Array.from({ length: READER_STORE_MAX_BLOCKS + 1 }, (_, i) => ({
+    id: `b${i}`,
+    kind: 'rule',
+  }));
+
+  await expect(decodeReaderDoc(await encodeReaderDoc({ ...DOC, blocks }))).resolves.toBeUndefined();
 });

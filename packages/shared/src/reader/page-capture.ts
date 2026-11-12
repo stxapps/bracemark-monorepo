@@ -18,10 +18,12 @@ import type { ReaderImageSource } from './reader-images';
 //
 // What the nonce is NOT: a defence against the page. The injected script runs in the
 // page's own world, so the page's scripts can watch `ReactNativeWebView.postMessage`
-// and forge a message with the right nonce. Nothing it could forge costs more than
-// the page itself could have served: the app validates every answer — the document
-// against `readerDocSchema`, every image's bytes by sniff and probe, every address as
-// absolute http(s) — exactly as it would validate the honest one.
+// and forge a message with the right nonce. The app therefore treats every answer as it
+// would the honest one, and bounds what a forged one can cost: the message's length
+// (the longest an honest one is), the document against `readerDocSchema` for shape and
+// `readerDocWithinCaps` for size, every image's bytes by sniff and probe, every address
+// as absolute http(s) when it is fetched. A forged document can still be one the page
+// itself could have served; it cannot be one that costs the reader more than the caps allow.
 
 export const PAGE_CAPTURE_MESSAGE = {
   // `{ type, nonce, href, doc }` — `doc` is the CAPTURE (`{ doc, images }`), or null
