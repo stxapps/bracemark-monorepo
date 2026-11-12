@@ -103,7 +103,8 @@ const COLUMN_MAX = 240;
 const CHAR_WIDTH = 7.5;
 const CELL_PADDING = 24;
 
-function columnWidths(rows: TableCell[][]): number[] {
+// Exported for its spec, which feeds it a table no real page has (reader-article.spec.tsx).
+export function columnWidths(rows: TableCell[][]): number[] {
   // A reduce, not `Math.max(...rows.map())`: a spread of a hostile table's rows is an argument
   // list as long as the table, and past ~100k elements it throws.
   const columns = rows.reduce((most, cells) => Math.max(most, cells.length), 0);

@@ -4,7 +4,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import type { ReaderDoc } from '@stxapps/shared';
 
-import { ReaderArticle } from './reader-article';
+import { columnWidths, ReaderArticle } from './reader-article';
 
 // The native reader's renderer. Its strings become `<Text>` and nothing interprets
 // them; what's left to pin is the rest of the contract the web twin's spec pins:
@@ -145,4 +145,35 @@ test('a figure is its words, not an image', () => {
   expect(screen.getByText('A chart')).toBeTruthy();
   expect(screen.getByText('Figure 1')).toBeTruthy();
   expect(screen.queryByRole('image')).toBeNull();
+});
+
+// A table is stored data, and a backup or another device can hold one the capture never wrote.
+// Spreading its rows into `Math.max(...)` throws past ~100k rows (Node: 150,000), and the reader
+// goes down with it. The width pass is a reduce, so the row count is not an argument list.
+describe('columnWidths', () => {
+  const cell = (text: string) => ({ runs: [{ text }], header: false });
+
+  it('measures a table far longer than any the capture keeps, without throwing', () => {
+    const rows = Array.from({ length: 300_000 }, () => [cell('ab'), cell('cd')]);
+
+    expect(() => columnWidths(rows)).not.toThrow();
+    expect(columnWidths(rows)).toHaveLength(2);
+  });
+
+  it('takes the widest row for the column count, and clamps each column', () => {
+    const widths = columnWidths([
+      [cell('a')],
+      [cell('a'), cell('x'.repeat(1000)), cell('c')],
+      [cell('a'), cell('b')],
+    ]);
+
+    expect(widths).toHaveLength(3);
+    expect(widths[1]).toBeGreaterThan(widths[0]);
+    expect(widths[1]).toBeLessThanOrEqual(240);
+    expect(widths[0]).toBeGreaterThanOrEqual(72);
+  });
+
+  it('is empty for a table with no rows', () => {
+    expect(columnWidths([])).toEqual([]);
+  });
 });

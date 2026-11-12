@@ -33,6 +33,7 @@ import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { usePaywall } from '../../contexts/paywall-provider';
 import { openWayback } from '../links/shared';
+import { isCaptureNavigationAllowed } from './capture-navigation';
 import { usePageCapture } from './use-page-capture';
 
 // The capture screen — the browser extension's popup, rebuilt around a WebView: the
@@ -283,6 +284,13 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
           // so a site signed in to here once stays signed in.
           sharedCookiesEnabled
           thirdPartyCookiesEnabled
+          // Every origin passes the library's own whitelist, because a URL that fails it is
+          // handed to `Linking.openURL` (another app, from a page's redirect); the decision is
+          // ours, below (capture-navigation.ts).
+          originWhitelist={['*']}
+          onShouldStartLoadWithRequest={(request) =>
+            isCaptureNavigationAllowed(request.url, request.isTopFrame)
+          }
           onNavigationStateChange={(nav) => {
             setCurrentUrl(nav.url);
             setLoading(nav.loading);

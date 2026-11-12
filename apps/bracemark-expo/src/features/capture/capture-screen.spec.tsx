@@ -32,6 +32,8 @@ let webviewProps: {
   source: { uri: string };
   onNavigationStateChange: (nav: { url: string; loading: boolean }) => void;
   onMessage: (event: { nativeEvent: { data: string } }) => void;
+  originWhitelist: string[];
+  onShouldStartLoadWithRequest: (request: { url: string; isTopFrame?: boolean }) => boolean;
   onLoadStart: () => void;
   onError: () => void;
 };
@@ -250,6 +252,50 @@ test('while a request waits, only a message with its nonce counts', async () => 
   // The positive control: the same message with the request's nonce is the answer.
   await post({ type: 'bracemark-read-mode', nonce, href: URL_, doc: CAPTURE });
   expect(mockKeepReadMode).toHaveBeenCalledTimes(1);
+});
+
+test('a message longer than any honest capture sends is dropped unread, even with the right nonce', async () => {
+  // The page can send anything, at any length, as often as it likes. An honest document is held to
+  // 3M characters by the page's own script and an image message is the base64 of one image of at
+  // most 8 MB, so a string past ~11M characters is not one of ours and is not even parsed.
+  await onPage();
+  fireEvent.press(keep());
+  const { nonce } = lastRequest();
+  const parse = jest.spyOn(JSON, 'parse');
+
+  await act(async () =>
+    webviewProps.onMessage({
+      nativeEvent: {
+        data: JSON.stringify({
+          type: 'bracemark-read-mode',
+          nonce,
+          href: URL_,
+          pad: 'x'.repeat(12_000_000),
+        }),
+      },
+    }),
+  );
+
+  expect(parse).not.toHaveBeenCalled();
+  expect(mockKeepReadMode).not.toHaveBeenCalled();
+  parse.mockRestore();
+  // The positive control: the honest message with the same nonce is still the answer.
+  await post({ type: 'bracemark-read-mode', nonce, href: URL_, doc: CAPTURE });
+  expect(mockKeepReadMode).toHaveBeenCalledTimes(1);
+});
+
+test('the page cannot send the user to another app: every origin passes the library, the screen decides', async () => {
+  // react-native-webview hands a URL outside `originWhitelist` to Linking.openURL. Whitelisting
+  // everything keeps a page's redirect from ever reaching it, and the handler refuses what is not
+  // the web (capture-navigation.spec.ts has the table).
+  await onPage();
+
+  expect(webviewProps.originWhitelist).toEqual(['*']);
+  const decide = webviewProps.onShouldStartLoadWithRequest;
+  expect(decide({ url: 'https://example.com/next', isTopFrame: true })).toBe(true);
+  expect(decide({ url: 'intent://scan/#Intent;scheme=zxing;end', isTopFrame: true })).toBe(false);
+  expect(decide({ url: 'mailto:someone@example.com', isTopFrame: true })).toBe(false);
+  expect(decide({ url: 'file:///etc/passwd', isTopFrame: true })).toBe(false);
 });
 
 test('a page with no article says so and stores nothing', async () => {

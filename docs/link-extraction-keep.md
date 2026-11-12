@@ -331,10 +331,22 @@ an earlier copy's pack and `writeExtraction` reclaims it.
   only as a JPEG whose size it measures itself, within the dimension cap
   (`readerImageFromPage`, expo-react `lib/reader-images.ts`), and fetches every
   address the page couldn't answer natively — no CORS there, so the host that refuses
-  the page a cross-origin read answers the app. `credentials` stays at the default:
+  the page a cross-origin read answers the app. The app's own fetch is sent with
+  `credentials: 'omit'` (React Native's is credentialed by default, and the WebView
+  shares its cookies with the native side): it is the app's request, not the page's, and
+  it carries none of the site's cookies, and it reads the body against a ceiling before
+  buffering it (`readBodyWithin`). The page's OWN fetch keeps the default credentials:
   `include` would fail every cross-origin read against a host that answers
   `Access-Control-Allow-Origin: *`, which is most image CDNs. With images off the page
   is asked for nothing.
+- **The capture WebView stays on the web.** react-native-webview hands any URL outside
+  `originWhitelist` to `Linking.openURL`, so a saved page that redirects to `intent://`,
+  an app's deep link or `mailto:` would open another app from a screen whose job is to
+  copy the page. The WebView whitelists every origin so nothing reaches `Linking`, and
+  its own `onShouldStartLoadWithRequest` (`capture-navigation.ts`) allows http, https and
+  `about:`, and `blob:` / `data:` only as frame content, never as where the window goes.
+  A `mailto:` or `tel:` link tapped on the capture screen therefore does nothing there.
+  A message from the page longer than an honest capture sends is dropped unparsed.
 - **bracemark-extractor** returns the addresses and fetches none: thirty images
   inside the extract request would hold it past its deadline and inline megabytes
   into JSON. The proxy is rate-limited per address and shared with a bulk import's
