@@ -53,10 +53,10 @@ import { StorageUsage } from './storage-usage';
 // @stxapps/shared iap/plans.ts, next to the entitlements table they render —
 // the SAME cards the web section renders, so the two storefronts can't drift.
 
-// How long the upgrade cards wait for the store catalog before rendering on
-// the planning price anyway — see `cardsReady` in the section. Web's
+// How long the screen waits for the store catalog before rendering on the
+// planning price anyway — see `cardsReady` in the section. Web's
 // PRICE_WAIT_MS; change the two together.
-const CATALOG_WAIT_MS = 1500;
+const CATALOG_WAIT_MS = 3000;
 
 function formatDate(epochMs: number): string {
   return new Date(epochMs).toLocaleDateString(undefined, {
@@ -135,13 +135,17 @@ export function SubscriptionSection() {
     };
   }, [catalogWanted, products]);
 
-  // The upgrade cards render ONCE, when the catalog settles, rather than on
-  // the planning price and then changing under the user (the web section's
-  // `cardsReady`, same reasoning). It costs nothing here: the button is
-  // disabled until the products land anyway. Capped by CATALOG_WAIT_MS so a
-  // slow store connection can't keep the plans off the screen; past it the
-  // cards render on the planning price with the button disabled, and the
-  // price, trial line and enabled button then arrive together.
+  // The screen reveals ONCE, when the catalog settles, rather than on the
+  // planning price and then changing under the user (the web section's
+  // `cardsReady`, same reasoning) — and the WHOLE body waits, not just the cards:
+  // the plan box alone was up first and the cards arrived under it a moment
+  // later, which read as the screen loading twice. On this single-column screen
+  // a late card also pushed everything below it down. It costs nothing here:
+  // the button is disabled until the products land anyway. A paid account never
+  // waits (`catalogWanted` is false for it). Capped by CATALOG_WAIT_MS so a
+  // slow store connection can't keep the screen blank; past it everything
+  // renders on the planning price with the button disabled, and the price,
+  // trial line and enabled button then arrive together.
   const [catalogWaitOver, setCatalogWaitOver] = useState(false);
   useEffect(() => {
     if (!catalogWanted) return;
@@ -149,6 +153,14 @@ export function SubscriptionSection() {
     return () => clearTimeout(timer);
   }, [catalogWanted]);
   const cardsReady = products !== null || catalogWaitOver;
+
+  // Latched: the gate guards the FIRST reveal only, so a paid account that
+  // lapses to `free` while this is open doesn't swap the whole screen — plan
+  // box, notice and all — for the loading pane. (Adjusting state during
+  // render, the documented pattern for deriving it from other state.)
+  const ready = !isLoading && (!catalogWanted || cardsReady);
+  const [revealed, setRevealed] = useState(false);
+  if (ready && !revealed) setRevealed(true);
 
   const startCheckout = async (cardPlan: AvailablePaidPlan) => {
     const product = products?.[cardPlan];
@@ -240,7 +252,7 @@ export function SubscriptionSection() {
     setBusy(null);
   };
 
-  if (isLoading) {
+  if (!ready && !revealed) {
     return (
       <SettingsPane>
         <SettingsHeader title="Subscription" description="Loading your subscription…" />
@@ -262,7 +274,8 @@ export function SubscriptionSection() {
   // `purchase_bound`, which is the other direction: one ACCOUNT per store
   // subscription, not one subscription per account.
   //
-  // `cardsReady` holds them until the catalog lookup settles (see above).
+  // `cardsReady` is already true by the first reveal; it is re-checked here for
+  // the lapse case, where the screen stays up while the catalog loads.
   const upgradeCards = plan === 'free' && cardsReady ? PLAN_CARDS : [];
 
   // What a PAID plan unlocks, listed inside the current-plan box. bracemark-web's

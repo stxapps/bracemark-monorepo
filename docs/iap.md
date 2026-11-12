@@ -1228,19 +1228,28 @@ a crossgrade inside the existing subscription rather than a second purchase.
   trial out costs a sentence. One that promises a trial the sheet then charges for
   breaks the promise at the moment of payment.
 
-  **The cards render once, when that answer is in.** The line sits between the
+  **The page renders once, when that answer is in.** The line sits between the
   feature list and the button, so a card drawn on the base price and then
   updated jumps its own button down ~32px as the trial line arrives, with the
-  price figure changing in the same moment. So both sections hold the upgrade
-  cards until the lookup settles: on web, the price preview (failure counts as
-  settled), and on expo, the products and their trial eligibility, committed
-  together. Committing the products first is what used to enable the button a
-  moment before moving it. The hold costs nothing real, because the button
-  can't act sooner anyway: web's checkout awaits the same Paddle.js the preview
-  loads, and expo's button is disabled until the products land. It is capped at
-  1.5s (`PRICE_WAIT_MS` / `CATALOG_WAIT_MS`), past which the cards render on the
-  base price and take the late update. A stalled third-party script shouldn't
-  keep the plans off the page.
+  price figure changing in the same moment. So both sections hold the lookup's
+  answer before showing anything past the header: on web, the price preview
+  (failure counts as settled), and on expo, the products and their trial
+  eligibility, committed together. Committing the products first is what used to
+  enable the button a moment before moving it. The **whole body** waits, not
+  just the cards: holding only the cards put the plan box up first and the cards
+  in under it a second or two later, which read as the page loading twice. Under
+  "Loading your subscription…" the header stays and nothing below it moves, then
+  the plan box and the cards arrive together. The hold costs nothing real,
+  because the button can't act sooner anyway: web's checkout awaits the same
+  Paddle.js the preview loads, and expo's button is disabled until the products
+  land. A paid account never waits, since the lookup runs only on `free`. The
+  gate is **latched** to the first reveal, so a paid account that lapses to
+  `free` while the page is open doesn't swap itself for the loading pane. It is
+  capped at 3s (`PRICE_WAIT_MS` / `CATALOG_WAIT_MS`), past which everything
+  renders on the base price and the cards take the late update. 1.5s was too
+  low: Paddle.js is a cold third-party load followed by a two-hop lookup, and it
+  routinely outran the cap, which rendered the fallback and then jumped anyway.
+  A stalled third-party script still shouldn't keep the plans off the page.
 
   **Only one of the three providers reports the trial as a status.** Paddle has
   `trialing` in `status` and flips it to `active` itself. Apple's status codes

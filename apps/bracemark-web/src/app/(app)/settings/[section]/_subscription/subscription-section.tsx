@@ -54,10 +54,13 @@ import { openPaddleCheckout } from '@/lib/paddle';
 const ACTIVATION_TRIES = 15;
 const ACTIVATION_INTERVAL_MS = 2000;
 
-// How long the upgrade cards wait for Paddle's price preview before rendering
-// on the USD fallback anyway — see `cardsReady` in the section.
+// How long the page waits for Paddle's price preview before rendering on the
+// USD fallback anyway — see `cardsReady` in the section. Paddle.js is loaded
+// lazily from a third party and then answers a two-hop lookup, so a cold load
+// routinely outruns 1.5s; a cap that low rendered the fallback and then took
+// the late update, i.e. the very jump the hold exists to prevent.
 // bracemark-expo's CATALOG_WAIT_MS is the same wait; change the two together.
-const PRICE_WAIT_MS = 1500;
+const PRICE_WAIT_MS = 3000;
 
 // Paddle's checkout PAYMENT LINK: `<default payment link>?_ptxn=txn_…`. This
 // page is the default payment link (docs/iap.md, _the payment link_), so it is
@@ -150,17 +153,20 @@ export function SubscriptionSection() {
   const pricesWanted = !isLoading && plan === 'free';
   const { data: prices, isFetched: pricesFetched } = usePaddlePrices({ enabled: pricesWanted });
 
-  // The upgrade cards render ONCE, when the lookup settles, rather than
-  // rendering on the base price and then changing under the user: the
-  // preview changes the price figure AND adds the trial line between the
-  // feature list and the button, a ~32px jump of the very control being
-  // aimed at. Holding them costs nothing real — the Upgrade button awaits the
-  // same Paddle.js the preview loads (openPaddleCheckout → getPaddle), so a
-  // card shown earlier would not open a checkout any sooner.
+  // The page reveals ONCE, when the lookup settles, rather than rendering on the
+  // base price and then changing under the user: the preview changes the price
+  // figure AND adds the trial line between the feature list and the button, a
+  // ~32px jump of the very control being aimed at. And the WHOLE body waits, not
+  // just the cards: the plan box alone was up first and the cards arrived a
+  // second or two later under it, which read as the page loading twice.
+  // Holding costs nothing real — the Upgrade button awaits the same Paddle.js
+  // the preview loads (openPaddleCheckout → getPaddle), so a card shown earlier
+  // would not open a checkout any sooner. A paid account never waits:
+  // `pricesWanted` is false for it.
   //
-  // Capped, though: a slow or stalled Paddle.js must not keep the plans off
-  // the page. Past PRICE_WAIT_MS the cards render on the USD fallback and take
-  // the late update — the old behaviour, now the exception, not the rule.
+  // Capped, though: a slow or stalled Paddle.js must not keep the page off the
+  // screen. Past PRICE_WAIT_MS everything renders on the USD fallback and the
+  // cards take the late update — the old behaviour, now the exception.
   const [priceWaitOver, setPriceWaitOver] = useState(false);
   useEffect(() => {
     if (!pricesWanted) return;
@@ -168,6 +174,15 @@ export function SubscriptionSection() {
     return () => clearTimeout(timer);
   }, [pricesWanted]);
   const cardsReady = pricesFetched || priceWaitOver;
+
+  // Latched: the gate guards the FIRST reveal only. Unlatched, a paid account
+  // that lapses to `free` while this is open would send `pricesWanted` back to
+  // true with the lookup unfetched and swap the whole page — plan box, notice
+  // and all — for the loading pane. (Adjusting state during render, the
+  // documented pattern for deriving it from other state.)
+  const ready = !isLoading && (!pricesWanted || cardsReady);
+  const [revealed, setRevealed] = useState(false);
+  if (ready && !revealed) setRevealed(true);
 
   // After a completed payment, re-read `iap/status` until the webhook has
   // landed — `settled` says what "landed" looks like for this payment — then
@@ -361,7 +376,7 @@ export function SubscriptionSection() {
     setBusy(null);
   };
 
-  if (isLoading) {
+  if (!ready && !revealed) {
     return (
       <SettingsPane>
         <SettingsHeader title="Subscription" description="Loading your subscription…" />
@@ -370,12 +385,15 @@ export function SubscriptionSection() {
   }
 
   // `plan` is read above the early return (the price-preview effect needs it).
+  // `ready` / `revealed` gate it: loading the subscription, then — on a free
+  // account only — the price preview.
   const { status, source, expiresAt, willRenew } = subscription;
   // Upgrade cards only from FREE: a paid user opening a second checkout would
   // create a second live Paddle subscription (double-billing) — a Plus→Pro
   // switch is a subscription UPDATE (proration) and ships as its own flow. The
   // server enforces the same guard at /v1/iap/checkout.
-  // `cardsReady` holds them until the price preview settles (see above).
+  // `cardsReady` is already true by the first reveal; it is re-checked here for
+  // the lapse case, where the page stays up while the lookup runs.
   const upgradeCards = plan === 'free' && cardsReady ? PLAN_CARDS : [];
 
   // What a PAID plan unlocks, listed inside the current-plan box — the same
