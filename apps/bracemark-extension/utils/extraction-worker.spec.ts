@@ -236,6 +236,9 @@ describe('the file-backed facets', () => {
   // its own spec). What is this file's is what it is HANDED: the document as captured,
   // the images this tab could give, and the tier.
   it('hands the read-mode capture and its images to the one writer, at this tier', async () => {
+    // Images are off by default (KEEP_ON_SAVE_DEFAULTS); this account turned them on.
+    mockReadSettingsGeneral.mockResolvedValue({ keepReadModeImages: true });
+
     await run('readMode');
 
     expect(mockStoreReadModeCopy).toHaveBeenCalledWith(
@@ -254,7 +257,8 @@ describe('the file-backed facets', () => {
   });
 
   it('keeps the words alone when the account has images off — nothing is fetched', async () => {
-    mockReadSettingsGeneral.mockResolvedValue({ keepReadModeImages: false });
+    // The default, stated: an absent setting is off.
+    mockReadSettingsGeneral.mockResolvedValue(undefined);
 
     await run('readMode');
 

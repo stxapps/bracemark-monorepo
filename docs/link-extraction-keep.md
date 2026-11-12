@@ -207,7 +207,10 @@ shipped client has to skip it.
 
 A read-mode copy keeps the article's pictures with its words. Built on every tier
 that takes a copy, 2026-11-10; before that a figure was only its alt text and caption,
-which loses the chart the paragraph is about. **On by default**, with a switch of its
+which loses the chart the paragraph is about. **Off by default** (changed 2026-11-12,
+before any release carried it): the pack is the largest thing a library holds, ~5× a
+link's whole footprint without it (_what it does to storage_), so the default keeps the
+words and the switch asks for the pictures. It has a switch of its
 own — _Include images in read-mode copies_, on the browser extension's options page,
 in Settings → Read mode on the web, and on both phones (`keepReadModeImages`, resolved by
 `keepOnSaveOf`). Unlike its neighbours
@@ -361,9 +364,9 @@ image the article had. **The encode stays at 1024 px, quality 0.8**: quality 0.7
 made the mean pack 14% smaller and 800 px 22% smaller, and neither moves the long
 tail, which is the count of images, not their quality.
 
-**What it does to storage.** A link saved with the defaults (preview, read mode with
-images, no screenshot) is a mean of ~216 KB, against ~43 KB with images off; the pack
-is the largest thing a library holds by default. The readout in Settings →
+**What it does to storage.** A link with images switched on (preview, read mode with
+images, no screenshot) is a mean of ~216 KB, against ~43 KB with images off, which is
+what the defaults give; the pack is the largest thing a library holds once it is on. The readout in Settings →
 Subscription and the storage answer in the FAQ say so.
 
 **What stays as it is.** A copy is never replaced on its own to add images: a
@@ -441,8 +444,9 @@ Three triggers, and deliberately not a fourth:
    synced save setting `keepReadModeOnSave` / `keepScreenshotOnSave` (entities.ts) —
    and on iOS by a share from Safari, under `keepReadModeOnShare` —
    which every reader resolves through `keepOnSaveOf` (`sync/extraction.ts`) because
-   the defaults differ: **read mode on, screenshot off** — the screenshot is ten
-   times the bytes and only some pages want it. A save on a plan with `keptCopies`
+   the defaults differ: **read mode on, its images off, screenshot off** — the
+   screenshot is ten times the bytes and only some pages want it, and the images are
+   a hundred times the text. A save on a plan with `keptCopies`
    asks for what the setting says beside `titleImage`, one message per facet so a
    page with no article costs the title and the screenshot nothing
    (`popup/Editor.tsx`). ⚠ **The setting is read from the store at the save**, not
@@ -635,8 +639,8 @@ and Android's WebView has its own `CookieManager`, apart from Chrome's. So, in o
    trade places (a replace, never a push) rather than stack
    ([reader.md](./reader.md), _the way in_). The page in a
    `react-native-webview` WebView with two actions under it. **Keep a copy**
-   keeps the article and its images (_images in read mode_ — the page fetches them
-   first); **Update preview** re-reads the title and preview image from the live
+   keeps the article, and its images when the account has them on (_images in read
+   mode_ — the page fetches them first); **Update preview** re-reads the title and preview image from the live
    page — the same collector the browser extension injects (web-react
    `lib/page-meta.ts`), `selectTitleImage` in the app, the image fetched in the
    page and natively where the page couldn't, and written at `expo:fg` whatever

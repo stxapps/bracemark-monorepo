@@ -182,15 +182,17 @@ export function replacedExtractionFileIds(
 // (entities.ts says why they split).
 //
 // `readModeImages` is not a third copy but what a read-mode copy INCLUDES: the
-// article's pictures, packed beside its text (reader/reader-images.ts). On by default —
-// a chart is often what the paragraph is about — and its own switch because it is the
-// largest thing a library keeps: a hundred times the text. It qualifies EVERY read-mode
+// article's pictures, packed beside its text (reader/reader-images.ts). OFF by default —
+// it is the largest thing a library keeps (a hundred times the text, a mean link ~216 KB
+// against ~43 KB without) and the one cost lever the other defaults don't have; a chart
+// is often what the paragraph is about, which is why it is a switch and not a removal.
+// It qualifies EVERY read-mode
 // capture this account makes, not only a save's: a per-link _Keep a read-mode copy_ reads it
 // too, since the question it answers is "how much of an article do I keep", not "when".
 export const KEEP_ON_SAVE_DEFAULTS = {
   readMode: true,
   readModeOnShare: true,
-  readModeImages: true,
+  readModeImages: false,
   screenshot: false,
 } as const;
 

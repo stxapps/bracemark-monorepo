@@ -41,7 +41,7 @@ export type StorageReadout = {
 };
 
 // Three kinds of picture, in the order most libraries hold them: every link has a
-// preview; a read-mode copy keeps its article's images by default, and those are the
+// preview; a read-mode copy can keep its article's images (off by default), and those are the
 // largest thing a library stores (a pack is a few hundred KB, a few MB for a long
 // illustrated article); a screenshot is large too but off by default (measured,
 // docs/link-extraction-keep.md). "Images" first because that is the whole of it —

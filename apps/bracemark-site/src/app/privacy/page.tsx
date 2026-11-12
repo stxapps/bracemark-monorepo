@@ -238,11 +238,11 @@ export default function Page() {
         <h2>What changed on 10 November 2026</h2>
         <ul>
           <li>
-            A read-mode copy of a link now keeps the pictures in the article as well as its text,
-            unless you turn that off in Settings. The browser extension and the mobile apps fetch
-            those pictures themselves. For a copy you ask the web app for, our link-extraction
-            service is sent the addresses of the pictures and passes them through to your device, as
-            it already does for a preview image, and keeps none of them.{' '}
+            A read-mode copy of a link can now keep the pictures in the article as well as its text,
+            if you turn that on in Settings. The browser extension and the mobile apps fetch those
+            pictures themselves. For a copy you ask the web app for, our link-extraction service is
+            sent the addresses of the pictures and passes them through to your device, as it already
+            does for a preview image, and keeps none of them.{' '}
             <em>How link previews and read-mode copies are fetched</em> now says so.
           </li>
         </ul>

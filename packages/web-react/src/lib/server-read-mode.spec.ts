@@ -118,6 +118,8 @@ describe('the article’s images', () => {
       return new Uint8Array([9]);
     });
 
+    await writeSettingsGeneral(USER, { keepReadModeImages: true });
+
     expect(await runServerReadMode(USER, LINK, illustrated(fetchImage))).toEqual({ kind: 'kept' });
 
     const extraction = await readExtraction('l_1');
@@ -144,8 +146,7 @@ describe('the article’s images', () => {
     expect(JSON.stringify(extraction)).not.toContain('cdn.example');
   });
 
-  it('with images off, fetches none and stores a document that names none', async () => {
-    await writeSettingsGeneral(USER, { keepReadModeImages: false });
+  it('with images off (the default), fetches none and stores a document that names none', async () => {
     const fetchImage = jest.fn(async () => new Uint8Array([9]));
 
     await runServerReadMode(USER, LINK, illustrated(fetchImage));
@@ -160,6 +161,7 @@ describe('the article’s images', () => {
   });
 
   it('keeps the words when every image fails', async () => {
+    await writeSettingsGeneral(USER, { keepReadModeImages: true });
     const fetchImage = jest.fn(async () => {
       throw new Error('offline');
     });

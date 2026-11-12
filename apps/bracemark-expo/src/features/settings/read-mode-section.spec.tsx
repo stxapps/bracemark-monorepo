@@ -91,5 +91,5 @@ test('iOS with previews off: says a Safari share keeps its text only', () => {
   Platform.OS = 'ios';
   mockMode = 'off';
   render(<ReadModeSection />);
-  expect(screen.getByText(/keeps its text only/)).toBeTruthy();
+  expect(screen.getByText(/share from Safari keeps its text only/)).toBeTruthy();
 });

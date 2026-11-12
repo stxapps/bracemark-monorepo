@@ -124,7 +124,7 @@ export function ReadModeSection() {
                 Include images in read-mode copies
               </Label>
             }
-            description="The article’s pictures, kept with its text in every read-mode copy you keep. They take far more room than the words — turn this off to keep text only. Copies you have already kept don’t change."
+            description="The article’s pictures, kept with its text in every read-mode copy you keep. They take far more room than the words; with this off, a copy keeps its text only. Copies you have already kept don’t change."
             action={
               <Switch
                 id="keep-read-mode-images"

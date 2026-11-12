@@ -14,7 +14,7 @@ import { WEB_APP_URL } from '@/utils/web-app-url';
 
 // The browser extension's part of the synced kept-copies setting (`keepReadModeOnSave`
 // / `keepScreenshotOnSave`, plus the account-wide `keepReadModeImages`, resolved by
-// `keepOnSaveOf` — read mode on, its images on, screenshot off by default), on the one
+// `keepOnSaveOf` — read mode on, its images off, screenshot off by default), on the one
 // client every switch here governs. A save
 // here is the save that takes a copy (popup/Editor.tsx, which reads the setting from
 // the store at the save), and the saved screen's taps (popup/KeptCopies.tsx) take
@@ -128,7 +128,7 @@ export function CopiesSection({ className }: { className?: string }) {
         <SwitchRow
           id="keep-read-mode-images"
           title="Include images in read-mode copies"
-          description="The article’s pictures, kept with its text in every read-mode copy you keep. They take far more room than the words — turn this off to keep text only. Copies you have already kept don’t change."
+          description="The article’s pictures, kept with its text in every read-mode copy you keep. They take far more room than the words; with this off, a copy keeps its text only. Copies you have already kept don’t change."
           checked={keepOnSave.readModeImages}
           onCheckedChange={(readModeImages) => set({ readModeImages })}
         />

@@ -13,7 +13,7 @@ import { SettingsHeader, SettingsNotice, SettingsPane, SettingsRow } from './set
 
 // Settings → Read mode — the expo half of bracemark-web's
 // `_read-mode/read-mode-section.tsx`: the SYNCED kept-copies setting, resolved by
-// `keepOnSaveOf` (read mode on, its images on, screenshot off by default).
+// `keepOnSaveOf` (read mode on, its images off, screenshot off by default).
 // docs/link-extraction-keep.md, _when a copy is taken_.
 //
 // A switch is rendered only where it changes something ON THIS DEVICE — a setting with
@@ -113,7 +113,7 @@ export function ReadModeSection() {
         ) : null}
         <SettingsRow
           title="Include images in read-mode copies"
-          description="The article’s pictures, kept with its text in every read-mode copy you keep. They take far more room than the words — turn this off to keep text only. Copies you have already kept don’t change."
+          description="The article’s pictures, kept with its text in every read-mode copy you keep. They take far more room than the words; with this off, a copy keeps its text only. Copies you have already kept don’t change."
           action={
             <Switch
               testID="keep-read-mode-images"

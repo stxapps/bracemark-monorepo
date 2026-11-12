@@ -4493,7 +4493,7 @@ back. Every image is encoded at several settings in one run (`IMAGE_SETTINGS`, t
 first being what ships), so the cap and the quality are chosen from one table rather
 than from runs against sites that changed in between. The summary reports the
 addresses found and kept per copy, why the rest were not kept, one image's stored
-size, a pack's, and a link's with the defaults. A run with images takes about six
+size, a pack's, and a link's with images on. A run with images takes about six
 minutes.
 
 The pages are `measure/kept-copies-pages.ts`: public articles and pages that
