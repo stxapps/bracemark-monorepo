@@ -160,7 +160,7 @@ STATIC import of it across that project. One
 `packages/web-react/src/lib/auth-api-client.spec.ts` made
 `npx nx lint @stxapps/web-react` fail with 51 errors reading _"Static imports of
 lazy-loaded libraries are forbidden"_, pointing at ~30 ordinary SOURCE files
-(`extraction-provider.tsx`, `lock-provider.tsx`, …) and never at the spec, which
+(`link-previews-provider.tsx`, `lock-provider.tsx`, …) and never at the spec, which
 appears once, unlabelled, in the summary list at the bottom of the output. The
 error text names the victims and never the cause, and `--fix` cannot fix it. So
 **import workspace packages statically in a spec**; if a dynamic import is
@@ -1033,7 +1033,7 @@ that exist there sit on the three things that fail SILENTLY:
   sale — the user pays and comes back to a locked feature.
 - **A gate whose closed side nothing else exercises.** `web-react`'s
   `contexts/server-extraction-gate.spec.tsx` pins the one rule
-  `ExtractionProvider` and `FaviconProvider` hold in duplicate: no URL leaves the
+  `LinkPreviewsProvider` and `FaviconProvider` hold in duplicate: no URL leaves the
   browser unless the `serverExtraction` opt-in is on AND an extractor origin is
   configured. It asserts at the wire (did anything ask the extractor), not on the
   `enabled` expression, which would just restate the code. The null-extractor

@@ -448,7 +448,7 @@ function countTitleImageOutcomes(): Promise<[number, number, number, number]> {
 
 // The RAW pending-titleImage count: links minus recorded outcomes, four index counts,
 // no decode, no join. "Raw" because Trash is NOT folded out — and that's sound for its
-// one consumer, extract-all's WAKE SIGNAL (extraction-provider `hasWork`): a trashed
+// one consumer, generate-all's WAKE SIGNAL (link-previews-provider `hasWork`): a trashed
 // link's outcome token cancels against its own entry in the link total, so the result
 // is exactly livePending + trashedPending — a strict OVER-count of eligible work, never
 // an under-count. 0 therefore always means "no live pending links" (safe to stay
@@ -500,7 +500,7 @@ export async function readRawPendingTitleImageCount(): Promise<number> {
 // readLinksPendingTitleImagePage): a trashed pending link is work the drains will never
 // do, so counting it would show a Pending stat that never drops and a "Generate all"
 // button that drains nothing. Exactness costs the O(trash) link↔extraction join below,
-// which is why this read is mounted ON DEMAND (useExtractionCounts — only while a
+// which is why this read is mounted ON DEMAND (useLinkPreviewCounts — only while a
 // surface renders the numbers) and never rides the always-on wake path.
 export interface ExtractionFacetCounts {
   done: number;
@@ -532,7 +532,7 @@ export interface ExtractionFacetCounts {
 // needs full records, since it's the one being decoded.
 //
 // O(trash) reads per re-run. This rides the ON-DEMAND counts liveQuery
-// (useExtractionCounts), so it repeats per `db.items` transaction only while a surface
+// (useLinkPreviewCounts), so it repeats per `db.items` transaction only while a surface
 // showing the numbers is mounted — never on the always-on wake path (the raw count
 // above). It's the cheaper of the two joins available — the other direction (every
 // settled extraction back to its link) is O(library) — and decoding is memoized, but a
@@ -588,7 +588,7 @@ export async function readExtractionFacetCounts(): Promise<ExtractionFacetCounts
 }
 
 // A position in the newest-first `links/` walk, used to PAGINATE the whole-library
-// extract-all drain (extraction-provider) without re-scanning from the top each batch. It
+// generate-all drain (link-previews-provider) without re-scanning from the top each batch. It
 // names the last link the walk EXAMINED — `(createdAt, path)` — so the next page resumes
 // strictly past it. `path` is the tiebreak, not decoration: the `[itemType+itemCreatedAt]`
 // index orders equal-createdAt rows by primary key (path), and a bulk import can stamp many
@@ -599,7 +599,7 @@ export interface LinkScanCursor {
   path: string;
 }
 
-// One page of the extract-all walk: up to `limit` pending+eligible links (newest-first), plus
+// One page of the generate-all walk: up to `limit` pending+eligible links (newest-first), plus
 // the `cursor` to resume from. `cursor === null` means the library is exhausted (the drain
 // stops); a non-null cursor always pairs with a FULL `links` page (the scan only stops early
 // when it hits `limit`), so the caller keeps paging while it's non-null.
@@ -611,15 +611,15 @@ export interface PendingTitleImagePage {
 // How many `links/` records one inner scan step pulls while hunting for the page's `limit`
 // eligible links. Bounds memory per step; a settled-heavy stretch just costs more steps —
 // but each link is still examined at most ONCE across the whole drain, because the cursor
-// only moves forward (the property that makes extract-all O(library), not O(library²)).
+// only moves forward (the property that makes generate-all O(library), not O(library²)).
 const SCAN_CHUNK = 200;
 
 function toCursor(record: ItemRecord): LinkScanCursor {
   return { createdAt: record.itemCreatedAt ?? 0, path: record.path };
 }
 
-// The residual extraction queue for the WHOLE-LIBRARY "extract all" job (extraction-provider
-// `extractAll`), as a QUERY (there's no queue object — see docs/link-extraction.md "the queue
+// The residual extraction queue for the WHOLE-LIBRARY "generate all" job (link-previews-provider
+// `generateAll`), as a QUERY (there's no queue object — see docs/link-extraction.md "the queue
 // is a query"), PAGINATED. Returns up to `limit` links whose `titleImage` is pending+eligible,
 // newest-first, plus a `cursor` the caller threads back to resume. The automatic drain uses
 // the displayed-scoped read below instead.
@@ -699,25 +699,25 @@ export async function readLinksPendingTitleImagePage(
 }
 
 // The pending-titleImage subset of a SPECIFIC set of link paths, in the given order — the
-// read behind bracemark-web's displayed-driven AUTOMATIC extraction (extraction-provider). Where
-// `readLinksPendingTitleImagePage` walks the whole library for the conscious "extract all" job,
+// read behind bracemark-web's displayed-driven AUTOMATIC extraction (link-previews-provider). Where
+// `readLinksPendingTitleImagePage` walks the whole library for the conscious "generate all" job,
 // this scopes the automatic drain to what the user is actually looking at: the page of links
 // the main pane has rendered. So a 30k-link bulk import left in an abandoned tab never
 // extracts past what was scrolled into view — work tracks attention, not an arbitrary cap.
 //
 // Cost: O(displayed), NOT O(library) — load-bearing because this read backs the always-on
-// probe liveQuery (extraction-provider), which re-runs on every `db.items` write. Two
+// probe liveQuery (link-previews-provider), which re-runs on every `db.items` write. Two
 // `bulkGet`s of the given paths (the links + their co-keyed extractions), then an inline
 // per-path eligibility test (`isFacetEligible`) — the same direct facet test the
-// extract-all page read uses, just over a bounded path set. Order follows `linkPaths` (the
+// generate-all page read uses, just over a bounded path set. Order follows `linkPaths` (the
 // display order — newest first), so on-screen links extract top-down. Missing / non-link /
 // trashed / settled / still-cooling paths drop out.
 //
 // Trashed paths drop out because the drains give Trash no extraction work at all (see the
-// extract-all read above). The layouts report whatever rows they render, and the Trash view
+// generate-all read above). The layouts report whatever rows they render, and the Trash view
 // renders trashed links like any other — so browsing Trash must not become the one way to
 // spend paid requests on links the user removed. Filtering here rather than asking each
-// caller not to report keeps that policy at the read layer, where the extract-all walk
+// caller not to report keeps that policy at the read layer, where the generate-all walk
 // already enforces it.
 export async function readLinksPendingTitleImageForLinkPaths(
   linkPaths: string[],

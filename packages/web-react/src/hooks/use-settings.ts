@@ -23,6 +23,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import {
   coerceThemeState,
   DEFAULT_THEME,
+  type KeepOnSave,
   keepOnSaveOf,
   type LinksLayout,
   type ThemeState,
@@ -64,11 +65,15 @@ export interface Settings {
   // OFF BY DEFAULT — `false` until the user turns it on; gates whether a web client
   // sends a saved URL to `bracemark-extractor` (see docs/link-extraction.md).
   serverExtraction: boolean;
+  // The synced server-read-mode opt-in — its own field, beside `serverExtraction`
+  // rather than inside it (entities.ts says why). OFF BY DEFAULT; gates the reader's
+  // per-link _Keep a read-mode copy_ through `bracemark-extractor` (useServerReadMode).
+  serverReadMode: boolean;
   // The synced kept-copies save setting, RESOLVED (`keepOnSaveOf`: read mode on,
   // screenshot off by default). For DISPLAY: a capture decided at a save reads the
   // store at that moment instead (the browser extension's Editor), because this is a
   // render's copy and answers the defaults until the blob's read lands.
-  keepOnSave: { readMode: boolean; readModeImages: boolean; screenshot: boolean };
+  keepOnSave: KeepOnSave;
   // The SYNCED links sort — global-only (no device split), so the synced value IS
   // the applied one. Typed `string` for the same forward-compat reason as
   // `linksLayout`: a newer client's value round-trips and reaches the Settings UI
@@ -104,12 +109,20 @@ export function useSettings(): Settings {
   const linksLayout = linksLayoutSource === 'local' ? localLinksLayout : syncLinksLayout;
   // Off by default: absent (older client / never toggled) reads as opted-out.
   const serverExtraction = general?.serverExtraction ?? false;
+  const serverReadMode = general?.serverReadMode ?? false;
   const keepReadModeOnSave = general?.keepReadModeOnSave;
+  const keepReadModeOnShare = general?.keepReadModeOnShare;
   const keepReadModeImages = general?.keepReadModeImages;
   const keepScreenshotOnSave = general?.keepScreenshotOnSave;
   const keepOnSave = useMemo(
-    () => keepOnSaveOf({ keepReadModeOnSave, keepReadModeImages, keepScreenshotOnSave }),
-    [keepReadModeOnSave, keepReadModeImages, keepScreenshotOnSave],
+    () =>
+      keepOnSaveOf({
+        keepReadModeOnSave,
+        keepReadModeOnShare,
+        keepReadModeImages,
+        keepScreenshotOnSave,
+      }),
+    [keepReadModeOnSave, keepReadModeOnShare, keepReadModeImages, keepScreenshotOnSave],
   );
 
   // Global-only: the synced value is the applied one (no source resolution like
@@ -144,6 +157,7 @@ export function useSettings(): Settings {
     syncLinksLayout,
     localLinksLayout,
     serverExtraction,
+    serverReadMode,
     keepOnSave,
     sortOn,
     sortOrder,

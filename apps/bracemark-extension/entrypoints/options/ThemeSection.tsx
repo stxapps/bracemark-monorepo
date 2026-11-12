@@ -11,10 +11,10 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { OptionsSection } from './Shell';
 
-// The extension's THEME picker — the one synced setting that actually applies here
-// (layout/serverExtraction don't: the options/popup have no library list and never
-// call bracemark-extractor). It mirrors bracemark-web's Settings → Misc theme block: a
-// Sync/Device tab picks WHERE the choice lives (use-settings.ts resolves the applied
+// The extension's THEME picker — one of the two synced settings that apply here, beside
+// CopiesSection's kept-copies switches (layout/serverExtraction don't: the
+// options/popup have no library list and never call bracemark-extractor). It mirrors
+// bracemark-web's Settings → Misc theme block: a Sync/Device tab picks WHERE the choice lives (use-settings.ts resolves the applied
 // value), and each tab's controls are bound to that source:
 //   - Sync   → settings/general.enc, shared across the account's devices;
 //   - Device → the off-sync localSettings store, this browser only (wiped on sign-out).

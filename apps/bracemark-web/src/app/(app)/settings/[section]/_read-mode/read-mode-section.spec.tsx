@@ -2,72 +2,90 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { ReadModeSection } from './read-mode-section';
 
-// Settings → Read mode: the kept-copies save setting. What matters is what each switch WRITES and what an
-// unentitled account sees — the stored value and the plan are separate facts, and
-// the screen must not blur them:
+// Settings → Read mode: how the web app takes a read-mode copy. What matters:
 //
-//   - a toggle writes only its own half (the other half stays whatever it was);
-//   - on free both switches read OFF and can't be moved, whatever is stored, so the
-//     screen never claims a capture the plan won't run — and nothing is rewritten,
-//     so a returning subscriber keeps their choice.
+//   - _Server read mode_ is its own opt-in, and writes only its own field — never
+//     Link previews' `serverExtraction`;
+//   - _Include images_ shows only while it is on (off, the web app takes no copy for it
+//     to qualify), and writes only its own field;
+//   - no on-save switch, no screenshot switch — the web app takes neither;
+//   - on free there is no switch at all, only the upgrade, named for the switch, and
+//     nothing is rewritten, so a returning subscriber keeps their choice.
 
 let mockKeptCopies = true;
-let mockKeepOnSave = { readMode: true, screenshot: false };
+let mockServerReadMode = false;
+const mockSetServerReadMode = jest.fn(async (_enabled: boolean) => undefined);
 const mockSetKeepOnSave = jest.fn(async (_patch: object) => undefined);
+const mockSetServerExtraction = jest.fn(async (_enabled: boolean) => undefined);
 
 jest.mock('@stxapps/web-react', () => ({
   useEntitlements: () => ({ entitlements: { keptCopies: mockKeptCopies } }),
-  useSettings: () => ({ keepOnSave: mockKeepOnSave }),
-  useSettingMutations: () => ({ setKeepOnSave: mockSetKeepOnSave }),
+  useSettings: () => ({
+    serverReadMode: mockServerReadMode,
+    keepOnSave: { readMode: true, readModeImages: true, screenshot: false },
+  }),
+  useSettingMutations: () => ({
+    setServerReadMode: mockSetServerReadMode,
+    setKeepOnSave: mockSetKeepOnSave,
+    setServerExtraction: mockSetServerExtraction,
+  }),
 }));
 
-const readMode = () => screen.getByRole('switch', { name: 'Keep read mode on save' });
-const screenshot = () => screen.getByRole('switch', { name: 'Keep a screenshot on save' });
+const serverReadMode = () => screen.getByRole('switch', { name: 'Server read mode' });
+const images = () => screen.queryByRole('switch', { name: 'Include images in read-mode copies' });
+const imagesSwitch = () =>
+  screen.getByRole('switch', { name: 'Include images in read-mode copies' });
 
 beforeEach(() => {
   mockKeptCopies = true;
-  mockKeepOnSave = { readMode: true, screenshot: false };
-  mockSetKeepOnSave.mockClear();
+  mockServerReadMode = false;
+  jest.clearAllMocks();
 });
 
-test('shows the resolved setting: read mode on, screenshot off', () => {
+test('off by default: the opt-in alone, with what it sends', () => {
   render(<ReadModeSection />);
-  expect(readMode().getAttribute('aria-checked')).toBe('true');
-  expect(screenshot().getAttribute('aria-checked')).toBe('false');
+  expect(serverReadMode().getAttribute('aria-checked')).toBe('false');
+  expect(images()).toBeNull();
+  expect(screen.getByText(/receives the link’s address, not your account/)).not.toBeNull();
 });
 
-test('each switch writes only its own half', async () => {
+test('turning it on writes its own field, never the preview opt-in', async () => {
+  render(<ReadModeSection />);
+  await act(async () => {
+    fireEvent.click(serverReadMode());
+  });
+  expect(mockSetServerReadMode).toHaveBeenCalledWith(true);
+  expect(mockSetServerExtraction).not.toHaveBeenCalled();
+});
+
+test('on: Include images appears, and writes only its own field', async () => {
+  mockServerReadMode = true;
   render(<ReadModeSection />);
 
+  expect(screen.getAllByRole('switch')).toHaveLength(2);
   await act(async () => {
-    fireEvent.click(screenshot());
+    fireEvent.click(imagesSwitch());
   });
-  expect(mockSetKeepOnSave).toHaveBeenLastCalledWith({ screenshot: true });
-
-  await act(async () => {
-    fireEvent.click(readMode());
-  });
-  expect(mockSetKeepOnSave).toHaveBeenLastCalledWith({ readMode: false });
+  expect(mockSetKeepOnSave).toHaveBeenLastCalledWith({ readModeImages: false });
 });
 
-test('free: both off and disabled whatever is stored, with the upgrade beside them', () => {
+test('free: no switch, only the upgrade named for the switch, and nothing written', () => {
   mockKeptCopies = false;
-  mockKeepOnSave = { readMode: true, screenshot: true };
+  mockServerReadMode = true;
 
   render(<ReadModeSection />);
 
-  for (const sw of [readMode(), screenshot()]) {
-    expect(sw.getAttribute('aria-checked')).toBe('false');
-    expect(sw).toHaveProperty('disabled', true);
-  }
+  expect(screen.queryAllByRole('switch')).toHaveLength(0);
+  expect(screen.getByText('Server read mode')).not.toBeNull();
+  expect(screen.getByText(/stay readable on every plan/)).not.toBeNull();
   expect(screen.getByRole('link', { name: /upgrade to plus/i }).getAttribute('href')).toBe(
     '/settings/subscription',
   );
-  expect(mockSetKeepOnSave).not.toHaveBeenCalled();
+  expect(mockSetServerReadMode).not.toHaveBeenCalled();
 });
 
-test('says copies come from the browser extension, not from saving in the web app', () => {
+test('says copies on save come from the browser extension, and where to set them', () => {
   render(<ReadModeSection />);
-  expect(screen.getByText(/browser extension/)).not.toBeNull();
-  expect(screen.getByText(/web app can’t keep a copy/)).not.toBeNull();
+  expect(screen.getByText(/browser extension’s Settings/)).not.toBeNull();
+  expect(screen.getByText(/web app can’t do that/)).not.toBeNull();
 });

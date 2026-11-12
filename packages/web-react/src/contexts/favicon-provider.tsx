@@ -89,7 +89,7 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
   const { serverExtraction } = useSettings();
 
   // No URL leaves the browser until the opt-in is on and an extractor is
-  // configured — mirrors ExtractionProvider's `enabled` gate.
+  // configured — mirrors LinkPreviewsProvider's `enabled` gate.
   const enabled = Boolean(username) && serverExtraction && extractClient !== null;
 
   // Latest identities for the async drain, so a fetch started before a render never

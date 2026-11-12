@@ -373,7 +373,7 @@ codebase differ on purpose:
   **call** level — a blip on page 9 of an op-log pull doesn't discard pages 1–8.
 - **the raw helpers — a scheduled re-wake.** A caller inside a React effect loop
   can't block: it must stay cancellable, visibility-aware, and single-flighted. The
-  **extraction drain** (`ExtractionProvider`, see
+  **extraction drain** (`LinkPreviewsProvider`, see
   [link-extraction.md](./link-extraction.md)) imports the three helpers directly
   and schedules its own backed-off _re-entry_ into the loop rather than wrapping the
   client — `withRetry`'s blocking wait can't be cancelled by `pause()` or gated on

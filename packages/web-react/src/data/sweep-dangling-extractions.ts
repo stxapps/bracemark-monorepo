@@ -8,7 +8,7 @@
 // back without its link. Nothing ever reads it again (every join goes link →
 // extraction), but it's not harmless: it skews both facet-count readers (queries.ts —
 // its outcome token has no link-total entry to cancel, so `pending` UNDER-counts,
-// the one error direction the extract-all wake can't tolerate) and it leaks storage —
+// the one error direction the generate-all wake can't tolerate) and it leaks storage —
 // the blob itself plus the `files/` content it references (image/screenshot/page copy,
 // easily hundreds of KB) persist in R2 against the user's quota and in every device's
 // local store, with no other reclamation path (destroy can't — the link is gone).

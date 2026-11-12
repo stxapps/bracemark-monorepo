@@ -6,7 +6,8 @@
 //   - setLinksLayoutSource / setLocalLinksLayout / setThemeSource / setLocalTheme /
 //     dismissPreviewsPrompt → the DEVICE-LOCAL `localSettings` store (no account, no
 //     sync — see local-settings-store.ts);
-//   - setSyncLinksLayout / setServerExtraction / setKeepOnSave / setSyncTheme → the SYNCED
+//   - setSyncLinksLayout / setServerExtraction / setServerReadMode / setKeepOnSave /
+//     setSyncTheme → the SYNCED
 //     `settings/general.enc` blob via writeSettingsGeneral, then a sync kick, exactly
 //     like useListMutations writes a list and requests sync.
 //
@@ -33,9 +34,13 @@ export interface SettingMutations {
   // Toggle the SYNCED server-extraction opt-in (the second, explicit opt-in); writes
   // settings/general.enc + syncs, so every device honors the same choice.
   setServerExtraction: (enabled: boolean) => Promise<void>;
+  // Toggle the SYNCED server-read-mode opt-in — its own consent, separate from
+  // server extraction (entities.ts); writes settings/general.enc + syncs.
+  setServerReadMode: (enabled: boolean) => Promise<void>;
   // The synced kept-copies save setting — either half, or both.
   setKeepOnSave: (patch: {
     readMode?: boolean;
+    readModeOnShare?: boolean;
     readModeImages?: boolean;
     screenshot?: boolean;
   }) => Promise<void>;
@@ -50,7 +55,7 @@ export interface SettingMutations {
   // Set THIS device's theme (the theme "Device" tab) — device-local, never synced.
   setLocalTheme: (theme: ThemeState) => Promise<void>;
   // Retire the first-run link-previews banner on THIS device — device-local, never
-  // synced (db.ts). One-way: the Settings extraction section is the durable surface.
+  // synced (db.ts). One-way: Settings → Link previews is the durable surface.
   dismissPreviewsPrompt: () => Promise<void>;
 }
 
@@ -86,11 +91,28 @@ export function useSettingMutations(): SettingMutations {
     [username, requestSync],
   );
 
+  const setServerReadMode = useCallback(
+    async (enabled: boolean) => {
+      if (!username) throw new Error('useSettingMutations: no active account');
+      await writeSettingsGeneral(username, { serverReadMode: enabled });
+      requestSync();
+    },
+    [username, requestSync],
+  );
+
   const setKeepOnSave = useCallback(
-    async (patch: { readMode?: boolean; readModeImages?: boolean; screenshot?: boolean }) => {
+    async (patch: {
+      readMode?: boolean;
+      readModeOnShare?: boolean;
+      readModeImages?: boolean;
+      screenshot?: boolean;
+    }) => {
       if (!username) throw new Error('useSettingMutations: no active account');
       await writeSettingsGeneral(username, {
         ...(patch.readMode !== undefined ? { keepReadModeOnSave: patch.readMode } : {}),
+        ...(patch.readModeOnShare !== undefined
+          ? { keepReadModeOnShare: patch.readModeOnShare }
+          : {}),
         ...(patch.readModeImages !== undefined ? { keepReadModeImages: patch.readModeImages } : {}),
         ...(patch.screenshot !== undefined ? { keepScreenshotOnSave: patch.screenshot } : {}),
       });
@@ -144,6 +166,7 @@ export function useSettingMutations(): SettingMutations {
       setSyncLinksLayout,
       setLocalLinksLayout,
       setServerExtraction,
+      setServerReadMode,
       setKeepOnSave,
       setSortOn,
       setSortOrder,
@@ -157,6 +180,7 @@ export function useSettingMutations(): SettingMutations {
       setSyncLinksLayout,
       setLocalLinksLayout,
       setServerExtraction,
+      setServerReadMode,
       setKeepOnSave,
       setSortOn,
       setSortOrder,

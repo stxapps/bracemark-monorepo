@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { treeNameMap } from '@stxapps/shared';
-import { type LinkView, useExtraction, useTags } from '@stxapps/web-react';
+import { type LinkView, useLinkPreviews, useTags } from '@stxapps/web-react';
 
 import { useLinksPage } from '../../_contexts/page-provider';
 import { useLinksViewState } from '../../_contexts/view-state-provider';
@@ -18,7 +18,7 @@ import { useLinksViewState } from '../../_contexts/view-state-provider';
 // only those rows), not every transient window a fast scroll flew past.
 const REPORT_SETTLE_MS = 300;
 
-// Report the on-screen link window to the automatic-extraction loop (extraction-provider), so
+// Report the on-screen link window to the automatic-extraction loop (link-previews-provider), so
 // it extracts what the user is actually looking at — the "displayed" set the provider drains
 // (see `reportDisplayedLinkPaths`). Bounded to O(displayed) — a few dozen rows — no matter how
 // far "show more" has grown `links`: reporting the whole loaded page instead would re-scan
@@ -33,7 +33,7 @@ export function useReportDisplayedLinkPaths(
   startIndex: number,
   endIndex: number,
 ): void {
-  const { reportDisplayedLinkPaths } = useExtraction();
+  const { reportDisplayedLinkPaths } = useLinkPreviews();
 
   useEffect(() => {
     const id = setTimeout(() => {

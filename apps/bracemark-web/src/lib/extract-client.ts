@@ -14,7 +14,7 @@ import { createExtractClient, type ExtractClient } from '@stxapps/shared';
 //
 // Unlike lib/api-client.ts, a MISSING env var is NOT fatal: server extraction is an opt-in
 // feature off by default, so an environment that doesn't configure an extractor just
-// leaves the client null and the ExtractionProvider loop inert — the app still runs.
+// leaves the client null and the LinkPreviewsProvider loop inert — the app still runs.
 const baseUrl = process.env.NEXT_PUBLIC_EXTRACTOR_URL;
 
 export const extractClient: ExtractClient | null = baseUrl

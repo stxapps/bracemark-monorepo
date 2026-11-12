@@ -172,7 +172,7 @@ export default function Page() {
             or after 8 December 2026. It changes HOW WE USE an address we were
             already handed, not what we collect: server read mode
             (docs/link-extraction-server.md, _robots.txt and read mode_) has the
-            link-preview service return a page's text as well, on one person's
+            link-extraction service return a page's text as well, on one person's
             ask for one link. The bullet says what is new to the reader — what
             comes back, and that it is only on request — and what is not: the
             service still keeps nothing (the invariants _How link previews are
@@ -204,23 +204,46 @@ export default function Page() {
             addresses, not what we keep: a read-mode copy now keeps the article's
             pictures with its text (docs/link-extraction-keep.md, _images in read
             mode_), on by default with a switch of its own. Three sentences of
-            _How link previews are fetched_ moved with it, one per path, because
+            _How link previews and read-mode copies are fetched_ moved with it, one per path, because
             each named what is fetched: the browser extension's tab now fetches
             the article's pictures as it already fetched the preview image; the
-            mobile apps fetch them themselves; and the link-preview service is
+            mobile apps fetch them themselves; and the link-extraction service is
             sent the pictures' addresses and passes the bytes through, as it does
             a preview image's. The invariants in that paragraph did not move — it
             still keeps nothing and logs no address. Per _Changes to this policy_,
-            deploy bracemark-site BEFORE the releases that fetch them. */}
+            deploy bracemark-site BEFORE the releases that fetch them.
+            12 NOVEMBER 2026 WENT UP ABOVE THEM, newest first, and may come out on
+            or after 12 December 2026. It changes WHEN an address is sent, not
+            what is collected or kept: a read-mode copy taken through the
+            link-extraction service now has its own opt-in, `serverReadMode`
+            (packages/shared sync/entities.ts says why), where it used to ride
+            the server-previews one. So _How link previews and read-mode copies are fetched_ names two
+            settings, each off until turned on, and says the read-mode one sends a
+            link only on an ask for it. The service's invariants did not move.
+            Per _Changes to this policy_, deploy bracemark-site BEFORE the web app
+            that reads the new setting. */}
+        <h2>What changed on 12 November 2026</h2>
+        <ul>
+          <li>
+            Keeping a read-mode copy of a link through the web app now has a setting of its own,
+            Server read mode, off unless you turn it on. It used to come with the setting for server
+            previews, so you could not have one without the other. With it on, a link is sent to our
+            link-extraction service only when you ask for its read-mode copy. And since that service
+            now does more than previews, this page calls it the link-extraction service, where it
+            used to say link-preview service; it is the same service.{' '}
+            <em>How link previews and read-mode copies are fetched</em> now says so.
+          </li>
+        </ul>
+
         <h2>What changed on 10 November 2026</h2>
         <ul>
           <li>
             A read-mode copy of a link now keeps the pictures in the article as well as its text,
             unless you turn that off in Settings. The browser extension and the mobile apps fetch
-            those pictures themselves. For a copy you ask the web app for, our link-preview service
-            is sent the addresses of the pictures and passes them through to your device, as it
-            already does for a preview image, and keeps none of them.{' '}
-            <em>How link previews are fetched</em> now says so.
+            those pictures themselves. For a copy you ask the web app for, our link-extraction
+            service is sent the addresses of the pictures and passes them through to your device, as
+            it already does for a preview image, and keeps none of them.{' '}
+            <em>How link previews and read-mode copies are fetched</em> now says so.
           </li>
         </ul>
 
@@ -240,9 +263,10 @@ export default function Page() {
         <ul>
           <li>
             When you ask the web app for a read-mode copy of a link (the article’s text, to read
-            later), our link-preview service now returns that text as well as the title and preview
-            image. It goes to your device, where it is encrypted like the rest of your library, and
-            the service keeps none of it. <em>How link previews are fetched</em> now says so.
+            later), our link-extraction service now returns that text as well as the title and
+            preview image. It goes to your device, where it is encrypted like the rest of your
+            library, and the service keeps none of it.{' '}
+            <em>How link previews and read-mode copies are fetched</em> now says so.
           </li>
         </ul>
 
@@ -536,8 +560,8 @@ export default function Page() {
 
             NO "WHICH NEVER STORE THE ADDRESS ITSELF". It was drafted onto this
             sentence and failed twice. It described every rate limiter,
-            and the link-preview service's limiter "briefly holds the requesting
-            IP address", which this page says under _How link previews are fetched_.
+            and the link-extraction service's limiter "briefly holds the requesting
+            IP address", which this page says under _How link previews and read-mode copies are fetched_.
             And even of the signup counter it said more than the HMAC does: we
             hold the key, and there are only about four billion IPv4 addresses
             to try, so "not the address itself" let a reader conclude we cannot
@@ -569,9 +593,9 @@ export default function Page() {
           have made both the same way. Neither of the two services we run on Cloudflare is set to
           forward its request log to another destination, which would put a copy of that stream in
           someone else’s storage under a retention period of its own. And one of the two, the
-          link-preview service — the one part of Bracemark that is ever handed the address of a page
-          you saved — runs with the log that would record its request line switched off. Both are
-          settings in the configuration files in{' '}
+          link-extraction service — the one part of Bracemark that is ever handed the address of a
+          page you saved — runs with the log that would record its request line switched off. Both
+          are settings in the configuration files in{' '}
           <a href={SOURCE.url} rel="noreferrer">
             {SOURCE.label}
           </a>
@@ -709,7 +733,7 @@ export default function Page() {
           of ours.
         </p>
 
-        <h3>How link previews are fetched</h3>
+        <h3>How link previews and read-mode copies are fetched</h3>
         <p>
           The browser extension reads the live tab and tries to fill in its title and preview image
           every time you save. The mobile apps fetch pages themselves: by default they cover links
@@ -724,18 +748,20 @@ export default function Page() {
           you keep a read-mode copy with them.
         </p>
         <p>
-          Browsers do not allow one web page to fetch another site, so the web app has an{' '}
-          <strong>opt-in {PLAN_LABELS.plus} setting</strong> that lets our link-preview service do
-          it. It is off unless you turn it on. When it is on, newly saved links and older pending
-          links are sent as they come into view while you browse; Generate all sends every pending
-          link. The service receives the address, fetches the page, returns the title and preview
-          image — and, when you ask for a read-mode copy of a link, the article’s text and the
-          pictures in it, whose addresses the web app sends it one by one — and keeps no page data:
-          it stores no URLs, writes none to its logs, holds no key, and is not told which account
-          asked. Its rate limiter briefly holds the requesting IP address so that a single source
-          cannot abuse it. The same service is described from the other side — for the people who
-          run the sites it fetches — on <Link href="/extractor">its own page</Link>, including the
-          caps it holds itself to and how to turn it away.
+          Browsers do not allow one web page to fetch another site, so the web app has two{' '}
+          <strong>opt-in {PLAN_LABELS.plus} settings</strong> that let one service of ours, the
+          link-extraction service, do it — the same service for both. Each is off unless you turn it
+          on. With Server previews on, newly saved links and older pending links are sent as they
+          come into view while you browse; Generate all sends every pending link. With Server read
+          mode on, a link is sent only when you ask for a read-mode copy of it. The service receives
+          the address, fetches the page, returns the title and preview image — or, for a read-mode
+          copy, the article’s text and the pictures in it, whose addresses the web app sends it one
+          by one — and keeps no page data: it stores no URLs, writes none to its logs, holds no key,
+          and is not told which account asked. It briefly holds the IP address each request comes
+          from, in a rate limiter, so that no single source can abuse it. The same service is
+          described from the other side — for the people who run the sites it fetches — on{' '}
+          <Link href="/extractor">its own page</Link>, including the caps it holds itself to and how
+          to turn it away.
         </p>
 
         <h3>If you contact us</h3>
@@ -896,8 +922,8 @@ export default function Page() {
           </li>
           <li>
             <strong>Your consent</strong> — the one optional thing, the {PLAN_LABELS.plus} setting
-            that lets our link-preview service fetch a page for you. It is off until you turn it on,
-            and turning it off again withdraws that consent for everything after.
+            that lets our link-extraction service fetch a page for you. It is off until you turn it
+            on, and turning it off again withdraws that consent for everything after.
           </li>
           <li>
             <strong>A legal obligation</strong> — the payment and tax records that accounting law
@@ -921,20 +947,22 @@ export default function Page() {
           payment needs under their own privacy policies.
         </p>
         <ul>
-          {/* The link-preview service is named here because this list is where
+          {/* The link-extraction service is named here because this list is where
               a reader checks who RECEIVES something, and with the opt-in on
               Cloudflare is handed a saved address in readable form — the one
               thing it sees that it does not also store. _How link previews are
               fetched_ says what the service does and does not say whose
-              machines it runs on. (It is "the link-preview service" in all four
-              places on this page; two of them said "our extraction service"
-              for a stretch, and a reader had no way to know that was the same
-              thing.) Two sentences, not one with a
+              machines it runs on. (It is "the link-extraction service" everywhere on
+              this page — one name, docs/brand-assets.md _terminology_. Two places
+              once said "our extraction service" beside "link-preview service",
+              and a reader had no way to know they were the same thing; the 12
+              November 2026 rename to the name that covers read mode too is said
+              in that day's entry above.) Two sentences, not one with a
               comma before "and": two predicates are a pair (docs/brand-assets.md,
               _the mechanics_). */}
           <li>
-            <strong>Cloudflare</strong> — hosts the API and the link-preview service. It stores the
-            encrypted files and the account records.
+            <strong>Cloudflare</strong> — hosts the API and the link-extraction service. It stores
+            the encrypted files and the account records.
           </li>
           <li>
             <strong>Amazon Web Services</strong> — serves this website and the web app as static

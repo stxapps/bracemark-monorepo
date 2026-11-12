@@ -1,5 +1,5 @@
 # Save a real public page at the default `saves` mode and watch Expo's DEVICE
-# extractor fill in its title — the gestured path (`extractNow`), which needs no
+# extractor fill in its title — the gestured path (`fetchPreviewsNow`), which needs no
 # opt-in because the save is the consent (docs/link-extraction.md, _expo drains
 # in the foreground_).
 #

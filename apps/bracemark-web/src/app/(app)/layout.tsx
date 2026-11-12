@@ -1,7 +1,7 @@
 import {
-  ExtractionProvider,
   FaviconProvider,
   FileContentProvider,
+  LinkPreviewsProvider,
   LockProvider,
 } from '@stxapps/web-react';
 import { SignOutProvider } from '@stxapps/web-ui/contexts/sign-out-provider';
@@ -48,11 +48,11 @@ import { PaywallProvider } from '@/contexts/paywall-provider';
 //   FaviconProvider — the per-host icon cache, beside it for the same reason:
 //                     it needs only the extract client + the serverExtraction
 //                     opt-in, and its rows are device-local.
-//   ExtractionProvider — the extraction drain. Needs the session AND a ready
+//   LinkPreviewsProvider — the extraction drain. Needs the session AND a ready
 //                     store, so it sits inside SyncProvider. Nothing between it
 //                     and FileContent/Favicon binds them HERE — that pair is
 //                     above it only because it depends on less. On expo the
-//                     Favicon half is a real dependency (its `extractNow` calls
+//                     Favicon half is a real dependency (its `fetchPreviewsNow` calls
 //                     `useFavicon`), so the order is not free to change: the two
 //                     stacks stay in step.
 //   LockProvider    — app + list locks state. Needs SyncProvider (its orphan
@@ -79,7 +79,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <SignOutProvider>
           <FileContentProvider>
             <FaviconProvider>
-              <ExtractionProvider>
+              <LinkPreviewsProvider>
                 <LockProvider>
                   <AppLockGate>
                     <InitialSyncGate>
@@ -102,7 +102,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     </InitialSyncGate>
                   </AppLockGate>
                 </LockProvider>
-              </ExtractionProvider>
+              </LinkPreviewsProvider>
             </FaviconProvider>
           </FileContentProvider>
         </SignOutProvider>

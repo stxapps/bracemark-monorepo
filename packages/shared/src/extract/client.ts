@@ -39,7 +39,7 @@ export interface ExtractClient {
   // image bytes come later through the streaming proxy). The SERVER resolves the
   // URLs CONCURRENTLY (its own bounded `Promise.all`), so a page of N pending links
   // gets all N titles/imageUrls back in ~one round trip instead of N sequential
-  // ones — the latency win the displayed-scoped / extract-all drains are built on.
+  // ones — the latency win the displayed-scoped / generate-all drains are built on.
   // Returns the per-URL result array verbatim; the caller correlates by `result.url`
   // (partial success, order not guaranteed). De-dupe URLs before calling — the server
   // fetches each entry it's given.

@@ -5,7 +5,7 @@
 //
 // TWO FILLERS, not web's one — the divergence the write helpers below are built
 // around. favicon-provider.tsx GUESSES `https://{host}/favicon.ico`, and
-// lib/device-extraction.ts CAPTURES the `<link rel=icon>` a page it was already
+// lib/device-link-previews.ts CAPTURES the `<link rel=icon>` a page it was already
 // fetching declared. Neither is a superset: only the guess can serve a host this
 // device never extracts a page for (synced/imported links, links settled
 // `permanent`, a settled library being scrolled), and only the capture can serve
@@ -133,7 +133,7 @@ export async function putFavicon(username: string, host: string, bytes: Uint8Arr
 //
 // NEVER DOWNGRADES AN `ok` ROW. This store has TWO fillers on expo (unlike web,
 // where the provider is the only writer): the provider's `/favicon.ico` guess
-// and device-extraction's declared-icon capture. Both are check-then-act with an
+// and device-link-previews's declared-icon capture. Both are check-then-act with an
 // await gap, so a guess that started before a capture can finish after it — and
 // without this guard it would delete the captured bytes and stamp `none`, which
 // `isFaviconStale` then honors for FAVICON_RETRY_MS. The rule that makes two

@@ -443,11 +443,11 @@ they are read by the same components, not because it is one of them.
     are deliberately NOT in secure-store — they're one-way PBKDF2 pairs gating
     already-decrypted data, and the pure covering logic both platforms share is
     `computeCoverage` in `@stxapps/shared` `sync/lock-coverage.ts`), the
-    ON-DEVICE EXTRACTION stack (`lib/device-extraction.ts` — the worker that
+    ON-DEVICE EXTRACTION stack (`lib/device-link-previews.ts` — the worker that
     fetches each page natively, parsed by `lib/parse-html-head.ts` and decided by
     `@stxapps/shared` `extract/select.ts`, which every extracting client shares so
     a tier upgrade is an improvement rather than a change — driven by
-    `contexts/extraction-provider.tsx`, the `platform:expo` sibling of web's; it
+    `contexts/link-previews-provider.tsx`, the `platform:expo` sibling of web's; it
     never calls `bracemark-extractor` and rides its own `deviceExtractionMode` ladder, see
     docs/link-extraction.md), and
     `useQueryManagers` (rewires TanStack Query's browser-only

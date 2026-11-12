@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowUpRight, BookOpen, History, Image as ImageIcon, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
@@ -27,6 +27,8 @@ import {
   useReaderDoc,
   useReaderImages,
   useServerReadMode,
+  useSettingMutations,
+  useSettings,
 } from '@stxapps/web-react';
 import { ReaderArticle } from '@stxapps/web-ui/components/reader/reader-article';
 import {
@@ -40,6 +42,8 @@ import {
   AlertDialogTitle,
 } from '@stxapps/web-ui/components/ui/alert-dialog';
 import { Button } from '@stxapps/web-ui/components/ui/button';
+import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
+import { Label } from '@stxapps/web-ui/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@stxapps/web-ui/components/ui/tabs';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
@@ -67,10 +71,21 @@ import { readLinksReturn } from '@/lib/links-return';
 //     tripwire). This file never touches the document's contents.
 //
 // The empty state is also where the web app TAKES a read-mode copy, through
-// bracemark-extractor (useServerReadMode — offered only with the server-extraction
+// bracemark-extractor (useServerReadMode — offered only with the `serverReadMode`
 // opt-in on, on a plan with `keptCopies`). Only ever on that button's press: the row
 // menu's "Read" opens this page on a paid plan's link with no copy too, and a press
 // that says "Read" is not an ask to have the server fetch the page.
+//
+// With the opt-in off, it is also where the opt-in is OFFERED — in place, not as a
+// link to Settings the way the links page's previews banner does it. That banner's
+// two reasons don't carry here: it has no room for the disclosure, and turning
+// previews on barely moves the count it shows. This empty state has the room, so the
+// sentence naming what is sent sits beside the button, and turning it on delivers
+// exactly what was asked. It stays TWO presses — turn on, then keep — because the
+// first is a standing choice and the second fetches this one page; one button doing
+// both would blur what the switch is. Focus is handed from the first to the second,
+// since the first unmounts. Once on, _Include images_ sits under the action it
+// qualifies (the synced `keepReadModeImages`, the same field as Settings → Read mode).
 //
 // TWO WAYS OUT, both in the top bar and both hidden behind a lock (the host is the
 // locked list's contents): _Open page_, the live page, and _Wayback Machine_, the
@@ -279,7 +294,7 @@ function DeleteCopy({ link, facet }: { link: LinkItem; facet: KeptCopyFacet }) {
 type OutcomeNotice = { text: string; failure: boolean };
 
 const KEEP_FAILED: OutcomeNotice = {
-  text: 'Could not keep read mode. Please try again.',
+  text: 'Could not keep a read-mode copy. Please try again.',
   failure: true,
 };
 
@@ -304,10 +319,19 @@ function outcomeNotice(outcome: ServerReadModeOutcome | 'error'): OutcomeNotice 
   }
 }
 
-function KeepReadMode({ link }: { link: LinkItem }) {
+function KeepReadMode({ link, focusOnMount }: { link: LinkItem; focusOnMount: boolean }) {
   const { keep } = useServerReadMode();
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<OutcomeNotice | null>(null);
+
+  // Mounted in place of _Turn on server read mode_, which a keyboard user just pressed
+  // and which is gone now — so focus is moved here rather than dropped on <body>. Only
+  // on that mount: arriving at the page must not take focus.
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const focusOnMountRef = useRef(focusOnMount);
+  useEffect(() => {
+    if (focusOnMountRef.current) buttonRef.current?.focus();
+  }, []);
 
   const run = () => {
     setBusy(true);
@@ -320,9 +344,9 @@ function KeepReadMode({ link }: { link: LinkItem }) {
 
   return (
     <>
-      <Button size="sm" disabled={busy} onClick={run}>
+      <Button ref={buttonRef} size="sm" disabled={busy} onClick={run}>
         <BookOpen data-icon="inline-start" />
-        {busy ? 'Keeping read mode…' : 'Keep read mode'}
+        {busy ? 'Keeping…' : 'Keep a read-mode copy'}
       </Button>
       {notice ? (
         <p role={notice.failure ? 'alert' : 'status'} className={cn('text-pretty')}>
@@ -330,6 +354,56 @@ function KeepReadMode({ link }: { link: LinkItem }) {
         </p>
       ) : null}
     </>
+  );
+}
+
+// Turns the `serverReadMode` opt-in on from the empty state. The disclosure it rests on
+// is the paragraph above it, in the same words as Settings → Read mode's switch.
+function TurnOnServerReadMode({ onTurnedOn }: { onTurnedOn: () => void }) {
+  const { setServerReadMode } = useSettingMutations();
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const run = () => {
+    setBusy(true);
+    setFailed(false);
+    setServerReadMode(true)
+      .then(onTurnedOn, () => setFailed(true))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <>
+      <Button size="sm" disabled={busy} onClick={run}>
+        <BookOpen data-icon="inline-start" />
+        {busy ? 'Turning on…' : 'Turn on server read mode'}
+      </Button>
+      {failed ? (
+        <p role="alert" className={cn('w-full text-pretty')}>
+          Could not turn on server read mode. Please try again.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+// _Include images_ beside the action it qualifies. A failed write needs no message of
+// its own: the box is bound to the stored value, so it simply doesn't change, and
+// Settings → Read mode is the durable surface.
+function IncludeImages() {
+  const { keepOnSave } = useSettings();
+  const { setKeepOnSave } = useSettingMutations();
+  return (
+    <Label htmlFor="reader-include-images" className={cn('gap-2 text-muted-foreground')}>
+      <Checkbox
+        id="reader-include-images"
+        checked={keepOnSave.readModeImages}
+        onCheckedChange={(v) =>
+          void setKeepOnSave({ readModeImages: v === true }).catch(() => undefined)
+        }
+      />
+      Include images
+    </Label>
   );
 }
 
@@ -343,18 +417,32 @@ function EmptyCopies({
   waybackHref: string | undefined;
 }) {
   const { entitlements } = useEntitlements();
-  const { available: serverAvailable } = useServerReadMode();
+  const { available, needsOptIn } = useServerReadMode();
   const paywall = usePaywall();
+  const [justTurnedOn, setJustTurnedOn] = useState(false);
 
   return (
     <Notice title="No copy of this page yet">
       <p>
         A kept copy is the page’s text in read mode, and a screenshot of what was on screen when you
         saved it — yours to read even if the page changes or disappears.{' '}
-        {serverAvailable
-          ? 'Keep its read mode now — the preview service you turned on in Settings fetches it for you. To keep a screenshot too, open the page and save it with the Bracemark browser extension.'
-          : 'Copies are taken from the page itself: open it, then save it with the Bracemark browser extension.'}
+        {available
+          ? 'Keep a read-mode copy now: our link-extraction service fetches the page and sends its article back to this browser. To keep a screenshot too, open the page and save it with the Bracemark browser extension.'
+          : needsOptIn
+            ? 'Copies are taken from the page itself: open it, then save it with the Bracemark browser extension. Or turn on server read mode to keep a read-mode copy from here.'
+            : 'Copies are taken from the page itself: open it, then save it with the Bracemark browser extension.'}
       </p>
+      {/* The disclosure, before the switch it is the consent for — the Settings
+          switch's words (read-mode-section.tsx says why each clause is there): the
+          address, not the account, the IP held briefly. */}
+      {needsOptIn ? (
+        <p>
+          The web app can’t open other sites, so with server read mode on, our link-extraction
+          service fetches the page for you — only when you ask for a read-mode copy, one link at a
+          time. It receives the link’s address, not your account, and briefly holds your IP address
+          so no single source can abuse it.
+        </p>
+      ) : null}
       {/* Only where the exit exists. With no copy of our own this is the one place
           the page as it was might still be, so it is said in a sentence rather than
           left to a button's two words. "May": we have not asked, and must not. */}
@@ -365,7 +453,8 @@ function EmptyCopies({
         </p>
       ) : null}
       <div className={cn('flex flex-wrap justify-center gap-2')}>
-        {serverAvailable ? <KeepReadMode link={link} /> : null}
+        {available ? <KeepReadMode link={link} focusOnMount={justTurnedOn} /> : null}
+        {needsOptIn ? <TurnOnServerReadMode onTurnedOn={() => setJustTurnedOn(true)} /> : null}
         {href ? (
           <Button asChild variant="outline" size="sm">
             <a href={href} target="_blank" rel="noreferrer">
@@ -388,6 +477,7 @@ function EmptyCopies({
           </Button>
         ) : null}
       </div>
+      {available ? <IncludeImages /> : null}
     </Notice>
   );
 }

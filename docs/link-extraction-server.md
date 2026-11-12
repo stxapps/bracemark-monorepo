@@ -175,7 +175,7 @@ browser that can't fetch for itself. It is a **separate app**, not a route in
     sends one site as many requests as that person saved pages of it, together. The
     page now says whose queue it is and what bounds a burst (`BATCH` =
     `MAX_EXTRACT_URLS` per request, one request in flight per drain —
-    web-react `contexts/extraction-provider.tsx`), which pins it to the web drain's
+    web-react `contexts/link-previews-provider.tsx`), which pins it to the web drain's
     SHAPE and not just to a constant: give the drain concurrent batches, or let a
     second surface call the extractor on its own, and the page describes a politeness
     the code no longer keeps. Nothing checks it — `bracemark-site` can't see either
@@ -199,7 +199,11 @@ The **app is committed** (a necessary build, see above) and so are the invariant
 (separate app, separate origin, anonymous, plaintext-return-only, stream-don't-store,
 never-log-the-URL, honest-UA-with-a-page-behind-it); what stays
 **off by default** is the _feature_ — server extraction never runs until the user
-takes the second, explicit opt-in.
+takes the second, explicit opt-in. Read mode through this service has an opt-in of its
+own, `serverReadMode`, beside `serverExtraction` rather than inside it: previews send
+every pending link as it comes into view, read mode one link per press, so they are two
+consents to the same service, each off by default
+([link-extraction-keep.md](./link-extraction-keep.md), _per client_, bracemark-web).
 
 ### deferred / open
 

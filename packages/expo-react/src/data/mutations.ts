@@ -380,6 +380,7 @@ export async function writeSettingsGeneral(
     serverExtraction?: boolean;
     deviceExtractionMode?: DeviceExtractionMode;
     keepReadModeOnSave?: boolean;
+    keepReadModeOnShare?: boolean;
     keepReadModeImages?: boolean;
     keepScreenshotOnSave?: boolean;
     theme?: ThemeState;

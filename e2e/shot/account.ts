@@ -207,9 +207,9 @@ async function fillPreviews(page: Page): Promise<void> {
   const total = SHOT_USER.links;
   await page.goto('/settings/link-previews');
 
-  // PHASE 1 — the extract-all job, watched WITHOUT navigating.
+  // PHASE 1 — the generate-all job, watched WITHOUT navigating.
   //
-  // `extractAll()` is client state on the provider, so a full page load ENDS it.
+  // `generateAll()` is client state on the provider, so a full page load ENDS it.
   // That matters more than it sounds: an earlier version of this function polled
   // by re-visiting `/settings/link-previews` every thirty seconds, which cancelled
   // the job on every pass and restarted nothing — it sat at 0 of 24 while the
@@ -218,19 +218,19 @@ async function fillPreviews(page: Page): Promise<void> {
   // is a liveQuery, so nothing needs a reload to update.
   //
   // The signal that the job is over is the Pause button going away: the slot
-  // renders Pause while `isExtractingAll`, and reverts to "Generate all" when the
-  // cursor walk reaches the end of the library and clears extract-all mode.
+  // renders Pause while `isGeneratingAll`, and reverts to "Generate all" when the
+  // cursor walk reaches the end of the library and clears generate-all mode.
   const generateAll = page.getByRole('button', { name: 'Generate all' });
   await expect(generateAll).toBeVisible();
 
   // READ THE COUNTS BEFORE READING THE BUTTON, which is the opposite of the
   // obvious order and the reason this ran for several captures doing half its
   // job. "Generate all" is `disabled={pendingCount === 0}`, and `pendingCount`
-  // comes from `useExtractionCounts` — an on-demand liveQuery that has no result
+  // comes from `useLinkPreviewCounts` — an on-demand liveQuery that has no result
   // for the first moment after the section mounts. So immediately after an
   // import the button is momentarily disabled because the count is *unknown*,
   // not because there is nothing to do; sampling `isEnabled()` there skipped the
-  // click altogether, extract-all never started, and the whole library got
+  // click altogether, generate-all never started, and the whole library got
   // dragged in by phase two's scrolling instead. It still finished, which is
   // exactly why nobody would look: the only symptom was `previewed 0/25` logged
   // between two phases that both appeared to work.
@@ -251,7 +251,7 @@ async function fillPreviews(page: Page): Promise<void> {
   // The wait itself has to stay generous rather than sampling `isEnabled()`, for
   // the reason recorded above: right after an import the button is disabled
   // because `pendingCount` is UNKNOWN, and falling through then would skip
-  // extract-all and let phase two drag the whole library in by scrolling — which
+  // generate-all and let phase two drag the whole library in by scrolling — which
   // still finishes, which is why nobody would look. So: wait the full minute, and
   // treat the timeout as a branch rather than an error.
   if (!isComplete(progress, total)) {
@@ -396,7 +396,7 @@ interface PreviewProgress {
 }
 
 async function readPreviewedCount(page: Page): Promise<PreviewProgress | null> {
-  // Poll rather than read once. The line is fed by `useExtractionCounts`, an
+  // Poll rather than read once. The line is fed by `useLinkPreviewCounts`, an
   // ON-DEMAND liveQuery mounted with the section, so for a second or two after
   // every navigation it has no result and the section renders "No links to
   // preview yet." instead — which matches nothing here. A single read therefore

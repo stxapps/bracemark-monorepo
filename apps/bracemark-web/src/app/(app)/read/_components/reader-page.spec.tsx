@@ -22,6 +22,14 @@ let mockKeptCopies = false;
 const mockShowPaywall = jest.fn();
 const mockRemoveCopy = jest.fn(async (_link: unknown, _facet: string) => true);
 let mockServerAvailable = false;
+let mockNeedsOptIn = false;
+let mockReadModeImages = true;
+const mockSetKeepOnSave = jest.fn(async (_patch: object) => undefined);
+// Turning the opt-in on flips the gate the way the real hook would, on the next render.
+const mockSetServerReadMode = jest.fn(async (enabled: boolean) => {
+  mockServerAvailable = enabled;
+  mockNeedsOptIn = !enabled;
+});
 const mockKeep = jest.fn(async (_link: unknown): Promise<object> => ({ kind: 'kept' }));
 const mockSearch = 'link=l1';
 
@@ -44,7 +52,16 @@ jest.mock('@stxapps/web-react', () => ({
   useEntitlements: () => ({ entitlements: { keptCopies: mockKeptCopies } }),
   useImageFileUrl: (id: string | undefined) => (id ? `blob:${id}` : undefined),
   useKeptCopyMutations: () => ({ removeCopy: mockRemoveCopy }),
-  useServerReadMode: () => ({ available: mockServerAvailable, keep: mockKeep }),
+  useServerReadMode: () => ({
+    available: mockServerAvailable,
+    needsOptIn: mockNeedsOptIn,
+    keep: mockKeep,
+  }),
+  useSettings: () => ({ keepOnSave: { readModeImages: mockReadModeImages } }),
+  useSettingMutations: () => ({
+    setServerReadMode: mockSetServerReadMode,
+    setKeepOnSave: mockSetKeepOnSave,
+  }),
   useLocks: () => ({
     status: 'ready',
     isListLocked: () => mockLocked,
@@ -87,7 +104,11 @@ beforeEach(() => {
   mockShowPaywall.mockClear();
   mockRemoveCopy.mockClear();
   mockServerAvailable = false;
+  mockNeedsOptIn = false;
+  mockReadModeImages = true;
   mockKeep.mockClear();
+  mockSetServerReadMode.mockClear();
+  mockSetKeepOnSave.mockClear();
 });
 
 test('a link in a locked list shows the unlock pane and none of the copy', async () => {
@@ -214,12 +235,12 @@ test('deleting a copy asks first, then removes that copy of this link', async ()
   expect(mockRemoveCopy).toHaveBeenCalledWith(LINK, 'readMode');
 });
 
-describe('keeping read mode through the link-preview service', () => {
+describe('keeping read mode through the link-extraction service', () => {
   test('is offered on an empty link only when the web app can take a copy', async () => {
     mockKeptCopies = true;
     render(<ReaderPage />);
     await screen.findByText('No copy of this page yet');
-    expect(screen.queryByRole('button', { name: 'Keep read mode' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Keep a read-mode copy' })).toBeNull();
   });
 
   test('a press asks once, for this link, and says why when there is no copy', async () => {
@@ -232,7 +253,7 @@ describe('keeping read mode through the link-preview service', () => {
     });
     render(<ReaderPage />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Keep read mode' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Keep a read-mode copy' }));
 
     expect((await screen.findByRole('status')).textContent).toMatch(
       /asks services like ours not to/,
@@ -241,15 +262,87 @@ describe('keeping read mode through the link-preview service', () => {
     expect(mockKeep.mock.calls[0][0]).toMatchObject({ url: LINK.url });
   });
 
+  test('beside the action, Include images writes the synced setting', async () => {
+    mockKeptCopies = true;
+    mockServerAvailable = true;
+    render(<ReaderPage />);
+
+    const images = await screen.findByRole('checkbox', { name: 'Include images' });
+    expect(images.getAttribute('aria-checked')).toBe('true');
+    await act(async () => {
+      fireEvent.click(images);
+    });
+    expect(mockSetKeepOnSave).toHaveBeenCalledWith({ readModeImages: false });
+  });
+
   test('a transport failure says so rather than throwing', async () => {
     mockKeptCopies = true;
     mockServerAvailable = true;
     mockKeep.mockRejectedValueOnce(new Error('503'));
     render(<ReaderPage />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Keep read mode' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Keep a read-mode copy' }));
     expect((await screen.findByRole('alert')).textContent).toBe(
-      'Could not keep read mode. Please try again.',
+      'Could not keep a read-mode copy. Please try again.',
     );
+  });
+});
+
+// Server read mode is its OWN opt-in, off by default, and the empty state is where it is
+// offered — in place, with the disclosure beside the button, and as a press of its own:
+// turning it on fetches nothing, and only the next press asks for this page.
+describe('turning server read mode on from the empty state', () => {
+  beforeEach(() => {
+    mockKeptCopies = true;
+    mockNeedsOptIn = true;
+  });
+
+  test('offers the opt-in with what it sends, and no Keep yet', async () => {
+    render(<ReaderPage />);
+
+    expect(await screen.findByRole('button', { name: 'Turn on server read mode' })).not.toBeNull();
+    expect(screen.getByText(/receives the link’s address, not your account/)).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Keep a read-mode copy' })).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: 'Include images' })).toBeNull();
+  });
+
+  test('turning it on fetches nothing, and hands focus to Keep', async () => {
+    render(<ReaderPage />);
+
+    const turnOn = await screen.findByRole('button', { name: 'Turn on server read mode' });
+    await act(async () => {
+      fireEvent.click(turnOn);
+    });
+
+    expect(mockSetServerReadMode).toHaveBeenCalledWith(true);
+    expect(mockKeep).not.toHaveBeenCalled();
+    const keep = await screen.findByRole('button', { name: 'Keep a read-mode copy' });
+    expect(document.activeElement).toBe(keep);
+    expect(screen.getByRole('checkbox', { name: 'Include images' })).not.toBeNull();
+  });
+
+  test('a failed write says so and leaves the offer up', async () => {
+    mockSetServerReadMode.mockRejectedValueOnce(new Error('No active account'));
+    render(<ReaderPage />);
+
+    const turnOn = await screen.findByRole('button', { name: 'Turn on server read mode' });
+    await act(async () => {
+      fireEvent.click(turnOn);
+    });
+
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Could not turn on server read mode. Please try again.',
+    );
+    expect(screen.getByRole('button', { name: 'Turn on server read mode' })).not.toBeNull();
+  });
+
+  test('a free account is offered Plus, not the opt-in', async () => {
+    mockKeptCopies = false;
+    mockNeedsOptIn = false;
+    render(<ReaderPage />);
+
+    await screen.findByText('No copy of this page yet');
+    expect(screen.queryByRole('button', { name: 'Turn on server read mode' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Keep copies with Plus' })).not.toBeNull();
   });
 });

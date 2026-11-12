@@ -32,7 +32,7 @@
 //     such cases at, the same door LockedBanner (search-bar.tsx) uses.
 //
 // The count comes from `readRawPendingTitleImageCount` (four index counts, no decode,
-// no trash-correction join), not `useExtractionCounts`: the exact tally is gated on
+// no trash-correction join), not `useLinkPreviewCounts`: the exact tally is gated on
 // extraction being ENABLED, which is precisely what this banner exists to ask about.
 // Raw pending is a strict over-count, the right side to err on for a "you have links
 // without previews" prompt — and the read runs ONLY while the banner could show, so it
@@ -73,13 +73,13 @@ export function PreviewsPrompt() {
   // "the opt-in is still off"; for a free one the synced preference is irrelevant
   // (the entitlement gate means nothing is being extracted either way), so what's
   // offered is the extension instead — see the header.
-  const canServerExtract = entitlements.serverExtraction;
+  const canServerPreview = entitlements.serverExtraction;
   const listLocked = selection.kind === 'list' && isListLocked(selection.id);
   const armed =
     !previewsPromptDismissed &&
     !planLoading &&
     !listLocked &&
-    !(canServerExtract && serverExtraction);
+    !(canServerPreview && serverExtraction);
   const pending =
     useLiveQuery(() => (armed ? readRawPendingTitleImageCount() : Promise.resolve(0)), [armed]) ??
     0;
@@ -101,13 +101,13 @@ export function PreviewsPrompt() {
         <p className="text-sm font-medium">
           {pending} link{pending === 1 ? '' : 's'} without a preview
         </p>
-        {canServerExtract ? (
+        {canServerPreview ? (
           <>
             <p className="text-sm text-muted-foreground">
               Bracemark can fill in their titles and images by fetching each page through its
-              preview service. Once you turn it on, pending links fill in as they come into view;
-              Generate all covers the rest. The service receives the URL and your IP address, but
-              stores no URL or page content.
+              link-extraction service. Once you turn it on, pending links fill in as they come into
+              view; Generate all covers the rest. The service receives the URL and your IP address,
+              but stores no URL or page content.
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <Button asChild size="sm" variant="outline">

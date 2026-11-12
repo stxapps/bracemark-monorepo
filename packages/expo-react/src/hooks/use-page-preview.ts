@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
 import { linkIdOf, type LinkItem } from '../data/queries';
 import { storePagePreview } from '../data/store-page-preview';
-import { fetchPreviewImageFile, previewFileFromBytes } from '../lib/device-extraction';
+import { fetchPreviewImageFile, previewFileFromBytes } from '../lib/device-link-previews';
 
 // _Update preview_ on the capture screen: a link's title and preview image, taken from
 // the page open in its WebView (the app's features/capture/capture-screen.tsx).

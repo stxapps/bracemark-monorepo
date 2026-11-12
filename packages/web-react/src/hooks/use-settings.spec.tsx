@@ -100,6 +100,26 @@ describe('before anything has been read', () => {
     expect(result.current.serverExtraction).toBe(false);
     await answer();
   });
+
+  // The same rule for its sibling: the reader's Keep a read-mode copy sends the link's
+  // address to the link-extraction service, so an absent value must read as never agreed to.
+  it('reads an absent server-read-mode opt-in as off', async () => {
+    const { result } = renderHook(() => useSettings());
+
+    expect(result.current.serverReadMode).toBe(false);
+    await answer();
+  });
+
+  // Two consents, two fields: turning previews on must not turn on read mode, nor the
+  // other way round.
+  it('reads the two server opt-ins independently', async () => {
+    mockGeneral = { serverExtraction: true };
+
+    const result = await settings();
+
+    expect(result.current.serverExtraction).toBe(true);
+    expect(result.current.serverReadMode).toBe(false);
+  });
 });
 
 describe('source resolution', () => {

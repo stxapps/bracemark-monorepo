@@ -7,7 +7,7 @@ import { CaptureScreen } from './capture-screen';
 // The capture screen's rules (its header and use-page-capture.ts's have the reasoning),
 // against a stand-in WebView that records each request the screen injects and lets the
 // spec play the page:
-//   - free loads the page but has no Update preview, and Keep read mode is the
+//   - free loads the page but has no Update preview, and Keep a copy is the
 //     upgrade; a locked list's page never loads;
 //   - the top bar's two exits: Read while the link has a copy (a replace — the reader
 //     and this screen trade places), the Wayback Machine — said in words too when the
@@ -122,7 +122,7 @@ beforeEach(() => {
   mockShowPaywall.mockClear();
 });
 
-test('free: the page loads, no Update preview, and Keep read mode is the upgrade', async () => {
+test('free: the page loads, no Update preview, and Keep a copy is the upgrade', async () => {
   mockKeptCopies = false;
   await onPage();
   // Both actions are Plus. A free account sets its own title and image in the editor.
@@ -231,7 +231,7 @@ test('an answer from a page that is no longer the link’s is refused', async ()
   // A failure that mounts after a tap is an alert (docs/accessibility.md, _the one
   // rule_), never the quiet status line the screen's other outcomes use.
   expect(screen.getByRole('alert')).toHaveTextContent(
-    'Could not keep read mode. Please try again.',
+    'Could not keep a read-mode copy. Please try again.',
   );
 });
 

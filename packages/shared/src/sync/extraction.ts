@@ -176,25 +176,42 @@ export function replacedExtractionFileIds(
 // the user ASKED for; whether the plan allows a capture is `keptCopies`, checked
 // separately by the caller. docs/link-extraction-keep.md, _when a copy is taken_.
 //
+// `readModeOnShare` is the same read-mode question for a share from the phone
+// (`keepReadModeOnShare`), with the same default; `readMode` is the browser
+// extension's save. Two keys, because each is switched where its save happens
+// (entities.ts says why they split).
+//
 // `readModeImages` is not a third copy but what a read-mode copy INCLUDES: the
 // article's pictures, packed beside its text (reader/reader-images.ts). On by default —
 // a chart is often what the paragraph is about — and its own switch because it is the
 // largest thing a library keeps: a hundred times the text. It qualifies EVERY read-mode
-// capture this account makes, not only a save's: a per-link _Keep read mode_ reads it
+// capture this account makes, not only a save's: a per-link _Keep a read-mode copy_ reads it
 // too, since the question it answers is "how much of an article do I keep", not "when".
 export const KEEP_ON_SAVE_DEFAULTS = {
   readMode: true,
+  readModeOnShare: true,
   readModeImages: true,
   screenshot: false,
 } as const;
 
+export interface KeepOnSave {
+  readMode: boolean;
+  readModeOnShare: boolean;
+  readModeImages: boolean;
+  screenshot: boolean;
+}
+
 export function keepOnSaveOf(
   settings:
-    | Pick<SettingsGeneral, 'keepReadModeOnSave' | 'keepReadModeImages' | 'keepScreenshotOnSave'>
+    | Pick<
+        SettingsGeneral,
+        'keepReadModeOnSave' | 'keepReadModeOnShare' | 'keepReadModeImages' | 'keepScreenshotOnSave'
+      >
     | undefined,
-): { readMode: boolean; readModeImages: boolean; screenshot: boolean } {
+): KeepOnSave {
   return {
     readMode: settings?.keepReadModeOnSave ?? KEEP_ON_SAVE_DEFAULTS.readMode,
+    readModeOnShare: settings?.keepReadModeOnShare ?? KEEP_ON_SAVE_DEFAULTS.readModeOnShare,
     readModeImages: settings?.keepReadModeImages ?? KEEP_ON_SAVE_DEFAULTS.readModeImages,
     screenshot: settings?.keepScreenshotOnSave ?? KEEP_ON_SAVE_DEFAULTS.screenshot,
   };

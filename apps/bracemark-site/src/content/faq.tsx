@@ -283,10 +283,10 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             <ExternalLink href={STATUS.url}>{STATUS.label}</ExternalLink> shows whether each part of
             Bracemark is answering — the website, the web app, our API (the service behind sign-in,
-            sync, and billing), and the link-preview service — checked from outside our own servers,
-            along with the outages it has recorded. While our API is down, a device that’s already
-            signed in still opens your library, and anything you change is queued and syncs once
-            it’s back.
+            sync, and billing), and the link-extraction service — checked from outside our own
+            servers, along with the outages it has recorded. While our API is down, a device that’s
+            already signed in still opens your library, and anything you change is queued and syncs
+            once it’s back.
           </>
         ),
       },
@@ -354,10 +354,10 @@ export const FAQ_GROUPS: FaqGroup[] = [
             record for each device you are signed in on, and a set of encrypted files — each with a
             path, a size, and the time it last changed. If you subscribe, a subscription record too.
             Not one title, address, tag, or note is kept in readable form, and there is no search
-            index over any of it. The opt-in preview service is handed an address to fetch and
-            stores none. Like any web service, they also see the IP address each request comes from,
-            which our hosts keep in their own logs and we keep no copy of. The full inventory is in
-            the <PageLink href="/privacy">privacy policy</PageLink>.
+            index over any of it. The opt-in link-extraction service is handed an address to fetch
+            and stores none. Like any web service, they also see the IP address each request comes
+            from, which our hosts keep in their own logs and we keep no copy of. The full inventory
+            is in the <PageLink href="/privacy">privacy policy</PageLink>.
           </>
         ),
       },

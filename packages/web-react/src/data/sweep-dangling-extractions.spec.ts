@@ -2,7 +2,7 @@
 // `extractions/{id}.enc` whose `links/{id}.enc` is gone — the writer-split's one delete
 // race. Nothing ever reads it again, so its damage is entirely in what it SKEWS and
 // LEAKS: it has an outcome token with no link-total entry to cancel, so the `pending`
-// tally under-counts (the one direction the extract-all wake can't tolerate), and the
+// tally under-counts (the one direction the generate-all wake can't tolerate), and the
 // `files/` blobs it references keep costing R2 quota on every device with no other
 // reclamation path.
 //

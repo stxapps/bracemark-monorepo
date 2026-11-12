@@ -28,8 +28,8 @@ import { ChevronDown, ChevronUp } from 'lucide-react-native';
 import {
   type LinkItem,
   readLinkByUrlKey,
-  useExtraction,
   useLinkMutations,
+  useLinkPreviews,
   useLinkQuota,
 } from '@stxapps/expo-react';
 import {
@@ -60,7 +60,7 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
   const reveal = useFocusedFieldReveal();
   const { selection } = useLinksPage();
   const { create, update } = useLinkMutations();
-  const { extractNow } = useExtraction();
+  const { fetchPreviewsNow } = useLinkPreviews();
   const { count, max, atLimit } = useLinkQuota();
 
   // Web's useDefaultListId, computed here rather than by the FAB now that this
@@ -165,11 +165,11 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
       // the page the user just handed us, right now, without waiting for the
       // drain and without needing the extraction mode to reach `all` — the save
       // IS the consent, exactly as the browser extension's active-tab capture
-      // is. Mode `off` still stops it (extractNow checks); that position exists
+      // is. Mode `off` still stops it (fetchPreviewsNow checks); that position exists
       // precisely to decline this.
       // Fire-and-forget: the title/image land in `extractions/` and the row
       // repaints itself, so nothing here waits on the network.
-      if (created) extractNow([created.path]);
+      if (created) fetchPreviewsNow([created.path]);
       close();
       // A save that landed is the moment the app-store review prompt uses; it
       // decides for itself whether this one asks (lib/review-prompt.ts).

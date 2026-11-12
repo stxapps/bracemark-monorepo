@@ -13,8 +13,9 @@ password-unlocked account model the auth flows build on.
   API with no standard equivalent (rare).
 - **Entrypoints map to extension contexts.** wxt's `entrypoints/` directory is the
   contract: `background.ts` → the MV3 service worker; `popup/` → the quick-save +
-  recent-list React app; `options/` → account / passphrase / key-management React
-  app; `content.ts` → the programmatic content script (active-tab DOM read for the
+  recent-list React app; `options/` → the Settings page: account, what a save keeps
+  (`CopiesSection`, the kept-copies switches — [link-extraction-keep.md](./link-extraction-keep.md),
+  _when a copy is taken_) and theme; `content.ts` → the programmatic content script (active-tab DOM read for the
   active-page extraction tier — see [link-extraction.md](./link-extraction.md)).
 - **Test helpers live in `testing/`, and that is not an arbitrary choice either.**
   WXT auto-imports everything under the reserved directories, so a fake `browser`

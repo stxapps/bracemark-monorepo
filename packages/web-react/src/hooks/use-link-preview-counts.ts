@@ -2,8 +2,8 @@
 
 // Live EXACT extraction-progress counts (done / pending / failed for `titleImage`,
 // trash-corrected — readExtractionFacetCounts) for the surfaces that DISPLAY them:
-// the Settings extraction section's stats and the "Generate all N pending?" confirm.
-// Deliberately a hook mounted on demand, NOT part of the always-on ExtractionProvider:
+// the Settings → Link previews section's stats and the "Generate all N pending?" confirm.
+// Deliberately a hook mounted on demand, NOT part of the always-on LinkPreviewsProvider:
 // exactness costs the O(trash) link↔extraction join (readTrashedTitleImageCounts),
 // and a liveQuery re-runs its querier on every `db.items` transaction — so the join
 // runs only while a surface is actually showing the numbers, never on the provider's
@@ -14,7 +14,7 @@
 
 import { useLiveQuery } from 'dexie-react-hooks';
 
-import { useExtraction } from '../contexts/extraction-provider';
+import { useLinkPreviews } from '../contexts/link-previews-provider';
 import { type ExtractionFacetCounts, readExtractionFacetCounts } from '../data/queries';
 
 const EMPTY_COUNTS: ExtractionFacetCounts = {
@@ -24,8 +24,8 @@ const EMPTY_COUNTS: ExtractionFacetCounts = {
   failedPermanent: 0,
 };
 
-export function useExtractionCounts(): ExtractionFacetCounts {
-  const { enabled } = useExtraction();
+export function useLinkPreviewCounts(): ExtractionFacetCounts {
+  const { enabled } = useLinkPreviews();
   return (
     useLiveQuery(
       () => (enabled ? readExtractionFacetCounts() : Promise.resolve(EMPTY_COUNTS)),

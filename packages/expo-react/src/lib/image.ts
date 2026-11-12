@@ -23,7 +23,7 @@
 //
 // Callers: the edit screen's custom-image pick and `saveCustomImage`
 // (hooks/use-link-mutations.ts), and the on-device extraction worker
-// (lib/device-extraction.ts).
+// (lib/device-link-previews.ts).
 
 import { Image } from 'react-native';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';

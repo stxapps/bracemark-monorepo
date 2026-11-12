@@ -196,7 +196,7 @@ Four things that aren't in its README:
 
 The embedded browser view the **capture screen** is built on
 (`features/capture/capture-screen.tsx`, `/capture?link=<id>`): the saved page,
-open, with _Update preview_ and _Keep read mode_ under it, reached from the row
+open, with _Update preview_ and _Keep a copy_ under it, reached from the row
 menu's **Read** ([reader.md](./reader.md), _the way in_) — the browser extension's
 popup rebuilt for a phone ([link-extraction-keep.md](./link-extraction-keep.md), _expo_). `13.15.0` at
 root, the version `expo/bundledNativeModules.json` names for SDK 54, `*` in the

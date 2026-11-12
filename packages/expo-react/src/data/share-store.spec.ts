@@ -1041,7 +1041,7 @@ describe('saveSharedDraft — the review-prompt count', () => {
 
 // The Android share activity writes the store itself, so no drain ever returns
 // its link — and the page fetch a share is owed at extraction mode `saves`
-// belongs to the main app's ExtractionProvider, which the activity does not
+// belongs to the main app's LinkPreviewsProvider, which the activity does not
 // mount (docs/share-sheet.md, _the main app's half_). The marker is the whole
 // of the link between them, and its absence is silent: the link is saved, it
 // syncs, and it keeps a provisional title and no image for good.
@@ -1172,7 +1172,7 @@ describe('the Android handoff', () => {
   });
 
   it('clears the markers on sign-out and leaves the theme mirror beside them', async () => {
-    // The ids are this account's; the next one's ExtractionProvider must never
+    // The ids are this account's; the next one's LinkPreviewsProvider must never
     // be handed them. The theme file is the app's to rewrite
     // (share-theme-store.ts), and carries no account data.
     expect(await saveSharedDraft(draft, api)).toBe('saved');

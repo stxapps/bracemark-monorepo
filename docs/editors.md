@@ -1119,7 +1119,7 @@ resurrecting stale fields.
   image bytes must route them through `saveCustomImage` (or call `resizeImage`
   itself) — the per-user byte quota is the only backstop otherwise.** This is the
   same client-thumbnailing step the two capture tiers run
-  (`server-extraction.ts`, the extension's `extraction-worker.ts`); the
+  (`server-link-previews.ts`, the extension's `extraction-worker.ts`); the
   `bracemark-extractor` server deliberately never resizes (link-extraction.md). One
   exception by design: the extension's full-page **screenshot** capture is stored
   full-fidelity, not thumbnailed — resize's 1024px/JPEG spec is a preview spec,

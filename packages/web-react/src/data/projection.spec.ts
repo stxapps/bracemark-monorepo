@@ -246,7 +246,7 @@ describe('toItemRecord', () => {
   // PENDING IS ABSENCE (entities.ts): there is no `pending` status token, so a facet-less
   // extraction must project an EMPTY token list — not a `pending:` entry, and not
   // `undefined`. The pending count is a set difference over links, and an invented token
-  // here would make it wrong in the one direction the extract-all wake can't tolerate.
+  // here would make it wrong in the one direction the generate-all wake can't tolerate.
   it('projects an empty token list for an extraction with no settled facets', () => {
     const record = toItemRecord(
       pathFromId('l_1', EXTRACTIONS_PREFIX),

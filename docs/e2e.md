@@ -1094,7 +1094,7 @@ InputMethod` reports while the window is visible. Every "reachable" claim is a
   string and no row can tell a fetched page from an unfetched one. The iOS part
   reads the "links without a preview" prompt instead: it arms two seconds after
   a link is seen pending with nothing fetching it, so it comes up for a draft
-  drained into a dead `extractNow` and never for one a live `extractNow` took.
+  drained into a dead `fetchPreviewsNow` and never for one a live `fetchPreviewsNow` took.
   ⚠ That oracle is an ABSENCE, so the part first waits — optionally, and
   expecting to time out — for the prompt's `Dismiss`, and only then asserts it
   is not there. Asserted straight after the row appears it would pass on a
@@ -1891,7 +1891,7 @@ release build's URL cache keeps is not measured by any run here**.
   preview or favicon was ever downloaded for it and there is nothing of that
   kind on the device to leave behind (_what e2e may not assert_).
 - **A process killed mid-write.** What a kill leaves in the scratch directory is
-  pinned in `@stxapps/expo-react`'s `lib/device-extraction.spec.ts`; a flow
+  pinned in `@stxapps/expo-react`'s `lib/device-link-previews.spec.ts`; a flow
   cannot time a kill.
 - **Anything it did not seed**, and on iOS the username (above).
 
@@ -3621,8 +3621,8 @@ an item that can block every future capture.
 - **The drain is two mechanisms, and each has a way of looking finished when it
   is not.** `Generate all` starts it — the auto drain would not, being
   displayed-scoped, visibility-gated and budget-capped by design (web-react's
-  `ExtractionProvider`), where extract-all is the one mode that is finite rather
-  than attention-bounded. But `extractAll()` is client state on the provider, so
+  `LinkPreviewsProvider`), where generate-all is the one mode that is finite rather
+  than attention-bounded. But `generateAll()` is client state on the provider, so
   **a full page load ends the job**: a first version of `fillPreviews` polled by
   re-visiting the settings page every thirty seconds, cancelling the drain on
   every pass, and sat at zero previewed while the log read like a slow network. Phase
@@ -3645,7 +3645,7 @@ an item that can block every future capture.
   on-demand liveQuery — which has no result for the first moment after the
   section mounts. Sampling `isEnabled()` there reads the button as disabled
   because the count is _unknown_, not because there is nothing to do, so the
-  click was skipped, extract-all never ran, and phase two's scrolling dragged the
+  click was skipped, generate-all never ran, and phase two's scrolling dragged the
   whole library in by itself. It still finished, which is why it survived a dozen
   captures: the only symptom was `previewed 0/25` logged between two phases that
   both appeared to work, and the shortfall it produced was misread for a while as
@@ -4685,10 +4685,10 @@ foreground_).
 
 Each case was also run against the behaviour it guards and failed: the web
 auto drain disabled (`EXTRACT-WEB-001` at the extract request,
-`EXTRACT-OFFLINE-001` at the first refused attempt), the extract-all batch
+`EXTRACT-OFFLINE-001` at the first refused attempt), the generate-all batch
 skipped (`EXTRACT-WEB-ALL-001` at the settled progress line), the drain's
 transport retry removed (`EXTRACT-OFFLINE-001` at the post-reload retries),
-the add panel's `extractNow` removed (`EXTRACT-NATIVE-001` at the title, iOS),
+the add panel's `fetchPreviewsNow` removed (`EXTRACT-NATIVE-001` at the title, iOS),
 and the dead-host stall above (`EXTRACT-NATIVE-ALL-001`, iOS, before the fix).
 iOS cannot remove the extractor from one simulator — it shares this Mac's
 loopback — so "without calling the server extractor" is proved on Android only;
@@ -4821,7 +4821,7 @@ and failed at the step that guards it:
 - `SHARE-EXTRACT-IOS-001` with the drain no longer held for a ready store — at
   the absence check: the prompt's `Dismiss` was up for the link the cold start
   had just drained. Until this run, that a cold start's first pass hands its
-  links to a dead `extractNow` was read from source
+  links to a dead `fetchPreviewsNow` was read from source
   ([share-sheet.md](./share-sheet.md), _the main app's half_).
 
 One harness fault, found by the iOS case's first run and fixed in the same

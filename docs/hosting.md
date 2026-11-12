@@ -637,12 +637,12 @@ blame the wrong way, and errors keep their fixed shape
 **What it requests**, from GitHub's runners, up to three tries of 10 seconds
 each:
 
-| part                 | request                                  | up when                   |
-| -------------------- | ---------------------------------------- | ------------------------- |
-| the website          | `https://bracemark.com/`                 | 2xx                       |
-| the web app          | `https://app.bracemark.com/`             | 2xx                       |
-| our API              | `https://api.bracemark.com/health`       | 2xx and `{"status":"ok"}` |
-| link-preview service | `https://extractor.bracemark.com/health` | 2xx and `{"status":"ok"}` |
+| part                    | request                                  | up when                   |
+| ----------------------- | ---------------------------------------- | ------------------------- |
+| the website             | `https://bracemark.com/`                 | 2xx                       |
+| the web app             | `https://app.bracemark.com/`             | 2xx                       |
+| our API                 | `https://api.bracemark.com/health`       | 2xx and `{"status":"ok"}` |
+| link-extraction service | `https://extractor.bracemark.com/health` | 2xx and `{"status":"ok"}` |
 
 ⚠ **Both `/health` routes are a contract with another repo.** Moving one,
 putting it behind auth or a rate limit a GitHub runner can trip, or changing its

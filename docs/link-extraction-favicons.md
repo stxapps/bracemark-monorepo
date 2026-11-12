@@ -118,7 +118,7 @@ default" falls out for free — a fresh install fetches no favicons anywhere, pe
   carve-out honest at `saves`, where the licence is one save rather than a
   standing opt-in: a **cross-origin** icon href (a CDN the gesture never implied)
   is skipped, and the guess is fired for the saved link's **own** host only —
-  `extractNow` hands those hosts to the queue directly, so the same save that
+  `fetchPreviewsNow` hands those hosts to the queue directly, so the same save that
   buys the page buys its icon, and a link saved here isn't left with a title, a
   picture, and a monogram.
 - **two fillers, one cache (expo only).** The guess and the capture write the same

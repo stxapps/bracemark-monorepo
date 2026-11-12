@@ -57,8 +57,8 @@ const EXCLUDE_IDS = [TRASH_ID];
 // `<Link>` to `/read`): there on a link with a copy (`readModeId` or
 // `screenshotId`), on every plan, since reading a copy is never gated; and on a
 // link with none only on a plan with `keptCopies`, where the reader's empty state
-// says how to take one — _Keep read mode_ with the server opt-in on, the browser
-// extension otherwise (read/_components/reader-page.tsx). A free account's link
+// says how to take one — _Keep a read-mode copy_ with server read mode on, the offer to
+// turn it on otherwise, and the browser extension either way (read/_components/reader-page.tsx). A free account's link
 // with no copy has no Read: the reader could only tell it what it can't have. The
 // Wayback Machine and taking a fresh copy live in the reader, not here — the menu
 // keeps to what is done to the LINK (docs/reader.md, _the way in_). The

@@ -296,11 +296,12 @@ describe('extractionFileIds', () => {
 });
 
 describe('keepOnSaveOf', () => {
-  it('defaults to read mode on, with its images, and the screenshot off', () => {
-    // Not `?? false` for all three: an absent setting must keep read mode and its
+  it('defaults to read mode on for both kinds of save, with its images, and the screenshot off', () => {
+    // Not `?? false` for all four: an absent setting must keep read mode and its
     // images, which is why every reader goes through this function.
     expect(keepOnSaveOf(undefined)).toEqual({
       readMode: true,
+      readModeOnShare: true,
       readModeImages: true,
       screenshot: false,
     });
@@ -310,14 +311,29 @@ describe('keepOnSaveOf', () => {
   it('honours an explicit choice either way', () => {
     expect(keepOnSaveOf({ keepReadModeOnSave: false, keepScreenshotOnSave: true })).toEqual({
       readMode: false,
+      readModeOnShare: true,
       readModeImages: true,
       screenshot: true,
     });
     // Its own switch: a copy can keep the words and leave the pictures.
     expect(keepOnSaveOf({ keepReadModeImages: false })).toEqual({
       readMode: true,
+      readModeOnShare: true,
       readModeImages: false,
       screenshot: false,
+    });
+  });
+
+  // The split: each kind of save has its own key, so turning read mode off for a share
+  // from the phone leaves the browser extension's saves as they were, and the other way.
+  it('reads the browser extension’s save and a phone share independently', () => {
+    expect(keepOnSaveOf({ keepReadModeOnShare: false })).toMatchObject({
+      readMode: true,
+      readModeOnShare: false,
+    });
+    expect(keepOnSaveOf({ keepReadModeOnSave: false })).toMatchObject({
+      readMode: false,
+      readModeOnShare: true,
     });
   });
 });

@@ -36,6 +36,46 @@ bytes. The two senses shared the word until they were split (the meter was
 `maxArchivedLinks`, which read like a cap on the Archive list and was not).
 Keep them apart in code, comments, and UI copy.
 
+**Naming — "extraction" is the mechanism, "preview" is the feature.** _Extraction_
+names the machinery this file describes, which serves every facet: the
+`extractions/` entity and its `'extraction'` item type, the facets and their
+verdicts (`sync/extraction.ts`, `extract/`), the queue reads, the extract client,
+the browser extension's `extraction-worker.ts` (which takes all three facets), the dangling-extraction sweep, and the service that
+does the server half (the _link-extraction service_ to a user —
+[brand-assets.md](./brand-assets.md), _terminology_). Several are **stored or
+sent**, and those may never be renamed: `serverExtraction` and
+`deviceExtractionMode` in `settings/general.enc`, the `extractions/` path, the
+`'extraction'` item and bundle kinds, the extractor's routes, and the `EXTRACT-*`
+case ids in `e2e/cases.json`. The expo section's `extraction-*` test ids name that
+setting and its counts, and the Maestro flows use them.
+
+_Preview_ — **link preview**, a title and an image — is the FEATURE a user sees,
+and everything built only for it is named for it. That includes the **drain**: the
+providers fill the `titleImage` facet and nothing else (read mode is never drained —
+_when a copy is taken_ in [link-extraction-keep.md](./link-extraction-keep.md) rules
+out the rule that would), so they are `LinkPreviewsProvider` / `useLinkPreviews`
+(`contexts/link-previews-provider.tsx` in web-react and expo-react), with
+`generateAll` / `isGeneratingAll` for the _Generate all_ job and expo's
+`fetchPreviewsNow` for a save made on the phone, and `useLinkPreviewCounts`
+(`hooks/use-link-preview-counts.ts`) for its numbers. They were
+`ExtractionProvider`, `useExtraction`, `extractAll`, `extractNow` and
+`useExtractionCounts` until 2026-11-12. So are the per-tier runners the drains call,
+which fetch a title and an image and nothing else: web-react's
+`lib/server-link-previews.ts` and expo-react's `lib/device-link-previews.ts` (with
+`DevicePreviewTier` / `DevicePreviewOptions`), beside `server-read-mode.ts` and
+`store-read-mode.ts` for the other facet — named by what they produce, as their
+siblings are. They were `server-extraction.ts` and `device-extraction.ts`, a generic
+name that read as covering read mode too. Not renamed: `server-extraction-gate.spec.tsx`,
+which tests the gate on the `serverExtraction` SETTING and is named for it. On the
+surface: Settings → _Link previews_
+(`_link-previews/link-previews-section.tsx`, expo's `link-previews-section.tsx`),
+the _Server previews_ switch, the links-page previews banner, _Generate all_ and its
+handlers (`askGenerateAll` …), and the editors' _Reset to preview_ and
+`previewTitle`. No user-facing string says "extract". The settings section was
+_Extraction_ until 2026-11-11, when read mode moved out to a section of its own and
+what stayed was only previews. If a drain ever takes a second facet, it is
+extraction again, and so is its name.
+
 ### the shape of the problem
 
 A saved link starts as just a URL. To enrich it you must **fetch the page** (for
@@ -261,14 +301,14 @@ Capability tiers say what each client _can_ do; the trigger says which pending
 links it actually works. There is deliberately no universal "only at save time"
 rule:
 
-| client / context                 | what wakes title+image extraction                                                 | tier        | cost / privacy                                                         |
-| -------------------------------- | --------------------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------- |
-| **browser extension save**       | every successful save kicks a capture from the live active tab                    | active-page | free, private, best                                                    |
-| **mobile / foreground save**     | `extractNow` fetches the link just saved; the share sheet hands it off to the app | active-page | free, private                                                          |
-| **mobile / foreground browse**   | at mode `all`, pending displayed links are fetched as they come into view         | active-page | free; each site sees the device's request                              |
-| **web app / visible links**      | with `serverExtraction` on, pending displayed links wake the in-page drain        | server      | server sees the URL — opt-in, off by default (see _server extraction_) |
-| **web or mobile / Generate all** | an explicit full-library pending scan                                             | server / fg | finite user-driven job                                                 |
-| **mobile / Update preview**      | a tap on the capture screen re-reads ONE link from the live page in its WebView   | active-page | Plus (`keptCopies`); written over whatever tier held it                |
+| client / context                 | what wakes title+image extraction                                                       | tier        | cost / privacy                                                         |
+| -------------------------------- | --------------------------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------- |
+| **browser extension save**       | every successful save kicks a capture from the live active tab                          | active-page | free, private, best                                                    |
+| **mobile / foreground save**     | `fetchPreviewsNow` fetches the link just saved; the share sheet hands it off to the app | active-page | free, private                                                          |
+| **mobile / foreground browse**   | at mode `all`, pending displayed links are fetched as they come into view               | active-page | free; each site sees the device's request                              |
+| **web app / visible links**      | with `serverExtraction` on, pending displayed links wake the in-page drain              | server      | server sees the URL — opt-in, off by default (see _server extraction_) |
+| **web or mobile / Generate all** | an explicit full-library pending scan                                                   | server / fg | finite user-driven job                                                 |
+| **mobile / Update preview**      | a tap on the capture screen re-reads ONE link from the live page in its WebView         | active-page | Plus (`keptCopies`); written over whatever tier held it                |
 
 The web row corrects two easy misreads of _the stance_. First, "the web app
 can't extract" is true only of **fetching** — a `bracemark-web` tab can't `fetch`
@@ -276,7 +316,7 @@ an arbitrary URL (CORS). But the web app **holds the data key**, so it can still
 _orchestrate_ extraction: `POST` the URL to `bracemark-extractor`, get plaintext
 title+image back, encrypt, and write the result into `extractions/`/`files/`
 itself. Second, that work is **not attached only to the save call**. The
-`ExtractionProvider` observes pending state; once server extraction is enabled it
+`LinkPreviewsProvider` observes pending state; once server extraction is enabled it
 works the pending rows currently displayed. A new save is covered when its row
 appears, and so are older, synced, and imported links as the user browses.
 **Generate all** switches the same provider to a finite full-library scan. With
@@ -292,11 +332,11 @@ links_, _capability tiers_).
 
 **How a share-sheet save reaches that fetch is per platform**, because the two
 shells reach the store differently. The iOS drain returns the links it landed
-and `ShareBridge` passes them to `extractNow`. Android's share activity writes
+and `ShareBridge` passes them to `fetchPreviewsNow`. Android's share activity writes
 the store itself, so no drain returns its link: it leaves a handoff marker that
 the same pass collects ([share-sheet.md](./share-sheet.md), _the Android
 handoff_). The marker is not a convenience. Below `all` the un-gestured drain is
-off, so `extractNow` is the only thing that fetches for a save — and an Android
+off, so `fetchPreviewsNow` is the only thing that fetches for a save — and an Android
 share that never reached it stayed pending for good, with a provisional title
 and no image.
 
@@ -466,7 +506,7 @@ another record names the same id: that check would mean decoding the library, or
 new index on both platforms, per delete, and it could still only see this device's
 copy while the delete reaches every device. So nothing may write one blob for two
 links. Extraction gives each link in a same-URL group its own copy of the preview
-(`server-extraction.ts`, `device-extraction.ts`), and an import gives each row its
+(`server-link-previews.ts`, `device-link-previews.ts`), and an import gives each row its
 own copy of an image several rows name (`import/project.ts`); the same image saved
 twice costs its bytes twice. Libraries written before that (a same-URL group's
 shared preview, an import's shared custom image) keep their shared blobs, and
@@ -758,7 +798,7 @@ Each facet answers the same questions independently:
     `failed`) stops _every_ device retrying that facet — not the per-device thrash a
     device-local marker would give. (The extractor's 429 `Retry-After` IS honored,
     but at the transport level — the drain's in-memory retry timer waits it out
-    (extraction-provider `scheduleRetry`) and a wholesale transport failure is
+    (link-previews-provider `scheduleRetry`) and a wholesale transport failure is
     never recorded per-link — so no synced deadline field is needed. If a
     _per-link_ server deadline ever appears, it isn't derivable from `attempts`
     and earns its own field at that point — until then, don't pre-pay it.)
@@ -993,7 +1033,7 @@ active-page facets aren't.)
 #### the web drains in-page, scoped to what's on screen
 
 `bracemark-web` has **no background service worker** — its sync engine already runs
-in-page, and so does its drain: the **`ExtractionProvider`** (web-react), the
+in-page, and so does its drain: the **`LinkPreviewsProvider`** (web-react), the
 counterpart of the Expo alarm sweep and the extension's active-context role. Because
 it's in-page it isn't alarm-paced; it's **`liveQuery`-reactive** — the pending query
 re-runs on every store change (a save, an import, a cross-device link landing) and
@@ -1092,9 +1132,9 @@ that this fallback has a **direction**: unknown coerces to `saves`, never up to
 `all`, so a blob from the future can't become network activity nobody agreed to.
 A stricter mode added later must therefore be one old clients coerce _down_ to.
 
-**`extractNow` reads the mode from the store, at the gesture.** That same
+**`fetchPreviewsNow` reads the mode from the store, at the gesture.** That same
 fallback is why. The hook's value is a render's copy, and `useSettings` answers
-`saves` until its read of the settings blob lands — so an `extractNow` captured
+`saves` until its read of the settings blob lands — so an `fetchPreviewsNow` captured
 by such a render would fetch for an account set to `off`, and nothing would show
 it: the fetch succeeds. `ShareBridge` can be holding exactly that closure when a
 first sync ends. It hands over what waited in the render the gate opens, and a
@@ -1108,17 +1148,17 @@ still on the default can only leave it off.
 
 **`expo:fg` is the tier that's built; `expo:bg` is the extra.** The foreground
 drain is the direct analogue of the web provider — expo-react's
-`contexts/extraction-provider.tsx` over `lib/device-extraction.ts`, with
+`contexts/link-previews-provider.tsx` over `lib/device-link-previews.ts`, with
 `AppState === 'active'` in place of the visibility gate, FlashList's viewable rows
 in place of the virtualizer window feeding `reportDisplayedLinkPaths`, and the same
 explicit "Generate all" / `pause()` pair. It covers save-time extraction,
 cross-device back-fill of what the user is actually looking at, and the
 whole-library job. Two honest platform notes on it. First, the gestured save gets
-its own entry point, `extractNow(linkPaths)` — outside the queue, the budget and
+its own entry point, `fetchPreviewsNow(linkPaths)` — outside the queue, the budget and
 the opt-in (the gestured/un-gestured split in _the stance_); the add screen calls
 it after a create, and ShareBridge for what the share sheet saved — the links the
 iOS outbox drain landed, and the ones the Android share activity handed off —
-since a share-sheet save reaches the app only there. Second, web's "extract-all keeps
+since a share-sheet save reaches the app only there. Second, web's "generate-all keeps
 running while the tab is hidden" is **not literally available** on iOS: a
 backgrounded app is suspended, so the drain isn't cancelled on background (a quick
 app switch resumes from the in-memory cursor) but progress can't be promised. The
@@ -1152,7 +1192,7 @@ synced, so a second phone still gets its one offer.
 
 **Offline is the OS's call, never the batch's alone.** Every expo link is its own
 fetch, so a rejected fetch cannot say whether the host is dead or the phone is.
-`runDeviceTitleImageBatch` (`lib/device-extraction.ts`) lets the batch decide
+`runDeviceTitleImageBatch` (`lib/device-link-previews.ts`) lets the batch decide
 first — if any link in it got an HTTP response, the unanswered ones are dead
 hosts and are recorded `failed` — and asks NetInfo only when NOTHING answered:
 `isConnected === false` rethrows a `TypeError` so the drain backs off with no
@@ -1199,7 +1239,7 @@ saved as `http://` therefore got no title or preview on a phone and was recorded
 transient `failed` — retried up to daily, for good, under "Will retry". A debug build
 reaches plain HTTP, which is why nothing on a developer's device showed it.
 
-What the phone does instead (`lib/device-extraction.ts`, expo-react):
+What the phone does instead (`lib/device-link-previews.ts`, expo-react):
 
 - **`https://` first.** A plain-HTTP link with no explicit port (`httpsUpgradeOf`,
   `@stxapps/shared` url/url.ts) is fetched over `https://` first — page, preview image,
@@ -1275,7 +1315,7 @@ bracemark-expo's, not a port of it:
   previews links **as you save them** rather than back-filling these, since it's
   active-context only; Plus is named once, second, as what does the back-fill.
 
-**What the two banners COUNT parted company as well, and `extractNow` is why.** On
+**What the two banners COUNT parted company as well, and `fetchPreviewsNow` is why.** On
 bracemark-web nothing extracts until the opt-in flips, so the raw count is a fair proxy
 for "links waiting": a pending link stays pending until the user acts. On expo it is
 not — the gestured path fetches a link saved on this device at `saves`, outside the
@@ -1284,7 +1324,7 @@ and then settles itself. Counting it put the banner on screen for a few seconds 
 every save on a single-device account and then took it away again: an offer flashing in
 and out, quoting a link `all` was never needed for. So expo renders the **residual** —
 raw pending minus what the gestured path holds right now (`gesturedInFlightCount` on the
-extraction context: counted from the paths handed to `extractNow`, incremented before
+extraction context: counted from the paths handed to `fetchPreviewsNow`, incremented before
 its first await so the window between the row landing and the claim is covered too),
 required to hold for a short settle window so the order the live read and the context
 update land in can't matter. What survives that subtraction is exactly the set `saves`

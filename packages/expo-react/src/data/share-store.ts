@@ -5,7 +5,7 @@
 //    taxonomy live from sqlite and saves through the real write edge
 //    (mutations.ts) — the pending op then rides the normal sync drain. What it
 //    cannot do from there is fetch the page: that is the main app's
-//    ExtractionProvider, which the share activity does not mount. So each save
+//    LinkPreviewsProvider, which the share activity does not mount. So each save
 //    leaves a HANDOFF marker the main app collects (_the Android handoff_,
 //    below).
 //  - iOS's share extension is a SEPARATE process that must not open the app's
@@ -707,7 +707,7 @@ export async function drainShareOutbox(
 // in the app's sandbox — share-theme-store's reasoning). It exists because a
 // share is a save gesture made on this device, which earns a page fetch at
 // extraction mode `saves` (docs/link-extraction.md, _the stance_), and the
-// fetch belongs to the main app's ExtractionProvider: the share activity mounts
+// fetch belongs to the main app's LinkPreviewsProvider: the share activity mounts
 // no providers, and its process may be gone seconds after Save. On iOS the
 // outbox file already is this record — the drain returns the paths it landed.
 // Android writes the store itself, so until this marker existed nothing told
@@ -747,7 +747,7 @@ function markShareHandoff(linkId: string): void {
 //
 // Never throws, and returns what it had read when something did: a path is
 // collected before its file is removed, so a failed delete hands the same link
-// over again on the next pass — which `extractNow` absorbs, since a link that
+// over again on the next pass — which `fetchPreviewsNow` absorbs, since a link that
 // is no longer pending is not fetched twice — where the other order would lose
 // it.
 export function takeShareHandoffs(): string[] {
@@ -808,7 +808,7 @@ export async function refreshShareTaxonomy(): Promise<void> {
 // rest of the teardown's file half.
 //
 // Android has one artifact, the handoff markers: link ids of this account's,
-// which the next account's ExtractionProvider must never be handed. Only that
+// which the next account's LinkPreviewsProvider must never be handed. Only that
 // directory goes — the theme mirror beside it is rewritten by the app itself
 // (share-theme-store.ts).
 export function clearShareData(): void {

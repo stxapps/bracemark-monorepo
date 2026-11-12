@@ -37,8 +37,12 @@ import { usePageCapture } from './use-page-capture';
 
 // The capture screen — the browser extension's popup, rebuilt around a WebView: the
 // saved page, open, with two actions under it. _Update preview_ re-reads the link's
-// title and preview image from the page; _Keep read mode_ keeps its article, with its
-// images. The one way this app takes either from a live page on its own (an iOS share
+// title and preview image from the page; _Keep a copy_ keeps its article, with its
+// images, as a read-mode copy. "Keep a copy", not the reader's "Keep a read-mode
+// copy": the two buttons share one row, at half a phone's width each, and the longer
+// label wraps there. The short one is still exact — a read-mode copy is the only kind
+// the phone takes — and it is the family its other states belong to (_Keep a new
+// copy_, _Kept — read it_). docs/brand-assets.md, _terminology_, the read mode row. The one way this app takes either from a live page on its own (an iOS share
 // from Safari is the other, for read mode, and needs no screen —
 // docs/link-extraction-keep.md, _per client_, bracemark-expo).
 //
@@ -96,7 +100,7 @@ const NOTICE = {
   loadFailed: 'This page didn’t load, so there’s nothing to update or keep from it.',
 } as const;
 const FAILURE = {
-  keep: 'Could not keep read mode. Please try again.',
+  keep: 'Could not keep a read-mode copy. Please try again.',
   preview: 'Could not update the preview. Please try again.',
 } as const;
 
@@ -323,7 +327,7 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
                 // On free the button is the upgrade, so it is never disabled there — and
                 // its name says what it is (the browser extension's saved screen does
                 // the same).
-                aria-label={entitled ? undefined : `Keep read mode — a ${plus} feature`}
+                aria-label={entitled ? undefined : `Keep a copy — a ${plus} feature`}
                 disabled={entitled && !ready}
                 onPress={() => void keep()}
               >
@@ -333,7 +337,7 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
                     ? 'Keeping…'
                     : extraction?.readModeId
                       ? 'Keep a new copy'
-                      : 'Keep read mode'}
+                      : 'Keep a copy'}
                 </Text>
                 {entitled ? null : <Text className="text-xs opacity-80">{plus}</Text>}
               </Button>

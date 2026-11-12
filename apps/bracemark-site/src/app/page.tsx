@@ -445,7 +445,7 @@ const TRADE: { aspect: string; hosted: string; ours: string }[] = [
   {
     aspect: 'Previews',
     hosted: 'Their servers fetch every page you save, and keep what they find.',
-    ours: `The browser extension tries to extract from the live tab when you save. The mobile app fetches on-device — saved links by default, or every pending link that comes into view when you choose All links. In the web app, opt-in server previews on ${PLAN_LABELS.plus} fill new saves and pending links as you browse; Generate all covers the rest.`,
+    ours: `The browser extension tries to fill in a preview from the live tab when you save. The mobile app fetches on-device — saved links by default, or every pending link that comes into view when you choose All links. In the web app, opt-in server previews on ${PLAN_LABELS.plus} fill new saves and pending links as you browse; Generate all covers the rest.`,
   },
   {
     // The loss a hosted-manager user is actually buying against, and the one this

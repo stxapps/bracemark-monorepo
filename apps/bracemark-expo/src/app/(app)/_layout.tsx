@@ -1,9 +1,9 @@
 import { Stack } from 'expo-router';
 
 import {
-  ExtractionProvider,
   FaviconProvider,
   FileContentProvider,
+  LinkPreviewsProvider,
   LockProvider,
 } from '@stxapps/expo-react';
 
@@ -56,10 +56,10 @@ import { SignOutProvider } from '../../contexts/sign-out-provider';
 //   FaviconProvider — the per-host icon cache, beside it for the same reason
 //                  (web's placement); it needs only the extraction opt-in and
 //                  its rows are device-local.
-//   ExtractionProvider — the on-device extraction drain (title + preview image
+//   LinkPreviewsProvider — the on-device extraction drain (title + preview image
 //                  per link). Needs the session AND a ready store, so it sits
 //                  inside SyncProvider — and it must sit inside FaviconProvider
-//                  too: `extractNow` fires the gestured favicon guess through
+//                  too: `fetchPreviewsNow` fires the gestured favicon guess through
 //                  `useFavicon`, which THROWS outside its provider. (FileContent
 //                  above is not a dependency; it's shallower only because it
 //                  depends on less.) The links screen consumes it (viewable-row
@@ -92,9 +92,9 @@ import { SignOutProvider } from '../../contexts/sign-out-provider';
 // ShareBridge is the share sheet's app-side half (docs/share-sheet.md): it
 // drains the iOS share extension's outbox through the write edge on
 // launch/foreground and keeps the App Group taxonomy snapshot fresh after syncs
-// and local edits. It reads useSync AND useExtraction (a drained share is a
+// and local edits. It reads useSync AND useLinkPreviews (a drained share is a
 // gestured save, so it gets the same immediate page fetch the add panel's
-// does), so it sits inside both — hence its place under ExtractionProvider
+// does), so it sits inside both — hence its place under LinkPreviewsProvider
 // rather than directly under SyncProvider. (The Android share activity's inline
 // sync kick lives in saveSharedDraft itself, not here; what it cannot do from
 // its own root — that page fetch — it hands off, and this collects it.)
@@ -105,7 +105,7 @@ export default function AppLayout() {
         <SignOutProvider>
           <FileContentProvider>
             <FaviconProvider>
-              <ExtractionProvider>
+              <LinkPreviewsProvider>
                 <ShareBridge />
                 <LockProvider>
                   <AppLockGate>
@@ -126,7 +126,7 @@ export default function AppLayout() {
                     </InitialSyncGate>
                   </AppLockGate>
                 </LockProvider>
-              </ExtractionProvider>
+              </LinkPreviewsProvider>
             </FaviconProvider>
           </FileContentProvider>
         </SignOutProvider>

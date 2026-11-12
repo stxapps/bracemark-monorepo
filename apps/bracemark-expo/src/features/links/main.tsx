@@ -38,7 +38,7 @@ import {
   type ViewToken,
 } from '@shopify/flash-list';
 
-import { type LinkView, useExtraction, useLocks, useSettings, useSync } from '@stxapps/expo-react';
+import { type LinkView, useLinkPreviews, useLocks, useSettings, useSync } from '@stxapps/expo-react';
 import { LOCK_COPY } from '@stxapps/react';
 import { type LinkSortOn } from '@stxapps/shared';
 
@@ -252,7 +252,7 @@ function UnlockedMain() {
 
   // Feed the extraction drain the rows actually on screen, so automatic preview
   // work tracks ATTENTION — a 30k-link import never extracts past what was
-  // scrolled into view (extraction-provider, cost layer 2).
+  // scrolled into view (link-previews-provider, cost layer 2).
   //
   // FlashList wires viewability once, when the list is constructed: whether an
   // `onViewableItemsChanged` exists at all, and `viewabilityConfig` (its own
@@ -263,7 +263,7 @@ function UnlockedMain() {
   // The `[]`-dep callback reading the reporter through a ref is therefore not
   // load-bearing — it keeps one function for the list's lifetime, and the
   // unmount cleanup below reads the same ref.
-  const { reportDisplayedLinkPaths } = useExtraction();
+  const { reportDisplayedLinkPaths } = useLinkPreviews();
   const reportRef = useRef(reportDisplayedLinkPaths);
   reportRef.current = reportDisplayedLinkPaths;
   const onViewableItemsChanged = useCallback(

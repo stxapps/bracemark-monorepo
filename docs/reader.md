@@ -56,9 +56,12 @@ then says how. The ✕ returns to the links view the user left
 - **Reading is never gated.** A copy that exists is shown on every plan; only the
   empty state reads `keptCopies`, to offer Plus beside the way a copy is taken (open
   the page, save it with the browser extension) — iap/plans.ts, the `keptCopies` note.
-- **Taking a read-mode copy here.** With server extraction on and a plan with
-  `keptCopies`, the empty state offers _Keep read mode_ — and only that button's press
-  asks. The row menu's **Read** lands a paid plan's link with no copy here, and a press
+- **Taking a read-mode copy here.** With _Server read mode_ on (`serverReadMode`, its
+  own opt-in, not Link previews') and a plan with `keptCopies`, the empty state offers
+  _Keep a read-mode copy_, with _Include images_ beneath it — and only that button's press
+  asks. With the opt-in off, it offers _Turn on server read mode_ in place, beside the
+  sentence saying what is sent; turning it on fetches nothing and hands focus to _Keep_
+  ([link-extraction-keep.md](./link-extraction-keep.md), _per client_, bracemark-web). The row menu's **Read** lands a paid plan's link with no copy here, and a press
   that says "Read" is not an ask to have the server fetch the page; nor is an address,
   so a reload or a history entry never fetches by itself. The answer is shown in place:
   the copy (the screen swaps to it), or why there is none — no article, not a web page,
@@ -107,7 +110,7 @@ it was the menu's clutter.
   the user's, so a lapsed plan must not take its only way in.
 - **No copy and no plan, no item.** Behind it there would be only a screen saying what
   the account can't have. A free account sets a link's title and image by hand in the
-  editor; _Update preview_ is a `keptCopies` action, like _Keep read mode_.
+  editor; _Update preview_ is a `keptCopies` action, like the capture screen's _Keep a copy_.
 - **On expo the two screens are one place with two faces.** The reader's _Update from
   the page_ goes to the capture screen; the capture screen's _Read_ (while the link
   has a copy) and its _Kept — read it_ come back. Each move is a `router.replace`, so
@@ -119,8 +122,8 @@ it was the menu's clutter.
   or gone, and those screens are where a user finds that out
   ([link-extraction-keep.md](./link-extraction-keep.md), _when the page is gone_).
 - **Web has no capture screen**, so a paid plan's link with no copy lands on the
-  reader's empty state: _Keep read mode_ with server extraction on, the browser
-  extension otherwise. The web reader offers no re-keep of a copy that exists.
+  reader's empty state: _Keep a read-mode copy_ with server read mode on, the offer to
+  turn it on otherwise, and the browser extension either way. The web reader offers no re-keep of a copy that exists.
 
 ### rendering — text nodes only
 

@@ -1117,15 +1117,15 @@ upload a sync pull landed before the drain.
 ### the main app's half — ShareBridge
 
 `ShareBridge` (bracemark-expo `components/share-bridge.tsx`) is a renderless
-component mounted inside `<ExtractionProvider>` — and so inside `<SyncProvider>`
-— in `(app)/_layout`, since it reads both `useSync` and `useExtraction`. It is
+component mounted inside `<LinkPreviewsProvider>` — and so inside `<SyncProvider>`
+— in `(app)/_layout`, since it reads both `useSync` and `useLinkPreviews`. It is
 the app-side pump for both App Group artifacts:
 
 - **inbound**: `drainShareOutbox()` on mount and on every return to foreground
   — **once the store is ready**, below;
   a drain that landed drafts calls `requestSync()` so the pending ops push
   immediately and the read edge shows the user their own share without a
-  refresh pill, and hands the landed links to `extractNow` — a share is a save
+  refresh pill, and hands the landed links to `fetchPreviewsNow` — a share is a save
   gesture made on this device, so its page fetch needs no opt-in
   ([link-extraction.md](./link-extraction.md), _the stance_). The same pass
   collects what the Android share activity handed off (`takeShareHandoffs()`),
@@ -1144,7 +1144,7 @@ signal.
 mounted above `InitialSyncGate`, so it is live for the whole of a first sync,
 and a share can arrive during one: the session is mirrored at sign-in, so the
 sheet works while the library is still downloading. Drained then, a draft lands
-with everything the drain hands on switched off. `extractNow` returns at once
+with everything the drain hands on switched off. `fetchPreviewsNow` returns at once
 until the store is ready, and by the time it would not the outbox is empty and
 nothing offers the link again — at extraction mode `saves`, a share that never
 gets its page fetch. The sync kick is declined
@@ -1162,7 +1162,7 @@ for the length of a first sync.
 **A first sync is the long case of "not ready", not the common one.**
 `storeStatus` is `checking` at the start of every launch, for as long as one
 read of the bookkeeping row takes, and the mount pass runs inside that window —
-closed over the `extractNow` of that first render, which returns at once. A
+closed over the `fetchPreviewsNow` of that first render, which returns at once. A
 drain there hands the whole outbox to it: the drain is synchronous sqlite under
 its `await`s, so it has finished before the render that turns `ready` can
 replace the closure. That is every share found by a cold start, which is how a
@@ -1177,8 +1177,8 @@ the link it just drained ([e2e.md](./e2e.md), _across a real share boundary_).
 **The Android handoff.** Android has no draft to hold back: its Save writes
 through the write edge whenever it happens, first sync or not. That write is
 safe for the reason above, and its inline kick is declined the same way. What
-it has no way to do is fetch the page. `extractNow` belongs to
-`<ExtractionProvider>`, which the share activity does not mount — it renders
+it has no way to do is fetch the page. `fetchPreviewsNow` belongs to
+`<LinkPreviewsProvider>`, which the share activity does not mount — it renders
 `ShareRoot` with no providers — and its process may be reaped seconds after
 Save, mid-fetch. So until the handoff existed nothing told the main app which
 links had arrived by share, and at extraction mode `saves` an Android share

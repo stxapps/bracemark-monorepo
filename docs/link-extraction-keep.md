@@ -19,7 +19,7 @@ captures in `utils/capture.ts`, `extraction-worker.ts`); bracemark-web reads bot
 `/read?link=<id>` ([reader.md](./reader.md), _the web reader_), and the synced save
 setting chooses what a save keeps (Settings → Read mode). Server
 read mode is built (_per client_, bracemark-extractor) and reached from bracemark-web
-as a per-link _Keep read mode_ in the reader. Removal (one copy, and a selection's in bulk edit) and
+as a per-link _Keep a read-mode copy_ in the reader. Removal (one copy, and a selection's in bulk edit) and
 the orphaned-file sweep are built (_removal, cleanup, export_), and so are expo's
 reader, its iOS share-from-Safari read mode and its capture screen (_per client_,
 bracemark-expo) — which also re-reads a link's title and preview image from the live
@@ -208,11 +208,11 @@ shipped client has to skip it.
 A read-mode copy keeps the article's pictures with its words. Built on every tier
 that takes a copy, 2026-11-10; before that a figure was only its alt text and caption,
 which loses the chart the paragraph is about. **On by default**, with a switch of its
-own — _Keep images in read mode_, beside the other two in Settings → Read mode on
-the web, and on both phones (`keepReadModeImages`, resolved by
+own — _Include images in read-mode copies_, on the browser extension's options page,
+in Settings → Read mode on the web, and on both phones (`keepReadModeImages`, resolved by
 `keepOnSaveOf`). Unlike its neighbours
 it is not "on save": it qualifies **every** read-mode copy the account takes, a
-per-link _Keep read mode_ included, because what it answers is how much of an article
+per-link _Keep a read-mode copy_ included, because what it answers is how much of an article
 a copy keeps, not when one is taken.
 
 **One pack per article, beside the text.** The images are a single second blob,
@@ -368,7 +368,7 @@ Subscription and the storage answer in the FAQ say so.
 
 **What stays as it is.** A copy is never replaced on its own to add images: a
 re-capture renumbers the blocks highlights are anchored to (_when a copy is taken_), so
-adding pictures to a copy taken before this is the user's _Keep read mode_ again.
+adding pictures to a copy taken before this is the user's _Keep a read-mode copy_ again.
 Removing a copy removes its pack (`removeKeptCopy` clears both fields). The backup
 carries it through `extractionFileIds`. A client from before the field round-trips it
 (the extraction is a `looseObject`) and its orphan sweep counts any string in an
@@ -438,7 +438,8 @@ names from the saved site. A real one needs:
 Three triggers, and deliberately not a fourth:
 
 1. **The save that asks for it.** Built in the browser extension, driven by the
-   synced save setting `keepReadModeOnSave` / `keepScreenshotOnSave` (entities.ts),
+   synced save setting `keepReadModeOnSave` / `keepScreenshotOnSave` (entities.ts) —
+   and on iOS by a share from Safari, under `keepReadModeOnShare` —
    which every reader resolves through `keepOnSaveOf` (`sync/extraction.ts`) because
    the defaults differ: **read mode on, screenshot off** — the screenshot is ten
    times the bytes and only some pages want it. A save on a plan with `keptCopies`
@@ -448,32 +449,75 @@ Three triggers, and deliberately not a fourth:
    from `useSettings`: that hook is a render's copy and answers the defaults until
    the blob's read lands, so a save in the popup's first frames would keep read mode
    for someone who turned it off — and nothing would show it, since the capture
-   succeeds. The same reason expo's `extractNow` reads its mode at the gesture; a
+   succeeds. The same reason expo's `fetchPreviewsNow` reads its mode at the gesture; a
    read that fails keeps nothing. The saved
    screen then offers both copies as taps (`popup/KeptCopies.tsx`) — "Keeping…"
    until a facet newer than the ask lands, "Try again" when the background refused
    without writing anything (the tab moved on), and a line suggesting the screenshot
    when read mode came back "not an article", the page a screenshot is for. A free
    account sees the same buttons marked Plus, and a tap opens the web app's
-   Subscription section. The setting itself is switches in bracemark-web's
-   Settings → _Read mode_ (`_read-mode/read-mode-section.tsx`), a section of its own
-   rather than a group under Link previews — a preview and a kept copy answer
-   different questions, and the previews section's plan gate and drain controls say
-   nothing about this one:
-   shown off and disabled on free beside the upgrade, with the stored value left
-   alone so a returning subscriber keeps their choice, and worded so it never claims
-   a save made in the web app keeps a copy — it can't, the page isn't open there. It
-   applies only to saves made **on the page**: the browser extension's, and on iOS a
-   share from Safari, whose drain reads `keepReadModeOnSave` at the drain. Expo
-   renders the same section (`features/settings/read-mode-section.tsx`) with only the
-   switches that change something on the device holding them — a setting with no
-   effect there is worse than none: _Keep images in read mode_ on both platforms (it
-   governs the capture screen's copies too), _Keep read mode on save_ on **iOS only**
-   (an Android share carries no copy, and the on-device read that would have given it
-   one is not built — _per client_, bracemark-expo), and no screenshot switch, since
-   the phone takes none. The setting is synced, so the iOS switch's description says
-   the browser extension's saves follow it too.
-2. **A per-link action**: _Keep read mode_ / _Keep screenshot_, reached through a
+   Subscription section.
+
+   **The setting is shown only where a switch changes something on the client
+   holding it** — a setting with no effect there is worse than none. It applies only
+   to saves made **on the page**: the browser extension's, and on iOS a share from
+   Safari, whose drain reads `keepReadModeOnShare` at the drain. So it is split by
+   client — one key per kind of save — and each switch carries the same title
+   wherever it appears:
+
+   | switch                                              | key                    | browser extension | bracemark-web | expo iOS | expo Android |
+   | --------------------------------------------------- | ---------------------- | ----------------- | ------------- | -------- | ------------ |
+   | _Keep a read-mode copy when you save_               | `keepReadModeOnSave`   | yes               | —             | —        | —            |
+   | _Keep a read-mode copy when you share from Safari_  | `keepReadModeOnShare`  | —                 | —             | yes      | —            |
+   | _Keep a screenshot when you save_                   | `keepScreenshotOnSave` | yes               | —             | —        | —            |
+   | _Include images in read-mode copies_ (next section) | `keepReadModeImages`   | yes               | while on ¹    | yes      | yes          |
+
+   ¹ bracemark-web shows it only while _Server read mode_ is on — off, the web app
+   takes no copy for it to qualify (_per client_, bracemark-web).
+
+   **One key per kind of save, and one for images.** The two read-mode switches were
+   one field, `keepReadModeOnSave`, until 2026-11-12, before any release carried it:
+   turning it off on the phone turned it off in the browser too, and each switch's
+   description had to warn about the other. Each now governs only the save made where
+   it is shown, so neither needs that sentence. Images stay ONE key on purpose: what
+   they cost is room in the one library every device syncs, so it is an account-wide
+   question, and per-source switches could only disagree about the same copies. Where
+   they live:
+   - **The browser extension's options page**, section _Keep a copy_
+     (`options/CopiesSection.tsx`) — all three, since a save there is the save that
+     takes a copy, and _Keep a copy_ is the saved screen's own heading for the same
+     two copies. Reached from the gear in the toolbar popup.
+   - **bracemark-web's Settings → _Read mode_** (`_read-mode/read-mode-section.tsx`)
+     — _Server read mode_, the web app's own opt-in (_per client_, bracemark-web);
+     the images switch beneath it while it is on, because the reader's server _Keep a
+     read-mode copy_ reads it; and one standing line saying what a save with the
+     browser extension keeps and where to choose it. On free, one upgrade row titled
+     _Server read mode_ — named for the switch, as Link previews' is. The web app takes no copy on a save and no
+     screenshot, so it shows neither switch, and the line says so — it never claims a
+     save made in the web app keeps a copy; it can't, the page isn't open there. A
+     section of its own rather than a group under Link previews: a preview and a kept
+     copy answer different questions, and the previews section's plan gate and drain
+     controls say nothing about this one.
+   - **expo's Settings → _Read mode_** (`features/settings/read-mode-section.tsx`) —
+     the images switch on both platforms (it governs the capture screen's copies too),
+     and the Safari one on **iOS only**: an Android share carries no copy, and the
+     on-device read that would have given it one is not built (_per client_,
+     bracemark-expo). No screenshot switch, since the phone takes none.
+
+   **On free, every surface shows the upgrade instead of the switches** — the
+   section's header and one row (on the options page, the section itself), Link
+   previews' shape: in `PAYWALL_COPY.keptCopies`' words on the browser extension and
+   expo, and on the web titled _Server read mode_ with its own sentence — not switches shown off
+   and disabled: a disabled switch says nothing about why
+   ([accessibility.md](./accessibility.md)), and one shown off over a stored on reads
+   as a setting nobody can trust. Upgrade goes straight to the Subscription section
+   (the web app's, from the browser extension), never through the upgrade dialog,
+   which would only repeat the row's words. The stored value is left alone so a
+   returning subscriber keeps their choice.
+
+2. **A per-link action**: _Keep a read-mode copy_ (the web reader; _Keep a copy_ on
+   expo's capture screen, where it shares a row with _Update preview_ and the only kind
+   is read mode) / _Keep screenshot_, reached through a
    link's menu — its one **Read** item, which on a link with no copy goes where the
    copy is taken ([reader.md](./reader.md), _the way in_) — and from the reader. On a client that can't capture that link right now, the
    action says what can (open it in the extension, open it in the app).
@@ -492,8 +536,8 @@ people keep re-running the same scoped job.
 **Gating on the existing ladder.** A save-time capture rides the save's own consent,
 exactly as `titleImage` does. Everything else — a bulk job, a per-link action on a
 link this device never fetched — is subject to the same switches as any other
-fetch: `serverExtraction` on web, `deviceExtractionMode` on expo, and `off` stops
-all of it.
+fetch: on web `serverExtraction` for previews and `serverReadMode` for a read-mode
+copy, `deviceExtractionMode` on expo, and `off` stops all of it.
 
 **"Not an article" is settled.** When Readability's pre-check or parse finds no
 article, the facet is written `permanent` with `reason: 'not-an-article'` (a
@@ -590,7 +634,7 @@ and Android's WebView has its own `CookieManager`, apart from Chrome's. So, in o
    one; its top bar has _Read_ back while the link has a copy, and the two screens
    trade places (a replace, never a push) rather than stack
    ([reader.md](./reader.md), _the way in_). The page in a
-   `react-native-webview` WebView with two actions under it. **Keep read mode**
+   `react-native-webview` WebView with two actions under it. **Keep a copy**
    keeps the article and its images (_images in read mode_ — the page fetches them
    first); **Update preview** re-reads the title and preview image from the live
    page — the same collector the browser extension injects (web-react
@@ -602,7 +646,7 @@ and Android's WebView has its own `CookieManager`, apart from Chrome's. So, in o
    says. **Both actions are `keptCopies`'**: no route brings a free account here,
    and one that arrives anyway (a plan lapsing on the screen, an old address) gets
    no _Update preview_ — a free account sets a title and image by hand in the editor
-   — and a _Keep read mode_ marked Plus that opens the upgrade. Its top bar also has
+   — and a _Keep a copy_ marked Plus that opens the upgrade. Its top bar also has
    the Wayback Machine, and a page that fails to load offers it in words (_when the
    page is gone_). A locked
    list's page stays unloaded, and both top-bar exits with it; both actions are live only while the WebView is on
@@ -634,7 +678,7 @@ unreliable, and it is invisible work on the user's battery.
 
 **An automatic read on save — measured 2026-11-11, not built.** The saves that reach
 the app with no live-page copy — an Android share, an iOS share from an app other than
-Safari, a link added in the app — could take read mode from the HTML `extractNow`
+Safari, a link added in the app — could take read mode from the HTML `fetchPreviewsNow`
 already fetches for the title: the server's code (`readModeFromHtml`, linkedom +
 Readability + the shared walker) run on the device, at `expo:bg`, with no extra request.
 A spike ran it over the 62 pages of `measure:kept-copies`, fetched as the app fetches
@@ -673,12 +717,27 @@ makes ([link-extraction-server.md](./link-extraction-server.md), _robots.txt and
 mode_).
 
 **bracemark-web — the server's read mode, on a per-link ask.** It can't fetch a page
-(CORS), so its read mode is the extractor's, under `serverExtraction`, and it has no
-screenshot or page copy of its own. Built as trigger 2 above for read mode: the row
-menu's **Read** opens the reader on a paid plan's link with no copy, and its empty state
-has _Keep read mode_ while `useServerReadMode().available` (signed in, a ready store,
-the `serverExtraction` opt-in, an extractor in this build, and `keptCopies`). Only that
-button's press asks — never the arrival: "Read" is not an ask to have the server fetch
+(CORS), so its read mode is the extractor's, under its own opt-in, `serverReadMode`, and
+it has no screenshot or page copy of its own. Built as trigger 2 above for read mode: the
+row menu's **Read** opens the reader on a paid plan's link with no copy, and its empty
+state has _Keep a read-mode copy_ while `useServerReadMode().available` (signed in, a
+ready store, the `serverReadMode` opt-in, an extractor in this build, and `keptCopies`).
+
+**Its own opt-in, not the preview one.** It rode `serverExtraction` at first, and that
+made one read-mode copy cost the whole un-gestured preview drain: the two send the same
+thing to the same service, but previews send every pending link as it comes into view
+and read mode one link per press, so they are two consents (`settingsGeneralSchema`,
+entities.ts). Both are off by default, which is what /privacy and /extractor promise —
+"off unless you turn it on" — and why per-press consent with no setting was turned down:
+it would have made that sentence false. With `serverReadMode` off and everything else in
+place (`needsOptIn`), the empty state **offers it in place** — the disclosure sentence,
+then _Turn on server read mode_ — not as a link to Settings the way the links page's
+previews banner does: that banner has no room for the disclosure and its switch barely
+moves the count it shows, where here both hold. Turning it on fetches nothing; it hands
+focus to _Keep a read-mode copy_, with _Include images_ beneath it, and that press asks.
+Settings → _Read mode_ is the durable surface.
+
+Only that button's press asks — never the arrival: "Read" is not an ask to have the server fetch
 the page, and an address can't make one either, so a reload or a history entry never
 fetches on its own. The reader says what came back. `runServerReadMode` (web-react `lib/server-read-mode.ts`)
 stores the copy exactly as the extension does, at the `server` tier, and **never
@@ -696,7 +755,7 @@ The kept copies are a Plus feature, `keptCopies` in `iap/plans.ts`, enforced in 
 client like every per-feature gate (the server can't tell one `files/` blob from
 another); the byte and file ceilings stay the server-hard backstop. It is checked
 where a capture is asked for — the browser extension's save and its saved screen,
-expo's share drain and both of the capture screen's actions (_Keep read mode_ and
+expo's share drain and both of the capture screen's actions (_Keep a copy_ and
 _Update preview_ — the row menu's **Read** sends a free account to the reader only, and
 only for a copy it has), and bracemark-web's server read mode
 (`useServerReadMode`) — and the upgrade dialog's words are `PAYWALL_COPY.keptCopies` (`@stxapps/react`),

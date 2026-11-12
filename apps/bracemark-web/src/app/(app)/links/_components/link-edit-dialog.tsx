@@ -17,7 +17,7 @@
 //
 // Title/image follow the override-wins model: the inputs edit `customTitle` /
 // `customImageId`, the placeholders/preview fall back to the extracted values,
-// and CLEARING an override (blank title / "Reset to extracted") deletes the
+// and CLEARING an override (blank title / "Reset to preview") deletes the
 // field so the display falls back to `extraction.title ?? host(url)` — revert
 // is trivial because the discovered value was never destroyed.
 
@@ -93,11 +93,11 @@ function LinkEditForm({
   const { update, saveCustomImage } = useLinkMutations();
 
   // The extraction supplies the fallbacks the overrides sit above: the
-  // placeholder title and the image shown after "Reset to extracted". Live, so
+  // placeholder title and the image shown after "Reset to preview". Live, so
   // a backfill landing mid-edit updates them.
   const id = linkIdOf(link);
   const extraction = useLiveQuery(() => readExtraction(id), [id]);
-  const extractedTitle = extraction?.title;
+  const previewTitle = extraction?.title;
 
   // Draft state, snapshotted from the row at open (this component mounts per
   // open — see LinkEditDialog). Title/note hold the OVERRIDE/typed value, not
@@ -275,7 +275,7 @@ function LinkEditForm({
                 autoCorrect="on"
                 spellCheck
                 maxLength={LINK_TITLE_MAX}
-                placeholder={extractedTitle ?? hostFromText(link.url)}
+                placeholder={previewTitle ?? hostFromText(link.url)}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
@@ -290,11 +290,11 @@ function LinkEditForm({
                 <p className="text-xs text-muted-foreground">
                   Leave blank to use the page’s own title.
                 </p>
-                {title.trim() === '' && extractedTitle && (
+                {title.trim() === '' && previewTitle && (
                   <button
                     type="button"
                     className="shrink-0 text-xs text-primary underline-offset-2 hover:underline"
-                    onClick={() => setTitle(extractedTitle)}
+                    onClick={() => setTitle(previewTitle)}
                   >
                     Edit it instead
                   </button>
@@ -380,7 +380,7 @@ function LinkEditForm({
 
                   The slot keeps its size with NO image, which is not cosmetic:
                   the two buttons below would otherwise move under the pointer —
-                  up when "Reset to extracted" clears to nothing, down when
+                  up when "Reset to preview" clears to nothing, down when
                   `storedUrl` (a LIVE read) materializes bytes mid-edit. Being
                   last retired its other reason, that a growing field shoved the
                   note out from under someone typing in it. Dashed, so an empty slot doesn't
@@ -437,7 +437,7 @@ function LinkEditForm({
                     onClick={() => setImage({ kind: 'clear' })}
                   >
                     <ImageOff data-icon="inline-start" className="size-4" />
-                    Reset to extracted
+                    Reset to preview
                   </Button>
                 )}
               </div>

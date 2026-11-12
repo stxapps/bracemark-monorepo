@@ -81,7 +81,7 @@ function HostMonogram({ host, className }: { host: string; className: string }) 
 // loading-state guard: useFaviconUri only yields a uri once the bytes are on
 // disk, so onError means a real decode failure, never "not fetched yet". The
 // per-host file path is stable, so bytes REPLACED under a still-mounted host
-// (device-extraction's declared-icon capture landing over a guessed
+// (device-link-previews's declared-icon capture landing over a guessed
 // /favicon.ico) keep the stale verdict until the instance is recycled — self-
 // healing and cosmetic; key on the row's fetchedAt if that ever matters.
 function useBrokenUri(): [(uri: string) => boolean, (uri: string) => void] {
@@ -112,7 +112,7 @@ export function Favicon({ host, className }: { host: string; className: string }
   //
   // cachePolicy 'none' — the file IS the cache. A second copy buys nothing here
   // (1–2 KB, already local) and costs correctness: the per-host path is STABLE
-  // while its bytes are REPLACEABLE (device-extraction's declared-icon capture
+  // while its bytes are REPLACEABLE (device-link-previews's declared-icon capture
   // landing over the guessed /favicon.ico — see useBrokenUri's note above), so
   // anything keyed on the uri would go on serving the superseded icon. Re-reading
   // it per mount is the cheaper side of that trade.

@@ -43,6 +43,7 @@ export interface SettingMutations {
   // Synced, so a switch here changes what the browser extension keeps too.
   setKeepOnSave: (patch: {
     readMode?: boolean;
+    readModeOnShare?: boolean;
     readModeImages?: boolean;
     screenshot?: boolean;
   }) => Promise<void>;
@@ -103,10 +104,18 @@ export function useSettingMutations(): SettingMutations {
   );
 
   const setKeepOnSave = useCallback(
-    async (patch: { readMode?: boolean; readModeImages?: boolean; screenshot?: boolean }) => {
+    async (patch: {
+      readMode?: boolean;
+      readModeOnShare?: boolean;
+      readModeImages?: boolean;
+      screenshot?: boolean;
+    }) => {
       if (!username) throw new Error('useSettingMutations: no active account');
       await writeSettingsGeneral(username, {
         ...(patch.readMode !== undefined ? { keepReadModeOnSave: patch.readMode } : {}),
+        ...(patch.readModeOnShare !== undefined
+          ? { keepReadModeOnShare: patch.readModeOnShare }
+          : {}),
         ...(patch.readModeImages !== undefined ? { keepReadModeImages: patch.readModeImages } : {}),
         ...(patch.screenshot !== undefined ? { keepScreenshotOnSave: patch.screenshot } : {}),
       });

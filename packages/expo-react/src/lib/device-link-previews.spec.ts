@@ -1,4 +1,4 @@
-// Specs for the ON-DEVICE extraction worker. web-react's server-extraction.spec.ts is
+// Specs for the ON-DEVICE extraction worker. web-react's server-link-previews.spec.ts is
 // canonical for the WRITE half — the two-pass ordering, the writer split, per-link outcomes
 // recorded rather than thrown — and this file deliberately does not re-litigate it. What is
 // pinned here is the FETCH half, which was rebuilt rather than ported, and the two rules
@@ -37,7 +37,7 @@ import { getDb } from '../data/db';
 import { readFavicon } from '../data/favicon-store';
 import { readExtraction } from '../data/queries';
 import { seedNewAccount } from '../data/sync-store';
-import { runDeviceTitleImageBatch } from './device-extraction';
+import { runDeviceTitleImageBatch } from './device-link-previews';
 import { USER_AGENT } from './user-agent';
 
 // The Response constructor's own body type, so the byte fixtures below don't have to name a

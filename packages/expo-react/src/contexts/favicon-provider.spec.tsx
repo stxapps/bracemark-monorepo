@@ -17,7 +17,7 @@ import { FaviconProvider, useFavicon } from './favicon-provider';
 //     `deviceExtractionMode === 'all'`, and it must STOP if the mode is lowered while its
 //     queue is still draining.
 //   - `requestFaviconNow` — the links the user just saved on this device, whose pages
-//     `extractNow` is fetching in the same breath. Its licence was the save, which already
+//     `fetchPreviewsNow` is fetching in the same breath. Its licence was the save, which already
 //     happened and cannot be revoked by a later toggle, so it must survive a mode BELOW
 //     `all` — including in the tail of the queue, past the fan-out cap.
 //

@@ -15,7 +15,7 @@ import { FaviconProvider, useFavicon } from './favicon-provider';
 // proxy and the verdict to @stxapps/shared; what lives here is the policy around them.
 //
 // `contexts/server-extraction-gate.spec.tsx` already pins the rule this provider holds in
-// duplicate with ExtractionProvider: nothing STARTS through a closed gate. This file is
+// duplicate with LinkPreviewsProvider: nothing STARTS through a closed gate. This file is
 // about the queue that already started, plus the two claims the source header makes that
 // nothing anywhere checks — one fetch per HOST, and a bounded fan-out.
 //

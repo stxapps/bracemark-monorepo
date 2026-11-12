@@ -1,13 +1,13 @@
 import * as React from 'react';
 import { act, render } from '@testing-library/react-native';
 
-import { useExtraction, useLiveRead, useSettingMutations, useSettings } from '@stxapps/expo-react';
+import { useLinkPreviews, useLiveRead, useSettingMutations, useSettings } from '@stxapps/expo-react';
 
 import { PreviewsPrompt } from './previews-prompt';
 
 // What this banner gets WRONG if nothing pins it: it counts links the save path
 // on this very device is already fetching. At `saves` — the mode it arms on —
-// `extractNow` fetches a link saved here outside the gate, so that link is
+// `fetchPreviewsNow` fetches a link saved here outside the gate, so that link is
 // raw-pending for the length of its own fetch and then settles itself. Counting
 // it put the offer on screen for a few seconds after every save on a
 // single-device account and then retired it, offering to cover a link that was
@@ -21,7 +21,7 @@ import { PreviewsPrompt } from './previews-prompt';
 // the arithmetic and the settle window between them.
 jest.mock('@stxapps/expo-react', () => ({
   readRawPendingTitleImageCount: jest.fn(),
-  useExtraction: jest.fn(),
+  useLinkPreviews: jest.fn(),
   useLiveRead: jest.fn(),
   useLocks: () => ({ isListLocked: () => false }),
   useSettingMutations: jest.fn(),
@@ -31,7 +31,7 @@ jest.mock('./page-provider', () => ({
   useLinksPage: () => ({ selection: { kind: 'all' } }),
 }));
 
-const useExtractionMock = useExtraction as jest.Mock;
+const useExtractionMock = useLinkPreviews as jest.Mock;
 const useLiveReadMock = useLiveRead as jest.Mock;
 const useSettingMutationsMock = useSettingMutations as jest.Mock;
 const useSettingsMock = useSettings as jest.Mock;

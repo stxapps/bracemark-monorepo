@@ -5,9 +5,9 @@
 // bracemark-extension; the app provides the configured api client via @stxapps/react's
 // ApiClientProvider (the seam these modules read through useApiClient / SyncDeps.api).
 export * from './contexts/auth-provider';
-export * from './contexts/extraction-provider';
 export * from './contexts/favicon-provider';
 export * from './contexts/file-content-provider';
+export * from './contexts/link-previews-provider';
 export * from './contexts/lock-provider';
 export * from './contexts/sync-provider';
 export * from './data/clear-data';
@@ -35,13 +35,13 @@ export * from './hooks/use-delete-account';
 export * from './hooks/use-delete-all-data';
 export * from './hooks/use-entitlements';
 export * from './hooks/use-export-all-data';
-export * from './hooks/use-extraction-counts';
 export * from './hooks/use-favicon-url';
 export * from './hooks/use-has-recovery-door';
 export * from './hooks/use-image-file-url';
 export * from './hooks/use-import-all-data';
 export * from './hooks/use-kept-copy-mutations';
 export * from './hooks/use-link-mutations';
+export * from './hooks/use-link-preview-counts';
 export * from './hooks/use-link-quota';
 export * from './hooks/use-list-mutations';
 export * from './hooks/use-lists';
@@ -67,7 +67,7 @@ export * from './lib/reader-doc-bytes';
 export * from './lib/reader-image';
 export * from './lib/reader-images';
 export * from './lib/resize-image';
-export * from './lib/server-extraction';
+export * from './lib/server-link-previews';
 export * from './lib/server-read-mode';
 export * from './lib/store-read-mode';
 export * from './sync/engine';

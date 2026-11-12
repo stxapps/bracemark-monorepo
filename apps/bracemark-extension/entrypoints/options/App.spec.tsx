@@ -12,8 +12,8 @@ import App from './App';
 // of its own — the popup owns it — so the empty state hands the user to the popup
 // (`action.openPopup()`), and where the browser can't open it (Chrome 111–126, or a
 // refused call) points at the toolbar icon instead. Either way it never just reports
-// a requirement. `ThemeSection` is covered in its own spec; here it is only asked
-// whether it appears at all.
+// a requirement. `ThemeSection` and `CopiesSection` are covered in their own specs;
+// here they are only asked whether they appear at all.
 
 const mockUseAuth = jest.fn();
 const mockUseSignOut = jest.fn();
@@ -21,6 +21,7 @@ const mockCountPendingOps = jest.fn();
 const mockUseSync = jest.fn();
 const mockUseSettings = jest.fn();
 const mockUseSettingMutations = jest.fn();
+const mockUseEntitlements = jest.fn();
 
 jest.mock('@stxapps/web-react', () => ({
   getSession: () => ({ generation: 'options-session' }),
@@ -41,6 +42,9 @@ jest.mock('@stxapps/web-react', () => ({
   },
   get useSettingMutations() {
     return mockUseSettingMutations;
+  },
+  get useEntitlements() {
+    return mockUseEntitlements;
   },
 }));
 
@@ -69,8 +73,11 @@ beforeEach(() => {
     themeSource: 'sync',
     syncTheme: { mode: 'system', lightStart: '06:00', darkStart: '18:00' },
     localTheme: { mode: 'system', lightStart: '06:00', darkStart: '18:00' },
+    keepOnSave: { readMode: true, readModeImages: true, screenshot: false },
   });
+  mockUseEntitlements.mockReturnValue({ entitlements: { keptCopies: true } });
   mockUseSettingMutations.mockReturnValue({
+    setKeepOnSave: jest.fn(async () => undefined),
     setThemeSource: jest.fn(async () => undefined),
     setSyncTheme: jest.fn(async () => undefined),
     setLocalTheme: jest.fn(async () => undefined),
@@ -127,10 +134,11 @@ describe('the three states', () => {
     expect(body()).toContain('Click the Bracemark icon in your browser toolbar');
   });
 
-  it('shows account and theme once there is a session', () => {
+  it('shows account, copies and theme once there is a session', () => {
     render(<App />);
 
     expect(screen.getByText('Account')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Keep a copy' })).toBeTruthy();
     expect(screen.getByText('Theme')).toBeTruthy();
   });
 });

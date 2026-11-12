@@ -99,7 +99,7 @@ app.get('/', (c) => {
 });
 
 // ⚠ status.bracemark.com polls this route every 15 minutes, from another repo
-// (stxapps/bracemark-status), and marks the link-preview service DOWN on a public page unless
+// (stxapps/bracemark-status), and marks the link-extraction service DOWN on a public page unless
 // it answers 2xx with exactly {"status":"ok"}. Nothing here can see that
 // dependency, so moving the path, changing the body, or putting it behind auth
 // is a change to the status page too. The standard rate limit is fine — the

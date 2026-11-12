@@ -25,7 +25,7 @@ import { unique } from './data';
 //     rather than from this origin (DNS failure → `fetch_failed` → transient);
 //   - a preview image, a redirect chain, a no-metadata page — NO. The page has
 //     no og:image and never redirects. Those stay at the unit layer
-//     (apps/bracemark-extractor lib/*.spec.ts, expo-react device-extraction.spec.ts)
+//     (apps/bracemark-extractor lib/*.spec.ts, expo-react device-link-previews.spec.ts)
 //     until an origin we own replaces this one (e2e/NEXT.md, EXTRACT-FIXTURE-001).
 //
 // No Playwright import, so the native runner can build the same fixtures.

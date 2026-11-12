@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { AppState, Text } from 'react-native';
 import { act, render, waitFor } from '@testing-library/react-native';
 
-import { ExtractionProvider, useExtraction } from './extraction-provider';
+import { LinkPreviewsProvider, useLinkPreviews } from './link-previews-provider';
 
 // THE GESTURED IN-FLIGHT TALLY — the half of the previews prompt that lives here.
 //
@@ -12,7 +12,7 @@ import { ExtractionProvider, useExtraction } from './extraction-provider';
 // make the number usable, and both fail silently:
 //
 //   - COUNTED BEFORE THE FIRST AWAIT. The save writes an `items` row, which wakes
-//     the banner's live read; `extractNow` is called in the next breath but claims
+//     the banner's live read; `fetchPreviewsNow` is called in the next breath but claims
 //     asynchronously. Increment after the await and the banner is briefly back to
 //     counting the link being saved — the original flicker, shorter.
 //   - RELEASED ALWAYS, AND BY WHAT IT COUNTED. The tally is subtracted from a count
@@ -25,15 +25,15 @@ import { ExtractionProvider, useExtraction } from './extraction-provider';
 // `enabled` is false by construction (it needs `all`), which is also the only mode
 // the banner arms in. What is under test is the gestured path, which runs anyway.
 // The one drain case at the end is a drift guard for a rule web's
-// extraction-provider.spec.tsx pins in full (docs/testing.md, _the ported pair_).
+// link-previews-provider.spec.tsx pins in full (docs/testing.md, _the ported pair_).
 //
 // Everything below the provider is mocked — the store, the counts, the fetch — the
 // same seam favicon-provider.spec.tsx takes: this file is about one number.
 //
 // And about one gate, because it is the same function and fails the same way.
-// `extractNow` re-reads the extraction mode from the STORE before anything leaves
+// `fetchPreviewsNow` re-reads the extraction mode from the STORE before anything leaves
 // the device: the mode a render holds is useSettings' default until the settings
-// blob has been read, and a caller can be holding the `extractNow` of exactly that
+// blob has been read, and a caller can be holding the `fetchPreviewsNow` of exactly that
 // render. Nothing shows the difference — the fetch succeeds.
 
 let mockMode = 'saves';
@@ -64,7 +64,7 @@ jest.mock('../hooks/use-live-read', () => ({
 
 const mockReadPendingForPaths = jest.fn();
 const mockReadPage = jest.fn();
-// The store's copy of the settings blob — what `extractNow` re-reads. It agrees
+// The store's copy of the settings blob — what `fetchPreviewsNow` re-reads. It agrees
 // with the render's mode unless a test makes the two differ.
 const mockReadSettings = jest.fn();
 jest.mock('../data/queries', () => ({
@@ -75,7 +75,7 @@ jest.mock('../data/queries', () => ({
 }));
 
 const mockRunBatch = jest.fn();
-jest.mock('../lib/device-extraction', () => ({
+jest.mock('../lib/device-link-previews', () => ({
   runDeviceTitleImageBatch: (...args: unknown[]) => mockRunBatch(...args),
 }));
 
@@ -96,19 +96,19 @@ function deferred<T>() {
 
 const link = (path: string) => ({ path, url: `https://example.com/${path}` });
 
-let extractNow: (linkPaths: string[]) => void = () => undefined;
-let extractAll: () => void = () => undefined;
+let fetchPreviewsNow: (linkPaths: string[]) => void = () => undefined;
+let generateAll: () => void = () => undefined;
 
 // Renders the tally so a re-render is what the assertions read, and hands the
-// entry points out so a test can make the save or press Extract all.
+// entry points out so a test can make the save or press Generate all.
 function Probe() {
-  const context = useExtraction();
+  const context = useLinkPreviews();
   useEffect(() => {
-    extractNow = context.extractNow;
-  }, [context.extractNow]);
+    fetchPreviewsNow = context.fetchPreviewsNow;
+  }, [context.fetchPreviewsNow]);
   useEffect(() => {
-    extractAll = context.extractAll;
-  }, [context.extractAll]);
+    generateAll = context.generateAll;
+  }, [context.generateAll]);
   return <Text>{`in flight: ${context.gesturedInFlightCount}`}</Text>;
 }
 
@@ -116,15 +116,15 @@ const inFlight = (n: number) => `in flight: ${n}`;
 
 const mount = () =>
   render(
-    <ExtractionProvider>
+    <LinkPreviewsProvider>
       <Probe />
-    </ExtractionProvider>,
+    </LinkPreviewsProvider>,
   );
 
 beforeEach(() => {
   mockMode = 'saves';
-  extractNow = () => undefined;
-  extractAll = () => undefined;
+  fetchPreviewsNow = () => undefined;
+  generateAll = () => undefined;
   mockProbe = [];
   mockRawPending = 0;
   mockReadPage.mockReset();
@@ -143,7 +143,7 @@ test('counts a save from before its first await until the run ends', async () =>
   expect(getByText(inFlight(0))).toBeTruthy();
 
   act(() => {
-    extractNow(['links/a.enc']);
+    fetchPreviewsNow(['links/a.enc']);
   });
   // Nothing has been claimed, or even looked up: the run is on its first await,
   // the mode's re-read. This is the window in which the banner's live read
@@ -168,7 +168,7 @@ test('releases what it counted when the fetch never lands', async () => {
 
   const { getByText } = mount();
   act(() => {
-    extractNow(['links/a.enc', 'links/b.enc']);
+    fetchPreviewsNow(['links/a.enc', 'links/b.enc']);
   });
   expect(getByText(inFlight(2))).toBeTruthy();
 
@@ -181,7 +181,7 @@ test('releases what it counted when the fetch never lands', async () => {
 });
 
 test('counts nothing at `off`, where the gesture itself is declined', async () => {
-  // The one position that reaches into `extractNow`: no fetch, and so nothing for
+  // The one position that reaches into `fetchPreviewsNow`: no fetch, and so nothing for
   // the banner to subtract either. The two tests above are its positive control —
   // the same call at `saves` counts.
   mockMode = 'off';
@@ -190,7 +190,7 @@ test('counts nothing at `off`, where the gesture itself is declined', async () =
 
   const { getByText } = mount();
   act(() => {
-    extractNow(['links/a.enc']);
+    fetchPreviewsNow(['links/a.enc']);
   });
 
   expect(mockReadPendingForPaths).not.toHaveBeenCalled();
@@ -200,14 +200,14 @@ test('counts nothing at `off`, where the gesture itself is declined', async () =
 test('declines a gesture the store says is `off`, whatever the render still holds', async () => {
   // The render is on `saves` — what useSettings answers before it has read the
   // settings blob — and the store already holds the account's `off`. ShareBridge
-  // calls the `extractNow` of such a render when a first sync ends. The first test
+  // calls the `fetchPreviewsNow` of such a render when a first sync ends. The first test
   // above is the control: the same call with the store on `saves` fetches.
   mockReadSettings.mockResolvedValue({ deviceExtractionMode: 'off' });
   mockReadPendingForPaths.mockResolvedValue([link('links/a.enc')]);
 
   const { getByText } = mount();
   await act(async () => {
-    extractNow(['links/a.enc']);
+    fetchPreviewsNow(['links/a.enc']);
     await Promise.resolve();
   });
 
@@ -225,7 +225,7 @@ test('takes the opt-in from the same read', async () => {
 
   mount();
   await act(async () => {
-    extractNow(['links/a.enc']);
+    fetchPreviewsNow(['links/a.enc']);
     await Promise.resolve();
   });
 
@@ -234,9 +234,9 @@ test('takes the opt-in from the same read', async () => {
   });
 });
 
-test('starts Extract all when it is pressed while an auto step is in flight', async () => {
-  // Drift guard for web's extraction-provider.spec.tsx: the drain is duplicated
-  // source, so the rerun handoff has to be pinned on this copy too. Extract all
+test('starts Generate all when it is pressed while an auto step is in flight', async () => {
+  // Drift guard for web's link-previews-provider.spec.tsx: the drain is duplicated
+  // source, so the rerun handoff has to be pinned on this copy too. Generate all
   // re-runs the drain effect mid-step; the new run can only queue behind the running
   // one, and the finishing — now cancelled — step has to hand the rerun on.
   mockMode = 'all';
@@ -256,7 +256,7 @@ test('starts Extract all when it is pressed while an auto step is in flight', as
   await waitFor(() => expect(mockRunBatch).toHaveBeenCalledTimes(1));
 
   await act(async () => {
-    extractAll();
+    generateAll();
     await Promise.resolve();
   });
   expect(mockReadPage).not.toHaveBeenCalled();

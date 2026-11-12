@@ -17,7 +17,7 @@
 //    `MAX_IMAGE_BYTES` is a 10 MB og:image ceiling, not a statement about
 //    icons) — see extract/favicon.ts.
 //
-// Deliberately NOT in lib/device-extraction.ts, whose header draws the line this
+// Deliberately NOT in lib/device-link-previews.ts, whose header draws the line this
 // module sits on the other side of: that worker captures a `<link rel=icon>` as a
 // byproduct of a page fetch it already paid for — "no disclosure the page fetch
 // didn't already pay" — and it says plainly that this happens ONLY there, never

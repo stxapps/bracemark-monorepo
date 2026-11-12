@@ -168,7 +168,7 @@ MEMBERS of a whole-value `useMemo` too — memoizing the wrapper buys nothing if
 something inside it is freshly allocated. The two shapes that keep reappearing
 are normalization helpers that return a new object (`coerceThemeState`) and
 inline arrows passed as provider props. Audited July 2026: page-provider,
-view-state-provider, auth-provider, extraction-provider, the api/extract client
+view-state-provider, auth-provider, link-previews-provider, the api/extract client
 providers and the real `SyncProvider` were all already correct (the api and
 extract clients are module singletons).
 
@@ -842,7 +842,7 @@ changes is mechanical, and only the substrate forces it:
 **Ported so far:** the namespace reads (lists/tags/pins/settings), the
 link-library query (`readLinks` and its whole driver tree), the by-id / by-url
 lookups, and the quota count. **Not yet ported:** the extraction tallies and the
-extract-all / displayed-scoped drain-page reads (§the extraction-queue reads) —
+generate-all / displayed-scoped drain-page reads (§the extraction-queue reads) —
 they arrive verbatim with the bracemark-expo features that need them, and will keep
 the same cursor-vs-`bulkGet` split described there (unbounded-but-not-reactive
 carries a cursor; reactive-but-bounded uses `bulkGet`).

@@ -474,7 +474,9 @@ export async function writeSettingsGeneral(
   patch: {
     linksLayout?: LinksLayout;
     serverExtraction?: boolean;
+    serverReadMode?: boolean;
     keepReadModeOnSave?: boolean;
+    keepReadModeOnShare?: boolean;
     keepReadModeImages?: boolean;
     keepScreenshotOnSave?: boolean;
     theme?: ThemeState;

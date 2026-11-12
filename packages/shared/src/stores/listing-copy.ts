@@ -24,7 +24,7 @@
 // THE COPY RULE, inherited from apps/bracemark-site/src/app/page.tsx: only promise
 // what ships. Page copies and AI are planned, not shipped, so neither appears here.
 // Read mode and screenshots SHIP — on desktop: the browser extension takes both, the
-// web app reads them and keeps read mode through the link-preview service, and the
+// web app reads them and keeps read mode through the link-extraction service, and the
 // mobile apps read them and keep read mode (from a Safari share on iOS, and from a
 // link's capture screen) but take no screenshot yet (docs/link-extraction-keep.md).
 // They are a Plus feature (`keptCopies`). None of these strings names them yet: that

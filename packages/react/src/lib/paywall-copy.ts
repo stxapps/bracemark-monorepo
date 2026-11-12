@@ -65,7 +65,7 @@ export const PAYWALL_COPY: Record<
   // Fired from the browser extension's saved screen (which opens the web app's
   // Subscription section instead of rendering this dialog — it has no paywall of
   // its own), from the web reader's empty state, and from expo's capture screen
-  // (_Keep read mode_ on a free account — which no route sends there, so only after a
+  // (_Keep a copy_ on a free account — which no route sends there, so only after a
   // plan lapses on the screen or from an old address; its _Update preview_ is simply
   // absent on free, docs/reader.md _the way in_). The screenshot is scoped to the browser
   // extension because this one string is read on a phone too, and the phone app

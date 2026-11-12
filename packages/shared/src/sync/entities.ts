@@ -497,21 +497,56 @@ export type SyncedThemeState = z.infer<typeof themeStateSchema>;
 // second copy of this. Round-tripped by `looseObject` on clients that don't model it
 // (bracemark-web/the extension never read it).
 //
-// `keepReadModeOnSave` / `keepScreenshotOnSave` are the KEPT-COPIES save setting
-// (docs/link-extraction-keep.md, _when a copy is taken_): which copies a save made ON
-// THE PAGE also takes. Two booleans, not one enum, because they are independent —
-// read mode alone, the screenshot alone, both, neither. SYNCED: it is what the user
-// wants kept, and a second browser should inherit it. Absent means the DEFAULT, and
+// `keepReadModeOnSave` / `keepScreenshotOnSave` / `keepReadModeOnShare` are the
+// KEPT-COPIES save setting (docs/link-extraction-keep.md, _when a copy is taken_): which
+// copies a save made ON THE PAGE also takes. One key per kind of save, because each is
+// switched where that save happens and nowhere else: the first two are the browser
+// extension's save (its options page), `keepReadModeOnShare` a share from the phone
+// (iOS's Settings → Read mode; a Safari share is the one that carries a copy today).
+// They were one `keepReadModeOnSave` for both until 2026-11-12 — before any release
+// carried them — and flipping it on the phone turned it off in the browser too, which
+// each switch had to warn about. Booleans, not one enum, because they are independent.
+// SYNCED: a second browser, or a second phone, should inherit it. Absent means the DEFAULT, and
 // the defaults are not both false — read mode on, screenshot off — so every reader
 // resolves them through `keepOnSaveOf` (sync/extraction.ts) rather than `?? false`.
 // They only ever ask; the plan's `keptCopies` still decides whether a capture runs.
+//
+// `serverReadMode` is the web app's opt-in to keep a read-mode copy THROUGH
+// `bracemark-extractor` (docs/link-extraction-keep.md, _per client_, bracemark-web).
+// Its own field, not a reading of `serverExtraction`, because the two consent to
+// different things on the same service: `serverExtraction` sends every pending link's
+// URL as it comes into view, with no gesture; this one only enables a per-link
+// _Keep a read-mode copy_, and every fetch it allows is still one press for one link.
+// Coupling them made one read-mode copy cost the whole un-gestured preview drain.
+// OFF BY DEFAULT, like its sibling — absent or `false` means the reader never sends
+// an address. SYNCED, because it is an account's trust decision about our service.
+//
+// ⚠ THE KEYS ARE FROZEN, and two of them read wider than the switches they are now.
+// Every key here has shipped, and a device that last synced long ago writes its old
+// key back, so a rename would leave two keys a pair of devices can set apart
+// (docs/local-first-sync.md, _the first release_). They keep their names; this says
+// what each one is in the UI today:
+//   - `serverExtraction` is web's _Server previews_ switch (Settings → Link previews)
+//     — titles, preview images and favicons through the link-extraction service, and
+//     nothing else since read mode moved to `serverReadMode`. Named today it would be
+//     `serverPreviews`; read mode never shipped under it, so its released meaning is
+//     unchanged. The `serverExtraction` ENTITLEMENT (iap/plans.ts) is the plan gate on
+//     this switch, and shares its name for that reason.
+//   - `deviceExtractionMode` is expo's _Link previews_ ladder, and its name is still
+//     exact: `off` stops EVERY fetch the phone makes for a link — the page, the preview
+//     image, favicons, and a Safari share's read-mode images (share-bridge.tsx) — so it
+//     governs extraction, not only previews.
+// Don't alias them at the read edge (`serverPreviews: general.serverExtraction`): one
+// stored field under two names is the drift this file's comments exist to prevent.
 export const settingsGeneralSchema = z.looseObject({
   linksLayout: z.string().optional().catch(undefined),
   serverExtraction: z.boolean().optional().catch(undefined),
+  serverReadMode: z.boolean().optional().catch(undefined),
   // A free `z.string()`, narrowed by `coerceDeviceExtractionMode` at the read edge —
   // see DEVICE_EXTRACTION_MODES for why the tolerant parse matters here.
   deviceExtractionMode: z.string().optional().catch(undefined),
   keepReadModeOnSave: z.boolean().optional().catch(undefined),
+  keepReadModeOnShare: z.boolean().optional().catch(undefined),
   // Whether a read-mode copy keeps the article's images too — absent means ON
   // (`keepOnSaveOf`, sync/extraction.ts, which says why it has a switch of its own).
   keepReadModeImages: z.boolean().optional().catch(undefined),

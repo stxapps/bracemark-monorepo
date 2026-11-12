@@ -31,7 +31,7 @@ import { pageCaptureScript } from './page-capture-script.generated';
 //     button spinning.
 //   - NOTHING THE PAGE SENDS IS TRUSTED. Shapes are checked here; the document, the
 //     images and the preview are each validated again where they are stored
-//     (expo-react store-read-mode.ts, lib/reader-images.ts, lib/device-extraction.ts).
+//     (expo-react store-read-mode.ts, lib/reader-images.ts, lib/device-link-previews.ts).
 
 const READ_MODE_TIMEOUT_MS = 30_000;
 const META_TIMEOUT_MS = 10_000;

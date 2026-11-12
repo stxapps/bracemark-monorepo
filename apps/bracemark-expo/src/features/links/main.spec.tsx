@@ -65,7 +65,7 @@ jest.mock('@stxapps/expo-react', () => {
   // rebuild the tag map, and with it the list's `extraData`, on every render.
   const tags: never[] = [];
   return {
-    useExtraction: () => ({ reportDisplayedLinkPaths: jest.fn() }),
+    useLinkPreviews: () => ({ reportDisplayedLinkPaths: jest.fn() }),
     useLocks: () => ({
       isListLocked: (id: string) => mockLocked.has(id),
       isListLockedByHand: (id: string) => mockLockedByHand.has(id),

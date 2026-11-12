@@ -120,7 +120,7 @@ export function InnerLayout({ children }: { children: React.ReactNode }) {
   // across requests/renders. ApiClientProvider hands the shared hooks the
   // env-configured client (apiClient) so they don't hardcode a baseUrl.
   // ExtractClientProvider is its bracemark-extractor sibling. Only the (app)
-  // layout's FaviconProvider and ExtractionProvider read it, yet it is provided
+  // layout's FaviconProvider and LinkPreviewsProvider read it, yet it is provided
   // HERE: the client carries functions, so that layout — a server component —
   // cannot hand it down, and this is the client component already above it.
   const [queryClient] = useState(() => new QueryClient());

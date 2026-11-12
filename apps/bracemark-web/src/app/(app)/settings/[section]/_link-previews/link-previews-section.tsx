@@ -3,16 +3,16 @@
 // The Link previews settings section: the opt-in toggle + link enrichment progress
 // + the explicit full-library controls. Server extraction fills in a saved
 // link's title/image via bracemark-extractor; the drain loop itself lives in
-// web-react's ExtractionProvider (mounted in (app)/layout.tsx), so this section
+// web-react's LinkPreviewsProvider (mounted in (app)/layout.tsx), so this section
 // is a thin controls surface:
 //   - the `serverExtraction` toggle (the privacy-load-bearing opt-in — no URL
 //     leaves the browser until it's on), a synced setting read/written through
 //     useSettings/useSettingMutations, colocated here with the controls it
 //     governs rather than split off into Misc;
 //   - progress from the exact facet counts (done / pending / failed) via
-//     useExtractionCounts — mounted HERE, on demand, because exactness carries an
+//     useLinkPreviewCounts — mounted HERE, on demand, because exactness carries an
 //     O(trash) trash-correction join that shouldn't ride the always-on provider;
-//   - "Extract all" to drain the WHOLE library (a conscious, potentially
+//   - "Generate all" to drain the WHOLE library (a conscious, potentially
 //     thousands-of-requests job — so it confirms at the button first, per
 //     docs/link-extraction.md), and "Pause" to stop it early.
 // The whole feature is self-contained in this one section so a platform that
@@ -32,8 +32,8 @@ import Link from 'next/link';
 import { PLAN_LABELS } from '@stxapps/shared';
 import {
   useEntitlements,
-  useExtraction,
-  useExtractionCounts,
+  useLinkPreviewCounts,
+  useLinkPreviews,
   useSettingMutations,
   useSettings,
 } from '@stxapps/web-react';
@@ -59,14 +59,14 @@ function Stat({ label, value }: { label: string; value: number }) {
 }
 
 export function LinkPreviewsSection() {
-  const { enabled, isRunning, isExtractingAll, autoLimitReached, extractAll, pause } =
-    useExtraction();
+  const { enabled, isRunning, isGeneratingAll, autoLimitReached, generateAll, pause } =
+    useLinkPreviews();
   const {
     done: doneCount,
     pending: pendingCount,
     failedTransient: failedTransientCount,
     failedPermanent: failedPermanentCount,
-  } = useExtractionCounts();
+  } = useLinkPreviewCounts();
 
   // The opt-in itself. `enabled` above is the composite gate (signed in + store
   // ready + extractor configured + this), so the toggle binds to the raw
@@ -83,7 +83,7 @@ export function LinkPreviewsSection() {
   // preference itself is untouched, so it comes back if they upgrade.
   const { entitlements } = useEntitlements();
 
-  // Two-step confirm for "Extract all": the first click reveals the count +
+  // Two-step confirm for "Generate all": the first click reveals the count +
   // Confirm, since draining the whole library can be thousands of paid requests.
   const [confirming, setConfirming] = useState(false);
 
@@ -134,20 +134,20 @@ export function LinkPreviewsSection() {
   const total = doneCount + pendingCount + failedTransientCount + failedPermanentCount;
 
   // All three swap the contents of the button slot, so all three hand focus on.
-  // `extractAll` flips `isExtractingAll` in the same event, so the slot the
+  // `generateAll` flips `isGeneratingAll` in the same event, so the slot the
   // effect focuses is Pause by the time it runs.
-  const askExtractAll = () => {
+  const askGenerateAll = () => {
     focusAfterSwap.current = 'group';
     setConfirming(true);
   };
-  const cancelExtractAll = () => {
+  const cancelGenerateAll = () => {
     focusAfterSwap.current = 'trigger';
     setConfirming(false);
   };
-  const startExtractAll = () => {
+  const startGenerateAll = () => {
     focusAfterSwap.current = 'trigger';
     setConfirming(false);
-    extractAll();
+    generateAll();
   };
 
   // Free plan: the whole feature is a Plus/Pro entitlement, so the section is
@@ -207,7 +207,12 @@ export function LinkPreviewsSection() {
         // front of an anonymous service could possibly work. /privacy and
         // /extractor already named the IP; the toggle that turns the thing ON is
         // the last place that should be quieter than the policy page.
-        description="Fetch pending links through the preview service to fill in their titles and images. While this is on, links shown on screen are handled automatically and Generate all covers the full library. Each request sends the link’s URL but no account identity. The rate limiter briefly holds the requesting IP address."
+        //
+        // The IP clause says what is held and WHY, not "the rate limiter briefly
+        // holds…": named by its mechanism it read as a limit on the feature
+        // ("previews may pause"), when it is a privacy fact. Server read mode's
+        // switch carries the same clause (read-mode-section.tsx).
+        description="Our link-extraction service fetches pending links to fill in their titles and images. While this is on, links shown on screen fill in automatically, and Generate all covers the full library. It receives each link’s address, not your account, and briefly holds your IP address so no single source can abuse it."
         action={
           <Switch id="server-extraction" checked={serverExtraction} onCheckedChange={setEnabled} />
         }
@@ -218,7 +223,7 @@ export function LinkPreviewsSection() {
       {serverExtraction && !enabled ? (
         <SettingsNotice tone="pending">
           Server previews are on but currently unavailable — they resume once you’re signed in and
-          the preview service is reachable.
+          the link-extraction service is reachable.
         </SettingsNotice>
       ) : enabled ? (
         <div className="flex flex-col gap-4">
@@ -268,7 +273,7 @@ export function LinkPreviewsSection() {
             </p>
           )}
 
-          {autoLimitReached && !isExtractingAll && (
+          {autoLimitReached && !isGeneratingAll && (
             <SettingsNotice tone="pending">
               Automatic previews paused for this session. Use <strong>Generate all</strong> to
               finish the remaining links.
@@ -276,7 +281,7 @@ export function LinkPreviewsSection() {
           )}
 
           <div>
-            {isExtractingAll ? (
+            {isGeneratingAll ? (
               <Button ref={triggerRef} variant="outline" onClick={pause}>
                 <Pause data-icon="inline-start" className="size-4" />
                 {isRunning ? 'Generating… Pause' : 'Pause'}
@@ -285,18 +290,18 @@ export function LinkPreviewsSection() {
               <div
                 ref={confirmGroupRef}
                 role="group"
-                aria-labelledby="extract-all-confirm"
+                aria-labelledby="generate-all-confirm"
                 tabIndex={-1}
                 className="flex flex-wrap items-center gap-3 outline-none"
               >
-                <span id="extract-all-confirm" className="text-sm">
+                <span id="generate-all-confirm" className="text-sm">
                   Generate previews for all {pendingCount} pending link
                   {pendingCount === 1 ? '' : 's'}? This sends every pending link’s address to the
-                  preview service.
+                  link-extraction service.
                 </span>
                 <div className="flex gap-2">
-                  <Button onClick={startExtractAll}>Confirm</Button>
-                  <Button variant="ghost" onClick={cancelExtractAll}>
+                  <Button onClick={startGenerateAll}>Confirm</Button>
+                  <Button variant="ghost" onClick={cancelGenerateAll}>
                     Cancel
                   </Button>
                 </div>
@@ -306,7 +311,7 @@ export function LinkPreviewsSection() {
                 ref={triggerRef}
                 variant="outline"
                 disabled={pendingCount === 0}
-                onClick={askExtractAll}
+                onClick={askGenerateAll}
               >
                 <ImageDown data-icon="inline-start" className="size-4" />
                 Generate all

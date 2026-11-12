@@ -32,7 +32,7 @@
 //    expo never calls, and honoring it here would tie this device's fetching to
 //    a decision about a server it doesn't use.
 //    The carve-out lives elsewhere: an icon learned WHILE EXTRACTING a page
-//    (lib/device-extraction.ts) is written straight to the store by that worker,
+//    (lib/device-link-previews.ts) is written straight to the store by that worker,
 //    because it costs no disclosure the page fetch didn't already pay. This
 //    queue is the guessing path, and stays behind the opt-in — with ONE
 //    exception, `requestFaviconNow` below.
@@ -40,7 +40,7 @@
 //    (gestured vs. un-gestured, not client vs. server). `requestFavicon` is the
 //    un-gestured one — a row scrolled past — and is gated. `requestFaviconNow`
 //    is the gestured one: the links the user just saved ON THIS DEVICE, whose
-//    page `extractNow` is fetching in the same breath, so a `/favicon.ico` GET
+//    page `fetchPreviewsNow` is fetching in the same breath, so a `/favicon.ico` GET
 //    to that same host discloses nothing the save didn't already. Without it the
 //    settings copy would be a half-truth — a link saved here would get its title
 //    and preview image with the opt-in off, but a monogram where its icon goes
@@ -79,7 +79,7 @@ interface FaviconContextValue {
   // The GESTURED sibling: same fetch, licensed by a save the user just made on
   // this device rather than by the mode reaching `all` — though mode `off` stops
   // this too, since it declines the save fetch itself. Takes hosts in bulk
-  // because its caller does — `extractNow` is handed a set of paths (one from
+  // because its caller does — `fetchPreviewsNow` is handed a set of paths (one from
   // the add screen, N from the share outbox). Identity-STABLE, unlike
   // `requestFavicon`, so it can sit in an effect's dep array unguarded.
   requestFaviconNow: (hosts: string[]) => void;
@@ -266,7 +266,7 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
   );
 
   // The gestured entry point (see the header). Reads its one reactive input through
-  // a ref, so its identity never changes — which is what lets `extractNow` stay
+  // a ref, so its identity never changes — which is what lets `fetchPreviewsNow` stay
   // usable from ShareBridge's effect deps.
   const requestFaviconNow = useCallback(
     (hosts: string[]) => {

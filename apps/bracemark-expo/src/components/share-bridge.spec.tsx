@@ -10,7 +10,7 @@ import { ShareBridge } from './share-bridge';
 // and its foreground listener armed — for the whole of a first sync. What these
 // cases pin is the one thing about that which fails in silence: a drain that
 // runs before the store is ready lands its drafts with everything it hands on
-// switched off. `extractNow` returns at once until the store is ready, and the
+// switched off. `fetchPreviewsNow` returns at once until the store is ready, and the
 // outbox is empty by the time it would not, so the share never gets its page
 // fetch — no error, no pending count, and at extraction mode `saves` no later
 // pass that could make up for it.
@@ -45,7 +45,7 @@ jest.mock('@stxapps/expo-react', () => ({
     localWriteNonce: 0,
     requestSync: mockRequestSync,
   }),
-  useExtraction: () => ({ extractNow: mockExtractNow }),
+  useLinkPreviews: () => ({ fetchPreviewsNow: mockExtractNow }),
 }));
 
 const DRAFT_PATH = 'links/l_shared.enc';
@@ -164,7 +164,21 @@ describe('the read-mode copy a Safari draft carries', () => {
     expect(keepAsked()).toBe(true);
   });
 
-  test('not kept when the user turned read mode off', async () => {
+  test('not kept when the user turned read mode off for a share', async () => {
+    mockKeptCopies = true;
+    mockReadSettingsGeneral.mockResolvedValue({
+      keepReadModeOnShare: false,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    render(<ShareBridge />);
+    await settle();
+    expect(keepAsked()).toBe(false);
+  });
+
+  // The split: the browser extension's on-save switch is its own key, and turning it
+  // off must not stop a share from the phone keeping its copy.
+  test('still kept when only the browser extension’s save has read mode off', async () => {
     mockKeptCopies = true;
     mockReadSettingsGeneral.mockResolvedValue({
       keepReadModeOnSave: false,
@@ -173,7 +187,7 @@ describe('the read-mode copy a Safari draft carries', () => {
     });
     render(<ShareBridge />);
     await settle();
-    expect(keepAsked()).toBe(false);
+    expect(keepAsked()).toBe(true);
   });
 
   test('not kept without the plan, and the setting is not even read', async () => {

@@ -52,7 +52,7 @@ jest.mock('../../_contexts/page-provider', () => ({
 }));
 
 jest.mock('@stxapps/web-react', () => ({
-  useExtraction: () => ({ reportDisplayedLinkPaths }),
+  useLinkPreviews: () => ({ reportDisplayedLinkPaths }),
   useTags: () => [],
 }));
 

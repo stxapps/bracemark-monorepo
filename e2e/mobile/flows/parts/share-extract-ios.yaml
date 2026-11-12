@@ -5,7 +5,7 @@
 # real title, so the provisional title and the extracted one are the same
 # string. What does differ is the "links without a preview" prompt: it arms two
 # seconds after a link is seen pending with nothing fetching it, and it stays.
-# A draft drained into an `extractNow` that returned at once is exactly that
+# A draft drained into an `fetchPreviewsNow` that returned at once is exactly that
 # link. Handed to a live one, the link is owned by the gestured fetch for as
 # long as it is pending and settled after, so the prompt never has a reason to
 # come up (bracemark-expo features/links/previews-prompt.tsx).

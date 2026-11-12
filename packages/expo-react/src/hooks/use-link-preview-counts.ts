@@ -1,5 +1,5 @@
 // Live EXACT extraction-progress counts (done / pending / failed for `titleImage`,
-// trash-corrected) — the expo port of web-react's hooks/use-extraction-counts.ts, and
+// trash-corrected) — the expo port of web-react's hooks/use-link-preview-counts.ts, and
 // mounted on demand for the same reason: exactness costs the trash-correction join
 // (readTrashedTitleImageCounts), and a live read re-runs on every `items` transaction, so
 // the join must run only while a surface is actually showing the numbers — never on the
@@ -10,7 +10,7 @@
 // drizzle's own useLiveQuery can't subscribe). Zeros while extraction is disabled or
 // before the first read resolves.
 
-import { useExtraction } from '../contexts/extraction-provider';
+import { useLinkPreviews } from '../contexts/link-previews-provider';
 import { type ExtractionFacetCounts, readExtractionFacetCounts } from '../data/queries';
 import { useLiveRead } from './use-live-read';
 
@@ -21,8 +21,8 @@ const EMPTY_COUNTS: ExtractionFacetCounts = {
   failedPermanent: 0,
 };
 
-export function useExtractionCounts(): ExtractionFacetCounts {
-  const { enabled } = useExtraction();
+export function useLinkPreviewCounts(): ExtractionFacetCounts {
+  const { enabled } = useLinkPreviews();
   return (
     useLiveRead(
       () => (enabled ? readExtractionFacetCounts() : Promise.resolve(EMPTY_COUNTS)),

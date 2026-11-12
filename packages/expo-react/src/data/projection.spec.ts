@@ -224,7 +224,7 @@ describe('toItemRecord', () => {
 
   // PENDING IS ABSENCE: no token, so the pending tally stays a set difference. A synthesized
   // `pending:` row here would land in the facet junction and make the exact counts wrong in
-  // the one direction the extract-all wake can't tolerate.
+  // the one direction the generate-all wake can't tolerate.
   it('projects an empty token list for an extraction with no settled facets', () => {
     const record = toItemRecord(
       pathFromId('l_1', EXTRACTIONS_PREFIX),

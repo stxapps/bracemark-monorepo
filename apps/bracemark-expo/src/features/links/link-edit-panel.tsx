@@ -88,11 +88,11 @@ function useLinkEditDraft(link: LinkItem, onDone: () => void) {
   const { update, saveCustomImage } = useLinkMutations();
 
   // The extraction supplies the fallbacks the overrides sit above: the
-  // placeholder title and the image shown after "Reset to extracted". Live, so
+  // placeholder title and the image shown after "Reset to preview". Live, so
   // a backfill landing mid-edit updates them.
   const id = linkIdOf(link);
   const extraction = useLiveRead(() => readExtraction(id), [id], ['items']);
-  const extractedTitle = extraction?.title;
+  const previewTitle = extraction?.title;
 
   // Draft state, snapshotted from the link at mount (this component mounts per
   // open — see LinkEditPanel's key). Title/note hold the OVERRIDE/typed
@@ -182,7 +182,7 @@ function useLinkEditDraft(link: LinkItem, onDone: () => void) {
   };
 
   return {
-    extractedTitle,
+    previewTitle,
     title,
     setTitle,
     listId,
@@ -219,7 +219,7 @@ function LinkEditFields({
   reveal: FocusedFieldReveal;
 }) {
   const {
-    extractedTitle,
+    previewTitle,
     title,
     setTitle,
     listId,
@@ -250,7 +250,7 @@ function LinkEditFields({
           onFocus={reveal.onFieldFocus}
           onBlur={reveal.onFieldBlur}
           maxLength={LINK_TITLE_MAX}
-          placeholder={extractedTitle ?? hostFromText(link.url)}
+          placeholder={previewTitle ?? hostFromText(link.url)}
           aria-label="Title"
         />
         {/* The placeholder isn't selectable, so someone who wants to tweak
@@ -261,8 +261,8 @@ function LinkEditFields({
           <Text className="min-w-0 flex-1 text-xs text-muted-foreground">
             Leave blank to use the page’s own title.
           </Text>
-          {title.trim() === '' && extractedTitle && (
-            <Pressable role="button" onPress={() => setTitle(extractedTitle)} className="shrink-0">
+          {title.trim() === '' && previewTitle && (
+            <Pressable role="button" onPress={() => setTitle(previewTitle)} className="shrink-0">
               <Text className="text-xs text-primary">Edit it instead</Text>
             </Pressable>
           )}
@@ -311,7 +311,7 @@ function LinkEditFields({
             fields book-ended rather than split — docs/editors.md), why the
             buttons stay BELOW at the same left edge, and why the slot holds
             its size with no image (the buttons would otherwise move under the
-            finger — up on "Reset to extracted", down when a live `storedUri`
+            finger — up on "Reset to preview", down when a live `storedUri`
             materializes mid-edit). `h-40 w-full` before it was a harder crop
             than either surface (358×160 ≈ 2.24:1 on a 390pt phone), so the
             preview cut off more than the card would. As a class, not
@@ -355,7 +355,7 @@ function LinkEditFields({
           {(image.kind === 'pick' || (image.kind === 'keep' && link.customImageId)) && (
             <Button variant="ghost" size="sm" onPress={() => setImage({ kind: 'clear' })}>
               <Icon as={ImageOff} className="size-4" />
-              <Text>Reset to extracted</Text>
+              <Text>Reset to preview</Text>
             </Button>
           )}
         </View>

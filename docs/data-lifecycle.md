@@ -1176,7 +1176,7 @@ which is why each one shipped.
   run has read it whole), a **custom image's picked file and resized copy**
   (kept until sign-out — the editor's draft points at the uri, and a save that
   failed after the copy retries from it), and an **extraction's in-transit
-  image** (`lib/device-extraction.ts` — the preview a saved page declares,
+  image** (`lib/device-link-previews.ts` — the preview a saved page declares,
   parked for the native decoders; the worker deletes it when the write settles,
   but a process killed before then never runs that `finally`, so it is written
   under `bracemark-scratch/` rather than loose in the cache dir, where the

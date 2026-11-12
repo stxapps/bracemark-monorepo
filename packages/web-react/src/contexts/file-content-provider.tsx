@@ -28,7 +28,7 @@
 // covers a genuinely deleted blob. A TRANSPORT failure is the opposite: the
 // batch is forgotten so a later mount retries.
 //
-// NOT gated on the serverExtraction opt-in (unlike ExtractionProvider): this is
+// NOT gated on the serverExtraction opt-in (unlike LinkPreviewsProvider): this is
 // ordinary sync-engine traffic to our own R2 — the user's own encrypted bytes —
 // not a third-party fetch.
 

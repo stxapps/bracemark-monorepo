@@ -7,7 +7,7 @@ import {
   refreshShareTaxonomy,
   takeShareHandoffs,
   useEntitlements,
-  useExtraction,
+  useLinkPreviews,
   useSync,
 } from '@stxapps/expo-react';
 import { coerceDeviceExtractionMode, keepOnSaveOf } from '@stxapps/shared';
@@ -22,11 +22,11 @@ import { coerceDeviceExtractionMode, keepOnSaveOf } from '@stxapps/shared';
 //    the effect). A drain that landed drafts calls
 //    requestSync(), so the pending ops push now and the read edge shows the
 //    user their own share immediately (localWriteNonce semantics). It also
-//    hands the landed paths to `extractNow`: a share IS a save gesture made on
+//    hands the landed paths to `fetchPreviewsNow`: a share IS a save gesture made on
 //    this device, so its page fetch needs no opt-in (docs/link-extraction.md —
 //    _the stance_); the outbox is simply the only door it can arrive through,
 //    since the separate-process extension can't fetch or write the store
-//    itself. This is why the component now sits inside <ExtractionProvider>
+//    itself. This is why the component now sits inside <LinkPreviewsProvider>
 //    as well as <SyncProvider>.
 //
 //    ANDROID arrives by the other door and ends in the same place. Its share
@@ -50,8 +50,10 @@ import { coerceDeviceExtractionMode, keepOnSaveOf } from '@stxapps/shared';
 // writes and reads the store live), the handoff one on iOS. All of it is
 // failure-tolerant: this bridge must never take the app tree down over a share
 // artifact — a missed pass self-heals on the next signal.
-// The synced kept-copies setting's read-mode half, from the store: whether a shared
-// page's copy is kept, and whether it keeps the article's images too. The second is
+// The synced kept-copies setting's read-mode half for a SHARE, from the store —
+// `keepReadModeOnShare`, the phone's own key, not the browser extension's
+// `keepReadModeOnSave` (entities.ts says why they split): whether a shared page's copy
+// is kept, and whether it keeps the article's images too. The second is
 // also this device's FETCH mode — the text arrived in the draft, but the images are
 // requests this app makes to the saved site's hosts, and `off` stops all of those
 // (docs/link-extraction.md, _the stance_). A read that fails keeps nothing.
@@ -60,7 +62,7 @@ async function readModeOnSave(): Promise<{ copy: boolean; images: boolean }> {
     const settings = await readSettingsGeneral();
     const keep = keepOnSaveOf(settings);
     return {
-      copy: keep.readMode,
+      copy: keep.readModeOnShare,
       images:
         keep.readModeImages && coerceDeviceExtractionMode(settings?.deviceExtractionMode) !== 'off',
     };
@@ -71,7 +73,7 @@ async function readModeOnSave(): Promise<{ copy: boolean; images: boolean }> {
 
 export function ShareBridge() {
   const { storeStatus, lastSyncAt, localWriteNonce, requestSync } = useSync();
-  const { extractNow } = useExtraction();
+  const { fetchPreviewsNow } = useLinkPreviews();
   const ready = storeStatus === 'ready';
   const { entitlements } = useEntitlements();
   const entitledRef = useRef(entitlements.keptCopies);
@@ -83,8 +85,8 @@ export function ShareBridge() {
         // THE DRAIN WAITS FOR A READY STORE; the drafts wait in the outbox, where
         // they are durable. This component is mounted above InitialSyncGate, so it
         // is live through the whole first sync, and everything a drain hands on is
-        // inert until that finishes: `extractNow` returns at once
-        // (extraction-provider), and by the time it would not, the outbox is empty
+        // inert until that finishes: `fetchPreviewsNow` returns at once
+        // (link-previews-provider), and by the time it would not, the outbox is empty
         // and nothing offers the link again — at extraction mode `saves` that was
         // a share with no page fetch, ever. The sync kick is declined too (the
         // engine runs no cycle before the first sync is done — sync/engine.ts
@@ -95,8 +97,8 @@ export function ShareBridge() {
         // "Not ready" is not only a first sync. The status starts at `checking`
         // on EVERY launch, for as long as one read of the bookkeeping row takes,
         // and the mount pass runs inside that window, closed over the
-        // `extractNow` of that first render. Draining there handed every share
-        // a cold start found — the usual way one is found — to an `extractNow`
+        // `fetchPreviewsNow` of that first render. Draining there handed every share
+        // a cold start found — the usual way one is found — to an `fetchPreviewsNow`
         // that returned at once.
         //
         // The Android handoff waits on the same line, for the same reason.
@@ -125,7 +127,7 @@ export function ShareBridge() {
         await refreshShareTaxonomy();
         if (applied.length > 0) {
           requestSync();
-          extractNow(applied);
+          fetchPreviewsNow(applied);
         }
       })().catch(() => undefined);
     };
@@ -134,11 +136,11 @@ export function ShareBridge() {
       if (state === 'active') pass();
     });
     return () => sub.remove();
-    // requestSync is identity-stable (sync-provider); extractNow changes only
+    // requestSync is identity-stable (sync-provider); fetchPreviewsNow changes only
     // when the session/store readiness or the extraction opt-in does, and a
     // re-run is harmless — the drain is idempotent, and an empty outbox or an
     // empty handoff is a no-op.
-  }, [ready, requestSync, extractNow]);
+  }, [ready, requestSync, fetchPreviewsNow]);
 
   useEffect(() => {
     // Skip the initial render (nothing synced/edited yet — the mount pass above

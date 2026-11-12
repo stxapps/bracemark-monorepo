@@ -2,7 +2,7 @@
 // two places where the divergence is invisible.
 //
 // 1. TWO FILLERS, one store. web's provider is the only writer; here the `/favicon.ico`
-//    guess (favicon-provider) and device-extraction's declared-icon CAPTURE both write,
+//    guess (favicon-provider) and device-link-previews's declared-icon CAPTURE both write,
 //    and neither knows about the other. Both are check-then-act with an await gap, so a
 //    guess that STARTED before a capture can FINISH after it — and without the guard in
 //    `putFaviconNone` it deletes the captured bytes and stamps `none`, which
@@ -140,7 +140,7 @@ describe('putFaviconNone', () => {
   });
 
   // THE TWO-FILLER RULE. This is the interleaving that actually happens: the provider's
-  // guess starts, device-extraction's capture lands real bytes, and then the guess's miss
+  // guess starts, device-link-previews's capture lands real bytes, and then the guess's miss
   // returns. Without the guard it deletes those bytes and stamps `none`, and
   // isFaviconStale then honours that for FAVICON_RETRY_MS — a host with a perfectly good
   // captured icon showing a monogram for a week.

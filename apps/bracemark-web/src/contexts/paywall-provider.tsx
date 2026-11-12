@@ -9,7 +9,7 @@
 //
 // This is the ACTION-INTERRUPT pattern (click Search, click "Lock list…"). It is
 // NOT for whole-section upsells where the feature IS the page — those keep their
-// own inline "See plans" surface (e.g. the extraction section), which has room to
+// own inline "See plans" surface (e.g. the Link previews section), which has room to
 // explain and isn't interrupting a click.
 //
 // Deliberately imperative (show(feature)) rather than local state per call site,

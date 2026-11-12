@@ -4,7 +4,7 @@
 #
 # What the pair proves is that a share gets the page fetch it is owed at the
 # default `saves` mode — where nothing un-gestured fetches, so the only thing
-# that can is `extractNow`, and the share surface cannot call it. Each platform
+# that can is `fetchPreviewsNow`, and the share surface cannot call it. Each platform
 # has its own way of telling the main app which link arrived, and each had its
 # own way of losing it (docs/share-sheet.md, _the main app's half_):
 #
@@ -13,7 +13,7 @@
 #     by the time the app opens, so the marker has to have survived it.
 #   - iOS's outbox draft is drained by ShareBridge, which must hold the drain
 #     until the store is ready: a cold start's first pass runs while the status
-#     is still `checking`, closed over an `extractNow` that returns at once.
+#     is still `checking`, closed over an `fetchPreviewsNow` that returns at once.
 #
 # LINK_URL is example.com with a run-scoped query and LINK_TITLE its known title
 # (e2e/fixtures.json) — `internet` cases, like EXTRACT-NATIVE-001. The oracle is

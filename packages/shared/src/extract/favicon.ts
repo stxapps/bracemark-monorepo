@@ -2,7 +2,7 @@
 // every filler on every platform, so the answer can't drift between them.
 //
 // Four fillers ask it today: expo's guess (`fetchFaviconBytes`) and its
-// declared-icon capture (lib/device-extraction.ts), and web's guess through the
+// declared-icon capture (lib/device-link-previews.ts), and web's guess through the
 // extractor proxy (contexts/favicon-provider.tsx) — plus web's RENDER path,
 // which needs the mime this returns to build a Blob an `<img>` will decode.
 // Their FETCHES are legitimately different (direct native GET vs. proxied,

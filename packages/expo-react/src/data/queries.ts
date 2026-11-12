@@ -695,8 +695,8 @@ function scanUnsettledLinks(
   }));
 }
 
-// The residual extraction queue for the WHOLE-LIBRARY job (extraction-provider's
-// `extractAll`), as a QUERY — there's no queue object (docs/link-extraction.md — _the
+// The residual extraction queue for the WHOLE-LIBRARY job (link-previews-provider's
+// `generateAll`), as a QUERY — there's no queue object (docs/link-extraction.md — _the
 // queue is a query_) — PAGINATED by a forward cursor so a full drain is O(library),
 // not O(library²): each batch resumes where the last stopped, and a just-extracted link
 // sits behind the cursor.
@@ -758,7 +758,7 @@ async function loadLinks(paths: string[]): Promise<LinkItem[]> {
 // extracts past what was scrolled into view.
 //
 // Cost: O(displayed), NOT O(library) — load-bearing, because this backs the always-on
-// wake read (extraction-provider), which re-runs on every `items` change. Two batch
+// wake read (link-previews-provider), which re-runs on every `items` change. Two batch
 // gets (the links + their co-keyed extractions), then an inline eligibility test.
 // Missing / non-link / trashed / settled / still-cooling paths drop out — Trash is
 // filtered HERE rather than asked of each caller, so browsing Trash can't become the

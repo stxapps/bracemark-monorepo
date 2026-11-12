@@ -16,7 +16,7 @@
 //     expo-image-manipulator). Kept until sign-out rather than deleted once
 //     stored: the editor's draft still points at the uri, and a save that
 //     failed after the copy retries from it.
-//   - an EXTRACTION's in-transit image (lib/device-extraction.ts): the preview a
+//   - an EXTRACTION's in-transit image (lib/device-link-previews.ts): the preview a
 //     saved page declares, parked for the native decoders to measure and resize.
 //     The worker deletes it when the write settles, but a process killed before
 //     then leaves it — so it is written under a directory of ours rather than

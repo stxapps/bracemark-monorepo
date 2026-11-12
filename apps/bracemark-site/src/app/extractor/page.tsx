@@ -134,7 +134,7 @@ export function generateMetadata(_: unknown, parent: ResolvingMetadata): Promise
 //
 //       Do NOT tighten that into "never more than two". If the inline fetch is
 //       attempted and fails, the client falls back to the proxy
-//       (packages/web-react/src/lib/server-extraction.ts, `loadImage`), and the
+//       (packages/web-react/src/lib/server-link-previews.ts, `loadImage`), and the
 //       live case is size: MAX_INLINE_IMAGE_BYTES is 2 MB against the proxy's
 //       10 MB ceiling, so a larger preview image is pulled from the operator
 //       twice. Narrow, but this page's own standard is that a published cap the
@@ -330,9 +330,10 @@ export default function Page() {
             </p>
             <p>
               It also only runs for people who turned it on. Fetching on someone’s behalf means
-              seeing an address they chose to save, so it is an opt-in setting that is off until
-              they enable it — the browser extension and the mobile apps read the page on the device
-              instead, with no server of ours in it. The full account of that is in the{' '}
+              seeing an address they chose to save, so it is opt-in — one setting for previews and
+              another for read-mode copies, each off until they enable it — and the browser
+              extension and the mobile apps read the page on the device instead, with no server of
+              ours in it. The full account of that is in the{' '}
               <Link
                 className={cn(
                   'text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',

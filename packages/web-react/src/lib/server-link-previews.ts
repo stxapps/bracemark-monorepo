@@ -44,7 +44,7 @@ import { resizeImage } from './resize-image';
 // failure isn't a per-link outcome — it tells us nothing about any link — so it propagates
 // and the caller stops the drain to retry on the next wake, rather
 // than mislabeling every link `failed` (which would burn each link's backoff, flood sync
-// with no-op writes, and — in extractAll — march the cursor through the whole library
+// with no-op writes, and — in generateAll — march the cursor through the whole library
 // writing failures). Every PER-LINK outcome (success, transient failure, permanent failure)
 // is instead RECORDED as a facet write and never re-throws, so once the request succeeds the
 // drain always makes progress — a processed link becomes settled (`done`, or
@@ -60,7 +60,7 @@ const EXTRACTED_BY = 'server';
 const IMAGE_CONCURRENCY = 3;
 
 // Extract a batch of links' `titleImage` facet in one shot — the path behind the
-// displayed-scoped / extract-all drains (extraction-provider). Returns the number of links
+// displayed-scoped / generate-all drains (link-previews-provider). Returns the number of links
 // processed (for the caller's auto-budget). Throws only on a transport failure or an
 // oversized batch (see above); per-link outcomes are recorded, never thrown.
 export async function runServerTitleImageBatch(
@@ -187,7 +187,7 @@ export async function runServerTitleImageBatch(
 // How many times this link's `titleImage` has already failed. Read only for the `403`
 // ladder in `verdictForStatus`, so the common paths stay decode-free. Group members share
 // a URL but not a facet, so the MAX is the honest count for the decision. The expo sibling
-// (device-extraction.ts) is identical over its own store.
+// (device-link-previews.ts) is identical over its own store.
 async function priorAttempts(targets: LinkItem[]): Promise<number> {
   let attempts = 0;
   for (const link of targets) {

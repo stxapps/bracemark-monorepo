@@ -38,8 +38,8 @@ import { Pressable, View } from 'react-native';
 import { Globe, ImageDown, Pause, ShieldOff, Smartphone } from 'lucide-react-native';
 
 import {
-  useExtraction,
-  useExtractionCounts,
+  useLinkPreviewCounts,
+  useLinkPreviews,
   useSettingMutations,
   useSettings,
 } from '@stxapps/expo-react';
@@ -138,14 +138,14 @@ function Stat({ label, value, testID }: { label: string; value: number; testID: 
 }
 
 export function LinkPreviewsSection() {
-  const { enabled, isRunning, isExtractingAll, autoLimitReached, extractAll, pause } =
-    useExtraction();
+  const { enabled, isRunning, isGeneratingAll, autoLimitReached, generateAll, pause } =
+    useLinkPreviews();
   const {
     done: doneCount,
     pending: pendingCount,
     failedTransient: failedTransientCount,
     failedPermanent: failedPermanentCount,
-  } = useExtractionCounts();
+  } = useLinkPreviewCounts();
 
   // The mode itself. `enabled` above is the composite gate (signed in + store ready
   // + mode `all`), so the radios bind to the raw setting — picking one while the
@@ -285,7 +285,7 @@ export function LinkPreviewsSection() {
             </Text>
           )}
 
-          {autoLimitReached && !isExtractingAll && (
+          {autoLimitReached && !isGeneratingAll && (
             <SettingsNotice tone="pending" className="mt-4">
               <Text className="text-sm text-muted-foreground">
                 Automatic previews paused for now. Use{' '}
@@ -296,7 +296,7 @@ export function LinkPreviewsSection() {
           )}
 
           <View className="mt-6 flex-row">
-            {isExtractingAll ? (
+            {isGeneratingAll ? (
               <Button testID="extraction-pause" variant="outline" onPress={pause}>
                 <Icon as={Pause} className="size-4" />
                 <Text>{isRunning ? 'Generating… Pause' : 'Pause'}</Text>
@@ -306,7 +306,7 @@ export function LinkPreviewsSection() {
                 testID="extraction-generate-all"
                 variant="outline"
                 disabled={pendingCount === 0}
-                onPress={extractAll}
+                onPress={generateAll}
               >
                 <Icon as={ImageDown} className="size-4" />
                 <Text>Generate all</Text>

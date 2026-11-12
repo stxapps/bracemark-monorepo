@@ -22,11 +22,11 @@ import { storeReadModeCopy } from './store-read-mode';
 // `extraction.readModeId` at it, exactly as the browser extension's capture does, but
 // `extractedBy: 'server'` — the lowest tier, which a live-page capture can later replace.
 //
-// Only ever an EXPLICIT per-link ask (useServerReadMode — the reader's _Keep read mode_),
+// Only ever an EXPLICIT per-link ask (useServerReadMode — the reader's _Keep a read-mode copy_),
 // never a drain: read mode is a whole article, and a standing rule that fetched articles
 // for links nobody is looking at is the un-gestured fetch the keep doc's "no rules engine"
 // rules out. The caller has already checked the plan (`keptCopies`) and the opt-in
-// (`serverExtraction`).
+// (`serverReadMode` — its own, not the preview opt-in; entities.ts says why).
 //
 // A copy that EXISTS is never replaced from here: it may be a live-page capture (a better
 // tier, and the one a signed-in or paywalled page needs), and a copy with highlights is

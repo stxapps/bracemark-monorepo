@@ -23,7 +23,7 @@
 // settings section stays the way back up from `off`.
 //
 // The count comes from `readRawPendingTitleImageCount` (four index counts, no
-// decode, no trash-correction join), not `useExtractionCounts`: the exact tally
+// decode, no trash-correction join), not `useLinkPreviewCounts`: the exact tally
 // is gated on the drain being ENABLED, which is precisely what this banner exists
 // to ask about. Raw pending is a strict over-count, which is the right side to err
 // on for a "you have links without previews" prompt — and the read runs ONLY while
@@ -32,7 +32,7 @@
 // But raw pending is the wrong number HERE, which is bracemark-web's banner and this
 // one parting company (docs/link-extraction.md — _the links-page offer_). On web
 // nothing extracts until the opt-in flips, so a raw-pending link stays pending. On
-// this platform `extractNow` fetches a link saved on this device at `saves`, outside
+// this platform `fetchPreviewsNow` fetches a link saved on this device at `saves`, outside
 // the gate — so that link is raw-pending for the length of its own fetch (15s page +
 // 20s image) and then settles itself. Counting it made the banner appear for a few
 // seconds after every save on a single-device account and then retire, offering to
@@ -55,7 +55,7 @@ import { ImageDown, X } from 'lucide-react-native';
 
 import {
   readRawPendingTitleImageCount,
-  useExtraction,
+  useLinkPreviews,
   useLiveRead,
   useLocks,
   useSettingMutations,
@@ -76,7 +76,7 @@ const SETTLE_MS = 2_000;
 export function PreviewsPrompt() {
   const { deviceExtractionMode, previewsPromptDismissed } = useSettings();
   const { setDeviceExtractionMode, dismissPreviewsPrompt } = useSettingMutations();
-  const { gesturedInFlightCount } = useExtraction();
+  const { gesturedInFlightCount } = useLinkPreviews();
   const { selection } = useLinksPage();
   const { isListLocked } = useLocks();
 
@@ -90,7 +90,7 @@ export function PreviewsPrompt() {
       ['items', 'item_facet_statuses'],
     ) ?? 0;
 
-  // Clamped because the two terms are independent: `extractNow` counts the paths it was
+  // Clamped because the two terms are independent: `fetchPreviewsNow` counts the paths it was
   // handed, some of which may already be settled and so absent from `pending`.
   const residual = Math.max(0, pending - gesturedInFlightCount);
   // The effect below keys on THIS, not on `residual` itself: a second link arriving must

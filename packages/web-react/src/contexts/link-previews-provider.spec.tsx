@@ -7,16 +7,16 @@ import { act, render, waitFor } from '@testing-library/react';
 import { ExtractClientProvider } from '@stxapps/react';
 import type { ExtractClient, LinkItem } from '@stxapps/shared';
 
-import { ExtractionProvider, useExtraction } from './extraction-provider';
+import { LinkPreviewsProvider, useLinkPreviews } from './link-previews-provider';
 
 // THE DRAIN'S HANDOFF ACROSS EFFECT RUNS. The drain is single-flighted by a ref that
 // outlives any one run of its effect: a wake while a drain is running only queues a
 // rerun, and whoever finishes the running drain starts it. A dep change mid-drain —
-// pressing Extract all during an auto batch, a tab reveal, StrictMode's mount →
+// pressing Generate all during an auto batch, a tab reveal, StrictMode's mount →
 // cleanup → mount in `next dev` — cancels the running closure while it still holds
 // that ref, so the NEW run's drain can do nothing but queue. If the finishing closure
 // only honoured the rerun when it was itself still live, the queued one was dropped,
-// and the drain sat idle until some other dep happened to move: Extract all showed as
+// and the drain sat idle until some other dep happened to move: Generate all showed as
 // running and extracted nothing. No error, no failed request — just nothing.
 //
 // The mock seam is server-extraction-gate.spec.tsx's, which is where the other half of
@@ -66,32 +66,32 @@ jest.mock('../data/queries', () => ({
 const mockRunBatch = jest.fn((_username: string, _links: LinkItem[], _client: ExtractClient) =>
   Promise.resolve(1),
 );
-jest.mock('../lib/server-extraction', () => ({
+jest.mock('../lib/server-link-previews', () => ({
   runServerTitleImageBatch: (username: string, links: LinkItem[], client: ExtractClient) =>
     mockRunBatch(username, links, client),
 }));
 
-let extractAll: () => void = () => undefined;
+let generateAll: () => void = () => undefined;
 
 function ReportsAPage() {
-  const context = useExtraction();
+  const context = useLinkPreviews();
   const { reportDisplayedLinkPaths } = context;
   useEffect(() => reportDisplayedLinkPaths(['links/l1']), [reportDisplayedLinkPaths]);
   useEffect(() => {
-    extractAll = context.extractAll;
-  }, [context.extractAll]);
+    generateAll = context.generateAll;
+  }, [context.generateAll]);
   return null;
 }
 
 beforeEach(() => {
-  extractAll = () => undefined;
+  generateAll = () => undefined;
   mockReadPage.mockClear();
   mockRunBatch.mockClear();
 });
 
-it('starts Extract all when it is pressed while an auto batch is in flight', async () => {
+it('starts Generate all when it is pressed while an auto batch is in flight', async () => {
   // Hold the auto drain inside its first batch, so it owns the single-flight when
-  // Extract all re-runs the effect.
+  // Generate all re-runs the effect.
   let finishAutoBatch!: (processed: number) => void;
   mockRunBatch.mockImplementationOnce(
     () =>
@@ -103,16 +103,16 @@ it('starts Extract all when it is pressed while an auto batch is in flight', asy
   await act(async () => {
     render(
       <ExtractClientProvider client={extractor}>
-        <ExtractionProvider>
+        <LinkPreviewsProvider>
           <ReportsAPage />
-        </ExtractionProvider>
+        </LinkPreviewsProvider>
       </ExtractClientProvider>,
     );
   });
   await waitFor(() => expect(mockRunBatch).toHaveBeenCalledTimes(1));
 
   // The new run finds the auto drain still running and can only queue behind it.
-  await act(async () => extractAll());
+  await act(async () => generateAll());
   expect(mockReadPage).not.toHaveBeenCalled();
 
   // The auto batch lands; its closure is cancelled and stops at the loop top. The

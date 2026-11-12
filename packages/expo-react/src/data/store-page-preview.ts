@@ -9,7 +9,7 @@ import { type ExtractionFields, writeExtraction, writeFile } from './mutations';
 // screen's WebView — _Update preview_ (features/capture/capture-screen.tsx in the app).
 // docs/link-extraction-keep.md, _per client_, the capture screen.
 //
-// The same write the drain makes (lib/device-extraction.ts — the writer-split: never
+// The same write the drain makes (lib/device-link-previews.ts — the writer-split: never
 // `links/{id}.enc`; the image into `files/`, the display fields and the facet into
 // `extractions/{id}.enc`), with two differences that both come from it being a TAP:
 //
@@ -26,7 +26,7 @@ import { type ExtractionFields, writeExtraction, writeFile } from './mutations';
 // The user's own `customTitle` / `customImageId` live on the link and are never touched
 // here; they keep winning in the UI, which the screen says.
 //
-// `image` is a temp file the caller made (lib/device-extraction.ts,
+// `image` is a temp file the caller made (lib/device-link-previews.ts,
 // `previewFileFromBytes` / `fetchPreviewImageFile`) and deletes afterwards. Resolves
 // whether anything was written.
 export async function storePagePreview(

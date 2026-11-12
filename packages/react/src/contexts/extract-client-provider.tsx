@@ -10,7 +10,7 @@ import type { ExtractClient } from '@stxapps/shared';
 // prerenders into "Functions cannot be passed directly to Client Components").
 // Each app builds its own env-bound client (createExtractClient with its
 // NEXT_PUBLIC_EXTRACTOR_URL) and provides it here inside a Client Component, so the
-// loop in web-react's ExtractionProvider reads it via the hook.
+// loop in web-react's LinkPreviewsProvider reads it via the hook.
 //
 // Unlike useApiClient, null is a LEGITIMATE value, not a mounting bug: server
 // extraction is opt-in/off-by-default, so an environment with no extractor origin

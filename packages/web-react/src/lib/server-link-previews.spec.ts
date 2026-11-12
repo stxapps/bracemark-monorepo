@@ -6,7 +6,7 @@
 //
 // Both directions are silently catastrophic. Record a transport failure as a per-link
 // `failed` and every link in the batch burns a backoff step, sync fills with no-op
-// writes, and — in extract-all — the cursor marches through the whole library writing
+// writes, and — in generate-all — the cursor marches through the whole library writing
 // failures for pages nobody ever asked about. Throw on a per-link outcome instead and the
 // drain stops at the first bad URL, so one 404 in a page of 20 stalls the rest forever.
 // Neither shows up as an error anywhere: both produce a plausible-looking store.
@@ -42,7 +42,7 @@ import { db } from '../data/db';
 import { writeExtraction } from '../data/mutations';
 import { readExtraction } from '../data/queries';
 import { seedNewAccount } from '../data/sync-store';
-import { runServerTitleImageBatch } from './server-extraction';
+import { runServerTitleImageBatch } from './server-link-previews';
 
 const USER = 'alice';
 

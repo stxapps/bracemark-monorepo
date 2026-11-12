@@ -30,7 +30,7 @@ const mockReadLinkByUrlKey = jest.fn();
 
 jest.mock('@stxapps/expo-react', () => ({
   readLinkByUrlKey: (url: string) => mockReadLinkByUrlKey(url),
-  useExtraction: () => ({ extractNow: mockExtractNow }),
+  useLinkPreviews: () => ({ fetchPreviewsNow: mockExtractNow }),
   useLinkMutations: () => ({ create: mockCreate, update: mockUpdate }),
   useLinkQuota: () => ({ count: 0, max: null, atLimit: false }),
 }));

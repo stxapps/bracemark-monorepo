@@ -64,7 +64,7 @@ import { openWebApp } from '@/utils/open-web-app';
 // What this save should keep, read from the STORE at the save — not from a render's
 // copy of the settings. `useSettings` answers the defaults until its read of the
 // settings blob lands, so a save made in the first frames of the popup would keep
-// read mode for a user who turned it off; the same reason expo's `extractNow` reads
+// read mode for a user who turned it off; the same reason expo's `fetchPreviewsNow` reads
 // its mode at the gesture (docs/link-extraction.md, _expo drains in the foreground_).
 // A read that fails keeps nothing: the save itself is unaffected, and both copies
 // stay one tap away on the complete screen.

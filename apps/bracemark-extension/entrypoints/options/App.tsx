@@ -8,14 +8,15 @@ import { SignOutProvider } from '@stxapps/web-ui/contexts/sign-out-provider';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { AccountSection } from './AccountSection';
+import { CopiesSection } from './CopiesSection';
 import { OptionsShell } from './Shell';
 import { ThemeSection } from './ThemeSection';
 
 // The Settings page — durable configuration only: the signed-in account (username +
-// sign-out) plus a theme picker (the one synced setting that applies here — see
-// ThemeSection). Operational state lives in the toolbar popup: sync status (and its
+// sign-out), what a save keeps (CopiesSection — the synced kept-copies setting, here
+// because this is the client it governs), and a theme picker (see ThemeSection). Operational state lives in the toolbar popup: sync status (and its
 // detail view) is the popup's SyncPill / SyncDetail, and extraction progress is in
-// bracemark-web's Settings → Extraction (the app that runs the extraction loop). This page
+// bracemark-web's Settings → Link previews (the app that runs the extraction loop). This page
 // holds nothing that changes on its own.
 function App() {
   const { status } = useAuth();
@@ -24,8 +25,8 @@ function App() {
     <OptionsShell>
       <h1 className={cn('text-xl font-semibold')}>Settings</h1>
       <p className={cn('mt-1 text-sm text-muted-foreground')}>
-        Your account and how the extension looks. Lists, tags, and everything else live in the
-        Bracemark app.
+        Your account, what a save keeps, and how the extension looks. Lists, tags, and everything
+        else live in the Bracemark app.
       </p>
 
       {status === 'loading' ? (
@@ -50,6 +51,7 @@ function App() {
               no flex column to hold a `gap`, so the step is a margin here instead of
               a gap there; the number is the one that has to match, not the mechanism. */}
           <AccountSection className={cn('mt-8')} />
+          <CopiesSection className={cn('mt-8')} />
           <ThemeSection className={cn('mt-8')} />
         </SignOutProvider>
       )}

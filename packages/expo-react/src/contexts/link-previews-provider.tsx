@@ -1,5 +1,5 @@
 // The on-device extraction LOOP DRIVER — the expo port of web-react's
-// contexts/extraction-provider (that header is canonical: the trigger is OBSERVING
+// contexts/link-previews-provider (that header is canonical: the trigger is OBSERVING
 // pending state rather than hooking the save path, which is what makes it cover
 // cross-device saves and imports for free; the three cost layers; the single-flight
 // drain with a queued rerun; the backed-off self-resume). What follows is only what
@@ -11,9 +11,9 @@
 //    nothing and would only downgrade the tier, cost a paid request, and disclose the URL.
 //    It's a LADDER, not a boolean (entities.ts DEVICE_EXTRACTION_MODES), and the two ends
 //    land in different places here: `all` is what arms the drain below (`enabled`), while
-//    `off` is checked inside `extractNow` — the only gate that can stop a gestured save.
+//    `off` is checked inside `fetchPreviewsNow` — the only gate that can stop a gestured save.
 //
-//  - `extractNow` IS NEW — the gestured path (see below). Web has no equivalent because
+//  - `fetchPreviewsNow` IS NEW — the gestured path (see below). Web has no equivalent because
 //    on web every extraction goes through a server and is therefore gated regardless.
 //
 //  - THE COST LAYERS SURVIVE, BOUNDING SOMETHING ELSE. On web they bound a BILL (every
@@ -24,9 +24,9 @@
 //    (overshooting spends the user's battery, not the project's money).
 //
 //  - APPSTATE REPLACES `visibilitychange`, with a caveat worth stating plainly: web's
-//    layer-3 promise that "extract-all keeps running while hidden" is NOT literally
+//    layer-3 promise that "generate-all keeps running while hidden" is NOT literally
 //    available on iOS — a backgrounded app is SUSPENDED, so JS stops whether we want it
-//    to or not. We therefore do not CANCEL an extract-all on background (a quick app
+//    to or not. We therefore do not CANCEL an generate-all on background (a quick app
 //    switch resumes seamlessly from the in-memory cursor, which is the honest thing we
 //    can offer), but we cannot promise progress the way a hidden browser tab can. That's
 //    a platform divergence, not a bug; the real background sweep is the deferred
@@ -37,11 +37,11 @@
 //    drain's `pending_ops` churn from re-firing the read on every queued op.
 //
 //  - THE STEP IS A SMALL LINK POOL, not `MAX_EXTRACT_URLS`. There's no batch endpoint to
-//    fill: a step is STEP links fetched at CONCURRENCY (device-extraction.ts), so the
+//    fill: a step is STEP links fetched at CONCURRENCY (device-link-previews.ts), so the
 //    number is about the radio and the target hosts, not a server's fan-out.
 //
 //  - TWO PATHS REACH THE SAME WORKER, so they share an in-flight set (`inFlightPathsRef`).
-//    Web has one path and needs none of this; here `extractNow` runs OUTSIDE the drain by
+//    Web has one path and needs none of this; here `fetchPreviewsNow` runs OUTSIDE the drain by
 //    design, and at mode `all` both can pick the same link. See the ref's comment.
 
 import {
@@ -74,7 +74,7 @@ import {
 } from '../data/queries';
 import { useLiveRead } from '../hooks/use-live-read';
 import { useSettings } from '../hooks/use-settings';
-import { runDeviceTitleImageBatch } from '../lib/device-extraction';
+import { runDeviceTitleImageBatch } from '../lib/device-link-previews';
 import { useAuth } from './auth-provider';
 import { useFavicon } from './favicon-provider';
 import { useSync } from './sync-provider';
@@ -85,7 +85,7 @@ import { useSync } from './sync-provider';
 const WAKE_TABLES = ['items', 'item_facet_statuses'];
 
 // How many links one drain step processes before pushing and re-scanning. A step is STEP
-// page fetches pooled at device-extraction's CONCURRENCY — small on purpose, so the list
+// page fetches pooled at device-link-previews's CONCURRENCY — small on purpose, so the list
 // visibly fills in a few links at a time and a background/pause is never more than a
 // couple of seconds of over-commit (a step doesn't check mid-batch).
 const STEP = 8;
@@ -98,7 +98,7 @@ const STEP = 8;
 const AUTO_BUDGET = 40 * STEP;
 
 // Backoff for auto-resuming after a RETRYABLE failure. On this platform that means one
-// thing — the device was offline for the whole step (device-extraction's header: nothing
+// thing — the device was offline for the whole step (device-link-previews's header: nothing
 // answered, so nothing was recorded and no backoff was burned) — so the retry ladder is
 // what gets the drain moving again when the radio comes back, before any wake fires.
 // `retryAfterMsOf` is still consulted for completeness, but there's no server of ours to
@@ -106,20 +106,20 @@ const AUTO_BUDGET = 40 * STEP;
 const RETRY_BASE_MS = 2_000;
 const RETRY_MAX_MS = 60_000;
 
-interface ExtractionContextValue {
+interface LinkPreviewsContextValue {
   // Is un-gestured on-device extraction live at all (mode `all`, store ready)? When false,
-  // the automatic drain and `extractAll` are no-ops — but `extractNow` still works, unless
+  // the automatic drain and `generateAll` are no-ops — but `fetchPreviewsNow` still works, unless
   // the mode is `off`, which stops that too.
   enabled: boolean;
   // NO progress counts here — the exact numbers carry a trash-correction join, so they
-  // live in the on-demand useExtractionCounts hook (web's split, verbatim).
+  // live in the on-demand useLinkPreviewCounts hook (web's split, verbatim).
   isRunning: boolean;
-  isExtractingAll: boolean;
+  isGeneratingAll: boolean;
   autoLimitReached: boolean;
   // Start the explicit full-library drain: lifts the auto cap and walks the library
   // newest-first until it's drained, then ends the job. No cost confirmation needed
   // (nothing is billed) — but it uses the connection, so the button should say so.
-  extractAll: () => void;
+  generateAll: () => void;
   pause: () => void;
   // Report the link paths currently DISPLAYED (FlashList's viewable rows). The automatic
   // drain extracts the pending subset of these and only these.
@@ -138,38 +138,38 @@ interface ExtractionContextValue {
   //
   // The rule that keeps this honest: ONE save is automatic, N-at-once is a prompt. An
   // import is a gesture too, but it's a thousand hosts — so it gets the explicit
-  // "Generate previews for N links?" moment (i.e. `extractAll`) instead of auto-draining.
+  // "Generate previews for N links?" moment (i.e. `generateAll`) instead of auto-draining.
   //
   // It also fires the FAVICON guess for these links' hosts (favicon-provider's
   // `requestFaviconNow`), on the same licence: without it, a link saved here with the
   // opt-in off would get its title and preview image but a monogram where its icon goes,
   // which is not what the settings section and the previews prompt tell the user.
-  extractNow: (linkPaths: string[]) => void;
-  // How many links the GESTURED path is fetching RIGHT NOW — `extractNow`'s runs only,
+  fetchPreviewsNow: (linkPaths: string[]) => void;
+  // How many links the GESTURED path is fetching RIGHT NOW — `fetchPreviewsNow`'s runs only,
   // never the drain's. It exists for the previews prompt, and the asymmetry it repairs is
   // this platform's alone: on web nothing extracts until the opt-in flips, so a raw-pending
   // link stays pending, while here a link saved on this device is fetched at `saves` by
-  // `extractNow` and is therefore raw-pending for the length of its own fetch (up to 15s
-  // page + 20s image, device-extraction.ts). Counting that link as "waiting for a preview"
+  // `fetchPreviewsNow` and is therefore raw-pending for the length of its own fetch (up to 15s
+  // page + 20s image, device-link-previews.ts). Counting that link as "waiting for a preview"
   // made the banner flash on every save of a single-device account and then retire itself —
   // an offer to cover links this device will NEVER pick up, quoting one it was already
   // picking up.
   //
   // Counted from the paths HANDED IN and incremented SYNCHRONOUSLY, before the async claim,
   // so the gap between the link's row landing (which wakes the banner's read) and
-  // `extractNow` claiming it is covered too. The cost of counting paths rather than claims
+  // `fetchPreviewsNow` claiming it is covered too. The cost of counting paths rather than claims
   // is that an already-settled path (a re-save) is counted for the length of one no-op run;
   // that errs toward hiding a passive offer for a few seconds, which is the safe side.
   gesturedInFlightCount: number;
 }
 
-const ExtractionContext = createContext<ExtractionContextValue | null>(null);
+const LinkPreviewsContext = createContext<LinkPreviewsContextValue | null>(null);
 
-export function ExtractionProvider({ children }: { children: ReactNode }) {
+export function LinkPreviewsProvider({ children }: { children: ReactNode }) {
   const { username } = useAuth();
   const { storeStatus, requestSync } = useSync();
   const { deviceExtractionMode } = useSettings();
-  // The gestured favicon entry point, for `extractNow` — see its comment. Requires
+  // The gestured favicon entry point, for `fetchPreviewsNow` — see its comment. Requires
   // <FaviconProvider> ABOVE this provider, which the (app) layout does.
   const { requestFaviconNow } = useFavicon();
 
@@ -207,11 +207,11 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Resume point for the whole-library walk — a ref, so the drain advances it across steps
-  // without re-scanning from the top (what keeps extract-all O(library), not O(library²)).
-  const extractAllCursorRef = useRef<LinkScanCursor | undefined>(undefined);
+  // without re-scanning from the top (what keeps generate-all O(library), not O(library²)).
+  const generateAllCursorRef = useRef<LinkScanCursor | undefined>(undefined);
 
-  const extractingAllRef = useRef(false);
-  const [isExtractingAll, setIsExtractingAll] = useState(false);
+  const generatingAllRef = useRef(false);
+  const [isGeneratingAll, setIsGeneratingAll] = useState(false);
 
   // A rerun goes to `drainRef` — the CURRENT effect run's drain — never to the finishing
   // run's own closure: a dep change mid-drain cancels that closure while it still holds
@@ -226,9 +226,9 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
   const retryDelayRef = useRef(RETRY_BASE_MS);
 
   // The links a fetch is running for RIGHT NOW, in EITHER path. `runningRef` single-flights
-  // the drain against itself; this is what keeps the drain and `extractNow` off the same
+  // the drain against itself; this is what keeps the drain and `fetchPreviewsNow` off the same
   // link, which they otherwise reach together at mode `all`: the save wakes the drain (a new
-  // `items` row, displayed and still pending) while `extractNow`'s page fetch — up to 15s —
+  // `items` row, displayed and still pending) while `fetchPreviewsNow`'s page fetch — up to 15s —
   // is in flight, and a link stays pending until its TERMINAL facet write lands in pass 2.
   // What losing that race costs is more than a wasted fetch: both runs reach extractOne's
   // pass 2, each writes a `files/` image blob, the second `extractions/` write wins, and the
@@ -238,7 +238,7 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
   // referrers).
   //
   // Deliberately in-memory and released in a `finally`, never a persisted mark: a mark that
-  // outlived the fetch (an offline `extractNow`, a killed app) would strand the link where
+  // outlived the fetch (an offline `fetchPreviewsNow`, a killed app) would strand the link where
   // no path looks at it again. And deliberately in-PROCESS only — cross-DEVICE duplication
   // stays unguarded on purpose (docs/link-extraction.md — _the extraction entity_,
   // cross-device dedup: self-healing, and a lease would cost a write-then-sync on the
@@ -273,46 +273,46 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
 
   // Cheap wake signal for the AUTO drain: is anything on the displayed page pending AND
   // eligible right now (backoff respected)? O(displayed), re-run on the two wake tables.
-  // Inert in extract-all mode, where the raw count below is the signal instead.
+  // Inert in generate-all mode, where the raw count below is the signal instead.
   const probe = useLiveRead(
     () =>
-      !enabled || isExtractingAll
+      !enabled || isGeneratingAll
         ? Promise.resolve([])
         : readLinksPendingTitleImageForLinkPaths(displayedLinkPaths, Date.now()),
-    [enabled, isExtractingAll, displayedLinkPaths],
+    [enabled, isGeneratingAll, displayedLinkPaths],
     WAKE_TABLES,
   );
 
-  // Extract-all wakes off the RAW pending count (four index counts, no decode, no trash
+  // Generate-all wakes off the RAW pending count (four index counts, no decode, no trash
   // join) — a strict over-count, so 0 always means "nothing to do" and a rare trashed-
-  // pending false positive costs one library walk that finds nothing. Gated to extract-all
+  // pending false positive costs one library walk that finds nothing. Gated to generate-all
   // mode so no count query runs on writes in normal operation.
   const rawPending =
     useLiveRead(
-      () => (enabled && isExtractingAll ? readRawPendingTitleImageCount() : Promise.resolve(0)),
-      [enabled, isExtractingAll],
+      () => (enabled && isGeneratingAll ? readRawPendingTitleImageCount() : Promise.resolve(0)),
+      [enabled, isGeneratingAll],
       WAKE_TABLES,
     ) ?? 0;
 
-  const hasWork = isExtractingAll ? rawPending > 0 : (probe?.length ?? 0) > 0;
+  const hasWork = isGeneratingAll ? rawPending > 0 : (probe?.length ?? 0) > 0;
 
-  const extractAll = useCallback(() => {
-    extractingAllRef.current = true;
-    extractAllCursorRef.current = undefined; // walk the whole library from the newest link
+  const generateAll = useCallback(() => {
+    generatingAllRef.current = true;
+    generateAllCursorRef.current = undefined; // walk the whole library from the newest link
     setAutoLimitReached(false);
-    setIsExtractingAll(true);
+    setIsGeneratingAll(true);
   }, []);
 
   const pause = useCallback(() => {
-    extractingAllRef.current = false;
+    generatingAllRef.current = false;
     // Spend the rest of the auto budget too, so Pause fully stops rather than letting the
-    // incidental drain quietly carry on. A later extractAll() is the only resume.
+    // incidental drain quietly carry on. A later generateAll() is the only resume.
     budgetRef.current = 0;
     if (retryTimerRef.current !== null) {
       clearTimeout(retryTimerRef.current);
       retryTimerRef.current = null;
     }
-    setIsExtractingAll(false);
+    setIsGeneratingAll(false);
   }, []);
 
   // The gestured path (see the context type). Deliberately NOT part of the drain: no
@@ -321,7 +321,7 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
   // of spinning. It runs at `expo:fg` like everything else here. The ONE thing it shares
   // with the drain is the in-flight set, which is not a gate on the gesture — it only
   // stops the two paths fetching the same link twice (see inFlightPathsRef).
-  const extractNow = useCallback(
+  const fetchPreviewsNow = useCallback(
     (linkPaths: string[]) => {
       if (!username || storeStatus !== 'ready' || linkPaths.length === 0) return;
       // `off` is the one position that reaches in here: it means "this device never
@@ -339,7 +339,7 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
           // THE MODE IS READ FROM THE STORE, at the moment of the gesture, before
           // anything leaves the device. `deviceExtractionMode` above is a render's
           // copy, and useSettings answers `saves` until its read of the settings
-          // blob lands — so a caller holding an `extractNow` from a render that was
+          // blob lands — so a caller holding an `fetchPreviewsNow` from a render that was
           // still on the default would fetch for an account set to `off`. One
           // caller can: ShareBridge hands over what waited out a first sync in the
           // very render the gate opens, and a bulk pull lets live reads re-run only
@@ -375,7 +375,7 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
           });
           requestSync();
         } catch {
-          // Offline, or a store hiccup: nothing was recorded (device-extraction's header),
+          // Offline, or a store hiccup: nothing was recorded (device-link-previews's header),
           // so the link stays pending and the normal drain picks it up on the next wake —
           // no reason to surface anything at the save site.
         } finally {
@@ -396,10 +396,10 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    // Foreground gates the AUTO drain only (cost layer 1). Extract-all is exempt in the
+    // Foreground gates the AUTO drain only (cost layer 1). Generate-all is exempt in the
     // same sense web means it — we don't stop it — though on iOS the OS suspends us
     // anyway; see the header's caveat.
-    if (!enabled || !username || !hasWork || (!active && !isExtractingAll)) return;
+    if (!enabled || !username || !hasWork || (!active && !isGeneratingAll)) return;
 
     let cancelled = false;
 
@@ -425,15 +425,15 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
         for (;;) {
           if (cancelled) return;
 
-          if (extractingAllRef.current) {
+          if (generatingAllRef.current) {
             // Page the whole library newest-first via the forward cursor — each step
             // resumes where the last left off.
             const page = await readLinksPendingTitleImagePage(
               Date.now(),
               STEP,
-              extractAllCursorRef.current,
+              generateAllCursorRef.current,
             );
-            // A link `extractNow` is mid-fetch on is skipped for this walk, not deferred:
+            // A link `fetchPreviewsNow` is mid-fetch on is skipped for this walk, not deferred:
             // the cursor moves past it either way, and its outcome is being written by the
             // run that holds it (see inFlightPathsRef).
             const claimed = claimInFlight(page.links);
@@ -448,13 +448,13 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
             }
             if (page.cursor === null) {
               // End of library: the job is FINITE, so end it rather than staying armed to
-              // re-fire on every later synced/imported link. A fresh extractAll() re-arms.
-              extractingAllRef.current = false;
-              extractAllCursorRef.current = undefined;
-              setIsExtractingAll(false);
+              // re-fire on every later synced/imported link. A fresh generateAll() re-arms.
+              generatingAllRef.current = false;
+              generateAllCursorRef.current = undefined;
+              setIsGeneratingAll(false);
               break;
             }
-            extractAllCursorRef.current = page.cursor;
+            generateAllCursorRef.current = page.cursor;
             continue;
           }
 
@@ -465,7 +465,7 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
             break;
           }
           const take = Math.min(STEP, budgetRef.current);
-          // The claim doubles as the step's slice — a link `extractNow` holds is skipped
+          // The claim doubles as the step's slice — a link `fetchPreviewsNow` holds is skipped
           // without spending a slot of `take` (see claimInFlight). Breaking when the whole
           // displayed page is claimed is safe: the run holding it writes an outcome to
           // `item_facet_statuses`, which is a wake table, so the drain re-fires with the
@@ -491,7 +491,7 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
         }
       } catch (err) {
         // The only wholesale failure this platform has: the whole step failed at the
-        // transport level, i.e. the device is offline (device-extraction records nothing in
+        // transport level, i.e. the device is offline (device-link-previews records nothing in
         // that case, so no backoff was burned and the cursor/budget are untouched). Clear a
         // queued rerun so a mid-drain trigger doesn't restart us straight back into it —
         // unless this run was cancelled, whose rerun belongs to its successor.
@@ -499,14 +499,14 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
         if (
           !cancelled &&
           isRetryableTransportError(err) &&
-          (activeRef.current || extractingAllRef.current)
+          (activeRef.current || generatingAllRef.current)
         ) {
           scheduleRetry(err);
         }
       } finally {
         runningRef.current = false;
         setIsRunning(false);
-        if (rerunRef.current && (activeRef.current || extractingAllRef.current)) {
+        if (rerunRef.current && (activeRef.current || generatingAllRef.current)) {
           rerunRef.current = false;
           void drainRef.current?.();
         }
@@ -528,45 +528,45 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
     username,
     hasWork,
     active,
-    isExtractingAll,
+    isGeneratingAll,
     requestSync,
     claimInFlight,
     releaseInFlight,
   ]);
 
-  const value = useMemo<ExtractionContextValue>(
+  const value = useMemo<LinkPreviewsContextValue>(
     () => ({
       enabled,
       isRunning,
-      isExtractingAll,
+      isGeneratingAll,
       autoLimitReached,
-      extractAll,
+      generateAll,
       pause,
       reportDisplayedLinkPaths,
-      extractNow,
+      fetchPreviewsNow,
       gesturedInFlightCount,
     }),
     [
       enabled,
       isRunning,
-      isExtractingAll,
+      isGeneratingAll,
       autoLimitReached,
-      extractAll,
+      generateAll,
       pause,
       reportDisplayedLinkPaths,
-      extractNow,
+      fetchPreviewsNow,
       gesturedInFlightCount,
     ],
   );
 
-  return <ExtractionContext.Provider value={value}>{children}</ExtractionContext.Provider>;
+  return <LinkPreviewsContext.Provider value={value}>{children}</LinkPreviewsContext.Provider>;
 }
 
 // Read drain state + drive the explicit controls. Throws outside a provider rather than
 // returning null-safe defaults, which would hide a mounting bug — mount
-// <ExtractionProvider> above any consumer (the (app) layout does).
-export function useExtraction(): ExtractionContextValue {
-  const ctx = useContext(ExtractionContext);
-  if (!ctx) throw new Error('useExtraction must be used within <ExtractionProvider>');
+// <LinkPreviewsProvider> above any consumer (the (app) layout does).
+export function useLinkPreviews(): LinkPreviewsContextValue {
+  const ctx = useContext(LinkPreviewsContext);
+  if (!ctx) throw new Error('useLinkPreviews must be used within <LinkPreviewsProvider>');
   return ctx;
 }

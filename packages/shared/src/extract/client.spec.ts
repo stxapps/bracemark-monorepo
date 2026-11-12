@@ -148,7 +148,7 @@ describe('extract — the interactive single save', () => {
 describe('extractMany — the batch drain', () => {
   it('sends every URL in ONE request and does NOT ask for inline images', async () => {
     // Both halves matter and both are invisible in a diff: the single round trip is
-    // the latency win the displayed-scoped / extract-all drains are built on, and the
+    // the latency win the displayed-scoped / generate-all drains are built on, and the
     // absent flag is what keeps the response small (imageUrl strings, bytes later
     // through the streaming proxy).
     const f = recordingFetch(results([]));

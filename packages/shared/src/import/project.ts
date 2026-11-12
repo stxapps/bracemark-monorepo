@@ -164,7 +164,7 @@ function* projectSteps(options: ProjectImportOptions): Generator<void, Projected
   // deletes what it named (destroy, the editor replacing the image). Two links
   // naming one blob means either link's delete or new image removes the other's
   // image on every device. Two rows with one image cost its bytes twice; that is
-  // the price, the same one extraction pays (web-react lib/server-extraction.ts).
+  // the price, the same one extraction pays (web-react lib/server-link-previews.ts).
   // Filled as links are ACCEPTED, below: a row's bytes enter `files` only once
   // its link has passed the schema.
   const files: ProjectedEntry<Uint8Array>[] = [];

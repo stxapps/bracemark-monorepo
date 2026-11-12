@@ -13,6 +13,7 @@ import {
   coerceThemeState,
   DEFAULT_THEME,
   type DeviceExtractionMode,
+  type KeepOnSave,
   keepOnSaveOf,
   type LinksLayout,
   type ThemeState,
@@ -52,7 +53,7 @@ export interface Settings {
   // on, screenshot off) — web-react's twin. A RENDER's copy: it answers the defaults
   // until the blob's read lands, so a capture reads the store at the ask instead
   // (docs/link-extraction-keep.md, _when a copy is taken_). For switches only.
-  keepOnSave: { readMode: boolean; readModeImages: boolean; screenshot: boolean };
+  keepOnSave: KeepOnSave;
 }
 
 export function useSettings(): Settings {
@@ -89,11 +90,18 @@ export function useSettings(): Settings {
   const theme = themeSource === 'local' ? localTheme : syncTheme;
 
   const keepReadModeOnSave = general?.keepReadModeOnSave;
+  const keepReadModeOnShare = general?.keepReadModeOnShare;
   const keepReadModeImages = general?.keepReadModeImages;
   const keepScreenshotOnSave = general?.keepScreenshotOnSave;
   const keepOnSave = useMemo(
-    () => keepOnSaveOf({ keepReadModeOnSave, keepReadModeImages, keepScreenshotOnSave }),
-    [keepReadModeOnSave, keepReadModeImages, keepScreenshotOnSave],
+    () =>
+      keepOnSaveOf({
+        keepReadModeOnSave,
+        keepReadModeOnShare,
+        keepReadModeImages,
+        keepScreenshotOnSave,
+      }),
+    [keepReadModeOnSave, keepReadModeOnShare, keepReadModeImages, keepScreenshotOnSave],
   );
 
   return {

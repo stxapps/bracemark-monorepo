@@ -1678,7 +1678,7 @@ it (`engine.spec.ts`, _two tabs, one queue_).
 > metadata naming a `files/` blob it held no op for and had not sent.
 >
 > Two writers do this to a path that is usually already queued: **server
-> extraction** (`lib/server-extraction.ts`), which writes the title into
+> extraction** (`lib/server-link-previews.ts`), which writes the title into
 > `extractions/{id}.enc` in its first pass and in its second writes the image to
 > a fresh `files/{id}.enc` and patches `imageId` into the same extraction — so
 > any cycle that starts between the passes holds the extraction's op and not the

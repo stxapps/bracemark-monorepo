@@ -89,11 +89,11 @@ import { USER_AGENT } from './user-agent';
 // from it — `:fg` = 3, the active-page ceiling). Foreground drains pass `expo:fg`; the
 // deferred `BGAppRefreshTask`/WorkManager sweep will pass `expo:bg`, which ranks below it
 // so a later foreground sighting can UPGRADE what a background sweep wrote.
-export type DeviceExtractionTier = 'expo:fg' | 'expo:bg';
+export type DevicePreviewTier = 'expo:fg' | 'expo:bg';
 
-export interface DeviceExtractionOptions {
+export interface DevicePreviewOptions {
   // Is the extraction mode `all` — i.e. is UN-GESTURED work permitted? The drain only ever
-  // runs when it is; `extractNow` also runs at `saves`, because the save IS the gesture
+  // runs when it is; `fetchPreviewsNow` also runs at `saves`, because the save IS the gesture
   // (neither runs at `off`, which the provider checks). It licenses exactly
   // one extra thing in here: fetching a declared favicon from a host OTHER than the page's
   // own. The carve-out that lets us capture an icon at all is "this costs no disclosure the
@@ -137,8 +137,8 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 export async function runDeviceTitleImageBatch(
   username: string,
   links: LinkItem[],
-  tier: DeviceExtractionTier,
-  opts: DeviceExtractionOptions,
+  tier: DevicePreviewTier,
+  opts: DevicePreviewOptions,
 ): Promise<number> {
   if (links.length === 0) return 0;
 
@@ -214,8 +214,8 @@ async function extractOne(
   username: string,
   url: string,
   targets: LinkItem[],
-  tier: DeviceExtractionTier,
-  opts: DeviceExtractionOptions,
+  tier: DevicePreviewTier,
+  opts: DevicePreviewOptions,
 ): Promise<{ reached: boolean; insecure: boolean }> {
   const page = await fetchPage(url);
   if (page.kind === 'unreached') return { reached: false, insecure: page.insecure };
@@ -481,7 +481,7 @@ async function captureDeclaredFavicon(
   username: string,
   collected: ReturnType<typeof parseHtmlHead>,
   finalUrl: URL,
-  { optedIn }: DeviceExtractionOptions,
+  { optedIn }: DevicePreviewOptions,
 ): Promise<void> {
   try {
     const iconUrl = selectFaviconUrl(collected, finalUrl);
@@ -490,7 +490,7 @@ async function captureDeclaredFavicon(
     const host = hostFromUrl(finalUrl);
     if (host === '') return;
     // Un-gestured opt-in off ⇒ we're here on a save gesture, which pays for this page's own
-    // host and nothing else. See DeviceExtractionOptions.
+    // host and nothing else. See DevicePreviewOptions.
     if (!optedIn && hostFromUrl(new URL(iconUrl)) !== host) return;
     // Only when the host has no bytes yet. NOT `isFaviconStale`: a fresh `none` row is not
     // stale, and deferring to it would let the guess path's miss block the more accurate
@@ -556,7 +556,7 @@ function writeAll(username: string, links: LinkItem[], patch: ExtractionPatch): 
 function settle(
   username: string,
   links: LinkItem[],
-  tier: DeviceExtractionTier,
+  tier: DevicePreviewTier,
   status: ExtractVerdict,
   reason?: string,
 ): Promise<unknown> {

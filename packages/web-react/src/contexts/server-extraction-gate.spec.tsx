@@ -7,8 +7,8 @@ import { act, render, waitFor } from '@testing-library/react';
 import { ExtractClientProvider } from '@stxapps/react';
 import type { ExtractClient, LinkItem } from '@stxapps/shared';
 
-import { ExtractionProvider, useExtraction } from './extraction-provider';
 import { FaviconProvider, useFavicon } from './favicon-provider';
+import { LinkPreviewsProvider, useLinkPreviews } from './link-previews-provider';
 
 // THE PRIVACY GATE, on both providers that hold it: no URL leaves the browser unless
 // the `serverExtraction` opt-in is on AND an extractor origin is configured. Server
@@ -18,7 +18,7 @@ import { FaviconProvider, useFavicon } from './favicon-provider';
 // telling one of our servers which pages this user saved.
 //
 // Two providers, one spec, because they are one rule written twice: FaviconProvider's
-// gate is a hand-copy of ExtractionProvider's, with the comment at favicon-provider
+// gate is a hand-copy of LinkPreviewsProvider's, with the comment at favicon-provider
 // .tsx:91 pointing at it. Splitting them by file would let one drift while the other
 // stayed pinned, which is the failure this is for.
 //
@@ -78,7 +78,7 @@ jest.mock('../data/queries', () => ({
 const mockRunBatch = jest.fn((_username: string, _links: LinkItem[], _client: ExtractClient) =>
   Promise.resolve(1),
 );
-jest.mock('../lib/server-extraction', () => ({
+jest.mock('../lib/server-link-previews', () => ({
   runServerTitleImageBatch: (username: string, links: LinkItem[], client: ExtractClient) =>
     mockRunBatch(username, links, client),
 }));
@@ -94,7 +94,7 @@ jest.mock('../data/favicon-store', () => ({
 }));
 
 function ReportsAPage() {
-  const { reportDisplayedLinkPaths } = useExtraction();
+  const { reportDisplayedLinkPaths } = useLinkPreviews();
   useEffect(() => reportDisplayedLinkPaths(['links/l1']), [reportDisplayedLinkPaths]);
   return null;
 }
@@ -111,9 +111,9 @@ async function mount(extractClient: ExtractClient | null) {
   await act(async () => {
     render(
       <ExtractClientProvider client={extractClient}>
-        <ExtractionProvider>
+        <LinkPreviewsProvider>
           <ReportsAPage />
-        </ExtractionProvider>
+        </LinkPreviewsProvider>
         <FaviconProvider>
           <AsksForAFavicon />
         </FaviconProvider>
@@ -210,26 +210,26 @@ describe('the server-extraction gate', () => {
     );
   });
 
-  // "Extract all" lifts the auto budget and the visibility gate — deliberately, it is
+  // "Generate all" lifts the auto budget and the visibility gate — deliberately, it is
   // an explicit finite job — so it is the one path where a gate regression would be
   // loudest: a full-library walk against a server the user never agreed to reach.
-  it('refuses an explicit extract-all through a closed gate', async () => {
+  it('refuses an explicit generate-all through a closed gate', async () => {
     mockServerExtraction = false;
-    let extractAll = (): void => void 0;
+    let generateAll = (): void => void 0;
     function Controls() {
-      extractAll = useExtraction().extractAll;
+      generateAll = useLinkPreviews().generateAll;
       return null;
     }
     await act(async () => {
       render(
         <ExtractClientProvider client={extractor}>
-          <ExtractionProvider>
+          <LinkPreviewsProvider>
             <Controls />
-          </ExtractionProvider>
+          </LinkPreviewsProvider>
         </ExtractClientProvider>,
       );
     });
-    await act(async () => void extractAll());
+    await act(async () => void generateAll());
     expect(mockRunBatch).not.toHaveBeenCalled();
   });
 });

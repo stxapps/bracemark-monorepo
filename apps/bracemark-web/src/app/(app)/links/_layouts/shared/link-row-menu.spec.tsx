@@ -46,7 +46,7 @@ jest.mock('@stxapps/web-react', () => ({
   }),
   // hooks.ts, which the menu takes useEngagedOpen from, reads these two at
   // module scope of its other hooks.
-  useExtraction: () => ({ reportDisplayedLinkPaths: jest.fn() }),
+  useLinkPreviews: () => ({ reportDisplayedLinkPaths: jest.fn() }),
   useTags: () => [],
   useEntitlements: () => ({ entitlements: { keptCopies: mockKeptCopies } }),
 }));
