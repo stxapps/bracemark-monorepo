@@ -20,8 +20,10 @@ import { fetchPreviewImageFile, previewFileFromBytes } from '../lib/device-extra
 // image host that refuses a cross-origin read). Either way the bytes go through the one
 // preview pipeline (`previewFileFromBytes`): sniffed, measured and capped.
 //
-// Not plan-gated: previews are free on every plan. Not subject to the device's fetch
-// mode either — this is an explicit ask on a page the user has open, like _Keep read
+// Not plan-gated HERE: the gate is the capture screen's, which offers this only on a
+// plan with `keptCopies` (docs/reader.md, _the way in_) — a preview the drain fetches
+// is free on every plan, this hand-asked re-read of one is not. Not subject to the
+// device's fetch mode either — this is an explicit ask on a page the user has open, like _Keep read
 // mode_ on the same screen (use-kept-copy-mutations.ts).
 
 export interface PagePreviewInput {

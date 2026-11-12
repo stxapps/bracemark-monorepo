@@ -7,14 +7,23 @@ import { ReaderScreen } from './reader-screen';
 
 // The expo reader's decisions — the same rules web's reader-page.spec.tsx pins:
 // a link in a locked list shows the unlock pane and none of the copy; reading and
-// deleting are never gated; one tab per copy; deleting asks first.
+// deleting are never gated; one tab per copy; deleting asks first. And the way
+// across to the capture screen: a paid plan's only, and a replace, not a push.
 
 let mockLink: object | null = null;
 let mockExtraction: object | null = null;
 let mockLocked = false;
+let mockKeptCopies = true;
+const mockReplace = jest.fn();
 const mockRemoveCopy = jest.fn(async (_link: unknown, _facet: string) => true);
 
-jest.mock('expo-router', () => ({ router: { canGoBack: () => true, back: jest.fn() } }));
+jest.mock('expo-router', () => ({
+  router: {
+    canGoBack: () => true,
+    back: jest.fn(),
+    replace: (href: string) => mockReplace(href),
+  },
+}));
 jest.mock('@stxapps/expo-react', () => {
   const react = jest.requireActual('react') as typeof import('react');
   return {
@@ -33,6 +42,7 @@ jest.mock('@stxapps/expo-react', () => {
       isListLocked: () => mockLocked,
       unlockList: jest.fn(),
     }),
+    useEntitlements: () => ({ entitlements: { keptCopies: mockKeptCopies } }),
     useImageFileUri: (id: string | undefined) => (id ? `file:///${id}` : undefined),
     useKeptCopyMutations: () => ({ removeCopy: mockRemoveCopy }),
     useReaderImages: () => ({ images: new Map(), settled: true }),
@@ -66,6 +76,8 @@ beforeEach(() => {
   mockLink = LINK;
   mockExtraction = null;
   mockLocked = false;
+  mockKeptCopies = true;
+  mockReplace.mockClear();
   mockRemoveCopy.mockClear();
 });
 
@@ -79,6 +91,25 @@ test('a link in a locked list shows the unlock pane and none of the copy', async
   expect(screen.queryByText('The kept words.')).toBeNull();
   expect(screen.queryByText('Open page')).toBeNull();
   expect(screen.queryByTestId('reader-wayback')).toBeNull();
+  expect(screen.queryByTestId('reader-capture')).toBeNull();
+});
+
+test('a paid plan crosses to the capture screen in place of the reader', async () => {
+  mockExtraction = { readModeId: 'r1', facets: {} };
+  render(<ReaderScreen linkId="l1" />);
+  await screen.findByText('The kept words.');
+
+  fireEvent.press(screen.getByLabelText('Update from the page'));
+  expect(mockReplace).toHaveBeenCalledWith('/capture?link=l1');
+});
+
+test('free: the copy reads, and there is no way to take another', async () => {
+  mockExtraction = { readModeId: 'r1', facets: {} };
+  mockKeptCopies = false;
+  render(<ReaderScreen linkId="l1" />);
+  // Reading is never gated — a copy kept on an earlier plan stays the user's.
+  expect(await screen.findByText('The kept words.')).toBeTruthy();
+  expect(screen.queryByTestId('reader-capture')).toBeNull();
 });
 
 test('the Wayback Machine opens the capture nearest the day the link was saved', async () => {

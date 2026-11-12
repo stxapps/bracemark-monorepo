@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowUpRight, BookOpen, History, Image as ImageIcon, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
 import { LOCK_COPY } from '@stxapps/react';
 import {
@@ -68,9 +68,9 @@ import { readLinksReturn } from '@/lib/links-return';
 //
 // The empty state is also where the web app TAKES a read-mode copy, through
 // bracemark-extractor (useServerReadMode — offered only with the server-extraction
-// opt-in on, on a plan with `keptCopies`). The row menu's _Keep read mode_ opens this
-// page with `&keep=readMode`, which runs that once and is then dropped from the
-// address, so a reload or a history entry can't fetch the page again on its own.
+// opt-in on, on a plan with `keptCopies`). Only ever on that button's press: the row
+// menu's "Read" opens this page on a paid plan's link with no copy too, and a press
+// that says "Read" is not an ask to have the server fetch the page.
 //
 // TWO WAYS OUT, both in the top bar and both hidden behind a lock (the host is the
 // locked list's contents): _Open page_, the live page, and _Wayback Machine_, the
@@ -304,7 +304,7 @@ function outcomeNotice(outcome: ServerReadModeOutcome | 'error'): OutcomeNotice 
   }
 }
 
-function KeepReadMode({ link, auto }: { link: LinkItem; auto: boolean }) {
+function KeepReadMode({ link }: { link: LinkItem }) {
   const { keep } = useServerReadMode();
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<OutcomeNotice | null>(null);
@@ -317,17 +317,6 @@ function KeepReadMode({ link, auto }: { link: LinkItem; auto: boolean }) {
       .catch(() => setNotice(outcomeNotice('error')))
       .finally(() => setBusy(false));
   };
-
-  // The row menu's _Keep read mode_ arrives with `auto` — that click was the ask. Once
-  // per mount; the parent has already dropped the parameter from the address.
-  const started = useRef(false);
-  useEffect(() => {
-    if (!auto || started.current) return;
-    started.current = true;
-    run();
-    // `run` is recreated per render; the ref is what makes this a once.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auto]);
 
   return (
     <>
@@ -348,12 +337,10 @@ function EmptyCopies({
   link,
   href,
   waybackHref,
-  autoKeep,
 }: {
   link: LinkItem;
   href: string | undefined;
   waybackHref: string | undefined;
-  autoKeep: boolean;
 }) {
   const { entitlements } = useEntitlements();
   const { available: serverAvailable } = useServerReadMode();
@@ -378,7 +365,7 @@ function EmptyCopies({
         </p>
       ) : null}
       <div className={cn('flex flex-wrap justify-center gap-2')}>
-        {serverAvailable ? <KeepReadMode link={link} auto={autoKeep} /> : null}
+        {serverAvailable ? <KeepReadMode link={link} /> : null}
         {href ? (
           <Button asChild variant="outline" size="sm">
             <a href={href} target="_blank" rel="noreferrer">
@@ -408,16 +395,6 @@ function EmptyCopies({
 export function ReaderPage() {
   const searchParams = useSearchParams();
   const linkId = searchParams.get('link') ?? '';
-  // `&keep=readMode` — the row menu's _Keep read mode_. Read once into state and then
-  // dropped from the address (a replace, not a push), so the ask runs for the click
-  // that made it and never for a reload, a restored tab or a history entry.
-  const router = useRouter();
-  const pathname = usePathname();
-  const [autoKeep] = useState(() => searchParams.get('keep') === 'readMode');
-  useEffect(() => {
-    if (searchParams.get('keep') === null) return;
-    router.replace(`${pathname}?link=${encodeURIComponent(linkId)}`);
-  }, [searchParams, router, pathname, linkId]);
   const closeHref = useCloseHref();
   const { status: lockStatus, isListLocked, unlockList } = useLocks();
 
@@ -509,7 +486,7 @@ export function ReaderPage() {
       </>
     );
   } else {
-    body = <EmptyCopies link={link} href={href} waybackHref={waybackHref} autoKeep={autoKeep} />;
+    body = <EmptyCopies link={link} href={href} waybackHref={waybackHref} />;
   }
 
   return (

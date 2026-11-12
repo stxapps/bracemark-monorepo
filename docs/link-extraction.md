@@ -268,7 +268,7 @@ rule:
 | **mobile / foreground browse**   | at mode `all`, pending displayed links are fetched as they come into view         | active-page | free; each site sees the device's request                              |
 | **web app / visible links**      | with `serverExtraction` on, pending displayed links wake the in-page drain        | server      | server sees the URL — opt-in, off by default (see _server extraction_) |
 | **web or mobile / Generate all** | an explicit full-library pending scan                                             | server / fg | finite user-driven job                                                 |
-| **mobile / Update preview**      | a tap on the capture screen re-reads ONE link from the live page in its WebView   | active-page | free on every plan; written over whatever tier held it                 |
+| **mobile / Update preview**      | a tap on the capture screen re-reads ONE link from the live page in its WebView   | active-page | Plus (`keptCopies`); written over whatever tier held it                |
 
 The web row corrects two easy misreads of _the stance_. First, "the web app
 can't extract" is true only of **fetching** — a `bracemark-web` tab can't `fetch`
@@ -1224,7 +1224,8 @@ What the phone does instead (`lib/device-extraction.ts`, expo-react):
   from "Will retry" to "Won't retry" through a second facet token beside `failed`
   (projection.ts) — whose line names the cause. Every other client reads an ordinary
   `failed`. A later success replaces the state and the tag with it; the capture screen's
-  _Update preview_ is the manual route.
+  _Update preview_ is the manual route on a plan with `keptCopies`; on free, the editor's
+  own title and image.
 - **An insecure preview image settles title-only.** A plain-HTTP `og:image` reached over
   neither is `none`, not `transient`: the title already landed, and a retry would fail
   the same way.

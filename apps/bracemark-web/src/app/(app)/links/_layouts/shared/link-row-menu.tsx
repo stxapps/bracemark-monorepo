@@ -6,10 +6,8 @@ import {
   ArrowDown,
   ArrowUp,
   BookOpen,
-  BookPlus,
   Copy,
   FolderInput,
-  History,
   MoreHorizontal,
   Pencil,
   Pin,
@@ -21,14 +19,14 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-import { ARCHIVE_ID, DEFAULT_LIST_ID, TRASH_ID, waybackUrl } from '@stxapps/shared';
+import { ARCHIVE_ID, DEFAULT_LIST_ID, TRASH_ID } from '@stxapps/shared';
 import {
   linkIdOf,
   type LinkView,
+  useEntitlements,
   useLinkMutations,
   useListMutations,
   usePinMutations,
-  useServerReadMode,
 } from '@stxapps/web-react';
 import { ListCommand } from '@stxapps/web-ui/components/links/list-command';
 import { Button } from '@stxapps/web-ui/components/ui/button';
@@ -55,13 +53,15 @@ const EXCLUDE_IDS = [TRASH_ID];
 // one `<LinkRowMenu>` and the logic stays in one place. The shape follows the
 // menu convention: frequent actions first (Read / Copy link / Edit / Move to /
 // Edit tags / Edit note / pin), destructive last behind a separator (Archive /
-// Remove). `Read` is the one CONDITIONAL item: it appears only on a link with a
-// kept copy (`readModeId` or `screenshotId`, docs/reader.md), because the reader
-// has nothing to open otherwise, and it is the menu's one route change (a
-// `<Link>` to `/read`). On a link with no copy it is _Keep read mode_ instead, when
-// the web app can take one (useServerReadMode: the server-extraction opt-in, a plan
-// with `keptCopies`) — the same route with `&keep=readMode`, which the reader runs
-// once and shows the answer to (read/_components/reader-page.tsx). The
+// Remove). `Read` is the one CONDITIONAL item and the menu's one route change (a
+// `<Link>` to `/read`): there on a link with a copy (`readModeId` or
+// `screenshotId`), on every plan, since reading a copy is never gated; and on a
+// link with none only on a plan with `keptCopies`, where the reader's empty state
+// says how to take one — _Keep read mode_ with the server opt-in on, the browser
+// extension otherwise (read/_components/reader-page.tsx). A free account's link
+// with no copy has no Read: the reader could only tell it what it can't have. The
+// Wayback Machine and taking a fresh copy live in the reader, not here — the menu
+// keeps to what is done to the LINK (docs/reader.md, _the way in_). The
 // variant is keyed off the LINK's own `listId`, not the active view, so a
 // trashed/archived link gets the right menu in the All view and tag views too:
 //
@@ -92,17 +92,6 @@ const EXCLUDE_IDS = [TRASH_ID];
 // `pinnedBelow`, the pinned neighbour this view renders — pins are one global
 // order filtered per view, so the neighbour, not an index, names the slot — and
 // is disabled where there is none.
-//
-// OPEN IN WAYBACK MACHINE is the last of the ordinary actions, on every plan and on
-// every link a public archive could hold (`waybackUrl` answers nothing for the rest,
-// and the item is then absent). It is the exit for a page that has changed or gone,
-// which is mostly a link with NO kept copy — an import, a free account — so it
-// cannot live in the reader alone. Rare, hence last; and it sits ABOVE the separator
-// so it is never read as one of the pair below it, where "Archive" means this app's
-// own list (docs/link-extraction.md, the opening note on that word). A plain `<a>`
-// to another origin, opened in a new tab with no referrer, like the row itself: the
-// address is built here and nothing is requested until the click (url.ts,
-// `waybackUrl`).
 //
 // The menu is a sibling of the row's link, never nested inside the `<a>` — a
 // button inside an anchor is invalid and would also fire the navigation. The
@@ -142,41 +131,12 @@ export function LinkRowMenu({
   const inTrash = link.listId === TRASH_ID;
   const inArchive = link.listId === ARCHIVE_ID;
 
-  const { available: canKeepReadMode } = useServerReadMode();
-  const hasCopy = Boolean(link.readModeId || link.screenshotId);
-  const readHref = `/read?link=${encodeURIComponent(linkIdOf(link))}`;
-  const read = hasCopy ? (
-    <DropdownMenuItem asChild>
-      <Link href={readHref}>
-        <BookOpen className="size-4" />
-        Read
-      </Link>
-    </DropdownMenuItem>
-  ) : canKeepReadMode ? (
-    <DropdownMenuItem asChild>
-      <Link href={`${readHref}&keep=readMode`}>
-        <BookPlus className="size-4" />
-        Keep read mode
-      </Link>
-    </DropdownMenuItem>
-  ) : null;
-
   const copyLink = (
     <DropdownMenuItem onSelect={() => void navigator.clipboard.writeText(link.url)}>
       <Copy className="size-4" />
       Copy link
     </DropdownMenuItem>
   );
-
-  const waybackHref = waybackUrl(link.url, link.createdAt);
-  const wayback = waybackHref ? (
-    <DropdownMenuItem asChild>
-      <a href={waybackHref} target="_blank" rel="noreferrer">
-        <History className="size-4" />
-        Open in Wayback Machine
-      </a>
-    </DropdownMenuItem>
-  ) : null;
 
   return (
     <DropdownMenu open={open} onOpenChange={handleOpenChange}>
@@ -224,7 +184,7 @@ export function LinkRowMenu({
           </>
         ) : (
           <>
-            {read}
+            <ReadItem link={link} />
             {copyLink}
             <DropdownMenuItem onSelect={() => openEditor(link)}>
               <Pencil className="size-4" />
@@ -306,7 +266,6 @@ export function LinkRowMenu({
                 Pin to top
               </DropdownMenuItem>
             )}
-            {wayback}
             <DropdownMenuSeparator />
             {inArchive ? (
               <DropdownMenuItem onSelect={() => void update(link, { listId: DEFAULT_LIST_ID })}>
@@ -330,5 +289,21 @@ export function LinkRowMenu({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+// `Read` (the header has the rule). Its own component so the plan is read only while
+// the menu is OPEN — Radix mounts the content's children only then, and this menu
+// renders once per virtualized row.
+function ReadItem({ link }: { link: LinkView }) {
+  const { entitlements } = useEntitlements();
+  if (!(link.readModeId || link.screenshotId) && !entitlements.keptCopies) return null;
+  return (
+    <DropdownMenuItem asChild>
+      <Link href={`/read?link=${encodeURIComponent(linkIdOf(link))}`}>
+        <BookOpen className="size-4" />
+        Read
+      </Link>
+    </DropdownMenuItem>
   );
 }

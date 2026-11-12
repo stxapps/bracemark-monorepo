@@ -171,7 +171,10 @@ export type Entitlements = {
   // (`readMode` / `screenshot` facets, docs/link-extraction-keep.md). A
   // value-capture gate, not a cost one: a gzipped read-mode copy is smaller than
   // the preview image every plan already stores, and the byte ceiling above stays
-  // the backstop for the screenshot. It gates the CAPTURE only — reading,
+  // the backstop for the screenshot. Expo's capture screen is wholly behind it, its
+  // _Update preview_ (a title and image re-read from the live page) included — a
+  // free account sets those by hand (docs/reader.md, _the way in_). It gates the
+  // CAPTURE only — reading,
   // exporting and deleting a copy are never gated, so a copy taken while
   // entitled stays the user's after a downgrade (the same no-hostage rule the
   // quota ceilings follow). Page copy is metered separately (`maxPageCopies`)

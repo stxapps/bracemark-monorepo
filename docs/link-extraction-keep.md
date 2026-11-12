@@ -19,14 +19,14 @@ captures in `utils/capture.ts`, `extraction-worker.ts`); bracemark-web reads bot
 `/read?link=<id>` ([reader.md](./reader.md), _the web reader_), and the synced save
 setting chooses what a save keeps (Settings → Read mode). Server
 read mode is built (_per client_, bracemark-extractor) and reached from bracemark-web
-as a per-link _Keep read mode_. Removal (one copy, and a selection's in bulk edit) and
+as a per-link _Keep read mode_ in the reader. Removal (one copy, and a selection's in bulk edit) and
 the orphaned-file sweep are built (_removal, cleanup, export_), and so are expo's
 reader, its iOS share-from-Safari read mode and its capture screen (_per client_,
 bracemark-expo) — which also re-reads a link's title and preview image from the live
-page, _Update preview_, on every plan. A read-mode copy keeps a page's **tables** as tables (_tables_) and
+page, _Update preview_, on a plan with `keptCopies`. A read-mode copy keeps a page's **tables** as tables (_tables_) and
 its **images** in a pack beside the text, on every tier that takes a copy (_images in
-read mode_), and every link has a way to the **Wayback Machine** for the page that is
-gone (_when the page is gone_). None of it has been released yet — which is why the
+read mode_), and the reader and the capture screen have a way to the **Wayback
+Machine** for the page that is gone (_when the page is gone_). None of it has been released yet — which is why the
 table block and the figure's image fields could still go into the format's first
 version.
 
@@ -473,8 +473,9 @@ Three triggers, and deliberately not a fourth:
    one is not built — _per client_, bracemark-expo), and no screenshot switch, since
    the phone takes none. The setting is synced, so the iOS switch's description says
    the browser extension's saves follow it too.
-2. **A per-link action**: _Keep read mode_ / _Keep screenshot_ from a link's menu
-   and from the reader. On a client that can't capture that link right now, the
+2. **A per-link action**: _Keep read mode_ / _Keep screenshot_, reached through a
+   link's menu — its one **Read** item, which on a link with no copy goes where the
+   copy is taken ([reader.md](./reader.md), _the way in_) — and from the reader. On a client that can't capture that link right now, the
    action says what can (open it in the extension, open it in the app).
 3. **A scoped bulk job**: the existing _Generate all_ drain, given a facet and a
    scope — a selection, a list, a tag, a search — and the same confirm, progress
@@ -584,9 +585,11 @@ and Android's WebView has its own `CookieManager`, apart from Chrome's. So, in o
    from Safari shows it — jsdom and Chrome both pass the null along happily.
    The WebView path posts JSON text and has no such limit.
 2. **A capture screen — built** (`/capture?link=<id>`,
-   `features/capture/capture-screen.tsx`), opened from a link's menu (_Keep a
-   copy_, or _Update preview_ — two entries for one screen, because "keep this
-   article" and "this preview is wrong" are different wants): the page in a
+   `features/capture/capture-screen.tsx`), opened by the row menu's **Read** on a
+   link with no copy, and from the reader's _Update from the page_ on one that has
+   one; its top bar has _Read_ back while the link has a copy, and the two screens
+   trade places (a replace, never a push) rather than stack
+   ([reader.md](./reader.md), _the way in_). The page in a
    `react-native-webview` WebView with two actions under it. **Keep read mode**
    keeps the article and its images (_images in read mode_ — the page fetches them
    first); **Update preview** re-reads the title and preview image from the live
@@ -596,9 +599,13 @@ and Android's WebView has its own `CookieManager`, apart from Chrome's. So, in o
    tier held it, since it is a tap (expo-react `data/store-page-preview.ts`). Only
    what was had is written: a page whose image couldn't be fetched keeps the old
    one, and a title or image the user set by hand still wins, which the screen
-   says. The page loads on every plan — a preview is free — and only _Keep read
-   mode_ is gated, marked Plus and opening the upgrade on a free account. A locked
-   list's page stays unloaded; both actions are live only while the WebView is on
+   says. **Both actions are `keptCopies`'**: no route brings a free account here,
+   and one that arrives anyway (a plan lapsing on the screen, an old address) gets
+   no _Update preview_ — a free account sets a title and image by hand in the editor
+   — and a _Keep read mode_ marked Plus that opens the upgrade. Its top bar also has
+   the Wayback Machine, and a page that fails to load offers it in words (_when the
+   page is gone_). A locked
+   list's page stays unloaded, and both top-bar exits with it; both actions are live only while the WebView is on
    the link's own page (`canonicalUrlKey`) and only while the page actually loaded
    (a failed load shows the WebView's own error page, so both go off and the screen
    says the page didn't load), the address the page reports with its answer is
@@ -667,13 +674,13 @@ mode_).
 
 **bracemark-web — the server's read mode, on a per-link ask.** It can't fetch a page
 (CORS), so its read mode is the extractor's, under `serverExtraction`, and it has no
-screenshot or page copy of its own. Built as trigger 2 above for read mode: a link with
-no copy gets _Keep read mode_ in its row menu while `useServerReadMode().available`
-(signed in, a ready store, the `serverExtraction` opt-in, an extractor in this build, and
-`keptCopies`), which opens `/read?link=<id>&keep=readMode`; the reader runs that ask
-once, drops the parameter from the address (so a reload or a history entry never
-fetches on its own), and says what came back. The same _Keep read mode_ button sits in
-the reader's empty state. `runServerReadMode` (web-react `lib/server-read-mode.ts`)
+screenshot or page copy of its own. Built as trigger 2 above for read mode: the row
+menu's **Read** opens the reader on a paid plan's link with no copy, and its empty state
+has _Keep read mode_ while `useServerReadMode().available` (signed in, a ready store,
+the `serverExtraction` opt-in, an extractor in this build, and `keptCopies`). Only that
+button's press asks — never the arrival: "Read" is not an ask to have the server fetch
+the page, and an address can't make one either, so a reload or a history entry never
+fetches on its own. The reader says what came back. `runServerReadMode` (web-react `lib/server-read-mode.ts`)
 stores the copy exactly as the extension does, at the `server` tier, and **never
 replaces a copy that exists** — checked before the request and again after it, since a
 live-page capture may land meanwhile — nor overwrites a better tier's settled verdict
@@ -689,8 +696,9 @@ The kept copies are a Plus feature, `keptCopies` in `iap/plans.ts`, enforced in 
 client like every per-feature gate (the server can't tell one `files/` blob from
 another); the byte and file ceilings stay the server-hard backstop. It is checked
 where a capture is asked for — the browser extension's save and its saved screen,
-expo's share drain and the capture screen's _Keep read mode_ (not the screen itself,
-which also serves the free _Update preview_), and bracemark-web's server read mode
+expo's share drain and both of the capture screen's actions (_Keep read mode_ and
+_Update preview_ — the row menu's **Read** sends a free account to the reader only, and
+only for a copy it has), and bracemark-web's server read mode
 (`useServerReadMode`) — and the upgrade dialog's words are `PAYWALL_COPY.keptCopies` (`@stxapps/react`),
 one string read on the web and on a phone, so its screenshot clause is scoped to the
 browser extension: the phone app takes none (_the scope each copy stops at_).
@@ -781,10 +789,14 @@ everything saved before copies existed. For those — and for any page that has 
 changed — the answer is not ours to store. It is a link: **Open in Wayback Machine**,
 to the Internet Archive's capture of that address nearest the day the link was saved.
 
-- **Where.** The row menu on both apps, as the last ordinary action, on every plan; the
-  reader's top bar, beside _Open page_; and the web reader's empty state, where it is
-  said in a sentence ([reader.md](./reader.md)). Behind a lock it is hidden with _Open
-  page_: the address is the locked list's contents.
+- **Where.** The reader's top bar on both apps, beside _Open page_; the web reader's
+  empty state, where it is said in a sentence ([reader.md](./reader.md)); and expo's
+  capture screen — its top bar, and in words under a page that failed to load. **Not
+  the row menu** (decided 2026-11-11): it is for the page that has gone or changed,
+  and those are the two screens a user is on when finding that out; a row-menu item on
+  every link, for a rare need, was the menu's clutter. So a free account's link with no
+  copy, which reaches neither screen, has no way to it in the app. Behind a lock it is hidden with
+  _Open page_: the address is the locked list's contents.
 - **The address** is `https://web.archive.org/web/{stamp}/{url}`, built by `waybackUrl`
   (`@stxapps/shared` `url/url.ts`): `stamp` is the link's `createdAt` as fourteen UTC
   digits, and the Wayback Machine answers with the capture nearest it — the page as it
@@ -804,8 +816,8 @@ to the Internet Archive's capture of that address nearest the day the link was s
   the address for good, share tokens and all, and takes the user's private reading
   list public one URL at a time. Not as a default, not as a setting.
 - **The word is "Wayback Machine", never "archive".** _Archive_ is the system list's
-  ([link-extraction.md](./link-extraction.md), the opening note), and in the row menu
-  the two sit a separator apart.
+  ([link-extraction.md](./link-extraction.md), the opening note) — the row menu's own
+  item, and the topbar's title in that view.
 
 **Why it is a complement and not the copy.** The Wayback Machine holds what a crawler
 saw of the public web: nothing behind a sign-in, uneven on small sites, poor at pages

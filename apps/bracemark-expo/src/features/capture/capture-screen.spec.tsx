@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Linking } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import { CaptureScreen } from './capture-screen';
@@ -6,8 +7,11 @@ import { CaptureScreen } from './capture-screen';
 // The capture screen's rules (its header and use-page-capture.ts's have the reasoning),
 // against a stand-in WebView that records each request the screen injects and lets the
 // spec play the page:
-//   - free loads the page and gets a preview, but Keep read mode is the upgrade; a
-//     locked list's page never loads;
+//   - free loads the page but has no Update preview, and Keep read mode is the
+//     upgrade; a locked list's page never loads;
+//   - the top bar's two exits: Read while the link has a copy (a replace — the reader
+//     and this screen trade places), the Wayback Machine — said in words too when the
+//     page didn't load;
 //   - the buttons are live only on the link's own page, and an answer from another
 //     page is refused;
 //   - a message counts only while a request awaits one, and only with its nonce.
@@ -15,6 +19,8 @@ import { CaptureScreen } from './capture-screen';
 let mockLink: Record<string, unknown> | null = null;
 let mockLocked = false;
 let mockKeptCopies = true;
+let mockExtraction: Record<string, unknown> | null = null;
+const mockReplace = jest.fn();
 const mockKeepReadMode = jest.fn(async (_link: unknown, _doc: unknown, _options?: unknown) => true);
 const mockUpdatePreview = jest.fn(async (_link: unknown, _input: unknown) => ({
   title: true,
@@ -49,7 +55,7 @@ jest.mock('./page-capture-script.generated', () => ({
 let mockNextId = 0;
 jest.mock('@stxapps/expo-crypto/lib/ids', () => ({ newId: () => `nonce-${++mockNextId}` }));
 jest.mock('expo-router', () => ({
-  router: { canGoBack: () => true, back: jest.fn(), replace: jest.fn() },
+  router: { canGoBack: () => true, back: jest.fn(), replace: (href: string) => mockReplace(href) },
 }));
 jest.mock('../../contexts/paywall-provider', () => ({
   usePaywall: () => ({ show: mockShowPaywall }),
@@ -62,7 +68,7 @@ jest.mock('@stxapps/expo-react', () => {
   const react = jest.requireActual('react') as typeof import('react');
   return {
     readLinkById: async () => mockLink,
-    readExtraction: async () => null,
+    readExtraction: async () => mockExtraction,
     useLiveRead: (read: () => Promise<unknown>) => {
       const [value, setValue] = react.useState<unknown>(undefined);
       react.useEffect(() => {
@@ -78,7 +84,13 @@ jest.mock('@stxapps/expo-react', () => {
 });
 
 const URL_ = 'https://example.com/post';
-const LINK = { path: 'links/l1.enc', url: URL_, listId: 'reading' };
+const LINK = {
+  path: 'links/l1.enc',
+  url: URL_,
+  listId: 'reading',
+  createdAt: Date.UTC(2026, 10, 9, 8, 7, 6),
+};
+const WAYBACK = 'https://web.archive.org/web/20261109080706/https://example.com/post';
 const CAPTURE = { doc: { version: 1, capturedAt: 1, blocks: [] }, images: [] };
 const keep = () => screen.getByTestId('capture-keep-read-mode');
 const preview = () => screen.getByTestId('capture-update-preview');
@@ -102,17 +114,19 @@ beforeEach(() => {
   mockLink = LINK;
   mockLocked = false;
   mockKeptCopies = true;
+  mockExtraction = null;
+  mockReplace.mockClear();
   mockKeepReadMode.mockClear();
   mockUpdatePreview.mockClear();
   mockInject.mockClear();
   mockShowPaywall.mockClear();
 });
 
-test('free: the page loads, and Keep read mode is the upgrade, not a capture', async () => {
+test('free: the page loads, no Update preview, and Keep read mode is the upgrade', async () => {
   mockKeptCopies = false;
   await onPage();
-  // A preview is free on every plan, so the page is there to read it from.
-  expect(preview().props.accessibilityState?.disabled).toBeFalsy();
+  // Both actions are Plus. A free account sets its own title and image in the editor.
+  expect(screen.queryByTestId('capture-update-preview')).toBeNull();
   fireEvent.press(keep());
   expect(mockShowPaywall).toHaveBeenCalledWith('keptCopies');
   expect(mockInject).not.toHaveBeenCalled();
@@ -120,9 +134,34 @@ test('free: the page loads, and Keep read mode is the upgrade, not a capture', a
 
 test('a link in a locked list: the unlock pane, and no page loaded', async () => {
   mockLocked = true;
+  mockExtraction = { readModeId: 'r1', facets: {} };
   render(<CaptureScreen linkId="l1" />);
   await waitFor(() => expect(screen.getByTestId('lock-pane')).toBeTruthy());
   expect(screen.queryByTestId('capture-webview')).toBeNull();
+  // The exits name the host too, so they hide with it.
+  expect(screen.queryByTestId('capture-reader')).toBeNull();
+  expect(screen.queryByTestId('capture-wayback')).toBeNull();
+});
+
+test('Read is there only while the link has a copy, and takes this screen’s place', async () => {
+  await onPage();
+  expect(screen.queryByTestId('capture-reader')).toBeNull();
+
+  mockExtraction = { readModeId: 'r1', facets: {} };
+  screen.unmount();
+  await onPage();
+  fireEvent.press(await screen.findByTestId('capture-reader'));
+  expect(mockReplace).toHaveBeenCalledWith('/read?link=l1');
+});
+
+test('the Wayback Machine opens the capture nearest the day the link was saved', async () => {
+  const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+  await onPage();
+  // Built on the device; nothing is opened, or asked, before the press.
+  expect(openURL).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByTestId('capture-wayback'));
+  expect(openURL).toHaveBeenCalledWith(WAYBACK);
+  openURL.mockRestore();
 });
 
 test('on the link’s page, keeping asks the page and stores what comes back', async () => {
@@ -281,8 +320,11 @@ test('a page that didn’t load: both buttons off, and the line says why', async
   ).toBeTruthy();
   fireEvent.press(preview());
   expect(mockInject).not.toHaveBeenCalled();
+  // The moment the Wayback Machine is for, so it is offered in words.
+  expect(screen.getByTestId('capture-wayback-load-failed')).toBeTruthy();
 
   // A new load clears it — the positive control.
   act(() => webviewProps.onLoadStart());
   expect(preview().props.accessibilityState?.disabled).toBeFalsy();
+  expect(screen.queryByTestId('capture-wayback-load-failed')).toBeNull();
 });

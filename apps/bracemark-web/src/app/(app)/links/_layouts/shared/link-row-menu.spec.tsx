@@ -31,7 +31,7 @@ const mockUpdate = jest.fn();
 const mockCreate = jest.fn();
 const mockSetMenuOpen = jest.fn();
 const mockRequestMove = jest.fn();
-let mockCanKeepReadMode = false;
+let mockKeptCopies = false;
 
 jest.mock('@stxapps/web-react', () => ({
   linkIdOf: (link: { path: string }) => link.path.replace(/^links\/|\.enc$/g, ''),
@@ -48,7 +48,7 @@ jest.mock('@stxapps/web-react', () => ({
   // module scope of its other hooks.
   useExtraction: () => ({ reportDisplayedLinkPaths: jest.fn() }),
   useTags: () => [],
-  useServerReadMode: () => ({ available: mockCanKeepReadMode, keep: jest.fn() }),
+  useEntitlements: () => ({ entitlements: { keptCopies: mockKeptCopies } }),
 }));
 
 jest.mock('../../_contexts/view-state-provider', () => ({
@@ -224,8 +224,10 @@ test('moves once, into the new list, when a row is pressed while the create is l
   expect(screen.queryByRole('menu')).toBeNull();
 });
 
-// `Read` — the one conditional item. It is there only when the link HAS a kept copy:
-// the reader would otherwise open onto an empty state the row promised against.
+// `Read` — the one conditional item. On a link with a copy it is there on every plan
+// (reading is never gated — a lapsed plan must not hide the user's copies); on one
+// with none, only on a plan that can take one, where the reader's empty state says
+// how. The Wayback Machine is the reader's, never this menu's.
 describe('Read', () => {
   const mountWith = (extra: Partial<LinkView>) =>
     render(
@@ -238,36 +240,28 @@ describe('Read', () => {
     );
 
   afterEach(() => {
-    mockCanKeepReadMode = false;
+    mockKeptCopies = false;
   });
 
-  test('is absent on a link with no kept copy', () => {
+  test('is absent on a free account’s link with no copy', () => {
     mountWith({});
     openMenu();
     expect(screen.queryByRole('menuitem', { name: 'Read' })).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: 'Keep read mode' })).toBeNull();
   });
 
-  test('is Keep read mode on a link with no copy, when the web app can take one', () => {
-    mockCanKeepReadMode = true;
+  test('opens the reader on a paid plan’s link with no copy, asking nothing of the page', () => {
+    mockKeptCopies = true;
     mountWith({});
     openMenu();
-    expect(screen.queryByRole('menuitem', { name: 'Read' })).toBeNull();
-    expect(screen.getByRole('menuitem', { name: 'Keep read mode' }).getAttribute('href')).toBe(
-      '/read?link=l1&keep=readMode',
+    // No `&keep=` — a plain "Read" must not start a server fetch; the empty state's
+    // own button is that ask.
+    expect(screen.getByRole('menuitem', { name: 'Read' }).getAttribute('href')).toBe(
+      '/read?link=l1',
     );
   });
 
-  test('stays Read on a link that has a copy, even when one could be taken', () => {
-    mockCanKeepReadMode = true;
-    mountWith({ screenshotId: 'file-1' });
-    openMenu();
-    expect(screen.getByRole('menuitem', { name: 'Read' })).toBeTruthy();
-    expect(screen.queryByRole('menuitem', { name: 'Keep read mode' })).toBeNull();
-  });
-
   test.each([['readModeId'], ['screenshotId']])(
-    'opens the reader for this link when it has a %s',
+    'opens the reader on a free account’s link with a %s',
     (field) => {
       mountWith({ [field]: 'file-1' });
       openMenu();
@@ -276,4 +270,11 @@ describe('Read', () => {
       );
     },
   );
+
+  test('carries no Wayback Machine item', () => {
+    mockKeptCopies = true;
+    mountWith({ readModeId: 'file-1' });
+    openMenu();
+    expect(screen.queryByRole('menuitem', { name: 'Open in Wayback Machine' })).toBeNull();
+  });
 });

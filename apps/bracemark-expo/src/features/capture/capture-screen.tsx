@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { router } from 'expo-router';
-import { BookOpen, Check, RefreshCw, X } from 'lucide-react-native';
+import { BookOpen, Check, History, RefreshCw, X } from 'lucide-react-native';
 import { withUniwind } from 'uniwind';
 
 import {
@@ -23,6 +23,7 @@ import {
   httpsUpgradeOf,
   openableUrl,
   PLAN_LABELS,
+  waybackUrl,
 } from '@stxapps/shared';
 
 import { ErrorText } from '../../components/error-text';
@@ -31,6 +32,7 @@ import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { usePaywall } from '../../contexts/paywall-provider';
+import { openWayback } from '../links/shared';
 import { usePageCapture } from './use-page-capture';
 
 // The capture screen — the browser extension's popup, rebuilt around a WebView: the
@@ -39,6 +41,13 @@ import { usePageCapture } from './use-page-capture';
 // images. The one way this app takes either from a live page on its own (an iOS share
 // from Safari is the other, for read mode, and needs no screen —
 // docs/link-extraction-keep.md, _per client_, bracemark-expo).
+//
+// Reached from the row menu's "Read" on a link with no copy, and from the reader's
+// _Update from the page_ on one that has one (docs/reader.md, _the way in_). Its top
+// bar goes the other way — _Read_, while the link has a copy — and to the Wayback
+// Machine, for the page that has changed or gone: the two exits the row menu no longer
+// carries. Every move between this screen and the reader is a REPLACE, so the two
+// trade places and never stack.
 //
 // A WebView, not an in-app browser: SFSafariViewController and Chrome Custom Tabs
 // can't be scripted, and both actions run code inside the page. The cost is that the
@@ -53,10 +62,14 @@ import { usePageCapture } from './use-page-capture';
 //
 //   - LOCKS FIRST: a link in a locked list doesn't load at all until it's unlocked —
 //     loading the page is reading the list's contents.
-//   - THE PLAN GATES READ MODE, NOT THE PAGE. A preview is free on every plan, so the
-//     page loads for everyone; on a free account _Keep read mode_ is marked Plus and
-//     opens the upgrade instead of capturing (the browser extension's saved screen does
-//     the same).
+//   - BOTH ACTIONS ARE PLUS (`keptCopies`). No route brings a free account here — the
+//     row menu's "Read" and the reader's way across are both paid-only without a copy
+//     — so this is for one that arrives anyway: a plan lapsing while the screen is
+//     open, an old address. There _Update preview_ is not offered at all (a free
+//     account sets its own title and image in the editor instead), and _Keep read
+//     mode_ is marked Plus and opens the upgrade instead of capturing (the browser
+//     extension's saved screen does the same). The page itself still loads: it is
+//     the user's own link, and the Wayback Machine is the same on every plan.
 //   - THE PAGE MUST STILL BE THE LINK'S. The user can follow links inside the
 //     WebView; a copy or a preview taken then would be ANOTHER page's, filed under this
 //     link at `expo:fg` — the top tier, which nothing outranks later. The buttons are
@@ -163,6 +176,9 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
     else setLoadFailed(true);
   };
   const host = link ? hostFromText(link.url) : '';
+  // Both exits hide behind a lock, as the reader's do: the host is the list's contents.
+  const waybackHref = link && !locked ? waybackUrl(link.url, link.createdAt) : undefined;
+  const hasCopy = Boolean(extraction?.readModeId || extraction?.screenshotId);
   const isLinkPage = (url: string | null | undefined): boolean =>
     Boolean(link && url) &&
     canonicalUrlKey(url as string) !== null &&
@@ -205,7 +221,7 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
   };
 
   const updatePreview = async () => {
-    if (!link || !ready) return;
+    if (!entitled || !link || !ready) return;
     setBusy('preview');
     setNotice('');
     setFailure('');
@@ -278,16 +294,18 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
         />
         <View className="gap-2 border-t border-border px-4 py-3">
           <View className="flex-row gap-2">
-            <Button
-              variant="outline"
-              className="flex-1"
-              testID="capture-update-preview"
-              disabled={!ready}
-              onPress={() => void updatePreview()}
-            >
-              <Icon as={RefreshCw} className="size-4 text-foreground" />
-              <Text>{busy === 'preview' ? 'Updating…' : 'Update preview'}</Text>
-            </Button>
+            {entitled ? (
+              <Button
+                variant="outline"
+                className="flex-1"
+                testID="capture-update-preview"
+                disabled={!ready}
+                onPress={() => void updatePreview()}
+              >
+                <Icon as={RefreshCw} className="size-4 text-foreground" />
+                <Text>{busy === 'preview' ? 'Updating…' : 'Update preview'}</Text>
+              </Button>
+            ) : null}
             {kept ? (
               <Button
                 variant="outline"
@@ -329,6 +347,20 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
                 (loadFailed ? NOTICE.loadFailed : !onLinkPage && !loading ? NOTICE.offPage : '')}
             </Text>
           )}
+          {/* A page that didn't load is the moment the Wayback Machine is for, so it is
+              said in words here, not left to the top bar's icon. */}
+          {loadFailed && waybackHref ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="self-center"
+              testID="capture-wayback-load-failed"
+              onPress={() => openWayback(waybackHref)}
+            >
+              <Icon as={History} className="size-4 text-foreground" />
+              <Text>Open in Wayback Machine</Text>
+            </Button>
+          ) : null}
         </View>
       </>
     );
@@ -343,6 +375,29 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
         >
           {host || 'Keep a copy'}
         </Text>
+        {link && !locked && hasCopy ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            testID="capture-reader"
+            onPress={() => router.replace(`/read?link=${encodeURIComponent(linkId)}`)}
+          >
+            <Icon as={BookOpen} className="size-4 text-foreground" />
+            <Text>Read</Text>
+          </Button>
+        ) : null}
+        {waybackHref ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-9"
+            aria-label="Open in Wayback Machine"
+            testID="capture-wayback"
+            onPress={() => openWayback(waybackHref)}
+          >
+            <Icon as={History} className="size-5 text-foreground" />
+          </Button>
+        ) : null}
         <Button
           variant="ghost"
           size="icon"

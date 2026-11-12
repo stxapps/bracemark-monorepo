@@ -23,13 +23,10 @@ const mockShowPaywall = jest.fn();
 const mockRemoveCopy = jest.fn(async (_link: unknown, _facet: string) => true);
 let mockServerAvailable = false;
 const mockKeep = jest.fn(async (_link: unknown): Promise<object> => ({ kind: 'kept' }));
-let mockSearch = 'link=l1';
-const mockReplace = jest.fn();
+const mockSearch = 'link=l1';
 
 jest.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(mockSearch),
-  useRouter: () => ({ replace: mockReplace }),
-  usePathname: () => '/read',
 }));
 jest.mock('dexie-react-hooks', () => ({
   useLiveQuery: (querier: () => Promise<unknown>, deps: unknown[]) => {
@@ -91,8 +88,6 @@ beforeEach(() => {
   mockRemoveCopy.mockClear();
   mockServerAvailable = false;
   mockKeep.mockClear();
-  mockSearch = 'link=l1';
-  mockReplace.mockClear();
 });
 
 test('a link in a locked list shows the unlock pane and none of the copy', async () => {
@@ -244,16 +239,6 @@ describe('keeping read mode through the link-preview service', () => {
     );
     expect(mockKeep).toHaveBeenCalledTimes(1);
     expect(mockKeep.mock.calls[0][0]).toMatchObject({ url: LINK.url });
-  });
-
-  test('arriving from the row menu runs it once and drops the ask from the address', async () => {
-    mockKeptCopies = true;
-    mockServerAvailable = true;
-    mockSearch = 'link=l1&keep=readMode';
-    render(<ReaderPage />);
-
-    await waitFor(() => expect(mockKeep).toHaveBeenCalledTimes(1));
-    expect(mockReplace).toHaveBeenCalledWith('/read?link=l1');
   });
 
   test('a transport failure says so rather than throwing', async () => {

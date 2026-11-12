@@ -8,8 +8,17 @@
 // Move to / Archive / Restore / Remove are all one `update({ listId })`;
 // `pinned` swaps the pin block between "Pin to top" and the pinned set (move
 // up/down + unpin); a move goes past `pinnedAbove`/`pinnedBelow`, the pinned
-// neighbour this view renders, and is disabled where there is none. Divergences
-// from web:
+// neighbour this view renders, and is disabled where there is none.
+//
+// "Read" is web's one conditional item, with web's rule (on a link with a copy, or
+// on a plan with `keptCopies`) and a phone's destination for the second case: a
+// link with no copy goes to the CAPTURE screen, the page itself, where the copy is
+// taken — the reader would only say there is nothing to read. The two screens link
+// to each other from there (reader-screen.tsx, capture-screen.tsx), so keeping a
+// fresh copy, updating the preview and the Wayback Machine all live behind this
+// one item rather than as three more rows here (docs/reader.md, _the way in_).
+//
+// Divergences from web:
 //
 //  - Copy link goes through expo-clipboard (web's navigator.clipboard).
 //  - Edit / Edit tags / Edit note open LinkEditHost's sheet (link-edit-panel.tsx),
@@ -33,10 +42,6 @@
 //    engagement count still holds while it's open (web's controlled-menu
 //    reason, the CommandItem submenu, doesn't apply here).
 //
-//  - Open in Wayback Machine is web's item (its header has the reasoning: last of
-//    the ordinary actions, absent where `waybackUrl` answers nothing), opened in
-//    the system browser like the page itself.
-//
 // Nested inside the item's Pressable — fine on this platform: RN's responder
 // hands the touch to the innermost pressable, so opening the menu never fires
 // the item (web needed the trigger outside the row's <a> instead).
@@ -48,24 +53,27 @@ import {
   ArchiveRestore,
   ArrowDown,
   ArrowUp,
-  BookCopy,
   BookOpen,
   Copy,
   FolderInput,
-  History,
   MoreHorizontal,
   Pencil,
   Pin,
   PinOff,
-  RefreshCw,
   StickyNote,
   Tags,
   Trash2,
   Undo2,
 } from 'lucide-react-native';
 
-import { linkIdOf, type LinkView, useLinkMutations, usePinMutations } from '@stxapps/expo-react';
-import { ARCHIVE_ID, DEFAULT_LIST_ID, TRASH_ID, waybackUrl } from '@stxapps/shared';
+import {
+  linkIdOf,
+  type LinkView,
+  useEntitlements,
+  useLinkMutations,
+  usePinMutations,
+} from '@stxapps/expo-react';
+import { ARCHIVE_ID, DEFAULT_LIST_ID, TRASH_ID } from '@stxapps/shared';
 
 import { Button } from '../../components/ui/button';
 import {
@@ -79,7 +87,7 @@ import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { useLinkEdit } from './link-edit-host';
 import { MoveToDialog } from './move-to-dialog';
-import { openWayback, useEngagedOpen } from './shared';
+import { useEngagedOpen } from './shared';
 import { useLinksViewActions } from './view-state-provider';
 
 export function LinkRowMenu({
@@ -106,54 +114,12 @@ export function LinkRowMenu({
   const { openEdit } = useLinkEdit();
   const openEditor = (focus?: 'tags' | 'note') => openEdit({ linkId: linkIdOf(link), focus });
 
-  // "Read" — only on a link with a kept copy, as on web (link-row-menu.tsx there):
-  // the reader has nothing else to open. docs/reader.md.
-  const read =
-    link.readModeId || link.screenshotId ? (
-      <DropdownMenuItem
-        testID="link-menu-read"
-        onPress={() => router.push(`/read?link=${encodeURIComponent(linkIdOf(link))}`)}
-      >
-        <Icon as={BookOpen} className="size-4" />
-        <Text>Read</Text>
-      </DropdownMenuItem>
-    ) : null;
-
-  // "Keep a copy" and "Update preview" — both open the page in the capture screen
-  // (features/capture/capture-screen.tsx), which has both actions under it: the
-  // read-mode copy (gated on the plan there) and the title and image read from the
-  // live page (every plan). Two entries for one screen because they answer two
-  // different wants — "keep this article", "this preview is wrong" — and a user with
-  // the second would not look under the first. On every non-Trash row: a link that
-  // already has either can take it again.
-  const captureHref = `/capture?link=${encodeURIComponent(linkIdOf(link))}` as const;
-  const updatePreview = (
-    <DropdownMenuItem testID="link-menu-update-preview" onPress={() => router.push(captureHref)}>
-      <Icon as={RefreshCw} className="size-4" />
-      <Text>Update preview</Text>
-    </DropdownMenuItem>
-  );
-  const keepCopy = (
-    <DropdownMenuItem testID="link-menu-keep-copy" onPress={() => router.push(captureHref)}>
-      <Icon as={BookCopy} className="size-4" />
-      <Text>Keep a copy</Text>
-    </DropdownMenuItem>
-  );
-
   const copyLink = (
     <DropdownMenuItem onPress={() => void Clipboard.setStringAsync(link.url)}>
       <Icon as={Copy} className="size-4" />
       <Text>Copy link</Text>
     </DropdownMenuItem>
   );
-
-  const waybackHref = waybackUrl(link.url, link.createdAt);
-  const wayback = waybackHref ? (
-    <DropdownMenuItem testID="link-menu-wayback" onPress={() => openWayback(waybackHref)}>
-      <Icon as={History} className="size-4" />
-      <Text>Open in Wayback Machine</Text>
-    </DropdownMenuItem>
-  ) : null;
 
   return (
     <>
@@ -207,9 +173,7 @@ export function LinkRowMenu({
             </>
           ) : (
             <>
-              {read}
-              {keepCopy}
-              {updatePreview}
+              <ReadItem link={link} />
               {copyLink}
               <DropdownMenuItem testID="link-menu-edit" onPress={() => openEditor()}>
                 <Icon as={Pencil} className="size-4" />
@@ -260,7 +224,6 @@ export function LinkRowMenu({
                   <Text>Pin to top</Text>
                 </DropdownMenuItem>
               )}
-              {wayback}
               <DropdownMenuSeparator />
               {inArchive ? (
                 <DropdownMenuItem
@@ -306,5 +269,29 @@ export function LinkRowMenu({
         />
       )}
     </>
+  );
+}
+
+// "Read" — the reader on a link with a copy, the capture screen on one without (the
+// header). Absent only on a link with no copy on a plan that can't take one: a free
+// account has nothing behind it, while a copy that exists is read on every plan
+// (iap/plans.ts, `keptCopies` — a lapsed plan must not hide the user's own copies).
+//
+// Its own component so the plan is read only while the menu is OPEN: the content's
+// portal mounts its children only then, and this menu renders per virtualized item —
+// useEntitlements is a sqlite read on every mount.
+function ReadItem({ link }: { link: LinkView }) {
+  const { entitlements } = useEntitlements();
+  const hasCopy = Boolean(link.readModeId || link.screenshotId);
+  if (!hasCopy && !entitlements.keptCopies) return null;
+  const id = encodeURIComponent(linkIdOf(link));
+  return (
+    <DropdownMenuItem
+      testID="link-menu-read"
+      onPress={() => router.push(hasCopy ? `/read?link=${id}` : `/capture?link=${id}`)}
+    >
+      <Icon as={BookOpen} className="size-4" />
+      <Text>Read</Text>
+    </DropdownMenuItem>
   );
 }

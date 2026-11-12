@@ -23,9 +23,9 @@ _theirs_ rather than a cache.
 
 `apps/bracemark-web/src/app/(app)/read/`. One route, one link, a tab per kept copy it
 has (Read mode, Screenshot) and no tabs for one. Reached from the link row menu's
-**Read**, which appears only on a link that has a copy (`link-row-menu.tsx`) — the
-reader has nothing else to show, and an item leading to an empty page is a promise
-the row can't keep. The ✕ returns to the links view the user left
+**Read**, under the rule in _the way in_ below: on a link that has a copy, on every
+plan, and on one that has none only on a plan that can take one — the empty state
+then says how. The ✕ returns to the links view the user left
 (`lib/links-return.ts`, as Settings' does).
 
 - **A query parameter, not a segment.** A static export can't build a page per id;
@@ -40,8 +40,9 @@ the row can't keep. The ✕ returns to the links view the user left
   Machine_ — the Internet Archive's capture nearest the day the link was saved, for
   the page that has changed or gone ([link-extraction-keep.md](./link-extraction-keep.md),
   _when the page is gone_). Below `sm` the second is its icon alone, under the full
-  accessible name; the words are in the row menu and in the empty state, which also
-  says in a sentence what the Wayback Machine may have. The address is built on the
+  accessible name; the words are in the empty state, which also says in a sentence
+  what the Wayback Machine may have. The row menu has no Wayback item — on web this
+  screen is where it lives. The address is built on the
   device and nothing is asked of the archive before the click. Behind a lock both are
   gone.
 - **The line under the title** is the site, the author, _Published_ and the date the
@@ -56,10 +57,10 @@ the row can't keep. The ✕ returns to the links view the user left
   empty state reads `keptCopies`, to offer Plus beside the way a copy is taken (open
   the page, save it with the browser extension) — iap/plans.ts, the `keptCopies` note.
 - **Taking a read-mode copy here.** With server extraction on and a plan with
-  `keptCopies`, the empty state offers _Keep read mode_, and a link with no copy has
-  _Keep read mode_ in its row menu instead of **Read** — the same route with
-  `&keep=readMode`, run once on arrival and then dropped from the address, so a reload
-  or a history entry never fetches the page by itself. The answer is shown in place:
+  `keptCopies`, the empty state offers _Keep read mode_ — and only that button's press
+  asks. The row menu's **Read** lands a paid plan's link with no copy here, and a press
+  that says "Read" is not an ask to have the server fetch the page; nor is an address,
+  so a reload or a history entry never fetches by itself. The answer is shown in place:
   the copy (the screen swaps to it), or why there is none — no article, not a web page,
   the site's robots.txt says no, or try later
   ([link-extraction-keep.md](./link-extraction-keep.md), _bracemark-web_).
@@ -73,7 +74,8 @@ the row can't keep. The ✕ returns to the links view the user left
 
 `apps/bracemark-expo/src/app/(app)/read.tsx` over `features/reader/reader-screen.tsx`:
 the same address as web's, a pushed Stack screen behind the (app) gates, reached from
-the row menu's **Read** under the same rule (only on a link with a copy). Same three
+the row menu's **Read** on a link with a copy (a link without one goes to the capture
+screen instead — _the way in_). Same three
 rules as web — locks first, reading and deleting never gated, text only — the same two
 ways out in the top bar (the Wayback Machine as an icon at every width, a phone's bar
 having no room for a second label), the same line under the title, and the same
@@ -81,9 +83,44 @@ states, read through expo-react's `useReaderDoc`, which reads the decrypted file
 disk and gunzips it with fflate (Hermes has no DecompressionStream). The screenshot is
 expo-image over the same file. Unlike web it has no empty-state upsell: a link only
 reaches the screen with a copy, and taking one is the capture screen's job
-(`/capture?link=<id>`, the row menu's _Keep a copy_ —
-[link-extraction-keep.md](./link-extraction-keep.md), _expo_), so there would be
-nothing to offer here.
+(`/capture?link=<id>` — [link-extraction-keep.md](./link-extraction-keep.md), _per
+client_, bracemark-expo), so there would be nothing to offer here. What it has
+instead, on a plan with `keptCopies`, is a top-bar way across to that screen —
+_Update from the page_, for a page that has changed since the copy.
+
+### the way in — one **Read** in the row menu
+
+Decided 2026-11-11, on both apps. The row menu carries one entry to everything about
+a link's page — **Read** — and the screens behind it carry the rest: keeping a fresh
+copy, re-reading the preview, and the Wayback Machine. Before, the expo menu had
+_Read_, _Keep a copy_, _Update preview_ and _Open in Wayback Machine_ as four rows,
+two of them opening the same screen and none of them saying which want they served;
+it was the menu's clutter.
+
+| the link has… | plan with `keptCopies`                                  | free        |
+| ------------- | ------------------------------------------------------- | ----------- |
+| a copy        | the reader                                              | the reader  |
+| no copy       | expo: the capture screen; web: the reader's empty state | no **Read** |
+
+- **A copy is read on every plan.** The free column's first row is the no-hostage
+  rule (`iap/plans.ts`, the `keptCopies` note): a copy kept on an earlier plan stays
+  the user's, so a lapsed plan must not take its only way in.
+- **No copy and no plan, no item.** Behind it there would be only a screen saying what
+  the account can't have. A free account sets a link's title and image by hand in the
+  editor; _Update preview_ is a `keptCopies` action, like _Keep read mode_.
+- **On expo the two screens are one place with two faces.** The reader's _Update from
+  the page_ goes to the capture screen; the capture screen's _Read_ (while the link
+  has a copy) and its _Kept — read it_ come back. Each move is a `router.replace`, so
+  the two trade places and Back always leaves to the links view, however often the
+  user crossed.
+- **The Wayback Machine is on the screens, not the menu** — the reader's top bar on
+  both apps and the capture screen's on expo, said in words in web's empty state and
+  under a page the capture screen couldn't load. It is for the page that has changed
+  or gone, and those screens are where a user finds that out
+  ([link-extraction-keep.md](./link-extraction-keep.md), _when the page is gone_).
+- **Web has no capture screen**, so a paid plan's link with no copy lands on the
+  reader's empty state: _Keep read mode_ with server extraction on, the browser
+  extension otherwise. The web reader offers no re-keep of a copy that exists.
 
 ### rendering — text nodes only
 
@@ -212,8 +249,8 @@ links are not articles — something to watch, buy or visit — so the page is w
 press is for. And a press that opens the reader on some rows and leaves the app on
 others is one the user cannot predict from the row.
 
-The cost is that a copy is only in the menu (**Read**), which hides the one thing the
-copy is for. _Planned, not built_: a visible Read control on a row that has a copy, a
+The cost is that a copy is only in the menu (**Read** — _the way in_), which hides the
+one thing the copy is for. _Planned, not built_: a visible Read control on a row that has a copy, a
 sibling of the row's link like the menu trigger, in every layout on both apps.
 
 The reader is therefore where someone goes when the page let them down, which is why

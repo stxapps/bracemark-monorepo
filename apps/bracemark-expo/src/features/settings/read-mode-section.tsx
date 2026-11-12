@@ -61,8 +61,8 @@ export function ReadModeSection() {
         title="Read mode"
         description={
           ios
-            ? 'Read mode keeps a page’s article — its text and pictures — with the link. Keep one from a link’s menu with Keep a copy, or when you share a page from Safari.'
-            : 'Read mode keeps a page’s article — its text and pictures — with the link. Keep one from a link’s menu with Keep a copy.'
+            ? 'Read mode keeps a page’s article — its text and pictures — with the link. Keep one with Read in a link’s menu, or when you share a page from Safari.'
+            : 'Read mode keeps a page’s article — its text and pictures — with the link. Keep one with Read in a link’s menu.'
         }
       />
       <View className="gap-3">
@@ -113,12 +113,13 @@ export function ReadModeSection() {
       </View>
       {/* With the device's fetch mode at `off`, a Safari share's images are not fetched
           (share-bridge.tsx — they are this app's requests to the saved site), while
-          Keep a copy, an explicit ask on a page the user has open, still fetches them.
+          the capture screen's Keep read mode, an explicit ask on a page the user has open,
+          still fetches them.
           Standing text, so no role. iOS only: Android has no share that carries a copy. */}
       {ios && entitled && keepOnSave.readModeImages && deviceExtractionMode === 'off' ? (
         <SettingsNotice tone="info">
-          With Link previews off, a page shared from Safari keeps its text only. Keep a copy still
-          keeps its pictures.
+          With Link previews off, a page shared from Safari keeps its text only. Keep read mode
+          still keeps its pictures.
         </SettingsNotice>
       ) : null}
       {error && <SettingsNotice tone="error">{error}</SettingsNotice>}

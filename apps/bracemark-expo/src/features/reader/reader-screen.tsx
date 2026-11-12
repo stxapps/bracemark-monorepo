@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import { router } from 'expo-router';
-import { ArrowUpRight, History, Trash2, X } from 'lucide-react-native';
+import { ArrowUpRight, History, RefreshCw, Trash2, X } from 'lucide-react-native';
 import { withUniwind } from 'uniwind';
 
 import {
@@ -11,6 +11,7 @@ import {
   type LinkItem,
   readExtraction,
   readLinkById,
+  useEntitlements,
   useImageFileUri,
   useKeptCopyMutations,
   useLiveRead,
@@ -52,13 +53,21 @@ import { ReaderArticle } from './reader-article';
 // Wayback Machine — the Internet Archive's capture nearest the day the link was
 // saved, an address built on this device and opened only by the press. It is an
 // icon here, at every width: a phone's bar has no room for a second label beside the
-// host, and the row menu carries the words.
+// host. The Wayback Machine is in no row menu — here and on the capture screen only,
+// the two places a user goes when the page let them down (docs/link-extraction-keep.md,
+// _when the page is gone_).
+//
+// And one way across: _Update from the page_, to the capture screen
+// (`/capture?link=<id>`), where a fresh copy is kept and the preview re-read — for a
+// page that has changed since the copy. Only on a plan with `keptCopies`, since both
+// of that screen's actions are; a free account reading a copy it kept earlier has
+// nothing there. A REPLACE, not a push, as the capture screen's own way back is: the
+// two screens trade places, so going back and forth never stacks them.
 //
 // What it does NOT have that web's does: an empty-state upsell. A link reaches this
-// screen only from the row menu's "Read", which appears only on a link with a copy;
-// taking one is the capture screen's job (`/capture?link=<id>`, the row menu's "Keep a
-// copy" — docs/link-extraction-keep.md, _per client_, bracemark-expo). A copy deleted
-// while the screen is open leaves the plain notice below instead.
+// screen from the row menu's "Read" only when it has a copy — without one, "Read"
+// goes to the capture screen (features/links/link-row-menu.tsx). A copy deleted while
+// the screen is open leaves the plain notice below instead.
 
 const Image = withUniwind(ExpoImage);
 const StyledSafeAreaView = withUniwind(SafeAreaView);
@@ -232,6 +241,7 @@ function DeleteCopy({ link, facet }: { link: LinkItem; facet: KeptCopyFacet }) {
 
 export function ReaderScreen({ linkId }: { linkId: string }) {
   const { status: lockStatus, isListLocked, unlockList } = useLocks();
+  const { entitlements } = useEntitlements();
   // `null` = settled and absent; `undefined` = still reading.
   const link = useLiveRead(() => readLinkById(linkId).then((l) => l ?? null), [linkId], ['items']);
   const extraction = useLiveRead(
@@ -331,6 +341,18 @@ export function ReaderScreen({ linkId }: { linkId: string }) {
           <Button variant="ghost" size="sm" onPress={() => openLink(link.url)}>
             <Text>Open page</Text>
             <Icon as={ArrowUpRight} className="size-4 text-foreground" />
+          </Button>
+        ) : null}
+        {link && !locked && entitlements.keptCopies ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-9"
+            aria-label="Update from the page"
+            testID="reader-capture"
+            onPress={() => router.replace(`/capture?link=${encodeURIComponent(linkId)}`)}
+          >
+            <Icon as={RefreshCw} className="size-5 text-foreground" />
           </Button>
         ) : null}
         {waybackHref ? (
