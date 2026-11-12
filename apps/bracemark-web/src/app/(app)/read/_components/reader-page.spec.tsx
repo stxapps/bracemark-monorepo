@@ -149,7 +149,7 @@ test('no copy: the Wayback Machine is offered in words, beside the page itself',
 
   render(<ReaderPage />);
 
-  await screen.findByText('No copy of this page yet');
+  await screen.findByText('Keep a copy of this page');
   expect(screen.getByText(/Wayback Machine may have it/)).not.toBeNull();
   expect(screen.getByRole('link', { name: /^Wayback Machine/ }).getAttribute('href')).toBe(WAYBACK);
 });
@@ -160,7 +160,7 @@ test('a link no public archive could hold gets no Wayback exit', async () => {
 
   render(<ReaderPage />);
 
-  await screen.findByText('No copy of this page yet');
+  await screen.findByText('Keep a copy of this page');
   expect(screen.queryByRole('link', { name: /wayback/i })).toBeNull();
   expect(screen.queryByText(/Wayback Machine/)).toBeNull();
 });
@@ -198,7 +198,7 @@ test('no copy, free: says how to get one and offers Plus', async () => {
 
   render(<ReaderPage />);
 
-  await screen.findByText('No copy of this page yet');
+  await screen.findByText('Keep a copy of this page');
   screen.getByRole('button', { name: /plus/i }).click();
   expect(mockShowPaywall).toHaveBeenCalledWith('keptCopies');
 });
@@ -209,7 +209,7 @@ test('no copy, Plus: no upsell — the browser extension is the way', async () =
 
   render(<ReaderPage />);
 
-  await screen.findByText('No copy of this page yet');
+  await screen.findByText('Keep a copy of this page');
   expect(screen.queryByRole('button', { name: /plus/i })).toBeNull();
 });
 
@@ -239,7 +239,7 @@ describe('keeping read mode through the link-extraction service', () => {
   test('is offered on an empty link only when the web app can take a copy', async () => {
     mockKeptCopies = true;
     render(<ReaderPage />);
-    await screen.findByText('No copy of this page yet');
+    await screen.findByText('Keep a copy of this page');
     expect(screen.queryByRole('button', { name: 'Keep a read-mode copy' })).toBeNull();
   });
 
@@ -341,7 +341,7 @@ describe('turning server read mode on from the empty state', () => {
     mockNeedsOptIn = false;
     render(<ReaderPage />);
 
-    await screen.findByText('No copy of this page yet');
+    await screen.findByText('Keep a copy of this page');
     expect(screen.queryByRole('button', { name: 'Turn on server read mode' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Keep copies with Plus' })).not.toBeNull();
   });

@@ -132,7 +132,7 @@ marketing site and the `min-h-dvh` screens are documents.
   grows the popup to 375 and paints the real scrollbar **outside** the 360px shell,
   so the shell holds still with or without the gutter.
 - **The opt-out is about `html`, not about the pane.** A frame that carries it can
-  still want a stable gutter on its own inner scroll container, and four of them
+  still want a stable gutter on its own inner scroll container, and five of them
   do. The utility is `scrollbar-gutter-stable` (Tailwind core since v4.2; it used
   to be written as the arbitrary property `[scrollbar-gutter:stable]`). In every
   case below it reserves a strip a scrollbar actually uses — the case the blanket
@@ -143,6 +143,14 @@ marketing site and the `min-h-dvh` screens are documents.
     whole column sideways between a section that scrolls and one that doesn't.
     That file is also where the topbar moved **into** the scroller, for the other
     half of the same alignment.
+  - `(app)/read/_components/reader-page.tsx` — a frame rather than a document, **because
+    it has modals**. A Radix modal (the delete confirmation, the Plus dialog) puts
+    `overflow: hidden` on `<body>`, and when the document is what scrolls that removes
+    the scrollbar _and_ `html`'s reserved gutter with it: measured 985 → 1000 wide, the
+    whole page ~8px sideways under the dialog. A `min-h-dvh` document is therefore not
+    the place for a screen that scrolls AND opens a modal; sign-in and the gates have
+    no such modal over a scrolling page. Its topbar is sticky inside the scroller, like
+    Settings', and the scroller carries `scroll-pt-18` for the same reason.
   - `(app)/links/_panes/sidebar.tsx` — this scroller's overflow is toggled from
     **inside** it: collapsing a section header, expanding a subtree, filtering the
     trees, locking a `hideList` list. Its rows `truncate`, so the width jump

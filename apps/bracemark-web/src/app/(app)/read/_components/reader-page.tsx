@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowUpRight, BookOpen, History, Image as ImageIcon, Trash2, X } from 'lucide-react';
-import Link from 'next/link';
+import { ArrowUpRight, BookOpen, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
 import { LOCK_COPY } from '@stxapps/react';
@@ -47,9 +46,10 @@ import { Label } from '@stxapps/web-ui/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@stxapps/web-ui/components/ui/tabs';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
+import { ReaderTopbar } from './reader-topbar';
+
 import { LockPane } from '@/components/lock-pane';
 import { usePaywall } from '@/contexts/paywall-provider';
-import { readLinksReturn } from '@/lib/links-return';
 
 // The reader screen — one link's kept copies. A tab per copy it has (Read mode,
 // Screenshot), no tabs when it has one, and an empty state that says how to get one
@@ -94,15 +94,6 @@ import { readLinksReturn } from '@/lib/links-return';
 // an address built on this device (`waybackUrl`, @stxapps/shared url.ts); nothing
 // is asked of the archive until the click, and nothing may be: a lookup would tell
 // a third party which pages are in the library.
-
-// The ✕'s target: where the links page was, read after mount because
-// sessionStorage isn't there during the static render (settings' topbar does the
-// same).
-function useCloseHref(): string {
-  const [href, setHref] = useState('/links');
-  useEffect(() => setHref(readLinksReturn()), []);
-  return href;
-}
 
 // How long a copy may stay "loading" before the screen says why. Long enough that
 // a normal fetch never shows it; the usual cause past it is a copy this device
@@ -269,8 +260,8 @@ function DeleteCopy({ link, facet }: { link: LinkItem; facet: KeptCopyFacet }) {
           <AlertDialogHeader className="place-items-start text-left">
             <AlertDialogTitle>Delete this {name}?</AlertDialogTitle>
             <AlertDialogDescription className="text-pretty">
-              It’s removed from all your devices. The link stays. To keep a new one, open the page
-              and take it again with the browser extension — if the page still shows the same thing.
+              It’s removed from all your devices. The link stays. A new copy is taken from the page
+              as it is then, which may not match this one.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -304,7 +295,7 @@ function outcomeNotice(outcome: ServerReadModeOutcome | 'error'): OutcomeNotice 
   switch (outcome.reason) {
     case READ_MODE_REASONS.notAnArticle:
       return {
-        text: 'There’s no article on this page to keep in read mode. To keep how it looks, take a screenshot with the browser extension.',
+        text: 'There’s no article on this page to keep in read mode.',
         failure: false,
       };
     case READ_MODE_REASONS.notHtml:
@@ -342,18 +333,31 @@ function KeepReadMode({ link, focusOnMount }: { link: LinkItem; focusOnMount: bo
       .finally(() => setBusy(false));
   };
 
+  // `contents`: the three are items of EmptyCopies' grid, which places them — the
+  // button, _Include images_ directly under it, and the server's answer under both.
+  // The checkbox qualifies THIS button, so nothing sits between the two at any width.
   return (
-    <>
-      <Button ref={buttonRef} size="sm" disabled={busy} onClick={run}>
+    <div className={cn('contents')}>
+      <Button
+        ref={buttonRef}
+        size="sm"
+        disabled={busy}
+        onClick={run}
+        className={cn('sm:col-start-1 sm:row-start-1')}
+      >
         <BookOpen data-icon="inline-start" />
         {busy ? 'Keeping…' : 'Keep a read-mode copy'}
       </Button>
+      <IncludeImages className={cn('sm:col-start-1 sm:row-start-2')} />
       {notice ? (
-        <p role={notice.failure ? 'alert' : 'status'} className={cn('text-pretty')}>
+        <p
+          role={notice.failure ? 'alert' : 'status'}
+          className={cn('text-pretty sm:col-span-full sm:row-start-3')}
+        >
           {notice.text}
         </p>
       ) : null}
-    </>
+    </div>
   );
 }
 
@@ -379,7 +383,7 @@ function TurnOnServerReadMode({ onTurnedOn }: { onTurnedOn: () => void }) {
         {busy ? 'Turning on…' : 'Turn on server read mode'}
       </Button>
       {failed ? (
-        <p role="alert" className={cn('w-full text-pretty')}>
+        <p role="alert" className={cn('text-pretty sm:col-span-full')}>
           Could not turn on server read mode. Please try again.
         </p>
       ) : null}
@@ -390,11 +394,11 @@ function TurnOnServerReadMode({ onTurnedOn }: { onTurnedOn: () => void }) {
 // _Include images_ beside the action it qualifies. A failed write needs no message of
 // its own: the box is bound to the stored value, so it simply doesn't change, and
 // Settings → Read mode is the durable surface.
-function IncludeImages() {
+function IncludeImages({ className }: { className?: string }) {
   const { keepOnSave } = useSettings();
   const { setKeepOnSave } = useSettingMutations();
   return (
-    <Label htmlFor="reader-include-images" className={cn('gap-2 text-muted-foreground')}>
+    <Label htmlFor="reader-include-images" className={cn('gap-2 text-muted-foreground', className)}>
       <Checkbox
         id="reader-include-images"
         checked={keepOnSave.readModeImages}
@@ -409,10 +413,12 @@ function IncludeImages() {
 
 function EmptyCopies({
   link,
+  title,
   href,
   waybackHref,
 }: {
   link: LinkItem;
+  title: string;
   href: string | undefined;
   waybackHref: string | undefined;
 }) {
@@ -421,71 +427,109 @@ function EmptyCopies({
   const paywall = usePaywall();
   const [justTurnedOn, setJustTurnedOn] = useState(false);
 
+  // Left-aligned, in the article's own column: this is prose of several sentences,
+  // and centred lines of that length have no edge to return to. The page's title
+  // leads, as it does over a copy, so the screen says whose copy is missing.
   return (
-    <Notice title="No copy of this page yet">
-      <p>
-        A kept copy is the page’s text in read mode, and a screenshot of what was on screen when you
-        saved it — yours to read even if the page changes or disappears.{' '}
-        {available
-          ? 'Keep a read-mode copy now: our link-extraction service fetches the page and sends its article back to this browser. To keep a screenshot too, open the page and save it with the Bracemark browser extension.'
-          : needsOptIn
-            ? 'Copies are taken from the page itself: open it, then save it with the Bracemark browser extension. Or turn on server read mode to keep a read-mode copy from here.'
-            : 'Copies are taken from the page itself: open it, then save it with the Bracemark browser extension.'}
-      </p>
-      {/* The disclosure, before the switch it is the consent for — the Settings
-          switch's words (read-mode-section.tsx says why each clause is there): the
-          address, not the account, the IP held briefly. */}
-      {needsOptIn ? (
-        <p>
-          The web app can’t open other sites, so with server read mode on, our link-extraction
-          service fetches the page for you — only when you ask for a read-mode copy, one link at a
-          time. It receives the link’s address, not your account, and briefly holds your IP address
-          so no single source can abuse it.
+    <div className={cn('flex flex-col gap-8')}>
+      <h1
+        className={cn(
+          'text-2xl leading-tight font-semibold wrap-break-word text-foreground md:text-3xl',
+        )}
+      >
+        {title}
+      </h1>
+      <section
+        aria-labelledby="reader-keep-title"
+        className={cn('flex flex-col items-start gap-4 text-sm leading-6 text-muted-foreground')}
+      >
+        <h2 id="reader-keep-title" className={cn('text-base font-semibold text-foreground')}>
+          Keep a copy of this page
+        </h2>
+        <p className={cn('text-pretty')}>
+          A copy is the page’s text in read mode — yours to read even if the page changes or
+          disappears.
         </p>
-      ) : null}
-      {/* Only where the exit exists. With no copy of our own this is the one place
-          the page as it was might still be, so it is said in a sentence rather than
-          left to a button's two words. "May": we have not asked, and must not. */}
-      {waybackHref ? (
-        <p>
-          If the page has changed or gone, the Internet Archive’s Wayback Machine may have it as it
-          was around the day you saved it.
+        <p className={cn('text-pretty')}>
+          {available
+            ? 'Keep one from here: our link-extraction service fetches the page and sends its article back to this browser. Or open the page and save it with the Bracemark browser extension.'
+            : needsOptIn
+              ? 'Open the page and save it with the Bracemark browser extension. Or keep one from here, once you turn on server read mode.'
+              : 'Open the page and save it with the Bracemark browser extension.'}
         </p>
-      ) : null}
-      <div className={cn('flex flex-wrap justify-center gap-2')}>
-        {available ? <KeepReadMode link={link} focusOnMount={justTurnedOn} /> : null}
-        {needsOptIn ? <TurnOnServerReadMode onTurnedOn={() => setJustTurnedOn(true)} /> : null}
-        {href ? (
-          <Button asChild variant="outline" size="sm">
-            <a href={href} target="_blank" rel="noreferrer">
-              Open the page
-              <ArrowUpRight data-icon="inline-end" />
-            </a>
-          </Button>
+        {/* The disclosure, before the switch it is the consent for — the Settings
+            switch's words (read-mode-section.tsx says why each clause is there): the
+            address, not the account, the IP held briefly. Boxed so it reads as the
+            terms of the button beside it, not a third paragraph of the pitch. */}
+        {needsOptIn ? (
+          <p className={cn('rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-pretty')}>
+            The web app can’t open other sites, so with server read mode on, our link-extraction
+            service fetches the page for you — only when you ask for a read-mode copy, one link at a
+            time. It receives the link’s address, not your account, and briefly holds your IP
+            address so no single source can abuse it.
+          </p>
         ) : null}
-        {waybackHref ? (
+        {/* One grid, so the two widths are the same markup. Narrow, a column: the ask
+            from here, _Include images_ directly under it, then the ways that leave this
+            screen. Wide, the page's button goes to the right of the ask and the
+            checkbox stays under it, in the ask's own column. The checkbox qualifies
+            the ask alone, so it is never between the ask and anything else, and
+            nothing but the ask sits above it. */}
+        <div
+          className={cn(
+            'grid grid-cols-1 items-center justify-items-start gap-x-2 gap-y-3 sm:grid-cols-[repeat(3,max-content)]',
+          )}
+        >
+          {available ? <KeepReadMode link={link} focusOnMount={justTurnedOn} /> : null}
+          {needsOptIn ? <TurnOnServerReadMode onTurnedOn={() => setJustTurnedOn(true)} /> : null}
+          {href ? (
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className={cn(available && 'sm:col-start-2 sm:row-start-1')}
+            >
+              <a href={href} target="_blank" rel="noreferrer">
+                Open the page
+                <ArrowUpRight data-icon="inline-end" />
+              </a>
+            </Button>
+          ) : null}
+          {!entitlements.keptCopies ? (
+            <Button size="sm" onClick={() => paywall.show('keptCopies')}>
+              Keep copies with Plus
+            </Button>
+          ) : null}
+        </div>
+      </section>
+      {/* Only where the exit exists, and apart from the above: it is a different
+          errand (the page is already gone), with no copy of our own the one place the
+          page as it was might still be. Said in a sentence rather than left to a
+          button's two words. "May": we have not asked, and must not. */}
+      {waybackHref ? (
+        <section
+          className={cn(
+            'flex flex-col items-start gap-3 border-t border-border pt-6 text-sm leading-6 text-muted-foreground',
+          )}
+        >
+          <p className={cn('text-pretty')}>
+            If the page has changed or gone, the Internet Archive’s Wayback Machine may have it.
+          </p>
           <Button asChild variant="outline" size="sm">
             <a href={waybackHref} target="_blank" rel="noreferrer">
               Wayback Machine
               <ArrowUpRight data-icon="inline-end" />
             </a>
           </Button>
-        ) : null}
-        {!entitlements.keptCopies ? (
-          <Button size="sm" onClick={() => paywall.show('keptCopies')}>
-            Keep copies with Plus
-          </Button>
-        ) : null}
-      </div>
-      {available ? <IncludeImages /> : null}
-    </Notice>
+        </section>
+      ) : null}
+    </div>
   );
 }
 
 export function ReaderPage() {
   const searchParams = useSearchParams();
   const linkId = searchParams.get('link') ?? '';
-  const closeHref = useCloseHref();
   const { status: lockStatus, isListLocked, unlockList } = useLocks();
 
   // `null` = settled and absent; `undefined` = still reading. The split keeps the
@@ -576,62 +620,26 @@ export function ReaderPage() {
       </>
     );
   } else {
-    body = <EmptyCopies link={link} href={href} waybackHref={waybackHref} />;
+    body = <EmptyCopies link={link} title={title} href={href} waybackHref={waybackHref} />;
   }
 
+  // A viewport-sized frame with its own scroller, like /settings (settings/layout.tsx
+  // has the long form), and for the reason that matters most here: the delete
+  // confirmation and the Plus dialog are modal, and a modal puts `overflow: hidden`
+  // on <body>. When the DOCUMENT is what scrolls, that takes the scrollbar away and
+  // `html`'s `scrollbar-gutter: stable` goes with it (measured: 985 -> 1000 wide), so
+  // the whole page jumps ~8px sideways under the dialog. A document that never
+  // scrolls has nothing to lose: `data-no-scrollbar-gutter` opts out of the blanket
+  // gutter (dead space on a frame), and the scroller carries its own stable one.
+  // The bar is sticky INSIDE the scroller, as Settings' is, so its right edge and the
+  // article's column are measured against the same box; that is also what owes the
+  // scroller a `scroll-pt` — the bar's 14 plus a step of air, as there.
   return (
-    <div className={cn('flex min-h-dvh flex-col bg-background safe-area')}>
-      <header className={cn('sticky top-0 z-10 h-14 border-b border-border bg-background')}>
-        {/* Same shape as settings' topbar: the bar's text rides the content column,
-            the ✕ is a window control in the pane's own corner. */}
-        <div
-          className={cn(
-            'mx-auto flex h-full w-full max-w-2xl items-center gap-2 pr-14 pl-4 md:pl-6',
-          )}
-        >
-          <span className={cn('min-w-0 flex-1 truncate text-sm font-medium text-muted-foreground')}>
-            {host || 'Reader'}
-          </span>
-          {href && !locked ? (
-            <Button asChild variant="ghost" size="sm">
-              <a href={href} target="_blank" rel="noreferrer">
-                Open page
-                <ArrowUpRight data-icon="inline-end" />
-              </a>
-            </Button>
-          ) : null}
-          {/* Icon-only below `sm`: with the host, _Open page_ and the ✕ there is no
-              room for a second label on a phone, and the label is one tap away in
-              the row menu and in the empty state. The accessible name is the full
-              phrase at every width. */}
-          {waybackHref && !locked ? (
-            <Button asChild variant="ghost" size="sm">
-              <a
-                href={waybackHref}
-                target="_blank"
-                rel="noreferrer"
-                aria-label="Open in Wayback Machine"
-                title="Open in Wayback Machine"
-              >
-                <History data-icon="inline-start" />
-                <span className={cn('hidden sm:inline')}>Wayback Machine</span>
-              </a>
-            </Button>
-          ) : null}
-        </div>
-        <Button
-          asChild
-          variant="ghost"
-          size="icon-sm"
-          className={cn('absolute top-3 right-3')}
-          aria-label="Close reader"
-        >
-          <Link href={closeHref}>
-            <X className={cn('size-5')} />
-          </Link>
-        </Button>
-      </header>
-      <main className={cn('mx-auto w-full max-w-2xl flex-1 px-4 py-8 md:px-6')}>{body}</main>
+    <div data-no-scrollbar-gutter="" className={cn('flex h-dvh flex-col bg-background safe-area')}>
+      <div className={cn('min-h-0 flex-1 scroll-pt-18 scrollbar-gutter-stable overflow-y-auto')}>
+        <ReaderTopbar host={host} href={href} waybackHref={waybackHref} locked={locked} />
+        <main className={cn('mx-auto w-full max-w-2xl px-4 py-8 md:px-6')}>{body}</main>
+      </div>
     </div>
   );
 }

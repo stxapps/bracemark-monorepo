@@ -40,16 +40,14 @@ export type StorageReadout = {
   note: string;
 };
 
-// Three kinds of picture, in the order most libraries hold them: every link has a
+// Two kinds of picture, in the order most libraries hold them: every link has a
 // preview; a read-mode copy can keep its article's images (off by default), and those are the
 // largest thing a library stores (a pack is a few hundred KB, a few MB for a long
-// illustrated article); a screenshot is large too but off by default (measured,
-// docs/link-extraction-keep.md). "Images" first because that is the whole of it —
+// illustrated article). "Images" first because that is the whole of it —
 // links, notes and an article's text are next to nothing. Deleting links is named
 // beside removing copies for the same reason — a library full of previews has no
 // copies to remove.
-const NOTE_ROOM =
-  'Images take the most room: previews, the pictures in read-mode copies, and screenshots.';
+const NOTE_ROOM = 'Images take the most room: previews and the pictures in read-mode copies.';
 const NOTE_FULL =
   'Full — new changes wait to sync until there’s room. Deleting copies you’ve kept, or links in Trash, frees space.';
 

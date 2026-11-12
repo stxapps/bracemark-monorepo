@@ -221,8 +221,8 @@ function DeleteCopy({ link, facet }: { link: LinkItem; facet: KeptCopyFacet }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this {name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              It’s removed from all your devices. The link stays. To keep a new one, open the page
-              and take it again — if the page still shows the same thing.
+              It’s removed from all your devices. The link stays. A new copy is taken from the page
+              as it is then, which may not match this one.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -108,7 +108,7 @@ export function CopiesSection({ className }: { className?: string }) {
     <OptionsSection
       className={className}
       title="Keep a copy"
-      description="A copy keeps what a page held when you saved it — its article in read mode, or a screenshot of what was on screen — so you can still see it after the page changes, moves or goes behind a sign-in. You can also keep one from the saved screen after you save."
+      description="A copy keeps what a page held when you saved it, so you can still see it after the page changes, moves or goes behind a sign-in. You can also keep one from the saved screen after you save."
     >
       <div className={cn('flex flex-col gap-3')}>
         <SwitchRow

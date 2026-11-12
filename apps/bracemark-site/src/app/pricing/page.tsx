@@ -267,26 +267,13 @@ const COMPARISON: { label: string; cell: (plan: Plan) => Cell }[] = [
   { label: 'Nested lists', cell: (p) => entitlementsOf(p).nestedLists },
   { label: 'App lock & hidden lists', cell: (p) => entitlementsOf(p).locks },
   { label: 'Search editor (fields, lists, tags)', cell: (p) => entitlementsOf(p).searchEditor },
-  // Two rows, not one "Read mode & screenshots", because the platforms differ and
-  // a merged row would promise a phone a screenshot it can't take: read mode is
-  // kept from the browser extension and the mobile apps, a screenshot only from
-  // the browser extension, which is where the page is open in a tab
-  // (docs/link-extraction-keep.md, _per client_). The label carries that scope,
-  // the way the server-previews row names the web app.
-  //
-  // The screenshot's label also says WHAT is captured, and "of pages" did not: it
-  // is the visible part of the tab at the moment of the save, never the page top
-  // to bottom (docs/link-extraction-keep.md, _the screenshot is a capped JPEG of
-  // the fold_). A reader arriving from a full-page capture tool, or from a
-  // service that keeps a permanent copy, fills "screenshots of pages" with the
-  // whole page — the same silence the search row above stopped leaving about its
-  // fields. "What’s on screen" is the in-app register too: the paywall and the
-  // reader both say a screenshot keeps how the page looked.
+  // One row, and it names read mode alone. The browser extension also takes a
+  // screenshot, but only of the part of the tab in view, so a row for it set an
+  // expectation of a page capture the product doesn't make; it is on the extension's
+  // own screen, where the limit is plain (docs/link-extraction-keep.md, _the
+  // screenshot is a capped JPEG of the fold_). Read mode is kept from the browser
+  // extension and the mobile apps alike, so the label needs no platform.
   { label: 'Read-mode copies of pages', cell: (p) => entitlementsOf(p).keptCopies },
-  {
-    label: 'Screenshot of what’s on screen when you save (browser extension)',
-    cell: (p) => entitlementsOf(p).keptCopies,
-  },
   {
     label: 'Server link previews in the web app',
     cell: (p) => (entitlementsOf(p).serverExtraction ? 'Opt-in' : false),

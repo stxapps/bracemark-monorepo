@@ -497,9 +497,8 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
               {withCopies.length === 1 ? '' : 's'}?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-pretty">
-              Their read-mode copies and screenshots are removed from all your devices. The links
-              stay. A new copy can only be taken from the page itself, if it still shows the same
-              thing.
+              The copies kept with them are removed from all your devices. The links stay. A new
+              copy is taken from the page as it is then, which may not match.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

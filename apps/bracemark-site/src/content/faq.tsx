@@ -806,13 +806,13 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             On {PLAN_LABELS.plus}, your library can hold {PLUS_STORAGE}. Links and notes take almost
             none of it. What fills it is each link’s preview image, usually tens of KB, and the
-            copies you keep: a page’s text in read mode is usually a few KB, the pictures, if you
-            choose to keep them, a few hundred KB (a few MB for a long article full of them), and a
-            screenshot up to a few hundred KB. Settings → Subscription shows how much your library
-            uses. If it ever fills up, nothing is deleted and nothing goes out of reach: you keep
-            reading, searching, and exporting, new changes wait to sync, and deleting copies you’ve
-            kept, or links in Trash, frees space. On {PLAN_LABELS.free}, the {FREE_LINKS}-link limit
-            comes long before storage does.
+            copies you keep: a page’s text in read mode is usually a few KB, and the pictures, if
+            you choose to keep them, a few hundred KB (a few MB for a long article full of them).
+            Settings → Subscription shows how much your library uses. If it ever fills up, nothing
+            is deleted and nothing goes out of reach: you keep reading, searching, and exporting,
+            new changes wait to sync, and deleting copies you’ve kept, or links in Trash, frees
+            space. On {PLAN_LABELS.free}, the {FREE_LINKS}-link limit comes long before storage
+            does.
           </>
         ),
       },

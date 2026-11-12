@@ -32,6 +32,10 @@ then says how. The ✕ returns to the links view the user left
   the one exported `/read` answers every link, and the service worker's precache
   ignores query strings, so the reader opens offline for any copy this device holds
   ([offline-mode.md](./offline-mode.md)). The id is a random token, never the URL.
+- **A frame with its own scroller, not a scrolling document.** The delete
+  confirmation and the Plus dialog are modal, and a modal's `overflow: hidden` on
+  `<body>` would take a scrolling document's scrollbar and gutter with it and shift
+  the page sideways ([safe-area.md](./safe-area.md), _the opt-out is about `html`_).
 - **Locks come first.** A link in a locked list is that list's contents, so the page
   swaps in the unlock pane before reading the copy — and drops the _Open page_
   link, since the host is contents too ([locks.md](./locks.md), _the two enforcement
@@ -39,9 +43,18 @@ then says how. The ✕ returns to the links view the user left
 - **Two ways out, in the top bar.** _Open page_, the live page, and _Wayback
   Machine_ — the Internet Archive's capture nearest the day the link was saved, for
   the page that has changed or gone ([link-extraction-keep.md](./link-extraction-keep.md),
-  _when the page is gone_). Below `sm` the second is its icon alone, under the full
-  accessible name; the words are in the empty state, which also says in a sentence
-  what the Wayback Machine may have. The row menu has no Wayback item — on web this
+  _when the page is gone_). Below `sm` both are their icons alone, under the full
+  accessible names; the words are in the empty state, which also says in a sentence
+  what the Wayback Machine may have. The bar (`reader-topbar.tsx`) is the
+  links page's and Settings' bar: sticky, full width, no measure — chrome sits at the
+  window's edges, and the article's `max-w-2xl` is a reading measure that belongs to
+  the text below it. The host is on the left; on the right are the two ways out, a
+  divider, then the ✕ (Settings' ghost icon button, in the same corner); behind a
+  lock the host goes too, leaving "Reader". The empty state is left-aligned under the
+  link's title: a "keep a copy" section, then, if there is an exit, a "page gone"
+  section with the Wayback Machine. The empty state and the server's answers name read mode alone and never
+  offer a screenshot: only the browser extension takes one, and only the part above the
+  fold, so it is mentioned where a screenshot exists (the tab, its removal), not as a thing to ask for. The row menu has no Wayback item — on web this
   screen is where it lives. The address is built on the
   device and nothing is asked of the archive before the click. Behind a lock both are
   gone.
@@ -58,7 +71,7 @@ then says how. The ✕ returns to the links view the user left
   the page, save it with the browser extension) — iap/plans.ts, the `keptCopies` note.
 - **Taking a read-mode copy here.** With _Server read mode_ on (`serverReadMode`, its
   own opt-in, not Link previews') and a plan with `keptCopies`, the empty state offers
-  _Keep a read-mode copy_, with _Include images_ beneath it — and only that button's press
+  _Keep a read-mode copy_, with _Include images_ directly under it (the page button goes beside it on a wide screen, below on a narrow one) — and only that button's press
   asks. With the opt-in off, it offers _Turn on server read mode_ in place, beside the
   sentence saying what is sent; turning it on fetches nothing and hands focus to _Keep_
   ([link-extraction-keep.md](./link-extraction-keep.md), _per client_, bracemark-web). The row menu's **Read** lands a paid plan's link with no copy here, and a press

@@ -393,6 +393,21 @@ pack out, and a figure whose pack is missing is a placeholder.
   `createImageBitmap` and `OffscreenCanvas` in the WebView (WKWebView, Android's
   Chromium WebView). Where they are missing the page posts nothing and every image
   falls back to the native fetch — no failure, but no sign-in either.
+- **Pages whose image wrappers are named `media-…`**, a known limit (found 2026-11-12 on a
+  DeepMind blog post: the text copy was whole, and its hero and one in-article picture
+  were gone before the walker saw them). Readability weights any class or id containing
+  `media` as −25 (its `negative` pattern) and `_cleanConditionally` then removes the
+  container, picture and all; that site names every picture wrapper `media-image-block`,
+  `media__container` or `media-content-wrapper`. Both capture paths run the same
+  Readability, so this is not server-specific, and the text is untouched: only the
+  pictures, a switch that is off by default, are lost. **Left on Readability's defaults
+  deliberately** — its weights are heuristics tuned across a great many pages, and the
+  `media` penalty is there to drop real widgets and embeds. One measured fix exists:
+  set `negative` on the instance without `|media` (`readability.REGEXPS = { …, negative }`);
+  on that page it returned exactly the two real pictures and nothing else. Measured on
+  one page only, so it was not adopted. If it comes up again, run it over the real-page
+  set (`measure:kept-copies`) first, counting pages that gain pictures against pages that
+  gain junk, and change both Readability call sites together with a fixture spec.
 - **The browser extension's page context that can't read an image host** could be
   covered through the proxy when the user has turned server previews on. Not worth it
   at 2%. (Expo's capture screen covers it with its native fetch.)
@@ -771,10 +786,10 @@ Two rules:
   and deletable after a downgrade; only new captures stop. Hiding someone's own data
   behind a lapsed plan reads as holding it hostage.
 - **The upgrade card names only what ships**, per `plans.ts`'s copy rule. Read mode
-  and the screenshot are built on desktop. /pricing names them in its comparison
-  table — the screenshot as "what’s on screen when you save", with its platform, so
-  the row cannot be read as a full-page capture — and has to go live with or after the
-  release that carries them. The plan cards and the store listings don't name them
+  and the screenshot are built on desktop. /pricing's comparison table names read mode
+  alone — the screenshot is the browser extension's, of the fold only, and a row for it
+  set the expectation of a page capture — and has to go live with or after the
+  release that carries it. The plan cards and the store listings don't name them
   yet — adding them is a copy change for those surfaces (with the brand review it
   needs), not something this gate implies. Page copy not before it exists.
 
