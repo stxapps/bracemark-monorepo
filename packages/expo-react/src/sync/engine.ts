@@ -49,6 +49,7 @@ import {
   createPullFanOut,
   createUnitCounter,
   emptySyncOutcome,
+  extractionsLast,
   FILES_PREFIX,
   filesListEndpoint,
   filesSignEndpoint,
@@ -117,6 +118,7 @@ import {
   isFirstSyncDone,
   markFirstSyncDone,
   markUnreadableRecordComplete,
+  markUnreadableRecordIncomplete,
   recordUnreadablePaths,
   resetCursor,
   unreadablePathSet,
@@ -684,12 +686,18 @@ async function runCycle(deps: SyncDeps, report: SyncCycleProgressFn): Promise<Sy
               proofAttemptFailed(proofBackoffs.get(deps.username), Date.now()),
             );
           }
+          // A fallback that fails after its listing may have stored part of the store and
+          // claimed nothing, and the next cycle can be routed incremental (another
+          // device's commit moved the log back into range). Nothing then re-lists what this
+          // one missed, so the record stops vouching for the store until a fallback
+          // completes. Best-effort: a torn-down account has nothing to unmark.
+          await markUnreadableRecordIncomplete(deps.username).catch(() => undefined);
           throw err;
         }
         // A fallback is a full listing, whichever reason routed it, so it completes
         // the record for a store not yet proven: one the op log sent here while the
         // forced one waited counts as much. After the fallback's own claim, and only
-        // if it got there: one that throws leaves the store unproven.
+        // if it got there: one that throws leaves the store unproven (unmarked above).
         if (unproven) {
           await markUnreadableRecordComplete(deps.username);
           proofBackoffs.delete(deps.username);
@@ -923,6 +931,7 @@ async function incrementalCycle(
 
   // 3. Push, 4. Pull — disjoint sets, so order is a sensible default, not a
   // requirement (local changes durable first).
+  let healLeftAbsent = false;
   await withBulkHold(pending.length + downloads.length + localDeletes.length, async () => {
     const orphanedPaths = await pushPending(deps, pending, outcome, report);
     // Complete the self-heal: a wedged op the push dropped (uploadOne) had its
@@ -934,10 +943,16 @@ async function incrementalCycle(
     for (const path of orphanedPaths) {
       const op = serverOps.get(path);
       if (op?.op === 'put') downloads.push({ path: op.path, updatedAt: op.updatedAt });
+      else if (!op) healLeftAbsent = true;
     }
     await storeDownloads(deps, downloads, (done, total) => report('download', done, total));
     await applyDeletes(deps.username, localDeletes);
   });
+  // A healed path with no op in the window is absent here while the server may hold it,
+  // and the cursor moves past this window: the record can't vouch for the store until a
+  // fallback re-lists it (shared's unreadableRecordComplete). A server delete in the
+  // window is a real absence and is not this.
+  if (healLeftAbsent) await markUnreadableRecordIncomplete(deps.username);
 
   // 5. Advance the cursor over what this cycle LISTED — and not over its own
   // commits, which is what this step used to fold in. The commit clamp stamps a
@@ -1134,7 +1149,9 @@ async function pushPhases(
   // ANY metadata put, so the content-before-metadata invariant holds across chunk
   // boundaries too. Each phase uploads at its own blob kind's chunk size; both at
   // the full fan-out, with large content gated narrower inside it (uploadOne).
-  const metadataPuts = puts.filter((o) => !isContentPath(o.path));
+  // Extractions after their links (shared's extractionsLast): the dangling-extraction sweep
+  // on another device would otherwise meet an extraction whose link is in a later commit.
+  const metadataPuts = extractionsLast(puts.filter((o) => !isContentPath(o.path)));
   const contentRefused = await pushPuts(
     deps,
     puts.filter((o) => isContentPath(o.path)),

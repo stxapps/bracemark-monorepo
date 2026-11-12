@@ -637,10 +637,16 @@ function toCursor(record: ItemRecord): LinkScanCursor {
 // FRESH: a link a concurrent sync settled mid-drain drops out here instead of costing a
 // redundant (paid) extract. Missing / settled / still-cooling links are skipped; only their
 // position advances the cursor.
+// `skipExtractionPaths` is the unreadable record (sync-store's unreadablePathSet): a link
+// whose `extractions/{id}` path is in it is NOT pending. This device could not open the
+// server's copy, so "no extraction here" is not "never extracted", and extracting would
+// overwrite the server's copy and the kept copies it names (writeExtraction refuses the
+// same link). The cursor still moves over it; the link returns once the recheck opens it.
 export async function readLinksPendingTitleImagePage(
   now: number,
   limit: number,
   cursor?: LinkScanCursor,
+  skipExtractionPaths?: ReadonlySet<string>,
 ): Promise<PendingTitleImagePage> {
   if (limit <= 0) return { links: [], cursor: cursor ?? null };
 
@@ -677,6 +683,7 @@ export async function readLinksPendingTitleImagePage(
       // No extraction work for trashed links. Skipped AFTER the cursor advances over
       // them, so the walk still makes progress and never re-examines them.
       if (record.itemListId === TRASH_ID) continue;
+      if (skipExtractionPaths?.has(extractionPathForLink(record.path))) continue;
 
       const exRecord = exRecords[i];
       const facet = exRecord ? decodeCachedExtraction(exRecord)?.facets.titleImage : undefined;
@@ -719,9 +726,15 @@ export async function readLinksPendingTitleImagePage(
 // spend paid requests on links the user removed. Filtering here rather than asking each
 // caller not to report keeps that policy at the read layer, where the generate-all walk
 // already enforces it.
+// `skipExtractionPaths` is the unreadable record (sync-store's unreadablePathSet): a link
+// whose `extractions/{id}` path is in it is NOT pending. This device could not open the
+// server's copy, so "no extraction here" is not "never extracted", and extracting would
+// overwrite the server's copy and the kept copies it names (writeExtraction refuses the
+// same link). The cursor still moves over it; the link returns once the recheck opens it.
 export async function readLinksPendingTitleImageForLinkPaths(
   linkPaths: string[],
   now: number,
+  skipExtractionPaths?: ReadonlySet<string>,
 ): Promise<LinkItem[]> {
   if (linkPaths.length === 0) return [];
 
@@ -734,6 +747,7 @@ export async function readLinksPendingTitleImageForLinkPaths(
   for (let i = 0; i < linkPaths.length; i++) {
     const record = records[i];
     if (!record || record.itemType !== 'link' || record.itemListId === TRASH_ID) continue;
+    if (skipExtractionPaths?.has(extractionPathForLink(record.path))) continue;
 
     const exRecord = exRecords[i];
     const facet = exRecord ? decodeCachedExtraction(exRecord)?.facets.titleImage : undefined;

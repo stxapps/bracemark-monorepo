@@ -152,8 +152,8 @@ export function useLinkMutations(): LinkMutations {
       // `current`, the record the patch was merged onto, never off the caller's
       // snapshot: an image another device set while a dialog was open is the one
       // this write drops, and deleting the snapshot's instead leaked it. After the
-      // write, so the reference has moved off the blob first (metadata before
-      // content on the way down). A write landing between the re-read and the put
+      // write, so the reference has moved off the blob first, locally (on the
+      // wire the push commits deletes before puts: web-react's deleteFile). A write landing between the re-read and the put
       // can still leave one behind, which the orphaned-file sweep reclaims.
       //
       // `finally`, because the link write has landed whatever the reclaim does: a

@@ -18,6 +18,9 @@ import { EXTRACTIONS_PREFIX, FILES_PREFIX, idFromPath, LINKS_PREFIX, rekey } fro
 // Content is written before the reference that names it, and a device that
 // pushed the blob and stalled gets this long to push the rest.
 export const ORPHAN_GRACE_MS = 30 * 24 * 60 * 60 * 1000;
+// How far past the newest server stamp this device has pulled its own clock may
+// run before the grace stops believing it (orphanGraceNow).
+export const ORPHAN_CLOCK_SLACK_MS = 24 * 60 * 60 * 1000;
 // How often a device runs the orphaned-file sweep for an account. Each run
 // decodes every entity.
 export const ORPHAN_SWEEP_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -47,6 +50,23 @@ export function danglingExtractionPaths(
   });
 }
 
+// The order a push commits its metadata puts in. The dangling-extraction sweep
+// reads "an extraction with no link" as garbage, and a push of more than one
+// commit chunk (500 ops) commits chunks in order, one at a time, and sorts the
+// queue by path: `extractions/` sorts before `links/`. So a large import with
+// its previews arriving could commit a link's extraction in an earlier chunk
+// than the link, and another device that cycled between the two commits would
+// sweep it, and every blob it names, for everyone. Extractions go last, so a
+// link is never later than its extraction. The relative order inside each group
+// is kept. A link and its extraction in the SAME chunk commit atomically, which
+// is why only the chunk boundary needed this.
+export function extractionsLast<T extends { path: string }>(ops: readonly T[]): T[] {
+  return [
+    ...ops.filter((o) => !o.path.startsWith(EXTRACTIONS_PREFIX)),
+    ...ops.filter((o) => o.path.startsWith(EXTRACTIONS_PREFIX)),
+  ];
+}
+
 // The bookkeeping the sweeps' gates read (both stores' SyncMetaRecord; expo's
 // nullable columns are web's optional fields).
 export interface SweepMeta {
@@ -54,6 +74,9 @@ export interface SweepMeta {
   unreadablePaths?: readonly string[] | null;
   unreadableRecordCompleteAt?: number | null;
   lastOrphanSweepAt?: number | null;
+  // The pull cursor's server stamp: the newest op this device has applied. The
+  // only server clock the sweep has (orphanGraceNow).
+  syncCursorUpdatedAt?: number;
 }
 
 // Can the unreadable record vouch for this store? Only once a FULL LISTING (a
@@ -62,7 +85,8 @@ export interface SweepMeta {
 // record skipped without recording, the cursor is past those paths, and no pull
 // meets them again. A store whose row predates the record (every web row from
 // before it, every expo row migration 1 brought up) reads as not complete, and
-// the engines force one fallback to make it so: the fallback downloads every
+// the engines force a fallback to make it so (and again, on a backoff, while one
+// fails): the fallback downloads every
 // path missing here, a skipped one fails again, and this time it is recorded.
 // Both sweeps refuse to run until then.
 export function unreadableRecordComplete(meta: SweepMeta | undefined): boolean {
@@ -137,6 +161,19 @@ export interface PendingOpKey {
 // while it ran (entityWrittenDuring).
 export function pendingWrites(ops: readonly PendingOpKey[]): Set<string> {
   return new Set(ops.map((op) => `${op.path}\u0000${op.writeId}`));
+}
+
+// The "now" the 30-day grace is measured against. Blob stamps are the SERVER's
+// clock, so measuring them against this device's clock lets a device whose clock
+// runs 30 days or more ahead see every blob as old, including the ones another
+// device uploaded minutes ago and has not named yet, and delete them for
+// everyone. So the grace never runs past the newest server stamp this device has
+// pulled plus a day of slack. An account with no recent activity measures from
+// its last activity instead of today, which only spares blobs. A cursor of 0 (or
+// none) leaves no candidates at all.
+export function orphanGraceNow(deviceNow: number, meta: SweepMeta | undefined): number {
+  const server = meta?.syncCursorUpdatedAt ?? 0;
+  return Math.min(deviceNow, server + ORPHAN_CLOCK_SLACK_MS);
 }
 
 // The orphan candidates, as file ids: `files/` rows old enough by their SERVER

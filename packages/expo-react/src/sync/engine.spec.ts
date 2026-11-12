@@ -434,6 +434,30 @@ beforeEach(async () => {
   await markFirstSyncDone(USER, 1000, 'links/l_seed.enc');
 });
 
+// --- the push order ----------------------------------------------------------
+
+describe('the push order', () => {
+  it('commits a link no later than its extraction, even across commit chunks', async () => {
+    // The queue is read in path order and `extractions/` sorts before `links/`. With more
+    // metadata puts than one commit holds (500), an extraction used to commit in an earlier
+    // chunk than its link, and another device that cycled in between swept it as dangling.
+    const N = 300;
+    const id = (i: number) => `l_${String(i).padStart(4, '0')}`;
+    for (let i = 0; i < N; i++) {
+      seedQueued(`links/${id(i)}.enc`, `link ${i}`);
+      seedQueued(`extractions/${id(i)}.enc`, `ext ${i}`);
+    }
+
+    await runIncrementalSync(deps());
+
+    expect(commits.length).toBeGreaterThan(1); // the chunk boundary is really crossed
+    const at = (path: string) => commits.findIndex((c) => c.some((o) => o.path === path));
+    for (let i = 0; i < N; i++) {
+      expect(at(`links/${id(i)}.enc`)).toBeLessThanOrEqual(at(`extractions/${id(i)}.enc`));
+    }
+  }, 60000);
+});
+
 // --- the fan-out --------------------------------------------------------------
 
 // Web engine's spec carries the reading behind these. Here the size that picks a
@@ -1422,6 +1446,69 @@ describe('a pulled blob that does not open under its path', () => {
         expect((await getSyncMeta(USER))?.unreadableRecheck).toMatchObject({ tries: 1 });
       });
 
+      // The rest of the recheck's rules, which web's spec also holds. Each is silent if it
+      // drifts: dropping a path the server still holds lets the orphaned-file sweep run.
+      const skipLink = async (): Promise<number> => {
+        failToOpen(LINK_PATH, new BlobUnreadableError(LINK_PATH));
+        const at = Date.now();
+        await quietly(() => runIncrementalSync(deps({ opsList: () => TWO_PUTS })));
+        return at;
+      };
+      const opensAgain = () =>
+        (decryptEntity as jest.Mock).mockImplementation(async (_key: unknown, bytes: Uint8Array) =>
+          bytes.slice(1),
+        );
+      const serves = (status: number) =>
+        mockGetBlob.mockImplementation(async (url: string) => {
+          if (pathFor(url) === LINK_PATH) throw new BlobRequestError('GET', status);
+          return new Uint8Array([0xee, ...utf8(`server ${pathFor(url)}`)]);
+        });
+
+      it('drops a path the server answers 404 for, and stores nothing', async () => {
+        const at = await skipLink();
+        serves(404);
+
+        await recheckUnreadable(deps(), at + LATER);
+
+        expect(await getItem(LINK_PATH)).toBeUndefined();
+        expect(await unreadable()).toBeNull();
+      });
+
+      it('keeps a path on any other failure, a 5xx included', async () => {
+        const at = await skipLink();
+        serves(500);
+
+        await recheckUnreadable(deps(), at + LATER);
+
+        expect(await unreadable()).toEqual([LINK_PATH]);
+      });
+
+      it('does not overwrite a copy this device wrote since, and lets the path go', async () => {
+        const at = await skipLink();
+        seedSynced(LINK_PATH, 'mine', 5000);
+        opensAgain();
+
+        await recheckUnreadable(deps(), at + LATER);
+
+        expect(await bodyAt(LINK_PATH)).toBe('mine');
+        expect((await getItem(LINK_PATH))?.updatedAt).toBe(5000);
+        expect(await unreadable()).toBeNull();
+      });
+
+      it('keeps a path recorded without a stamp, and does not store it', async () => {
+        getDb()
+          .update(syncMeta)
+          .set({ unreadablePaths: [LINK_PATH], unreadableRecheck: null })
+          .where(eq(syncMeta.username, USER))
+          .run();
+        opensAgain();
+
+        await recheckUnreadable(deps(), Date.now());
+
+        expect(await getItem(LINK_PATH)).toBeUndefined();
+        expect(await unreadable()).toEqual([LINK_PATH]);
+      });
+
       it('runs in a successful cycle, before afterCycle', async () => {
         await recordUnreadablePaths(USER, [{ path: LINK_PATH, updatedAt: 2000 }], 0);
         let seen: string[] | null | undefined;
@@ -1621,6 +1708,56 @@ describe('the cycle, against this copy of it', () => {
     expect(await bodyAt(LINK_PATH)).toBe('the server copy');
     expect((await getItem(LINK_PATH))?.updatedAt).toBe(2000);
     expect(committedPaths()).toEqual([]);
+  });
+
+  it('stops the record vouching for the store when a healed path has no op in the window', async () => {
+    // Drift guard for web's spec. The wedged op is dropped, its path stays absent here
+    // while the server may hold it, and the cursor moves past the window: the dangling
+    // sweep would read the link as deleted. The mark is cleared, which keeps the sweeps
+    // off and sends the next cycle to a full listing.
+    getDb().transaction((tx) => enqueuePutTx(tx, USER, LINK_PATH, 0));
+    expect((await getSyncMeta(USER))?.unreadableRecordCompleteAt).toBeGreaterThan(0);
+    const inRange = () => ({
+      ops: [],
+      oldestUpdatedAt: 500,
+      newestUpdatedAt: 1000,
+      hasMore: false,
+    });
+
+    await runIncrementalSync(deps({ opsList: inRange }));
+
+    expect((await getSyncMeta(USER))?.unreadableRecordCompleteAt).toBeNull();
+    let listings = 0;
+    await runIncrementalSync(
+      deps({
+        opsList: inRange,
+        filesList: () => {
+          listings += 1;
+          return [];
+        },
+      }),
+    );
+    expect(listings).toBe(1);
+    expect((await getSyncMeta(USER))?.unreadableRecordCompleteAt).toBeGreaterThan(0);
+  });
+
+  it('stops the record vouching for a proven store whose fallback fails', async () => {
+    // Drift guard for web's spec. The op log sends the cycle to the fallback (emptied
+    // log), the listing is taken and the cycle throws before claiming anything. The next
+    // cycle can be routed incremental, which would never re-list what this one missed.
+    expect((await getSyncMeta(USER))?.unreadableRecordCompleteAt).toBeGreaterThan(0);
+
+    await expect(
+      runIncrementalSync(
+        deps({
+          filesList: () => {
+            throw new Error('listing failed');
+          },
+        }),
+      ),
+    ).rejects.toThrow('listing failed');
+
+    expect((await getSyncMeta(USER))?.unreadableRecordCompleteAt).toBeNull();
   });
 
   it('records a refused push and completes, still committing the deletes', async () => {

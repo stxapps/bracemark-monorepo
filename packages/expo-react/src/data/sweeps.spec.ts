@@ -114,6 +114,12 @@ beforeEach(async () => {
   getDb().delete(items).run();
   getDb().delete(pendingOps).run();
   await seedNewAccount(USER);
+  // A synced account: the cursor is the server clock the grace is measured against.
+  getDb()
+    .update(syncMeta)
+    .set({ syncCursorUpdatedAt: NOW })
+    .where(eq(syncMeta.username, USER))
+    .run();
 });
 
 describe('sweepDanglingExtractions', () => {
@@ -181,6 +187,28 @@ describe('sweepDanglingExtractions', () => {
 });
 
 describe('sweepOrphanFiles', () => {
+  it('measures the grace on the server’s clock, not a device clock that runs ahead', async () => {
+    // Another device uploaded this blob a day ago and has not named it yet. This device's
+    // clock is 40 days fast, so by its own clock the blob is 41 days old.
+    await pushedFile('f_fresh', NOW - 24 * 60 * 60 * 1000);
+    const FAST = NOW + 40 * 24 * 60 * 60 * 1000;
+
+    await expect(sweepOrphanFiles(USER, FAST)).resolves.toBe(0);
+    expect(rowExists(filePath('f_fresh'))).toBe(true);
+  });
+
+  it('spares everything when no server stamp has been pulled', async () => {
+    await pushedFile('f_old');
+    getDb()
+      .update(syncMeta)
+      .set({ syncCursorUpdatedAt: 0 })
+      .where(eq(syncMeta.username, USER))
+      .run();
+
+    await expect(sweepOrphanFiles(USER, NOW)).resolves.toBe(0);
+    expect(rowExists(filePath('f_old'))).toBe(true);
+  });
+
   it('deletes an old blob nothing names, row and file, and spares one named in a field it has never heard of', async () => {
     await pushedFile('f_orphan');
     await pushedFile('f_named');

@@ -63,6 +63,7 @@ import {
   FILES_PREFIX,
   ORPHAN_GRACE_MS,
   orphanCandidates,
+  orphanGraceNow,
   orphansToDelete,
   orphanSweepMayRun,
   orphanSweepStamp,
@@ -84,7 +85,11 @@ const SCAN_CHUNK = 500;
 // the cap) are shared's sync/sweeps.ts, which expo's sweep runs too; this keeps the
 // store reads and the deletes.
 export async function sweepOrphanFiles(username: string, now = Date.now()): Promise<number> {
-  if (!orphanSweepMayRun(await getSyncMeta(username), now)) return 0;
+  const meta = await getSyncMeta(username);
+  if (!orphanSweepMayRun(meta, now)) return 0;
+  // The grace runs on the server's clock as far as this device knows it, not on this
+  // device's (shared's orphanGraceNow).
+  const graceNow = orphanGraceNow(now, meta);
 
   // Candidates: old enough by their SERVER stamp, and with nothing queued for their
   // path. The index range is only the cheap first cut; orphanCandidates applies the
@@ -92,7 +97,7 @@ export async function sweepOrphanFiles(username: string, now = Date.now()): Prom
   const fileRows: { path: string; updatedAt: number }[] = [];
   await db.items
     .where('updatedAt')
-    .between(0, now - ORPHAN_GRACE_MS, false, false)
+    .between(0, graceNow - ORPHAN_GRACE_MS, false, false)
     .eachKey((updatedAt, cursor) => {
       const path = cursor.primaryKey as string;
       if (path.startsWith(FILES_PREFIX)) fileRows.push({ path, updatedAt: updatedAt as number });
@@ -100,7 +105,7 @@ export async function sweepOrphanFiles(username: string, now = Date.now()): Prom
   const queue = async () =>
     pendingWrites(await db.pendingOps.where('username').equals(username).toArray());
   const before = await queue();
-  const candidates = orphanCandidates(fileRows, before, now);
+  const candidates = orphanCandidates(fileRows, before, graceNow);
 
   if (candidates.size > 0) {
     const entityPaths = (await db.items.toCollection().primaryKeys()).filter(

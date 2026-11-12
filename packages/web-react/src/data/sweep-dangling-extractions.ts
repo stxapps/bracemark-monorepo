@@ -63,8 +63,9 @@
 //     the push drops it as orphaned, and the path stays absent unless the cycle's
 //     own window lists it (sync/engine.ts incrementalCycle).
 // A link resurrected on the server concurrently (edit-vs-delete LWW) can also lose
-// its extraction to a sweep that raced it — the machine half only: it re-queues as
-// pending and re-extracts, no user data at stake.
+// its extraction to a sweep that raced it, and with it every blob that extraction
+// names. The machine half comes back (the link re-queues as pending and re-extracts);
+// a kept copy (read-mode text, screenshot, page copy) does not, and is user data.
 //
 // Cost: one keys-only index scan of `extractions/` plus one keyed existence probe of
 // the co-keyed `links/` paths — no blobs are read unless a dangling is actually found

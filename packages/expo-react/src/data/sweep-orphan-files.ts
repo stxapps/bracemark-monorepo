@@ -25,6 +25,7 @@ import {
   entityWrittenDuring,
   FILES_PREFIX,
   orphanCandidates,
+  orphanGraceNow,
   orphansToDelete,
   orphanSweepMayRun,
   orphanSweepStamp,
@@ -45,11 +46,15 @@ const SCAN_PAGE = 500;
 // queue the server delete. Returns how many were swept, so the caller knows whether
 // to run the cycle once more to push the deletes.
 export async function sweepOrphanFiles(username: string, now = Date.now()): Promise<number> {
-  if (!orphanSweepMayRun(await getSyncMeta(username), now)) return 0;
+  const meta = await getSyncMeta(username);
+  if (!orphanSweepMayRun(meta, now)) return 0;
+  // The grace runs on the server's clock as far as this device knows it, not on this
+  // device's (shared's orphanGraceNow).
+  const graceNow = orphanGraceNow(now, meta);
 
   const queue = async () => pendingWrites(await listPendingOps(username));
   const before = await queue();
-  const candidates = orphanCandidates(namespaceStamps(FILES_PREFIX), before, now);
+  const candidates = orphanCandidates(namespaceStamps(FILES_PREFIX), before, graceNow);
 
   if (candidates.size > 0) {
     const decoder = new TextDecoder();

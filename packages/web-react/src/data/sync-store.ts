@@ -98,6 +98,18 @@ export async function unreadablePathSet(username: string): Promise<Set<string>> 
   return new Set((await db.syncMeta.get(username))?.unreadablePaths);
 }
 
+// The record of every account on this device, as one set. For a reader that has no
+// account in hand and only wants to know "may this path be absent here for a reason
+// other than deletion?" (the list-lock cleanup). A device holds one account's store, so
+// this is that account's record; if a stale row of another were ever here it would only
+// widen the set, which is the safe side.
+export async function deviceUnreadablePathSet(): Promise<Set<string>> {
+  const paths = new Set<string>();
+  for (const meta of await db.syncMeta.toArray())
+    for (const p of meta.unreadablePaths ?? []) paths.add(p);
+  return paths;
+}
+
 // Claim the bookkeeping row — only ever under the lifecycle lock: from setSession,
 // before it exposes the adopted session, and from claimIfStillSignedIn below. A
 // sync cycle must never call this directly to recreate ownership after teardown.
@@ -198,6 +210,19 @@ export async function markUnreadableRecordComplete(username: string): Promise<vo
   await db.transaction('rw', db.syncMeta, async () => {
     await assertAccountStillOwnsStore(username);
     await db.syncMeta.update(username, { unreadableRecordCompleteAt: Date.now() });
+  });
+}
+
+// The record can no longer vouch for the store: a cycle left it lacking something the
+// server may hold, with the cursor past it (a fallback that failed after its listing,
+// a self-healed path with no op in the window to restore it). Clearing the mark sends
+// the next cycle to a fallback (a full listing, on the proof backoff) and keeps both
+// sweeps off until one completes (shared's unreadableRecordComplete). Fenced like the
+// pull's writes.
+export async function markUnreadableRecordIncomplete(username: string): Promise<void> {
+  await db.transaction('rw', db.syncMeta, async () => {
+    await assertAccountStillOwnsStore(username);
+    await db.syncMeta.update(username, { unreadableRecordCompleteAt: undefined });
   });
 }
 

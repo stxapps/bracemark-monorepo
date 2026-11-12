@@ -189,6 +189,19 @@ export async function markUnreadableRecordComplete(username: string): Promise<vo
   });
 }
 
+// The record can no longer vouch for the store — web-react sync-store's
+// markUnreadableRecordIncomplete, which carries the reasons. NULL, as migration 1 leaves
+// a row from the first release. Fenced like the pull's writes.
+export async function markUnreadableRecordIncomplete(username: string): Promise<void> {
+  getDb().transaction((tx) => {
+    assertAccountOwnsStoreTx(tx, username);
+    tx.update(syncMeta)
+      .set({ unreadableRecordCompleteAt: null })
+      .where(eq(syncMeta.username, username))
+      .run();
+  });
+}
+
 // Advance the compound `(updatedAt, path)` cursor after an incremental cycle — to
 // the last op that cycle LISTED, never to a stamp it merely holds (its own
 // commit's): the cursor is the claim that everything at or below it has been
@@ -254,6 +267,16 @@ export async function unreadablePathSet(username: string): Promise<Set<string>> 
     .where(eq(syncMeta.username, username))
     .get();
   return new Set(meta?.paths);
+}
+
+// The record of every account on this device, as one set — web-react sync-store's
+// deviceUnreadablePathSet, which carries why it is safe to read without an account.
+export async function deviceUnreadablePathSet(): Promise<Set<string>> {
+  const paths = new Set<string>();
+  for (const row of getDb().select({ paths: syncMeta.unreadablePaths }).from(syncMeta).all()) {
+    for (const p of row.paths ?? []) paths.add(p);
+  }
+  return paths;
 }
 
 // Write a record shared's rules returned. An empty one is NULL, as web's absent field.

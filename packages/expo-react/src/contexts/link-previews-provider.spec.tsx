@@ -53,13 +53,13 @@ jest.mock('../hooks/use-settings', () => ({
   useSettings: () => ({ deviceExtractionMode: mockMode }),
 }));
 // The drain's two wake signals, told apart by their deps: the displayed-page probe
-// keys on three, the raw pending count on two. Empty by default, which is inert
+// keys on four (the account too), the raw pending count on two. Empty by default, which is inert
 // whatever the mode; the drain case fills them.
 let mockProbe: unknown[] = [];
 let mockRawPending = 0;
 jest.mock('../hooks/use-live-read', () => ({
   useLiveRead: (_read: unknown, deps: unknown[]) =>
-    deps.length === 3 ? mockProbe : mockRawPending,
+    deps.length === 4 ? mockProbe : mockRawPending,
 }));
 
 const mockReadPendingForPaths = jest.fn();
@@ -75,6 +75,11 @@ jest.mock('../data/queries', () => ({
 }));
 
 const mockRunBatch = jest.fn();
+// The unreadable record the pending reads are handed (sync-store is native sqlite). Empty:
+// the drain's own behaviour is under test here, not the skip, which queries' specs pin.
+jest.mock('../data/sync-store', () => ({
+  unreadablePathSet: () => Promise.resolve(new Set<string>()),
+}));
 jest.mock('../lib/device-link-previews', () => ({
   runDeviceTitleImageBatch: (...args: unknown[]) => mockRunBatch(...args),
 }));

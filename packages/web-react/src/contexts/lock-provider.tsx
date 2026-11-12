@@ -11,11 +11,12 @@ import {
 } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
-import { computeCoverage, flattenTree } from '@stxapps/shared';
+import { computeCoverage, flattenTree, LISTS_PREFIX, pathFromId } from '@stxapps/shared';
 import { createLockVerifier, verifyLockPassword } from '@stxapps/web-crypto';
 
 import type { LockRecord } from '../data/db';
 import { APP_LOCK_ID, deleteLock, putLock, readLocks } from '../data/lock-store';
+import { deviceUnreadablePathSet } from '../data/sync-store';
 import { useLists } from '../hooks/use-lists';
 import { useSync } from './sync-provider';
 
@@ -116,12 +117,26 @@ export function LockProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (storeStatus !== 'ready' || locks === undefined || lists.length === 0) return;
     const listIds = new Set(flattenTree(lists).map((node) => node.item.id));
-    const orphans = (locks ?? []).filter((l) => l.kind === 'list' && !listIds.has(l.id));
-    if (orphans.length === 0) return;
-    void Promise.all(orphans.map((l) => deleteLock(l.id))).catch(() => {
-      // Best-effort; the rows are invisible in the UI either way and the next
-      // lists change retries.
-    });
+    const missing = (locks ?? []).filter((l) => l.kind === 'list' && !listIds.has(l.id));
+    if (missing.length === 0) return;
+    // A list this device could not open is absent here, not deleted: its lock is the only
+    // thing keeping its links behind a password once the list heals (the recheck makes
+    // that likely), so a lock is dropped only for a list that is not in the unreadable
+    // record either.
+    let cancelled = false;
+    void deviceUnreadablePathSet()
+      .then((unreadable) => {
+        if (cancelled) return;
+        const orphans = missing.filter((l) => !unreadable.has(pathFromId(l.id, LISTS_PREFIX)));
+        return Promise.all(orphans.map((l) => deleteLock(l.id)));
+      })
+      .catch(() => {
+        // Best-effort; the rows are invisible in the UI either way and the next
+        // lists change retries.
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [storeStatus, locks, lists]);
 
   const coverage = useMemo(

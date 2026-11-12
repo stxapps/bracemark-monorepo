@@ -85,6 +85,7 @@ import {
   readLinksPendingTitleImagePage,
   readRawPendingTitleImageCount,
 } from '../data/queries';
+import { unreadablePathSet } from '../data/sync-store';
 import { useSettings } from '../hooks/use-settings';
 import { runServerTitleImageBatch } from '../lib/server-link-previews';
 import { useAuth } from './auth-provider';
@@ -236,9 +237,11 @@ export function LinkPreviewsProvider({ children }: { children: ReactNode }) {
   // drain is reactive without a fixed poll. Bounded to O(displayed). Inert in generate-all mode,
   // where the wake comes from the raw pending count below instead (no per-write library scan).
   const probe = useLiveQuery(() => {
-    if (!enabled || isGeneratingAll) return Promise.resolve([] as unknown[]);
-    return readLinksPendingTitleImageForLinkPaths(displayedLinkPaths, Date.now());
-  }, [enabled, isGeneratingAll, displayedLinkPaths]);
+    if (!enabled || isGeneratingAll || !username) return Promise.resolve([] as unknown[]);
+    return unreadablePathSet(username).then((skip) =>
+      readLinksPendingTitleImageForLinkPaths(displayedLinkPaths, Date.now(), skip),
+    );
+  }, [enabled, isGeneratingAll, displayedLinkPaths, username]);
 
   // Generate-all mode wakes off the RAW pending count (links minus recorded outcomes — four
   // index counts, no decode, no trash join) rather than a per-write whole-library eligibility
@@ -351,6 +354,7 @@ export function LinkPreviewsProvider({ children }: { children: ReactNode }) {
               Date.now(),
               BATCH,
               generateAllCursorRef.current,
+              await unreadablePathSet(username),
             );
             if (page.links.length > 0) {
               // One batched extract extracts the whole page — the server fans the URLs out,
@@ -390,7 +394,11 @@ export function LinkPreviewsProvider({ children }: { children: ReactNode }) {
           }
           const take = Math.min(BATCH, budgetRef.current);
           const links = (
-            await readLinksPendingTitleImageForLinkPaths(displayedLinkPathsRef.current, Date.now())
+            await readLinksPendingTitleImageForLinkPaths(
+              displayedLinkPathsRef.current,
+              Date.now(),
+              await unreadablePathSet(username),
+            )
           ).slice(0, take);
           if (links.length === 0) break;
 

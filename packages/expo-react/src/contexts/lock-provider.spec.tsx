@@ -71,6 +71,11 @@ async function refresh(): Promise<void> {
 }
 
 jest.mock('./sync-provider', () => ({ useSync: () => ({ storeStatus: 'ready' }) }));
+// The unreadable record, which the list-lock cleanup consults (sync-store is native sqlite).
+let mockUnreadable = new Set<string>();
+jest.mock('../data/sync-store', () => ({
+  deviceUnreadablePathSet: () => Promise.resolve(mockUnreadable),
+}));
 jest.mock('../lib/biometric', () => ({
   getBiometricCapability: () => Promise.resolve({ available: false, label: '' }),
   authenticateBiometric: () => Promise.resolve(false),
@@ -131,6 +136,7 @@ async function openListLock(listId: string): Promise<void> {
 beforeEach(() => {
   mockRows.clear();
   mockRefreshers.clear();
+  mockUnreadable = new Set();
   mockLists = [node(MY_LIST_ID), node(PARENT, [node(CHILD, [], 1)])];
   appStateListeners = [];
   jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, listener) => {
@@ -276,5 +282,22 @@ describe('a list lock at the app lock’s id', () => {
 
     expect([...mockRows.values()]).toEqual([expect.objectContaining({ id: 'app', kind: 'app' })]);
     expect(locks.appLock).toMatchObject({ exists: true, unlocked: true });
+  });
+});
+
+describe('the cleanup of a lock whose list is gone', () => {
+  const row = (id: string): LockRecord =>
+    ({ id, kind: 'list', salt: 's', hash: 'h' }) as LockRecord;
+
+  // A list this device could not open is absent from the tree, not deleted. Its lock is
+  // all that keeps its links behind a password once the list heals, so the cleanup
+  // leaves a lock whose list is in the unreadable record, and still drops one that is not.
+  it('keeps the lock of a list this device could not open', async () => {
+    mockUnreadable = new Set(['lists/li_unreadable.enc']);
+    mockRows.set('li_unreadable', row('li_unreadable'));
+    mockRows.set('li_deleted', row('li_deleted'));
+
+    await mount();
+    await waitFor(() => expect([...mockRows.keys()]).toEqual(['li_unreadable']));
   });
 });

@@ -87,8 +87,8 @@ export interface SyncMetaRecord {
   // When a FULL LISTING (a first sync, or a fallback) last completed on this device
   // with the record in place, so the record covers every skip in this store. Absent on
   // a row from before the record existed, whose skips nothing recorded: the engine
-  // then forces one fallback (runCycle), and both sweeps refuse to run until it has
-  // completed (shared's unreadableRecordComplete, sync/sweeps.ts). Set by
+  // then forces a fallback (runCycle; again on a backoff while one fails), and both sweeps
+  // refuse to run until one has completed (shared's unreadableRecordComplete, sync/sweeps.ts). Set by
   // seedNewAccount and the delete-all reset too, which have nothing to skip. Optional
   // and not indexed, like `unreadablePaths`.
   unreadableRecordCompleteAt?: number;

@@ -24,6 +24,7 @@ import {
   LINKS_PREFIX,
   newFacet,
   pathFromId,
+  UnreadableExtractionError,
 } from '@stxapps/shared';
 
 import { db } from './db';
@@ -36,7 +37,7 @@ import {
   writeLink,
 } from './mutations';
 import { type LinkItem, readExtraction, readLinkById } from './queries';
-import { seedNewAccount } from './sync-store';
+import { forgetUnreadablePaths, recordUnreadablePaths, seedNewAccount } from './sync-store';
 
 const USER = 'alice';
 const LINK_ID = 'l_a';
@@ -64,6 +65,27 @@ it('refuses a late local write after another account owns the store', async () =
 });
 
 describe('writeExtraction', () => {
+  it('refuses a link whose extraction the device could not open, and writes once it heals', async () => {
+    // "No extraction here" is not "never extracted" while the path is recorded: a write
+    // built on this view would overwrite the server's copy and the kept copies it names.
+    await recordUnreadablePaths(USER, [{ path: PATH, updatedAt: 1000 }]);
+
+    await expect(writeExtraction(USER, LINK_ID, { fields: { title: 'x' } })).rejects.toThrow(
+      UnreadableExtractionError,
+    );
+    expect(await db.items.get(PATH)).toBeUndefined();
+    expect(await pendingFor(PATH)).toBeUndefined();
+    // Another link is unaffected.
+    await writeExtraction(USER, 'l_b', { fields: { title: 'fine' } });
+    expect((await readExtraction('l_b'))?.title).toBe('fine');
+
+    const meta = await db.syncMeta.get(USER);
+    if (!meta) throw new Error('no sync meta');
+    await forgetUnreadablePaths(meta, [PATH]);
+    await writeExtraction(USER, LINK_ID, { fields: { title: 'healed' } });
+    expect((await readExtraction(LINK_ID))?.title).toBe('healed');
+  });
+
   it('writes the record and its pending op together', async () => {
     await writeExtraction(USER, LINK_ID, { fields: { title: 'Google' } });
 

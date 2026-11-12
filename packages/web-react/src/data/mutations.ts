@@ -40,6 +40,7 @@ import {
   type Tag,
   tagSchema,
   type ThemeState,
+  UnreadableExtractionError,
   utf8,
 } from '@stxapps/shared';
 
@@ -47,7 +48,7 @@ import { db, type ItemRecord, type PendingOpRecord } from './db';
 import { enqueueDelete, enqueuePut, pendingDeleteRecord, pendingPutRecord } from './pending-store';
 import { parseBlob, toItemRecord } from './projection';
 import { type LinkItem, toItem, type WithPath } from './queries';
-import { assertAccountStillOwnsStore } from './sync-store';
+import { assertAccountStillOwnsStore, unreadablePathSet } from './sync-store';
 
 // The stores every local write's rw transaction locks: the record, its pending op, and
 // `syncMeta` for assertAccountStillOwnsStore's read. ONE list, because flushLocalWrites
@@ -544,9 +545,15 @@ export async function writeExtraction(
 ): Promise<void> {
   const now = Date.now();
   const path = pathFromId(linkId, EXTRACTIONS_PREFIX);
+  // A copy this device could not open is not "never extracted", and writing from this
+  // view would overwrite the server's copy and the kept copies it names
+  // (UnreadableExtractionError). Read before the transaction: the record only grows
+  // under the cycle lock, so a path recorded a moment later is the recheck's to find.
+  if ((await unreadablePathSet(username)).has(path)) throw new UnreadableExtractionError(path);
   // The `files/` blobs this write stops referencing — a re-capture's predecessor, a tier
   // upgrade's old preview. Collected inside the merge (the only place `current` is the
-  // committed value) and deleted after the put, metadata before content on the way down.
+  // committed value) and deleted after the put. Locally the reference moves off the blob
+  // first; on the wire the push commits deletes before puts (see deleteFile).
   let replaced: string[] = [];
   await writeEntityWith(username, path, (existing) => {
     const current: Extraction = parseBlob(existing?.data, extractionSchema) ?? {
@@ -589,10 +596,11 @@ export async function writeExtraction(
     replaced = replacedExtractionFileIds(current, next);
     return next;
   });
-  // Nothing else would ever reclaim these: the sweep and the destroy paths find blobs
-  // through the extraction's CURRENT refs, so a replaced one counted against the quota on
-  // every device for as long as the account lived. If this is interrupted the blob stays
-  // orphaned, which is where every replaced blob used to end up anyway.
+  // The destroy and the dangling sweep find blobs through the extraction's CURRENT refs,
+  // so a replaced one would count against the quota on every device until the orphaned-file
+  // sweep found it, 30 days on and at most weekly. Deleting it here frees it at once. If this
+  // is interrupted the blob stays orphaned for that sweep, which is where every replaced
+  // blob used to end up anyway.
   for (const fileId of replaced) await deleteFile(username, fileId);
 }
 
@@ -610,8 +618,8 @@ const hasKeptCopy = (extraction: Extraction | undefined, facet: KeptCopyFacet): 
   KEPT_COPY_FIELDS[facet].some((field) => extraction?.[field]);
 
 // Remove one kept copy of one link: drop its ref from `extractions/{id}.enc`, mark
-// the facet REMOVED, then delete the blob (metadata before content on the way down,
-// as writeExtraction does for a replaced one). docs/link-extraction-keep.md,
+// the facet REMOVED, then delete the blob (the same local order as writeExtraction's
+// replaced blob; see deleteFile for the wire order). docs/link-extraction-keep.md,
 // _removal, cleanup, export_.
 //
 // The facet stays `done` with a `removedAt` passthrough — it is NOT deleted. An
@@ -701,10 +709,14 @@ export function writeFile(username: string, fileId: string, data: Uint8Array): P
 }
 
 // Delete a `files/{id}.enc` content blob — the counterpart of writeFile, for a
-// replaced/cleared custom image or a destroyed link's content. Metadata-before-content
-// on the way down: callers drop the reference (via writeLink/writeExtraction) before
-// or with the blob delete; a briefly-dangling ref is NORMAL and read as "no bytes yet"
-// (readFileBytes → undefined), same as a not-yet-materialized lazy blob.
+// replaced/cleared custom image or a destroyed link's content. Callers drop the
+// reference (via writeLink/writeExtraction) before or with the blob delete, so LOCALLY
+// the reference moves off the blob first and a briefly-dangling ref is read as "no
+// bytes yet" (readFileBytes → undefined), same as a not-yet-materialized lazy blob.
+// ON THE WIRE it is not metadata-before-content: the push commits every delete before
+// any put (engine.ts pushPhases), so another device can hold the old reference for a
+// moment after the blob is gone, and a replacement whose upload keeps failing leaves
+// the old copy deleted everywhere with the new one only here.
 export function deleteFile(username: string, fileId: string): Promise<void> {
   return deleteEntity(username, pathFromId(fileId, FILES_PREFIX));
 }

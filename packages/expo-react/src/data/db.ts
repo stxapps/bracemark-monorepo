@@ -96,7 +96,8 @@ export const syncMeta = sqliteTable('sync_meta', {
   // where web's field is absent: a row from before the migration, or one no
   // pull has skipped anything for. A migrated row's NULL
   // `unreadableRecordCompleteAt` is the point: every released build skipped
-  // without recording, so the engine forces one fallback before any sweep runs.
+  // without recording, so the engine forces a fallback (again on a backoff while one fails) before any
+  // sweep runs.
   unreadablePaths: text('unreadable_paths', { mode: 'json' }).$type<string[]>(),
   unreadableRecheck: text('unreadable_recheck', { mode: 'json' }).$type<UnreadableRecheck>(),
   unreadableRecordCompleteAt: integer('unreadable_record_complete_at'),

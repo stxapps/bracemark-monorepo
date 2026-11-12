@@ -57,6 +57,7 @@ import {
   type Tag,
   tagSchema,
   type ThemeState,
+  UnreadableExtractionError,
   utf8,
   type WithPath,
 } from '@stxapps/shared';
@@ -73,7 +74,7 @@ import {
 import { enqueueDeleteTx, enqueuePutsTx, enqueuePutTx } from './pending-store';
 import { type ItemRecord, parseBlob, toItemRecord } from './projection';
 import { type LinkItem, toItem } from './queries';
-import { assertAccountOwnsStoreTx } from './sync-store';
+import { assertAccountOwnsStoreTx, unreadablePathSet } from './sync-store';
 
 // Persist one path's bytes locally and queue the upload, producing the bytes
 // INSIDE the transaction from the path's current row — the base primitive every
@@ -464,6 +465,8 @@ export async function writeExtraction(
 ): Promise<void> {
   const now = Date.now();
   const path = pathFromId(linkId, EXTRACTIONS_PREFIX);
+  // Refuses a copy this device could not open — see web-react's writeExtraction.
+  if ((await unreadablePathSet(username)).has(path)) throw new UnreadableExtractionError(path);
   // The `files/` blobs this write stops referencing — see web-react's writeExtraction.
   let replaced: string[] = [];
   writeEntityWith(username, path, (existing) => {
@@ -594,9 +597,10 @@ export async function writeFile(username: string, fileId: string, source: File):
 // half: the decrypted bytes live ON DISK here (file-store.ts), not in the row,
 // so the row delete is followed by the plaintext file's — rows first, files
 // after, so a crash in between leaves only an invisible orphan file
-// (clear-data's order). Metadata-before-content on the way down: callers drop
-// the reference (via writeLink/writeExtraction) before or with this; a
-// briefly-dangling ref reads as "no bytes" (readFileBytes → undefined).
+// (clear-data's order). Callers drop the reference (via writeLink/writeExtraction)
+// before or with this, so locally a briefly-dangling ref reads as "no bytes"
+// (readFileBytes → undefined). On the wire the push commits deletes before puts
+// (web-react's deleteFile has the consequence).
 export async function deleteFile(username: string, fileId: string): Promise<void> {
   const path = pathFromId(fileId, FILES_PREFIX);
   deleteEntity(username, path);

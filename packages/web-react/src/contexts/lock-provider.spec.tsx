@@ -36,6 +36,7 @@ import { MY_LIST_ID, type TreeNode } from '@stxapps/shared';
 import { db } from '../data/db';
 import { APP_LOCK_ID, readLocks } from '../data/lock-store';
 import type { ListItem } from '../data/queries';
+import { recordUnreadablePaths, seedNewAccount } from '../data/sync-store';
 import { LockProvider, useLockMutations, useLocks } from './lock-provider';
 
 // fake-indexeddb needs a structuredClone, which jsdom doesn't provide (see the note in
@@ -486,6 +487,23 @@ describe('the orphan sweep', () => {
     renderProvider();
 
     await waitFor(async () => expect(await db.locks.count()).toBe(0));
+  });
+
+  // A list this device could not open is absent from the tree, not deleted. Its lock is
+  // all that keeps its links behind a password once the list heals, so the sweep leaves
+  // a lock whose list is in the unreadable record, and still drops one that is not.
+  it('keeps the lock of a list this device could not open', async () => {
+    await db.syncMeta.clear();
+    await seedNewAccount('alice');
+    await recordUnreadablePaths('alice', [{ path: 'lists/li_unreadable.enc', updatedAt: 1 }]);
+    await db.locks.put({ id: 'li_unreadable', kind: 'list', salt: 's', hash: 'hash:pw' });
+    await db.locks.put({ id: 'li_deleted', kind: 'list', salt: 's', hash: 'hash:pw' });
+
+    renderProvider();
+
+    await waitFor(async () =>
+      expect((await db.locks.toArray()).map((l) => l.id)).toEqual(['li_unreadable']),
+    );
   });
 
   // THE GUARD. An empty tree means the lists are still loading (`readLists` always

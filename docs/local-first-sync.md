@@ -1573,7 +1573,9 @@ concurrency makes them too — two devices or tabs capturing the same link in on
 sync window (last-writer-wins keeps one extraction, and the other's blob loses
 its reference), two custom-image picks racing on one link, a device that pushed
 a blob and stalled before the entity naming it. The sweep reclaims them, but
-conservatively: only a blob 30 days old by its server stamp, at most weekly and
+conservatively: only a blob 30 days old by its server stamp (measured against the
+newest server stamp this device has pulled plus a day, never against a device clock
+that runs ahead of it), at most weekly and
 500 a run (daily while a run still hits that cap, so a backlog clears in weeks,
 not months), and not at all on a device with a recorded unreadable path. Until
 then an orphan counts against the quota, and an account at its byte ceiling
@@ -2016,8 +2018,9 @@ nothing is stored, a local copy the path already had stays as it was, and the
 cursor moves on. It used to propagate, and one such path then failed every
 cycle for good: the pull rejected with the cursor where it was, met the same
 blob on the next cycle, and no other path in the account synced again. Skipped,
-the path is read again only when it is rewritten or a fallback lists it, which
-is what the server could already achieve by withholding it (below). ⚠ **A
+the path is read again only when it is rewritten, a fallback lists it, or the
+unreadable recheck fetches it again, which is what the server could already
+achieve by withholding it (below). ⚠ **A
 completed cycle does not mean the store holds everything up to the cursor**: a
 skip is one way it can lack a path the server holds, and not the only one
 ([link-extraction.md](./link-extraction.md) lists the known others where the
@@ -2052,7 +2055,22 @@ the op log routes the cycle and the store stays unproven, which only keeps the
 sweeps off; a fallback the op log routes meanwhile completes the record as well. That covers every web row from before
 the record and every expo row migration 1 brought up. What it can't cover is a
 web tab still running a pre-record build, which skips into a store this build
-has already proven. The two sweeps, the only
+has already proven. ⚠ **A record can also stop being complete.** A fallback that
+fails after its listing may have stored part of the store and claimed nothing, and
+the next cycle can be routed incremental (another device's commit moved the log
+back into range), which re-lists nothing; and a self-healed pending put whose path
+has no op in the window stays absent here while the server may hold it, with the
+cursor moved past. Both clear `unreadableRecordCompleteAt`, which sends the next
+cycle to a fallback, on the same backoff, and keeps both sweeps off until one
+completes. ⚠ **Nothing that writes may ignore the record either.** A link whose
+`extractions/{id}` path is recorded is not "never extracted" — this device could
+not open the server's copy — so the pending-extraction reads skip it and
+`writeExtraction` refuses it (`UnreadableExtractionError`); a write built on the
+local view would overwrite the server's copy and the kept copies it names, and
+the recheck would then see a newer local copy and drop the path from the record.
+The path heals when the recheck opens it. A server restored from a point in time,
+with a later commit stamped above the lost ops, still hides a lost op behind a
+cursor that looks in range; nothing on the client can see that. The two sweeps, the only
 places a local absence becomes a server delete, do, on both platforms
 ([link-extraction.md](./link-extraction.md), the dangling sweep;
 [link-extraction-keep.md](./link-extraction-keep.md), the orphaned-file sweep).

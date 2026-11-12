@@ -7,13 +7,18 @@
 // dangling-extraction and orphaned-file sweeps). docs/local-first-sync.md,
 // _crypto boundary_.
 //
-// A path leaves the record in exactly three ways, all of them the server's
-// answer: a pull stores it, a pull deletes it, or a RECHECK fetches it again
-// and either opens it (and stores it) or meets a 404. A recheck that still
-// can't open it keeps it. Nothing ever drops a path because it has failed for a
-// long time, because forgetting it is what lets the orphaned-file sweep delete
-// the blobs it names. That would happen on every device, including those that
-// read it fine (a platform-only decrypt bug is the case that makes this real).
+// A path leaves the record in three ways that are the server's answer — a pull
+// stores it, a pull deletes it, or a RECHECK fetches it again and either opens
+// it (and stores it) or meets a 404 — and in one that is a local fact: the
+// recheck finds this device has written the path since the pull skipped it (a
+// copy newer than the recorded stamp), so the record has nothing left to say
+// about it. Nothing else writes a recorded extraction (`writeExtraction`
+// refuses, UnreadableExtractionError), which is what keeps that last way from
+// being a way to drop a path the server still holds. A recheck that still can't
+// open it keeps it. Nothing ever drops a path because it has failed for a long
+// time, because forgetting it is what lets the orphaned-file sweep delete the
+// blobs it names. That would happen on every device, including those that read
+// it fine (a platform-only decrypt bug is the case that makes this real).
 //
 // The recheck exists because a skip is often transient (a corrupt transfer, or
 // a delete whose op this device hasn't met yet), while the cursor is already
@@ -155,4 +160,20 @@ export function afterRecheck(
     paths,
     recheck: { dueAt: now + recheckDelay(tries), tries, stamps: left?.stamps ?? {} },
   };
+}
+
+// Thrown by `writeExtraction` (both stores) for a link whose `extractions/{id}`
+// path is in the record. This device could not open the server's copy, so a
+// write built on its own view (a missing row reads as "never extracted", an
+// older row as current) would overwrite what the server holds, and the recheck
+// would then see a newer local copy and drop the path from the record. The
+// writers that decide what to extract skip such a link first (the pending
+// reads take the record as `skipExtractionPaths`), so this is the backstop for
+// every other caller. The path heals when the recheck opens it, after which
+// writes go through.
+export class UnreadableExtractionError extends Error {
+  constructor(public readonly path: string) {
+    super(`Extraction does not open on this device; not writing over it: ${path}`);
+    this.name = 'UnreadableExtractionError';
+  }
 }

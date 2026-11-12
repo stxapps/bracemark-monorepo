@@ -60,6 +60,26 @@ async function link(id: string, extra: Record<string, unknown> = {}): Promise<vo
 beforeEach(async () => {
   await Promise.all([db.items.clear(), db.pendingOps.clear(), db.syncMeta.clear()]);
   await seedNewAccount(USER);
+  // A synced account: the cursor is the server clock the grace is measured against.
+  await db.syncMeta.update(USER, { syncCursorUpdatedAt: NOW });
+});
+
+it('measures the grace on the server’s clock, not a device clock that runs ahead', async () => {
+  // Another device uploaded this blob a day ago and has not named it yet. This device's
+  // clock is 40 days fast, so by its own clock the blob is 41 days old.
+  await pushedFile('fresh', NOW - 24 * 60 * 60 * 1000);
+  const FAST = NOW + 40 * 24 * 60 * 60 * 1000;
+
+  await expect(sweepOrphanFiles(USER, FAST)).resolves.toBe(0);
+  expect(await exists('fresh')).toBe(true);
+});
+
+it('spares everything when no server stamp has been pulled', async () => {
+  await pushedFile('orphan');
+  await db.syncMeta.update(USER, { syncCursorUpdatedAt: 0 });
+
+  await expect(sweepOrphanFiles(USER, NOW)).resolves.toBe(0);
+  expect(await exists('orphan')).toBe(true);
 });
 
 it('sweeps an old blob nothing names, and spares the ones that are named', async () => {

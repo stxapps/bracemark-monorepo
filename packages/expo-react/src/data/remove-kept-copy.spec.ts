@@ -1,12 +1,18 @@
 import { File, Paths } from 'expo-file-system';
 
-import { EXTRACTIONS_PREFIX, FILES_PREFIX, newFacet, pathFromId } from '@stxapps/shared';
+import {
+  EXTRACTIONS_PREFIX,
+  FILES_PREFIX,
+  newFacet,
+  pathFromId,
+  UnreadableExtractionError,
+} from '@stxapps/shared';
 
 import { resetFileSystem, writeFileText } from '../testing/memory-file-system';
 import { getDb, items } from './db';
 import { removeKeptCopy, writeExtraction, writeFile } from './mutations';
 import { readExtraction } from './queries';
-import { seedNewAccount } from './sync-store';
+import { recordUnreadablePaths, seedNewAccount } from './sync-store';
 
 // expo's removeKeptCopy — the port of web-react's (data/mutations.spec.ts there has
 // the reasoning). The two properties pinned on both platforms: a removed copy is GONE
@@ -83,4 +89,20 @@ it('removes a read-mode copy’s image pack with its text', async () => {
 it('writes nothing when there is no such copy — and never creates an extraction', async () => {
   await expect(removeKeptCopy(USER, LINK_ID, 'screenshot')).resolves.toBe(false);
   expect(rowExists(pathFromId(LINK_ID, EXTRACTIONS_PREFIX))).toBe(false);
+});
+
+it('writeExtraction refuses a link whose extraction the device could not open', async () => {
+  // "No extraction here" is not "never extracted" while the path is recorded: a write built
+  // on this view would overwrite the server's copy and the kept copies it names.
+  const path = pathFromId(LINK_ID, EXTRACTIONS_PREFIX);
+  await recordUnreadablePaths(USER, [{ path, updatedAt: 1000 }]);
+
+  await expect(writeExtraction(USER, LINK_ID, { fields: { title: 'x' } })).rejects.toThrow(
+    UnreadableExtractionError,
+  );
+  expect(rowExists(path)).toBe(false);
+
+  // Another link is unaffected.
+  await writeExtraction(USER, 'l_other', { fields: { title: 'fine' } });
+  expect(rowExists(pathFromId('l_other', EXTRACTIONS_PREFIX))).toBe(true);
 });

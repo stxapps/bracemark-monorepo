@@ -72,6 +72,7 @@ import {
   readRawPendingTitleImageCount,
   readSettingsGeneral,
 } from '../data/queries';
+import { unreadablePathSet } from '../data/sync-store';
 import { useLiveRead } from '../hooks/use-live-read';
 import { useSettings } from '../hooks/use-settings';
 import { runDeviceTitleImageBatch } from '../lib/device-link-previews';
@@ -276,10 +277,12 @@ export function LinkPreviewsProvider({ children }: { children: ReactNode }) {
   // Inert in generate-all mode, where the raw count below is the signal instead.
   const probe = useLiveRead(
     () =>
-      !enabled || isGeneratingAll
+      !enabled || isGeneratingAll || !username
         ? Promise.resolve([])
-        : readLinksPendingTitleImageForLinkPaths(displayedLinkPaths, Date.now()),
-    [enabled, isGeneratingAll, displayedLinkPaths],
+        : unreadablePathSet(username).then((skip) =>
+            readLinksPendingTitleImageForLinkPaths(displayedLinkPaths, Date.now(), skip),
+          ),
+    [enabled, isGeneratingAll, displayedLinkPaths, username],
     WAKE_TABLES,
   );
 
@@ -358,7 +361,11 @@ export function LinkPreviewsProvider({ children }: { children: ReactNode }) {
           // inFlightPathsRef). Only reachable at mode `all`; at `saves` the drain can't run,
           // so nothing is ever dropped here.
           links = claimInFlight(
-            await readLinksPendingTitleImageForLinkPaths(linkPaths, Date.now()),
+            await readLinksPendingTitleImageForLinkPaths(
+              linkPaths,
+              Date.now(),
+              await unreadablePathSet(username),
+            ),
           );
           if (links.length === 0) return;
           // The icon rides the same gesture as the page (favicon-provider's two entry
@@ -432,6 +439,7 @@ export function LinkPreviewsProvider({ children }: { children: ReactNode }) {
               Date.now(),
               STEP,
               generateAllCursorRef.current,
+              await unreadablePathSet(username),
             );
             // A link `fetchPreviewsNow` is mid-fetch on is skipped for this walk, not deferred:
             // the cursor moves past it either way, and its outcome is being written by the
@@ -471,7 +479,11 @@ export function LinkPreviewsProvider({ children }: { children: ReactNode }) {
           // `item_facet_statuses`, which is a wake table, so the drain re-fires with the
           // real remainder rather than sitting on a lost wakeup.
           const links = claimInFlight(
-            await readLinksPendingTitleImageForLinkPaths(displayedLinkPathsRef.current, Date.now()),
+            await readLinksPendingTitleImageForLinkPaths(
+              displayedLinkPathsRef.current,
+              Date.now(),
+              await unreadablePathSet(username),
+            ),
             take,
           );
           if (links.length === 0) break;

@@ -438,7 +438,12 @@ pull's GETs land in any order — in another tab as much as this one, which is w
 the lock and not this tab's own status is the gate. After a cycle that **failed**
 it doesn't either: what that cycle pulled stays stored while its cursor stays put,
 so an extraction can sit there without the link the next cycle brings; a failed
-cycle never reaches its end. And only a **full-sync** client may run it: the test is "link
+cycle never reaches its end. The same order shapes the push: the queue is read in path
+order and committed in chunks of 500, so a large import with its previews could commit
+an extraction in an earlier chunk than its link, and another device that cycled between
+the two commits would sweep it. The push commits extractions after the links
+(shared's `extractionsLast`); a link and its extraction in one chunk commit together.
+And only a **full-sync** client may run it: the test is "link
 absent locally" and the remedy is a remote delete, so a selective-sync client (see
 _what each client syncs_ below) would judge healthy extractions dangling and delete
 them for every device. ⚠ A completed cycle is not a complete store either: a link

@@ -54,6 +54,8 @@ import { bulkWriteEntities, writeExtraction, writeLink, writePin } from './mutat
 import {
   readExtractionFacetCounts,
   readLinks,
+  readLinksPendingTitleImageForLinkPaths,
+  readLinksPendingTitleImagePage,
   readLists,
   readPins,
   readRawPendingTitleImageCount,
@@ -404,5 +406,39 @@ describe('the ids the read edge decides', () => {
       id: 'lnk-a',
       rank: RANK_B,
     });
+  });
+});
+
+describe('the unreadable record in the pending reads', () => {
+  // A link whose extraction this device could not open has no extraction row HERE, which
+  // reads as "never extracted". Extracting it would overwrite the server's copy, so both
+  // pending reads skip a link whose extraction path the caller passes as recorded.
+  const idsOf = (links: { path: string }[]) =>
+    links.map((link) => link.path.replace(/^links\/|\.enc$/g, '')).sort();
+
+  it('lists a link with no extraction, and not once its extraction path is recorded', async () => {
+    await seedLink('a');
+    await seedLink('b');
+    const paths = ['links/a.enc', 'links/b.enc'];
+    const recorded = new Set(['extractions/a.enc']);
+
+    expect(idsOf(await readLinksPendingTitleImageForLinkPaths(paths, Date.now()))).toEqual([
+      'a',
+      'b',
+    ]);
+    expect(
+      idsOf(await readLinksPendingTitleImageForLinkPaths(paths, Date.now(), recorded)),
+    ).toEqual(['b']);
+  });
+
+  it('walks past a recorded link in the whole-library page and still reaches the rest', async () => {
+    await seedLink('a');
+    await seedLink('b');
+    const recorded = new Set(['extractions/a.enc']);
+
+    const page = await readLinksPendingTitleImagePage(Date.now(), 10, undefined, recorded);
+
+    expect(idsOf(page.links)).toEqual(['b']);
+    expect(page.cursor).toBeNull();
   });
 });
