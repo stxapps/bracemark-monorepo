@@ -3,7 +3,12 @@ import type { File } from 'expo-file-system';
 import { newId } from '@stxapps/expo-crypto/lib/ids';
 import { newFacet } from '@stxapps/shared';
 
-import { type ExtractionFields, writeExtraction, writeFile } from './mutations';
+import {
+  assertExtractionWritable,
+  type ExtractionFields,
+  writeExtraction,
+  writeFile,
+} from './mutations';
 
 // Store a link's title and preview image as read from the LIVE page in the capture
 // screen's WebView — _Update preview_ (features/capture/capture-screen.tsx in the app).
@@ -35,6 +40,9 @@ export async function storePagePreview(
   { title, image }: { title?: string; image?: File },
 ): Promise<boolean> {
   if (!title && !image) return false;
+  // Before the blob: a refusal after it would leave the image uploaded with no extraction
+  // naming it.
+  await assertExtractionWritable(username, linkId);
   const fields: ExtractionFields = {};
   if (title) fields.title = title;
   if (image) {

@@ -842,10 +842,10 @@ Two rules:
   - never a blob with a **pending op** (a local unpushed write carries `updatedAt:
 0`, so age alone can't exclude it), never one younger than **30 days** by its
     server stamp (`ORPHAN_GRACE_MS` — content is written before its reference, and
-    a stalled device gets that long to push the rest). "Now" is the newest server
-    stamp the device has pulled plus a day (`orphanGraceNow`), not the device clock:
-    stamps are the server's, and a clock 30 days fast would otherwise see another
-    device's blob from minutes ago as old. A device that has pulled nothing has no
+    a stalled device gets that long to push the rest). "Now" is the device clock or, if
+    that is earlier, the newest server stamp the device has pulled plus a day
+    (`orphanGraceNow`): stamps are the server's, and a clock 30 days fast would
+    otherwise see another device's blob from minutes ago as old. A device that has pulled nothing has no
     candidates; and **nothing written during
     the scan** (an entity put queued while it yields aborts the run);
   - at most **weekly** per account per device (`SyncMetaRecord.lastOrphanSweepAt`)

@@ -8,6 +8,7 @@ import {
 } from '@stxapps/shared';
 import { newId } from '@stxapps/web-crypto';
 import {
+  assertExtractionWritable,
   collectReaderImages,
   type ExtractionFacet,
   type ExtractionFields,
@@ -72,6 +73,11 @@ export async function runExtraction(
   if ((normalizeUrl(tabUrl) ?? tabUrl) !== link.url) {
     throw new Error('Active tab is no longer this link’s page');
   }
+  // Before the capture and any blob, and before the try: a link whose extraction this
+  // device could not open takes no write, and the catch below would try to record a
+  // `failed` facet with the very write that is refused. Like the check above this is not
+  // the host's fault, so it burns no backoff.
+  await assertExtractionWritable(username, linkId);
 
   try {
     switch (facet) {

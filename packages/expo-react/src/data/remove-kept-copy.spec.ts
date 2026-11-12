@@ -3,14 +3,24 @@ import { File, Paths } from 'expo-file-system';
 import {
   EXTRACTIONS_PREFIX,
   FILES_PREFIX,
+  LINKS_PREFIX,
   newFacet,
   pathFromId,
-  UnreadableExtractionError,
+  UnreadablePathError,
 } from '@stxapps/shared';
 
 import { resetFileSystem, writeFileText } from '../testing/memory-file-system';
 import { getDb, items } from './db';
-import { removeKeptCopy, writeExtraction, writeFile } from './mutations';
+import {
+  assertExtractionWritable,
+  bulkDeleteEntities,
+  bulkWriteEntities,
+  bulkWriteLinks,
+  removeKeptCopy,
+  writeExtraction,
+  writeFile,
+  writeLink,
+} from './mutations';
 import { readExtraction } from './queries';
 import { recordUnreadablePaths, seedNewAccount } from './sync-store';
 
@@ -98,11 +108,90 @@ it('writeExtraction refuses a link whose extraction the device could not open', 
   await recordUnreadablePaths(USER, [{ path, updatedAt: 1000 }]);
 
   await expect(writeExtraction(USER, LINK_ID, { fields: { title: 'x' } })).rejects.toThrow(
-    UnreadableExtractionError,
+    UnreadablePathError,
   );
   expect(rowExists(path)).toBe(false);
 
   // Another link is unaffected.
   await writeExtraction(USER, 'l_other', { fields: { title: 'fine' } });
   expect(rowExists(pathFromId('l_other', EXTRACTIONS_PREFIX))).toBe(true);
+});
+
+// THE WRITE EDGE AND THE UNREADABLE RECORD (web's mutations.spec has the reasoning): a put to
+// a recorded path is refused in the write's own transaction, whoever the writer is.
+describe('the write edge and the unreadable record', () => {
+  const EXTRACTION = pathFromId(LINK_ID, EXTRACTIONS_PREFIX);
+  const LINK = pathFromId('l_rec', LINKS_PREFIX);
+  const record = (path: string) => recordUnreadablePaths(USER, [{ path, updatedAt: 1000 }]);
+  const linkItem = {
+    path: LINK,
+    url: 'https://example.com/a',
+    listId: 'my-list',
+    tagIds: [],
+    createdAt: 1,
+    updatedAt: 1,
+  };
+
+  it('refuses a link write to a recorded path', async () => {
+    await writeLink(USER, linkItem, {});
+    await record(LINK);
+
+    await expect(writeLink(USER, linkItem, { listId: 'archive' })).rejects.toThrow(
+      UnreadablePathError,
+    );
+    await expect(bulkWriteLinks(USER, [{ link: linkItem, patch: {} }])).rejects.toThrow(
+      UnreadablePathError,
+    );
+  });
+
+  it('refuses removing a kept copy from a recorded extraction', async () => {
+    await file('shot-1');
+    await writeExtraction(USER, LINK_ID, {
+      fields: { screenshotId: 'shot-1' },
+      facet: 'screenshot',
+      state: newFacet('done', 'server'),
+    });
+    await record(EXTRACTION);
+
+    await expect(removeKeptCopy(USER, LINK_ID, 'screenshot')).rejects.toThrow(UnreadablePathError);
+
+    expect((await readExtraction(LINK_ID))?.screenshotId).toBe('shot-1');
+  });
+
+  it('lets a bulk restore skip a recorded path, and refuses one that may not skip', async () => {
+    const other = pathFromId('l_other', LINKS_PREFIX);
+    await record(LINK);
+
+    const written = await bulkWriteEntities(
+      USER,
+      [
+        { path: LINK, data: { url: 'https://example.com/a' } },
+        { path: other, data: { url: 'https://example.com/b' } },
+      ],
+      { skipExisting: true },
+    );
+
+    expect(written).toEqual([other]);
+    expect(rowExists(LINK)).toBe(false);
+    await expect(
+      bulkWriteEntities(USER, [{ path: LINK, data: { url: 'https://example.com/a' } }]),
+    ).rejects.toThrow(UnreadablePathError);
+  });
+
+  it('does not refuse a delete of a recorded path', async () => {
+    await writeLink(USER, linkItem, {});
+    await record(LINK);
+
+    await bulkDeleteEntities(USER, [LINK]);
+
+    expect(rowExists(LINK)).toBe(false);
+  });
+
+  it('answers the question before any work is done', async () => {
+    await expect(assertExtractionWritable(USER, LINK_ID)).resolves.toBeUndefined();
+    await record(EXTRACTION);
+
+    await expect(assertExtractionWritable(USER, LINK_ID)).rejects.toThrow(UnreadablePathError);
+    await expect(assertExtractionWritable(USER, 'l_b')).resolves.toBeUndefined();
+  });
 });

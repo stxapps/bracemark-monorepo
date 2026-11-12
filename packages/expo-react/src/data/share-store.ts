@@ -70,6 +70,7 @@ import {
   type Tag,
   TAGS_PREFIX,
   TRASH_ID,
+  UnreadablePathError,
   z,
 } from '@stxapps/shared';
 
@@ -578,7 +579,13 @@ async function applyShareDraft(username: string, draft: ShareDraft): Promise<voi
 
   const title = cleanTitle(draft.title);
   if (title !== undefined) {
-    await mutations().writeExtraction(username, draft.id, { fields: { title } });
+    // The title is a nicety on a link that is saved. An extraction this device could not
+    // open (UnreadablePathError) takes no write, and that must not undo the save.
+    try {
+      await mutations().writeExtraction(username, draft.id, { fields: { title } });
+    } catch (err) {
+      if (!(err instanceof UnreadablePathError)) throw err;
+    }
   }
 
   // A share is a save, so it counts toward the app-store review prompt — here,
@@ -687,7 +694,16 @@ export async function drainShareOutbox(
       entry.delete();
       continue;
     }
-    await applyShareDraft(session.username, draft);
+    try {
+      await applyShareDraft(session.username, draft);
+    } catch (err) {
+      // The write edge refused the draft's link: this id is a path the pull could not open,
+      // so the server already holds something there. One such draft must not stop every
+      // draft after it on every launch. It stays in the outbox for a later drain, after
+      // the recheck has had its chance to open the path.
+      if (err instanceof UnreadablePathError) continue;
+      throw err;
+    }
     if (options.keepReadMode && draft.readMode !== undefined) {
       await storeReadMode().storeReadModeCopy(session.username, draft.id, draft.readMode, {
         images: options.keepReadModeImages === true,

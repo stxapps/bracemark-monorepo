@@ -1573,9 +1573,9 @@ concurrency makes them too — two devices or tabs capturing the same link in on
 sync window (last-writer-wins keeps one extraction, and the other's blob loses
 its reference), two custom-image picks racing on one link, a device that pushed
 a blob and stalled before the entity naming it. The sweep reclaims them, but
-conservatively: only a blob 30 days old by its server stamp (measured against the
-newest server stamp this device has pulled plus a day, never against a device clock
-that runs ahead of it), at most weekly and
+conservatively: only a blob 30 days old by its server stamp (measured against
+this device's clock or, if it is earlier, the newest server stamp this device has
+pulled plus a day, so a clock that runs ahead gains nothing), at most weekly and
 500 a run (daily while a run still hits that cap, so a backlog clears in weeks,
 not months), and not at all on a device with a recorded unreadable path. Until
 then an orphan counts against the quota, and an account at its byte ceiling
@@ -2062,13 +2062,18 @@ back into range), which re-lists nothing; and a self-healed pending put whose pa
 has no op in the window stays absent here while the server may hold it, with the
 cursor moved past. Both clear `unreadableRecordCompleteAt`, which sends the next
 cycle to a fallback, on the same backoff, and keeps both sweeps off until one
-completes. ⚠ **Nothing that writes may ignore the record either.** A link whose
-`extractions/{id}` path is recorded is not "never extracted" — this device could
-not open the server's copy — so the pending-extraction reads skip it and
-`writeExtraction` refuses it (`UnreadableExtractionError`); a write built on the
-local view would overwrite the server's copy and the kept copies it names, and
-the recheck would then see a newer local copy and drop the path from the record.
-The path heals when the recheck opens it. A server restored from a point in time,
+completes. ⚠ **A writer must not build on a path the record holds either.** A link
+whose `extractions/{id}` path is recorded is not "never extracted" — this device
+could not open the server's copy. A write built on the local view (a missing row
+reads as never written, an older row as current) would overwrite the server's copy
+and the kept copies it names, and the recheck would then see a newer local copy and
+drop the path from the record. So the write edge refuses any put to a recorded path
+inside the write's own transaction (`UnreadablePathError`; a bulk restore that skips
+existing paths skips it, a delete is not refused), the pending-extraction reads skip
+the link so the drains do not keep choosing it, and the capture flows ask first
+(`assertExtractionWritable`), before they fetch a page or write a blob that a refused
+extraction write would leave unreferenced. The refusal is the last line, not the
+first. The path heals when the recheck opens it. A server restored from a point in time,
 with a later commit stamped above the lost ops, still hides a lost op behind a
 cursor that looks in range; nothing on the client can see that. The two sweeps, the only
 places a local absence becomes a server delete, do, on both platforms

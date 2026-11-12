@@ -75,10 +75,12 @@ jest.mock('../data/queries', () => ({
 }));
 
 const mockRunBatch = jest.fn();
-// The unreadable record the pending reads are handed (sync-store is native sqlite). Empty:
-// the drain's own behaviour is under test here, not the skip, which queries' specs pin.
+// The unreadable record the pending reads are handed (sync-store is native sqlite). Empty
+// unless a test sets it; the skip itself is queries' specs, and that every read is handed
+// the record is the test at the bottom.
+let mockUnreadable = new Set<string>();
 jest.mock('../data/sync-store', () => ({
-  unreadablePathSet: () => Promise.resolve(new Set<string>()),
+  unreadablePathSet: () => Promise.resolve(mockUnreadable),
 }));
 jest.mock('../lib/device-link-previews', () => ({
   runDeviceTitleImageBatch: (...args: unknown[]) => mockRunBatch(...args),
@@ -132,6 +134,7 @@ beforeEach(() => {
   generateAll = () => undefined;
   mockProbe = [];
   mockRawPending = 0;
+  mockUnreadable = new Set();
   mockReadPage.mockReset();
   mockReadPendingForPaths.mockReset();
   mockReadSettings.mockReset();
@@ -271,5 +274,39 @@ test('starts Generate all when it is pressed while an auto step is in flight', a
     await autoStep.promise;
   });
   await waitFor(() => expect(mockReadPage).toHaveBeenCalledTimes(1));
+  appState.currentState = currentState;
+});
+
+// The unreadable record reaches the pending reads the drain makes. A link whose extraction
+// this device could not open must not be chosen for extraction (it would overwrite the
+// server's copy), so each read is handed the record: a gesture's read, the auto drain's
+// read and the library walk's. Dropping the argument at any one silently brings it back.
+test('hands the unreadable record to the gesture, the auto drain and the library walk', async () => {
+  mockUnreadable = new Set(['extractions/a.enc']);
+  mockMode = 'all';
+  const appState = AppState as { currentState: unknown };
+  const currentState = appState.currentState;
+  appState.currentState = 'active';
+  mockProbe = [link('links/a.enc')];
+  mockRawPending = 1;
+  mockReadSettings.mockResolvedValue({ deviceExtractionMode: 'all' });
+  mockReadPendingForPaths.mockResolvedValue([link('links/a.enc')]);
+  mockReadPage.mockResolvedValue({ links: [link('links/b.enc')], cursor: null });
+
+  mount();
+  await waitFor(() => expect(mockRunBatch).toHaveBeenCalled()); // the auto drain
+  await act(async () => {
+    fetchPreviewsNow(['links/a.enc']);
+    await Promise.resolve();
+  });
+  await act(async () => generateAll());
+  await waitFor(() => expect(mockReadPage).toHaveBeenCalled()); // the walk
+
+  const handed = [
+    ...mockReadPendingForPaths.mock.calls.map((call) => call[2]),
+    mockReadPage.mock.calls[0][3],
+  ];
+  expect(handed.length).toBeGreaterThanOrEqual(3);
+  for (const set of handed) expect(set).toEqual(new Set(['extractions/a.enc']));
   appState.currentState = currentState;
 });

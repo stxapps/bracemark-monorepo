@@ -58,8 +58,10 @@ export function danglingExtractionPaths(
 // than the link, and another device that cycled between the two commits would
 // sweep it, and every blob it names, for everyone. Extractions go last, so a
 // link is never later than its extraction. The relative order inside each group
-// is kept. A link and its extraction in the SAME chunk commit atomically, which
-// is why only the chunk boundary needed this.
+// is kept. A link and its extraction in the SAME chunk are one log write, which is why
+// the chunk boundary was the order's gap. It narrows the window, it does not close it: a
+// link whose upload fails, or is superseded by a re-edit mid-cycle, stays queued while
+// its extraction's succeeds and commits, so an extraction can still reach the log first.
 export function extractionsLast<T extends { path: string }>(ops: readonly T[]): T[] {
   return [
     ...ops.filter((o) => !o.path.startsWith(EXTRACTIONS_PREFIX)),

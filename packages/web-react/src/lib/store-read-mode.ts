@@ -9,7 +9,7 @@ import {
 } from '@stxapps/shared';
 import { newId } from '@stxapps/web-crypto';
 
-import { writeExtraction, writeFile } from '../data/mutations';
+import { assertExtractionWritable, writeExtraction, writeFile } from '../data/mutations';
 import { encodeReaderDoc } from './reader-doc-bytes';
 
 // Store ONE read-mode copy: the text, and the images kept with it. The single writer
@@ -40,6 +40,9 @@ export async function storeReadModeCopy(
   images: readonly ReaderImageEntry[],
   extractedBy: string,
 ): Promise<void> {
+  // Before any blob: a refusal later would leave the pack and the text uploaded with no
+  // extraction naming them.
+  await assertExtractionWritable(username, linkId);
   const kept = withinReaderImageBudget(images);
   const settled = applyReaderImages(
     doc,

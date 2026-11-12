@@ -40,7 +40,7 @@ import {
   type Tag,
   tagSchema,
   type ThemeState,
-  UnreadableExtractionError,
+  UnreadablePathError,
   utf8,
 } from '@stxapps/shared';
 
@@ -90,6 +90,14 @@ export async function flushLocalWrites(): Promise<void> {
 // the base reconcile diffs the next pulled stamp against to tell our own echo
 // from a real conflict. The local `items.updatedAt` is left at that base until
 // the commit restamps it.
+// Refuse a put to a path the unreadable record holds (UnreadablePathError). Inside the
+// write's own transaction (db.syncMeta is a write-edge store), so the record is read at
+// the moment of the write: a path recorded after a caller decided to write is still
+// caught. The set is empty for nearly every account, so this is one small row read.
+async function assertPathWritable(username: string, path: string): Promise<void> {
+  if ((await unreadablePathSet(username)).has(path)) throw new UnreadablePathError(path);
+}
+
 async function writeBytesWith(
   username: string,
   path: string,
@@ -97,6 +105,7 @@ async function writeBytesWith(
 ): Promise<void> {
   await db.transaction('rw', WRITE_EDGE_STORES, async () => {
     await assertAccountStillOwnsStore(username);
+    await assertPathWritable(username, path);
     const existing = await db.items.get(path);
     const baseUpdatedAt = existing?.updatedAt ?? 0;
     const bytes = produce(existing);
@@ -178,11 +187,18 @@ export async function bulkWriteEntities(
   const written: string[] = [];
   await db.transaction('rw', WRITE_EDGE_STORES, async () => {
     await assertAccountStillOwnsStore(username);
+    const unreadable = await unreadablePathSet(username);
     const existing = await db.items.bulkGet(entries.map((entry) => entry.path));
     const records: ItemRecord[] = [];
     const ops: PendingOpRecord[] = [];
     for (let i = 0; i < entries.length; i++) {
       const { path, data } = entries[i];
+      // A recorded path exists on the server, this device just can't open it: "skip
+      // existing" is the honest answer for a restore, and anything else would overwrite it.
+      if (unreadable.has(path)) {
+        if (options.skipExisting) continue;
+        throw new UnreadablePathError(path);
+      }
       if (options.skipExisting && existing[i] !== undefined) continue;
       written.push(path);
       const baseUpdatedAt = existing[i]?.updatedAt ?? 0;
@@ -319,6 +335,10 @@ export async function bulkWriteLinks(username: string, edits: LinkEdit[]): Promi
   const now = Date.now();
   await db.transaction('rw', WRITE_EDGE_STORES, async () => {
     await assertAccountStillOwnsStore(username);
+    const unreadable = await unreadablePathSet(username);
+    for (const { link } of edits) {
+      if (unreadable.has(link.path)) throw new UnreadablePathError(link.path);
+    }
     const existing = await db.items.bulkGet(edits.map((edit) => edit.link.path));
     const records: ItemRecord[] = [];
     const ops: PendingOpRecord[] = [];
@@ -518,6 +538,16 @@ export type ExtractionFields = Partial<
   >
 >;
 
+// Ask before doing the work: may `extractions/{id}` be written for this link now? Throws
+// UnreadablePathError when this device could not open the server's copy. The capture
+// flows call it first, before they fetch a page or write a blob, so a refusal does not
+// leave an uploaded `files/` blob that no extraction names (writeExtraction itself
+// refuses inside its transaction, which is too late for content already written).
+export async function assertExtractionWritable(username: string, linkId: string): Promise<void> {
+  const path = pathFromId(linkId, EXTRACTIONS_PREFIX);
+  if ((await unreadablePathSet(username)).has(path)) throw new UnreadablePathError(path);
+}
+
 // What one extraction write-back carries: an optional display-field patch and/or one
 // facet's bookkeeping. Both ride a SINGLE read-merge-write so a completion writes one
 // file (the writer-split removed the second, `links/` backfill write) and the field +
@@ -545,11 +575,6 @@ export async function writeExtraction(
 ): Promise<void> {
   const now = Date.now();
   const path = pathFromId(linkId, EXTRACTIONS_PREFIX);
-  // A copy this device could not open is not "never extracted", and writing from this
-  // view would overwrite the server's copy and the kept copies it names
-  // (UnreadableExtractionError). Read before the transaction: the record only grows
-  // under the cycle lock, so a path recorded a moment later is the recheck's to find.
-  if ((await unreadablePathSet(username)).has(path)) throw new UnreadableExtractionError(path);
   // The `files/` blobs this write stops referencing — a re-capture's predecessor, a tier
   // upgrade's old preview. Collected inside the merge (the only place `current` is the
   // committed value) and deleted after the put. Locally the reference moves off the blob

@@ -10,7 +10,7 @@ import {
   readModeVerdictOf,
 } from '@stxapps/shared';
 
-import { writeExtraction } from '../data/mutations';
+import { assertExtractionWritable, writeExtraction } from '../data/mutations';
 import { type LinkItem, readExtraction, readSettingsGeneral } from '../data/queries';
 import { collectReaderImages } from './reader-images';
 import { storeReadModeCopy } from './store-read-mode';
@@ -64,6 +64,9 @@ export async function runServerReadMode(
 ): Promise<ServerReadModeOutcome> {
   const linkId = idFromPath(link.path, LINKS_PREFIX);
   if ((await readExtraction(linkId))?.readModeId) return { kind: 'exists' };
+  // Before the round trip and the image fetches: a link whose extraction this device
+  // could not open cannot take a copy, so nothing is asked of the extractor for it.
+  await assertExtractionWritable(username, linkId);
 
   const result = await client.extractReadMode(link.url);
   const verdict = await readModeVerdictOf(

@@ -26,6 +26,7 @@ import {
   SYSTEM_LIST_DEFAULTS,
   type Tag,
   TRASH_ID,
+  UnreadablePathError,
 } from '@stxapps/shared';
 
 import { runIncrementalSync } from '../sync/engine';
@@ -427,6 +428,33 @@ describe('drainShareOutbox', () => {
     expect(storeReadModeCopy).toHaveBeenLastCalledWith('alice', 'link-1', withCopy.readMode, {
       images: true,
     });
+  });
+
+  // The write edge refuses a put to a path the pull could not open (UnreadablePathError). One
+  // such draft must not stop every draft after it, on every launch: it stays in the outbox
+  // for a later drain, and the others land.
+  it('leaves a draft the write edge refused, and still applies the ones after it', async () => {
+    const { writeLink } = jest.requireMock<typeof import('./mutations')>('./mutations');
+    jest.mocked(writeLink).mockRejectedValueOnce(new UnreadablePathError('links/link-1.enc'));
+    mockFiles.set(`${OUTBOX}/a-refused.json`, JSON.stringify(draft));
+    mockFiles.set(`${OUTBOX}/b-fine.json`, JSON.stringify({ ...draft, id: 'link-2' }));
+
+    await expect(drainShareOutbox()).resolves.toEqual(['links/link-2.enc']);
+
+    expect(mockFiles.has(`${OUTBOX}/a-refused.json`)).toBe(true);
+    expect(mockFiles.has(`${OUTBOX}/b-fine.json`)).toBe(false);
+  });
+
+  it('keeps the link when only its title is refused', async () => {
+    const { writeExtraction } = jest.requireMock<typeof import('./mutations')>('./mutations');
+    jest
+      .mocked(writeExtraction)
+      .mockRejectedValueOnce(new UnreadablePathError('extractions/link-1.enc'));
+    mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify(draft));
+
+    await expect(drainShareOutbox()).resolves.toEqual(['links/link-1.enc']);
+
+    expect([...mockFiles.keys()]).toEqual([]);
   });
 
   it('applies a valid draft and deletes its file', async () => {

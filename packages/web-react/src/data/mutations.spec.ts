@@ -24,12 +24,14 @@ import {
   LINKS_PREFIX,
   newFacet,
   pathFromId,
-  UnreadableExtractionError,
+  UnreadablePathError,
 } from '@stxapps/shared';
 
 import { db } from './db';
 import {
+  assertExtractionWritable,
   bulkDeleteEntities,
+  bulkWriteEntities,
   bulkWriteLinks,
   removeKeptCopy,
   writeExtraction,
@@ -71,7 +73,7 @@ describe('writeExtraction', () => {
     await recordUnreadablePaths(USER, [{ path: PATH, updatedAt: 1000 }]);
 
     await expect(writeExtraction(USER, LINK_ID, { fields: { title: 'x' } })).rejects.toThrow(
-      UnreadableExtractionError,
+      UnreadablePathError,
     );
     expect(await db.items.get(PATH)).toBeUndefined();
     expect(await pendingFor(PATH)).toBeUndefined();
@@ -519,5 +521,87 @@ describe('removeKeptCopy', () => {
     await db.pendingOps.clear();
     await expect(removeKeptCopy(USER, LINK_ID, 'screenshot')).resolves.toBe(false);
     expect(await pendingFor(PATH)).toBeUndefined();
+  });
+});
+
+// THE WRITE EDGE AND THE UNREADABLE RECORD. A path the pull skipped is one this device could
+// not open and the server holds: any put built on this device's view of it (a missing row
+// reads as never written, an older row as current) would overwrite the server's copy. The
+// refusal lives in the write's own transaction, so it covers every writer, not only the
+// extraction drain. A delete is the user's word and is not refused.
+describe('the write edge and the unreadable record', () => {
+  const LINK_PATH = pathFromId('l_rec', LINKS_PREFIX);
+  const record = (path: string) => recordUnreadablePaths(USER, [{ path, updatedAt: 1000 }]);
+
+  it('refuses a link write to a recorded path, and writes nothing', async () => {
+    // An older local copy the pull kept; editing it would write over the newer one.
+    const link = await seedLink('l_rec', 'https://example.com/a');
+    await db.pendingOps.clear();
+    const before = (await db.items.get(LINK_PATH))?.updatedAt;
+    await record(LINK_PATH);
+
+    await expect(writeLink(USER, link, { listId: ARCHIVE_ID })).rejects.toThrow(
+      UnreadablePathError,
+    );
+    await expect(bulkWriteLinks(USER, [{ link, patch: { listId: ARCHIVE_ID } }])).rejects.toThrow(
+      UnreadablePathError,
+    );
+
+    expect((await readLinkById('l_rec'))?.listId).not.toBe(ARCHIVE_ID);
+    expect((await db.items.get(LINK_PATH))?.updatedAt).toBe(before);
+    expect(await pendingFor(LINK_PATH)).toBeUndefined();
+  });
+
+  it('refuses removing a kept copy from a recorded extraction', async () => {
+    // An older local copy is current as far as this device knows; editing it would write
+    // over the newer copy the server holds.
+    await writeExtraction(USER, LINK_ID, {
+      fields: { screenshotId: 'shot-1' },
+      facet: 'screenshot',
+      state: newFacet('done', 'server'),
+    });
+    await db.pendingOps.clear();
+    await record(PATH);
+
+    await expect(removeKeptCopy(USER, LINK_ID, 'screenshot')).rejects.toThrow(UnreadablePathError);
+
+    expect((await readExtraction(LINK_ID))?.screenshotId).toBe('shot-1');
+    expect(await pendingFor(PATH)).toBeUndefined();
+  });
+
+  it('lets a bulk restore skip a recorded path, and refuses one that may not skip', async () => {
+    const other = pathFromId('l_other', LINKS_PREFIX);
+    await record(LINK_PATH);
+
+    const written = await bulkWriteEntities(
+      USER,
+      [
+        { path: LINK_PATH, data: { url: 'https://example.com/a' } },
+        { path: other, data: { url: 'https://example.com/b' } },
+      ],
+      { skipExisting: true },
+    );
+
+    expect(written).toEqual([other]);
+    expect(await db.items.get(LINK_PATH)).toBeUndefined();
+    await expect(
+      bulkWriteEntities(USER, [{ path: LINK_PATH, data: { url: 'https://example.com/a' } }]),
+    ).rejects.toThrow(UnreadablePathError);
+  });
+
+  it('does not refuse a delete of a recorded path', async () => {
+    await record(LINK_PATH);
+
+    await bulkDeleteEntities(USER, [LINK_PATH]);
+
+    expect(await pendingFor(LINK_PATH)).toMatchObject({ op: 'delete' });
+  });
+
+  it('answers the question before any work is done', async () => {
+    await expect(assertExtractionWritable(USER, LINK_ID)).resolves.toBeUndefined();
+    await record(PATH);
+
+    await expect(assertExtractionWritable(USER, LINK_ID)).rejects.toThrow(UnreadablePathError);
+    await expect(assertExtractionWritable(USER, 'l_b')).resolves.toBeUndefined();
   });
 });

@@ -1741,6 +1741,24 @@ describe('the cycle, against this copy of it', () => {
     expect((await getSyncMeta(USER))?.unreadableRecordCompleteAt).toBeGreaterThan(0);
   });
 
+  it('leaves the record complete when the window shows the healed path deleted', async () => {
+    // A server delete is a real absence, not a path the cursor moved past.
+    getDb().transaction((tx) => enqueuePutTx(tx, USER, LINK_PATH, 0));
+
+    await runIncrementalSync(
+      deps({
+        opsList: () => ({
+          ops: [{ op: 'delete', path: LINK_PATH, updatedAt: 2000 }],
+          oldestUpdatedAt: 500,
+          newestUpdatedAt: 2000,
+          hasMore: false,
+        }),
+      }),
+    );
+
+    expect((await getSyncMeta(USER))?.unreadableRecordCompleteAt).toBeGreaterThan(0);
+  });
+
   it('stops the record vouching for a proven store whose fallback fails', async () => {
     // Drift guard for web's spec. The op log sends the cycle to the fallback (emptied
     // log), the listing is taken and the cycle throws before claiming anything. The next

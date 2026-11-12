@@ -11,12 +11,13 @@ import {
   type ReaderImageEntry,
   readerImageKeys,
   type ReaderImageSource,
+  UnreadablePathError,
   utf8,
   withinReaderImageBudget,
 } from '@stxapps/shared';
 
 import { collectReaderImages, collectReaderImagesPreferring } from '../lib/reader-images';
-import { writeExtraction, writeFile } from './mutations';
+import { assertExtractionWritable, writeExtraction, writeFile } from './mutations';
 
 // Store a read-mode copy taken on this device from a LIVE page — the expo half of the
 // browser extension's write in extraction-worker.ts. Two callers, both in the APP'S
@@ -82,6 +83,15 @@ export async function storeReadModeCopy(
   readMode: unknown,
   options: StoreReadModeOptions = {},
 ): Promise<boolean> {
+  // Before the images are fetched and any blob is written: a refusal later would leave
+  // the pack and the text on disk and queued with no extraction naming them. False, like
+  // any copy that could not be kept.
+  try {
+    await assertExtractionWritable(username, linkId);
+  } catch (err) {
+    if (err instanceof UnreadablePathError) return false;
+    throw err;
+  }
   let candidate = readMode;
   if (typeof readMode === 'string') {
     try {

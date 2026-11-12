@@ -1,13 +1,13 @@
 import { File, Paths } from 'expo-file-system';
 
-import { newFacet } from '@stxapps/shared';
+import { EXTRACTIONS_PREFIX, newFacet, pathFromId, UnreadablePathError } from '@stxapps/shared';
 
 import { resetFileSystem } from '../testing/memory-file-system';
 import { getDb, items } from './db';
 import { writeExtraction } from './mutations';
 import { readExtraction } from './queries';
 import { storePagePreview } from './store-page-preview';
-import { seedNewAccount } from './sync-store';
+import { recordUnreadablePaths, seedNewAccount } from './sync-store';
 
 // _Update preview_'s write (the capture screen): a title and image read from the live
 // page. Two rules, both silent if lost — the list would just keep showing what it did:
@@ -70,4 +70,18 @@ it('writes nothing when the page yielded nothing', async () => {
     imageId: 'old-image',
     facets: { titleImage: { extractedBy: 'server' } },
   });
+});
+
+it('writes no blob for a link whose extraction this device could not open', async () => {
+  // The link's extraction is the one beforeEach wrote; here it is also one the pull could
+  // not open, so the image would be uploaded with no extraction naming it.
+  await recordUnreadablePaths(USER, [{ path: pathFromId('l1', EXTRACTIONS_PREFIX), updatedAt: 1 }]);
+  const before = getDb().select().from(items).all().length;
+
+  await expect(storePagePreview(USER, 'l1', { title: 'New', image: imageFile() })).rejects.toThrow(
+    UnreadablePathError,
+  );
+
+  expect(getDb().select().from(items).all()).toHaveLength(before);
+  expect((await readExtraction('l1'))?.title).toBe('Old title');
 });

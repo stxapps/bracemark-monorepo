@@ -57,10 +57,18 @@ jest.mock('dexie-react-hooks', () => ({
 
 // One link, permanently pending, on the displayed page and in the library walk alike.
 const mockPending = [{ id: 'l1', url: 'https://example.com/a' }];
-const mockReadPage = jest.fn(() => Promise.resolve({ links: mockPending, cursor: null }));
+// The account's unreadable record, which the drain hands to every pending read.
+let mockUnreadable = new Set<string>();
+jest.mock('../data/sync-store', () => ({
+  unreadablePathSet: () => Promise.resolve(mockUnreadable),
+}));
+const mockReadPage = jest.fn((..._args: unknown[]) =>
+  Promise.resolve({ links: mockPending, cursor: null }),
+);
+const mockReadForPaths = jest.fn((..._args: unknown[]) => Promise.resolve(mockPending));
 jest.mock('../data/queries', () => ({
-  readLinksPendingTitleImageForLinkPaths: () => Promise.resolve(mockPending),
-  readLinksPendingTitleImagePage: () => mockReadPage(),
+  readLinksPendingTitleImageForLinkPaths: (...args: unknown[]) => mockReadForPaths(...args),
+  readLinksPendingTitleImagePage: (...args: unknown[]) => mockReadPage(...args),
   readRawPendingTitleImageCount: () => Promise.resolve(mockPending.length),
 }));
 const mockRunBatch = jest.fn((_username: string, _links: LinkItem[], _client: ExtractClient) =>
@@ -86,7 +94,9 @@ function ReportsAPage() {
 beforeEach(() => {
   generateAll = () => undefined;
   mockReadPage.mockClear();
+  mockReadForPaths.mockClear();
   mockRunBatch.mockClear();
+  mockUnreadable = new Set();
 });
 
 it('starts Generate all when it is pressed while an auto batch is in flight', async () => {
@@ -121,4 +131,32 @@ it('starts Generate all when it is pressed while an auto batch is in flight', as
   // never let settle, so the batch count is the budget's, not this handoff's.)
   await act(async () => finishAutoBatch(1));
   await waitFor(() => expect(mockReadPage).toHaveBeenCalledTimes(1));
+});
+
+// The unreadable record reaches every pending read the drain makes. A link whose extraction this
+// device could not open must not be chosen for extraction (it would overwrite the server's
+// copy), so each read is handed the record: the wake probe, the auto drain, and the library
+// walk. Dropping the argument at any one of them silently brings the hazard back.
+it('hands the unreadable record to every pending read it makes', async () => {
+  mockUnreadable = new Set(['extractions/l1.enc']);
+
+  await act(async () => {
+    render(
+      <ExtractClientProvider client={extractor}>
+        <LinkPreviewsProvider>
+          <ReportsAPage />
+        </LinkPreviewsProvider>
+      </ExtractClientProvider>,
+    );
+  });
+  await waitFor(() => expect(mockRunBatch).toHaveBeenCalled());
+  await act(async () => generateAll());
+  await waitFor(() => expect(mockReadPage).toHaveBeenCalled());
+
+  const handed = [
+    ...mockReadForPaths.mock.calls.map((call) => call[2]),
+    mockReadPage.mock.calls[0][3],
+  ];
+  expect(handed.length).toBeGreaterThanOrEqual(3);
+  for (const set of handed) expect(set).toEqual(new Set(['extractions/l1.enc']));
 });

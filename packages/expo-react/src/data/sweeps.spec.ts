@@ -197,6 +197,20 @@ describe('sweepOrphanFiles', () => {
     expect(rowExists(filePath('f_fresh'))).toBe(true);
   });
 
+  it('allows the grace exactly a day past the newest server stamp, no more', async () => {
+    // With a clock far ahead, "now" is the cursor plus ONE day: a blob 29 days and an hour
+    // older than the cursor is past the 30-day grace by that measure, one an hour younger is not.
+    const DAY = 24 * 60 * 60 * 1000;
+    const HOUR = 60 * 60 * 1000;
+    await pushedFile('f_past', NOW - 29 * DAY - HOUR);
+    await pushedFile('f_inside', NOW - 29 * DAY + HOUR);
+
+    await expect(sweepOrphanFiles(USER, NOW + 100 * DAY)).resolves.toBe(1);
+
+    expect(rowExists(filePath('f_past'))).toBe(false);
+    expect(rowExists(filePath('f_inside'))).toBe(true);
+  });
+
   it('spares everything when no server stamp has been pulled', async () => {
     await pushedFile('f_old');
     getDb()

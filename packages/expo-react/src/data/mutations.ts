@@ -57,7 +57,7 @@ import {
   type Tag,
   tagSchema,
   type ThemeState,
-  UnreadableExtractionError,
+  UnreadablePathError,
   utf8,
   type WithPath,
 } from '@stxapps/shared';
@@ -74,7 +74,7 @@ import {
 import { enqueueDeleteTx, enqueuePutsTx, enqueuePutTx } from './pending-store';
 import { type ItemRecord, parseBlob, toItemRecord } from './projection';
 import { type LinkItem, toItem } from './queries';
-import { assertAccountOwnsStoreTx, unreadablePathSet } from './sync-store';
+import { assertAccountOwnsStoreTx, unreadablePathSet, unreadablePathSetTx } from './sync-store';
 
 // Persist one path's bytes locally and queue the upload, producing the bytes
 // INSIDE the transaction from the path's current row — the base primitive every
@@ -88,6 +88,9 @@ function writeBytesWith(
 ): void {
   getDb().transaction((tx: DbTx) => {
     assertAccountOwnsStoreTx(tx, username);
+    // Refuse a put to a path the unreadable record holds (web-react's assertPathWritable),
+    // read at the moment of the write.
+    if (unreadablePathSetTx(tx, username).has(path)) throw new UnreadablePathError(path);
     const existing = tx.select().from(items).where(eq(items.path, path)).get();
     const baseUpdatedAt = existing?.updatedAt ?? 0;
     const bytes = produce(existing);
@@ -175,6 +178,7 @@ export async function bulkWriteEntities(
   // preparing statements (docs/data-lifecycle.md, _readings — expo_).
   getDb().transaction((tx: DbTx) => {
     assertAccountOwnsStoreTx(tx, username);
+    const unreadable = unreadablePathSetTx(tx, username);
     const stamps = itemUpdatedAtsTx(
       tx,
       entries.map(({ path }) => path),
@@ -182,6 +186,12 @@ export async function bulkWriteEntities(
     const records: ItemRecord[] = [];
     const puts: { path: string; baseUpdatedAt: number }[] = [];
     for (const { path, data } of entries) {
+      // A recorded path exists on the server, this device just can't open it: "skip
+      // existing" is the honest answer for a restore, and anything else would overwrite it.
+      if (unreadable.has(path)) {
+        if (options.skipExisting) continue;
+        throw new UnreadablePathError(path);
+      }
       if (options.skipExisting && stamps.has(path)) continue;
       written.push(path);
       if (data instanceof Uint8Array) {
@@ -257,8 +267,10 @@ export async function bulkWriteLinks(username: string, edits: LinkEdit[]): Promi
   const now = Date.now();
   getDb().transaction((tx: DbTx) => {
     assertAccountOwnsStoreTx(tx, username);
+    const unreadable = unreadablePathSetTx(tx, username);
     for (const { link, patch } of edits) {
       const { path, ...snapshot } = link;
+      if (unreadable.has(path)) throw new UnreadablePathError(path);
       const existing = tx.select().from(items).where(eq(items.path, path)).get();
       const stored = existing?.data ? parseBlob(existing.data, linkSchema) : undefined;
       // The stored blob is clean by construction; the snapshot fallback is a row
@@ -454,6 +466,14 @@ export interface ExtractionPatch {
   state?: Facet;
 }
 
+// Ask before doing the work — web-react's assertExtractionWritable: throws
+// UnreadablePathError when this device could not open the server's copy of the link's
+// extraction. The capture flows call it before they fetch or write a blob.
+export async function assertExtractionWritable(username: string, linkId: string): Promise<void> {
+  const path = pathFromId(linkId, EXTRACTIONS_PREFIX);
+  if ((await unreadablePathSet(username)).has(path)) throw new UnreadablePathError(path);
+}
+
 // Read-merge-write one link's `extractions/{id}.enc` — the MACHINE half of a
 // link. Same body as web's writeExtraction, including the writer-owned
 // `attempts` derivation on a `failed` write (see there for the full rationale);
@@ -465,8 +485,6 @@ export async function writeExtraction(
 ): Promise<void> {
   const now = Date.now();
   const path = pathFromId(linkId, EXTRACTIONS_PREFIX);
-  // Refuses a copy this device could not open — see web-react's writeExtraction.
-  if ((await unreadablePathSet(username)).has(path)) throw new UnreadableExtractionError(path);
   // The `files/` blobs this write stops referencing — see web-react's writeExtraction.
   let replaced: string[] = [];
   writeEntityWith(username, path, (existing) => {

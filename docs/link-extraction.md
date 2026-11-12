@@ -442,7 +442,9 @@ cycle never reaches its end. The same order shapes the push: the queue is read i
 order and committed in chunks of 500, so a large import with its previews could commit
 an extraction in an earlier chunk than its link, and another device that cycled between
 the two commits would sweep it. The push commits extractions after the links
-(shared's `extractionsLast`); a link and its extraction in one chunk commit together.
+(shared's `extractionsLast`); a link and its extraction in one chunk are one log write. That
+narrows the window and does not close it: a link whose upload fails, or is superseded
+mid-cycle, stays queued while its extraction commits.
 And only a **full-sync** client may run it: the test is "link
 absent locally" and the remedy is a remote delete, so a selective-sync client (see
 _what each client syncs_ below) would judge healthy extractions dangling and delete

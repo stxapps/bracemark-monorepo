@@ -1,6 +1,6 @@
 import { gunzipSync } from 'fflate';
 
-import { decodeReaderImages, FILES_PREFIX, pathFromId } from '@stxapps/shared';
+import { decodeReaderImages, EXTRACTIONS_PREFIX, FILES_PREFIX, pathFromId } from '@stxapps/shared';
 
 import { collectReaderImages, collectReaderImagesPreferring } from '../lib/reader-images';
 import { readFileBytes, resetFileSystem } from '../testing/memory-file-system';
@@ -8,7 +8,7 @@ import { getDb, items } from './db';
 import { dataFileFor } from './file-store';
 import { readExtraction } from './queries';
 import { storeReadModeCopy } from './store-read-mode';
-import { seedNewAccount } from './sync-store';
+import { recordUnreadablePaths, seedNewAccount } from './sync-store';
 
 // Storing a read-mode copy taken from a live page (a Safari share, the capture
 // screen's WebView). The copy crossed a process or context boundary, so it is
@@ -187,4 +187,15 @@ describe('a capture that carries image addresses', () => {
       expect(collectReaderImages).toHaveBeenCalledWith(CAPTURE.images.slice(0, 2));
     });
   });
+});
+
+it('keeps nothing, and writes no blob, for a link whose extraction this device could not open', async () => {
+  // A refusal after the blobs were written would leave them on disk and queued with no
+  // extraction naming them, so the question is asked before any of that.
+  await recordUnreadablePaths(USER, [{ path: pathFromId('l1', EXTRACTIONS_PREFIX), updatedAt: 1 }]);
+
+  await expect(storeReadModeCopy(USER, 'l1', DOC)).resolves.toBe(false);
+
+  expect(getDb().select().from(items).all()).toEqual([]);
+  expect(jest.mocked(collectReaderImages)).not.toHaveBeenCalled();
 });

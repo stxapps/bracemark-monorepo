@@ -1,3 +1,4 @@
+import { UnreadablePathError } from '@stxapps/shared';
 import type { ExtractionFacet } from '@stxapps/web-react';
 
 import { type FakeBrowser, installFakeBrowser } from '../testing/fake-browser';
@@ -26,6 +27,9 @@ import { runExtraction } from './extraction-worker';
 // and nothing here asserts on their shape.
 const mockReadLinkById = jest.fn<Promise<unknown>, unknown[]>();
 const mockWriteExtraction = jest.fn<Promise<void>, unknown[]>();
+// The question a capture asks before it fetches or writes anything (web-react's
+// assertExtractionWritable): resolves unless a test says the link may not be written.
+const mockAssertExtractionWritable = jest.fn<Promise<void>, unknown[]>();
 const mockWriteFile = jest.fn<Promise<void>, unknown[]>();
 const mockResizeImage = jest.fn<Promise<Uint8Array>, unknown[]>();
 const mockNewId = jest.fn<string, unknown[]>();
@@ -44,6 +48,9 @@ const mockCaptureScreenshot = jest.fn<Promise<Uint8Array>, unknown[]>();
 // a getter defers that read to the property access the call site makes anyway. Same
 // shape in every spec here.
 jest.mock('@stxapps/web-react', () => ({
+  get assertExtractionWritable() {
+    return mockAssertExtractionWritable;
+  },
   get readLinkById() {
     return mockReadLinkById;
   },
@@ -112,6 +119,8 @@ const writes = (): ExtractionWrite[] =>
   mockWriteExtraction.mock.calls.map((call) => call[2] as ExtractionWrite);
 
 beforeEach(() => {
+  mockAssertExtractionWritable.mockReset();
+  mockAssertExtractionWritable.mockResolvedValue(undefined);
   // Before the fake is installed: `resetAllMocks` reaches every spy in the
   // registry, the fake browser's included.
   jest.resetAllMocks();
@@ -150,6 +159,19 @@ describe('the guards that run before any capture', () => {
 
     await expect(run('titleImage')).rejects.toThrow('no longer this link');
     expect(mockCaptureTitleImage).not.toHaveBeenCalled();
+  });
+
+  it('refuses a link whose extraction this device could not open, before any capture or write', async () => {
+    // Not the host's fault, so it burns no backoff: the catch below would try to record a
+    // `failed` facet with the very write the store refuses, and a blob written first would
+    // be left with no extraction naming it.
+    mockAssertExtractionWritable.mockRejectedValue(new UnreadablePathError('extractions/l1.enc'));
+
+    await expect(run('titleImage')).rejects.toThrow(UnreadablePathError);
+
+    expect(mockCaptureTitleImage).not.toHaveBeenCalled();
+    expect(mockWriteFile).not.toHaveBeenCalled();
+    expect(mockWriteExtraction).not.toHaveBeenCalled();
   });
 
   it('does NOT record a failed facet for the stale tab — that would burn the backoff', async () => {

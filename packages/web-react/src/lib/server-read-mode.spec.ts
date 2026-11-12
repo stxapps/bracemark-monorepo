@@ -12,6 +12,7 @@ import {
   decodeReaderImages,
   type ExtractClient,
   extractionFileIds,
+  EXTRACTIONS_PREFIX,
   type ExtractResult,
   FILES_PREFIX,
   type LinkItem,
@@ -19,12 +20,13 @@ import {
   MY_LIST_ID,
   pathFromId,
   type ReaderDoc,
+  UnreadablePathError,
 } from '@stxapps/shared';
 
 import { db } from '../data/db';
 import { writeExtraction, writeSettingsGeneral } from '../data/mutations';
 import { readExtraction } from '../data/queries';
-import { seedNewAccount } from '../data/sync-store';
+import { recordUnreadablePaths, seedNewAccount } from '../data/sync-store';
 import { decodeReaderDoc } from './reader-doc-bytes';
 import { encodeReaderImage } from './reader-image';
 import { runServerReadMode } from './server-read-mode';
@@ -75,6 +77,21 @@ it('stores the copy as a gzipped blob the extraction names, at the server tier',
   const bytes = await readFileBytes(extraction?.readModeId ?? '');
   expect(bytes).toBeDefined();
   expect(await decodeReaderDoc(bytes ?? new Uint8Array())).toEqual(DOC);
+});
+
+it('asks nothing of the extractor, and stores nothing, for a link whose extraction this device could not open', async () => {
+  // A refusal after the round trip would leave the pack and the text uploaded with no
+  // extraction naming them, so the question is asked first.
+  await recordUnreadablePaths(USER, [
+    { path: pathFromId('l_1', EXTRACTIONS_PREFIX), updatedAt: 1 },
+  ]);
+  const extractor = client({ readMode: DOC });
+
+  await expect(runServerReadMode(USER, LINK, extractor)).rejects.toThrow(UnreadablePathError);
+
+  expect(extractor.extractReadMode).not.toHaveBeenCalled();
+  expect(await db.items.count()).toBe(0);
+  expect(await db.pendingOps.count()).toBe(0);
 });
 
 describe('the article’s images', () => {

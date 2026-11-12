@@ -255,6 +255,12 @@ function unreadableStateTx(tx: DbTx, username: string): UnreadableState {
   return { paths: meta?.paths ?? [], recheck: meta?.recheck ?? undefined };
 }
 
+// The same set, read inside the caller's transaction — what the write edge refuses a
+// put against (mutations.ts), so the record is read at the moment of the write.
+export function unreadablePathSetTx(tx: DbTx, username: string): Set<string> {
+  return new Set(unreadableStateTx(tx, username).paths);
+}
+
 // The unreadable record's paths, as a set — web-react sync-store's
 // unreadablePathSet, which carries why a pull reads it once and what a stale one
 // costs. A pull's stores then take a path out of the record only when it is in

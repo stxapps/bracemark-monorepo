@@ -12,13 +12,14 @@
 // it (and stores it) or meets a 404 — and in one that is a local fact: the
 // recheck finds this device has written the path since the pull skipped it (a
 // copy newer than the recorded stamp), so the record has nothing left to say
-// about it. Nothing else writes a recorded extraction (`writeExtraction`
-// refuses, UnreadableExtractionError), which is what keeps that last way from
-// being a way to drop a path the server still holds. A recheck that still can't
-// open it keeps it. Nothing ever drops a path because it has failed for a long
-// time, because forgetting it is what lets the orphaned-file sweep delete the
-// blobs it names. That would happen on every device, including those that read
-// it fine (a platform-only decrypt bug is the case that makes this real).
+// about it. The write edge refuses a put to a recorded path (UnreadablePathError),
+// which is what keeps that last way from being a way to drop a path the server
+// still holds: a write built on this device's view of a path it could not open
+// would overwrite the server's copy. A recheck that still can't open it keeps
+// it. Nothing ever drops a path because it has failed for a long time, because
+// forgetting it is what lets the orphaned-file sweep delete the blobs it names.
+// That would happen on every device, including those that read it fine (a
+// platform-only decrypt bug is the case that makes this real).
 //
 // The recheck exists because a skip is often transient (a corrupt transfer, or
 // a delete whose op this device hasn't met yet), while the cursor is already
@@ -162,18 +163,20 @@ export function afterRecheck(
   };
 }
 
-// Thrown by `writeExtraction` (both stores) for a link whose `extractions/{id}`
-// path is in the record. This device could not open the server's copy, so a
-// write built on its own view (a missing row reads as "never extracted", an
-// older row as current) would overwrite what the server holds, and the recheck
-// would then see a newer local copy and drop the path from the record. The
-// writers that decide what to extract skip such a link first (the pending
-// reads take the record as `skipExtractionPaths`), so this is the backstop for
-// every other caller. The path heals when the recheck opens it, after which
-// writes go through.
-export class UnreadableExtractionError extends Error {
+// Thrown by the write edge (both stores) for a put to a path in the record. This
+// device could not open the server's copy, so a write built on its own view (a
+// missing row reads as "never written", an older row as current) would overwrite
+// what the server holds, and the recheck would then see a newer local copy and drop
+// the path from the record. It is checked inside the write's own transaction, so a
+// path recorded between a caller's decision and its write is still caught. The
+// callers that decide what to extract skip such a link first (the pending reads take
+// the record as `skipExtractionPaths`), and the capture flows ask before they fetch or
+// write a blob (`assertExtractionWritable`), so this is the last line, not the first.
+// It heals when the recheck opens the path, after which writes go through. A delete is
+// not refused: it is the user's word, and it does not build on the unreadable copy.
+export class UnreadablePathError extends Error {
   constructor(public readonly path: string) {
-    super(`Extraction does not open on this device; not writing over it: ${path}`);
-    this.name = 'UnreadableExtractionError';
+    super(`Not writing over a copy this device could not open: ${path}`);
+    this.name = 'UnreadablePathError';
   }
 }
