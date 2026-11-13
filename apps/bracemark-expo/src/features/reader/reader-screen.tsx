@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import { router } from 'expo-router';
-import { ArrowUpRight, History, RefreshCw, Trash2, X } from 'lucide-react-native';
+import { ArrowUpRight, BookOpen, History, RefreshCw, Trash2, X } from 'lucide-react-native';
 import { withUniwind } from 'uniwind';
 
 import {
@@ -63,6 +63,15 @@ import { ReaderArticle } from './reader-article';
 // of that screen's actions are; a free account reading a copy it kept earlier has
 // nothing there. A REPLACE, not a push, as the capture screen's own way back is: the
 // two screens trade places, so going back and forth never stacks them.
+//
+// TABS follow web's rule — a tab per copy the link has, plus one for a copy this
+// screen can send you to take. The phone takes read mode on the capture screen and
+// never a screenshot, so a link with only a screenshot, on a plan with `keptCopies`,
+// gets both tabs: the Read mode tab holds a notice and _Keep a read-mode copy_, which
+// goes to the capture screen (a replace, as _Update from the page_ does). It opens on
+// the Screenshot tab, the copy that exists. On a free plan that tab would lead only to
+// a screen whose actions are Plus, so there the bare screenshot shows, as it does for
+// a read-mode copy alone.
 //
 // What it does NOT have that web's does: an empty-state upsell. A link reaches this
 // screen from the row menu's "Read" only when it has a copy — without one, "Read"
@@ -239,6 +248,31 @@ function DeleteCopy({ link, facet }: { link: LinkItem; facet: KeptCopyFacet }) {
   );
 }
 
+// The Read mode tab of a link that has only a screenshot: nothing to read, and the way
+// to get a copy — the capture screen, the one place the phone takes read mode. A
+// replace, so the reader and the capture screen trade places and never stack
+// (docs/reader.md, _the way in_). Shown only on a plan with `keptCopies`, which that
+// screen's actions need.
+function KeepReadMode({ linkId }: { linkId: string }) {
+  return (
+    <View className="items-center gap-4 px-6 py-16">
+      <Text className="text-center text-base font-semibold">No read-mode copy yet</Text>
+      <Text className="text-center text-sm text-muted-foreground">
+        Open the page to keep its article as a read-mode copy — yours to read even if the page
+        changes or disappears.
+      </Text>
+      <Button
+        size="sm"
+        testID="reader-keep-read-mode"
+        onPress={() => router.replace(`/capture?link=${encodeURIComponent(linkId)}`)}
+      >
+        <Icon as={BookOpen} className="size-4 text-primary-foreground" />
+        <Text>Keep a read-mode copy</Text>
+      </Button>
+    </View>
+  );
+}
+
 export function ReaderScreen({ linkId }: { linkId: string }) {
   const { status: lockStatus, isListLocked, unlockList } = useLocks();
   const { entitlements } = useEntitlements();
@@ -249,7 +283,9 @@ export function ReaderScreen({ linkId }: { linkId: string }) {
     [linkId],
     ['items'],
   );
-  const [tab, setTab] = useState<'read' | 'screenshot'>('read');
+  // Set once the user picks a tab; until then derived, so a screenshot-only link opens
+  // on the screenshot and not on the empty Read mode tab.
+  const [pickedTab, setPickedTab] = useState<'read' | 'screenshot' | undefined>(undefined);
 
   const settled = link !== undefined && extraction !== undefined && lockStatus === 'ready';
   const locked = settled && link !== null && isListLocked(link.listId);
@@ -279,9 +315,12 @@ export function ReaderScreen({ linkId }: { linkId: string }) {
         onUnlock={(password) => unlockList(link.listId, password)}
       />
     );
-  } else if (readModeId && screenshotId) {
+  } else if (screenshotId && (readModeId || entitlements.keptCopies)) {
     body = (
-      <Tabs value={tab} onValueChange={(v) => setTab(v === 'screenshot' ? 'screenshot' : 'read')}>
+      <Tabs
+        value={pickedTab ?? (readModeId ? 'read' : 'screenshot')}
+        onValueChange={(v) => setPickedTab(v === 'screenshot' ? 'screenshot' : 'read')}
+      >
         <TabsList className="mb-6 self-start">
           <TabsTrigger value="read">
             <Text>Read mode</Text>
@@ -291,13 +330,19 @@ export function ReaderScreen({ linkId }: { linkId: string }) {
           </TabsTrigger>
         </TabsList>
         <TabsContent value="read">
-          <ReadModeCopy
-            fileId={readModeId}
-            imagesFileId={readModeImagesId}
-            title={title}
-            host={host}
-          />
-          <DeleteCopy link={link} facet="readMode" />
+          {readModeId ? (
+            <>
+              <ReadModeCopy
+                fileId={readModeId}
+                imagesFileId={readModeImagesId}
+                title={title}
+                host={host}
+              />
+              <DeleteCopy link={link} facet="readMode" />
+            </>
+          ) : (
+            <KeepReadMode linkId={linkId} />
+          )}
         </TabsContent>
         <TabsContent value="screenshot">
           <ScreenshotCopy fileId={screenshotId} title={title} />

@@ -19,7 +19,8 @@ captures in `utils/capture.ts`, `extraction-worker.ts`); bracemark-web reads bot
 `/read?link=<id>` ([reader.md](./reader.md), _the web reader_), and the synced save
 setting chooses what a save keeps (Settings → Read mode). Server
 read mode is built (_per client_, bracemark-extractor) and reached from bracemark-web
-as a per-link _Keep a read-mode copy_ in the reader. Removal (one copy, and a selection's in bulk edit) and
+as a per-link _Keep a read-mode copy_ in the reader (its empty state, and the Read mode
+tab of a link that has only a screenshot — [reader.md](./reader.md), _the tabs_). Removal (one copy, and a selection's in bulk edit) and
 the orphaned-file sweep are built (_removal, cleanup, export_), and so are expo's
 reader, its iOS share-from-Safari read mode and its capture screen (_per client_,
 bracemark-expo) — which also re-reads a link's title and preview image from the live
@@ -554,7 +555,10 @@ Three triggers, and deliberately not a fourth:
    expo's capture screen, where it shares a row with _Update preview_ and the only kind
    is read mode) / _Keep screenshot_, reached through a
    link's menu — its one **Read** item, which on a link with no copy goes where the
-   copy is taken ([reader.md](./reader.md), _the way in_) — and from the reader. On a client that can't capture that link right now, the
+   copy is taken ([reader.md](./reader.md), _the way in_) — and from the reader, whose
+   Read mode tab on a link with only a screenshot is that action on both apps (web:
+   the keep section in place; expo: a button to the capture screen —
+   [reader.md](./reader.md), _the tabs_). On a client that can't capture that link right now, the
    action says what can (open it in the extension, open it in the app).
 3. **A scoped bulk job**: the existing _Generate all_ drain, given a facet and a
    scope — a selection, a list, a tag, a search — and the same confirm, progress

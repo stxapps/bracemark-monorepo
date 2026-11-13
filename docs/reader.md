@@ -22,7 +22,8 @@ _theirs_ rather than a cache.
 ### the web reader — `/read?link=<id>`
 
 `apps/bracemark-web/src/app/(app)/read/`. One route, one link, a tab per kept copy it
-has (Read mode, Screenshot) and no tabs for one. Reached from the link row menu's
+has (Read mode, Screenshot) **plus one for a copy the screen can take** (_the tabs_
+below), and no tabs when there is only one thing to show. Reached from the link row menu's
 **Read**, under the rule in _the way in_ below: on a link that has a copy, on every
 plan, and on one that has none only on a plan that can take one — the empty state
 then says how. The ✕ returns to the links view the user left
@@ -87,7 +88,8 @@ offset and view are exactly where they were.
   so a reload or a history entry never fetches by itself. The answer is shown in place:
   the copy (the screen swaps to it), or why there is none — no article, not a web page,
   the site's robots.txt says no, or try later
-  ([link-extraction-keep.md](./link-extraction-keep.md), _bracemark-web_).
+  ([link-extraction-keep.md](./link-extraction-keep.md), _bracemark-web_). The same
+  section is the Read mode tab of a link that has only a screenshot (_the tabs_).
 - **Bytes on demand.** `useReaderDoc` (web-react) asks `FileContentProvider` for the
   blob at once — no settle delay, the reader is a deliberate open — then gunzips and
   parses it; bytes that aren't a copy settle as "can't be read", never a throw. A copy
@@ -108,9 +110,51 @@ disk and gunzips it with fflate (Hermes has no DecompressionStream). The screens
 expo-image over the same file. Unlike web it has no empty-state upsell: a link only
 reaches the screen with a copy, and taking one is the capture screen's job
 (`/capture?link=<id>` — [link-extraction-keep.md](./link-extraction-keep.md), _per
-client_, bracemark-expo), so there would be nothing to offer here. What it has
-instead, on a plan with `keptCopies`, is a top-bar way across to that screen —
-_Update from the page_, for a page that has changed since the copy.
+client_, bracemark-expo), so there is no keep section to host here. What it has
+instead, on a plan with `keptCopies`, is two ways across to that screen: a top-bar
+_Update from the page_, for a page that has changed since the copy, and — for a link
+with only a screenshot — the Read mode tab's _Keep a read-mode copy_ (_the tabs_
+above), the phone's way of taking the copy that tab stands for.
+
+### the tabs — a tab per copy, plus a tab for a copy this screen can take
+
+Decided 2026-11-13, on both apps. The rule: **a tab for each copy that exists, and a
+tab for any copy this surface can take.** What each surface can take is not the same
+([link-extraction-keep.md](./link-extraction-keep.md), _per client_): read mode on
+both — on web through the link-extraction service, on expo through the capture
+screen — and a screenshot on neither (only the browser extension takes one).
+
+| the link has…     | plan with `keptCopies`                               | free                                               |
+| ----------------- | ---------------------------------------------------- | -------------------------------------------------- |
+| both              | tabs: Read mode, Screenshot                          | the same tabs                                      |
+| read mode only    | no tabs — the screen can't take the screenshot       | the same                                           |
+| a screenshot only | tabs; the Read mode tab holds the way to take a copy | the bare screenshot                                |
+| neither           | web: the empty state; expo: the capture screen's job | web: the empty state, with Plus; expo: no route in |
+
+- **A screenshot alone is the case the rule exists for.** It is usually a page read mode
+  answered "not an article" for — but it is also what is left after the read-mode copy
+  was deleted, and removal marks the copy removed so nothing retakes it by itself. The
+  Read mode tab is then the one place on the screen to ask for it again. It is not
+  hidden for the "not an article" pages: asking is the user's, and the answer
+  (_no article on this page_) is said in place.
+- **It opens on the copy that exists.** The tab shown is the user's pick once they have
+  made one; until then it is Read mode when there is a read-mode copy and Screenshot
+  when there is not. Never an empty tab on arrival.
+- **Free: no tab.** Taking read mode needs `keptCopies`, so for a free account the tab
+  would hold only an upsell beside a copy it already owns. The bare screenshot shows,
+  as a read-mode copy alone does. This is the row menu's rule again (_the way in_): the
+  screen offers a copy only to a plan that can take one. Reading is never gated.
+- **Web's tab is the empty state's keep section** — _Keep a read-mode copy_ with
+  _Include images_ under it, or _Turn on server read mode_ in place when the opt-in is
+  off, and the browser extension either way — under the page's title, without the
+  Wayback section (the top bar has the exit, and the screenshot is the page as it was).
+  The tab is offered when `useServerReadMode` reports `available` or `needsOptIn`,
+  which already means a plan with `keptCopies` and a ready store.
+- **Expo's tab is a notice and one button** — _Keep a read-mode copy_, to
+  `/capture?link=<id>` as a `router.replace`, like _Update from the page_. The capture
+  screen is where the phone takes read mode, so the tab sends there rather than
+  repeating it; a successful keep comes back to the reader by that screen's _Kept —
+  read it_, now with a copy to open on.
 
 ### the way in — one **Read** in the row menu
 
@@ -144,7 +188,8 @@ it was the menu's clutter.
   ([link-extraction-keep.md](./link-extraction-keep.md), _when the page is gone_).
 - **Web has no capture screen**, so a paid plan's link with no copy lands on the
   reader's empty state: _Keep a read-mode copy_ with server read mode on, the offer to
-  turn it on otherwise, and the browser extension either way. The web reader offers no re-keep of a copy that exists.
+  turn it on otherwise, and the browser extension either way. The web reader offers no re-keep of a copy that exists — the keep section shows where
+  there is none, in the empty state or the Read mode tab of a screenshot-only link.
 
 ### rendering — text nodes only
 

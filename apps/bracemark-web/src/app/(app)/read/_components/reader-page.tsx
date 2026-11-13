@@ -53,9 +53,23 @@ import { usePaywall } from '@/contexts/paywall-provider';
 import { recordReturnRow } from '@/lib/links-return';
 
 // The reader screen — one link's kept copies. A tab per copy it has (Read mode,
-// Screenshot), no tabs when it has one, and an empty state that says how to get one
-// when it has none. docs/reader.md is the design; link-extraction-keep.md is what a
-// copy is and how it got here.
+// Screenshot) PLUS one for a copy this screen can take, no tabs when there is only one
+// thing to show, and an empty state that says how to get a copy when it has none.
+// docs/reader.md is the design; link-extraction-keep.md is what a copy is and how it
+// got here.
+//
+// What this screen can take is read mode, through the link-extraction service (below);
+// never a screenshot, which only the browser extension takes. So the tabs are:
+//
+//   - both copies: Read mode, Screenshot;
+//   - a screenshot alone, on a plan that can take read mode here: the same two tabs,
+//     the Read mode tab holding the empty state's keep section — the one place on the
+//     screen to ask for it, and the way back after a read-mode copy was deleted
+//     (removal marks it removed, so nothing retakes it by itself). It opens on the
+//     Screenshot tab, the copy that exists;
+//   - a screenshot alone otherwise (a free plan): the bare screenshot. A Read mode tab
+//     there would hold only an upsell, beside a copy the user already owns;
+//   - a read-mode copy alone: no tabs — this screen can't take the screenshot.
 //
 // Three rules shape it, each from a doc that would not report breaking it:
 //
@@ -71,7 +85,8 @@ import { recordReturnRow } from '@/lib/links-return';
 //     into text nodes and nothing else (link-extraction-keep.md, the format
 //     tripwire). This file never touches the document's contents.
 //
-// The empty state is also where the web app TAKES a read-mode copy, through
+// The empty state — and the Read mode tab of a link with only a screenshot, which
+// renders it — is also where the web app TAKES a read-mode copy, through
 // bracemark-extractor (useServerReadMode — offered only with the `serverReadMode`
 // opt-in on, on a plan with `keptCopies`). Only ever on that button's press: the row
 // menu's "Read" opens this page on a paid plan's link with no copy too, and a press
@@ -532,6 +547,12 @@ export function ReaderPage() {
   const searchParams = useSearchParams();
   const linkId = searchParams.get('link') ?? '';
   const { status: lockStatus, isListLocked, unlockList } = useLocks();
+  const { available, needsOptIn } = useServerReadMode();
+  // Which tab shows, once the user has picked one. Until then it is derived — Read mode
+  // when there is a copy, else the Screenshot — so a link that opens with only a
+  // screenshot does not open on an empty tab, and a read-mode copy that arrives while
+  // the user has not chosen is the one they see.
+  const [pickedTab, setPickedTab] = useState<'read' | 'screenshot' | undefined>(undefined);
 
   // The row the links page restores when the ✕ — or Back — returns to it
   // (lib/links-return.ts). Recorded on opening rather than on the ✕, so the browser's
@@ -581,9 +602,15 @@ export function ReaderPage() {
         onUnlock={(password) => unlockList(link.listId, password)}
       />
     );
-  } else if (readModeId && screenshotId) {
+  } else if (screenshotId && (readModeId || available || needsOptIn)) {
+    // `available || needsOptIn`: a plan with `keptCopies` and everything this screen
+    // needs to take read mode (useServerReadMode). The opt-in being off still counts —
+    // the keep section offers to turn it on in place.
     body = (
-      <Tabs defaultValue="read">
+      <Tabs
+        value={pickedTab ?? (readModeId ? 'read' : 'screenshot')}
+        onValueChange={(v) => setPickedTab(v === 'screenshot' ? 'screenshot' : 'read')}
+      >
         <TabsList className={cn('mb-6')}>
           <TabsTrigger value="read">
             <BookOpen />
@@ -595,13 +622,21 @@ export function ReaderPage() {
           </TabsTrigger>
         </TabsList>
         <TabsContent value="read">
-          <ReadModeTab
-            fileId={readModeId}
-            imagesFileId={readModeImagesId}
-            title={title}
-            host={host}
-          />
-          <DeleteCopy link={link} facet="readMode" />
+          {readModeId ? (
+            <>
+              <ReadModeTab
+                fileId={readModeId}
+                imagesFileId={readModeImagesId}
+                title={title}
+                host={host}
+              />
+              <DeleteCopy link={link} facet="readMode" />
+            </>
+          ) : (
+            // No Wayback section: the top bar has it, and the screenshot is the
+            // page as it was — the case that section is for.
+            <EmptyCopies link={link} title={title} href={href} waybackHref={undefined} />
+          )}
         </TabsContent>
         <TabsContent value="screenshot">
           <ScreenshotTab fileId={screenshotId} title={title} />

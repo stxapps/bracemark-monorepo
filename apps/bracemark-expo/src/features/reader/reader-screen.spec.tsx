@@ -7,7 +7,7 @@ import { ReaderScreen } from './reader-screen';
 
 // The expo reader's decisions — the same rules web's reader-page.spec.tsx pins:
 // a link in a locked list shows the unlock pane and none of the copy; reading and
-// deleting are never gated; one tab per copy; deleting asks first. And the way
+// deleting are never gated; one tab per copy, and one for the copy the phone can take; deleting asks first. And the way
 // across to the capture screen: a paid plan's only, and a replace, not a push.
 
 let mockLink: object | null = null;
@@ -140,6 +140,41 @@ test('a tab per copy when the link has both', async () => {
   render(<ReaderScreen linkId="l1" />);
   expect(await screen.findByText('Read mode')).toBeTruthy();
   expect(screen.getByText('Screenshot')).toBeTruthy();
+});
+
+test('a screenshot alone, on a paid plan: both tabs, opening on the screenshot', async () => {
+  mockExtraction = { screenshotId: 's1', facets: {} };
+  render(<ReaderScreen linkId="l1" />);
+  expect(await screen.findByText('Read mode')).toBeTruthy();
+  expect(screen.getByText('Screenshot')).toBeTruthy();
+  // Opens on the copy that exists, not on the empty tab.
+  expect(screen.getByLabelText(/Screenshot of A post/)).toBeTruthy();
+  expect(screen.queryByTestId('reader-keep-read-mode')).toBeNull();
+});
+
+test('its Read mode tab sends the phone to the capture screen, in place of the reader', async () => {
+  mockExtraction = { screenshotId: 's1', facets: {} };
+  render(<ReaderScreen linkId="l1" />);
+  fireEvent.press(await screen.findByText('Read mode'));
+
+  expect(screen.getByText('No read-mode copy yet')).toBeTruthy();
+  fireEvent.press(screen.getByTestId('reader-keep-read-mode'));
+  expect(mockReplace).toHaveBeenCalledWith('/capture?link=l1');
+});
+
+test('a screenshot alone, free: the bare screenshot — that tab would lead only to Plus', async () => {
+  mockExtraction = { screenshotId: 's1', facets: {} };
+  mockKeptCopies = false;
+  render(<ReaderScreen linkId="l1" />);
+  expect(await screen.findByLabelText(/Screenshot of A post/)).toBeTruthy();
+  expect(screen.queryByText('Read mode')).toBeNull();
+});
+
+test('a read-mode copy alone has no tabs — the phone takes no screenshot', async () => {
+  mockExtraction = { readModeId: 'r1', facets: {} };
+  render(<ReaderScreen linkId="l1" />);
+  await screen.findByText('The kept words.');
+  expect(screen.queryByText('Screenshot')).toBeNull();
 });
 
 test('deleting a copy asks first, then removes that copy of this link', async () => {

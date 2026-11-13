@@ -10,7 +10,8 @@ import { ReaderPage } from './reader-page';
 //     `/read?link=` URL in the history must not be a way round the lock;
 //   - reading is NEVER gated: a free account sees a copy it has. Only the empty
 //     state looks at the plan, to say what would fill it;
-//   - one tab per copy the link has, and no tabs for one.
+//   - one tab per copy the link has, one more for the copy this screen can take, and
+//     no tabs when there is only one thing to show.
 //
 // The store, the locks and the copy's bytes are seams (`@stxapps/web-react` is
 // mocked at the barrel); the copy's rendering is web-ui's ReaderArticle, real.
@@ -182,6 +183,56 @@ test('a tab per copy when the link has both', async () => {
 
   await screen.findByRole('tablist');
   expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Read mode', 'Screenshot']);
+});
+
+test('a screenshot alone, where read mode can be taken: both tabs, opening on the screenshot', async () => {
+  mockExtraction = { screenshotId: 's1', facets: {} };
+  mockKeptCopies = true;
+  mockServerAvailable = true;
+
+  render(<ReaderPage />);
+
+  await screen.findByRole('tablist');
+  expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Read mode', 'Screenshot']);
+  // The copy that exists, not the empty tab.
+  expect((await screen.findByRole('img')).getAttribute('src')).toBe('blob:s1');
+  expect(screen.queryByRole('button', { name: 'Keep a read-mode copy' })).toBeNull();
+});
+
+test('its Read mode tab holds the keep section — and none of the Wayback one', async () => {
+  mockExtraction = { screenshotId: 's1', facets: {} };
+  mockKeptCopies = true;
+  mockServerAvailable = true;
+
+  render(<ReaderPage />);
+
+  fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Read mode' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Read mode' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Keep a read-mode copy' }));
+  await waitFor(() => expect(mockKeep).toHaveBeenCalledTimes(1));
+  // No Wayback section in the tab: the top bar has the exit.
+  expect(screen.queryByText(/Wayback Machine may have it/)).toBeNull();
+});
+
+test('a screenshot alone, where only the opt-in is missing: the tab offers to turn it on', async () => {
+  mockExtraction = { screenshotId: 's1', facets: {} };
+  mockKeptCopies = true;
+  mockNeedsOptIn = true;
+
+  render(<ReaderPage />);
+
+  fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Read mode' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Read mode' }));
+  expect(await screen.findByRole('button', { name: 'Turn on server read mode' })).not.toBeNull();
+});
+
+test('a screenshot alone, free: the bare screenshot — that tab would hold only an upsell', async () => {
+  mockExtraction = { screenshotId: 's1', facets: {} };
+
+  render(<ReaderPage />);
+
+  expect((await screen.findByRole('img')).getAttribute('src')).toBe('blob:s1');
+  expect(screen.queryByRole('tablist')).toBeNull();
 });
 
 test('a screenshot alone is shown as the image of the page', async () => {
