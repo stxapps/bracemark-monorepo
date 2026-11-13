@@ -321,11 +321,13 @@ export function ReaderScreen({ linkId }: { linkId: string }) {
         value={pickedTab ?? (readModeId ? 'read' : 'screenshot')}
         onValueChange={(v) => setPickedTab(v === 'screenshot' ? 'screenshot' : 'read')}
       >
-        <TabsList className="mb-6 self-start">
-          <TabsTrigger value="read">
+        {/* Full width on a phone, the two triggers splitting it into big targets; the
+            fitted pill, at the article's left edge, from `sm` up (web's rule). */}
+        <TabsList className="mb-6 w-full sm:w-auto sm:self-start">
+          <TabsTrigger value="read" className="flex-1 sm:flex-none">
             <Text>Read mode</Text>
           </TabsTrigger>
-          <TabsTrigger value="screenshot">
+          <TabsTrigger value="screenshot" className="flex-1 sm:flex-none">
             <Text>Screenshot</Text>
           </TabsTrigger>
         </TabsList>

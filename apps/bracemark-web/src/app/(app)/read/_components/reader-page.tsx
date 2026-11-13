@@ -611,7 +611,9 @@ export function ReaderPage() {
         value={pickedTab ?? (readModeId ? 'read' : 'screenshot')}
         onValueChange={(v) => setPickedTab(v === 'screenshot' ? 'screenshot' : 'read')}
       >
-        <TabsList className={cn('mb-6')}>
+        {/* Full width on a phone, where the triggers (flex-1) split it into two big
+            targets; the fitted pill, left with the article's edge, from `sm` up. */}
+        <TabsList className={cn('mb-6 w-full sm:w-fit')}>
           <TabsTrigger value="read">
             <BookOpen />
             Read mode
