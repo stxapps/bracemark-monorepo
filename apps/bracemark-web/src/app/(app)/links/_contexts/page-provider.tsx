@@ -37,7 +37,7 @@ import {
 } from '@stxapps/shared';
 import { type LinkQuery, useLists, useSettings, useTagsOrUndefined } from '@stxapps/web-react';
 
-import { recordLinksReturn } from '@/lib/links-return';
+import { linksHrefOf, recordLinksReturn } from '@/lib/links-return';
 
 // The single-axis view the sidebar highlights and the topbar names — a lossy
 // PROJECTION of `query` onto one axis (via `selectionFromQuery`; never set
@@ -391,8 +391,7 @@ function InnerLinksPageProvider({ children }: { children: React.ReactNode }) {
   // off the URL itself, so the record can't drift from what's on screen and no
   // call site has to remember to update it — the URL is already the whole view.
   useEffect(() => {
-    const qs = searchParams.toString();
-    recordLinksReturn(qs ? `/links?${qs}` : '/links');
+    recordLinksReturn(linksHrefOf(searchParams.toString()));
   }, [searchParams]);
 
   // …and the URL follows the fallback above, so it doesn't go on naming a view

@@ -68,6 +68,8 @@ jest.mock('@stxapps/web-react', () => ({
 
 const recordLinksReturn = jest.fn();
 jest.mock('@/lib/links-return', () => ({
+  // The href spelling is the real one: the assertions below read what it produced.
+  ...jest.requireActual('@/lib/links-return'),
   recordLinksReturn: (href: string) => recordLinksReturn(href),
 }));
 

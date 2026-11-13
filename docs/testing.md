@@ -973,7 +973,8 @@ copy that other projects already pin. What it does cover:
 - **`app/robots.spec.ts` and `lib/links-return.spec.ts`**, the two small ones,
   both guards rather than getters: `ALLOW_INDEXING` required in BOTH directions
   (a truthiness check reads `"false"` as allow), and a sessionStorage value that
-  goes straight into a `<Link href>` and so is validated on the way out.
+  goes straight into a `<Link href>` and so is validated on the way out; the second
+  key (the reader's row) is held to its own view and to being torn down with the first.
 - **`app/inner-layout.spec.tsx`** holds the saved links view to its account:
   sign-out, revocation, or account replacement clears it even after routed content
   unmounts, while reload hydration and route changes preserve it. The spec renders

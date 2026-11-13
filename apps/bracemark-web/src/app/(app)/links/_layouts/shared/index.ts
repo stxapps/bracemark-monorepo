@@ -3,7 +3,12 @@
 // scroll container + virtualizer (row geometry differs per layout), so this
 // folder is deliberately just the shared parts, not a base component.
 
-export { useReportDisplayedLinkPaths, useScrollTopOnQuery, useTagMap } from './hooks';
+export {
+  useReportDisplayedLinkPaths,
+  useRestoreReturnRow,
+  useScrollTopOnQuery,
+  useTagMap,
+} from './hooks';
 export { EmptyState, RefreshPill, ShowMore } from './layout-chrome';
 export { Favicon, LinkPreviewImage } from './link-media';
 export { LinkRowMenu } from './link-row-menu';

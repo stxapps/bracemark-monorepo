@@ -26,7 +26,15 @@ has (Read mode, Screenshot) and no tabs for one. Reached from the link row menu'
 **Read**, under the rule in _the way in_ below: on a link that has a copy, on every
 plan, and on one that has none only on a plan that can take one — the empty state
 then says how. The ✕ returns to the links view the user left
-(`lib/links-return.ts`, as Settings' does).
+(`lib/links-return.ts`, as Settings' does) **and to the row it was opened from**:
+the trip unmounted the links tree, which took the scroll offset and the "show more"
+depth with it, so the reader records the link it shows and the links page pages to
+it and scrolls it into view on the way back — by id, once, in the view it was
+recorded for, and the browser's Back does the same
+([client-queries.md](./client-queries.md), _returning from the reader_). **Expo
+needs none of this**: its reader is a card on the `(app)` stack and the ✕ pops it
+(`router.back()`), so the links screen under it was never unmounted — its list
+offset and view are exactly where they were.
 
 - **A query parameter, not a segment.** A static export can't build a page per id;
   the one exported `/read` answers every link, and the service worker's precache

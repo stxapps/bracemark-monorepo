@@ -29,13 +29,27 @@
 //     further. It keys on the query IDENTITY, not on `selection`, because
 //     selection holds still across two different searches and doesn't move at
 //     all for a sort change, which reorders every row.
+//
+//   useRestoreReturnRow — the reader's ✕ and Back come back to a links tree that
+//     was unmounted, so the view returns at its top and first page. The hook pages
+//     until the link the reader showed is loaded and scrolls it into view, once.
+//     What fails silently is every way it could keep going: hunting a trashed
+//     link through the whole library, jumping the pane after the user has taken
+//     the scroll, or restoring in a view the link was never opened from.
 
 import { act, render } from '@testing-library/react';
 
 import type { LinkQuery } from '@stxapps/shared';
 import type { LinkView } from '@stxapps/web-react';
 
-import { useEngagedOpen, useReportDisplayedLinkPaths, useScrollTopOnQuery } from './hooks';
+import {
+  useEngagedOpen,
+  useReportDisplayedLinkPaths,
+  useRestoreReturnRow,
+  useScrollTopOnQuery,
+} from './hooks';
+
+import { recordReturnRow } from '@/lib/links-return';
 
 const setMenuOpen = jest.fn();
 const setScrolled = jest.fn();
@@ -54,6 +68,12 @@ jest.mock('../../_contexts/page-provider', () => ({
 jest.mock('@stxapps/web-react', () => ({
   useLinkPreviews: () => ({ reportDisplayedLinkPaths }),
   useTags: () => [],
+}));
+
+let mockSearch = '';
+
+jest.mock('next/navigation', () => ({
+  useSearchParams: () => new URLSearchParams(mockSearch),
 }));
 
 const rowsOf = (...paths: string[]) => paths.map((path) => ({ path }) as unknown as LinkView);
@@ -224,4 +244,148 @@ describe('useScrollTopOnQuery', () => {
     act(() => view.rerender(<Probe />));
     expect(scrollTo).not.toHaveBeenCalled();
   });
+});
+
+describe('useRestoreReturnRow', () => {
+  const scrollToLink = jest.fn();
+  const showMore = jest.fn();
+  const scroller = document.createElement('div');
+
+  const linkRows = (...ids: string[]) => rowsOf(...ids.map((id) => `links/${id}.enc`));
+
+  type Props = {
+    links?: LinkView[];
+    isLoading?: boolean;
+    hasMore?: boolean;
+    ready?: boolean;
+  };
+
+  function Probe({ links = [], isLoading = false, hasMore = false, ready = true }: Props) {
+    useRestoreReturnRow({
+      links,
+      isLoading,
+      hasMore,
+      showMore,
+      ready,
+      getScrollElement: () => scroller,
+      scrollToLink,
+    });
+    return null;
+  }
+
+  beforeEach(() => {
+    sessionStorage.clear();
+    scrollToLink.mockClear();
+    showMore.mockClear();
+    mockSearch = '';
+  });
+
+  it('does nothing when no row was recorded', () => {
+    render(<Probe links={linkRows('a', 'b')} hasMore />);
+
+    expect(scrollToLink).not.toHaveBeenCalled();
+    expect(showMore).not.toHaveBeenCalled();
+  });
+
+  it('scrolls to the recorded link once it is loaded, then forgets it', () => {
+    recordReturnRow('b');
+    const view = render(<Probe links={linkRows('a', 'b', 'c')} />);
+
+    expect(scrollToLink).toHaveBeenCalledTimes(1);
+    expect(scrollToLink).toHaveBeenCalledWith(1);
+
+    // A later render — a sync landing a row — must not move the pane again.
+    act(() => view.rerender(<Probe links={linkRows('z', 'a', 'b', 'c')} />));
+    expect(scrollToLink).toHaveBeenCalledTimes(1);
+
+    // …and the record is gone: the next mount of the links page restores nothing.
+    scrollToLink.mockClear();
+    render(<Probe links={linkRows('a', 'b')} />);
+    expect(scrollToLink).not.toHaveBeenCalled();
+  });
+
+  it('waits for the first page rather than concluding the link is gone', () => {
+    recordReturnRow('b');
+    const view = render(<Probe isLoading />);
+    expect(showMore).not.toHaveBeenCalled();
+
+    act(() => view.rerender(<Probe links={linkRows('a', 'b')} />));
+    expect(scrollToLink).toHaveBeenCalledWith(1);
+  });
+
+  it('pages in more rows while the link is not loaded, once per page', () => {
+    recordReturnRow('deep');
+    const view = render(<Probe links={linkRows('a', 'b')} hasMore />);
+    expect(showMore).toHaveBeenCalledTimes(1);
+
+    // A re-render at the same length is not a new page.
+    act(() => view.rerender(<Probe links={linkRows('a', 'b')} hasMore />));
+    expect(showMore).toHaveBeenCalledTimes(1);
+
+    act(() => view.rerender(<Probe links={linkRows('a', 'b', 'c')} hasMore />));
+    expect(showMore).toHaveBeenCalledTimes(2);
+
+    act(() => view.rerender(<Probe links={linkRows('a', 'b', 'c', 'deep')} hasMore />));
+    expect(scrollToLink).toHaveBeenCalledWith(3);
+  });
+
+  it('gives up when the view runs out of pages', () => {
+    recordReturnRow('trashed');
+    const view = render(<Probe links={linkRows('a', 'b')} hasMore />);
+    act(() => view.rerender(<Probe links={linkRows('a', 'b', 'c')} hasMore={false} />));
+
+    expect(scrollToLink).not.toHaveBeenCalled();
+
+    // Gone for good: the next mount does not go looking again.
+    showMore.mockClear();
+    render(<Probe links={linkRows('a')} hasMore />);
+    expect(showMore).not.toHaveBeenCalled();
+  });
+
+  it('stops paging at the cap rather than reading a whole library for a lost link', () => {
+    recordReturnRow('trashed');
+    const many = linkRows(...Array.from({ length: 1000 }, (_, i) => `l${i}`));
+    render(<Probe links={many} hasMore />);
+
+    expect(showMore).not.toHaveBeenCalled();
+    expect(scrollToLink).not.toHaveBeenCalled();
+  });
+
+  it('does not place the row before the layout can', () => {
+    recordReturnRow('b');
+    const view = render(<Probe links={linkRows('a', 'b')} ready={false} />);
+    expect(scrollToLink).not.toHaveBeenCalled();
+
+    act(() => view.rerender(<Probe links={linkRows('a', 'b')} ready />));
+    expect(scrollToLink).toHaveBeenCalledWith(1);
+  });
+
+  it('restores only in the view the reader was opened from', () => {
+    mockSearch = 'list=list-abc';
+    recordReturnRow('b'); // recorded against the bare view: nothing recorded a list view
+    render(<Probe links={linkRows('a', 'b')} hasMore />);
+
+    expect(scrollToLink).not.toHaveBeenCalled();
+    expect(showMore).not.toHaveBeenCalled();
+
+    // …and the record is left for the view it belongs to.
+    mockSearch = '';
+    render(<Probe links={linkRows('a', 'b')} />);
+    expect(scrollToLink).toHaveBeenCalledWith(1);
+  });
+
+  it.each(['wheel', 'touchstart', 'keydown', 'pointerdown'])(
+    'stands down when the user takes the scroll (%s)',
+    (type) => {
+      recordReturnRow('deep');
+      const view = render(<Probe links={linkRows('a', 'b')} hasMore />);
+
+      act(() => {
+        scroller.dispatchEvent(new Event(type));
+      });
+      act(() => view.rerender(<Probe links={linkRows('a', 'b', 'deep')} hasMore />));
+
+      expect(scrollToLink).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -1329,10 +1329,11 @@ dialog down on success.
 `clearData` on web runs in **one tab**, and two things are out of its reach for
 that reason or a near one (two more, further down, for a different one):
 
-- **`sessionStorage` is per tab.** bracemark-web keeps one key there, the links
-  view Settings' ✕ returns to (`lib/links-return.ts`), and it can carry a
+- **`sessionStorage` is per tab.** bracemark-web keeps two keys there, the links
+  view Settings' ✕ returns to and the link id the reader's ✕ returns to
+  (`lib/links-return.ts`, one `clearLinksReturn` drops both). The view can carry a
   search — which, unlike a previous account's list or tag id, resolves for
-  anyone. So each tab drops its own when the account that browsed it stops
+  anyone — and the row is a link of that account's. So each tab drops its own when the account that browsed it stops
   being the one signed in (an effect in the root layout's `Initializer`, comparing
   the previous username with the current one). Initial hydration from no username
   to an account preserves the saved view across a reload. ⚠ Not from `AuthGuard`,

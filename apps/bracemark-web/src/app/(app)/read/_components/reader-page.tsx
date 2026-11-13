@@ -50,6 +50,7 @@ import { ReaderTopbar } from './reader-topbar';
 
 import { LockPane } from '@/components/lock-pane';
 import { usePaywall } from '@/contexts/paywall-provider';
+import { recordReturnRow } from '@/lib/links-return';
 
 // The reader screen — one link's kept copies. A tab per copy it has (Read mode,
 // Screenshot), no tabs when it has one, and an empty state that says how to get one
@@ -531,6 +532,14 @@ export function ReaderPage() {
   const searchParams = useSearchParams();
   const linkId = searchParams.get('link') ?? '';
   const { status: lockStatus, isListLocked, unlockList } = useLocks();
+
+  // The row the links page restores when the ✕ — or Back — returns to it
+  // (lib/links-return.ts). Recorded on opening rather than on the ✕, so the browser's
+  // Back, which never touches the ✕, restores it too. A record is only ever read by
+  // the links page that follows, and only in the view it names.
+  useEffect(() => {
+    if (linkId) recordReturnRow(linkId);
+  }, [linkId]);
 
   // `null` = settled and absent; `undefined` = still reading. The split keeps the
   // not-found notice from flashing before the store answers.

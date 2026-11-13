@@ -17,7 +17,15 @@
 // frame, so a storage hiccup (Safari private mode, a quota'd origin) that threw
 // would take down the page rather than the feature.
 
-import { clearLinksReturn, readLinksReturn, recordLinksReturn } from './links-return';
+import {
+  clearLinksReturn,
+  clearReturnRow,
+  linksHrefOf,
+  peekReturnRow,
+  readLinksReturn,
+  recordLinksReturn,
+  recordReturnRow,
+} from './links-return';
 
 // Replace the whole storage seam for one test. jsdom exposes `sessionStorage` as
 // a prototype getter, so it can only be shadowed by an own property — which is
@@ -111,4 +119,105 @@ it('forgets the view on request', () => {
   clearLinksReturn();
 
   expect(readLinksReturn()).toBe('/links');
+});
+
+// The row the reader was opened from. The route is validated because it feeds a
+// `<Link href>`; the row feeds nothing but a comparison with link ids, so what is
+// asserted here is that it only ever restores in the view it was recorded for and
+// that it dies with the account.
+describe('the return row', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+  });
+
+  it('spells a view href from its query string', () => {
+    expect(linksHrefOf('')).toBe('/links');
+    expect(linksHrefOf('list=list-abc&text=hi')).toBe('/links?list=list-abc&text=hi');
+  });
+
+  it('is found in the view the reader was opened from', () => {
+    recordLinksReturn('/links?list=list-abc');
+    recordReturnRow('link-1');
+
+    expect(peekReturnRow('/links?list=list-abc')).toBe('link-1');
+  });
+
+  it('is not found in any other view', () => {
+    recordLinksReturn('/links?list=list-abc');
+    recordReturnRow('link-1');
+
+    expect(peekReturnRow('/links')).toBeUndefined();
+    expect(peekReturnRow('/links?list=list-other')).toBeUndefined();
+  });
+
+  it('records against the bare links page when this tab never visited a view', () => {
+    recordReturnRow('link-1');
+
+    expect(peekReturnRow('/links')).toBe('link-1');
+  });
+
+  // A peek leaves the record: the restore can run twice before it finishes.
+  it('survives a peek and ends on request', () => {
+    recordReturnRow('link-1');
+    expect(peekReturnRow('/links')).toBe('link-1');
+    expect(peekReturnRow('/links')).toBe('link-1');
+
+    clearReturnRow();
+
+    expect(peekReturnRow('/links')).toBeUndefined();
+  });
+
+  it.each([
+    ['not JSON', 'link-1'],
+    ['JSON that is not an object', '"link-1"'],
+    ['null', 'null'],
+    ['a record with no id', '{"href":"/links"}'],
+    ['a record with an empty id', '{"href":"/links","id":""}'],
+    ['a record whose id is not a string', '{"href":"/links","id":7}'],
+    ['a record with no view', '{"id":"link-1"}'],
+  ])('discards %s', (_label, tampered) => {
+    sessionStorage.setItem('bracemark:links-return-row', tampered);
+
+    expect(peekReturnRow('/links')).toBeUndefined();
+  });
+
+  // The account teardown clears ONE call and must take both keys: a link id is as
+  // much the previous account's as a search is.
+  it('goes with the view when the account leaves the tab', () => {
+    recordLinksReturn('/links?q=tax');
+    recordReturnRow('link-1');
+
+    clearLinksReturn();
+
+    expect(readLinksReturn()).toBe('/links');
+    expect(peekReturnRow('/links?q=tax')).toBeUndefined();
+    expect(peekReturnRow('/links')).toBeUndefined();
+  });
+
+  it('swallows storage failures on every path', () => {
+    const throwing = {
+      getItem: () => {
+        throw new Error('SecurityError');
+      },
+      setItem: () => {
+        throw new Error('QuotaExceededError');
+      },
+      removeItem: () => {
+        throw new Error('SecurityError');
+      },
+    } as unknown as Storage;
+    withSessionStorage(throwing, () => {
+      expect(() => recordReturnRow('link-1')).not.toThrow();
+      expect(peekReturnRow('/links')).toBeUndefined();
+      expect(() => clearReturnRow()).not.toThrow();
+      expect(() => clearLinksReturn()).not.toThrow();
+    });
+  });
+
+  it('is absent, not an error, with no storage at all', () => {
+    withSessionStorage(undefined, () => {
+      expect(() => recordReturnRow('link-1')).not.toThrow();
+      expect(peekReturnRow('/links')).toBeUndefined();
+    });
+  });
 });

@@ -1,5 +1,6 @@
-// Where the links page was when you left it for Settings — read/write over one
-// sessionStorage key, and the sole owner of that key.
+// Where the links page was when you left it for Settings or the reader — read/write
+// over two sessionStorage keys (the view, and the row in it), and the sole owner of
+// both.
 //
 // The links view is ENTIRELY in the URL (`links/_contexts/page-provider.tsx`),
 // so nothing about the view itself needs persisting: this stores a route, not
@@ -23,10 +24,28 @@
 // carries: a SEARCH. `/links?q=…` resolves for anyone, so the next account signed
 // in from this tab closed Settings onto the previous one's search text.
 //
+// A SECOND key holds the ROW the reader was opened from, for the same reason one
+// level down. The route brings you back to the right view, but the view comes back
+// at its top, with its first page: the links tree is unmounted by the trip, and the
+// pane's scroll offset and "show more" depth lived in it. After reading a link 300
+// rows down you would land 300 rows from it. So the reader records the link it
+// showed, and the links page — once, on the mount that follows — pages until that
+// link is loaded and scrolls it into view (`useRestoreReturnRow`, links/_layouts).
+// It stores an ID and the view it was in, never an offset: an offset is meaningless
+// against a list that has been re-sorted, edited or re-paged since, and an id is
+// the one thing that still names the same row. The view is stored with it so the
+// row is only restored in the view it was opened from — the link would otherwise
+// be hunted for, page by page, in a list that does not hold it.
+//
+// Same lifetime and same teardown as the route (session storage, cleared by
+// `clearLinksReturn` when the account leaves the tab): a link id is as much that
+// account's as a search is.
+//
 // Every operation is best-effort — closing Settings must never throw over a
 // storage hiccup; a failed read just means the bare `/links` we had before.
 
 const STORAGE_KEY = 'bracemark:links-return';
+const ROW_STORAGE_KEY = 'bracemark:links-return-row';
 
 // The default the ✕ falls back to whenever there's nothing usable stored.
 const LINKS_HOME = '/links';
@@ -38,6 +57,13 @@ const LINKS_HOME = '/links';
 // that isn't `/links` or `/links?…` is discarded rather than sanitized.
 function isLinksHref(href: string): boolean {
   return href === LINKS_HOME || href.startsWith(`${LINKS_HOME}?`);
+}
+
+// The href of a links view given its query string (no leading `?`; empty for the
+// bare view). The one spelling of it: the provider records it, and the row restore
+// compares against it.
+export function linksHrefOf(queryString: string): string {
+  return queryString ? `${LINKS_HOME}?${queryString}` : LINKS_HOME;
 }
 
 // Remember the links view currently on screen. Called from the links page
@@ -63,11 +89,57 @@ export function readLinksReturn(): string {
   }
 }
 
-// Forget where the links page was.
+// Remember the link the reader is showing as the row to come back to, in the view
+// the ✕ will return to (the last one the links page recorded). Called by the reader
+// when it opens a link, so the browser's Back button restores the row as well as
+// the ✕ does.
+export function recordReturnRow(linkId: string): void {
+  try {
+    globalThis.sessionStorage?.setItem(
+      ROW_STORAGE_KEY,
+      JSON.stringify({ href: readLinksReturn(), id: linkId }),
+    );
+  } catch {
+    // Storage unavailable — the view comes back at its top.
+  }
+}
+
+// The link id to scroll to in the view at `href`, or undefined — nothing stored,
+// the record is for another view, or the value is not the shape this module wrote
+// (sessionStorage is user-writable; an id is only ever compared with ids, but a
+// malformed record is discarded rather than guessed at). A peek, not a take: the
+// restore can run twice before it finishes (a dev double-mount, a re-render while
+// it pages) and the second run must find the same row; `clearReturnRow` is what
+// ends it.
+export function peekReturnRow(href: string): string | undefined {
+  try {
+    const raw = globalThis.sessionStorage?.getItem(ROW_STORAGE_KEY);
+    if (!raw) return undefined;
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return undefined;
+    const { href: storedHref, id } = parsed as { href?: unknown; id?: unknown };
+    if (typeof storedHref !== 'string' || typeof id !== 'string' || !id) return undefined;
+    return storedHref === href ? id : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// The restore is over — it found the row, gave up, or the user took the scroll.
+export function clearReturnRow(): void {
+  try {
+    globalThis.sessionStorage?.removeItem(ROW_STORAGE_KEY);
+  } catch {
+    // Best-effort, like the rest.
+  }
+}
+
+// Forget where the links page was, and the row in it.
 export function clearLinksReturn(): void {
   try {
     globalThis.sessionStorage?.removeItem(STORAGE_KEY);
   } catch {
     // Best-effort, like the rest.
   }
+  clearReturnRow();
 }

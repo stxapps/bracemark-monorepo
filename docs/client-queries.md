@@ -410,6 +410,40 @@ N of whatever the driver produced." Nothing about it special-cases the hard
 queries. At a few thousand links the residual cost (re-_reading_ — not
 re-decoding — the prefix bytes from IndexedDB each tick) is comfortably fast.
 
+**Returning from the reader puts the pane back on its row (web).** The same two owners
+are why a trip to `/read` and back used to land at the top of the view's first page: the
+reader is a separate page, the links tree is unmounted, and the scroll container and
+`limit` lived in it. The route comes back (`lib/links-return.ts`); the position did not.
+So the reader records the link it is showing (`recordReturnRow`, on opening, so the
+browser's Back restores it as well as the ✕), and `useRestoreReturnRow`
+(`_layouts/shared/hooks.ts`, called by both layouts) reads it on the links page's mount
+and, while the link is not in the loaded rows and more exist, calls `showMore` once per
+loaded page; when the row is there it scrolls it to the centre and clears the record.
+Four rules, each of which fails silently:
+
+- **By id, never by offset.** An offset is the quantity this section just showed to be
+  meaningless against a re-paged, re-sorted or edited list — restored into a first page
+  it is clamped to the bottom, which pages further. The id still names the row.
+- **Only in the view it was opened from.** The record carries the view's href and is
+  ignored (and left alone) in any other; otherwise a link not in this view would be
+  paged for through the whole library.
+- **It is bounded and it ends.** A row can be gone (trashed, moved, deleted by a sync
+  while the reader was open), and the only way to learn that is to run out of pages, so
+  it gives up at `RESTORE_MAX_LINKS` (1,000 rows) or when `hasMore` is false. It also
+  ends the moment the user takes the scroll (wheel, touch, key, press on the pane): a
+  jump that lands after the user started scrolling is worse than none.
+- **The layout says when it can place a row.** The card layout's row index depends on
+  `columns`, a guess until the pane's width is measured, so it passes `ready` only
+  after that; the list layout has no scroller while its empty state shows.
+
+Measured in a browser on `plus-full`'s Show All (1,000 links): the row opened at index
+649 (list) and 216 (card) came back centred from a cold first page of 50, by ✕ and by
+Back, and a record naming no link cleared in under a second at the top. **Expo is not
+affected:** its reader is pushed onto the stack and popped, so the links screen is never
+unmounted and keeps its FlashList offset (`features/settings/close.ts` is the same fact
+for Settings). The one expo path that loses it is a cold entry on `/read` (a deep
+link), where there is no list under it to return to.
+
 ### the pinned overlay (pin-to-top)
 
 Pinned links float to the top of **every view they appear in**. They live in

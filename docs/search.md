@@ -294,7 +294,9 @@ read happens in an effect because `sessionStorage` doesn't exist on the server, 
 first paint is the `/links` default on both sides and the stored href swaps in on mount
 — no hydration mismatch, and the ✕ stays a real `<a href>`. A stored value is checked
 to be `/links` or `/links?…` before use: it's user-writable storage feeding a link, the
-same open-redirect hole `guest-guard.ts` closes on its `?next=` param.
+same open-redirect hole `guest-guard.ts` closes on its `?next=` param. A second key
+beside it holds the row the reader was opened from, so the ✕ also lands on the row, not
+the view's top ([client-queries.md](./client-queries.md), _returning from the reader_).
 
 **A returned-to view can be stale**, because Settings is exactly where lists and tags
 get deleted. Both providers therefore carry `isStaleSelection`: a single-axis

@@ -26,6 +26,7 @@ import {
   RefreshPill,
   ShowMore,
   useReportDisplayedLinkPaths,
+  useRestoreReturnRow,
   useScrollTopOnQuery,
   useTagMap,
 } from './shared';
@@ -160,6 +161,18 @@ export function ListLayout({
       showMore();
     }
   }, [rows, hasMore, links.length, showMore]);
+
+  // Coming back from the reader: page to the row it was opened from and put it in
+  // view, once (see the hook). The scroller exists only while there are rows.
+  useRestoreReturnRow({
+    links,
+    isLoading,
+    hasMore,
+    showMore,
+    ready: links.length > 0,
+    getScrollElement: () => scrollRef.current,
+    scrollToLink: (index) => virtualizer.scrollToIndex(index, { align: 'center' }),
+  });
 
   if (links.length === 0) return <EmptyState isLoading={isLoading} variant="list" />;
 

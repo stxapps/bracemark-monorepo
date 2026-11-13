@@ -72,6 +72,7 @@ import {
   RefreshPill,
   ShowMore,
   useReportDisplayedLinkPaths,
+  useRestoreReturnRow,
   useScrollTopOnQuery,
   useTagMap,
 } from './shared';
@@ -217,6 +218,20 @@ export function CardLayout({
       showMore();
     }
   }, [rows, hasMore, rowCount, links.length, showMore]);
+
+  // Coming back from the reader: page to the card it was opened from and put its row
+  // in view, once (see the hook). Not before the width is measured — until then
+  // `columns` is a guess, and the row index is columns-dependent.
+  useRestoreReturnRow({
+    links,
+    isLoading,
+    hasMore,
+    showMore,
+    ready: scrollEl !== null && contentWidth > 0,
+    getScrollElement: () => scrollEl,
+    scrollToLink: (index) =>
+      virtualizer.scrollToIndex(Math.floor(index / columns), { align: 'center' }),
+  });
 
   if (links.length === 0) return <EmptyState isLoading={isLoading} variant="card" />;
 
