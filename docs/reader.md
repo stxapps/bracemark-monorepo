@@ -218,15 +218,15 @@ and the renderer's whole job is to keep it that way:
 - **figures** are placeholders with the alt text and caption. No image loads,
   because there is no image in the copy and the remote URL was never kept
   ([link-extraction-keep.md](./link-extraction-keep.md), the format tripwire).
-- **a figure that kept its picture** shows it, from the copy's own image pack
+- **a figure that kept its image** shows it, from the copy's own image pack
   (`extraction.readModeImagesId`; _images in read mode_ there). The reader asks for
   the pack beside the text (`useReaderImages`, on both platforms) and hands the
   renderer a map from key to a local image — a `blob:` URL on web, a `data:` URI on
   expo — so the only source a figure can have is one minted on this device from
-  decrypted bytes. Three states: the picture, in a box of the block's stored aspect
+  decrypted bytes. Three states: the image, in a box of the block's stored aspect
   ratio and never wider than the image; the same box empty while the pack is on its
   way, so the text below does not move when it lands; and the words, when the pack is
-  read and has no picture for that key, or can't be read at all.
+  read and has no image for that key, or can't be read at all.
 - **tables** are tables: a real `<table>` in a focusable sideways scroller on web, a
   horizontal scroll of fixed-width columns on expo, each cell's strings rendered like
   any other ([link-extraction-keep.md](./link-extraction-keep.md), _tables_). The grid
@@ -284,7 +284,7 @@ block with `runs` or `text`, and a `table` block's content is in its `rows`
 
 `blockId` and the offsets are exact only for the copy they were made on. A
 re-capture numbers its blocks afresh, and a page edited between captures moves its
-words. So the anchor is three layers, tried in order:
+text. So the anchor is three layers, tried in order:
 
 1. `blockId` + `start`/`end`, accepted only if the text there still equals `quote`;
 2. otherwise, `quote` searched for across the document, `prefix`/`suffix` breaking

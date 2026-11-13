@@ -59,7 +59,7 @@ export function ReadModeSection() {
   const header = (
     <SettingsHeader
       title="Read mode"
-      description="A read-mode copy is the article on a page — its text and pictures, without the ads and menus — kept with the link, so you can still read it after the page changes, moves or goes behind a sign-in. Open or keep one with Read in a link’s menu."
+      description="A read-mode copy is the article on a page — its text and images, without the ads and menus — kept with the link, so you can still read it after the page changes, moves or goes behind a sign-in. Open or keep one with Read in a link’s menu."
     />
   );
 
@@ -113,7 +113,7 @@ export function ReadModeSection() {
         ) : null}
         <SettingsRow
           title="Include images in read-mode copies"
-          description="The article’s pictures, kept with its text in every read-mode copy you keep. They take far more room than the words; with this off, a copy keeps its text only. Copies you have already kept don’t change."
+          description="The article’s images, kept with its text in every read-mode copy you keep. They use far more storage than the text does; with this off, a copy keeps its text only. Copies you have already kept don’t change."
           action={
             <Switch
               testID="keep-read-mode-images"
@@ -132,7 +132,7 @@ export function ReadModeSection() {
       {ios && keepOnSave.readModeImages && deviceExtractionMode === 'off' ? (
         <SettingsNotice tone="info">
           With Link previews off, a page you share from Safari keeps its text only. Keep a copy,
-          from a link’s Read, still keeps its pictures.
+          from a link’s Read, still keeps its images.
         </SettingsNotice>
       ) : null}
       {error && <SettingsNotice tone="error">{error}</SettingsNotice>}

@@ -221,7 +221,25 @@ export default function Page() {
             settings, each off until turned on, and says the read-mode one sends a
             link only on an ask for it. The service's invariants did not move.
             Per _Changes to this policy_, deploy bracemark-site BEFORE the web app
-            that reads the new setting. */}
+            that reads the new setting.
+
+            13 NOVEMBER 2026 WENT UP ABOVE THEM, newest first, and may come out on
+            or after 13 December 2026. It is neither a change nor a correction of
+            a claim: it is plainer wording (docs/brand-assets.md, _plain words for
+            what a copy holds and costs_ — "images", never "pictures"), and the
+            bullet says so, including that nothing about what we collect, how we
+            use it or who receives it moved. It is listed anyway because the date
+            at the top moved, and a reader who compares versions should find the
+            reason here and not have to diff the history. */}
+        <h2>What changed on 13 November 2026</h2>
+        <ul>
+          <li>
+            We made some of the wording in this policy, and in the app’s settings, simpler and
+            easier to read. For example, we now say “images” instead of “pictures”. What we collect,
+            how we use it, and who receives it have not changed.
+          </li>
+        </ul>
+
         <h2>What changed on 12 November 2026</h2>
         <ul>
           <li>
@@ -238,10 +256,10 @@ export default function Page() {
         <h2>What changed on 10 November 2026</h2>
         <ul>
           <li>
-            A read-mode copy of a link can now keep the pictures in the article as well as its text,
+            A read-mode copy of a link can now keep the images in the article as well as its text,
             if you turn that on in Settings. The browser extension and the mobile apps fetch those
-            pictures themselves. For a copy you ask the web app for, our link-extraction service is
-            sent the addresses of the pictures and passes them through to your device, as it already
+            images themselves. For a copy you ask the web app for, our link-extraction service is
+            sent the addresses of the images and passes them through to your device, as it already
             does for a preview image, and keeps none of them.{' '}
             <em>How link previews and read-mode copies are fetched</em> now says so.
           </li>
@@ -740,12 +758,12 @@ export default function Page() {
           saved on that device, and the All links setting also covers links synced from another
           device or added by import as they come into view. With All links selected, Generate all
           works through every pending link. When a mobile app keeps a read-mode copy with the
-          article’s pictures, it fetches those pictures itself too. Neither path involves our
-          servers. The browser extension asks for the narrowest permission that does its job: it can
-          read a tab only in the moment you click to save it, and it holds no standing access to
-          your browsing. Its background service talks only to our API; during the save, code in that
-          tab may fetch the preview image named by the page, and the pictures in the article when
-          you keep a read-mode copy with them.
+          article’s images, it fetches those images itself too. Neither path involves our servers.
+          The browser extension asks for the narrowest permission that does its job: it can read a
+          tab only in the moment you click to save it, and it holds no standing access to your
+          browsing. Its background service talks only to our API; during the save, code in that tab
+          may fetch the preview image named by the page, and the images in the article when you keep
+          a read-mode copy with them.
         </p>
         <p>
           Browsers do not allow one web page to fetch another site, so the web app has two{' '}
@@ -755,8 +773,8 @@ export default function Page() {
           come into view while you browse; Generate all sends every pending link. With Server read
           mode on, a link is sent only when you ask for a read-mode copy of it. The service receives
           the address, fetches the page, returns the title and preview image — or, for a read-mode
-          copy, the article’s text and the pictures in it, whose addresses the web app sends it one
-          by one — and keeps no page data: it stores no URLs, writes none to its logs, holds no key,
+          copy, the article’s text and the images in it, whose addresses the web app sends it one by
+          one — and keeps no page data: it stores no URLs, writes none to its logs, holds no key,
           and is not told which account asked. It briefly holds the IP address each request comes
           from, in a rate limiter, so that no single source can abuse it. The same service is
           described from the other side — for the people who run the sites it fetches — on{' '}

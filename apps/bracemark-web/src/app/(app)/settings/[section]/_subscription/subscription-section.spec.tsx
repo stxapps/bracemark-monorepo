@@ -192,7 +192,7 @@ describe('SubscriptionSection', () => {
       text: '1.2 GB of 5 GB used',
       fraction: 0.24,
       full: false,
-      note: 'Images take the most room: previews and the pictures in read-mode copies.',
+      note: 'Images take the most storage: previews and the images in read-mode copies.',
     };
 
     render(<SubscriptionSection />);

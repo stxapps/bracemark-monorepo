@@ -47,7 +47,7 @@ export type StorageReadout = {
 // links, notes and an article's text are next to nothing. Deleting links is named
 // beside removing copies for the same reason — a library full of previews has no
 // copies to remove.
-const NOTE_ROOM = 'Images take the most room: previews and the pictures in read-mode copies.';
+const NOTE_STORAGE = 'Images take the most storage: previews and the images in read-mode copies.';
 const NOTE_FULL =
   'Full — new changes wait to sync until there’s room. Deleting copies you’ve kept, or links in Trash, frees space.';
 
@@ -65,6 +65,6 @@ export function useStorageReadout(): StorageReadout | null {
     text: `${formatStorageBytes(usedBytes)} of ${formatStorageCeiling(maxBytes)} used`,
     fraction: Math.min(1, usedBytes / maxBytes),
     full,
-    note: full ? NOTE_FULL : NOTE_ROOM,
+    note: full ? NOTE_FULL : NOTE_STORAGE,
   };
 }

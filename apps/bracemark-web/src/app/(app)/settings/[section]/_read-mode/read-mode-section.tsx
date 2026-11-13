@@ -59,7 +59,7 @@ export function ReadModeSection() {
   const header = (
     <SettingsHeader
       title="Read mode"
-      description="A read-mode copy is the article on a page — its text and pictures, without the ads and menus — kept with the link, so you can still read it after the page changes, moves or goes behind a sign-in. Open one with Read in a link’s menu."
+      description="A read-mode copy is the article on a page — its text and images, without the ads and menus — kept with the link, so you can still read it after the page changes, moves or goes behind a sign-in. Open one with Read in a link’s menu."
     />
   );
 
@@ -124,7 +124,7 @@ export function ReadModeSection() {
                 Include images in read-mode copies
               </Label>
             }
-            description="The article’s pictures, kept with its text in every read-mode copy you keep. They take far more room than the words; with this off, a copy keeps its text only. Copies you have already kept don’t change."
+            description="The article’s images, kept with its text in every read-mode copy you keep. They use far more storage than the text does; with this off, a copy keeps its text only. Copies you have already kept don’t change."
             action={
               <Switch
                 id="keep-read-mode-images"

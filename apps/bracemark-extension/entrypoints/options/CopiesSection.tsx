@@ -121,7 +121,7 @@ export function CopiesSection({ className }: { className?: string }) {
         <SwitchRow
           id="keep-read-mode-images"
           title="Include images in read-mode copies"
-          description="The article’s pictures, kept with its text in every read-mode copy you keep. They take far more room than the words; with this off, a copy keeps its text only. Copies you have already kept don’t change."
+          description="The article’s images, kept with its text in every read-mode copy you keep. They use far more storage than the text does; with this off, a copy keeps its text only. Copies you have already kept don’t change."
           checked={keepOnSave.readModeImages}
           onCheckedChange={(readModeImages) => set({ readModeImages })}
         />

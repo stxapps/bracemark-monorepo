@@ -62,12 +62,12 @@ const MODE_OPTIONS: Record<
 > = {
   off: {
     label: 'Off',
-    hint: 'Never contact the sites you save. Links still save and sync — they just show their address and a coloured tile instead of a title and picture.',
+    hint: 'Never contact the sites you save. Links still save and sync — they just show their address and a coloured tile instead of a title and image.',
     icon: ShieldOff,
   },
   saves: {
     label: 'Links you save on this device',
-    hint: 'When you save a link here, the app fetches that one page itself to fill in its title and picture. No server of ours is involved.',
+    hint: 'When you save a link here, the app fetches that one page itself to fill in its title and image. No server of ours is involved.',
     icon: Smartphone,
   },
   all: {

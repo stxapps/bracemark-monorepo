@@ -52,7 +52,7 @@ page has moved, gone behind a sign-in, or changed. The three are not equal:
 
 | facet      | what it keeps                        | size as stored, one link                                                                   | built     |
 | ---------- | ------------------------------------ | ------------------------------------------------------------------------------------------ | --------- |
-| read mode  | the article's words, and its images  | text: median 5.5 KB, p90 42 KB (gzipped); with images, a pack of median 127 KB, p90 1.6 MB | extension |
+| read mode  | the article's text, and its images   | text: median 5.5 KB, p90 42 KB (gzipped); with images, a pack of median 127 KB, p90 1.6 MB | extension |
 | screenshot | what was on screen when it was saved | median 135 KB, p90 237 KB, max 271 KB (2× laptop)                                          | extension |
 | page copy  | the page, offline, with its assets   | MBs; tens for media-heavy pages (est.)                                                     | not built |
 
@@ -96,7 +96,7 @@ does not extend one by reflex.
   record of **what was on screen when the page was saved** — a price, a listing, a
   dashboard — for the page where read mode answers "not an article". That is narrower
   than an archive (an article's fold is its headline) and it is not a preview either:
-  it shows what the user saw, signed in, that day, where a preview is the picture the
+  it shows what the user saw, signed in, that day, where a preview is the image the
   publisher chose. Every surface says so in those words; a bare "screenshots of pages"
   reads as the whole page, top to bottom.
   - **Not on the server**, for the reasons under _per client_, and one more that makes
@@ -112,7 +112,7 @@ does not extend one by reflex.
 - **Page copy is deferred, and may never be built.** It is the expensive one — capture
   on the order of SingleFile, a viewer on an origin of its own, megabytes a page — and
   the two cheaper answers cover most of what it is for: read mode keeps an article's
-  content and its pictures, and for a public page the Wayback Machine usually has the page as it was
+  content and its images, and for a public page the Wayback Machine usually has the page as it was
   (_when the page is gone_). What only a page copy would add is a faithful copy of a
   **signed-in** page, or of a public page the Wayback Machine missed. Revisit if people
   ask for that, in those words.
@@ -182,7 +182,7 @@ shipped client has to skip it.
 - **Only a data table is kept as one.** A `<table>` with fewer than two rows or two
   columns, one holding another table, or one wider than `READER_TABLE_MAX_COLUMNS`
   (24) is layout or a spreadsheet, not a figure in an article: its cells are walked as
-  ordinary content, so its words are kept and its grid is not. A table nested in such a
+  ordinary content, so its text is kept and its grid is not. A table nested in such a
   cell is judged on its own.
 - **A long table is cut, and says so.** Past `READER_TABLE_MAX_ROWS` (500) the block
   stops and carries `truncated`; both readers print that the rest was not kept. Both
@@ -207,12 +207,12 @@ shipped client has to skip it.
 
 ### images in read mode
 
-A read-mode copy keeps the article's pictures with its words. Built on every tier
+A read-mode copy keeps the article's images with its text. Built on every tier
 that takes a copy, 2026-11-10; before that a figure was only its alt text and caption,
 which loses the chart the paragraph is about. **Off by default** (changed 2026-11-12,
 before any release carried it): the pack is the largest thing a library holds, ~5× a
 link's whole footprint without it (_what it does to storage_), so the default keeps the
-words and the switch asks for the pictures. It has a switch of its
+text and the switch asks for the images. It has a switch of its
 own — _Include images in read-mode copies_, on the browser extension's options page,
 in Settings → Read mode on the web, and on both phones (`keepReadModeImages`, resolved by
 `keepOnSaveOf`). Unlike its neighbours
@@ -248,9 +248,9 @@ the index's length, the index as ASCII JSON (`key`, `type`, `width`, `height`,
 `length` per image), then each image's bytes end to end. Not gzip, since images don't
 compress, and not base64 in JSON, which is a third larger and parsed whole. The index
 is ASCII so it decodes without a `TextDecoder`. A pack that isn't one — damaged, or a
-newer version — decodes to nothing, never a throw: the article keeps its words.
+newer version — decodes to nothing, never a throw: the article keeps its text.
 
-**In the document**, a `figure` block that kept its picture carries `image` (its key
+**In the document**, a `figure` block that kept its image carries `image` (its key
 in the pack, `i0`, `i1`, …) and the stored `width` and `height`. The dimensions let the
 reader hold the space before the pack arrives, so the text does not jump and the
 reading position holds. A figure with no `image` is the placeholder it always was.
@@ -262,23 +262,23 @@ in a live page), which returns the `ReaderDoc` and, separately, `images` — a
 list is dropped. If the address were a field of the block, a writer that forgot to
 strip it would store a remote URL in a copy — the leak the format exists to prevent —
 and every test of an ordinary article would still pass. Both renderers take a figure's
-picture only from the map their caller built from the pack; a spec on each holds that
+image only from the map their caller built from the pack; a spec on each holds that
 nothing a block carries can become a `src`.
 
 ⚠ **Every capture settles its document before storing it** — `applyReaderImages`,
 called by the one writer on each platform (`storeReadModeCopy`: web-react
 `lib/store-read-mode.ts` for the browser extension and bracemark-web, expo-react
 `data/store-read-mode.ts`). It gives each kept figure its stored size and takes the
-key off every figure whose picture is not in the pack, so with images off, or none
-fetched, the stored document names no picture at all. A capture that wrote the
-walker's document as it came would promise pictures the pack doesn't hold. The same
+key off every figure whose image is not in the pack, so with images off, or none
+fetched, the stored document names no image at all. A capture that wrote the
+walker's document as it came would promise images the pack doesn't hold. The same
 writer stores `readModeImagesId` even when it is undefined, so a re-capture **clears**
 an earlier copy's pack and `writeExtraction` reclaims it.
 
 **Which images, and how they are kept** (the constants are in
 `reader/reader-doc-core.ts`; all are the capture's, never the schema's):
 
-- **An image alone in its element is a figure; an image among words is not.**
+- **An image alone in its element is a figure; an image among text is not.**
   `<figure>`, `<picture>`, a bare `<img>` between blocks, and the usual wrappers
   (`<p><img></p>`, `<a><img></a>`) become figures. An emoji or an inline icon inside a
   sentence is left out, as every image used to be: promoting it would cut the sentence
@@ -301,8 +301,8 @@ an earlier copy's pack and `writeExtraction` reclaims it.
   or an animated GIF is megabytes as it stands.
 - **One budget for the pack**: `READER_IMAGES_MAX_BYTES` (4 MiB). Images are taken in
   page order until one doesn't fit, and everything after it stays a placeholder
-  (`withinReaderImageBudget`) — "the pictures stop here", not a scatter of gaps.
-- **A picture that can't be had is a placeholder, never a failed capture.** The fetch
+  (`withinReaderImageBudget`) — "the images stop here", not a scatter of gaps.
+- **An image that can't be had is a placeholder, never a failed capture.** The fetch
   runs a few at a time under one deadline for the article; the text is already in
   hand and does not wait on a slow image host.
 
@@ -329,7 +329,7 @@ an earlier copy's pack and `writeExtraction` reclaims it.
   images (web-react `lib/webview-capture.ts`): fetched there with the page's own
   context — the site's session for an image on its own origin — and re-encoded there
   by `encodeReaderImage`, so each crosses to the app as the 1024 px JPEG it will be
-  stored as, not an 8 MB original inflated by base64. The app takes a posted picture
+  stored as, not an 8 MB original inflated by base64. The app takes a posted image
   only as a JPEG whose size it measures itself, within the dimension cap
   (`readerImageFromPage`, expo-react `lib/reader-images.ts`), and fetches every
   address the page couldn't answer natively — no CORS there, so the host that refuses
@@ -388,7 +388,7 @@ Subscription and the storage answer in the FAQ say so.
 
 **What stays as it is.** A copy is never replaced on its own to add images: a
 re-capture renumbers the blocks highlights are anchored to (_when a copy is taken_), so
-adding pictures to a copy taken before this is the user's _Keep a read-mode copy_ again.
+adding images to a copy taken before this is the user's _Keep a read-mode copy_ again.
 Removing a copy removes its pack (`removeKeptCopy` clears both fields). The backup
 carries it through `extractionFileIds`. A client from before the field round-trips it
 (the extraction is a `looseObject`) and its orphan sweep counts any string in an
@@ -411,19 +411,19 @@ pack out, and a figure whose pack is missing is a placeholder.
   Chromium WebView). Where they are missing the page posts nothing and every image
   falls back to the native fetch — no failure, but no sign-in either.
 - **Pages whose image wrappers are named `media-…`**, a known limit (found 2026-11-12 on a
-  DeepMind blog post: the text copy was whole, and its hero and one in-article picture
+  DeepMind blog post: the text copy was whole, and its hero and one in-article image
   were gone before the walker saw them). Readability weights any class or id containing
   `media` as −25 (its `negative` pattern) and `_cleanConditionally` then removes the
-  container, picture and all; that site names every picture wrapper `media-image-block`,
+  container, image and all; that site names every image wrapper `media-image-block`,
   `media__container` or `media-content-wrapper`. Both capture paths run the same
   Readability, so this is not server-specific, and the text is untouched: only the
-  pictures, a switch that is off by default, are lost. **Left on Readability's defaults
+  images, a switch that is off by default, are lost. **Left on Readability's defaults
   deliberately** — its weights are heuristics tuned across a great many pages, and the
   `media` penalty is there to drop real widgets and embeds. One measured fix exists:
   set `negative` on the instance without `|media` (`readability.REGEXPS = { …, negative }`);
-  on that page it returned exactly the two real pictures and nothing else. Measured on
+  on that page it returned exactly the two real images and nothing else. Measured on
   one page only, so it was not adopted. If it comes up again, run it over the real-page
-  set (`measure:kept-copies`) first, counting pages that gain pictures against pages that
+  set (`measure:kept-copies`) first, counting pages that gain images against pages that
   gain junk, and change both Readability call sites together with a fixture spec.
 - **The browser extension's page context that can't read an image host** could be
   covered through the proxy when the user has turned server previews on. Not worth it
@@ -945,7 +945,7 @@ covers the pages we never copied; it is the reason page copy can wait.
   document, and every capture settles its document with `applyReaderImages` before
   storing it** (_images in read mode_). Break the first and the orphan sweep deletes
   the images a month later; the second stores a remote URL in a copy; the third
-  leaves figures naming pictures the pack doesn't hold.
+  leaves figures naming images the pack doesn't hold.
 - **No `null` in what Safari's preprocessing hands over — strings only** — a
   property list has none, and one null loses the whole share on iOS. And the
   copy stays JSON **text** until the app's drain: parsed in the share

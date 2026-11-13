@@ -178,7 +178,7 @@ const USER_AGENT = 'bracemark-extractor/1.0 (+https://bracemark.com/extractor)';
 //
 // `Takes` is the row read-mode moved; see the fourth rule above before editing it.
 const FACTS: [string, string][] = [
-  ['Takes', 'a title · a preview image · the article’s text and pictures, when asked'],
+  ['Takes', 'a title · a preview image · the article’s text and images, when asked'],
   ['Method', 'GET · no cookies, no credentials'],
   ['Timeout', '8 seconds per hop'],
   ['Redirects', '5 maximum'],
@@ -239,7 +239,7 @@ export default function Page() {
     <PageShell
       eyebrow="Bot"
       title="Someone saved a link to your page."
-      lede="That is the whole reason this fetcher knocked. A person asked it to look for a title and preview image in your document, or for the text and pictures of your article, so they can keep a copy to read later on their own device — and here is everything about it that an access log won’t tell you."
+      lede="That is the whole reason this fetcher knocked. A person asked it to look for a title and preview image in your document, or for the text and images of your article, so they can keep a copy to read later on their own device — and here is everything about it that an access log won’t tell you."
     >
       <div className={cn('space-y-14')}>
         {/* The string they searched for, given the weight /support gives its
@@ -257,10 +257,10 @@ export default function Page() {
             Bracemark is an end-to-end encrypted bookmark manager. When someone saves a link in the
             web app — or asks us to fill in ones they saved or imported earlier — the browser won’t
             let that page fetch yours, so this service fetches it instead: reads the title and the
-            preview image — and, if they asked to keep it, the article’s text and its pictures —
-            hands them back to the person’s own device, and forgets the address. It is the only
-            server of ours that fetches a page at all: every other way of saving a link reads it on
-            the person’s own device, from their own address.
+            preview image — and, if they asked to keep it, the article’s text and its images — hands
+            them back to the person’s own device, and forgets the address. It is the only server of
+            ours that fetches a page at all: every other way of saving a link reads it on the
+            person’s own device, from their own address.
           </p>
         </section>
 
@@ -296,9 +296,9 @@ export default function Page() {
               than it could read your page — that’s why we need the second request. Keeping the
               article’s text is a separate ask the person makes for one link at a time: the service
               reads your robots.txt first, then the document, so it is usually a second request for
-              a page you have already answered for. If they keep the article’s pictures with its
-              text, each picture is one more request to wherever your document says it is — our web
-              app asks for twelve at most, a few at a time.
+              a page you have already answered for. If they keep the article’s images with its text,
+              each image is one more request to wherever your document says it is — our web app asks
+              for twelve at most, a few at a time.
             </p>
             <p>
               There is a backlog, though, and it is theirs rather than ours. Links saved before
@@ -414,12 +414,12 @@ export default function Page() {
               <span className={cn('font-mono text-sm text-foreground')}>bracemark-extractor</span>{' '}
               if you wrote one, otherwise the{' '}
               <span className={cn('font-mono text-sm text-foreground')}>*</span> group. A path
-              disallowed there gets no copy of its text from us — nor of its pictures, which are
-              only asked for with the text — and if only the text was asked for, the page isn’t
-              requested at all. If your robots.txt can’t be reached, no text is taken that time. For
-              the title and the preview image, it does not read robots.txt, and a directive won’t
-              stop those — we would rather say so than let you write a rule that quietly does less
-              than you meant.
+              disallowed there gets no copy of its text from us — nor of its images, which are only
+              asked for with the text — and if only the text was asked for, the page isn’t requested
+              at all. If your robots.txt can’t be reached, no text is taken that time. For the title
+              and the preview image, it does not read robots.txt, and a directive won’t stop those —
+              we would rather say so than let you write a rule that quietly does less than you
+              meant.
             </p>
             <p>
               The reasoning is about who chose, and about what is being taken. A robots directive
@@ -501,7 +501,7 @@ export default function Page() {
             </p>
             <p>
               What blocking does to the person who saved the link: they get your hostname as the
-              title, no preview image, and no copy of the article’s text or pictures. The link still
+              title, no preview image, and no copy of the article’s text or images. The link still
               works, they aren’t told why, and nothing else about your site is affected.
             </p>
           </div>
