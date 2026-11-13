@@ -5,7 +5,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowUpRight, BookOpen, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
-import { LOCK_COPY } from '@stxapps/react';
+import { LOCK_COPY, useSlow } from '@stxapps/react';
 import {
   hostFromText,
   openableUrl,
@@ -110,24 +110,6 @@ import { recordReturnRow } from '@/lib/links-return';
 // an address built on this device (`waybackUrl`, @stxapps/shared url.ts); nothing
 // is asked of the archive until the click, and nothing may be: a lookup would tell
 // a third party which pages are in the library.
-
-// How long a copy may stay "loading" before the screen says why. Long enough that
-// a normal fetch never shows it; the usual cause past it is a copy this device
-// never downloaded, opened offline.
-const SLOW_LOAD_MS = 4000;
-
-function useSlow(active: boolean): boolean {
-  const [slow, setSlow] = useState(false);
-  useEffect(() => {
-    if (!active) {
-      setSlow(false);
-      return;
-    }
-    const timer = setTimeout(() => setSlow(true), SLOW_LOAD_MS);
-    return () => clearTimeout(timer);
-  }, [active]);
-  return slow;
-}
 
 function formatDay(ms: number): string {
   return new Date(ms).toLocaleDateString(undefined, { dateStyle: 'medium' });

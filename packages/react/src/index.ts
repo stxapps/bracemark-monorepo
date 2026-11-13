@@ -4,6 +4,7 @@ export * from './hooks/use-auth-forms';
 export * from './hooks/use-debounced-value';
 export * from './hooks/use-has-recovery-door';
 export * from './hooks/use-sign-out-others';
+export * from './hooks/use-slow';
 export * from './hooks/use-stable-id';
 export * from './hooks/use-storage-usage';
 export * from './hooks/use-subscription-status';

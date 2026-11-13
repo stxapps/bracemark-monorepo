@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
@@ -19,7 +19,7 @@ import {
   useReaderDoc,
   useReaderImages,
 } from '@stxapps/expo-react';
-import { LOCK_COPY } from '@stxapps/react';
+import { LOCK_COPY, useSlow } from '@stxapps/react';
 import { hostFromText, readerPublishedAt, waybackUrl } from '@stxapps/shared';
 
 import { LockPane } from '../../components/lock-pane';
@@ -80,21 +80,6 @@ import { ReaderArticle } from './reader-article';
 
 const Image = withUniwind(ExpoImage);
 const StyledSafeAreaView = withUniwind(SafeAreaView);
-
-const SLOW_LOAD_MS = 4000;
-
-function useSlow(active: boolean): boolean {
-  const [slow, setSlow] = useState(false);
-  useEffect(() => {
-    if (!active) {
-      setSlow(false);
-      return;
-    }
-    const timer = setTimeout(() => setSlow(true), SLOW_LOAD_MS);
-    return () => clearTimeout(timer);
-  }, [active]);
-  return slow;
-}
 
 function formatDay(ms: number): string {
   return new Date(ms).toLocaleDateString(undefined, { dateStyle: 'medium' });
