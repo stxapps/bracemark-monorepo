@@ -7,6 +7,7 @@ import { DeleteAllAccountChangedError } from '@stxapps/shared';
 import { useDeleteAllData } from './use-delete-all-data';
 
 const mockApi = {};
+const mockRequestSync = jest.fn();
 const mockDeleteAllData = jest.fn();
 let mockUsername: string | null = 'alice';
 
@@ -14,13 +15,40 @@ jest.mock('@stxapps/react', () => ({ useApiClient: () => mockApi }));
 jest.mock('../contexts/auth-provider', () => ({
   useAuth: () => ({ username: mockUsername }),
 }));
+jest.mock('../contexts/sync-provider', () => ({
+  useSync: () => ({ requestSync: mockRequestSync }),
+}));
 jest.mock('../data/delete-all-data', () => ({
   deleteAllData: (args: unknown) => mockDeleteAllData(args),
 }));
 
 beforeEach(() => {
   mockUsername = 'alice';
+  mockRequestSync.mockClear();
   mockDeleteAllData.mockReset();
+});
+
+// The wipe runs no sync cycle of its own, so the hook asks for the (now empty) follow-up
+// one — what moves the Data card's "Last synced" off its pre-wipe timestamp — and as a
+// local write, so a mounted read edge applies the empty library immediately.
+it('marks a successful wipe as a local write and starts the follow-up cycle', async () => {
+  mockDeleteAllData.mockResolvedValue({ deletedCount: 4 });
+  const { result } = renderHook(() => useDeleteAllData());
+
+  act(() => result.current.run());
+
+  await waitFor(() => expect(result.current.state.phase).toBe('done'));
+  expect(mockRequestSync).toHaveBeenCalledTimes(1);
+});
+
+it('does not request a sync after a failed wipe', async () => {
+  mockDeleteAllData.mockRejectedValue(new Error('offline'));
+  const { result } = renderHook(() => useDeleteAllData());
+
+  act(() => result.current.run());
+
+  await waitFor(() => expect(result.current.state.phase).toBe('error'));
+  expect(mockRequestSync).not.toHaveBeenCalled();
 });
 
 it('exposes whether the running wipe is waiting for sync or deleting', () => {
@@ -97,6 +125,8 @@ describe('when the account changes under the view', () => {
       await waitFor(() =>
         expect(result.current.state).toEqual({ phase: 'account-changed', serverWiped }),
       );
+      // Not this account's to sync: the local store was left as it was.
+      expect(mockRequestSync).not.toHaveBeenCalled();
     },
   );
 });

@@ -13,6 +13,7 @@ import { useApiClient } from '@stxapps/react';
 import { DeleteAllAccountChangedError, DeleteAllUncertainError } from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
+import { useSync } from '../contexts/sync-provider';
 import { deleteAllData, type DeleteAllOutcome, type DeleteAllStep } from '../data/delete-all-data';
 
 export type DeleteAllState =
@@ -42,6 +43,7 @@ export interface UseDeleteAllDataResult {
 export function useDeleteAllData(): UseDeleteAllDataResult {
   const { username } = useAuth();
   const api = useApiClient();
+  const { requestSync } = useSync();
   const [state, setState] = useState<DeleteAllState>({ phase: 'idle' });
   // Re-entrancy guard that doesn't wait for the state update to land.
   const runningRef = useRef(false);
@@ -80,7 +82,18 @@ export function useDeleteAllData(): UseDeleteAllDataResult {
       onStep: (step) => setState({ phase: 'running', step }),
     })
       .then(
-        (outcome) => setState({ phase: 'done', outcome }),
+        (outcome) => {
+          // The wipe is a local write and runs no cycle of its own (it holds them
+          // off), so without this nothing syncs after it: the Data card's "Last
+          // synced" keeps the timestamp from before the wipe. requestSync starts
+          // the now-empty follow-up cycle, and — unlike syncNow, which is for a
+          // pressed Sync button — bumps localWriteNonce, so a mounted read edge
+          // applies the empty library at once instead of staging it behind the
+          // refresh pill. Only on success: an error or account-changed run left
+          // the local store as it was (or is not this account's to sync).
+          requestSync();
+          setState({ phase: 'done', outcome });
+        },
         (err: unknown) =>
           setState(
             err instanceof DeleteAllAccountChangedError
@@ -95,7 +108,7 @@ export function useDeleteAllData(): UseDeleteAllDataResult {
       .finally(() => {
         runningRef.current = false;
       });
-  }, [username, openedFor, api]);
+  }, [username, openedFor, api, requestSync]);
 
   return { state, run };
 }
