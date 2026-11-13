@@ -33,6 +33,7 @@ let webviewProps: {
   onNavigationStateChange: (nav: { url: string; loading: boolean }) => void;
   onMessage: (event: { nativeEvent: { data: string } }) => void;
   originWhitelist: string[];
+  setSupportMultipleWindows?: boolean;
   onShouldStartLoadWithRequest: (request: { url: string; isTopFrame?: boolean }) => boolean;
   onLoadStart: () => void;
   onError: () => void;
@@ -291,6 +292,9 @@ test('the page cannot send the user to another app: every origin passes the libr
   await onPage();
 
   expect(webviewProps.originWhitelist).toEqual(['*']);
+  // Android opens `window.open` / `target="_blank"` in a separate window whose client has no
+  // handler of ours; false keeps those navigations in this WebView, under the handler below.
+  expect(webviewProps.setSupportMultipleWindows).toBe(false);
   const decide = webviewProps.onShouldStartLoadWithRequest;
   expect(decide({ url: 'https://example.com/next', isTopFrame: true })).toBe(true);
   expect(decide({ url: 'intent://scan/#Intent;scheme=zxing;end', isTopFrame: true })).toBe(false);

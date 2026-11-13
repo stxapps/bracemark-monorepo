@@ -149,9 +149,10 @@ So, for anyone tempted to "just keep the HTML" for fidelity:
   target is data the user may choose to open, re-checked with `isReaderHref`
   (absolute http(s) only) at render as well as at capture, because a backup is an
   outside file.
-- **No `.max()` in the schema.** It parses stored bytes; the caps
-  (`READER_DOC_MAX_BLOCKS`, `READER_DOC_MAX_CHARS`) are the capture's
-  ([data-limits.md](./data-limits.md), the tripwire).
+- **No `.max()` in the schema.** It parses stored bytes; the capture's caps
+  (`READER_DOC_MAX_BLOCKS`, `READER_DOC_MAX_CHARS`) are the walker's, and a stored copy
+  is held to the store edge's ceilings (`readerDocWithinCaps`) at every write and every
+  decode instead ([data-limits.md](./data-limits.md), the tripwire).
 
 **Gzip before encryption**, because ciphertext doesn't compress and article text
 compresses three- to five-fold. The format is gzip, not an API: the extension's
@@ -334,8 +335,11 @@ an earlier copy's pack and `writeExtraction` reclaims it.
   the page a cross-origin read answers the app. The app's own fetch is sent with
   `credentials: 'omit'` (React Native's is credentialed by default, and the WebView
   shares its cookies with the native side): it is the app's request, not the page's, and
-  it carries none of the site's cookies, and it reads the body against a ceiling before
-  buffering it (`readBodyWithin`). The page's OWN fetch keeps the default credentials:
+  it carries none of the site's cookies. It is `expo/fetch`, not React Native's `fetch`
+  (whose `Response` has no `body`, so nothing could be read in pieces): `readBodyWithin`
+  refuses on a declared `content-length` past the ceiling, and otherwise reads the stream
+  chunk by chunk and cancels it the moment it passes, so a body that never ends costs a
+  cancelled request, not the phone's memory. The page's OWN fetch keeps the default credentials:
   `include` would fail every cross-origin read against a host that answers
   `Access-Control-Allow-Origin: *`, which is most image CDNs. With images off the page
   is asked for nothing.

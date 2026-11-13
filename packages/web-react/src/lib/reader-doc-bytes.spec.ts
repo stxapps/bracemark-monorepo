@@ -73,6 +73,25 @@ it('stops inflating at the ceiling: a few KB of gzip cannot become a gigabyte', 
   await expect(decodeReaderDoc(await encodeReaderDoc(DOC))).resolves.toEqual(DOC);
 });
 
+// The ceiling's point is that the rest is never produced: the stream is CANCELLED the moment it
+// passes, not read to its end and thrown away. The result above is the same either way.
+it('cancels the inflate at the ceiling instead of reading the bomb out', async () => {
+  const cancel = jest.spyOn(ReadableStreamDefaultReader.prototype, 'cancel');
+  try {
+    const padded = new Uint8Array(READER_DOC_MAX_JSON_BYTES * 2).fill(0x20);
+    padded.set(utf8(JSON.stringify(DOC)));
+
+    await expect(decodeReaderDoc(await gzip(padded))).resolves.toBeUndefined();
+    expect(cancel).toHaveBeenCalledTimes(1);
+
+    cancel.mockClear();
+    await expect(decodeReaderDoc(await encodeReaderDoc(DOC))).resolves.toEqual(DOC);
+    expect(cancel).not.toHaveBeenCalled();
+  } finally {
+    cancel.mockRestore();
+  }
+});
+
 it('refuses a document past the store edge’s size ceilings, whoever stored it', async () => {
   const blocks = Array.from({ length: READER_STORE_MAX_BLOCKS + 1 }, (_, i) => ({
     id: `b${i}`,

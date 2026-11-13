@@ -71,6 +71,10 @@ export function useReaderImages(fileId: string | undefined): ReaderImagesState {
     }
     const minted = new Map<string, ReaderImageView>();
     for (const { key, type, width, height, bytes: image } of entries) {
+      // The first of a repeated key wins, and no address is minted for the rest: a Map keeps one
+      // URL per key, so a second would be overwritten and never revoked (a backup's pack is an
+      // outside file and can repeat a key).
+      if (minted.has(key)) continue;
       const url = URL.createObjectURL(new Blob([image as BlobPart], { type }));
       minted.set(key, { url, width, height });
     }

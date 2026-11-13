@@ -278,10 +278,20 @@ client asked again about, forever. Every one of those is past the Workers Free p
 ⚠ **read mode needs the Workers Paid plan on the account that serves it** before it is
 turned on for anyone; on Free, the request is killed for CPU and the whole batch comes
 back a 5xx, which the client reads as a transport failure and retries, forever and
-silently. Nothing in this repo can check which plan an account is on. The cost also depends on the page's SHAPE, not only its size: Readability on a linkedom tree is
-super-linear in nesting depth (about cubic; 11 KB of nested `<div>`s took 3-6 s on Node), so a
-page deeper than `MAX_READ_MODE_DEPTH` or with more elements than `MAX_READ_MODE_ELEMENTS` is
-answered `not-an-article` before Readability runs, and a `robots.txt` verdict has a step budget
-(`MAX_ROBOTS_MATCH_STEPS`) after which the answer is a disallow. That is why a read-mode request is
+silently. Nothing in this repo can check which plan an account is on. The cost also depends on the page's SHAPE, not only its size, and a depth limit and an element
+limit are not a bound on it. Two costs, so two checks. **Parsing** (linkedom) is cheap until the
+nesting is absurd (10,000 nested `<div>`s in 13 ms, 160,000 in 24 s), and it runs before any walk
+has a tree, so it is bounded on the string: more than `MAX_READ_MODE_MARKUP` `<` characters, or an
+estimated nesting past `MAX_READ_MODE_NESTING_ESTIMATE` (void and optional-end-tag elements are not
+levels), answers `not-an-article` without parsing. **Readability** on the parsed tree is
+super-linear in nesting and depends on the shape: the same 74 KB, 250 deep and 5,000 elements took
+0.4 s with one article and 10 s with another (23.5 s in workerd). The walk therefore adds up depth
+squared over every element and stops at `MAX_READ_MODE_COST`, besides `MAX_READ_MODE_DEPTH` and
+`MAX_READ_MODE_ELEMENTS`; at the cap the slowest shape found took about 2 s on Node. The cap is a
+judgement from local pages, not real traffic: the heaviest local document (a 1.1 MB list of 22,000
+elements) adds up to 1.3e7, the median real page 3e3, and no local page of 562 is refused. Whether
+a real page is — `measure:kept-copies` fetches live sites — has not been run against it. A
+`robots.txt` verdict has a step budget (`MAX_ROBOTS_MATCH_STEPS`) after which the answer is a
+disallow. That is why a read-mode request is
 capped at `MAX_EXTRACT_READ_MODE_URLS` and why only an explicit per-link ask sends one
 (web-react `lib/server-read-mode.ts`); no drain batches read mode.

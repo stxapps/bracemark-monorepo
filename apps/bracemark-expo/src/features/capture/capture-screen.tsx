@@ -288,6 +288,11 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
           // handed to `Linking.openURL` (another app, from a page's redirect); the decision is
           // ours, below (capture-navigation.ts).
           originWhitelist={['*']}
+          // Android: with the default (true), `window.open` and `target="_blank"` go to a
+          // separate window's own client, which has no handler of ours — so a page could reach
+          // an address the rule below refuses. False loads them in THIS WebView, where
+          // `onShouldStartLoadWithRequest` sees them like any other navigation.
+          setSupportMultipleWindows={false}
           onShouldStartLoadWithRequest={(request) =>
             isCaptureNavigationAllowed(request.url, request.isTopFrame)
           }

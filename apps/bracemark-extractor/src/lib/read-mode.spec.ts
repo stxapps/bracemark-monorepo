@@ -5,10 +5,14 @@ import { readerDocSchema } from '@stxapps/shared';
 
 import {
   decodeHtml,
+  MAX_READ_MODE_COST,
   MAX_READ_MODE_DEPTH,
   MAX_READ_MODE_ELEMENTS,
+  MAX_READ_MODE_MARKUP,
+  MAX_READ_MODE_NESTING_ESTIMATE,
   readModeFromHtml,
   withinReadModeBounds,
+  withinReadModeMarkup,
 } from './read-mode';
 
 // Server read mode, in workerd itself — so linkedom and Readability are exercised in the
@@ -202,5 +206,85 @@ describe('the work a page may ask of the parse', () => {
     const { document } = parseHTML(`<html><body>${'<div>'.repeat(depth)}x</body></html>`);
 
     expect(withinReadModeBounds(document as unknown as { firstElementChild: unknown })).toBe(false);
+  });
+
+  // Depth and element count are not a cost bound: the same 5,000 elements at depth 100 cost Readability
+  // about 2 s on Node (and at depth 250, 10 s) where a flat page of 5,000 costs milliseconds. What is
+  // capped is the sum of depth squared over the elements.
+  it('refuses a page whose depth and element count are each in bounds but whose product is not', () => {
+    const body = `${'<div>'.repeat(100)}<p>${PROSE}</p><p>${PROSE}</p>${'<span>a</span>'.repeat(5000)}${'</div>'.repeat(100)}`;
+    const html = `<!doctype html><html><body>${body}</body></html>`;
+    const { document } = parseHTML(html);
+    // Each limit alone is met, and the string checks pass.
+    expect(5000 + 105).toBeLessThan(MAX_READ_MODE_ELEMENTS);
+    expect(withinReadModeMarkup(html)).toBe(true);
+    expect(5000 * 101 * 101).toBeGreaterThan(MAX_READ_MODE_COST);
+
+    expect(withinReadModeBounds(document as unknown as { firstElementChild: unknown })).toBe(false);
+    const started = Date.now();
+    expect(readModeFromHtml(html, FINAL, 7)).toBeNull();
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  it('reads a heavy real-sized page: a few thousand elements about 30 deep', () => {
+    const rows = `<div>${'<span>a</span>'.repeat(3)}</div>`.repeat(800);
+    const html = `<!doctype html><html><body>${'<div>'.repeat(30)}<article><h1>A post</h1><p>${PROSE}</p><p>${PROSE}</p>${rows}</article>${'</div>'.repeat(30)}</body></html>`;
+
+    expect(readModeFromHtml(html, FINAL, 7)?.doc.blocks.length).toBeGreaterThan(0);
+  });
+});
+
+// The parse itself (linkedom's `parseHTML`) is what a page of absurd nesting makes slow, and it runs
+// before any tree exists to walk — 160,000 nested <div>s (950 KB) took 24 s to parse — so the string
+// is checked first.
+describe('the markup a page may hold before it is parsed', () => {
+  it('answers not-an-article at once for 950 KB of nested divs, without parsing them', () => {
+    const nested = `<!doctype html><html><body>${'<div>'.repeat(160_000)}x${'</div>'.repeat(160_000)}</body></html>`;
+    expect(nested.length).toBeGreaterThan(900_000);
+
+    const started = Date.now();
+    expect(withinReadModeMarkup(nested)).toBe(false);
+    expect(readModeFromHtml(nested, FINAL, 7)).toBeNull();
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  it('counts the `<` characters: more than any real page holds is refused', () => {
+    expect(withinReadModeMarkup('<b>x</b>'.repeat(MAX_READ_MODE_MARKUP / 2 + 1))).toBe(false);
+    expect(withinReadModeMarkup('<b>x</b>'.repeat(MAX_READ_MODE_MARKUP / 2 - 1))).toBe(true);
+  });
+
+  it('estimates nesting from the tags, and stops at a bound a real page is far inside', () => {
+    const nest = (depth: number) => '<div>'.repeat(depth) + '</div>'.repeat(depth);
+
+    expect(withinReadModeMarkup(nest(MAX_READ_MODE_NESTING_ESTIMATE))).toBe(true);
+    expect(withinReadModeMarkup(nest(MAX_READ_MODE_NESTING_ESTIMATE + 1))).toBe(false);
+  });
+
+  it('does not count what a real page leaves open or never nests', () => {
+    // Void elements, self-closed tags and end tags HTML lets a page leave out are not levels.
+    const loose =
+      '<ul>' +
+      '<li>a'.repeat(3000) +
+      '</ul><p>x'.repeat(3000) +
+      '<br>'.repeat(3000) +
+      '<img src=x>'.repeat(3000) +
+      '<div/>'.repeat(3000) +
+      '<table>' +
+      '<tr><td>a<td>b'.repeat(3000) +
+      '</table><!-- c --><!doctype html>';
+
+    expect(withinReadModeMarkup(loose)).toBe(true);
+    // Upper case and a stray close below zero are both read.
+    expect(withinReadModeMarkup('</DIV></div>'.repeat(5000) + '<DIV>'.repeat(10))).toBe(true);
+  });
+
+  it('is linear: tags that never close, and a `<` that opens nothing, cost one pass', () => {
+    const started = Date.now();
+    // 100,000 void tags whose only `>` is the last character: a search for the `>` from each `<`
+    // would read the whole string each time.
+    expect(withinReadModeMarkup('<br x'.repeat(100_000) + '>')).toBe(true);
+    expect(withinReadModeMarkup('<br x'.repeat(100_000))).toBe(true);
+    expect(withinReadModeMarkup('< 1 <2 <3 '.repeat(14_000))).toBe(true);
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 });

@@ -73,16 +73,76 @@ type ReadabilityDocument = ConstructorParameters<typeof Readability>[0];
 // fetch through the image proxy (routes/image.ts), never this Worker's: fetching thirty
 // images inside the extract request would hold it open past its deadline and inline
 // megabytes into a JSON response. The walker has resolved each against the final URL.
-// The most work a page may ask of the parse before it is called "not an article". The
-// byte cap (MAX_HTML_BYTES) bounds what is READ, not what it COSTS: Readability on a linkedom
-// tree is super-linear in nesting depth (measured about cubic: 11 KB of nested `<div>`s is
-// 3 s at depth 800 and 6 s at 1000, and a 1 MB page of nesting does not finish), and a
-// stranger picks the page. Real articles sit far inside both: a page is a few dozen levels
-// deep, and tens of thousands of elements is a heavy one.
+// The most work a page may ask of the parse before it is called "not an article". The byte cap
+// (MAX_HTML_BYTES) bounds what is READ, not what it COSTS, and a stranger picks the page. Two
+// costs, so two checks:
+//
+// - PARSING (linkedom's `parseHTML`) is cheap until the nesting is absurd: a page of 1,000 or
+//   10,000 nested `<div>`s parses in milliseconds, 160,000 of them (950 KB) in 24 s. It runs before
+//   any walk can look at the tree, so it is bounded on the STRING: `withinReadModeMarkup`.
+// - READABILITY on the parsed tree is super-linear in nesting and depends on the page's shape. It
+//   was measured at about elements x depth^2 (a 74 KB page 250 deep with 5,000 spans took 23.5 s),
+//   and the same size and depth with a different article took 0.4 s, so a count of elements and a
+//   depth limit alone bound nothing. The walk adds up depth^2 over every element
+//   (MAX_READ_MODE_COST) and stops at the cap.
+//
+// The cap is a judgement from local pages, not from real traffic. The heaviest local document, a
+// 1.1 MB list of 22,000 elements, adds up to 1.3e7; real article pages sit one to three orders of
+// magnitude under it (median 3e3, p99 1.3e6). At 2.5e7 the slowest page shape found took about 2 s
+// on Node. A page past it is answered `not-an-article`; the live set `measure:kept-copies` fetches
+// would say whether a real page is refused, and has not been run against it.
 export const MAX_READ_MODE_DEPTH = 256;
 export const MAX_READ_MODE_ELEMENTS = 60_000;
+export const MAX_READ_MODE_COST = 25_000_000;
+// Markup the string may hold before it is parsed: `<` characters (tags, comments, and any `<` in
+// text or script), and the nesting its tags add up to with the implied closes left out. Both are
+// loose on purpose — an estimate off a string, never the document's truth — and sit well over a
+// real page (the local maximum is 32,000 `<` and a depth of 36).
+export const MAX_READ_MODE_MARKUP = 150_000;
+export const MAX_READ_MODE_NESTING_ESTIMATE = 4 * MAX_READ_MODE_DEPTH;
 
-// Is this document inside those bounds? One iterative walk (no recursion: the page chooses
+// Elements that never hold children, and elements whose end tag HTML lets a page leave out (so an
+// open one is not an open level). Everything else counts as opening a level until its end tag.
+const NON_NESTING = new Set(
+  (
+    'area base br col embed hr img input link meta param source track wbr ' +
+    'p li dt dd tr td th thead tbody tfoot option optgroup colgroup rt rp'
+  ).split(' '),
+);
+
+// Is the string inside the markup bounds? One linear pass, no tree: every index it asks for only
+// moves forward (a regex that backtracked to each `<` for a `>` that never comes would not be
+// linear). Cheap — a 1 MB page is a few milliseconds — and run BEFORE `parseHTML`, which is what
+// it protects. It reads names and the `/` before a `>` only; a `>` inside an attribute value ends
+// a tag early, which an estimate can afford.
+export function withinReadModeMarkup(html: string): boolean {
+  let tags = 0;
+  let depth = 0;
+  let close = html.indexOf('>');
+  for (let at = html.indexOf('<'); at !== -1; at = html.indexOf('<', at + 1)) {
+    if (++tags > MAX_READ_MODE_MARKUP) return false;
+    const closing = html.charCodeAt(at + 1) === 47; // '/'
+    let end = at + (closing ? 2 : 1);
+    while (end < html.length && isNameChar(html.charCodeAt(end), end === at + (closing ? 2 : 1))) {
+      end++;
+    }
+    if (end === at + (closing ? 2 : 1)) continue; // `<!--`, `<!doctype`, `<?`, a stray `<`
+    if (close !== -1 && close < end) close = html.indexOf('>', end);
+    if (NON_NESTING.has(html.slice(at + (closing ? 2 : 1), end).toLowerCase())) continue;
+    if (!closing && close !== -1 && html.charCodeAt(close - 1) === 47) continue; // `<x />`
+    if (closing) depth = Math.max(0, depth - 1);
+    else if (++depth > MAX_READ_MODE_NESTING_ESTIMATE) return false;
+  }
+  return true;
+}
+
+// A tag name's characters: a letter first, then letters, digits and `-`.
+function isNameChar(code: number, first: boolean): boolean {
+  const letter = (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+  return first ? letter : letter || (code >= 48 && code <= 57) || code === 45;
+}
+
+// Is this parsed document inside those bounds? One iterative walk (no recursion: the page chooses
 // the depth), stopping at the first element that crosses one.
 export function withinReadModeBounds(root: { firstElementChild: unknown }): boolean {
   type El = { firstElementChild: El | null; nextElementSibling: El | null };
@@ -94,9 +154,17 @@ export function withinReadModeBounds(root: { firstElementChild: unknown }): bool
   };
   push(root, 1);
   let count = 0;
+  let cost = 0;
   while (stack.length > 0) {
     const { el, depth } = stack.pop() as { el: El; depth: number };
-    if (depth > MAX_READ_MODE_DEPTH || ++count > MAX_READ_MODE_ELEMENTS) return false;
+    cost += depth * depth;
+    if (
+      depth > MAX_READ_MODE_DEPTH ||
+      ++count > MAX_READ_MODE_ELEMENTS ||
+      cost > MAX_READ_MODE_COST
+    ) {
+      return false;
+    }
     push(el, depth + 1);
   }
   return true;
@@ -119,8 +187,10 @@ function readModeOrThrow(
   finalUrl: URL,
   now: number,
 ): { doc: ReaderDoc; images: ReaderImageSource[] } | null {
+  // Before the parse, which is what nesting can make slow (above) ...
+  if (!withinReadModeMarkup(html)) return null;
   const { document } = parseHTML(html);
-  // Before anything walks it: Readability's cost is not bounded by the bytes (above).
+  // ... and before anything walks the tree: Readability's cost is not bounded by the bytes.
   if (!withinReadModeBounds(document as unknown as { firstElementChild: unknown })) return null;
   setBaseUrl(document, finalUrl);
 

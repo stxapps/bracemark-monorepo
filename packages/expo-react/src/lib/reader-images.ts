@@ -1,3 +1,4 @@
+import { fetch as expoFetch } from 'expo/fetch';
 import { File } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
@@ -26,10 +27,10 @@ import { USER_AGENT } from './user-agent';
 // that can't be had is simply absent, never a throw, the result cut to the pack's
 // budget. docs/link-extraction-keep.md, _images in read mode_.
 //
-// What differs is the platform. The fetch is NATIVE — no CORS, so the host that
+// What differs is the platform. The fetch is NATIVE (`expo/fetch`, which streams) — no CORS, so the host that
 // refuses a browser's cross-origin read answers here — but it is this app's request,
 // not the page's: it is sent with `credentials: 'omit'`, so it carries no cookie of the
-// site's (React Native's fetch is credentialed by default, and the capture WebView shares
+// site's (a native fetch is credentialed by default, and the capture WebView shares
 // its cookies with the native side), and an image behind the page's sign-in is a
 // placeholder. And the decode is the native one, through a file: bytes →
 // a scratch file → `probeImageSize` → expo-image-manipulator, which hands back a JPEG
@@ -60,12 +61,14 @@ function deleteQuietly(file: File | undefined): void {
 // ok response; the figure is then a placeholder, like any image that can't be had.
 // The response's body, or undefined when it is past `limit`. The ceiling is checked BEFORE the
 // body is buffered: from `content-length` when the host sends one, and otherwise by reading
-// the stream chunk by chunk and cancelling it the moment it passes (React Native's fetch has no
-// stream on some builds, and then the whole body is read, bounded by the article's deadline). A
-// page names these addresses, so a body that never ends must cost a cancelled request, not the
-// phone's memory.
+// the stream chunk by chunk and cancelling it the moment it passes. That needs a response with a
+// stream, which React Native's own `fetch` (whatwg-fetch) never has — its `Response` has no
+// `body`, so the whole body would be buffered — and `expo/fetch`'s does: this file fetches with
+// the latter, as sync/r2.ts does. The buffered branch below is only a fallback for a response
+// without a stream (it still enforces the ceiling, after the fact). A page names these
+// addresses, so a body that never ends must cost a cancelled request, not the phone's memory.
 export async function readBodyWithin(
-  res: Response,
+  res: Pick<Response, 'headers' | 'body' | 'arrayBuffer'>,
   limit: number,
 ): Promise<Uint8Array | undefined> {
   const declared = Number(res.headers.get('content-length'));
@@ -96,13 +99,17 @@ export async function readBodyWithin(
   return out;
 }
 
-async function fetchHttpsFirst(url: string, signal: AbortSignal): Promise<Response | undefined> {
+async function fetchHttpsFirst(
+  url: string,
+  signal: AbortSignal,
+): Promise<Awaited<ReturnType<typeof expoFetch>> | undefined> {
   for (const candidate of [httpsUpgradeOf(url), url]) {
     if (!candidate || signal.aborted) continue;
     try {
-      const res = await fetch(candidate, {
+      const res = await expoFetch(candidate, {
         headers: { 'User-Agent': USER_AGENT },
-        // No cookie of the site's: this is the app's request, not the page's.
+        // No cookie of the site's: this is the app's request, not the page's (the capture
+        // WebView shares its cookies with the native side).
         credentials: 'omit',
         signal,
       });

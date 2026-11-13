@@ -34,10 +34,13 @@ export const READER_CAPTURE_MAX_PAYLOAD_CHARS = 3_000_000;
 // forged WebView message, a Safari draft, a backup, a blob from another device. The
 // walker's caps above bind where the walker is trusted to run; on the WebView and Safari
 // doors it runs in the page, so they bind nothing there (docs/link-extraction-keep.md,
-// _the format tripwire_). What every honest writer's output stays inside, with room: the
-// blocks the walker stops at, the payload cap the crossings enforce, the table ceilings.
-// A copy past one is not an article, and is not kept. The decompressed size is the
-// reader's own ceiling, so a few KB of gzip cannot become a gigabyte at open.
+// _the format tripwire_). The block count is the walker's own number, with no room above
+// it, and the characters are the walker's cap and the crossings' payload cap, both 3M; an
+// honest writer sits at or inside each. The browser extension's door has no payload cap, so
+// this edge is the only one a copy from it meets. A copy past one is not an article, and is
+// not kept. The decompressed size is the reader's own ceiling, enforced on every decode: web
+// stops the stream at it, and expo pushes fflate in small slices so the inflate stops there too
+// (lib/reader-doc-bytes.ts in each), so a few KB of gzip cannot become a gigabyte at open.
 export const READER_STORE_MAX_BLOCKS = READER_DOC_MAX_BLOCKS;
 export const READER_STORE_MAX_CHARS = 3_000_000;
 export const READER_DOC_MAX_JSON_BYTES = 32 * 1024 * 1024;

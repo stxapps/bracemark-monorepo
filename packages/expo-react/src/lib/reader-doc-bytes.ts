@@ -22,10 +22,16 @@ import { decodeUtf8 } from './utf8';
 // the reason lib/utf8.ts gives.
 //
 // BOUNDED. The blob is not trusted: a backup is an outside file, and on the WebView door
-// the walker is the page's own code, so a few KB of gzip can name a gigabyte. The inflate
-// stops at READER_DOC_MAX_JSON_BYTES (it throws out of the callback, so the rest is never
-// produced), and a copy that parses is then held to the store edge's size ceilings
+// the walker is the page's own code, so a few KB of gzip can name a gigabyte. fflate inflates
+// the WHOLE chunk it is pushed before its callback fires, so a ceiling checked in the callback
+// alone bounds nothing (measured: a 1 MiB gzip pushed whole is +3 GB of memory; pushed in 4 KiB
+// slices, +57 MB). So the input is pushed in INFLATE_SLICE_BYTES slices: each slice inflates to
+// at most about a thousand times its size, the callback sees it, and the inflate stops at
+// READER_DOC_MAX_JSON_BYTES (it throws out of the callback, so the slices after it are never
+// pushed). A copy that parses is then held to the store edge's size ceilings
 // (readerDocWithinCaps). Either way: undefined, like any other unreadable copy.
+export const INFLATE_SLICE_BYTES = 4096;
+
 function inflateWithin(bytes: Uint8Array, limit: number): Uint8Array {
   const parts: Uint8Array[] = [];
   let total = 0;
@@ -34,7 +40,13 @@ function inflateWithin(bytes: Uint8Array, limit: number): Uint8Array {
     if (total > limit) throw new RangeError('reader copy too large');
     parts.push(chunk);
   });
-  gunzip.push(bytes, true);
+  for (let at = 0; at < bytes.length; at += INFLATE_SLICE_BYTES) {
+    gunzip.push(
+      bytes.subarray(at, at + INFLATE_SLICE_BYTES),
+      at + INFLATE_SLICE_BYTES >= bytes.length,
+    );
+  }
+  if (bytes.length === 0) gunzip.push(bytes, true);
   const out = new Uint8Array(total);
   let at = 0;
   for (const part of parts) {

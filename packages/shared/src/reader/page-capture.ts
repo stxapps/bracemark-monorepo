@@ -23,7 +23,10 @@ import type { ReaderImageSource } from './reader-images';
 // (the longest an honest one is), the document against `readerDocSchema` for shape and
 // `readerDocWithinCaps` for size, every image's bytes by sniff and probe, every address
 // as absolute http(s) when it is fetched. A forged document can still be one the page
-// itself could have served; it cannot be one that costs the reader more than the caps allow.
+// itself could have served, and within the caps a forged one can still be costly to draw: they
+// count characters, blocks, rows and columns, not every cell or run, so a document of many empty
+// table cells or one-character runs passes them. What they do bound is what is stored, decoded
+// and held in memory at once.
 
 export const PAGE_CAPTURE_MESSAGE = {
   // `{ type, nonce, href, doc }` — `doc` is the CAPTURE (`{ doc, images }`), or null

@@ -1,4 +1,6 @@
-import { READER_IMAGE_MAX_DIMENSION } from '@stxapps/shared';
+import { fetch as expoFetch } from 'expo/fetch';
+
+import { READER_IMAGE_MAX_DIMENSION, READER_IMAGE_MAX_SOURCE_BYTES } from '@stxapps/shared';
 
 import { probeImageSize } from './image';
 import { collectReaderImagesPreferring, readBodyWithin } from './reader-images';
@@ -12,6 +14,7 @@ jest.mock('expo-file-system', () => require('../testing/memory-file-system'));
 jest.mock('@stxapps/expo-crypto/lib/ids', () => ({ newId: () => globalThis.crypto.randomUUID() }));
 jest.mock('expo-image-manipulator', () => ({ ImageManipulator: {}, SaveFormat: {} }));
 jest.mock('./image', () => ({ probeImageSize: jest.fn() }));
+jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 
 // Twelve bytes: the sniff reads no shorter input.
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1]);
@@ -21,13 +24,15 @@ const SOURCES = [
   { key: 'i1', url: 'https://cdn.example/b.jpg' },
 ];
 
-// The native fallback's fetch. It answers nothing usable here — what is asserted is
-// WHICH addresses it was asked for.
-const fetchMock = jest.fn(async () => ({ ok: false, status: 404 }));
+// The native fallback's fetch (`expo/fetch`, not React Native's, whose Response has no stream).
+// It answers nothing usable here — what is asserted is WHICH addresses it was asked for.
+const fetchMock = jest.mocked(expoFetch);
 
 beforeEach(() => {
-  globalThis.fetch = fetchMock as unknown as typeof fetch;
-  fetchMock.mockClear();
+  fetchMock.mockReset();
+  fetchMock.mockResolvedValue({ ok: false, status: 404 } as unknown as Awaited<
+    ReturnType<typeof expoFetch>
+  >);
   jest.mocked(probeImageSize).mockResolvedValue({ width: 640, height: 320 });
 });
 
@@ -52,6 +57,42 @@ it('refuses what the page’s encoder never writes, and fetches it natively inst
 
   expect(fetchMock).toHaveBeenCalledTimes(2);
   expect(fetchMock).toHaveBeenCalledWith(SOURCES[0].url, expect.anything());
+});
+
+// The native fetch is this app's request, not the page's: no cookie of the site's rides on it, and
+// its body is read against the ceiling through the stream, never buffered whole.
+it('fetches natively without credentials, and cancels a body that passes the ceiling', async () => {
+  const cancel = jest.fn(async () => undefined);
+  const arrayBuffer = jest.fn(async () => {
+    throw new Error('must not buffer the whole body');
+  });
+  let sent = 0;
+  fetchMock.mockResolvedValue({
+    ok: true,
+    status: 200,
+    headers: { get: () => null },
+    arrayBuffer,
+    body: {
+      getReader: () => ({
+        read: async () => {
+          sent += 1;
+          return { done: false, value: new Uint8Array(READER_IMAGE_MAX_SOURCE_BYTES / 2 + 1) };
+        },
+        cancel,
+      }),
+    },
+  } as unknown as Awaited<ReturnType<typeof expoFetch>>);
+
+  const kept = await collectReaderImagesPreferring(SOURCES.slice(0, 1), new Map());
+
+  expect(kept).toEqual([]);
+  expect(fetchMock).toHaveBeenCalledWith(
+    SOURCES[0].url,
+    expect.objectContaining({ credentials: 'omit' }),
+  );
+  expect(sent).toBe(2);
+  expect(cancel).toHaveBeenCalledTimes(1);
+  expect(arrayBuffer).not.toHaveBeenCalled();
 });
 
 // A page names these addresses, so a response that never ends must cost a cancelled request, not

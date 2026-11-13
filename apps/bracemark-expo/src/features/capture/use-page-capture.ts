@@ -30,8 +30,9 @@ import { pageCaptureScript } from './page-capture-script.generated';
 //   - EVERY REQUEST ENDS. A timeout resolves it with what it has (nothing, or the
 //     images so far), so a page that hangs or navigates away mid-answer never leaves a
 //     button spinning.
-//   - NOTHING THE PAGE SENDS IS TRUSTED. Its length is bounded and its shape checked here
-//     (MAX_MESSAGE_CHARS); the document, the images and the preview are each
+//   - NOTHING THE PAGE SENDS IS TRUSTED. Its length is bounded and its shape checked HERE, at
+//     the handler (MAX_MESSAGE_CHARS) — the bridge into it has no bound of its own, and no cap
+//     here limits how many images a forged capture accumulates in one request; the document, the images and the preview are each
 //     validated again where they are stored — the document for shape and size
 //     (expo-react store-read-mode.ts), the images by sniff and probe (lib/reader-images.ts),
 //     the preview in lib/device-link-previews.ts. A link in a stored document is checked

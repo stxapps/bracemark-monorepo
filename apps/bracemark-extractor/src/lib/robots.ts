@@ -40,7 +40,9 @@ export const MAX_ROBOTS_BYTES = 512_000;
 // thousands of rules, and its operator chooses all of it: 500 rules of 1,000 characters
 // against a 2,000-character path was 3.4 s of CPU for one answer. Real files cost a few
 // thousand steps. Past the budget the answer is a disallow: nothing is fetched for a file
-// this service cannot afford to read, the way an unreachable file reads.
+// this service cannot afford to read. That is `disallowed`, a settled answer: not `unavailable`,
+// the transient one for a file that could not be fetched, which a client would ask about again to
+// the same end.
 export const MAX_ROBOTS_MATCH_STEPS = 2_000_000;
 
 export type RobotsVerdict = 'allowed' | 'disallowed' | 'unavailable';
