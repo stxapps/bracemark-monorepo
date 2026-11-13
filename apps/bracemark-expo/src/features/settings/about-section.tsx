@@ -23,7 +23,7 @@
 // sign-out (lib/review-prompt.ts).
 //
 // The mark renders at 40px, the one departure from the 20px lockup shared by
-// every other surface (docs/brand-assets.md — _the mark_): everywhere else the brand is
+// every other surface (docs/brand-visuals.md — _the mark_): everywhere else the brand is
 // a carrier that has to agree with the six other surfaces, and here it is the
 // subject of the screen.
 

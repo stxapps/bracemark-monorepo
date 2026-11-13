@@ -16,7 +16,7 @@ import { useCSSVariable } from 'uniwind';
 // the mark's own 29% ratio: a step above the 16px corner radius it sits beside,
 // so it can't be misread as a heavier rounding, and level with the 24px padding
 // it aligns to. The mark's ratio only reads as a silhouette on ~40px objects
-// (docs/brand-assets.md, _the mark_); at card scale it would be a shape, not a fold.
+// (docs/brand-visuals.md, _the mark_); at card scale it would be a shape, not a fold.
 //
 // WHY AN SVG AND NOT A CLIPPED VIEW. Web draws this as two stacked elements
 // sharing a `clip-path` — a 1px sheet of the ring colour with the card inset

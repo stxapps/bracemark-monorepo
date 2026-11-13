@@ -50,7 +50,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // The tab title is otherwise the only thing identifying where they are. It is
 // web-ui's `BrandLockup`, the same component the browser extension's popup header
 // and both rails render, so these are one lockup rendered nine times rather than
-// nine that drift (docs/brand-assets.md, _the lockup_, pins the ratio behind it).
+// nine that drift (docs/brand-visuals.md, _the lockup_, pins the ratio behind it).
 export function FocusedPage({ children }: { children: React.ReactNode }) {
   return (
     <div className={cn('flex min-h-dvh flex-col bg-muted safe-area dark:bg-background')}>

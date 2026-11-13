@@ -53,7 +53,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // size, flattening the mark against the word by ~8%. That drift is why the
 // measurements are a component now rather than four hand-typed copies. There is
 // no small lockup — 16px is the mark's legibility floor, so a surface can only
-// render this pair or About's larger stacked one (docs/brand-assets.md, _the
+// render this pair or About's larger stacked one (docs/brand-visuals.md, _the
 // lockup_).
 //
 // `actions` stays OUTSIDE the lockup (rather than riding its `action` slot, as

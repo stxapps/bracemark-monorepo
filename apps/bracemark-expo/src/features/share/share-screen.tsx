@@ -18,7 +18,7 @@
 //      library draws it, it is on screen from the first frame to the last, and
 //      the save happens TO it — its corner comes off, which is the brand's own
 //      "saved" gesture and the same one the browser-extension popup already
-//      performs on the same object (docs/brand-assets.md, _the mark_). The compose
+//      performs on the same object (docs/brand-visuals.md, _the mark_). The compose
 //      screen and the saved screen are no longer two screens with nothing in
 //      common; they are one screen whose controls change.
 //   2. THE CHOICES ARE DISCLOSED, NOT SPREAD OUT. A destination is one value

@@ -14,7 +14,7 @@
 // corner, anchored to nothing and duplicating the topbar's close button. The rail
 // now says which app this is, through the same web-ui `BrandLockup` the links
 // rail, the auth card and the browser extension's popup render (the ratio behind
-// its two sizes is pinned in docs/brand-assets.md, _the lockup_), and its header
+// its two sizes is pinned in docs/brand-visuals.md, _the lockup_), and its header
 // sits at the same `h-14` as the topbar so the two hairlines meet across the
 // frame. Leaving the surface is the topbar's job, in one place, where a close
 // control is looked for.

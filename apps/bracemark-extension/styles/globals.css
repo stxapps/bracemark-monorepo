@@ -104,7 +104,7 @@ body {
  * the same 12px off both: 12 of the 64px width is 19%, and sizing to fix THAT
  * would want 17px, which is 43% of the height — a wedge, not a folded corner.
  * A 40px-tall object is still inside the range where the fold reads as the
- * mark's silhouette at all (docs/brand-assets.md, _the mark_), which is the
+ * mark's silhouette at all (docs/brand-visuals.md, _the mark_), which is the
  * condition this whole pair depends on. If the slot's height ever moves, this
  * number moves with it; the width may move freely.
  */

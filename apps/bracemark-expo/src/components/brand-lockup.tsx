@@ -55,7 +55,7 @@ import { Text } from './ui/text';
 // of row height (18.15 vs 15), which no call site can see: the two rails and the
 // share sheet's header fix their own (`h-14`, `h-9`), the auth screen and the
 // landing space this row with `gap-*`. Nothing lints or tests any of it —
-// docs/theme.md, _extending_, and docs/brand-assets.md, _the lockup_.
+// docs/theme.md, _extending_, and docs/brand-visuals.md, _the lockup_.
 //
 // THE PAIR IS A RATIO, and the height below is the half of it that can't say so.
 // 16 against 15 is the mark at 1.6× the wordmark's cap height — the proportion

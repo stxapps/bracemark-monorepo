@@ -28,7 +28,7 @@
 // ⚠ WHAT NOTHING HOLDS: the picture against the product. A capture of a panel
 // that has since gained a field renders exactly as well as a current one, so
 // each entry names the scene that takes it and re-taking is a decision someone
-// makes when that screen changes shape (docs/brand-assets.md, _the generated
+// makes when that screen changes shape (docs/brand-visuals.md, _the generated
 // pictures_ — the regenerate list). And the ALT TEXT against the picture: it
 // describes the capture, state by state, so it is re-read every time one is
 // re-taken.

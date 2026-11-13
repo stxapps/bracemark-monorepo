@@ -650,7 +650,7 @@ is lopsided: **the 90% path is share → Save**; the list and the tags are the
 
 **The page is the subject.** `share-specimen.tsx` draws the shared URL the way
 the library will draw it — the row's own 64x40 slot carrying a monogram, the
-title, the address ([brand-assets.md](./brand-assets.md#the-mark) has why that
+title, the address ([brand-visuals.md](./brand-visuals.md#the-mark) has why that
 slot is 16:10 and what the 12px cut now reads against) — and it
 holds the top of the sheet from the loading state through the confirmation. It is
 the RN port of the browser extension's `PageSpecimen`, deliberately: that popup
@@ -662,7 +662,7 @@ move, and **its corner comes off**. That fold is the part of the confirmation th
 happens to the OBJECT — the saved phase also prints "Saved to <list>" and swaps
 the controls, so the words carry the state — and it is the meaning the mark already
 carries on the extension's tile: square is unsaved, cut is saved
-([brand-assets.md](./brand-assets.md#the-mark)), not a new one.
+([brand-visuals.md](./brand-visuals.md#the-mark)), not a new one.
 
 The two pickers are the exception, and a deliberate one: they replace the
 specimen rather than sit under it. They are screens precisely because the tree
@@ -1401,7 +1401,7 @@ DOES import have halves it never runs, and they defer them behind
 
 **No portals, no Reanimated.** The pickers are screens within the sheet rather
 than overlays over it, and the specimen's corner cut is an overlay rather than a
-stroked SVG path ([brand-assets.md](./brand-assets.md#the-mark), _at TILE scale_).
+stroked SVG path ([brand-visuals.md](./brand-visuals.md#the-mark), _at TILE scale_).
 `react-native-svg` is in the bundle regardless — **every lucide icon renders
 through it**, so this is not a cost the brand lockup adds and not one that
 dropping the lockup would remove.

@@ -49,7 +49,7 @@ import { openWebApp } from '@/utils/open-web-app';
 //
 // SO THE HIERARCHY ON THIS SCREEN READS, top to bottom: the lockup at 15px
 // semibold, behind the header's own hairline — chrome, not content, and the
-// popup's only carrier of the brand (brand-assets.md, _the lockup_); then
+// popup's only carrier of the brand (brand-visuals.md, _the lockup_); then
 // `PopupTitle` at 14px medium, which after the density pass is the ONLY
 // medium-weight non-control text in the body and so is unambiguously the
 // heading; then 12px muted for the note under it, the field labels and both

@@ -370,7 +370,7 @@ plugin to the app config. Wiring (already done):
 
 Configured in `app.config.ts` (the mark at 200pt, `contain`, on `#ffffff` with a
 `dark` pair on `#0a0a0a` — the same two values `--color-background` resolves to,
-see [brand-assets.md](./brand-assets.md)), so both platforms get a native launch
+see [brand-visuals.md](./brand-visuals.md)), so both platforms get a native launch
 screen with no JS involved. What needs saying is **when it comes off**, because
 the default answer is not the one this app wants and nothing about it is visible
 in our source.

@@ -7,7 +7,7 @@ import * as React from 'react';
 // is the only feature of the silhouette that is still legible at 16px.
 //
 // THAT 16px IS NOW LOAD-BEARING, not a remark: it is the size every lockup
-// renders the mark at (docs/brand-assets.md, _the lockup_), chosen because the
+// renders the mark at (docs/brand-visuals.md, _the lockup_), chosen because the
 // legibility floor and the 1.6×-cap-height proportion the lockup is pinned to
 // land on the same number. Retouching the path in a way that costs the cut a
 // little legibility therefore costs it on nine shipped surfaces at once, and

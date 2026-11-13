@@ -231,7 +231,7 @@ gained a field renders exactly as well as a current one, and these are not
 stamped in `assets.stamp.json` — they draw no tagline and no caption for
 `check:assets` to compare. Each entry names the `e2e/shot` scene that takes it
 ([e2e.md](./e2e.md), _the published screenshots_); re-taking one is a line on the
-regenerate list in [brand-assets.md](./brand-assets.md), _the generated pictures_.
+regenerate list in [brand-visuals.md](./brand-visuals.md), _the generated pictures_.
 The alt text describes the capture state by state, so it is re-read against
 every re-take.
 
@@ -271,7 +271,7 @@ The launch post opens on `<DemoClip />`, the one moving picture on the site: a
 plain `<video>` over two files in `public/video/`, served from the apex itself
 and started by the reader. Why it is a file here rather than a hosted player is
 [hosting.md](./hosting.md), _security headers_; what it is drawn from, and what
-makes it stale, is [brand-assets.md](./brand-assets.md), _the generated
+makes it stale, is [brand-visuals.md](./brand-visuals.md), _the generated
 pictures_.
 
 `app/feed.xml/route.ts` emits an RSS 2.0 summary feed as a static GET response

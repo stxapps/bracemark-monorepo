@@ -1076,7 +1076,7 @@ same role the kit's menu items have).
   `assets/fonts/InterVariable.ttf`) `leading-none` puts the baseline 11.0 from
   the top of a 15pt box and the cap block's centre at 5.54 against the box's 7.5:
   **~2px high**, which is what pulled the brand wordmark off the middle of its
-  16px mark ([brand-assets.md](./brand-assets.md), _the lockup_). `items-center`
+  16px mark ([brand-visuals.md](./brand-visuals.md), _the lockup_). `items-center`
   is not the cause and no `items-*` value is the cure — the two boxes are centred
   to the pixel; the caps are not centred inside theirs. Drop the leading and the
   font's own box does it for free (for Inter, ascender − cap height = descender
@@ -1199,7 +1199,7 @@ min-h-*` is not the general answer: an empty Android field measures its
   stylesheet, in one role, ~24 times. The wordmark is deliberately **not** one —
   its invariant is a ratio to the mark's `h-4`, and a token would make the
   one-line edit that breaks the ratio look safe
-  ([brand-assets.md](./brand-assets.md), _the lockup_); the specimen is three
+  ([brand-visuals.md](./brand-visuals.md), _the lockup_); the specimen is three
   call sites across three apps, held by comments that name each other.
   Site-local tokens go in the site's own sheet, never `web-ui`'s — a token the
   app never uses does not belong in the app's sheet. On the expo side a

@@ -2386,7 +2386,7 @@ catalog owes that was never taken, or the dark check above.
 about a machine's browser build, simulator runtime and fonts as much as about
 the app, so a baseline committed from one machine would read as `changed` on
 the next; and a public repo of app screenshots is a publishing decision
-([brand-assets.md](./brand-assets.md)). Clearing `.artifacts` clears them, and
+([brand-visuals.md](./brand-visuals.md)). Clearing `.artifacts` clears them, and
 the next run reports every capture `new`. Where a shared baseline lives is the
 first question CI has to answer before any checkpoint is gated.
 
@@ -3404,7 +3404,7 @@ instead, and their contract is stricter: each is exactly one of the two PWA size
 (1170x2532 narrow, 2560x1600 wide), the compositor refuses a capture whose pixels
 disagree with the size it expects, and `npm run check:assets` refuses a
 `manifest.json` that declares a size the file does not have. What each size is and
-why is `docs/brand-assets.md`, _the generated pictures_.
+why is `docs/brand-visuals.md`, _the generated pictures_.
 
 `search-advanced` answers to a **docs figure** — `advanced-search` in
 `apps/bracemark-site/src/content/figures.ts`, shown on `/docs/search` — and it is

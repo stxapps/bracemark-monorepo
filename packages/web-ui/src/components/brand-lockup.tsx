@@ -22,7 +22,7 @@ import { BracemarkIcon } from './icons/bracemark-icon';
 //
 // THE MEASUREMENTS: a 16px mark (`h-4`), the wordmark at
 // `text-[0.9375rem] leading-none font-semibold tracking-tight`, `gap-2.5`
-// between them. docs/brand-assets.md, _the lockup_, holds them.
+// between them. docs/brand-visuals.md, _the lockup_, holds them.
 //
 // THE PAIR IS A RATIO, and this file is where both halves of it finally sit
 // together. 16 against 15 is the mark at 1.6× the wordmark's cap height — the

@@ -14,7 +14,7 @@
 // opens About to answer, in the order they ask them.
 //
 // It renders the mark at 40px, which is the ONE surface allowed to depart from
-// the 20px lockup every other surface shares (docs/brand-assets.md — _the mark_). The
+// the 20px lockup every other surface shares (docs/brand-visuals.md — _the mark_). The
 // rule exists for surfaces where the brand is a CARRIER and has to agree with the
 // six others a user might have just come from; here the brand is the SUBJECT of
 // the page. A 20px lockup under a 20px "About" heading reads as a nav fragment

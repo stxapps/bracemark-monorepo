@@ -1,315 +1,22 @@
-## brand assets — the mark, the lockup, the lines, the licence, the account
+## brand assets — the lines, the voice, the words, the claims, the account
 
-The **invariants** that keep the brand consistent across seven surfaces and the
-four apps that carry the mark: what the mark is, where its copies live and why
-they must not drift, the one set of lockup measurements, the two meanings the 45°
-fold is allowed to carry, the three brand lines, the voice everything else is
-written in, the two nouns the product uses for what it stores, what the public
-repo entitles us to claim, and the one social account we hold.
+The **rules for everything we say**, kept consistent across the marketing site,
+the four apps, the store listings, the docs, the blog, and the one social
+account: the three brand lines, the voice everything else is written in, the
+mechanics and terminology that keep a string matching the last two hundred, the
+two nouns the product uses for what it stores, what the public repo entitles us
+to claim, and the account we hold. What we draw — the mark, the lockup, the 45°
+fold, the generated pictures, the store screenshots — is in
+[brand-visuals.md](./brand-visuals.md).
 
-Every rule here is enforced by nothing but this file. There is no test that
-compares two SVG paths, no lint rule that catches a hand-typed lockup, and no
-generator that re-renders the rasters — so a change to any of them is a
-multi-file change that only this page will remind you of.
+Every rule here is enforced by nothing but this file, except where a section says
+a spec or a lint rule holds it. A paragraph in the wrong register type-checks,
+lints and ships, so a change to a rule is a multi-file change that only this page
+will remind you of.
 
 Companions: [hosting.md](./hosting.md) for the origins the brand is served from,
 [architecture.md](./architecture.md#apps) for what bracemark-site is, and
-[share-sheet.md](./share-sheet.md) for the one surface where the lockup is all
-the user has.
-
-### the mark
-
-A solid geometric B with its top-right corner cut away at 45°, the way a page
-corner is turned down to keep a place. **The shape itself is documented at the
-top of `packages/web-ui/src/components/icons/bracemark-icon.tsx`** — the
-one-path/`currentColor` invariant and the 428×512 grid it is constructed on. That
-comment is the source of truth for _what the shape is doing_ and is not repeated
-here; this page owns the inventory and the rules that span files.
-
-**Two source components and 29 raster assets:**
-
-| where                                                                                                                                                                                          | what                                                                                                                                                      |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/web-ui/src/components/icons/bracemark-icon.tsx`                                                                                                                                      | the source of truth                                                                                                                                       |
-| `apps/bracemark-expo/src/components/icons/bracemark-icon.tsx`                                                                                                                                  | the RN port — **byte-identical path and viewBox**, colour from `useCSSVariable` because `react-native-svg` takes fill as a prop and has no `currentColor` |
-| `apps/bracemark-web/public/` (9), `apps/bracemark-web/src/app/` (4), `apps/bracemark-site/src/app/` (4), `apps/bracemark-expo/assets/images/` (8), `apps/bracemark-extension/public/icon/` (4) | 29 PNG/ICO files rendered from that path                                                                                                                  |
-
-⚠ **The two components must not drift, and nothing enforces it** — no test
-compares the two `d` strings. A retouch of the mark is a **two-file** change plus
-a re-render of every raster.
-
-**The raster conventions, which are a rule and not a per-file judgement:**
-
-- **Favicons and toolbar icons** (`logo16/32/48/64`, the browser extension's
-  `icon/16|32|48|128`, `icon1`/`icon2` in bracemark-web and the marketing site,
-  expo `favicon.png`) — mark in `#0a0a0a` on an **opaque white tile cut tight to
-  the mark**: on an N×N canvas the tile is **7N/8 wide × N tall, centred**, with
-  an **N/8 radius on three corners and a 45° chamfer of N/3 on the top-right**,
-  and the mark sits inside it at **ink height 7N/8**, centred, natural 428:512
-  aspect. The canvas corners outside the tile stay transparent, so the tile reads
-  as a dog-eared chip and not as a square.
-  The chamfer is the mark's own fold repeated one level out, and it is
-  deliberately **larger** than the fold it echoes — N/3 measured against the tile,
-  not the mark's ~30% measured against the mark — so the two diagonals run
-  parallel with a white band between them instead of collapsing into one edge.
-  That band is what sets the floor: at 16px it is a single pixel, and cutting any
-  deeper merges the mark's fold into the tile's, at which point the corner stops
-  reading as folded and starts reading as clipped.
-- **App and PWA tiles** (`logo192/512`, `*-maskable`, `apple-touch-icon`,
-  `apple-icon`, expo `icon.png`/`ios-light.png`) — opaque **white** tile, mark
-  `#0a0a0a`, ink height 50–55%, and **no chamfer**. These are full-bleed squares
-  the platform masks to a shape of its own (a squircle, a circle, a rounded rect),
-  so a corner cut here is either erased by the mask or fights it. The split is
-  deliberate and it is visible — the same mark is a dog-eared chip in a tab strip
-  and a plain square on a home screen — and it follows from who owns the corner: a
-  browser paints our raster as we shipped it, an OS does not.
-- **The expo dark and tinted variants** (`ios-dark.png`, `ios-tinted.png`) —
-  transparent, near-white mark, 55%; iOS composites them over its own backdrop.
-- **The two `favicon.ico`** (bracemark-web, bracemark-site) — four frames each,
-  16/32/48/64, following the favicon rule above, tile and chamfer included. **All
-  four frames move together.** A shape change that re-renders the PNGs and the
-  largest frame leaves 16px on the old shape in every browser that picks that
-  frame, and nothing about the file looks wrong — the `.ico` is one path in
-  `git status` no matter how many frames inside it are stale.
-- **The three expo rasters the platform composites itself** (`adaptive-icon.png`,
-  `splash-icon.png`, `splash-icon-dark.png`, all 1024²) — transparent, because
-  their background is set in `app.config.ts` rather than baked in: Android's
-  adaptive icon sits on `#ffffff`, and the splash pair on `#ffffff` / `#0a0a0a`
-  at `imageWidth: 200`, `resizeMode: 'contain'`. Editing the background is an
-  `app.config.ts` change, not a re-render — and `adaptive-icon.png` is a
-  **maskable** foreground, so it is bound by the 65.2% ceiling below.
-
-Only mark rasters are counted above. The two apps' `src/app/` also hold the social
-card, and `apps/bracemark-web/public/` is where the PWA screenshots (`ss-*`) go
-when there are any — both governed further down under _the generated pictures_,
-which exists because that sentence used to end "which are not brand assets and are
-not governed here" and they stayed on the predecessor's branding for the product's
-whole life.
-
-**Maskable padding is a measured number: 65.2%.** The mark fits Android's 80%
-safe circle at that ink height and no larger — a property of the 0.836 aspect
-plus the corner radii. Re-measure it whenever the path changes: the number is
-`0.4 × 512 ÷ R`, where `R` is the largest distance from the centre of the mark's
-bounding box to its outline — currently ~314 units, on the rounded bottom-left
-corner, which is the point that binds. The `-maskable` files ship at 50%,
-comfortably inside it; the non-maskable tiles at 55% are **not** maskable and
-must not be substituted.
-
-There is **no committed generator** for any of this, so the rules above are the
-only thing that makes the rasters reproducible. Two consequences before you
-re-render: the geometry reproduces exactly, but the **antialiasing does not** — a
-fresh render from the same path differs from the committed file by up to ~26%
-alpha on edge pixels alone, because a different rasteriser drew it — so a
-re-render is never a byte-clean diff.
-
-Which is the argument for **editing the corner rather than re-rendering the file**
-whenever a change is confined to one corner, as the chamfer was. The diff then
-stays inside that corner's bounding box and every other pixel stays byte-identical
-to what shipped, so the mark itself is provably untouched and the check is
-mechanical: the difference of old and new must have an empty bounding box outside
-the corner. A full re-render buries the same change in edge noise across the whole
-raster and there is nothing left to check it against.
-
-**The white tile is what makes that first class survive a dark browser**, and it
-is why those files are no longer transparent. They are the only rasters a
-_browser_ paints into its own chrome — a toolbar button, a tab strip, a bookmarks
-bar — at a colour it chooses and never tells us, and `#0a0a0a` on Chrome's dark
-toolbar is close to invisible. A per-theme variant was never actually available:
-MV3 has no manifest-level light/dark icon switch (Firefox's `theme_icons` is
-Firefox-only) and the service worker has no `matchMedia` to drive
-`action.setIcon` from, so it would need an extension page or content script to
-drive it — and a favicon or a PWA manifest icon has no such hook at all. One
-opaque tile covers every surface in the class, in every browser, with no runtime
-code; the cost is that the mark no longer floats free on light chrome.
-
-⚠ **The class is all-tiled or all-transparent — never mixed.** Restoring
-transparency on one file because it looks better in one browser puts a white chip
-behind the mark in bracemark-web's tab and none behind the same mark on the
-toolbar button beside it. The app and PWA tiles are a different class and keep
-their full-bleed square: nothing paints _them_ onto an unknown colour.
-
-### the lockup
-
-Mark beside wordmark — **one set of measurements rendered on nine surfaces**: a
-16px mark (`h-4`), the wordmark at
-`text-[0.9375rem] leading-none font-semibold tracking-tight`, `gap-2.5` between
-them.
-
-⚠ **The leading is web-only — the native wordmark carries no `leading-*`, on
-purpose.** `leading-none` computes to the same 15px line box on both platforms,
-but only web and Android split its negative half-leading evenly around the
-glyphs; iOS takes the whole shortfall off the ascent, so the caps sit ~2px above
-the middle of their own box while `items-center` centres the two boxes to the
-pixel — the name reads as if it had slipped up off the mark. So
-`apps/bracemark-expo/src/components/brand-lockup.tsx` states three of the four
-spellings and omits the fourth, letting Inter's own box centre the caps (it does,
-exactly). This is the one measurement the two components are allowed to differ
-on, and putting the class back is a silent regression: it is a valid style on a
-valid tree, no test lays text out, and Android is off by half a pixel rather than
-two. The mechanism is in [theme.md](./theme.md), _extending_.
-
-⚠ **The invariant is the RATIO, and the pair is derived from it.** The mark's
-height is **1.6× the wordmark's cap height**. Inter's cap height is 0.6758em, so
-that is ≈1.08× the wordmark's font-size, and 15px of wordmark asks for 16.2px of
-mark. The usable band is roughly 1.55–1.70×: under it the mark is swallowed by
-the word, over it the mark stops reading as half of a lockup and starts reading
-as an icon that happens to have text beside it — which is what the previous
-20px/15px (1.97×) did, and it is why the mark looked unmoored from the word even
-though the two boxes were centred to the pixel by `items-center`.
-
-The ratio is written down because **an absolute pair cannot defend itself**. The
-browser extension's popup once stepped the lockup down to 16px/13px — the mark
-by ×0.80, the wordmark by ×0.867 — and nothing caught the 8% flattening, because
-"20 and 15" says nothing about what the two numbers owe each other. Nothing
-lints this and no test can see it.
-
-**16px is also the mark's floor, and the two constraints meet at the same
-number.** `bracemark-icon.tsx` records that the 45° cut is the last feature to
-survive small sizes and that it still reads at 16px, so nothing may render the
-mark under it. A surface therefore cannot carry a lockup SMALLER than the
-canonical one, which is why there is no second, compact lane for the popup or
-for anything else: it is this pair, or About's larger stacked one below.
-
-**Do not reach for `em` to enforce the ratio.** On web both numbers are already
-rem (`h-4` is `1rem`, the wordmark `0.9375rem`), so the proportion already
-survives root font scaling for free; an `em` mark height would only force the
-font-size onto the flex parent so the SVG could inherit it. On native it is not
-expressible at all — `rem` is baked at build time and `react-native-svg` sizes
-by a numeric prop ([theme.md](./theme.md), _extending_). This is an authoring
-rule, held by this paragraph and by the comments that point at it.
-
-It is the brand's only appearance on any surface that has no other carrier, so
-the surfaces have to agree: bracemark-web's links rail, its settings rail and its
-auth card; the browser extension's popup header; and bracemark-expo's two
-drawers, its auth screen, its landing and **its share sheet** — the purest case
-of the rule, since that one floats over somebody else's app and has nothing but
-the lockup to say whose sheet it is. The browser extension's `OptionsShell` is
-**not** one of them and no longer carries a lockup at all: that document always
-renders embedded in a host which draws the name and icon immediately above it,
-so a lockup there was the second copy of both (its own header comment carries
-the reasoning).
-
-**Nine call sites, two components, no hand-typed copies.** Web goes through
-`packages/web-ui/src/components/brand-lockup.tsx` and native through
-`apps/bracemark-expo/src/components/brand-lockup.tsx`; both take the wordmark
-from `BRAND.name` rather than a literal, and each call site passes only its own
-chrome (the rails' `h-14` and hairline, the popup header's `h-11`).
-
-Web typed the utilities into all four files for a long time, with a comment in
-each naming the other three — which is how the popup's 16/13 flattening got in
-and stayed. Expo never had that option: the mark's height is a `height` **prop**
-there (`react-native-svg` sizes by prop, not by class), so a copy drifts by a
-pixel the first time one is edited.
-
-The two components are duplicates on purpose. Uniwind and Tailwind are separate
-compilers over separate stylesheets, so there is nothing for the native file to
-import; the numbers are stated twice and this section is what keeps them equal.
-The one remaining hand-typed wordmark step is the browser extension popup's
-**sub-view title** (`popup/Shell.tsx`), which stands in the wordmark's slot so
-the header is the same bar in both modes — it is a title, not a lockup, and its
-comment says so.
-
-Do **not** reach for a `--text-*` token to hold the 15px. The invariant is the
-ratio to the mark, and a token names only the half that cannot defend itself: a
-one-line edit would move all nine wordmarks and leave every `h-4` where it is,
-which is precisely the drift above, made cheaper. bracemark-site's `--text-body`
-is the same number for running prose at a different leading, and is unrelated
-(`apps/bracemark-site/src/app/globals.css`).
-
-**Settings → About is the one surface that departs from those measurements**, in
-both apps: a **40px** mark stacked above the name
-(`text-lg font-semibold tracking-tight`) and `BRAND.descriptor`, inside a
-bordered card. The rule above binds surfaces where the brand is a **carrier** — a
-rail, a sheet, a card that is about something else and has to agree with the six
-others a user may have just come from. On About the brand is the **subject**: it
-is the screen a person opens to ask what this app is and which version they are
-running, and a 16px lockup under a 20px "About" heading reads there as a nav
-fragment that wandered in from the rail. No third size follows from this — if a
-surface is not About, it is a carrier.
-
-### the 45° fold as a UI device
-
-The fold is also used away from the mark, and it carries **exactly two
-meanings**. No use renders the mark — each cuts the same corner off a rectangle,
-at a size set against the object rather than against the mark's 30% ratio, which
-only reads as a silhouette on ~40px objects.
-
-**The favicon tile's chamfer is not one of these uses and is not a third
-meaning.** It is the mark's own fold on the tile that exists only to carry the
-mark, and it is governed by the raster conventions above, not by this table. The
-rule here binds the fold where it appears **away** from the mark, on an object
-that is about something else — which is exactly where a fold has to earn a
-meaning, because there is no mark beside it to explain the shape.
-
-| where                                                                       | cut     | what it means                                                                                                               |
-| --------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------- |
-| the browser extension's page tile (`corner-cut`/`corner-square`)            | 0.75rem | **state** — square is unsaved, cut is saved; the part of it on the OBJECT ([browser-extension.md](./browser-extension.md))  |
-| bracemark-expo's share-sheet specimen (`features/share/share-specimen.tsx`) | 12px    | **state**, the same one — the native port of the row above, on the same 64x40 slot                                          |
-| bracemark-web's auth card (`(auth)/layout.tsx`)                             | 1.5rem  | **identity** — the signed-out routes have no rail to carry the brand, so the card itself is the Bracemark surface           |
-| bracemark-expo's auth card (`components/dog-eared-card.tsx`)                | 24px    | **identity**, the same one — the native port of the row above, not a third meaning; the case is _stronger_ here (see below) |
-
-Count meanings, not surfaces — **four rows, two meanings**, each meaning one idea
-rendered on two platforms. The expo card is the web card on another platform:
-same two screens, same job, same 1.5rem/24px cut, and a native app has no tab
-title to fall back on, so it is even more true there that these screens are the
-only place the app never says its own name. The share sheet's specimen is the
-browser extension's page tile on another platform, and the pairing is just as
-tight: the same question ("this page — saved or not?"), the same 64x40 slot, the
-same 12px cut, both drawn as the thing the library will draw for that link.
-
-⚠ **The 12px is read against the slot's SHORT edge, and only the short edge.**
-Both specimens drew a 44px square until the four surfaces that render a saved
-link were measured against each other — bracemark-web's list row and its
-skeleton, bracemark-expo's row, and the two specimens — and only the specimens
-were square. They now carry the row's `h-10 w-16`, and the cut's ratio survived
-the move intact: 12 of 40 is 30%, against 12 of 44's 27%, where the mark's own
-fold is ~29%. It survived because the cut is 45° and takes the same 12px off
-both edges, so the SHORT one governs — sizing to the 64px width instead would
-want 17px, which is 43% of the height and reads as a wedge rather than a folded
-corner. A 40px-tall object is still inside the range where the fold reads as a
-silhouette of the mark at all, which is what the whole pair depends on. If that
-slot's height ever moves, the cut moves with it; its width may move freely.
-The derivation is in `bracemark-extension/styles/globals.css`, above the pair.
-
-⚠ **A third meaning is what is forbidden.** A fold that means "saved" somewhere
-and nothing in particular elsewhere teaches users it means nothing.
-
-**The state fold is not the whole confirmation, and the code said so before the
-prose did.** Both specimens' headers claimed the cut was the entire "saved"
-signal — "no check badge, no colour, no state word competing with the title" —
-while `Complete.tsx` set its `PopupTitle` to "Saved" and named the list, and
-`share-screen.tsx` printed "Saved to <list>". The words carry the state on both
-platforms; the fold is the part of the confirmation that happens to the OBJECT
-rather than to the chrome around it, which is the whole reason the specimen does
-not move across the save. Keep it — it is one CSS pair and one RN overlay, and
-dropping it would take one of the two meanings in the table above with it — but
-do not restate the stronger claim, which is the version an accessibility review
-would fail us on if it were true (a fold announces nothing).
-
-The two platforms draw it differently, and on RN the technique is chosen by
-**scale** rather than by taste:
-
-- **Web clips**, and the clip takes the ring and the box shadow with it — so the
-  card draws its hairline as a 1px filled layer underneath and its shadow as a
-  `drop-shadow` filter. Copy that pattern for any clipped surface big enough to
-  have a border.
-- **RN has no `clip-path` at all**, so it has two techniques, and the dividing
-  line is whether the shape carries a hairline:
-  - **At card scale, a stroked path.** The obvious native trick — a rotated
-    square in the page colour laid over the corner — cannot carry a hairline,
-    which would leave the diagonal as the one edge with no border, and the
-    diagonal is the whole device. So the expo auth card's outline is **one
-    filled-and-stroked `react-native-svg` path** sized from the content's
-    measured box: three rounded corners and a straight chamfer where the fourth
-    would be. It also ships **no shadow**, deliberately — RN would cast the
-    _content box's_ rectangular shadow, putting a rectangular halo around a
-    folded corner and turning a turned page into a chipped one.
-  - **At tile scale, the overlay is correct** — and it is not an approximation.
-    Web's own 44px tile loses its ring along the diagonal too, because
-    `clip-path` erases the ring with everything else, so a rotated square in the
-    page colour reproduces the web result exactly. That is what the share sheet's
-    specimen uses, and it keeps `react-native-svg` off a path whose init cost
-    would be paid on every cold share ([share-sheet.md](./share-sheet.md)).
+[brand-visuals.md](./brand-visuals.md) for the pictures.
 
 ### the brand lines
 
@@ -490,6 +197,38 @@ argue, and the register follows the room rather than the channel.
 | errors                                 | fixed shape, below                                                     | "Could not change your password. Please try again."                                                             |
 | /terms, /privacy, the consent sentence | plain and literal — full document titles, no marketing register at all | "By creating an account, you agree to our Terms of Service and Privacy Policy" (`components/legal-consent.tsx`) |
 
+#### what binds where
+
+The rules in this file are of two kinds, and applying them evenly to every
+surface goes wrong in both directions.
+
+**Claims bind everywhere, in full, at any length.** What our servers hold, what
+ships, the source boundary, no adjectives about intent, no "zero-knowledge"
+(_terminology_, _only what ships_, _the source_). A reader tests a claim, not a
+channel: a one-line reply, a blog post, and a personal post by someone who works
+here are all read as our word about the product. A short surface may shorten how
+a claim is put, never what it claims, and scope is never the thing to cut
+(_states its own costs_, above).
+
+**Form binds where we are the published voice, and relaxes with the channel.**
+The mechanics, the generated-shapes list and the tone table exist so that pages a
+reader meets together read as one author. A reply to one person has no sibling
+page to match.
+
+| surface                              | form                                                                                                                                                                                                                                                                   |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| site, store listings, in-app strings | all of _the voice_ and _the mechanics_                                                                                                                                                                                                                                 |
+| /docs and help pages                 | plain steps, the costs where the reader meets them; the generated-shapes list doesn't reach steps                                                                                                                                                                      |
+| the blog                             | the argued register, so _what reads as generated_ applies, with the full costs                                                                                                                                                                                         |
+| the product's X account              | the voice and the mechanics, including no jokes; a post is too short for every cost, so the one test in _states its own costs_ decides                                                                                                                                 |
+| a team member's personal account     | their own voice, jokes included; a sentence about the product is held to the claims above, and a stance or a joke on its own is theirs                                                                                                                                 |
+| replies, on X and by email           | write to the one person: answer what they asked, in their words, with the specific answer where they asked a specific question; contractions; plain apostrophes are fine; only the costs their question touches; no pasted template lines; nothing that hasn't shipped |
+
+The last two rows are the loosest on purpose and the easiest to overdo. A reply
+that is friendlier or looser than the pages is fine. A reply that says something
+the pages don't, about what we hold or what a check proves, is a new claim, and
+nobody reviews it before it is sent.
+
 #### errors have a fixed shape, and it is already in the code
 
 Two forms, and the choice between them is whether the user can do anything.
@@ -621,234 +360,138 @@ here — the point is that the next string matches the last two hundred.
 | the platform verb         | **click** on web, **tap** on expo — the ported string differs in exactly this word                        | "select", "press", or one string serving both                        |
 | plan names and numbers    | read `PLAN_LABELS` and `iap/plans`; store copy carries **no** numbers at all                              | typing "Plus", a price, a cap, or a trial length                     |
 
-**The serial comma was the one row not already kept when this table was
-written.** The rule stood and the copy did not: the marketing site dropped it
-more often than it kept it — "Lists, tags and pins", "titles, addresses and
-hosts", four clauses of /terms — while /delete-account kept it throughout. The
-sweep put it into every user-facing string, the store copy in `listing-copy.ts`
-included. Nothing enforces it: a list is grammar, not a character, so no
-selector can find the missing comma the way one finds a straight `'`. Section
-headings in /terms and /privacy are quoted by name elsewhere on the same page
-(_Plans, fees, and subscriptions_), so a heading and its cross-reference move
-together. The one exception is an **ampersand label** — "List, tags & note",
-"Lists, tags, pins, notes & layouts" — where the `&` already marks the last item
-and a comma before it reads as a typo.
+**A serial comma needs three items; two take none.** Count what the "and"
+closes: three or more and the comma goes in ("links, lists, and tags"); two and
+it stays out ("a path and a size", "reads every message and writes or approves
+every reply"). A comma between two **clauses**, each with its own subject, is
+ordinary punctuation and stays: "There is no grace period, and we don’t bring a
+deleted account back from a backup." The one exception is an **ampersand
+label** — "List, tags & note" — where the `&` already marks the last item.
+Nothing enforces it: a missing comma has no selector, so this page is the check.
+Headings in /terms and /privacy are quoted by name elsewhere on the same page, so
+a heading and its cross-reference move together.
 
-**A serial comma needs three items; two take none.** The sweep's own failure
-mode is to reach for the comma at every "and", and two things joined by one
-"and" are a pair, not a list: "reads every message and writes or approves every
-reply", "a path and a size", never "reads every message, and writes". The test
-is to count what the "and" closes — three or more and the comma goes in; two and
-it stays out. Not to be confused with a comma between two **clauses**, each with
-its own subject, which is ordinary punctuation and stays: "There is no grace
-period, and we don’t bring a deleted account back from a backup." One sweep
-already added the stray kind to /privacy, and this rule is harder to hold than
-the one above it, because a two-item comma looks like diligence rather than an
-error.
+**The spelling is British, with -ise, not the Oxford -ize**, because that is what
+the existing pages used. The scope is every string a user reads, and it reaches
+the repository's own public prose — `SECURITY.md`, the root `README`, the reports
+in `security-reviews/`, and the store notes in `release-notes/`. Four things stay
+as they are, because they are names or data rather than our prose: **another
+app's words** (Raindrop's _Favorites_, LinkWarden's _Unorganized_ collection, a
+CSV column called `favorite`), **identifiers** (CSS `color`, schema.org's
+`Organization`, an API field), **a platform's string quoted verbatim**, such as a
+browser's permission warning, and **_dialog_ and _program_** in their computing
+sense, which British usage spells that way too. Code comments and `docs/` are not
+held to it. Nothing enforces it — each author spells the way they spell, and
+nothing reads the page as a whole — so this page is the check.
 
-**The spelling is British, and was kept by habit for long enough to look like a
-rule before it was one.** /about, /terms, /privacy, /security, and the landing
-page wrote _behaviour_, _organised_, _recognised_, and _authorised_; the blog
-and the converter's input row did not, and the first security-review post
-spelled _cancelled_ in its first section and _behavior_ in its last — the same
-drift as the apostrophe, by the same route: each author spelled the way they
-spell, and nothing reads the page as a whole. The variant is **-ise**, not the
-Oxford -ize, because that is what the existing pages already used. The scope is
-every string a user reads, the same as the rest of this section, and it reaches
-the repository's own public prose — `SECURITY.md`, the root `README`, the
-reports in `security-reviews/`, and the store notes in `release-notes/`. Four things stay as they are, because they are
-names or data rather than our prose: **another app's words** (Raindrop's
-_Favorites_, LinkWarden's _Unorganized_ collection, a CSV column called
-`favorite`), which the import help pages describe in their own spelling;
-**identifiers** — CSS `color`, schema.org's `Organization`, an API field; **a
-platform's string quoted verbatim**, such as a browser's permission warning; and
-**_dialog_ and _program_** in their computing sense, which British usage spells
-that way too. Nothing enforces it — a spelling is a word, not a character a
-selector can find — so this row is the check. Code comments and `docs/` are not
-held to it.
-
-**The one place contractions are dropped is a decision, not an oversight.** The
-tagline says _can't_ and `FULL_DESCRIPTION` opens with _cannot_ — "Bracemark is a
-bookmark manager that **cannot** read your bookmarks", and later "We **cannot**
-look, so we cannot be asked to." The uncontracted form is the heavier one and is
-reserved for the sentence making the claim most flatly. Everywhere else the
-contraction is right, and reaching for "cannot" in helper text just sounds stiff.
-
-**"Most flatly" needs a test, because it is a judgement and nothing enforces
-it.** Two sentences of the same kind spelled two ways is the only real
-inconsistency here — the two forms side by side are ordinary English — so the
-line has to fall in the same place for every author. It is: **"cannot" when the
-subject is us or our server and the verb is about reaching the library** — read,
-open, decrypt, search, index, sign you in. "Of your library we hold ciphertext
-we cannot open", "a server that cannot read your links cannot search them for
-you either", "we cannot sign you in or decrypt your account for you". Everything
-else contracts, including sentences about us: "we can’t offer payment", "an edit
-you regret can’t be rolled back from our side" (a missing feature, not the
-architecture), "Permanent deletion can’t be undone". **The brand lines are the
-exception**, in the other direction: the tagline and the slogan ("We built it so
-we can’t") are spoken lines, set once in `brand/brand.ts`, and keep their
-contraction although they state the claim. The contraction sweep that put this
-test into practice left /terms, /privacy and /security uncontracted on purpose:
-those three pages write out every negation, and that register is theirs.
+**Contractions are the default, and "cannot" is a decision.** The tagline says
+_can't_ and `FULL_DESCRIPTION` opens with _cannot_ — "Bracemark is a bookmark
+manager that **cannot** read your bookmarks". The uncontracted form is the
+heavier one, and the line falls in the same place for every author: **"cannot"
+when the subject is us or our server and the verb is about reaching the
+library** — read, open, decrypt, search, index, sign you in. "Of your library we
+hold ciphertext we cannot open", "a server that cannot read your links cannot
+search them for you either", "we cannot sign you in or decrypt your account for
+you". Everything else contracts, including sentences about us: "we can’t offer
+payment", "an edit you regret can’t be rolled back from our side" (a missing
+feature, not the architecture), "Permanent deletion can’t be undone". **The brand
+lines are the exception**, in the other direction: the tagline and the slogan
+("We built it so we can’t") are spoken lines, set once in `brand/brand.ts`, and
+keep their contraction although they state the claim. /terms, /privacy and
+/security write out every negation on purpose; that register is theirs.
 
 ⚠ **The apostrophe is the typographic `’` in everything a user reads — an
-editorial choice, not a consequence of the quote character.** The distinction
-matters because the codebase spent a long stretch making it the other way round.
-`.prettierrc` sets `singleQuote: true`, and prettier picks whichever quote needs
-fewer escapes, so a straight `'` in prose silently flips its literal to double
-quotes — and the next sentence gets written to match whatever quote it landed in.
-A single-quoted literal took `’` because a straight `'` would have to be escaped;
-a double-quoted literal or a JSX text node took `'` because it would not. The same
-recovery-code sentence ended up existing in both forms, one screen apart, in four
-hand-copied files.
-
-Following the rule dissolves the mechanism: copy that carries `’` needs no
-escaping, so prettier keeps single quotes throughout, and a double-quoted literal
-in a copy file becomes a smell rather than a normal outcome.
-
-Two things now hold it, because "the rule is written down" is exactly what failed
-here:
+editorial choice, not a consequence of the quote character.** `.prettierrc` sets
+`singleQuote: true`, and prettier picks whichever quote needs fewer escapes, so a
+straight `'` in prose silently flips its literal to double quotes and the next
+sentence gets written to match; the same recovery-code sentence once existed in
+both forms, one screen apart. Writing `’` dissolves the mechanism. Two things
+hold it:
 
 - **Two specs assert it** over every exported string in the published-copy
-  modules: `listing-copy.spec.ts` for the store copy — the strings that leave the
-  repo, either into the browser extension's `manifest.json` at build time or into
-  a store console by hand — and `brand.spec.ts` for the brand lines, `COMPANY` and
-  `SOURCE`. Each walks its module rather than a list of names, so a new export is
-  covered without anyone remembering to add it. The character budgets cannot catch
-  this on their own: `’` is one UTF-16 code unit, exactly like `'`, so no length
-  moves.
-- **The copy that exists twice lives in one file.** `packages/react/src/lib/`
-  holds it: `recovery-code-copy.ts` (create-account and Settings → Account),
-  `lock-copy.ts` (the unlock pane and its two gates), `misc-settings-copy.ts`
-  (every radio row in Settings → Misc.), `paywall-copy.ts` (the action-interrupt
-  upgrade dialog, both apps' `contexts/paywall-provider.tsx`), beside the
-  `new-password-copy.ts` that set the pattern. Each covers a surface that exists
-  once per platform, where the native half is a hand port of the web one and
-  nothing but the shared file keeps the two saying the same words. The rule for
-  what goes in: only the WORDS, and only when there are two of them — a string
-  that exists on one platform only (the biometric button) stays at its call site
-  rather than moving somewhere that implies a twin. `PAYWALL_COPY` marks the edge
-  of "only the WORDS": each entry carries the `plan` that unlocks it, which is not
-  a word at rest but is one by the time it is read — the CTA renders
-  `Upgrade to {PLAN_LABELS[plan]}` and the description names the same plan in
-  prose, so the two travel together or the sentence can promise Plus while the
-  button sells Pro.
+  modules: `listing-copy.spec.ts` for the store copy and `brand.spec.ts` for the
+  brand lines, `COMPANY` and `SOURCE`. Each walks its module rather than a list of
+  names, so a new export is covered.
+- **`no-restricted-syntax` in the root `eslint.config.mjs`** holds it over every
+  `.ts` and `.tsx` in the workspace, with three selectors: `Literal`,
+  `TemplateElement` and `JSXText`.
 
-The sweep **is** done — every string a user reads carries `’`, across both apps,
-the packages and the marketing site — and **`no-restricted-syntax` in the root
-`eslint.config.mjs` now holds it**, so this is the one rule in this section a
-reader does not have to remember. Three things are worth keeping.
+Three things are worth keeping. **Write `’` in JSX text, not `&apos;` or
+`&rsquo;`**: Babel decodes `&apos;` into the straight `'`, so it was only a
+disguise a search for `'` can't find, and a bare `'` in JSX text passes lint
+because `react/no-unescaped-entities` is not enabled here. **The rule is about
+the character, not the reader**: a log line, a thrown `Error` and a dev warning
+all take `’`, because making every author judge whether a string might reach a
+user is the call that produced the drift. The one exception is where the
+apostrophe is **data** — a parser token, a fixture, a value compared against user
+input — where `’` would be a bug and a disable comment is right; there are none
+today. Out of scope: **comments**, and **specs and `e2e/`**, where a test name is
+prose nobody reads in the product. A spec asserting on real copy still has to
+spell it exactly.
 
-**There was a second spelling, and it hid from the obvious grep.** In JSX TEXT
-the straight apostrophe was written as the HTML entity `&apos;` — forty-four of
-them, none of which a search for `'` can find. Babel decodes it at parse time (on
-Metro as well as on web) into exactly the straight `'`, so it was never a fix for
-anything, only a disguise. Nothing in this repo asks for it, either:
-`react/no-unescaped-entities` is NOT enabled here, and a bare `'` in JSX text
-passes `npm run lint` — the entity is a habit carried in from projects that do
-enable that rule (it was a Next.js default for years). A third spelling, `&rsquo;`, was in two files and was the only
-correct one of the three. Both entities are gone; the literal `’` needs no entity
-and does not trip the rule. **Write `’`, not `&rsquo;`** — one spelling, and it
-greps.
-
-**The rule is about the CHARACTER, not about who reads the string.** It covers
-every `.ts`/`.tsx` in the workspace, and fixing a hit is always the same thing:
-type `’`. A log line, a thrown `Error`, a dev-only warning — all of them take `’`
-too. That is deliberate and it is the cheaper rule to live under: the alternative
-makes every author judge whether a string might reach a user one day, which is
-exactly the kind of call that produced the drift above. The one real exception is
-a string where the apostrophe is **data** rather than prose — a parser token, a
-fixture, a value compared against user input — where `’` would be a bug and a
-disable comment is right. There are none today.
-
-Out of scope: **comments** (not a string literal, so the rule never sees them) and
-**specs and `e2e/`**, which are ignored — a test NAME is prose nobody reads in the
-product, so `it("applies a child's own hide …")` stays as it is. A spec asserting
-on real copy still has to spell that copy exactly, or it stops passing, which is
-how `listing-copy.spec.ts` and `field-messages.spec.ts` already work.
-
-The three selectors are `Literal`, `TemplateElement` and `JSXText`; the last is
-the one that earns the rule, for the `&apos;` reason above. `listing-copy.spec.ts`
-keeps its own assertion regardless — the rule fires on the source, the spec fires
-on the exported VALUES, which is what actually reaches a store console.
+**The copy that exists twice lives in one file.** `packages/react/src/lib/` holds
+it: `recovery-code-copy.ts`, `lock-copy.ts`, `misc-settings-copy.ts`,
+`paywall-copy.ts`, beside the `new-password-copy.ts` that set the pattern. Each
+covers a surface that exists once per platform, where the native half is a hand
+port of the web one and nothing but the shared file keeps the two saying the same
+words. What goes in: only the **words**, and only when there are two of them — a
+string that exists on one platform only (the biometric button) stays at its call
+site. `PAYWALL_COPY` marks the edge: each entry carries the `plan` that unlocks
+it, which is not a word at rest but is one by the time it is read, since the CTA
+renders `Upgrade to {PLAN_LABELS[plan]}` and the description names the same plan,
+so the two travel together or the sentence can promise Plus while the button sells
+Pro.
 
 ⚠ **The quotation mark is the typographic pair `“ ”` (U+201C/U+201D)**, by the
 same editorial rule and with the same scope — every string, one pair, never a
-straight `"`, never `&quot;` or `&ldquo;`.
+straight `"`, never `&quot;` or `&ldquo;`. Nothing ever pulled it wrong (prettier
+flips a literal only when it holds more single quotes than doubles), so it has
+been right by taste, and it is written down at zero rather than after a drift.
 
-**The mechanism that broke the apostrophe does not exist here, and that is the
-point.** Prettier flips a literal to double quotes only when the content holds
-more single quotes than doubles, so a `"` in prose needs no escaping and forces
-no flip — nothing was ever pulling the choice wrong. It has consequently been
-right by taste alone since the beginning: all 25 quotation marks in the workspace
-are `“ ”`, and every straight `"` in a `.ts`/`.tsx` is a **comment** or **data**
-(the CSV quoting in `import/csv.ts` and `export/csv.ts`, the HTML attributes in
-`export/netscape.ts`, the attribute-scanner regexes in `expo-react`'s
-`parse-html-head.ts` and the HTML fixtures its spec feeds them).
-Which is exactly why it is written down at zero rather than after a drift:
-nothing was pulling it wrong, and nothing is pulling it right either.
-
-**Three jobs, all of them already in the code.** A delimiter around **content the
-user typed**, which is the common one and is not optional — `Create “{trimmed}”`
-in the four list/tag pickers across both platforms, `Move “{name}” to`,
-`“{title}” and its saved content`. A **defined term** in the legal pages —
-`(“{COMPANY.shortName}”, “we”, “us”)`, the “Service”, “AS IS”. And a **mention**,
-where a phrase is being discussed rather than asserted — _there is no “we promise
-not to look” in that sentence_ on /about, _What does “end-to-end encrypted”
-actually mean here?_ in the FAQ.
-
-**Nesting is barred, and the reason is the rule above it.** The standard inner
-pair is `‘ ’`, whose closing mark is the SAME codepoint as the apostrophe — so a
-nested quotation puts a character that means _apostrophe_ everywhere else in the
-product at the end of a phrase, one word away from a real one. Restructure the
-sentence instead. There is no nesting today, and the only `‘` in the workspace is
-a table entry in `shared`'s `html/entities.ts` — the windows-1252 character at
-0x91, which is that codepoint as DATA rather than as punctuation.
-
-**Whether to quote a UI label is the one case with a real choice in it**, and the
-line is what the reader has to do with the string. A **named surface or system
-list** stays bare — My List, Archive, Trash, Show All are data
-(`sync/system-lists.ts`), a user navigates to them, and the terminology table
-already treats them as names rather than as copy. An **option value inside a
-control** takes the quotes, because the reader has to find that exact string in a
-row of radios and click it: _switch the setting from “Sync” to “Device”_
-(`content/faq.tsx`) is right as it stands.
-
-**What holds it is weaker than the apostrophe's guard, deliberately.** A fourth
-`no-restricted-syntax` selector covers `JSXText`, where a straight `"` is
-unambiguously prose, and the two spec walkers assert it over the exported values
-alongside `’`. There is no `Literal` selector, because `"` is real data in this
-workspace and such a rule would be per-file disables forever — so a **prose
-string in a single-quoted literal** (`'the "Service"'`) is the gap, and this page
-is what covers it. `listing-copy.spec.ts` is where that gap matters most:
-the two long descriptions, `FULL_DESCRIPTION` and
-`BROWSER_EXTENSION_FULL_DESCRIPTION`, are the exports long enough to quote
-anything — the second quotes Chrome's permission warning — and both are pasted
-into a store console by hand.
+- **Three jobs.** A delimiter around **content the user typed** (`Create “{trimmed}”`, `Move “{name}” to`); a **defined term** in the legal pages
+  (`(“{COMPANY.shortName}”, “we”, “us”)`, the “Service”, “AS IS”); and a
+  **mention**, where a phrase is discussed rather than asserted (_What does
+  “end-to-end encrypted” actually mean here?_).
+- **Nesting is barred.** The inner pair `‘ ’` closes with the same codepoint as
+  the apostrophe, which would put an apostrophe at the end of a phrase one word
+  from a real one. Restructure the sentence.
+- **Quoting a UI label** depends on what the reader has to do. A **named surface
+  or system list** stays bare — My List, Archive, Trash, Show All are data. An
+  **option value inside a control** takes the quotes, because the reader has to
+  find that exact string in a row of radios: _switch the setting from “Sync” to
+  “Device”_.
+- **What holds it is weaker than the apostrophe's guard, deliberately.** A fourth
+  `no-restricted-syntax` selector covers `JSXText`, where a straight `"` is
+  unambiguously prose, and the two spec walkers assert it. There is no `Literal`
+  selector, because `"` is real data here (CSV quoting, HTML attributes,
+  regexes). So a **prose string in a single-quoted literal** (`'the "Service"'`)
+  is the gap, and this page covers it, most of all in the two long store
+  descriptions in `listing-copy.ts`, which are pasted into a store console by
+  hand.
 
 #### terminology
 
 The load-bearing pair — bookmark and link — has its own section below. The rest:
 
-| use                                                                                                                                                       | not                                                                                                                         | why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **"a key your password unlocks"**                                                                                                                         | "a key derived from your password"                                                                                          | the root of an account is a **random DEK**; the password derives only the KEK that unwraps a copy of it, which is how a recovery code opens the same library — so "derived" refutes itself one clause later, beside the sentence promising the recovery code. It reached **eight** surfaces out of one compressed heading before that heading was rewritten ([account.md](./account.md), the callout under _the model_). Two nearby spellings that ARE right and must not be "corrected": the wrapped blobs are "locked with a key derived from your password or recovery code" (that IS the KEK), and "your password is put through Argon2id to derive a key, and that key unlocks the one your library is encrypted with"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| **"each link is encrypted"**, "my links", "your library"                                                                                                  | "everything is encrypted", "your data is encrypted", "encrypts your data"                                                   | the LIBRARY is what is encrypted — every link, list, tag, and setting is its own encrypted file — and the account is not: the username, the public key, the session records, and the subscription row are held in the clear, and each encrypted file keeps a readable path, size, and timestamp ([local-first-sync.md](./local-first-sync.md), _crypto boundary & what the server still learns_). "Everything" is the row below made from the client's end: a true subset presented as the whole, and the FAQ refuted it two questions above the question that assumed it. It shipped on three surfaces — that question, the share sheet's signed-out notice, and /terms ("the key that encrypts your data") — because it **arrives as a premise, not an assertion**: the "if" or "so" clause of a sentence about something else, and a question in the reader's voice is still our copy. **"Your data" is the same quantifier without the word**; the username is the reader's data too. The fix keeps the sentence's length: name the object ("each link", "my links") or the mass noun ("your library"). Right, and not to be "corrected": "Everything your library is encrypted with comes from that one key" and "Every link, list, tag, and setting is its own encrypted file" are scoped to the library; "Delete all your data" and "Export your data" state the reach of an action, not of the encryption                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| **"`api.bracemark.com` never sees your library in plaintext"**                                                                                            | "the server sees nothing", "only ever sees ciphertext", "the sync server"                                                   | one Worker serves auth, sync AND billing, so the same host that cannot read a link holds your username, public key, sessions and subscription row in the clear; only the LIBRARY is ciphertext-only, and there is no separate sync server to narrow the claim onto. An **enumeration that closes** ("nothing else on file") is the same error one step quieter, and a claim about what we SEE rather than what we HOLD is false the moment `bracemark-extractor` is on. `R2` only ever sees ciphertext IS true, and so is "blind sync broker" ([local-first-sync.md](./local-first-sync.md), _the shape of the problem_)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| **"end-to-end encrypted"**, and then name what the server holds                                                                                           | "zero-knowledge", "we know nothing", "knowledge-minimized"                                                                  | there is no zero-knowledge **proof** anywhere in this stack, so the term is wrong in its own field — on the property whose credibility argument is that you can read the source, that is the most checkable false claim available. On the looser marketing reading it is false three ways over: the identity/billing plane holds your username, public key, sessions and subscription row; `bracemark-extractor` is handed a plaintext URL whenever the opt-in is on ([link-extraction-server.md](./link-extraction-server.md)); and R2 accrues object counts, sizes and timestamps. It opened [account.md](./account.md) with its own refutation one colon later ("…also holds your username… in the clear") — the row above this one, spelled with a different word — and had reached five files, none of them user-facing, before anyone read it as a claim rather than a category. **"Knowledge-minimized" is not the fix**: it is accurate and it is a claim about our intent, which _the voice_ bars beside "privacy-focused" wherever a mechanism is available, and here four are — "end-to-end encrypted", "`api.bracemark.com` never sees your library in plaintext", "`R2` only ever sees ciphertext", "blind sync broker". `KEYWORDS` in `listing-copy.ts` keeps `zero,knowledge` and is outside this rule for the reason "vault" is: a comma-list of search terms is not prose, and matching a query is not making a claim                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| **"no analytics code"**, "no analytics in the app"                                                                                                        | "no analytics", "we run no analytics"                                                                                       | we count totals on the server — accounts, recent sign-ins and syncs, subscriptions, and library sizes in ranges — from records already kept to run the service, and /privacy names those records under _How we use what we collect_. That is analytics by any reader's definition and by Apple's App Privacy one ("measure audience size"), so a bare "no analytics" is the true-subset-as-the-whole error of the two rows above: true of the code we ship, false of what we do, and refuted by our own privacy policy. Scope the No to the code — "no analytics code" on the landing page and in the browser extension's listing, "no analytics in the app" in the mobile listing, "We ship no analytics or advertising code" in the FAQ, which then names the counting in its next sentence. /privacy's own No is "counting adds no analytics or tracking code", the same scope; it said "no analytics **product**" for a stretch, which our hosts' dashboards made arguable once the page admitted we read them. And beside the request logs our hosts keep, /privacy states the uses rather than limiting them — finding a fault or an attack, and the totals their consoles compile, read like our own — because those consoles build traffic reports whether we open them or not. "We read it only to diagnose a fault or an attack" was the wording for a stretch: a purpose limit on a dashboard we do not control, broken by a glance at it. The store declarations must carry the Analytics purpose to match, or the listing and the label disagree on one screen                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| **our API**, glossed once per page                                                                                                                        | "the sync service", "the account service"                                                                                   | `bracemark-api` is one Worker behind sign-in, sync, and billing, and a name taken from one of those jobs is the `api.bracemark.com` row above arriving as a noun: the help page on encryption called it "the account service" where it listed what we hold and "our sync service" three paragraphs earlier, where the sentence was about files — two services on one page, and the second one does not exist. The gloss is /privacy's, "the service behind sign-in, sync, and billing", and it goes on the first mention of any page a non-technical reader lands on. **"Our servers"** stays the collective for a claim about what we HOLD ("our servers hold a path, a size…") — plural, since the files sit in storage and not in the API — and "the server" stays in sync status strings, where it is the thing a device could not reach. Not to be confused with /about's "there is no public API", which is about an interface for other people's code                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| **link-extraction service**                                                                                                                               | "link-preview service", "preview service", "extraction service" on its own, "the preview server", "read-mode service"       | one service, one name, at one length. It was "link-preview service" until 12 November 2026, when the same service was also returning read-mode copies and the name no longer covered what it does. A second name for that half ("read-mode service") would claim a second service with rules of its own, where /privacy describes one. "Link-extraction" also meets the name a site operator sees — `bracemark-extractor`, on /extractor and in the user agent — so the policy's "its own page" link lands on the word it promised. The full form goes everywhere the service is named — /privacy, /terms, the FAQ, the help pages, the in-app prompt, both switches and the reader — because a short form beside the long one is how four names happened before: /privacy once said "link-preview service" in one section and "our extraction service" in the next, /terms said "link-extraction service", and a switch said "the preview server", with no way for a reader to know they were one thing. **"Server previews"** and **"Server read mode"** are SETTINGS, not the service, and "no server of ours" is a description, not a name; all stay. `bracemark-extractor` is the name on /extractor alone, read by people who found it in their access logs. The published security-review post keeps "the preview service": it reports what was examined under that name, on its date                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| **browser extension** / **share extension**                                                                                                               | "extension", bare                                                                                                           | two unrelated things carry the name; a store listing is read by people who know neither exists ([architecture.md](./architecture.md#apps))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| **password**                                                                                                                                              | "passphrase", in any user-facing copy                                                                                       | the app never prints the other word: `NEW_PASSWORD_COPY` (`react/lib/new-password-copy.ts`) says _password_ for the generated words too ("Generated for you." under the field, then "Save it in a password manager…"), so a surface that says _passphrase_ names a thing the reader will not find in the ceremony. It is the engineering name for the generated default (`crypto/passphrase.ts`) and stays in docs, identifiers and comments — it had leaked into the landing page, the FAQ and the store listing before this row said so ([account.md](./account.md))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| **recovery code**                                                                                                                                         | "backup code", "recovery key"                                                                                               | one name, and it is the one the crypto uses (`crypto/recovery-code.ts`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| **sign in / sign out / create account**                                                                                                                   | "log in", "login", "sign up"                                                                                                | already unanimous across both apps; "login" is a noun and never a verb                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| **My List, Archive, Trash, Show All**                                                                                                                     | "inbox", "bin", "all items"                                                                                                 | these are data (`sync/system-lists.ts`), not copy — never retyped, never translated in prose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| **Free, Plus, Pro**                                                                                                                                       | "premium", "paid tier"                                                                                                      | `PLAN_LABELS` is the source; see the mechanics table                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| **list, tag, pin**                                                                                                                                        | "folder", "label", "favourite"                                                                                              | the UI names places and the schema agrees; a synonym in prose teaches a second vocabulary for one feature                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| **copies** — one is a **read-mode copy**, a **screenshot** or a **page copy**; together, "the copies you keep"                                            | "kept copies" as a label, "page copies" for the three together, "link copies", "archived pages", "snapshots", "saved pages" | what is kept is the PAGE, not the link — "link copies" reads as duplicate bookmarks, beside a menu whose "Copy link" copies the address. A **link preview** is not a copy and stays outside the word: it is a title and an image fetched for every link so the list reads, where a copy is the page itself, kept for when it moves, changes or goes behind a sign-in. _Page copy_ names ONE kind (planned — _only what ships_ above keeps it out of public copy until it lands), so the umbrella is the bare noun and never "page copies". The neighbours each fail on a word already taken: "archive" is the Archive system list's (`link-extraction-keep.md`, _naming_), "snapshot" blurs into screenshot, "saved pages" into saving a link, and "offline copies" claims an availability nothing guarantees. "Kept copies" is the docs' and the code's name for the three (`keptCopies`) and stays there — as a heading it reads as a participle stranded in front of a noun. A heading or a control names the KIND (Settings → _Read mode_, "Keep a read-mode copy", "Keep a screenshot when you save"); the umbrella is for where more than one kind is meant — the paywall, the storage note, bulk edit — and works best as a verb: "Keep a copy". The verb that undoes one is **delete** ("Delete copies", "Delete this screenshot?"): "remove" in this app moves a link to Trash, and on a copy it would promise a recovery that does not exist                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| **read mode** as a noun, **read-mode** only before one — "in read mode", Settings → _Read mode_, "a read-mode copy", "Include images in read-mode copies" | "a read-mode" as a noun, "Read Mode", "Keep read mode on save", "Keep images in read mode"                                  | the ordinary compound-modifier rule: the two words take a hyphen when together they describe a following noun, and stand open everywhere else — so the hyphen marks exactly one job, the copy's kind. The rule matters more than usual here because **"mode" names a way of viewing** (every browser has a reader mode), so read mode left as the bare object of a verb reads as a display setting, not as something kept: "Keep read mode on save" parsed as "keep read mode ON", and "Keep images in read mode" as a preference for showing pictures in the reader. Both were switch labels in Settings → Read mode. Where the words are about the THING kept, the noun is **copy** and read-mode qualifies it ("Keep a read-mode copy when you save", "Include images in read-mode copies"). Bare read mode stays right where nothing can be mistaken for a mode — "its text in read mode" in `PAYWALL_COPY`, "an article to keep in read mode". **A name keeps its own spelling**, even in front of a noun: it is "the Read mode section", like "the Link previews section", never "the Read-mode section" — the hyphen rule is for describing words, and a section's name is quoted, not described (the code's `read-mode-section.tsx` is a file name and follows neither). A setting's name is a name too: _Server read mode_, the web app's opt-in, is named beside _Server previews_ and reads as one, so it stays open. The per-link button is _Keep a read-mode copy_ (the web reader); on expo's capture screen it is _Keep a copy_, because it shares one row with _Update preview_ at half a phone's width, where the long label wraps — and there the umbrella is exact, since a read-mode copy is the only kind the phone takes, and it is the family of the button's other states (_Keep a new copy_). The browser extension's saved screen needs neither: its two buttons sit under a _Keep a copy_ heading, so they name the bare kind, "Read mode" and "Screenshot". Not "auto" either ("Auto-make a read-mode copy"): a switch whose title ends "when you save" is already automatic, and "auto" is a word about the machine where the label should name what the reader gets. Docs and comments follow the same spelling; code is `readMode` |
-| **the successor to Brace.to**                                                                                                                             | "the second version", "v2"                                                                                                  | the predecessor was renamed AND rebuilt — a decentralised identity stack traded for our own end-to-end encryption — so "second version" names an increment that did not happen, and /about contradicts it two sentences later ("named after a domain nobody could say out loud"). "Successor" is what the repo already calls it everywhere but its public surfaces (`data-lifecycle.md`, `brand/brand.ts`). Not "next generation" either: that fails _mechanical_ above — a reassuring adjective with no content, pointing forward where the claim is a backward-looking track record. It is stated on exactly TWO surfaces, the landing page's _If we disappear_ footnote and /about's _Where it came from_, and they have to agree. Both now carry the YEAR and the LINK, from `PREDECESSOR` in `brand/brand.ts` — an unlinked, undated product name is a track record a reader cannot check, which on this property is the one kind of claim that costs more than it buys, and three readers went looking for something to click. Both also say **and still run today**: a predecessor named only in the past tense reads as churn on the very band arguing we will still be here. That clause is present tense and reports what is running; if the domain ever stops answering, the link comes out of both surfaces and the tense around it is re-read in the same change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| use                                                                                                                                                       | not                                                                                                                         | why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **"a key your password unlocks"**                                                                                                                         | "a key derived from your password"                                                                                          | the root of an account is a **random DEK**; the password derives only the KEK that unwraps a copy of it, which is how a recovery code opens the same library — so "derived" refutes itself one clause later ([account.md](./account.md), the callout under _the model_). Two nearby spellings are right and must not be "corrected": the wrapped blobs are "locked with a key derived from your password or recovery code" (that IS the KEK), and "your password is put through Argon2id to derive a key, and that key unlocks the one your library is encrypted with"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **"each link is encrypted"**, "my links", "your library"                                                                                                  | "everything is encrypted", "your data is encrypted", "encrypts your data"                                                   | the LIBRARY is what is encrypted — every link, list, tag, and setting is its own encrypted file — and the account is not: the username, the public key, the session records, and the subscription row are held in the clear, and each encrypted file keeps a readable path, size, and timestamp ([local-first-sync.md](./local-first-sync.md), _crypto boundary & what the server still learns_). "Everything" is a true subset presented as the whole, and it arrives as a **premise, not an assertion**: the "if" or "so" clause of a sentence about something else, or a question in the reader's voice, is still our copy. "Your data" is the same quantifier without the word; the username is the reader's data too. The fix keeps the sentence's length: name the object ("each link", "my links") or the mass noun ("your library"). Right, and not to be "corrected": "Everything your library is encrypted with comes from that one key" and "Every link, list, tag, and setting is its own encrypted file" are scoped to the library; "Delete all your data" and "Export your data" state the reach of an action, not of the encryption                                                                                                                                                                                                                                                                                                                           |
+| **"`api.bracemark.com` never sees your library in plaintext"**                                                                                            | "the server sees nothing", "only ever sees ciphertext", "the sync server"                                                   | one Worker serves auth, sync AND billing, so the same host that cannot read a link holds your username, public key, sessions and subscription row in the clear; only the LIBRARY is ciphertext-only, and there is no separate sync server to narrow the claim onto. An **enumeration that closes** ("nothing else on file") is the same error one step quieter, and a claim about what we SEE rather than what we HOLD is false the moment `bracemark-extractor` is on. `R2` only ever sees ciphertext IS true, and so is "blind sync broker" ([local-first-sync.md](./local-first-sync.md), _the shape of the problem_)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **"end-to-end encrypted"**, and then name what the server holds                                                                                           | "zero-knowledge", "we know nothing", "knowledge-minimized"                                                                  | there is no zero-knowledge **proof** anywhere in this stack, so the term is wrong in its own field — and on a property whose argument is that you can read the source, it is the most checkable false claim available. On the looser marketing reading it is false three ways over: the identity/billing plane holds your username, public key, sessions and subscription row; `bracemark-extractor` is handed a plaintext URL whenever the opt-in is on ([link-extraction-server.md](./link-extraction-server.md)); and R2 accrues object counts, sizes and timestamps. **"Knowledge-minimized" is not the fix**: it is accurate, and it is a claim about our intent, which _the voice_ bars beside "privacy-focused" wherever a mechanism is available — and four are: "end-to-end encrypted", "`api.bracemark.com` never sees your library in plaintext", "`R2` only ever sees ciphertext", "blind sync broker". `KEYWORDS` in `listing-copy.ts` keeps `zero,knowledge` and is outside this rule: a comma-list of search terms is not prose, and matching a query is not making a claim                                                                                                                                                                                                                                                                                                                                                                                   |
+| **"no analytics code"**, "no analytics in the app"                                                                                                        | "no analytics", "we run no analytics"                                                                                       | we count totals on the server — accounts, recent sign-ins and syncs, subscriptions, and library sizes in ranges — from records already kept to run the service, and /privacy names those records under _How we use what we collect_. That is analytics by any reader's definition and by Apple's App Privacy one ("measure audience size"), so a bare "no analytics" is true of the code we ship and false of what we do. Scope the No to the code: "no analytics code" on the landing page and in the browser extension's listing, "no analytics in the app" in the mobile listing, "We ship no analytics or advertising code" in the FAQ, which then names the counting in its next sentence. /privacy's own No is "counting adds no analytics or tracking code"; it said "no analytics **product**" for a stretch, which our hosts' dashboards made arguable. Beside the request logs our hosts keep, /privacy states the uses rather than limiting them (finding a fault or an attack, and the totals their consoles compile), because those consoles build traffic reports whether we open them or not; "we read it only to diagnose a fault or an attack" was a purpose limit on a dashboard we do not control. The store declarations must carry the Analytics purpose to match, or the listing and the label disagree on one screen                                                                                                                                  |
+| **our API**, glossed once per page                                                                                                                        | "the sync service", "the account service"                                                                                   | `bracemark-api` is one Worker behind sign-in, sync, and billing, and a name taken from one of those jobs is the `api.bracemark.com` row above arriving as a noun: the help page on encryption called it "the account service" where it listed what we hold and "our sync service" three paragraphs earlier. The gloss is /privacy's, "the service behind sign-in, sync, and billing", and it goes on the first mention of any page a non-technical reader lands on. **"Our servers"** stays the collective for a claim about what we HOLD ("our servers hold a path, a size…") — plural, since the files sit in storage and not in the API — and "the server" stays in sync status strings, where it is the thing a device could not reach. Not to be confused with /about's "there is no public API", which is about an interface for other people's code                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **link-extraction service**                                                                                                                               | "link-preview service", "preview service", "extraction service" on its own, "the preview server", "read-mode service"       | one service, one name, at one length. It was "link-preview service" until 12 November 2026, when the same service was also returning read-mode copies and the name no longer covered what it does. A second name for that half ("read-mode service") would claim a second service with rules of its own, where /privacy describes one. "Link-extraction" also meets the name a site operator sees — `bracemark-extractor`, on /extractor and in the user agent — so the policy's "its own page" link lands on the word it promised. The full form goes everywhere the service is named (/privacy, /terms, the FAQ, the help pages, the in-app prompt, both switches and the reader), because a short form beside the long one is how four names happened before. **"Server previews"** and **"Server read mode"** are SETTINGS, not the service, and "no server of ours" is a description, not a name; all stay. `bracemark-extractor` is the name on /extractor alone, read by people who found it in their access logs. The published security-review post keeps "the preview service": it reports what was examined under that name, on its date                                                                                                                                                                                                                                                                                                                          |
+| **browser extension** / **share extension**                                                                                                               | "extension", bare                                                                                                           | two unrelated things carry the name; a store listing is read by people who know neither exists ([architecture.md](./architecture.md#apps))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **password**                                                                                                                                              | "passphrase", in any user-facing copy                                                                                       | the app never prints the other word: `NEW_PASSWORD_COPY` (`react/lib/new-password-copy.ts`) says _password_ for the generated words too ("Generated for you." under the field, then "Save it in a password manager…"), so a surface that says _passphrase_ names a thing the reader will not find in the ceremony. It is the engineering name for the generated default (`crypto/passphrase.ts`) and stays in docs, identifiers and comments — it had leaked into the landing page, the FAQ and the store listing before this row said so ([account.md](./account.md))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **recovery code**                                                                                                                                         | "backup code", "recovery key"                                                                                               | one name, and it is the one the crypto uses (`crypto/recovery-code.ts`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **sign in / sign out / create account**                                                                                                                   | "log in", "login", "sign up"                                                                                                | already unanimous across both apps; "login" is a noun and never a verb                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **My List, Archive, Trash, Show All**                                                                                                                     | "inbox", "bin", "all items"                                                                                                 | these are data (`sync/system-lists.ts`), not copy — never retyped, never translated in prose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| **Free, Plus, Pro**                                                                                                                                       | "premium", "paid tier"                                                                                                      | `PLAN_LABELS` is the source; see the mechanics table                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **list, tag, pin**                                                                                                                                        | "folder", "label", "favourite"                                                                                              | the UI names places and the schema agrees; a synonym in prose teaches a second vocabulary for one feature                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **copies** — one is a **read-mode copy**, a **screenshot** or a **page copy**; together, "the copies you keep"                                            | "kept copies" as a label, "page copies" for the three together, "link copies", "archived pages", "snapshots", "saved pages" | what is kept is the PAGE, not the link — "link copies" reads as duplicate bookmarks, beside a menu whose "Copy link" copies the address. A **link preview** is not a copy and stays outside the word: it is a title and an image fetched for every link so the list reads, where a copy is the page itself, kept for when it moves, changes or goes behind a sign-in. _Page copy_ names ONE kind (planned — _only what ships_ above keeps it out of public copy until it lands), so the umbrella is the bare noun and never "page copies". The neighbours each fail on a word already taken: "archive" is the Archive system list's, "snapshot" blurs into screenshot, "saved pages" into saving a link, and "offline copies" claims an availability nothing guarantees. "Kept copies" is the docs' and the code's name for the three (`keptCopies`) and stays there. A heading or a control names the KIND (Settings → _Read mode_, "Keep a read-mode copy", "Keep a screenshot when you save"); the umbrella is for where more than one kind is meant — the paywall, the storage note, bulk edit — and works best as a verb: "Keep a copy". The verb that undoes one is **delete**: "remove" in this app moves a link to Trash, and on a copy it would promise a recovery that does not exist                                                                                                                                                                              |
+| **read mode** as a noun, **read-mode** only before one — "in read mode", Settings → _Read mode_, "a read-mode copy", "Include images in read-mode copies" | "a read-mode" as a noun, "Read Mode", "Keep read mode on save", "Keep images in read mode"                                  | the ordinary compound-modifier rule: the hyphen when the two words together describe a following noun, open everywhere else, so the hyphen marks exactly one job, the copy's kind. It matters more than usual because **"mode" names a way of viewing** (every browser has a reader mode): bare read mode as the object of a verb reads as a display setting, and "Keep read mode on save" parsed as "keep read mode ON". Where the words are about the THING kept, the noun is **copy** and read-mode qualifies it ("Keep a read-mode copy when you save", "Include images in read-mode copies"). Bare read mode stays right where nothing can be mistaken for a mode: "its text in read mode", "an article to keep in read mode". **A name keeps its own spelling**, even before a noun: "the Read mode section", like "the Link previews section", and a setting's name too (_Server read mode_, beside _Server previews_). The per-link button is _Keep a read-mode copy_ (the web reader); on expo's capture screen it is _Keep a copy_, because it shares a row with _Update preview_ at half a phone's width, and a read-mode copy is the only kind the phone takes. The browser extension's saved screen names the bare kind, "Read mode" and "Screenshot", under a _Keep a copy_ heading. Not "auto" ("Auto-make a read-mode copy"): a switch whose title ends "when you save" is already automatic. Docs and comments follow the same spelling; code is `readMode` |
+| **the successor to Brace.to**                                                                                                                             | "the second version", "v2"                                                                                                  | the predecessor was renamed AND rebuilt — a decentralised identity stack traded for our own end-to-end encryption — so "second version" names an increment that did not happen, and /about contradicts it two sentences later ("named after a domain nobody could say out loud"). "Successor" is what the repo already calls it everywhere but its public surfaces (`data-lifecycle.md`, `brand/brand.ts`). Not "next generation" either: that fails _mechanical_ above — a reassuring adjective with no content, pointing forward where the claim is a backward-looking track record. It is stated on exactly TWO surfaces, the landing page's _If we disappear_ footnote and /about's _Where it came from_, and they have to agree. Both carry the YEAR and the LINK, from `PREDECESSOR` in `brand/brand.ts`: an unlinked, undated product name is a track record a reader cannot check. Both also say **and still run today**: a predecessor named only in the past tense reads as churn on the very band arguing we will still be here. That clause reports what is running; if the domain ever stops answering, the link comes out of both surfaces and the tense around it is re-read in the same change                                                                                                                                                                                                                                                               |
 
 And the collection still gets no noun — "vault" and "library" are ruled on in the
 next section, which is where the whole terminology argument is made at length.
@@ -930,11 +573,40 @@ and it must not outrun what the code supports.
 lets a visitor **read what we do**. It does **not** let them verify that the
 bundle their browser executed was built from it — there is no reproducible build
 and no signed release, so nothing ties a served asset back to a commit. So:
-_"see for yourself what we do"_, never _"verify what you are running"_. Every
-placement states the limit rather than leaving a reader to discover it. If
+_"see for yourself what we do"_, never _"verify what you are running"_. If
 reproducible builds ever ship, this paragraph is what changes, and the surfaces
 below move with it. What they would and would not prove, per platform, and what
 the new boundary may say: [reproducible-builds.md](./reproducible-builds.md).
+
+**What we claim, and what we don't.** We claim that the source is public under
+the AGPL, that a reader can read what the code does, and that a network inspector
+shows what the running build sends. We don't claim that any of the three proves
+another, that the build a reader runs came from the repo, or what a key does with
+what it holds. None of them is a guarantee, and every one is better than taking
+an app's word for it, which is the point of offering them.
+
+**The bar is on the object, not the word.** What is barred is a claim that a
+check reaches a result about the build a reader is running: "verify what you are
+running", "verifiable", "transparent". The verbs are not the problem. "Read",
+"check", "watch" and "see for yourself" describe what the reader does and are the
+default. "Verify" is allowed where it is the reader's own act and a limit has
+already been said, which is how the proverb "trust, but verify" reads straight
+after "none of these checks is a guarantee". It is not allowed as our claim about
+a build.
+
+**The limit scales with the room, as the costs do** (_the voice_). Every surface
+states a limit rather than leaving a reader to discover it. How much it says
+depends on what the surface claims and how much room it has.
+
+| surface                                                                                                | the limit it carries                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the pages that make the argument: /about, /faq `source`, /security, the repo README, a blog post on it | the build gap in full: no reproducible build, no signed release, nothing ties a served asset back to a commit                                        |
+| a short surface that points at a check: a post, a caption, a store field                               | one broad clause that no check is a guarantee. It claims nothing, so it needn't name the gap                                                         |
+| a reply to someone asking about the build, anywhere                                                    | the specific answer, because that is the question: the source is public, the build isn't reproducible, so a reader can't confirm theirs came from it |
+| any surface that tells a reader to use an AI                                                           | the broad clause covers it where room is short; with room, add that an AI can be wrong and the reader should open the lines it cites                 |
+
+What no surface may do, at any length, is imply that one check proves what a
+reader is running.
 
 **A network inspector is a third thing, and it sits inside the boundary.** Both
 halves above are about the SOURCE — what a reader can read, and what reading
@@ -942,8 +614,11 @@ cannot settle. A browser's own network inspector is neither: it observes the
 behaviour of the build that is actually running, which is precisely what the
 source cannot speak to. So it is admissible, and /security carries it once
 (_what this page does not prove_), as an OBSERVATION rather than a check that
-anything matches anything. Three limits travel with it, and the sentence has to
-hold all three at once:
+anything matches anything. Three limits travel with any sentence that **states
+what the inspector will show**, and that sentence has to hold all three at once.
+A surface that only **points** at it — telling a reader they can open it and
+look, with no claim about what they will find — states no result and needs only
+the broad limit above:
 
 - **It shows what a request contained, not what a key is doing.** Opaque request
   bodies are equally consistent with a key that never leaves and with one
@@ -962,7 +637,9 @@ hold all three at once:
 - **Name no tool and no request.** "Your browser's network inspector", never
   Chrome's DevTools: naming a vendor dates the copy and reads Chrome-first for a
   product with four clients. No endpoint, method or request shape either — those
-  rot exactly the way a published cap does.
+  rot exactly the way a published cap does. That is about published copy, which
+  dates. In a one-to-one reply, naming the tool the person is using is just
+  helping them.
 
 **Why AGPL and not MIT.** A hosted fork is the only real competitive risk, and
 the AGPL's network clause is the one that addresses it: run a modified version as
@@ -1029,255 +706,6 @@ the same failure the privacy claims were rewritten to avoid
 FAQ answer must NOT become: a how-to (a half-followed attempt is a support thread
 we have just declined to take), or a roadmap entry — "today" describes where
 things stand, and this band makes no promises about our future.
-
-### the generated pictures — the card and the store screenshots
-
-**Eight committed PNGs the build reads, and none of them can be checked by
-looking.** Four are the social card (`opengraph-image.png` + `twitter-image.png`
-in `apps/bracemark-site/src/app/` and `apps/bracemark-web/src/app/`, 1200x630,
-with an `.alt.txt` beside each); four are the PWA screenshots in
-`apps/bracemark-web/public/` that `manifest.json` lists — `ss-narrow-1/2.png` and
-`ss-wide-1/2.png`. They are **artifacts**: produced deliberately, out of the
-build, committed, and governed by the contract below rather than by a generator
-this repo runs.
-
-**And one film, under the same contract.** `apps/bracemark-site/public/video/`
-holds `demo.mp4` and `demo.poster.png` — 1920x1080, silent, about nineteen
-seconds — which the launch post plays through `<DemoClip />`
-(`apps/bracemark-site/src/components/mdx-components.tsx`). Every line of type in
-it is a constant this repo owns: the tagline, the hero's `SIGNATURE` panel, three
-of `SCREENSHOT_CAPTIONS` (`saveTab`, `encryptedBeforeSync`, `searchNotOurs`) and
-the slogan. So it is stamped like a card and goes stale like one, with two
-differences worth knowing. The pair is stamped **together** — the poster is
-frame 0 of the same render, `check:assets` reads the mp4's size out of its track
-header the way it reads a PNG's, and it refuses a clip whose poster is missing, a
-different size, or stamped from different inputs. And its text alternative is
-**not a sidecar**: a `<video>` has no `alt`, so the component builds the label
-from the same constants, in the order the film shows them, and there is no
-second file to forget.
-
-⚠ **The film shows the iOS app beside bracemark-web, in sync, and no stamp
-records that.** It is a claim made by a picture rather than by a string, so
-_only what ships_ (above) binds it and nothing checks it: the clip is true on a
-page that also says the iOS app is available, and on no other. The launch post
-says so in its first paragraph. Before the clip is put anywhere else — the
-landing page, a post written for a platform we have not shipped on — that is the
-question to ask of it.
-
-⚠ **BOTH FAMILIES SHIPPED BRACE.TO v1 FOR THE PRODUCT'S WHOLE LIFE, AND NOTHING
-SAID SO.** The card this repo shipped from `Initial commit` read "Save links to
-visit later", named the _predecessor_ in its body copy, claimed "Powered by
-Stacks technology", drew the old dotted-square mark, and carried **eleven
-third-party wordmarks** — the same smear the hero panel refuses to draw even once
-(`page.tsx`, the note above its preview slot, on the endorsement test). The eight
-`ss-*.png` were the same picture with a caption on it, and they outlived the card
-because this page said in as many words that they were "not brand assets and are
-not governed here". Both survived the entire rename for the reason every failure
-on this page survives: **a picture has nothing to lint.** No type error, no test,
-no failing build, and a wrong one renders exactly as well as a right one.
-
-**So the pictures are stamped, and the stamp is what is checked.**
-`assets.stamp.json` — at the workspace root, beside the other files that describe
-the tree rather than live in it — records, for each file, the strings and tokens
-it was drawn from and the hash of the file itself; `npm run check:assets`
-recomputes those inputs from the live constants and fails when they have moved:
-
-| part                 | must equal                                       | or the picture            |
-| -------------------- | ------------------------------------------------ | ------------------------- |
-| the headline         | `BRAND.tagline`                                  | says a sentence we do not |
-| the wordmark         | `BRAND.name`                                     | drifts from the lockup    |
-| a screenshot caption | `SUBTITLE` / the listing lines                   | promises what we do not   |
-| the mark             | the `d` in `web-ui`'s `BracemarkIcon`            | is a **third** copy of it |
-| the colours          | `--foreground`/`--muted-foreground`/`--signal`   | invents a second palette  |
-| the pixel size       | what `manifest.json` and the card format declare | is silently mis-declared  |
-
-It checks **inputs, not pixels**, and that is deliberate rather than a shortcut:
-a re-render is never a byte-clean diff (see the antialiasing note under _the
-mark_), so comparing pictures would fail on every regeneration and comparing
-inputs fails only when something actually moved. Run it beside
-`npm run check:private`; a failure names the file, the string it was drawn from
-and the string that constant says now.
-
-**Regenerate and re-stamp when:** the tagline, subtitle or a listing line
-changes; **a screenshot caption changes**; **the slogan changes** (the promo tile
-below and the film's last frame are set in it); **a `SIGNATURE` string changes**
-(any picture that draws the hero's panel — the film does); the mark changes; a `--color-*` token moves; the links list layout changes shape; the browser extension's popup changes
-shape; the share sheet does; the Advanced search panel gains, loses or renames a field; the
-selection bar, the Sync row in Settings → Data, the import's over-limit question, the Edit link
-dialog or the welcome's recovery step (after create-account) is reworded or rearranged; the free plan's link cap moves (the import figure prints it); or a screenshot
-shows a screen that no longer exists. Nothing else will
-tell you — that list _is_ the tripwire, and for the store pictures further down it
-is the _only_ thing there is, since those are not stamped. The same holds for the
-marketing site's own figures — the landing page's and the ones its `/docs` pages
-show (`apps/bracemark-site/src/content/figures.ts`): bare `.webp` captures, checked
-for their files and sizes and not stamped
-([architecture.md](./architecture.md), _the marketing site's `/docs`_).
-
-**The card has two designs and the stamp records which one is committed.**
-`slab` is type on white over an inverted ciphertext band — the page's own
-inverted-slab rhetoric, where dark is what the server sees. `library` is the
-seeded capture from `e2e/shot` cropped to the list pane, which shows the
-real product and pays for it by cropping a 25:19 object into 1.91:1 and carrying
-other people's cover art.
-
-**1200x630, and the twin file is not redundant.** Every unfurler sizes a
-`summary_large_image` at 1.91:1 and upsamples from that step; the card this
-replaced was 800x418, inside the floor and soft on any retina timeline. With only
-the og file Next emits no `twitter:image` tag at all, so `twitter-image.png` is a
-byte-identical copy rather than a duplicate.
-
-⚠ **The PWA screenshots are bare captures — no device bezel, no caption.** Chrome
-draws them inside its own install dialog at a few hundred pixels, where a frame
-inside a frame reads as a mistake and a caption is illegible. A store listing is
-a different consumer of the same capture: it may add a caption, but the mobile
-store design deliberately adds no handset bezel either. And the set
-`manifest.json` lists is the set that ships: two of the v1 files sat in `public/`
-referenced by nothing, deploying 2MB per release for no reader.
-
-**They are `1170x2532` narrow and `2560x1600` wide** — 390x844 CSS at DPR 3, and
-1280x800 CSS at DPR 2. Both are chosen rather than inherited; the v1 files were
-1242x2688 and 2732x2048, legal but arbitrary. A `wide` screenshot is a **desktop**
-one and 4:3 is not a desktop — 2732x2048 read as a landscape tablet — so it is the
-median laptop viewport. `narrow` is the median modern phone (iPhone 12–16; Pixel
-is 412 CSS) rather than the widest, because the dialog scales a screenshot to a
-fixed width: a narrower CSS viewport makes the app's own type **bigger** in the
-result. Both sit under Tailwind's `sm`, so the mobile layout is the same either
-way. The captures that fill these are scenes in `e2e/shot/scenes.ts` —
-`docs/e2e.md`, _the published screenshots_.
-
-⚠ **Chrome applies three rules to `manifest.json`'s screenshots and reports none
-of them.** Every dimension in 320–3840; the long side at most **2.3x** the short
-side; and every screenshot of one `form_factor` must share **one aspect ratio**.
-Break any of them and the set is dropped from the install dialog — which still
-opens, so the symptom is a picture that is simply not there. `npm run check:assets`
-enforces all three, because nothing else does. The number to watch is the narrow
-ratio, **2.164:1**: it is deliberate headroom, and phones keep getting taller — a
-20:9 screen is 2.22 and a 21:9 is 2.33, over the ceiling. Pick a phone by its
-ratio, not its name. Format is **PNG or JPEG only**; WebP is not accepted here,
-whatever `make-image-variants.sh` argues for the site's own figures.
-
-**Two per form factor, not four**, and the count is a decision. Chrome takes up to
-5 narrow and 8 wide, but the dialog shows about one and a half at a time; and every
-extra file is another PNG the regenerate list above invalidates, another stamp
-entry, another capture run against real sites. Two is where the set stops being a
-still life and starts making a claim — **My List** (`/links`, filled) and
-**the library doing something** (a committed `?text=` search, which on a phone also
-shows the summoned search row and on a laptop shows the rail with nothing
-highlighted, because a text search projects to no single axis). A third can be
-added later provided it comes from the **same profile**, since one form factor must
-share one aspect ratio. The captures are scenes in `e2e/shot/scenes.ts`.
-
-⚠ **A filtered view is short, and that is the fixture rather than a defect.** The
-shot library is 26 links across 10 lists, so the search shots land four rows and
-leave air under them — about 70% of the narrow frame and 60% of the wide one are
-used. On wide the rail carries the full height, so the empty pane reads as a
-narrowed view; if it ever stops reading that way the fix is a longer `library.ts`,
-not a broader search word.
-
-#### the store screenshots — public copy, private pictures
-
-**The browser extension's Chrome Web Store and AMO listings are four 1280x800
-pictures, and none of them is in this repo.** That is the same rule the eight
-above obey, read the other way: the repo tracks an image **when a build reads
-one**, and nothing here reads a store screenshot — a person uploads it to a
-console. What IS here is the half that can go wrong silently.
-
-**The captions are public, and that is the point of them being here at all.**
-`SCREENSHOT_CAPTIONS` in `packages/shared/src/stores/listing-copy.ts` holds every
-store-screenshot line. A caption is a user-facing claim drawn into a picture, so
-a caption typed beside the art would be the one piece of public copy
-in the product that nothing reviews — where in that file it gets the character
-budget, the bare-"extension" rule, the banned-claim list and the typographic
-apostrophe check for free, exactly like the store descriptions beside it. They are
-keyed by slug rather than by position: **which caption goes on which screen, and
-in what order, is listing strategy** and is not decided here.
-
-⚠ **No console enforces a caption length, so `STORE_LIMITS.screenshotCaption`
-is the only thing that does.** A long caption is accepted everywhere and simply
-sets smaller, wraps to three lines and spends the room the product was going to
-have. 40 characters is what the layout holds.
-
-⚠ **These console-uploaded pictures are NOT stamped, and the gap is real.**
-`assets.stamp.json` covers files in this tree; a store picture has no destination
-in it, so `check:assets` cannot see that a caption edit has made one wrong. The
-regenerate list above
-therefore gains a line that nothing will enforce: **a caption changes → redraw the
-store screenshots.** They declare their inputs anyway, so the contract is already
-written the day a store family becomes a tracked asset.
-
-**Chrome requires 1280x800 and caps a listing at five; AMO sets no size and caps
-at ten — so there is one set of art, at Chrome's size, for both.** Four of the
-five slots are used, for the same reason the install dialog gets two per form
-factor rather than four: a carousel is swiped once, and every extra picture is
-another capture to re-take when a screen changes shape. Chrome also **requires a
-440x280 promo tile**, which is art rather than a screenshot: the lockup and
-`BRAND.slogan` on an inverted ground, with the tile's own top-right corner turned
-down. That is the fold's _identity_ meaning from the table above, on the one
-surface in a store grid with nothing else to carry the brand — and the polarity
-is what makes the cut the mark's own gesture rather than its inverse, since a
-light tile would have to reveal ink to be visible at all. It is not in this repo
-either, for the reason the four screenshots are not, and it is not stamped
-either: **`BRAND.slogan` changing is one more line on the regenerate list that
-nothing will enforce.**
-
-**The mobile stores use the same four semantic pictures, not the same four
-files.** App Store receives native iOS captures at 1290x2796 for the 6.9-inch
-phone class; Play receives native Android captures composed at 1080x1920. These
-two phone families were the eight-asset deliverable while the app was phone-only.
-It is iPad-native now ([expo-build.md](./expo-build.md), _devices_), so App Store
-submission also needs an iPad family: capture the same four jobs independently in
-the real iPad layout — rails docked — at 2064x2752 rather than stretching phone
-art. The Play size is deliberate
-9:16: it is recommendation-eligible and stays inside
-Play's 2:1 long-side ceiling, unlike a raw 1080x2400 emulator screenshot. Four
-is enough to meet Play's recommendation-surface minimum while leaving Apple's
-first three images to carry the main story. Re-verify every size and count in
-the consoles at submission.
-
-The families share captions and subject matter so the promise does not change by
-store, but each shows the platform-native app and share surface a buyer will
-actually receive. They are caption-above-product composites on the quiet border
-field: Bricolage Grotesque, foreground ink, one or two lines in the top 18%, then
-an unframed app pane with a hairline and top corners that continues past the
-bottom edge. No handset outline, Dynamic Island, camera hole, vendor mockup,
-gradient, decorative object or mixed light/dark set. This keeps the UI large,
-avoids claiming one device model, and follows Play's guidance to minimize text
-and device imagery. The caption-to-screen pairing and upload order remain outside
-the public repo.
-
-⚠ **The one third-party thing in a store picture is the page being saved**, and it
-is chosen under the rule `e2e/shot/library.ts` already argues: our own pages,
-public-domain or openly-licensed material, cover art that is a photograph rather
-than a masthead. The listing-safe seed permits no logo-card cover: a real host and
-favicon are nominative context, but a publisher mark presented as artwork is a
-different claim and a store reviewer can reasonably read it as an endorsement.
-A store screenshot crops harder than any figure on the site, so inspect the
-finished crop rather than approving the source list in the abstract.
-
-**When there is nothing fit to ship, the key comes out.** The eight v1 files were
-deleted outright rather than left in place until replacements existed: a manifest
-that declares no screenshots degrades to Chrome's plain install prompt, which is
-strictly better than a dialog showing the predecessor's mark, a tagline we do not
-use and eleven third-party wordmarks. `screenshots` is therefore **optional** to
-`check:assets`, which treats its absence as legitimate while keeping both of its
-manifest⇄tree directions live — a stamped `public/ss-*.png` that nothing
-references still fails.
-
-⚠ **Chrome's richer install UI needs a `description` too, and without one the
-screenshots are never drawn at all** — committed, correct and invisible. The
-manifest carries one, and it is **not typed there**: it is
-`PWA_INSTALL_DESCRIPTION` in `packages/shared/src/stores/listing-copy.ts` (the
-same string as Play's short description — same job, one line a person reads while
-deciding to install), and `check:assets` fails when the two disagree. That is the
-same treatment the cards' `.alt.txt` sidecars get, for the same reason: it is
-TEXT, it is a user-facing claim, and `manifest.json` is a file nobody opens. It is
-also a stamped input of all four screenshots — the one input a bare capture
-depends on without drawing, because Chrome renders the sentence immediately above
-the carousel and the two are one composition.
-
-**Optional and not taken yet:** screenshot entries also accept a `label`, which
-Chrome can show. Those are user-facing copy and belong in `listing-copy.ts` beside
-the description rather than typed into the manifest.
 
 ### the X account — @bracemarkapp
 

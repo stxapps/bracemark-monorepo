@@ -19,7 +19,7 @@
 // put, and its corner comes off.
 //
 // THE CORNER IS THE SAVE — on the OBJECT — and it is the meaning the fold ALREADY
-// carries on the extension's tile (docs/brand-assets.md, _the mark_: square is
+// carries on the extension's tile (docs/brand-visuals.md, _the mark_: square is
 // unsaved, cut is saved), the same meaning on the same job, not a third one. It is
 // NOT the whole signal, whatever this comment used to say: `share-screen.tsx`'s
 // saved phase prints "Saved to <list>" and swaps the controls beneath, exactly as

@@ -30,7 +30,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // the THING rather than to the chrome around it — which is the whole reason the
 // specimen doesn't move across the save. Removing it would cost nothing a user
 // could name and would take with it one of the two meanings the fold is allowed
-// to carry (docs/brand-assets.md, _the mark_); keeping it costs one CSS pair here
+// to carry (docs/brand-visuals.md, _the mark_); keeping it costs one CSS pair here
 // and one overlay in the RN port. Keep it, and don't re-inflate the claim.
 //
 // THE TILE'S FALLBACK CHAIN, best first:

@@ -561,7 +561,7 @@ optional, and only honest once the app is built at the 27.1 tier.
 
 **`supportsTablet: true` is one-way.** Once a build with iPad support ships, App
 Store Connect rejects any later build that drops it. It also makes **iPad
-screenshots required** at submission ([brand-assets.md](./brand-assets.md), _the
+screenshots required** at submission ([brand-visuals.md](./brand-visuals.md), _the
 store screenshots_, names the size).
 
 **No orientation lock, on any device.** `orientation: 'default'` writes all four

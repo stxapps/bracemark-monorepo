@@ -10,7 +10,7 @@
 // tagline, the wrong mark, an encryption claim we no longer make, and eleven
 // third-party wordmarks. Nothing caught it, because a picture has nothing to lint.
 // No type error, no test, no failing build, and a wrong one renders exactly as
-// well as a right one (docs/brand-assets.md, _the generated pictures_). The demo
+// well as a right one (docs/brand-visuals.md, _the generated pictures_). The demo
 // clip the marketing site plays is the same kind of file with a clock: an mp4
 // and its poster, set in the tagline, the signature panel and three captions.
 //
@@ -20,7 +20,7 @@
 //
 // IT COMPARES INPUTS, NOT PIXELS, and that is the design rather than a shortcut.
 // Re-rendering the same geometry does not reproduce the same bytes — a different
-// rasteriser differs by up to ~26% alpha on edge pixels alone (brand-assets.md,
+// rasteriser differs by up to ~26% alpha on edge pixels alone (brand-visuals.md,
 // _the mark_) — so a picture-to-picture comparison would fail on every legitimate
 // regeneration and tell you nothing. The inputs are exact, and they are the half
 // that goes wrong silently.
@@ -405,7 +405,7 @@ function main(): void {
   console.error(`BLOCKED: ${failures.length} committed picture(s) no longer match the repo.\n`);
   for (const failure of failures) console.error(`  ${failure}\n`);
   console.error('Regenerate the affected pictures, then update assets.stamp.json.');
-  console.error('docs/brand-assets.md, _the generated pictures_, has the contract.');
+  console.error('docs/brand-visuals.md, _the generated pictures_, has the contract.');
   process.exit(1);
 }
 

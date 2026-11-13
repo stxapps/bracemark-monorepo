@@ -108,7 +108,7 @@ function PlanName({ plan }: { plan: keyof typeof PLAN_LABELS }) {
 // poster are generated artifacts in `public/video/`, stamped in
 // assets.stamp.json — every line of type in the film is a constant from
 // `@stxapps/shared`, and `npm run check:assets` fails when one of them moves
-// (docs/brand-assets.md, _the generated pictures_). Nothing fails when a file is
+// (docs/brand-visuals.md, _the generated pictures_). Nothing fails when a file is
 // simply swapped for another name, so the two paths below are the join.
 //
 // SAME-ORIGIN, and not an embed. /privacy and the FAQ say Bracemark loads no
