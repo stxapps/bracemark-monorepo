@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Linking } from 'react-native';
+import { Linking, View } from 'react-native';
 import { PortalHost } from '@rn-primitives/portal';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
@@ -8,7 +8,9 @@ import { ReaderScreen } from './reader-screen';
 // The expo reader's decisions — the same rules web's reader-page.spec.tsx pins:
 // a link in a locked list shows the unlock pane and none of the copy; reading and
 // deleting are never gated; one tab per copy, and one for the copy the phone can take; deleting asks first. And the way
-// across to the capture screen: a paid plan's only, and a replace, not a push.
+// across to the capture screen: a paid plan's only, and a replace, not a push. The top
+// bar's actions are in its ⋯ menu (topbar.tsx), and behind a lock the bar names
+// no host and has no menu.
 
 let mockLink: object | null = null;
 let mockExtraction: object | null = null;
@@ -72,7 +74,24 @@ const LINK = {
   createdAt: Date.UTC(2026, 10, 9, 8, 7, 6),
 };
 
+// The menu portals out, and is placed only once its trigger is measured — the jest
+// View never calls `measure` back (dropdown-menu.spec.tsx has the same stand-in).
+function renderReader() {
+  return render(
+    <>
+      <ReaderScreen linkId="l1" />
+      <PortalHost />
+    </>,
+  );
+}
+const openMenu = () => fireEvent.press(screen.getByTestId('reader-more-options'));
+
+afterEach(() => jest.restoreAllMocks());
+
 beforeEach(() => {
+  jest
+    .spyOn(View.prototype, 'measure')
+    .mockImplementation((callback) => callback(0, 0, 36, 36, 300, 10));
   mockLink = LINK;
   mockExtraction = null;
   mockLocked = false;
@@ -89,26 +108,43 @@ test('a link in a locked list shows the unlock pane and none of the copy', async
 
   await waitFor(() => expect(screen.getByTestId('lock-pane')).toBeTruthy());
   expect(screen.queryByText('The kept words.')).toBeNull();
-  expect(screen.queryByText('Open page')).toBeNull();
-  expect(screen.queryByTestId('reader-wayback')).toBeNull();
-  expect(screen.queryByTestId('reader-capture')).toBeNull();
+  // The host is the list's contents too: the bar says "Reader" and offers nothing.
+  expect(screen.getByTestId('reader-title')).toHaveTextContent('Reader');
+  expect(screen.queryByText('example.com')).toBeNull();
+  expect(screen.queryByTestId('reader-more-options')).toBeNull();
+});
+
+test('the bar names the host, and its menu holds the ways out and the way across', async () => {
+  mockExtraction = { readModeId: 'r1', facets: {} };
+  renderReader();
+  await screen.findByText('The kept words.');
+  expect(screen.getByTestId('reader-title')).toHaveTextContent('example.com');
+
+  openMenu();
+  expect(screen.getByText('Open page')).toBeTruthy();
+  expect(screen.getByText('Update from the page')).toBeTruthy();
+  expect(screen.getByText('Open in Wayback Machine')).toBeTruthy();
 });
 
 test('a paid plan crosses to the capture screen in place of the reader', async () => {
   mockExtraction = { readModeId: 'r1', facets: {} };
-  render(<ReaderScreen linkId="l1" />);
+  renderReader();
   await screen.findByText('The kept words.');
 
-  fireEvent.press(screen.getByLabelText('Update from the page'));
+  openMenu();
+  fireEvent.press(screen.getByTestId('reader-capture'));
   expect(mockReplace).toHaveBeenCalledWith('/capture?link=l1');
 });
 
 test('free: the copy reads, and there is no way to take another', async () => {
   mockExtraction = { readModeId: 'r1', facets: {} };
   mockKeptCopies = false;
-  render(<ReaderScreen linkId="l1" />);
+  renderReader();
   // Reading is never gated — a copy kept on an earlier plan stays the user's.
   expect(await screen.findByText('The kept words.')).toBeTruthy();
+  openMenu();
+  // The positive control: the menu is open, without the way across.
+  expect(screen.getByTestId('reader-open-page')).toBeTruthy();
   expect(screen.queryByTestId('reader-capture')).toBeNull();
 });
 
@@ -116,16 +152,16 @@ test('the Wayback Machine opens the capture nearest the day the link was saved',
   mockExtraction = { readModeId: 'r1', facets: {} };
   const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
 
-  render(<ReaderScreen linkId="l1" />);
+  renderReader();
   await screen.findByText('The kept words.');
   // Built on the device; nothing is opened, or asked, before the press.
   expect(openURL).not.toHaveBeenCalled();
 
+  openMenu();
   fireEvent.press(screen.getByTestId('reader-wayback'));
   expect(openURL).toHaveBeenCalledWith(
     'https://web.archive.org/web/20261109080706/https://example.com/post',
   );
-  openURL.mockRestore();
 });
 
 test('reads a copy the link has', async () => {

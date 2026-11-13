@@ -131,8 +131,9 @@ export function ReadModeSection() {
           Standing text, so no role. iOS only: Android has no share that carries a copy. */}
       {ios && keepOnSave.readModeImages && deviceExtractionMode === 'off' ? (
         <SettingsNotice tone="info">
-          With Link previews off, a page you share from Safari keeps its text only. Keep a copy,
-          from a link’s Read, still keeps its images.
+          With Link previews off, the read-mode copy of a page you share from Safari keeps its text
+          only, even with Include images in read-mode copies on. A read-mode copy you keep with Read
+          in a link’s menu still includes its images.
         </SettingsNotice>
       ) : null}
       {error && <SettingsNotice tone="error">{error}</SettingsNotice>}

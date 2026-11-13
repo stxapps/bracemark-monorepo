@@ -62,7 +62,7 @@ const MODE_OPTIONS: Record<
 > = {
   off: {
     label: 'Off',
-    hint: 'Never contact the sites you save. Links still save and sync — they just show their address and a coloured tile instead of a title and image.',
+    hint: 'Never contact the sites you save. Links still save and sync, but this device fetches no titles or images. A link without them shows its address and a coloured tile.',
     icon: ShieldOff,
   },
   saves: {

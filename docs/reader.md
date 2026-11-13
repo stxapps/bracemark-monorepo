@@ -49,17 +49,17 @@ offset and view are exactly where they were.
   swaps in the unlock pane before reading the copy — and drops the _Open page_
   link, since the host is contents too ([locks.md](./locks.md), _the two enforcement
   edges_). Otherwise a `/read?link=` URL in the history would be a way round a lock.
-- **Two ways out, in the top bar.** _Open page_, the live page, and _Wayback
-  Machine_ — the Internet Archive's capture nearest the day the link was saved, for
-  the page that has changed or gone ([link-extraction-keep.md](./link-extraction-keep.md),
-  _when the page is gone_). Below `sm` both are their icons alone, under the full
-  accessible names; the words are in the empty state, which also says in a sentence
-  what the Wayback Machine may have. The bar (`reader-topbar.tsx`) is the
+- **Two ways out, in the top bar's ⋯ menu.** _Open page_, the live page, and _Open in
+  Wayback Machine_ — the Internet Archive's capture nearest the day the link was saved,
+  for the page that has changed or gone ([link-extraction-keep.md](./link-extraction-keep.md),
+  _when the page is gone_). A menu at every width, named in it, so the bar is the same
+  shape as expo's (_the expo reader_ below has why); the empty state also has both in
+  words, and says in a sentence what the Wayback Machine may have. The bar (`read/_components/topbar.tsx`) is the
   links page's and Settings' bar: sticky, full width, no measure — chrome sits at the
   window's edges, and the article's `max-w-2xl` is a reading measure that belongs to
-  the text below it. The host is on the left; on the right are the two ways out, a
+  the text below it. The host is on the left; on the right are the ⋯ menu, a
   divider, then the ✕ (Settings' ghost icon button, in the same corner); behind a
-  lock the host goes too, leaving "Reader". The empty state is left-aligned under the
+  lock the host and the menu go too, leaving "Reader". The empty state is left-aligned under the
   link's title: a "keep a copy" section, then, if there is an exit, a "page gone"
   section with the Wayback Machine. The empty state and the server's answers name read mode alone and never
   offer a screenshot: only the browser extension takes one, and only the part above the
@@ -108,8 +108,7 @@ the same address as web's, a pushed Stack screen behind the (app) gates, reached
 the row menu's **Read** on a link with a copy (a link without one goes to the capture
 screen instead — _the way in_). Same three
 rules as web — locks first, reading and deleting never gated, text only — the same two
-ways out in the top bar (the Wayback Machine as an icon at every width, a phone's bar
-having no room for a second label), the same line under the title, and the same
+ways out, the same line under the title, and the same
 states, read through expo-react's `useReaderDoc`, which reads the decrypted file off
 disk and gunzips it with fflate (Hermes has no DecompressionStream). The screenshot is
 expo-image over the same file. Unlike web it has no empty-state upsell: a link only
@@ -120,6 +119,21 @@ instead, on a plan with `keptCopies`, is two ways across to that screen: a top-b
 _Update from the page_, for a page that has changed since the copy, and — for a link
 with only a screenshot — the Read mode tab's _Keep a read-mode copy_ (_the tabs_
 above), the phone's way of taking the copy that tab stands for.
+
+**The top bar** (`features/reader/topbar.tsx`) is shared with the capture
+screen, so the two faces of one place (_the way in_) don't shift as they trade places.
+Web's order: the host on the left; on the right the actions, a divider, then the ✕.
+The actions are **one ⋯ menu**, not a row of icons: the reader has three (_Open page_,
+_Update from the page_, _Open in Wayback Machine_) where web has two, a phone's bar has
+no room for their words, and bare, RefreshCw and History are both a circular arrow —
+in the menu each is named. The capture screen's menu has _Read_ (while the link has a
+copy) and the Wayback Machine. The cost is a second tap to _Open page_. The ✕ stays
+last, not a back arrow on the left: the leading slot on this app's bars is the
+drawer's, and Settings' bar is left by a ✕ in the same corner. **Behind a lock the bar
+shows no host and no menu**, enforced in the bar itself — both screens once printed the
+host above their unlock pane, because each computed its own label. Web's bar took the
+same shape (decided 2026-11-13): it had room for its two ways out's words from `sm` up,
+but one bar on both apps is worth the second click to _Open page_ there.
 
 ### the tabs — a tab per copy, plus a tab for a copy this screen can take
 

@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import { router } from 'expo-router';
-import { ArrowUpRight, BookOpen, History, RefreshCw, Trash2, X } from 'lucide-react-native';
+import { ArrowUpRight, BookOpen, History, RefreshCw, Trash2 } from 'lucide-react-native';
 import { withUniwind } from 'uniwind';
 
 import {
@@ -36,8 +36,9 @@ import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Text } from '../../components/ui/text';
-import { openLink, openWayback } from '../links/shared';
+import { openLink, openWayback } from '../../lib/open-url';
 import { ReaderArticle } from './reader-article';
+import { ReaderTopbar, type ReaderTopbarAction } from './topbar';
 
 // The reader — one link's kept copies, on expo. The twin of bracemark-web's
 // `(app)/read/_components/reader-page.tsx` (its header has the reasoning), with the
@@ -49,15 +50,15 @@ import { ReaderArticle } from './reader-article';
 //   - READING AND DELETING ARE NEVER GATED on the plan (iap/plans.ts, `keptCopies`).
 //   - THE COPY IS TEXT — ReaderArticle turns strings into `<Text>`, nothing else.
 //
-// Two ways out in the top bar, as on web and for web's reasons: _Open page_, and the
-// Wayback Machine — the Internet Archive's capture nearest the day the link was
-// saved, an address built on this device and opened only by the press. It is an
-// icon here, at every width: a phone's bar has no room for a second label beside the
-// host. The Wayback Machine is in no row menu — here and on the capture screen only,
-// the two places a user goes when the page let them down (docs/link-extraction-keep.md,
-// _when the page is gone_).
+// The top bar is ReaderTopbar (topbar.tsx), shared with the capture screen:
+// the host, then a ⋯ menu, a divider and the ✕. In the menu, two ways out, as on
+// web and for web's reasons: _Open page_, and the Wayback Machine — the Internet
+// Archive's capture nearest the day the link was saved, an address built on this
+// device and opened only by the press. The Wayback Machine is in no row menu — here
+// and on the capture screen only, the two places a user goes when the page let them
+// down (docs/link-extraction-keep.md, _when the page is gone_).
 //
-// And one way across: _Update from the page_, to the capture screen
+// And one way across, in the same menu: _Update from the page_, to the capture screen
 // (`/capture?link=<id>`), where a fresh copy is kept and the preview re-read — for a
 // page that has changed since the copy. Only on a plan with `keptCopies`, since both
 // of that screen's actions are; a free account reading a copy it kept earlier has
@@ -287,6 +288,33 @@ export function ReaderScreen({ linkId }: { linkId: string }) {
   const readModeImagesId = locked ? undefined : (extraction?.readModeImagesId ?? undefined);
   const screenshotId = locked ? undefined : (extraction?.screenshotId ?? undefined);
 
+  // The ⋯ menu's rows. ReaderTopbar drops them all behind a lock as well.
+  const actions: ReaderTopbarAction[] = [];
+  if (link && !locked) {
+    actions.push({
+      label: 'Open page',
+      icon: ArrowUpRight,
+      testID: 'reader-open-page',
+      onPress: () => openLink(link.url),
+    });
+    if (entitlements.keptCopies) {
+      actions.push({
+        label: 'Update from the page',
+        icon: RefreshCw,
+        testID: 'reader-capture',
+        onPress: () => router.replace(`/capture?link=${encodeURIComponent(linkId)}`),
+      });
+    }
+  }
+  if (waybackHref) {
+    actions.push({
+      label: 'Open in Wayback Machine',
+      icon: History,
+      testID: 'reader-wayback',
+      onPress: () => openWayback(waybackHref),
+    });
+  }
+
   let body: React.ReactNode = null;
   if (!settled) {
     body = null;
@@ -368,54 +396,15 @@ export function ReaderScreen({ linkId }: { linkId: string }) {
 
   return (
     <StyledSafeAreaView className="flex-1 bg-background">
-      <View className="h-14 shrink-0 flex-row items-center gap-2 border-b border-border px-3">
-        <Text
-          className="min-w-0 flex-1 pl-1 text-sm font-medium text-muted-foreground"
-          numberOfLines={1}
-        >
-          {host || 'Reader'}
-        </Text>
-        {link && !locked ? (
-          <Button variant="ghost" size="sm" onPress={() => openLink(link.url)}>
-            <Text>Open page</Text>
-            <Icon as={ArrowUpRight} className="size-4 text-foreground" />
-          </Button>
-        ) : null}
-        {link && !locked && entitlements.keptCopies ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-9"
-            aria-label="Update from the page"
-            testID="reader-capture"
-            onPress={() => router.replace(`/capture?link=${encodeURIComponent(linkId)}`)}
-          >
-            <Icon as={RefreshCw} className="size-5 text-foreground" />
-          </Button>
-        ) : null}
-        {waybackHref ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-9"
-            aria-label="Open in Wayback Machine"
-            testID="reader-wayback"
-            onPress={() => openWayback(waybackHref)}
-          >
-            <Icon as={History} className="size-5 text-foreground" />
-          </Button>
-        ) : null}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="-mr-1 size-9"
-          aria-label="Close reader"
-          testID="reader-close"
-          onPress={close}
-        >
-          <Icon as={X} className="size-5 text-foreground" />
-        </Button>
-      </View>
+      <ReaderTopbar
+        host={host}
+        locked={locked}
+        fallback="Reader"
+        actions={actions}
+        closeLabel="Close reader"
+        testIDPrefix="reader"
+        onClose={close}
+      />
       <ScrollView contentContainerClassName="mx-auto w-full max-w-2xl px-4 py-6 md:px-6">
         {body}
       </ScrollView>

@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { router } from 'expo-router';
-import { BookOpen, Check, History, RefreshCw, X } from 'lucide-react-native';
+import { BookOpen, Check, History, RefreshCw } from 'lucide-react-native';
 import { withUniwind } from 'uniwind';
 
 import {
@@ -32,7 +32,8 @@ import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { usePaywall } from '../../contexts/paywall-provider';
-import { openWayback } from '../links/shared';
+import { openWayback } from '../../lib/open-url';
+import { ReaderTopbar, type ReaderTopbarAction } from '../reader/topbar';
 import { isCaptureNavigationAllowed } from './capture-navigation';
 import { usePageCapture } from './use-page-capture';
 
@@ -49,10 +50,11 @@ import { usePageCapture } from './use-page-capture';
 //
 // Reached from the row menu's "Read" on a link with no copy, and from the reader's
 // _Update from the page_ on one that has one (docs/reader.md, _the way in_). Its top
-// bar goes the other way — _Read_, while the link has a copy — and to the Wayback
-// Machine, for the page that has changed or gone: the two exits the row menu no longer
-// carries. Every move between this screen and the reader is a REPLACE, so the two
-// trade places and never stack.
+// bar is the reader's (reader/topbar.tsx), and its ⋯ menu goes the other way —
+// _Read_, while the link has a copy — and to the Wayback Machine, for the page that
+// has changed or gone: the two exits the row menu no longer carries. Every move
+// between this screen and the reader is a REPLACE, so the two trade places and never
+// stack.
 //
 // A WebView, not an in-app browser: SFSafariViewController and Chrome Custom Tabs
 // can't be scripted, and both actions run code inside the page. The cost is that the
@@ -184,6 +186,23 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
   // Both exits hide behind a lock, as the reader's do: the host is the list's contents.
   const waybackHref = link && !locked ? waybackUrl(link.url, link.createdAt) : undefined;
   const hasCopy = Boolean(extraction?.readModeId || extraction?.screenshotId);
+  const actions: ReaderTopbarAction[] = [];
+  if (link && !locked && hasCopy) {
+    actions.push({
+      label: 'Read',
+      icon: BookOpen,
+      testID: 'capture-reader',
+      onPress: () => router.replace(`/read?link=${encodeURIComponent(linkId)}`),
+    });
+  }
+  if (waybackHref) {
+    actions.push({
+      label: 'Open in Wayback Machine',
+      icon: History,
+      testID: 'capture-wayback',
+      onPress: () => openWayback(waybackHref),
+    });
+  }
   const isLinkPage = (url: string | null | undefined): boolean =>
     Boolean(link && url) &&
     canonicalUrlKey(url as string) !== null &&
@@ -385,47 +404,15 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
 
   return (
     <StyledSafeAreaView className="flex-1 bg-background">
-      <View className="h-14 shrink-0 flex-row items-center gap-2 border-b border-border px-3">
-        <Text
-          className="min-w-0 flex-1 pl-1 text-sm font-medium text-muted-foreground"
-          numberOfLines={1}
-        >
-          {host || 'Keep a copy'}
-        </Text>
-        {link && !locked && hasCopy ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            testID="capture-reader"
-            onPress={() => router.replace(`/read?link=${encodeURIComponent(linkId)}`)}
-          >
-            <Icon as={BookOpen} className="size-4 text-foreground" />
-            <Text>Read</Text>
-          </Button>
-        ) : null}
-        {waybackHref ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-9"
-            aria-label="Open in Wayback Machine"
-            testID="capture-wayback"
-            onPress={() => openWayback(waybackHref)}
-          >
-            <Icon as={History} className="size-5 text-foreground" />
-          </Button>
-        ) : null}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="-mr-1 size-9"
-          aria-label="Close"
-          testID="capture-close"
-          onPress={close}
-        >
-          <Icon as={X} className="size-5 text-foreground" />
-        </Button>
-      </View>
+      <ReaderTopbar
+        host={host}
+        locked={locked}
+        fallback="Keep a copy"
+        actions={actions}
+        closeLabel="Close"
+        testIDPrefix="capture"
+        onClose={close}
+      />
       {body}
     </StyledSafeAreaView>
   );

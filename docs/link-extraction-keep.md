@@ -670,7 +670,7 @@ and Android's WebView has its own `CookieManager`, apart from Chrome's. So, in o
 2. **A capture screen — built** (`/capture?link=<id>`,
    `features/capture/capture-screen.tsx`), opened by the row menu's **Read** on a
    link with no copy, and from the reader's _Update from the page_ on one that has
-   one; its top bar has _Read_ back while the link has a copy, and the two screens
+   one; its top bar's ⋯ menu has _Read_ back while the link has a copy, and the two screens
    trade places (a replace, never a push) rather than stack
    ([reader.md](./reader.md), _the way in_). The page in a
    `react-native-webview` WebView with two actions under it. **Keep a copy**
@@ -685,7 +685,7 @@ and Android's WebView has its own `CookieManager`, apart from Chrome's. So, in o
    says. **Both actions are `keptCopies`'**: no route brings a free account here,
    and one that arrives anyway (a plan lapsing on the screen, an old address) gets
    no _Update preview_ — a free account sets a title and image by hand in the editor
-   — and a _Keep a copy_ marked Plus that opens the upgrade. Its top bar also has
+   — and a _Keep a copy_ marked Plus that opens the upgrade. Its top bar's menu also has
    the Wayback Machine, and a page that fails to load offers it in words (_when the
    page is gone_). A locked
    list's page stays unloaded, and both top-bar exits with it; both actions are live only while the WebView is on
@@ -891,9 +891,9 @@ everything saved before copies existed. For those — and for any page that has 
 changed — the answer is not ours to store. It is a link: **Open in Wayback Machine**,
 to the Internet Archive's capture of that address nearest the day the link was saved.
 
-- **Where.** The reader's top bar on both apps, beside _Open page_; the web reader's
-  empty state, where it is said in a sentence ([reader.md](./reader.md)); and expo's
-  capture screen — its top bar, and in words under a page that failed to load. **Not
+- **Where.** The reader's top bar on both apps, in its ⋯ menu beside _Open page_; the
+  web reader's empty state, where it is said in a sentence
+  ([reader.md](./reader.md)); and expo's capture screen — its top bar's menu, and in words under a page that failed to load. **Not
   the row menu** (decided 2026-11-11): it is for the page that has gone or changed,
   and those are the two screens a user is on when finding that out; a row-menu item on
   every link, for a rare need, was the menu's clutter. So a free account's link with no

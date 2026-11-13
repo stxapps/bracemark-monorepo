@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { Linking } from 'react-native';
+import { Linking, View } from 'react-native';
+import { PortalHost } from '@rn-primitives/portal';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import { CaptureScreen } from './capture-screen';
@@ -9,9 +10,10 @@ import { CaptureScreen } from './capture-screen';
 // spec play the page:
 //   - free loads the page but has no Update preview, and Keep a copy is the
 //     upgrade; a locked list's page never loads;
-//   - the top bar's two exits: Read while the link has a copy (a replace — the reader
-//     and this screen trade places), the Wayback Machine — said in words too when the
-//     page didn't load;
+//   - the top bar's two exits, in its ⋯ menu (reader/topbar.tsx): Read while
+//     the link has a copy (a replace — the reader and this screen trade places), the
+//     Wayback Machine — said in words too when the page didn't load; behind a lock
+//     the bar names no host and has no menu;
 //   - the buttons are live only on the link's own page, and an answer from another
 //     page is refused;
 //   - a message counts only while a request awaits one, and only with its nonce.
@@ -99,7 +101,15 @@ const keep = () => screen.getByTestId('capture-keep-read-mode');
 const preview = () => screen.getByTestId('capture-update-preview');
 
 async function onPage(url = URL_) {
-  render(<CaptureScreen linkId="l1" />);
+  // The bar's menu portals out (reader-screen.spec.tsx has the same harness). A View,
+  // not a fragment: pressing a disabled button walks up for a handler, and RNTL's walk
+  // fails on a fragment root.
+  render(
+    <View>
+      <CaptureScreen linkId="l1" />
+      <PortalHost />
+    </View>,
+  );
   await screen.findByTestId('capture-webview');
   act(() => webviewProps.onNavigationStateChange({ url, loading: false }));
 }
@@ -113,7 +123,15 @@ function lastRequest(): { kind: string; nonce: string; capturedFrom?: string } {
 const post = (data: unknown) =>
   act(async () => webviewProps.onMessage({ nativeEvent: { data: JSON.stringify(data) } }));
 
+const openMenu = () => fireEvent.press(screen.getByTestId('capture-more-options'));
+
+afterEach(() => jest.restoreAllMocks());
+
 beforeEach(() => {
+  // The menu is placed only once its trigger is measured; the jest View never calls back.
+  jest
+    .spyOn(View.prototype, 'measure')
+    .mockImplementation((callback) => callback(0, 0, 36, 36, 300, 10));
   mockLink = LINK;
   mockLocked = false;
   mockKeptCopies = true;
@@ -141,18 +159,23 @@ test('a link in a locked list: the unlock pane, and no page loaded', async () =>
   render(<CaptureScreen linkId="l1" />);
   await waitFor(() => expect(screen.getByTestId('lock-pane')).toBeTruthy());
   expect(screen.queryByTestId('capture-webview')).toBeNull();
-  // The exits name the host too, so they hide with it.
-  expect(screen.queryByTestId('capture-reader')).toBeNull();
-  expect(screen.queryByTestId('capture-wayback')).toBeNull();
+  // The host is the list's contents; the exits name it too, so they hide with it.
+  expect(screen.getByTestId('capture-title')).toHaveTextContent('Keep a copy');
+  expect(screen.queryByText('example.com')).toBeNull();
+  expect(screen.queryByTestId('capture-more-options')).toBeNull();
 });
 
 test('Read is there only while the link has a copy, and takes this screen’s place', async () => {
   await onPage();
+  openMenu();
+  // The positive control: the menu is open, without Read.
+  expect(screen.getByTestId('capture-wayback')).toBeTruthy();
   expect(screen.queryByTestId('capture-reader')).toBeNull();
 
   mockExtraction = { readModeId: 'r1', facets: {} };
   screen.unmount();
   await onPage();
+  openMenu();
   fireEvent.press(await screen.findByTestId('capture-reader'));
   expect(mockReplace).toHaveBeenCalledWith('/read?link=l1');
 });
@@ -162,9 +185,9 @@ test('the Wayback Machine opens the capture nearest the day the link was saved',
   await onPage();
   // Built on the device; nothing is opened, or asked, before the press.
   expect(openURL).not.toHaveBeenCalled();
+  openMenu();
   fireEvent.press(screen.getByTestId('capture-wayback'));
   expect(openURL).toHaveBeenCalledWith(WAYBACK);
-  openURL.mockRestore();
 });
 
 test('on the link’s page, keeping asks the page and stores what comes back', async () => {

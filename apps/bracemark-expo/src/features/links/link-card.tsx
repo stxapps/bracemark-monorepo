@@ -28,10 +28,11 @@ import { displayUrl, hostFromText } from '@stxapps/shared';
 
 import { Checkbox } from '../../components/ui/checkbox';
 import { Text } from '../../components/ui/text';
+import { openLink } from '../../lib/open-url';
 import { Favicon, LinkPreviewImage } from './link-media';
 import { LinkRowMenu } from './link-row-menu';
 import { LinkTagChips } from './link-tag-chips';
-import { type LinkItemProps, NoteBadge, openLink, PinnedBadge } from './shared';
+import { type LinkItemProps, NoteBadge, PinnedBadge } from './shared';
 import { useLinksViewActions } from './view-state-provider';
 
 // The banner is 12:7 — its height is 58.33% of the card's width — so it scales

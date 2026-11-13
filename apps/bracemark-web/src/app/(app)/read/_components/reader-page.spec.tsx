@@ -120,9 +120,32 @@ test('a link in a locked list shows the unlock pane and none of the copy', async
 
   await waitFor(() => expect(screen.getByRole('form')).not.toBeNull());
   expect(screen.queryByText('The kept words.')).toBeNull();
-  // Not even the way out to the page itself: the host is the list's contents too.
+  // Not even the way out to the page itself: the host is the list's contents too. The
+  // bar says "Reader" and has no menu.
+  expect(screen.queryByText('example.com')).toBeNull();
+  expect(screen.getByText('Reader')).not.toBeNull();
+  expect(screen.queryByRole('button', { name: 'More options' })).toBeNull();
   expect(screen.queryByRole('link', { name: /open page/i })).toBeNull();
   expect(screen.queryByRole('link', { name: /wayback/i })).toBeNull();
+});
+
+// Keyboard, not pointer: Radix opens the menu on `pointerdown` and reads the event's
+// `button`, which jsdom's PointerEvent stand-in does not carry (link-row-menu.spec.tsx).
+const openBarMenu = async () => {
+  const trigger = await screen.findByRole('button', { name: 'More options' });
+  act(() => void fireEvent.keyDown(trigger, { key: 'Enter' }));
+};
+
+test('the bar names the host, and its ⋯ menu holds both ways out', async () => {
+  mockExtraction = { readModeId: 'r1', facets: {} };
+  render(<ReaderPage />);
+  expect(await screen.findByText('example.com')).not.toBeNull();
+
+  await openBarMenu();
+  const page = screen.getByRole('menuitem', { name: 'Open page' });
+  expect(page.getAttribute('href')).toBe('https://example.com/post');
+  expect(page.getAttribute('target')).toBe('_blank');
+  expect(screen.getByRole('menuitem', { name: 'Open in Wayback Machine' })).not.toBeNull();
 });
 
 test('beside a copy, the Wayback Machine is one press away — built here, asked nothing', async () => {
@@ -134,7 +157,8 @@ test('beside a copy, the Wayback Machine is one press away — built here, asked
   try {
     render(<ReaderPage />);
 
-    const link = await screen.findByRole('link', { name: 'Open in Wayback Machine' });
+    await openBarMenu();
+    const link = screen.getByRole('menuitem', { name: 'Open in Wayback Machine' });
     expect(link.getAttribute('href')).toBe(WAYBACK);
     expect(link.getAttribute('target')).toBe('_blank');
     expect(link.getAttribute('rel')).toContain('noreferrer');
@@ -164,6 +188,10 @@ test('a link no public archive could hold gets no Wayback exit', async () => {
   await screen.findByText('Keep a copy of this page');
   expect(screen.queryByRole('link', { name: /wayback/i })).toBeNull();
   expect(screen.queryByText(/Wayback Machine/)).toBeNull();
+  // Nor in the bar's menu, which still has the page (the positive control).
+  await openBarMenu();
+  expect(screen.getByRole('menuitem', { name: 'Open page' })).not.toBeNull();
+  expect(screen.queryByRole('menuitem', { name: /wayback/i })).toBeNull();
 });
 
 test('a free account reads a copy it already has — reading is never gated', async () => {

@@ -46,7 +46,7 @@ import { Label } from '@stxapps/web-ui/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@stxapps/web-ui/components/ui/tabs';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
-import { ReaderTopbar } from './reader-topbar';
+import { ReaderTopbar } from './topbar';
 
 import { LockPane } from '@/components/lock-pane';
 import { usePaywall } from '@/contexts/paywall-provider';
