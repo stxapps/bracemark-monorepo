@@ -119,18 +119,18 @@ export function CopiesSection({ className }: { className?: string }) {
           onCheckedChange={(readMode) => set({ readMode })}
         />
         <SwitchRow
-          id="keep-screenshot"
-          title="Keep a screenshot when you save"
-          description="What was on screen when you saved — the part of the page in view, not all of it."
-          checked={keepOnSave.screenshot}
-          onCheckedChange={(screenshot) => set({ screenshot })}
-        />
-        <SwitchRow
           id="keep-read-mode-images"
           title="Include images in read-mode copies"
           description="The article’s pictures, kept with its text in every read-mode copy you keep. They take far more room than the words; with this off, a copy keeps its text only. Copies you have already kept don’t change."
           checked={keepOnSave.readModeImages}
           onCheckedChange={(readModeImages) => set({ readModeImages })}
+        />
+        <SwitchRow
+          id="keep-screenshot"
+          title="Keep a screenshot when you save"
+          description="What was on screen when you saved — the part of the page in view, not all of it."
+          checked={keepOnSave.screenshot}
+          onCheckedChange={(screenshot) => set({ screenshot })}
         />
       </div>
       {error ? (
