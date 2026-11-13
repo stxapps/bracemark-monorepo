@@ -1,0 +1,97 @@
+{/_
+DRAFT, not published. Written 13 November 2026 against source revision f6e3a542d8137682ace9899056def1064d0f8ff4.
+
+To publish: move this file up to blog/, delete this comment, and add to index.ts:
+slug: 'source-security-review-2026-11'
+title: 'Source security review, November 2026'
+description: 'Our second AI-assisted source review: what a device may delete when a file is missing, what we fixed and rechecked, what we left, and what no one has reviewed.'
+publishedAt: the publish day (the series is dated; the October post keeps its date)
+
+Also, in the same change (docs/architecture.md, the marketing site’s /blog; security-reviews/README.md):
+
+- a new report, security-reviews/YYYY-MM-DD-source-review.md, and a new top row in security-reviews/README.md; this post links the series index until the report exists
+- a pointer line to this post at the end of the October post, plus updatedAt on its manifest entry; nothing else in the October post or report changes
+
+Before publishing, re-check every sentence marked TODO against what is live that day, and:
+
+- the pinned revision (the link in the last section) and the “what is in each release” section
+- the section on copies of a page: the claims that the feature is or isn’t in a release. If it hasn’t shipped, say so in one sentence or cut the section to that sentence (docs/brand-assets.md, only what ships)
+- the model sentence in the method section
+- the two items the section on what was live disclosed: both are in production and low in consequence
+  Gate: publish only if the fixes are in the revision the post pins. If that slips past the end of November, publish in December rather than describe code nobody has read.
+  Run brand-review, then the site’s lint, typecheck, test and production build; check the article, the sitemap, the feed and the mobile layout.
+  _/}
+
+## Why a second review
+
+October’s review found that a cleanup in the web app could delete a link’s saved preview on every device because the link was missing from one of them. The link was missing because a file that failed its integrity check was being skipped. We fixed that route and said some older ones remained. This review follows that thread, and it follows the code we wrote since: the same cleanups for the mobile apps, and code that keeps the text of an article as a read-mode copy.
+
+The limits from October still apply. It’s an AI-assisted review that we direct, not an external audit. Its decisions rest on reading source and on running our own code on a development machine: the unit tests, small probes, and mutation tests, never production or real users’ data. None of it has been retested on a running app or a device. The counts of saved decisions haven’t changed: 28 records, of which 4 are confirmed findings (all low), 19 need validation, and 5 were rejected.
+
+Nothing below is a new record, and we should say why. A record is a claim that someone with less trust than you could cross a boundary. Every item below happens to your own library, after a file failed to open or changes arrived in an unlucky order. We report them as engineering problems with a stated consequence, and we don’t treat that as the same thing as safe.
+
+## When a device deletes something because it is missing
+
+Your library is a set of encrypted files, and each device keeps its own copy. Some tidying can only work by noticing what isn’t there: the web app deletes a link’s preview when the link isn’t on the device, and deletes image files that no link names. That is safe only if missing means gone.
+
+Missing can mean other things. A file failed its integrity check and was skipped. A sync stopped halfway. The changes arrived in a different order than they were written. A clock was wrong. A cleanup that reads each of those as gone turns one device’s problem into a deletion on every device, because the deletion syncs.
+
+October’s fix gave each device a record of the files it couldn’t open, and held the cleanups back unless that record is complete. Since then we extended the same cleanups to the mobile apps, which needed the app’s first local database migration, and added a recheck that opens a recorded file again after an hour, then a day, then weekly.
+
+## What the second review found
+
+A separate agent, starting from a fresh context, read the whole set. It found no ordinary path that deletes a file another device still names. The record, the gate on the cleanups, and the recheck did what they claim on the web and on mobile, in our test harness. Then it found what the record didn’t reach.
+
+- **Writers ignored the record.** Only the cleanups read it. A link whose preview file couldn’t be opened looked like a link with no preview, so the app fetched a new one and uploaded it over the server’s copy. The recheck then saw a newer local file and dropped the path from the record. After the 30-day grace, the cleanup for unreferenced files could delete what the unreadable file had pointed to, on every device. The overwrite is in the web app today. The deletion is in no release.
+- **A preview could reach the server before its link.** Changes go up in batches of up to 500, in path order, and a preview’s path sorts before its link’s. Between two batches, another device could see a preview with no link and delete it. This is in the web app today. In the cases we reproduced, the cost was a preview, which the app can fetch again.
+- **The grace period used the device’s clock.** A clock set well ahead would shorten the 30 days.
+- **Smaller ones:** the cleanup of device-local list locks deleted the lock of a list that was only unreadable; the grace counted from when a file was uploaded, not from the owner’s last change; and a replaced image was deleted before its replacement uploaded.
+
+## What we changed, and how it was checked
+
+We made the fixes and then had them checked the way we did in October: a separate agent, given the earlier review and the changed code, and not told what to expect.
+
+- A link whose preview file is recorded as unreadable is no longer rewritten. A capture you start on one fails with a generic error until the recheck opens the file.
+- Previews are queued after their links, so a batch boundary can’t separate them in the wrong order.
+- The grace period can’t run ahead of the newest time the server has reported.
+- The lock cleanup spares a list that’s recorded as unreadable.
+- A cycle that fails partway no longer leaves the record marked complete.
+
+The recheck found the routes closed, and no new deletion by absence. It also found small things, and two of them were ours: our new refusal could stop the iOS share-sheet drain from saving later drafts, and a refused write left files it had already uploaded with nothing pointing to them. We fixed both. That fix, and every change since the recheck, was read by us and by tests, not by a separate agent.
+
+## What we decided to leave
+
+- **A file that can never be opened is never deleted, and we don’t tell you.** There’s nothing you could do about a file you can’t open, and nothing about it that we could show. The cost is that on that device the cleanup of unreferenced files stays off, so those files stay until the file opens.
+- **A restore on our side may look like a deletion.** If our server were restored to an earlier point after your devices had synced, a device can’t always tell a restore from something you deleted. Fixing that needs the server to number its log. It isn’t built, and the design record says so.
+- **Some libraries share one custom image between links.** Earlier imports did that. Changing or deleting the image on one of those links removes it under the others. New imports give each link its own.
+- **A replaced image is deleted before its replacement uploads.** If the upload then fails, the old one is already gone.
+- **The 30 days count from upload.** A file’s grace starts when it was uploaded, not when its owner last changed the link, so a file can have less time left than you’d expect.
+- **The mobile migration hasn’t run on a device.** We tested it against a file shaped like the first release’s, in the test harness only.
+
+## Read-mode copies
+
+The repository also holds code that keeps an article’s text, and optionally its images, as a read-mode copy, so you can read it after the page moves; the section on releases says which builds carry it. Its words come from a page someone else wrote, through the browser extension, the mobile capture screen, the iOS share sheet from Safari, or our link-extraction service, and a copy also arrives inside a backup or from another device. We asked what a stranger’s page could do with that.
+
+**The format held.** A stranger’s page doesn’t become markup, script, an attribute, an unchecked address, or an image address through any of those routes. Text is drawn as text. A link is kept only if it’s an absolute http or https address, and it’s checked again when it’s drawn. Images come only from the pack stored beside the copy. We drew a hostile document and found no script in the result.
+
+**The size didn’t.** The limits lived in the converter that builds a copy, and on two routes that converter runs inside the page. So a forged message from a page, a backup, or a compromised device could store a copy of any size: 200 KB of gzip that decompresses to 200 MB. On our server, a page of nested elements made the reader slow in proportion to roughly the cube of its depth, and an 11 KB page took three to six seconds. A hostile robots.txt cost 3.4 seconds for one answer.
+
+We added limits where a copy is stored and where it’s opened, bounds on the image pack, a step budget for robots.txt, and depth and element limits in the link-extraction service. A second agent rechecked and found the work partly done. The service’s depth and element limits didn’t bound its cost: a 74 KB page passed both and took 23.5 seconds. The mobile app’s limit on how much a copy may decompress to didn’t bound memory, because the library decompresses a whole chunk before it can stop: 1 MiB of gzip took about 3 GB.
+
+We fixed those and the smaller ones. The mobile app now feeds the decompressor in 4 KiB slices. The link-extraction service checks a page’s markup before it parses it, and then adds up each element’s depth squared and refuses a page past a cap. Three things stay open. We chose that cap by running it over several hundred pages on our own disk, none of which it refused, so it isn’t calibrated on pages from the web, and no count can be exact: two pages of the same size and depth took 0.4 and 10 seconds, depending on their shape. We haven’t seen the mobile capture screen’s new-window handling on a device. And no separate agent has read these last fixes.
+
+TODO: say what of this is in a release on the publish date. As of 13 November, the browser extension’s capture code is in the 1.2.0 builds on Chrome and Firefox (check whether it is reachable without the paid plan’s gate); the web reader, the mobile capture screen, and the link-extraction service’s read mode are in no release.
+
+## What is in each release
+
+TODO, filled in on the publish date from the deploy tags and the stores. As of 13 November, the web app, our API (the service behind sign-in, sync, and billing), and the link-extraction service run the code of 6 November, which has the October fixes and none of this review’s. The Android app live on Google Play has the October fixes. The iOS app was waiting for its first App Store review. Everything this post describes as fixed is committed, and none of it is deployed. The overwrite and the ordering problem in the section above are in the web app until it is.
+
+## How we did it
+
+The method is October’s: we adapted Cloudflare’s [security-audit skill](https://github.com/cloudflare/security-audit-skill), a separate agent from a fresh context reviews each claim and each fix of ours, and no third party has audited Bracemark. The sessions that made these fixes and read the results ran on Claude Sonnet 5.5. The tooling didn’t record which model the separate reviewing agents ran on, so we can’t name it.
+
+## What this still doesn’t settle
+
+Nothing here has been retested on a device or on a running deployment. Our one staging run held an older build of the web app, so it says nothing about these changes. Open facts that need a device or a deployment: the mobile migration on a real first-release database; Android’s handling of a page that opens a new window; whether the phone’s network stack reads a response in pieces; and how a deployed Worker’s CPU limit treats a page near the link-extraction service’s cap.
+
+The next evidence has to be a build with these changes in it, run by us on a device or against staging. A report for this review will follow in the [series of source reviews](https://github.com/stxapps/bracemark-monorepo/blob/main/security-reviews/README.md), pinned to the revision it describes. This post describes [source revision f6e3a54](https://github.com/stxapps/bracemark-monorepo/tree/f6e3a542d8137682ace9899056def1064d0f8ff4). Read [October’s review](/blog/source-security-review-2026-10) for the first one, our [security page](/security) for what we claim, and the [public source](https://github.com/stxapps/bracemark-monorepo). Source availability doesn’t prove which build you’re running. If you find a problem, please send the details privately through our [security reporting policy](https://github.com/stxapps/bracemark-monorepo/blob/main/SECURITY.md).
