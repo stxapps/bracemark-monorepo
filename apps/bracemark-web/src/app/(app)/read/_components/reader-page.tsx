@@ -279,7 +279,10 @@ function DeleteCopy({ link, facet }: { link: LinkItem; facet: KeptCopyFacet }) {
 // words: the page swaps the empty state for it. A FAILURE (nothing learned about the
 // page) takes the fixed error shape and announces as an alert; a settled answer about
 // the page is information, read politely (docs/brand-assets.md, _errors have a fixed
-// shape_; docs/accessibility.md).
+// shape_; docs/accessibility.md). The two differ in what a second press is worth: after
+// a failure it may well work, so _Keep_ stays; after a settled answer it would make the
+// same trip to the same fetch of the same page and read the same words, so _Keep_ goes
+// off and the sentence stays beside it as the reason (KeepReadMode).
 type OutcomeNotice = { text: string; failure: boolean };
 
 const KEEP_FAILED: OutcomeNotice = {
@@ -334,17 +337,25 @@ function KeepReadMode({ link, focusOnMount }: { link: LinkItem; focusOnMount: bo
   // `contents`: the three are items of EmptyCopies' grid, which places them — the
   // button, _Include images_ directly under it, and the server's answer under both.
   // The checkbox qualifies THIS button, so nothing sits between the two at any width.
+  //
+  // A settled answer ends the asking for this visit: this fetch is the same every time
+  // (no sign-in, no scrolling, nothing a second press changes), so a press would repeat
+  // the trip and set the identical sentence — a button that appears to do nothing. The
+  // sentence stays under it as the reason. (The browser extension's and the phone's
+  // buttons stay live after "no article": they read the page the user is looking at,
+  // which can change.) A failure keeps it live, as _Try again_.
+  const settled = notice !== null && !notice.failure;
   return (
     <div className={cn('contents')}>
       <Button
         ref={buttonRef}
         size="sm"
-        disabled={busy}
+        disabled={busy || settled}
         onClick={run}
         className={cn('sm:col-start-1 sm:row-start-1')}
       >
         <BookOpen data-icon="inline-start" />
-        {busy ? 'Keeping…' : 'Keep a read-mode copy'}
+        {busy ? 'Keeping…' : notice?.failure ? 'Try again' : 'Keep a read-mode copy'}
       </Button>
       <IncludeImages className={cn('sm:col-start-1 sm:row-start-2')} />
       {notice ? (
@@ -441,20 +452,29 @@ function EmptyCopies({
         aria-labelledby="reader-keep-title"
         className={cn('flex flex-col items-start gap-4 text-sm leading-6 text-muted-foreground')}
       >
-        <h2 id="reader-keep-title" className={cn('text-base font-semibold text-foreground')}>
-          Keep a copy of this page
-        </h2>
-        <p className={cn('text-pretty')}>
-          A copy is the page’s text in read mode — yours to read even if the page changes or
-          disappears.
-        </p>
-        <p className={cn('text-pretty')}>
-          {available
-            ? 'Keep one from here: our link-extraction service fetches the page and sends its article back to this browser. Or open the page and save it with the Bracemark browser extension.'
-            : needsOptIn
-              ? 'Open the page and save it with the Bracemark browser extension. Or keep one from here, once you turn on server read mode.'
-              : 'Open the page and save it with the Bracemark browser extension.'}
-        </p>
+        {/* The text is its own, tighter group. Every line box here has half-leading
+            above and below the glyphs (leading-6 on 14px: ~5px each side), so between
+            two paragraphs the gap reads as gap + 10px, but between a paragraph and a
+            box (the disclosure, the buttons) as gap + 5px — the box edge is where the
+            eye stops. A smaller gap inside the group and the section's gap-4 between
+            the group and the boxes put the visible spaces at ~17-18px for related text
+            and ~21px for the step to a separate block. */}
+        <div className={cn('flex flex-col gap-2')}>
+          <h2 id="reader-keep-title" className={cn('text-base font-semibold text-foreground')}>
+            Keep a copy of this page
+          </h2>
+          <p className={cn('text-pretty')}>
+            A copy is the page’s text in read mode — yours to read even if the page changes or
+            disappears.
+          </p>
+          <p className={cn('text-pretty')}>
+            {available
+              ? 'Keep one from here: our link-extraction service fetches the page and sends its article back to this browser. Or open the page and save it with the Bracemark browser extension.'
+              : needsOptIn
+                ? 'Open the page and save it with the Bracemark browser extension. Or keep one from here, once you turn on server read mode.'
+                : 'Open the page and save it with the Bracemark browser extension.'}
+          </p>
+        </div>
         {/* The disclosure, before the switch it is the consent for — the Settings
             switch's words (read-mode-section.tsx says why each clause is there): the
             address, not the account, the IP held briefly. Boxed so it reads as the

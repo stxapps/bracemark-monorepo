@@ -241,11 +241,17 @@ function DeleteCopy({ link, facet }: { link: LinkItem; facet: KeptCopyFacet }) {
 function KeepReadMode({ linkId }: { linkId: string }) {
   return (
     <View className="items-center gap-4 px-6 py-16">
-      <Text className="text-center text-base font-semibold">No read-mode copy yet</Text>
-      <Text className="text-center text-sm text-muted-foreground">
-        Open the page to keep its article as a read-mode copy — yours to read even if the page
-        changes or disappears.
-      </Text>
+      {/* The two texts are a group with a tighter gap than the one to the button: each
+          line box has half-leading above and below its glyphs, so text-to-text reads
+          as gap + both halves, while text-to-button stops at the button's edge
+          (web's EmptyCopies, reader-page.tsx, has the numbers). */}
+      <View className="items-center gap-2">
+        <Text className="text-center text-base font-semibold">No read-mode copy yet</Text>
+        <Text className="text-center text-sm text-muted-foreground">
+          Open the page to keep its article as a read-mode copy — yours to read even if the page
+          changes or disappears.
+        </Text>
+      </View>
       <Button
         size="sm"
         testID="reader-keep-read-mode"

@@ -313,6 +313,27 @@ describe('keeping read mode through the link-extraction service', () => {
     expect(mockKeep.mock.calls[0][0]).toMatchObject({ url: LINK.url });
   });
 
+  // A settled answer is the same on every press, so the button goes off with the reason
+  // beside it rather than inviting a press that appears to do nothing.
+  test('after a settled "no copy" the button is off and the reason stays', async () => {
+    mockKeptCopies = true;
+    mockServerAvailable = true;
+    mockKeep.mockResolvedValueOnce({
+      kind: 'none',
+      status: 'permanent',
+      reason: 'not-an-article',
+    });
+    render(<ReaderPage />);
+
+    const keep = await screen.findByRole('button', { name: 'Keep a read-mode copy' });
+    fireEvent.click(keep);
+
+    expect((await screen.findByRole('status')).textContent).toMatch(/no article on this page/);
+    await waitFor(() => expect((keep as HTMLButtonElement).disabled).toBe(true));
+    fireEvent.click(keep);
+    expect(mockKeep).toHaveBeenCalledTimes(1);
+  });
+
   test('beside the action, Include images writes the synced setting', async () => {
     mockKeptCopies = true;
     mockServerAvailable = true;
@@ -336,6 +357,23 @@ describe('keeping read mode through the link-extraction service', () => {
     expect((await screen.findByRole('alert')).textContent).toBe(
       'Could not keep a read-mode copy. Please try again.',
     );
+  });
+
+  // A failure learned nothing about the page, so a second press may work: the button
+  // stays, and says so.
+  test('after a failure the button stays on, as Try again', async () => {
+    mockKeptCopies = true;
+    mockServerAvailable = true;
+    mockKeep.mockRejectedValueOnce(new Error('503'));
+    render(<ReaderPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Keep a read-mode copy' }));
+    await screen.findByRole('alert');
+
+    const again = screen.getByRole('button', { name: 'Try again' }) as HTMLButtonElement;
+    expect(again.disabled).toBe(false);
+    fireEvent.click(again);
+    await waitFor(() => expect(mockKeep).toHaveBeenCalledTimes(2));
   });
 });
 

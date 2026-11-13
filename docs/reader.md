@@ -88,7 +88,12 @@ offset and view are exactly where they were.
   so a reload or a history entry never fetches by itself. The answer is shown in place:
   the copy (the screen swaps to it), or why there is none — no article, not a web page,
   the site's robots.txt says no, or try later
-  ([link-extraction-keep.md](./link-extraction-keep.md), _bracemark-web_). The same
+  ([link-extraction-keep.md](./link-extraction-keep.md), _bracemark-web_). A settled
+  "no copy" (the first three) switches the button off for that visit, with the reason
+  left beside it — the server's fetch is the same on every press, so another one would
+  only repeat the trip and look like nothing happened; a failure keeps it, as _Try
+  again_. (The browser extension's and the phone's buttons stay live after "no
+  article": they read the page the user is looking at, which can change.) The same
   section is the Read mode tab of a link that has only a screenshot (_the tabs_).
 - **Bytes on demand.** `useReaderDoc` (web-react) asks `FileContentProvider` for the
   blob at once — no settle delay, the reader is a deliberate open — then gunzips and
