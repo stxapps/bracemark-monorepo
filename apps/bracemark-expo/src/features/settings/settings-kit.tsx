@@ -200,11 +200,28 @@ export function SettingsGroup({
 //   - a DESTRUCTIVE drill-down (`destructive`), where the icon and title go red
 //     but the description does NOT — a whole red row reads as an error state
 //     rather than a door to a dangerous place.
+//
+// `footer` is an opt-in slot UNDER a static row, inside its border and across its
+// full width — under the action too, not just under the text column. It is for a
+// caveat that belongs to this one control (Read mode's images switch, when Link
+// previews are off): placed in `description` instead, it shares the text column
+// with the switch, and on a phone that left a two-sentence notice ~195pt wide and
+// five lines tall inside a box inside a box. Below the section it read as a note
+// on the whole section. Everything else stays a beside-the-control description —
+// the shape the browser extension's options page and bracemark-web's twin share
+// class for class — so this is additive: a row without a footer looks as it
+// always did. Web's twin has no footer because nothing there needs one;
+// add it there, in this shape, the day something does.
+//
+// VoiceOver reads it after the action. That is fine for a caveat that only shows
+// once the control is set (as Read mode's does), and it is the reason a warning
+// the user needs BEFORE pressing belongs in `description` instead.
 export function SettingsRow({
   icon,
   title,
   description,
   action,
+  footer,
   onPress,
   external,
   destructive,
@@ -218,6 +235,9 @@ export function SettingsRow({
   // `onPress` is set — a control inside a pressable row would swallow one of the
   // two presses, and which one it swallows is a platform detail.
   action?: ReactNode;
+  // Full-width content under a static row — see above. Ignored when `onPress` is
+  // set, for `action`'s reason: anything pressable in it would fight the row.
+  footer?: ReactNode;
   onPress?: () => void;
   // Only meaningful with `onPress`: swaps the chevron for the out-arrow.
   external?: boolean;
@@ -271,15 +291,25 @@ export function SettingsRow({
     );
   }
 
+  // ONE tree, footer or not. This was two — the plain row as before, and a column
+  // wrapping it only when a footer was passed — and that moved the action one View
+  // deeper whenever the footer came or went, so React REMOUNTED it. Read mode's
+  // footer appears and disappears with its own switch, so every flip of that switch
+  // threw away the native UISwitch mid-spring and put a new one in its place, which
+  // read as a stutter; settings-kit.spec.tsx pins it. The border and padding
+  // sit on the column so the footer spans under the action; a row without a footer
+  // is the same row at the same size, just one View deeper.
+  //
+  // `gap-3` is the row-to-row step: the footer is its own block, apart from the
+  // title-and-action line as a whole, not one more line of description (those sit
+  // `gap-0.5`).
   return (
-    <View
-      className={cn(
-        'flex-row items-start justify-between gap-4 rounded-lg border border-border p-4',
-        className,
-      )}
-    >
-      <View className="min-w-0 flex-1 flex-row items-start gap-3">{body}</View>
-      {action ? <View className="shrink-0">{action}</View> : null}
+    <View className={cn('gap-3 rounded-lg border border-border p-4', className)}>
+      <View className="flex-row items-start justify-between gap-4">
+        <View className="min-w-0 flex-1 flex-row items-start gap-3">{body}</View>
+        {action ? <View className="shrink-0">{action}</View> : null}
+      </View>
+      {footer}
     </View>
   );
 }

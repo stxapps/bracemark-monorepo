@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { Platform, View } from 'react-native';
 import { router } from 'expo-router';
+import { Info } from 'lucide-react-native';
 
 import { useEntitlements, useSettingMutations, useSettings } from '@stxapps/expo-react';
 import { PAYWALL_COPY } from '@stxapps/react';
 import { PLAN_LABELS } from '@stxapps/shared';
 
 import { Button } from '../../components/ui/button';
+import { Icon } from '../../components/ui/icon';
 import { Switch } from '../../components/ui/switch';
 import { Text } from '../../components/ui/text';
 import { SettingsHeader, SettingsNotice, SettingsPane, SettingsRow } from './settings-kit';
@@ -122,20 +124,24 @@ export function ReadModeSection() {
               onValueChange={(readModeImages) => set({ readModeImages })}
             />
           }
+          /* With the device's fetch mode at `off`, a Safari share's images are not
+             fetched (share-bridge.tsx — they are this app's requests to the saved
+             site), while the capture screen's Keep a copy, an explicit ask on a page
+             the user has open, still fetches them. In this row's footer rather than
+             under the section, so it reads as a caveat of THIS switch, and full width
+             rather than in `description`, where it shared the text column with the
+             switch (settings-kit.tsx, SettingsRow's `footer`). Standing text, so no
+             role. iOS only: Android has no share that carries a copy. */
+          footer={
+            ios && keepOnSave.readModeImages && deviceExtractionMode === 'off' ? (
+              <SettingsNotice icon={<Icon as={Info} className="size-4 text-muted-foreground" />}>
+                With Link previews off, a copy taken as you share from Safari keeps its text only.
+                A copy you keep with Read in a link’s menu still includes its images.
+              </SettingsNotice>
+            ) : null
+          }
         />
       </View>
-      {/* With the device's fetch mode at `off`, a Safari share's images are not fetched
-          (share-bridge.tsx — they are this app's requests to the saved site), while
-          the capture screen's Keep a copy, an explicit ask on a page the user has
-          open, still fetches them.
-          Standing text, so no role. iOS only: Android has no share that carries a copy. */}
-      {ios && keepOnSave.readModeImages && deviceExtractionMode === 'off' ? (
-        <SettingsNotice tone="info">
-          With Link previews off, the read-mode copy of a page you share from Safari keeps its text
-          only, even with Include images in read-mode copies on. A read-mode copy you keep with Read
-          in a link’s menu still includes its images.
-        </SettingsNotice>
-      ) : null}
       {error && <SettingsNotice tone="error">{error}</SettingsNotice>}
     </SettingsPane>
   );
