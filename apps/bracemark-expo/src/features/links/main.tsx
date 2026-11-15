@@ -38,7 +38,13 @@ import {
   type ViewToken,
 } from '@shopify/flash-list';
 
-import { type LinkView, useLinkPreviews, useLocks, useSettings, useSync } from '@stxapps/expo-react';
+import {
+  type LinkView,
+  useLinkPreviews,
+  useLocks,
+  useSettings,
+  useSync,
+} from '@stxapps/expo-react';
 import { LOCK_COPY } from '@stxapps/react';
 import { type LinkSortOn } from '@stxapps/shared';
 

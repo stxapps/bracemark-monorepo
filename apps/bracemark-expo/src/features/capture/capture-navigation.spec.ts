@@ -25,6 +25,7 @@ describe('isCaptureNavigationAllowed', () => {
       'sms:+15555550100',
       'itms-apps://apps.apple.com/app/id1',
       'market://details?id=com.example',
+      // eslint-disable-next-line no-script-url -- the input under test, a URL the rule must refuse
       'javascript:alert(1)',
       'file:///etc/passwd',
       'ftp://example.com/x',

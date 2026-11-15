@@ -371,7 +371,12 @@ test('Update preview says, in words, what it couldn’t fetch', async () => {
   mockUpdatePreview.mockResolvedValueOnce({ title: true, image: false });
   await onPage();
   fireEvent.press(preview());
-  await post({ type: 'bracemark-page-meta', nonce: lastRequest().nonce, href: URL_, collected: {} });
+  await post({
+    type: 'bracemark-page-meta',
+    nonce: lastRequest().nonce,
+    href: URL_,
+    collected: {},
+  });
   expect(await screen.findByText('Title updated')).toBeTruthy();
   expect(screen.getByRole('alert')).toHaveTextContent(
     'No preview image could be fetched from this page.',
@@ -382,7 +387,12 @@ test('Update preview finding nothing is an alert, and the button stays to try ag
   mockUpdatePreview.mockResolvedValueOnce({ title: false, image: false });
   await onPage();
   fireEvent.press(preview());
-  await post({ type: 'bracemark-page-meta', nonce: lastRequest().nonce, href: URL_, collected: {} });
+  await post({
+    type: 'bracemark-page-meta',
+    nonce: lastRequest().nonce,
+    href: URL_,
+    collected: {},
+  });
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'No title or image found on this page.',
   );

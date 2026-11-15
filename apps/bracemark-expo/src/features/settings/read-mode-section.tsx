@@ -135,8 +135,8 @@ export function ReadModeSection() {
           footer={
             ios && keepOnSave.readModeImages && deviceExtractionMode === 'off' ? (
               <SettingsNotice icon={<Icon as={Info} className="size-4 text-muted-foreground" />}>
-                With Link previews off, a copy taken as you share from Safari keeps its text only.
-                A copy you keep with Read in a link’s menu still includes its images.
+                With Link previews off, a copy taken as you share from Safari keeps its text only. A
+                copy you keep with Read in a link’s menu still includes its images.
               </SettingsNotice>
             ) : null
           }

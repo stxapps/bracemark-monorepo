@@ -1,7 +1,12 @@
 import * as React from 'react';
 import { act, render } from '@testing-library/react-native';
 
-import { useLinkPreviews, useLiveRead, useSettingMutations, useSettings } from '@stxapps/expo-react';
+import {
+  useLinkPreviews,
+  useLiveRead,
+  useSettingMutations,
+  useSettings,
+} from '@stxapps/expo-react';
 
 import { PreviewsPrompt } from './previews-prompt';
 
