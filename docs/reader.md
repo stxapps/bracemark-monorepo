@@ -111,14 +111,23 @@ rules as web — locks first, reading and deleting never gated, text only — th
 ways out, the same line under the title, and the same
 states, read through expo-react's `useReaderDoc`, which reads the decrypted file off
 disk and gunzips it with fflate (Hermes has no DecompressionStream). The screenshot is
-expo-image over the same file. Unlike web it has no empty-state upsell: a link only
-reaches the screen with a copy, and taking one is the capture screen's job
+expo-image over the same file. Taking a copy is the capture screen's job
 (`/capture?link=<id>` — [link-extraction-keep.md](./link-extraction-keep.md), _per
 client_, bracemark-expo), so there is no keep section to host here. What it has
-instead, on a plan with `keptCopies`, is two ways across to that screen: a top-bar
-_Update from the page_, for a page that has changed since the copy, and — for a link
-with only a screenshot — the Read mode tab's _Keep a read-mode copy_ (_the tabs_
-above), the phone's way of taking the copy that tab stands for.
+instead, on a plan with `keptCopies`, is ways across to that screen: a top-bar
+_Update from the page_, for a page that has changed since the copy, and — where the
+link has no read-mode copy — _Keep a read-mode copy_, the phone's way of taking it
+(_the tabs_ below).
+
+**The empty state** (decided 2026-11-15). The row menu never sends a link with no copy
+here, so one arrives because its last copy was deleted while the screen was open, or
+by an old address. Until then it was a plain notice with nothing to press. Now, on a
+plan with `keptCopies`, it is the screenshot-only Read mode tab's notice and button —
+the same case without the screenshot — and on free the notice alone (no upsell, as
+everywhere on this reader). Both plans get web's Wayback line under it, in words: with
+no copy of our own, the archive is the one place the page as it was might still be.
+**It never moves to the capture screen by itself** — that loads the page, a request
+to the site, and only a press may ask for it (web's server keep has the same rule).
 
 **The top bar** (`features/reader/topbar.tsx`) is shared with the capture
 screen, so the two faces of one place (_the way in_) don't shift as they trade places.
@@ -143,12 +152,12 @@ tab for any copy this surface can take.** What each surface can take is not the 
 both — on web through the link-extraction service, on expo through the capture
 screen — and a screenshot on neither (only the browser extension takes one).
 
-| the link has…     | plan with `keptCopies`                               | free                                               |
-| ----------------- | ---------------------------------------------------- | -------------------------------------------------- |
-| both              | tabs: Read mode, Screenshot                          | the same tabs                                      |
-| read mode only    | no tabs — the screen can't take the screenshot       | the same                                           |
-| a screenshot only | tabs; the Read mode tab holds the way to take a copy | the bare screenshot                                |
-| neither           | web: the empty state; expo: the capture screen's job | web: the empty state, with Plus; expo: no route in |
+| the link has…     | plan with `keptCopies`                                                         | free                                              |
+| ----------------- | ------------------------------------------------------------------------------ | ------------------------------------------------- |
+| both              | tabs: Read mode, Screenshot                                                    | the same tabs                                     |
+| read mode only    | no tabs — the screen can't take the screenshot                                 | the same                                          |
+| a screenshot only | tabs; the Read mode tab holds the way to take a copy                           | the bare screenshot                               |
+| neither           | the empty state: web keeps in place, expo has the button to the capture screen | web: the empty state, with Plus; expo: the notice |
 
 - **A screenshot alone is the case the rule exists for.** It is usually a page read mode
   answered "not an article" for — but it is also what is left after the read-mode copy
@@ -173,7 +182,8 @@ screen — and a screenshot on neither (only the browser extension takes one).
   `/capture?link=<id>` as a `router.replace`, like _Update from the page_. The capture
   screen is where the phone takes read mode, so the tab sends there rather than
   repeating it; a successful keep comes back to the reader by that screen's _Kept —
-  read it_, now with a copy to open on.
+  read it_, now with a copy to open on. A link with no copy at all gets the same
+  notice and button as its empty state (_the expo reader_ above).
 
 ### the way in — one **Read** in the row menu
 

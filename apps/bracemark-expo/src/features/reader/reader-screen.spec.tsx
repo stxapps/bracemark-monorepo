@@ -7,7 +7,8 @@ import { ReaderScreen } from './reader-screen';
 
 // The expo reader's decisions — the same rules web's reader-page.spec.tsx pins:
 // a link in a locked list shows the unlock pane and none of the copy; reading and
-// deleting are never gated; one tab per copy, and one for the copy the phone can take; deleting asks first. And the way
+// deleting are never gated; one tab per copy, and one for the copy the phone can take; deleting asks first;
+// a link with no copy left offers to keep one, on a paid plan. And the way
 // across to the capture screen: a paid plan's only, and a replace, not a push. The top
 // bar's actions are in its ⋯ menu (topbar.tsx), and behind a lock the bar names
 // no host and has no menu.
@@ -236,4 +237,32 @@ test('a link that is not in the library says so', async () => {
   mockLink = null;
   render(<ReaderScreen linkId="gone" />);
   expect(await screen.findByText(/isn’t in your library/)).toBeTruthy();
+});
+
+test('no copy left, on a paid plan: the way to keep one, and the Wayback Machine in words', async () => {
+  // The last copy deleted while the screen was open.
+  mockExtraction = { facets: {} };
+  const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+  render(<ReaderScreen linkId="l1" />);
+
+  expect(await screen.findByText('No read-mode copy yet')).toBeTruthy();
+  // Nothing moves to the capture screen, which loads the page, before the press.
+  expect(mockReplace).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByTestId('reader-keep-read-mode'));
+  expect(mockReplace).toHaveBeenCalledWith('/capture?link=l1');
+
+  fireEvent.press(screen.getByTestId('reader-wayback-empty'));
+  expect(openURL).toHaveBeenCalledWith(
+    'https://web.archive.org/web/20261109080706/https://example.com/post',
+  );
+});
+
+test('no copy left, free: the notice and the Wayback Machine, no way to take one', async () => {
+  mockExtraction = { facets: {} };
+  mockKeptCopies = false;
+  render(<ReaderScreen linkId="l1" />);
+
+  expect(await screen.findByText('No copy of this page')).toBeTruthy();
+  expect(screen.queryByTestId('reader-keep-read-mode')).toBeNull();
+  expect(screen.getByTestId('reader-wayback-empty')).toBeTruthy();
 });

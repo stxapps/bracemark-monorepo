@@ -8,8 +8,9 @@ import { CaptureScreen } from './capture-screen';
 // The capture screen's rules (its header and use-page-capture.ts's have the reasoning),
 // against a stand-in WebView that records each request the screen injects and lets the
 // spec play the page:
-//   - free loads the page but has no Update preview, and Keep a copy is the
-//     upgrade; a locked list's page never loads;
+//   - free loads the page but has no Update preview and no Include images, and Keep a
+//     copy is the upgrade; a locked list's page never loads;
+//   - Include images is the synced setting, and goes once the keep is done;
 //   - the top bar's two exits, in its ⋯ menu (reader/topbar.tsx): Read while
 //     the link has a copy (a replace — the reader and this screen trade places), the
 //     Wayback Machine — said in words too when the page didn't load; behind a lock
@@ -29,6 +30,8 @@ const mockUpdatePreview = jest.fn(async (_link: unknown, _input: unknown) => ({
   image: true,
 }));
 const mockShowPaywall = jest.fn();
+let mockReadModeImages = false;
+const mockSetKeepOnSave = jest.fn(async (_patch: unknown) => undefined);
 const mockInject = jest.fn();
 let webviewProps: {
   source: { uri: string };
@@ -85,6 +88,8 @@ jest.mock('@stxapps/expo-react', () => {
     useEntitlements: () => ({ entitlements: { keptCopies: mockKeptCopies } }),
     useKeptCopyMutations: () => ({ keepReadMode: mockKeepReadMode }),
     usePagePreview: () => ({ updatePreviewFromPage: mockUpdatePreview }),
+    useSettings: () => ({ keepOnSave: { readModeImages: mockReadModeImages } }),
+    useSettingMutations: () => ({ setKeepOnSave: mockSetKeepOnSave }),
   };
 });
 
@@ -141,6 +146,8 @@ beforeEach(() => {
   mockUpdatePreview.mockClear();
   mockInject.mockClear();
   mockShowPaywall.mockClear();
+  mockReadModeImages = false;
+  mockSetKeepOnSave.mockClear();
 });
 
 test('free: the page loads, no Update preview, and Keep a copy is the upgrade', async () => {
@@ -148,6 +155,7 @@ test('free: the page loads, no Update preview, and Keep a copy is the upgrade', 
   await onPage();
   // Both actions are Plus. A free account sets its own title and image in the editor.
   expect(screen.queryByTestId('capture-update-preview')).toBeNull();
+  expect(screen.queryByTestId('capture-include-images')).toBeNull();
   fireEvent.press(keep());
   expect(mockShowPaywall).toHaveBeenCalledWith('keptCopies');
   expect(mockInject).not.toHaveBeenCalled();
@@ -255,7 +263,7 @@ test('an answer from a page that is no longer the link’s is refused', async ()
   });
   expect(mockKeepReadMode).not.toHaveBeenCalled();
   // A failure that mounts after a tap is an alert (docs/accessibility.md, _the one
-  // rule_), never the quiet status line the screen's other outcomes use.
+  // rule_), never the quiet line that only says why the buttons are off.
   expect(screen.getByRole('alert')).toHaveTextContent(
     'Could not keep a read-mode copy. Please try again.',
   );
@@ -330,7 +338,7 @@ test('a page with no article says so and stores nothing', async () => {
   fireEvent.press(keep());
   await post({ type: 'bracemark-read-mode', nonce: lastRequest().nonce, href: URL_, doc: null });
   expect(mockKeepReadMode).not.toHaveBeenCalled();
-  expect(screen.getByText('No article on this page to keep as text.')).toBeTruthy();
+  expect(screen.getByRole('alert')).toHaveTextContent('No article on this page to keep as text.');
 });
 
 test('Update preview reads the page’s candidates and hands over only their strings', async () => {
@@ -351,7 +359,35 @@ test('Update preview reads the page’s candidates and hands over only their str
     collected: { ogTitle: 'The OG title' },
     fetchFromPage: expect.any(Function),
   });
-  expect(await screen.findByText('Preview updated.')).toBeTruthy();
+  // Done is said on the button, which goes off — nothing mounts under it.
+  expect(await screen.findByText('Preview updated')).toBeTruthy();
+  expect(preview().props.accessibilityState?.disabled).toBe(true);
+  expect(screen.queryByRole('alert')).toBeNull();
+  fireEvent.press(preview());
+  expect(mockInject).toHaveBeenCalledTimes(1);
+});
+
+test('Update preview says, in words, what it couldn’t fetch', async () => {
+  mockUpdatePreview.mockResolvedValueOnce({ title: true, image: false });
+  await onPage();
+  fireEvent.press(preview());
+  await post({ type: 'bracemark-page-meta', nonce: lastRequest().nonce, href: URL_, collected: {} });
+  expect(await screen.findByText('Title updated')).toBeTruthy();
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'No preview image could be fetched from this page.',
+  );
+});
+
+test('Update preview finding nothing is an alert, and the button stays to try again', async () => {
+  mockUpdatePreview.mockResolvedValueOnce({ title: false, image: false });
+  await onPage();
+  fireEvent.press(preview());
+  await post({ type: 'bracemark-page-meta', nonce: lastRequest().nonce, href: URL_, collected: {} });
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'No title or image found on this page.',
+  );
+  expect(screen.getByText('Update preview')).toBeTruthy();
+  expect(preview().props.accessibilityState?.disabled).toBeFalsy();
 });
 
 test('Update preview says when the title the user set still wins', async () => {
@@ -364,7 +400,8 @@ test('Update preview says when the title the user set still wins', async () => {
     href: URL_,
     collected: {},
   });
-  expect(await screen.findByText('Preview updated. The title you set still shows.')).toBeTruthy();
+  expect(await screen.findByText('Preview updated')).toBeTruthy();
+  expect(screen.getByRole('alert')).toHaveTextContent('The title you set still shows.');
 });
 
 // A link saved as plain HTTP. Release builds can't load one at all — Android forbids
@@ -400,4 +437,28 @@ test('a page that didn’t load: both buttons off, and the line says why', async
   act(() => webviewProps.onLoadStart());
   expect(preview().props.accessibilityState?.disabled).toBeFalsy();
   expect(screen.queryByTestId('capture-wayback-load-failed')).toBeNull();
+});
+
+test('Include images, under Keep a copy, is the account’s synced setting', async () => {
+  await onPage();
+  const box = screen.getByTestId('capture-include-images');
+  expect(box).not.toBeChecked();
+  fireEvent.press(box);
+  expect(mockSetKeepOnSave).toHaveBeenCalledWith({ readModeImages: true });
+});
+
+test('Include images stays, off, once the keep is done — the footer keeps its height', async () => {
+  await onPage();
+  fireEvent.press(keep());
+  await post({ type: 'bracemark-read-mode', nonce: lastRequest().nonce, href: URL_, doc: CAPTURE });
+  expect(await screen.findByTestId('capture-read')).toBeTruthy();
+  const box = screen.getByTestId('capture-include-images');
+  expect(box).toBeDisabled();
+  fireEvent.press(box);
+  expect(mockSetKeepOnSave).not.toHaveBeenCalled();
+});
+
+test('no status line is mounted while there is nothing to say', async () => {
+  await onPage();
+  expect(screen.queryByRole('status')).toBeNull();
 });

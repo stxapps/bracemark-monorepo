@@ -535,7 +535,8 @@ Three triggers, and deliberately not a fourth:
      copy answer different questions, and the previews section's plan gate and drain
      controls say nothing about this one.
    - **expo's Settings → _Read mode_** (`features/settings/read-mode-section.tsx`) —
-     the images switch on both platforms (it governs the capture screen's copies too),
+     the images switch on both platforms (it governs the capture screen's copies too,
+     whose _Include images_ under _Keep a copy_ is the same value),
      and the Safari one on **iOS only**: an Android share carries no copy, and the
      on-device read that would have given it one is not built (_per client_,
      bracemark-expo). No screenshot switch, since the phone takes none.
@@ -673,16 +674,23 @@ and Android's WebView has its own `CookieManager`, apart from Chrome's. So, in o
    one; its top bar's ⋯ menu has _Read_ back while the link has a copy, and the two screens
    trade places (a replace, never a push) rather than stack
    ([reader.md](./reader.md), _the way in_). The page in a
-   `react-native-webview` WebView with two actions under it. **Keep a copy**
-   keeps the article, and its images when the account has them on (_images in read
-   mode_ — the page fetches them first); **Update preview** re-reads the title and preview image from the live
+   `react-native-webview` WebView with two actions under it. **Keep a copy**, on
+   the left, keeps the article, and its images when the account has them on (_images
+   in read mode_ — the page fetches them first); _Include images_ sits directly under
+   it, the same synced `keepReadModeImages` as Settings → Read mode, so the default
+   (off) is changed where the copy is taken rather than only in Settings — web's
+   keep section's order, and on a plan with `keptCopies` only; once the keep is done it
+   stays, off, under _Kept — read it_, so the bar doesn't change height under the page. **Update preview**, on the right, re-reads the title and preview image from the live
    page — the same collector the browser extension injects (web-react
    `lib/page-meta.ts`), `selectTitleImage` in the app, the image fetched in the
    page and natively where the page couldn't, and written at `expo:fg` whatever
    tier held it, since it is a tap (expo-react `data/store-page-preview.ts`). Only
    what was had is written: a page whose image couldn't be fetched keeps the old
    one, and a title or image the user set by hand still wins, which the screen
-   says. **Both actions are `keptCopies`'**: no route brings a free account here,
+   says. A tap that worked says so on its own button (_Kept — read it_, _Preview
+   updated_, which then goes off), so good news never grows the bar under the page;
+   only a failure or a part-done result mounts a line, as an alert, and the one quiet
+   line left is why the buttons are off (another page, a failed load). **Both actions are `keptCopies`'**: no route brings a free account here,
    and one that arrives anyway (a plan lapsing on the screen, an old address) gets
    no _Update preview_ — a free account sets a title and image by hand in the editor
    — and a _Keep a copy_ marked Plus that opens the upgrade. Its top bar's menu also has

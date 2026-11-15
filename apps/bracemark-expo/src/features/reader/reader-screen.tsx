@@ -74,10 +74,17 @@ import { ReaderTopbar, type ReaderTopbarAction } from './topbar';
 // a screen whose actions are Plus, so there the bare screenshot shows, as it does for
 // a read-mode copy alone.
 //
-// What it does NOT have that web's does: an empty-state upsell. A link reaches this
-// screen from the row menu's "Read" only when it has a copy — without one, "Read"
-// goes to the capture screen (features/links/link-row-menu.tsx). A copy deleted while
-// the screen is open leaves the plain notice below instead.
+// THE EMPTY STATE. A link reaches this screen from the row menu's "Read" only when it
+// has a copy — without one, "Read" goes to the capture screen
+// (features/links/link-row-menu.tsx). So a link with no copy is here because its LAST
+// copy was deleted while the screen was open (or the address is an old one). On a plan
+// with `keptCopies` that is the Read mode tab's case with no screenshot beside it, so
+// it gets the same notice and _Keep a read-mode copy_ — not a plain notice with
+// nothing to press, which is what a delete used to leave. Never a move to the capture
+// screen by itself: that loads the page, a request to the site, and only a press may
+// ask for it. On free, the notice alone — web's empty state upsells, this app's
+// reader never does. Both plans get web's Wayback line under it: with no copy of our
+// own, the archive is the one place the page as it was might still be.
 
 const Image = withUniwind(ExpoImage);
 const StyledSafeAreaView = withUniwind(SafeAreaView);
@@ -234,11 +241,11 @@ function DeleteCopy({ link, facet }: { link: LinkItem; facet: KeptCopyFacet }) {
   );
 }
 
-// The Read mode tab of a link that has only a screenshot: nothing to read, and the way
-// to get a copy — the capture screen, the one place the phone takes read mode. A
-// replace, so the reader and the capture screen trade places and never stack
-// (docs/reader.md, _the way in_). Shown only on a plan with `keptCopies`, which that
-// screen's actions need.
+// The Read mode tab of a link that has only a screenshot, and the empty state of one
+// with no copy left: nothing to read, and the way to get a copy — the capture screen,
+// the one place the phone takes read mode. A replace, so the reader and the capture
+// screen trade places and never stack (docs/reader.md, _the way in_). Shown only on a
+// plan with `keptCopies`, which that screen's actions need.
 function KeepReadMode({ linkId }: { linkId: string }) {
   return (
     <View className="items-center gap-4 px-6 py-16">
@@ -260,6 +267,28 @@ function KeepReadMode({ linkId }: { linkId: string }) {
       >
         <Icon as={BookOpen} className="size-4 text-primary-foreground" />
         <Text>Keep a read-mode copy</Text>
+      </Button>
+    </View>
+  );
+}
+
+// Under the empty state, as on web (EmptyCopies, reader-page.tsx): the exit said in a
+// sentence, apart from the keep above it — a different errand, the page already gone.
+// "May": nothing has asked the archive, and nothing may (waybackUrl).
+function WaybackHint({ href }: { href: string }) {
+  return (
+    <View className="mx-6 items-center gap-3 border-t border-border pt-6">
+      <Text className="text-center text-sm text-muted-foreground">
+        If the page has changed or gone, the Internet Archive’s Wayback Machine may have it.
+      </Text>
+      <Button
+        variant="outline"
+        size="sm"
+        testID="reader-wayback-empty"
+        onPress={() => openWayback(href)}
+      >
+        <Icon as={History} className="size-4 text-foreground" />
+        <Text>Open in Wayback Machine</Text>
       </Button>
     </View>
   );
@@ -391,7 +420,16 @@ export function ReaderScreen({ linkId }: { linkId: string }) {
       </>
     );
   } else {
-    body = <Notice title="No copy of this page" body="Copies are taken from the page itself." />;
+    body = (
+      <>
+        {entitlements.keptCopies ? (
+          <KeepReadMode linkId={linkId} />
+        ) : (
+          <Notice title="No copy of this page" body="Copies are taken from the page itself." />
+        )}
+        {waybackHref ? <WaybackHint href={waybackHref} /> : null}
+      </>
+    );
   }
 
   return (

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { router } from 'expo-router';
@@ -15,6 +15,8 @@ import {
   useLiveRead,
   useLocks,
   usePagePreview,
+  useSettingMutations,
+  useSettings,
 } from '@stxapps/expo-react';
 import { LOCK_COPY } from '@stxapps/react';
 import {
@@ -29,6 +31,7 @@ import {
 import { ErrorText } from '../../components/error-text';
 import { LockPane } from '../../components/lock-pane';
 import { Button } from '../../components/ui/button';
+import { Checkbox } from '../../components/ui/checkbox';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { usePaywall } from '../../contexts/paywall-provider';
@@ -38,13 +41,15 @@ import { isCaptureNavigationAllowed } from './capture-navigation';
 import { usePageCapture } from './use-page-capture';
 
 // The capture screen — the browser extension's popup, rebuilt around a WebView: the
-// saved page, open, with two actions under it. _Update preview_ re-reads the link's
-// title and preview image from the page; _Keep a copy_ keeps its article, with its
-// images, as a read-mode copy. "Keep a copy", not the reader's "Keep a read-mode
-// copy": the two buttons share one row, at half a phone's width each, and the longer
-// label wraps there. The short one is still exact — a read-mode copy is the only kind
-// the phone takes — and it is the family its other states belong to (_Keep a new
-// copy_, _Kept — read it_). docs/brand-assets.md, _terminology_, the read mode row. The one way this app takes either from a live page on its own (an iOS share
+// saved page, open, with two actions under it. _Keep a copy_ keeps its article as a
+// read-mode copy — with its images when _Include images_, under it, is ticked
+// (IncludeImages, below); _Update preview_ re-reads the link's title and preview image
+// from the page. "Keep a copy", not the reader's "Keep a read-mode copy": the two
+// buttons share one row, at half a phone's width each, and the longer label wraps
+// there. The short one is still exact — a read-mode copy is the only kind the phone
+// takes — and it is the family its other states belong to (_Keep a new copy_, _Kept —
+// read it_). docs/brand-assets.md, _terminology_, the read mode row. The one way this
+// app takes either from a live page on its own (an iOS share
 // from Safari is the other, for read mode, and needs no screen —
 // docs/link-extraction-keep.md, _per client_, bracemark-expo).
 //
@@ -93,38 +98,104 @@ import { usePageCapture } from './use-page-capture';
 
 const StyledSafeAreaView = withUniwind(SafeAreaView);
 
-// The outcome of a tap. A failure is an error that MOUNTS, so it goes to ErrorText
-// (role="alert" — docs/accessibility.md, _the one rule_) in the fixed error shape
-// (docs/brand-assets.md, _errors have a fixed shape_); every other outcome is a quiet
-// status line.
-const NOTICE = {
-  noArticle: 'No article on this page to keep as text.',
+// The footer's words, and why only these mount a line. A tap that WORKED says so on its
+// own button — _Kept — read it_, _Preview updated_ — so the bar doesn't grow under the
+// page for good news. A tap that failed or fell short MOUNTS a message, so it is
+// ErrorText (role="alert" — docs/accessibility.md, _the one rule_), in the fixed error
+// shape (docs/brand-assets.md, _errors have a fixed shape_): `error` for what didn't
+// happen, `warning` for what happened only in part. The one quiet line left is
+// STANDING state, not an outcome: why the buttons are off (REASON) — a disabled button
+// must have its reason beside it (docs/accessibility.md, _a `disabled` button says
+// nothing either_) — and it comes and goes with a navigation, when the page above is
+// changing anyway.
+const REASON = {
   offPage: 'Go back to the saved page to update its preview or keep a copy.',
   loadFailed: 'This page didn’t load, so there’s nothing to update or keep from it.',
 } as const;
 const FAILURE = {
   keep: 'Could not keep a read-mode copy. Please try again.',
   preview: 'Could not update the preview. Please try again.',
+  noArticle: 'No article on this page to keep as text.',
+  noPreview: 'No title or image found on this page.',
 } as const;
 
-// What _Update preview_ says it did. Only what was had is written (expo-react
-// data/store-page-preview.ts), so a missing image is reported, not hidden — and a title
-// or image the user set by hand still wins over the page's, which the screen says
-// rather than leaving the list looking unchanged.
-function previewNotice(outcome: { title: boolean; image: boolean }, link: LinkItem): string {
-  if (!outcome.title && !outcome.image) return 'No title or image found on this page.';
-  const done =
+type Message = { text: string; tone: 'error' | 'warning' };
+
+// What _Update preview_ did: the button's done label, and what it must add in words.
+// Only what was had is written (expo-react data/store-page-preview.ts), so a missing
+// image is reported, not hidden — and a title or image the user set by hand still wins
+// over the page's, which the screen says rather than leaving the list looking
+// unchanged. Labels stay as short as _Update preview_: the button is half a phone wide.
+function previewOutcome(
+  outcome: { title: boolean; image: boolean },
+  link: LinkItem,
+): { label: string | null; message: Message | null } {
+  if (!outcome.title && !outcome.image) {
+    return { label: null, message: { text: FAILURE.noPreview, tone: 'error' } };
+  }
+  const label =
     outcome.title && outcome.image
-      ? 'Preview updated.'
+      ? 'Preview updated'
       : outcome.title
-        ? 'Title updated. No preview image could be fetched from this page.'
-        : 'Image updated.';
+        ? 'Title updated'
+        : 'Image updated';
+  const notes: string[] = [];
+  if (outcome.title && !outcome.image) {
+    notes.push('No preview image could be fetched from this page.');
+  }
   const ownTitle = outcome.title && Boolean(link.customTitle);
   const ownImage = outcome.image && Boolean(link.customImageId);
-  if (ownTitle && ownImage) return `${done} The title and image you set still show.`;
-  if (ownTitle) return `${done} The title you set still shows.`;
-  if (ownImage) return `${done} The image you set still shows.`;
-  return done;
+  if (ownTitle && ownImage) notes.push('The title and image you set still show.');
+  else if (ownTitle) notes.push('The title you set still shows.');
+  else if (ownImage) notes.push('The image you set still shows.');
+  return {
+    label,
+    message: notes.length > 0 ? { text: notes.join(' '), tone: 'warning' } : null,
+  };
+}
+
+// _Include images_ under _Keep a copy_, the box web's keep section has: the synced
+// `keepReadModeImages`, the same value as Settings → Read mode's switch, so ticking it
+// here changes it on every device — as web's does. Here because the default is off and
+// this is the phone's one place to keep a copy: without it, copies come out
+// text-only and the reason is in Settings. keepReadMode reads the setting from
+// the store at the press, so the box needs no wiring of its own; it is off during a
+// keep, which has already read it, and stays off under _Kept — read it_ once the keep
+// is done — still there, so the footer keeps its height (taking the 44pt row away
+// shrank the bar and jumped the WebView at the moment the user was looking at it), and
+// still showing what the copy was asked for. Plus only. A failed write needs no
+// message: the box is bound to the stored value, so it simply doesn't change.
+//
+// The ROW is the checkbox to a screen reader (account-section.tsx's delete
+// confirmation has why the role and state are on the Pressable), and it takes the
+// 44pt floor as height, not slop — slop would reach up over the button
+// (docs/accessibility.md, _a 36dp box is not a 44pt target_).
+function IncludeImages({ disabled }: { disabled: boolean }) {
+  const { keepOnSave } = useSettings();
+  const { setKeepOnSave } = useSettingMutations();
+  const checked = keepOnSave.readModeImages;
+  const set = (readModeImages: boolean) => {
+    if (disabled) return;
+    void setKeepOnSave({ readModeImages }).catch(() => undefined);
+  };
+  return (
+    <Pressable
+      role="checkbox"
+      testID="capture-include-images"
+      aria-checked={checked}
+      disabled={disabled}
+      className="min-h-11 flex-row items-center justify-center gap-2"
+      onPress={() => set(!checked)}
+    >
+      <Checkbox
+        checked={checked}
+        disabled={disabled}
+        hitSlop={0}
+        onCheckedChange={(v) => set(v === true)}
+      />
+      <Text className="text-sm text-muted-foreground">Include images</Text>
+    </Pressable>
+  );
 }
 
 function close(): void {
@@ -151,8 +222,10 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<'readMode' | 'preview' | null>(null);
   const [kept, setKept] = useState(false);
-  const [notice, setNotice] = useState('');
-  const [failure, setFailure] = useState('');
+  // _Update preview_'s done label (previewOutcome), and the button is off once it's set:
+  // the label says why, and a second read of the same page would write the same thing.
+  const [previewDone, setPreviewDone] = useState<string | null>(null);
+  const [message, setMessage] = useState<Message | null>(null);
   // Set when the https twin of a plain-HTTP link failed to load (see `source` below).
   const [secureFailed, setSecureFailed] = useState(false);
   // Set when the page itself failed to load — no https twin left to try. Both actions
@@ -209,6 +282,8 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
     canonicalUrlKey(url as string) === canonicalUrlKey((link as LinkItem).url);
   const onLinkPage = isLinkPage(currentUrl);
   const ready = onLinkPage && !loading && !loadFailed && busy === null;
+  const reason = loadFailed ? REASON.loadFailed : !onLinkPage && !loading ? REASON.offPage : '';
+  const fail = (text: string) => setMessage({ text, tone: 'error' });
 
   const keep = async () => {
     if (!entitled) {
@@ -217,16 +292,15 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
     }
     if (!link || !ready) return;
     setBusy('readMode');
-    setNotice('');
-    setFailure('');
+    setMessage(null);
     try {
       const answer = await page.readMode();
       if (!answer || !isLinkPage(answer.href)) {
-        setFailure(FAILURE.keep);
+        fail(FAILURE.keep);
         return;
       }
       if (answer.capture === null) {
-        setNotice(NOTICE.noArticle);
+        fail(FAILURE.noArticle);
         return;
       }
       // The images are asked of the page first (its session reaches what the native
@@ -236,23 +310,22 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
         fetchFromPage: (sources) => page.readerImages(sources, answer.href),
       });
       if (stored) setKept(true);
-      else setFailure(FAILURE.keep);
+      else fail(FAILURE.keep);
     } catch {
-      setFailure(FAILURE.keep);
+      fail(FAILURE.keep);
     } finally {
       setBusy(null);
     }
   };
 
   const updatePreview = async () => {
-    if (!entitled || !link || !ready) return;
+    if (!entitled || !link || !ready || previewDone !== null) return;
     setBusy('preview');
-    setNotice('');
-    setFailure('');
+    setMessage(null);
     try {
       const answer = await page.meta();
       if (!answer || !isLinkPage(answer.href)) {
-        setFailure(FAILURE.preview);
+        fail(FAILURE.preview);
         return;
       }
       const outcome = await updatePreviewFromPage(link, {
@@ -260,9 +333,11 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
         collected: answer.collected,
         fetchFromPage: (url) => page.previewImage(url, answer.href),
       });
-      setNotice(previewNotice(outcome, link));
+      const result = previewOutcome(outcome, link);
+      setPreviewDone(result.label);
+      setMessage(result.message);
     } catch {
-      setFailure(FAILURE.preview);
+      fail(FAILURE.preview);
     } finally {
       setBusy(null);
     }
@@ -329,60 +404,74 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
           }}
         />
         <View className="gap-2 border-t border-border px-4 py-3">
-          <View className="flex-row gap-2">
+          {/* The keep first, _Include images_ directly under it in its own column, and
+              _Update preview_ beside — web's keep section's order (reader-page.tsx,
+              EmptyCopies): the box qualifies the keep alone, so nothing but the keep
+              is above it, and a screen reader meets the two in a row. `items-start`
+              keeps the two buttons level while the left column is taller. */}
+          <View className="flex-row items-start gap-2">
+            <View className="flex-1">
+              {kept ? (
+                <>
+                  <Button
+                    variant="outline"
+                    testID="capture-read"
+                    onPress={() => router.replace(`/read?link=${encodeURIComponent(linkId)}`)}
+                  >
+                    <Icon as={Check} className="size-4 text-foreground" />
+                    <Text>Kept — read it</Text>
+                  </Button>
+                  <IncludeImages disabled />
+                </>
+              ) : (
+                <>
+                  <Button
+                    testID="capture-keep-read-mode"
+                    // On free the button is the upgrade, so it is never disabled there —
+                    // and its name says what it is (the browser extension's saved screen
+                    // does the same).
+                    aria-label={entitled ? undefined : `Keep a copy — a ${plus} feature`}
+                    disabled={entitled && !ready}
+                    onPress={() => void keep()}
+                  >
+                    <Icon as={BookOpen} className="size-4 text-primary-foreground" />
+                    <Text>
+                      {busy === 'readMode'
+                        ? 'Keeping…'
+                        : extraction?.readModeId
+                          ? 'Keep a new copy'
+                          : 'Keep a copy'}
+                    </Text>
+                    {entitled ? null : <Text className="text-xs opacity-80">{plus}</Text>}
+                  </Button>
+                  {entitled ? <IncludeImages disabled={busy === 'readMode'} /> : null}
+                </>
+              )}
+            </View>
             {entitled ? (
               <Button
                 variant="outline"
                 className="flex-1"
                 testID="capture-update-preview"
-                disabled={!ready}
+                disabled={!ready || previewDone !== null}
                 onPress={() => void updatePreview()}
               >
-                <Icon as={RefreshCw} className="size-4 text-foreground" />
-                <Text>{busy === 'preview' ? 'Updating…' : 'Update preview'}</Text>
+                <Icon as={previewDone ? Check : RefreshCw} className="size-4 text-foreground" />
+                <Text>{busy === 'preview' ? 'Updating…' : (previewDone ?? 'Update preview')}</Text>
               </Button>
             ) : null}
-            {kept ? (
-              <Button
-                variant="outline"
-                className="flex-1"
-                testID="capture-read"
-                onPress={() => router.replace(`/read?link=${encodeURIComponent(linkId)}`)}
-              >
-                <Icon as={Check} className="size-4 text-foreground" />
-                <Text>Kept — read it</Text>
-              </Button>
-            ) : (
-              <Button
-                className="flex-1"
-                testID="capture-keep-read-mode"
-                // On free the button is the upgrade, so it is never disabled there — and
-                // its name says what it is (the browser extension's saved screen does
-                // the same).
-                aria-label={entitled ? undefined : `Keep a copy — a ${plus} feature`}
-                disabled={entitled && !ready}
-                onPress={() => void keep()}
-              >
-                <Icon as={BookOpen} className="size-4 text-primary-foreground" />
-                <Text>
-                  {busy === 'readMode'
-                    ? 'Keeping…'
-                    : extraction?.readModeId
-                      ? 'Keep a new copy'
-                      : 'Keep a copy'}
-                </Text>
-                {entitled ? null : <Text className="text-xs opacity-80">{plus}</Text>}
-              </Button>
-            )}
           </View>
-          {failure ? (
-            <ErrorText className="text-center text-xs">{failure}</ErrorText>
-          ) : (
+          {/* Mounted only with something to say: an empty Text still takes a line,
+              and the column's gap-2 above it, as dead space under the buttons. */}
+          {message ? (
+            <ErrorText tone={message.tone} className="text-center text-xs">
+              {message.text}
+            </ErrorText>
+          ) : reason ? (
             <Text className="text-center text-xs text-muted-foreground" role="status">
-              {notice ||
-                (loadFailed ? NOTICE.loadFailed : !onLinkPage && !loading ? NOTICE.offPage : '')}
+              {reason}
             </Text>
-          )}
+          ) : null}
           {/* A page that didn't load is the moment the Wayback Machine is for, so it is
               said in words here, not left to the top bar's icon. */}
           {loadFailed && waybackHref ? (
