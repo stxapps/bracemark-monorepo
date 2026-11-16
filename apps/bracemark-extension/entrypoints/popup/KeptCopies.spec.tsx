@@ -14,14 +14,21 @@ import { KeptCopies } from './KeptCopies';
 //   - "not an article" settles the automatic capture, never the button: an explicit
 //     ask is always allowed;
 //   - a free account's taps go to the web app's Subscription section and capture
-//     nothing; reading a kept copy works on every plan.
+//     nothing; reading a kept copy works on every plan;
+//   - _Include images_ is live only while a tap on _Read mode_ would take a copy —
+//     off during "Keeping…", whose capture has already read the setting, and off
+//     under a kept copy, which the popup can't re-take.
 
 let mockKeptCopies = true;
+let mockReadModeImages = false;
+const mockSetKeepOnSave = jest.fn(async (_patch: unknown) => undefined);
 const mockSendMessage = jest.fn(async (_m: unknown) => ({ ok: true }) as { ok: boolean });
 const mockOpenWebApp = jest.fn(async (_path: string) => undefined);
 
 jest.mock('@stxapps/web-react', () => ({
   useEntitlements: () => ({ entitlements: { keptCopies: mockKeptCopies } }),
+  useSettings: () => ({ keepOnSave: { readModeImages: mockReadModeImages } }),
+  useSettingMutations: () => ({ setKeepOnSave: (p: unknown) => mockSetKeepOnSave(p) }),
 }));
 jest.mock('@/utils/messages', () => ({
   sendMessage: (m: unknown) => mockSendMessage(m),
@@ -46,6 +53,8 @@ const mount = (ex: ExtractionItem | undefined, requested?: typeof READ_MODE_ASKE
 
 beforeEach(() => {
   mockKeptCopies = true;
+  mockReadModeImages = false;
+  mockSetKeepOnSave.mockClear();
   mockSendMessage.mockReset().mockResolvedValue({ ok: true });
   mockOpenWebApp.mockClear();
 });
@@ -139,4 +148,42 @@ test('free: a tap opens Subscription in the web app and captures nothing', () =>
 test('a save that asked for the screenshot too opens on “Keeping…” for both', () => {
   mount(extraction(), { readMode: true, screenshot: true });
   expect(screen.getAllByRole('button', { name: /keeping/i })).toHaveLength(2);
+});
+
+const includeImages = () => screen.getByRole('checkbox', { name: 'Include images' });
+
+test('_Include images_ is live before a copy, and writes the synced setting', () => {
+  mount(extraction());
+
+  expect(includeImages()).toHaveProperty('disabled', false);
+  fireEvent.click(includeImages());
+  expect(mockSetKeepOnSave).toHaveBeenCalledWith({ readModeImages: true });
+});
+
+test('_Include images_ is off while a fresh save’s copy is being taken', () => {
+  mockReadModeImages = true;
+  mount(extraction(), READ_MODE_ASKED);
+
+  expect(includeImages()).toHaveProperty('disabled', true);
+  expect(includeImages().getAttribute('aria-checked')).toBe('true');
+  fireEvent.click(includeImages());
+  expect(mockSetKeepOnSave).not.toHaveBeenCalled();
+});
+
+test('_Include images_ stays, off, under a kept copy', () => {
+  mount(
+    extraction({
+      readModeId: 'r1',
+      facets: { readMode: { status: 'done', extractedAt: 1, attempts: 0 } },
+    }),
+  );
+
+  expect(includeImages()).toHaveProperty('disabled', true);
+});
+
+test('free: no _Include images_', () => {
+  mockKeptCopies = false;
+  mount(extraction());
+
+  expect(screen.queryByRole('checkbox')).toBeNull();
 });

@@ -215,7 +215,8 @@ link's whole footprint without it (_what it does to storage_), so the default ke
 text and the switch asks for the images. It has a switch of its
 own — _Include images in read-mode copies_, on the browser extension's options page,
 in Settings → Read mode on the web, and on both phones (`keepReadModeImages`, resolved by
-`keepOnSaveOf`). Unlike its neighbours
+`keepOnSaveOf`) — and as _Include images_ under every per-link keep button (_the keep
+row, per client_). Unlike its neighbours
 it is not "on save": it qualifies **every** read-mode copy the account takes, a
 per-link _Keep a read-mode copy_ included, because what it answers is how much of an article
 a copy keeps, not when one is taken.
@@ -490,7 +491,8 @@ Three triggers, and deliberately not a fourth:
    screen then offers both copies as taps (`popup/KeptCopies.tsx`) — "Keeping…"
    until a facet newer than the ask lands, "Try again" when the background refused
    without writing anything (the tab moved on), and a line suggesting the screenshot
-   when read mode came back "not an article", the page a screenshot is for. A free
+   when read mode came back "not an article", the page a screenshot is for. _Include
+   images_ sits under _Read mode_ (_the keep row, per client_). A free
    account sees the same buttons marked Plus, and a tap opens the web app's
    Subscription section.
 
@@ -522,7 +524,8 @@ Three triggers, and deliberately not a fourth:
    - **The browser extension's options page**, section _Keep a copy_
      (`options/CopiesSection.tsx`) — all three, since a save there is the save that
      takes a copy, and _Keep a copy_ is the saved screen's own heading for the same
-     two copies. Reached from the gear in the toolbar popup.
+     two copies. Reached from the gear in the toolbar popup. The saved screen's
+     _Include images_, under _Read mode_, is the same images value.
    - **bracemark-web's Settings → _Read mode_** (`_read-mode/read-mode-section.tsx`)
      — _Server read mode_, the web app's own opt-in (_per client_, bracemark-web);
      the images switch beneath it while it is on, because the reader's server _Keep a
@@ -589,6 +592,43 @@ on it.
 better client re-extract a `done` facet; for read mode that would renumber the
 blocks every highlight is anchored to ([reader.md](./reader.md), _re-anchoring_).
 An upgrade there is the user's choice, offered, never taken.
+
+### the keep row, per client
+
+Every screen that takes a read-mode copy on a press lays its keep out the same way:
+**the keep button first, _Include images_ directly under it in its own column, and one
+more thing beside them.** The box qualifies the read-mode copy alone, so nothing but the
+keep is above it, and a screen reader meets the two in a row. The box is the synced
+`keepReadModeImages` (_images in read mode_), here because the default is off: without
+it, a copy taken from that screen comes out text-only and the reason is in a settings
+page. Plus only on all three, since the keep is.
+
+The thing beside the keep is **not one control in three versions**. It is what else
+that screen can do with the page, and each is the right one for where it is:
+
+| screen                                                   | the keep                | beside it        | why that one                                                                                                                |
+| -------------------------------------------------------- | ----------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| browser extension, saved screen (`popup/KeptCopies.tsx`) | _Read mode_             | _Screenshot_     | it is on the page, signed in, and takes both copies; the screenshot is the other one                                        |
+| bracemark-web, the reader's keep section                 | _Keep a read-mode copy_ | _Open the page_  | it can't read the page (CORS) and takes no screenshot, so the other way to a copy is to leave for a client that can         |
+| bracemark-expo, capture screen                           | _Keep a copy_           | _Update preview_ | it has the page open but takes no screenshot (_the scope each copy stops at_); the preview is what else the live page gives |
+
+So don't make them match: _Open the page_ in the popup is the page the user is already
+on, and a _Screenshot_ on web or on expo is a copy neither client takes.
+
+When the box is live differs with when each screen's copy is asked for:
+
+- **bracemark-web** — only once _Server read mode_ is on; before that the keep is _Turn
+  on server read mode_ and there is no box, since nothing it qualifies can happen yet
+  (_per client_, bracemark-web).
+- **bracemark-expo** — off during a keep, which has already read it, and off under
+  _Kept — read it_; it stays mounted there so the bar doesn't change height under the
+  page.
+- **The browser extension** — live only while a tap on _Read mode_ would take a copy.
+  A fresh save's copy is asked for at the save and the background reads the setting at
+  the capture (trigger 1, above), usually before the popup is on screen, so the box is
+  off under "Keeping…" — a tick then would race a capture it can't reliably reach — and
+  off under a kept copy, which the popup has no way to take again. It stays mounted in
+  both, as expo's does, so the popup doesn't resize under the user.
 
 ### per client
 

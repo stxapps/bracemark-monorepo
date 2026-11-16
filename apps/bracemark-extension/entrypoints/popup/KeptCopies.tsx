@@ -2,8 +2,16 @@ import { useState } from 'react';
 import { ArrowUpRight, BookOpen, Check, Image as ImageIcon, Loader2 } from 'lucide-react';
 
 import { PLAN_LABELS } from '@stxapps/shared';
-import { type ExtractionFacet, type ExtractionItem, useEntitlements } from '@stxapps/web-react';
+import {
+  type ExtractionFacet,
+  type ExtractionItem,
+  useEntitlements,
+  useSettingMutations,
+  useSettings,
+} from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
+import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
+import { Label } from '@stxapps/web-ui/components/ui/label';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { sendMessage } from '@/utils/messages';
@@ -31,6 +39,12 @@ import { openWebApp } from '@/utils/open-web-app';
 // app's Subscription section: the popup has no paywall of its own, the same hand-off
 // the link-cap banner makes (Editor). Reading a kept copy is never gated — "Read" on
 // a kept copy works on every plan.
+//
+// _Include images_ sits directly under _Read mode_, in its column — the order web's
+// keep section and expo's capture screen have: the box qualifies the read-mode copy
+// alone, so nothing but that button is above it, and the screenshot keeps the other
+// column (docs/link-extraction-keep.md, _the keep row, per client_). See IncludeImages
+// for when it is live.
 
 type CopyState = 'idle' | 'keeping' | 'kept' | 'failed' | 'noArticle';
 
@@ -64,6 +78,7 @@ function CopyButton({
   entitled,
   onKeep,
   onRead,
+  className,
 }: {
   icon: React.ReactNode;
   label: string;
@@ -71,10 +86,17 @@ function CopyButton({
   entitled: boolean;
   onKeep: () => void;
   onRead: () => void;
+  className?: string;
 }) {
   if (state === 'kept') {
     return (
-      <Button variant="outline" size="sm" onClick={onRead} aria-label={`${label} kept — read it`}>
+      <Button
+        variant="outline"
+        size="sm"
+        className={className}
+        onClick={onRead}
+        aria-label={`${label} kept — read it`}
+      >
         <Check data-icon="inline-start" />
         {label}
         <ArrowUpRight data-icon="inline-end" />
@@ -83,7 +105,7 @@ function CopyButton({
   }
   if (state === 'keeping') {
     return (
-      <Button variant="outline" size="sm" disabled>
+      <Button variant="outline" size="sm" className={className} disabled>
         <Loader2 data-icon="inline-start" className={cn('motion-safe:animate-spin')} />
         Keeping…
       </Button>
@@ -95,6 +117,7 @@ function CopyButton({
     <Button
       variant="outline"
       size="sm"
+      className={className}
       onClick={onKeep}
       aria-label={entitled ? undefined : `${label} — a ${PLAN_LABELS.plus} feature`}
     >
@@ -106,6 +129,37 @@ function CopyButton({
         <span className={cn('ml-1 text-xs text-muted-foreground')}>{PLAN_LABELS.plus}</span>
       ) : null}
     </Button>
+  );
+}
+
+// _Include images_: the synced `keepReadModeImages`, the same value as the options
+// page's switch, so ticking it here changes it on every device. Here because the
+// default is off: without it, a copy taken from this screen comes out text-only and
+// the reason is on the options page.
+//
+// Live only while a tap on _Read mode_ would take a copy. During "Keeping…" it is
+// off: the capture reads the setting from the store (extraction-worker.ts), and a
+// fresh save's capture has usually started before the popup is on screen, so a tick
+// then would race a copy it can't reliably reach. Once kept it stays, off — the popup
+// has no _Keep a new copy_, so a live box beside a kept copy would claim to change
+// it; still there so the popup doesn't change size under the user, and still showing
+// what the copy was asked for. Plus only. A failed write needs no message: the box is
+// bound to the stored value, so it simply doesn't change.
+function IncludeImages({ disabled, className }: { disabled: boolean; className?: string }) {
+  const { keepOnSave } = useSettings();
+  const { setKeepOnSave } = useSettingMutations();
+  return (
+    <Label htmlFor="kept-copies-include-images" density="dense" className={className}>
+      <Checkbox
+        id="kept-copies-include-images"
+        checked={keepOnSave.readModeImages}
+        disabled={disabled}
+        onCheckedChange={(v) =>
+          void setKeepOnSave({ readModeImages: v === true }).catch(() => undefined)
+        }
+      />
+      Include images
+    </Label>
   );
 }
 
@@ -172,7 +226,9 @@ export function KeptCopies({
       <h2 id="kept-copies" className={cn('text-xs font-medium text-muted-foreground')}>
         Keep a copy
       </h2>
-      <div className={cn('grid grid-cols-2 gap-2')}>
+      {/* Placed by the grid, in DOM order for a screen reader: _Read mode_, then the
+          box that qualifies it, then _Screenshot_ beside them. */}
+      <div className={cn('grid grid-cols-2 gap-x-2 gap-y-3')}>
         <CopyButton
           icon={<BookOpen />}
           label="Read mode"
@@ -180,7 +236,14 @@ export function KeptCopies({
           entitled={entitled}
           onKeep={() => keep('readMode')}
           onRead={read}
+          className={cn('col-start-1 row-start-1')}
         />
+        {entitled ? (
+          <IncludeImages
+            disabled={readMode === 'keeping' || readMode === 'kept'}
+            className={cn('col-start-1 row-start-2')}
+          />
+        ) : null}
         <CopyButton
           icon={<ImageIcon />}
           label="Screenshot"
@@ -188,6 +251,7 @@ export function KeptCopies({
           entitled={entitled}
           onKeep={() => keep('screenshot')}
           onRead={read}
+          className={cn('col-start-2 row-start-1')}
         />
       </div>
       {readMode === 'noArticle' ? (
