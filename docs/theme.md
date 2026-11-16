@@ -1015,6 +1015,19 @@ same role the kit's menu items have).
   until `--font-mono` got an `@variant ios` / `@variant android` value in
   `global.css` → [expo-dependencies.md](./expo-dependencies.md), _font —
   monospace_.
+- **Never pair `flex-1` with a breakpoint's `flex-none` (or `flex-auto`) — a
+  breakpoint can't take `flex-1` back.** Uniwind compiles `flex-1` to RN's
+  `flex: 1` and every other `flex-*` shorthand to the three longhands, and at the
+  breakpoint both land in one style. Yoga reads `flex` and the longhands as
+  separate properties: `flexGrow: 0` wins over `flex`'s grow, but
+  `flexBasis: 'auto'` counts as unset, so `flex: 1`'s basis of 0 stays
+  (`processFlexBasis`, `ReactCommon/yoga/yoga/node/Node.cpp`). Grow 0 plus basis 0
+  is a box with no width, so its contents don't show. Web is fine, since there the
+  later shorthand replaces the earlier one. That is how the reader's
+  _Read mode_ / _Screenshot_ tabs lost their labels on an iPad
+  (`flex-1 sm:flex-none`). For a value that changes at a breakpoint, use the
+  longhands on both sides: `grow basis-0 sm:grow-0 sm:basis-auto`
+  (`features/reader/reader-screen.tsx`).
 - **A revealed password cuts mid-word on Android, and that is deliberate.** Web
   (`wrap-break-word`) and iOS break a passphrase after a hyphen
   (`…wasp-garbage-` / `ostrich`). Android's line breaker (Minikin) does not

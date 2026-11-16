@@ -413,12 +413,24 @@ export function ReaderScreen({ linkId }: { linkId: string }) {
         onValueChange={(v) => setPickedTab(v === 'screenshot' ? 'screenshot' : 'read')}
       >
         {/* Full width on a phone, the two triggers splitting it into big targets; the
-            fitted pill, at the article's left edge, from `sm` up (web's rule). */}
+            fitted pill, at the article's left edge, from `sm` up (web's rule).
+            Longhands, never `flex-1 sm:flex-none`: uniwind compiles `flex-1` to RN's
+            `flex: 1` and `flex-none` to the three longhands, both land in one style,
+            and Yoga takes `flex: 1`'s basis of 0 over an explicit `flexBasis: 'auto'` —
+            so from `sm` up each trigger had grow 0, basis 0: zero wide, no label. */}
         <TabsList className="mb-6 w-full sm:w-auto sm:self-start">
-          <TabsTrigger value="read" className="flex-1 sm:flex-none">
+          <TabsTrigger
+            value="read"
+            testID="reader-tab-read"
+            className="grow basis-0 sm:grow-0 sm:basis-auto"
+          >
             <Text>Read mode</Text>
           </TabsTrigger>
-          <TabsTrigger value="screenshot" className="flex-1 sm:flex-none">
+          <TabsTrigger
+            value="screenshot"
+            testID="reader-tab-screenshot"
+            className="grow basis-0 sm:grow-0 sm:basis-auto"
+          >
             <Text>Screenshot</Text>
           </TabsTrigger>
         </TabsList>
