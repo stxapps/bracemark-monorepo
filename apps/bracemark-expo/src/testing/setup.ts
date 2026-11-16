@@ -19,8 +19,10 @@ jest.mock('react-native-keyboard-controller', () =>
 );
 
 // A real gesture needs a native runtime (RNGestureHandlerModule), so the stub
-// keeps only the shape the settings tables' drag layer and the links rail's
-// width grip build against (drag-sort.tsx, sidebar-rail.tsx): a chainable builder, and a detector that renders its child.
+// keeps only the shape the settings tables' drag layer, the links rail's width
+// grip and the reader's screenshot viewer build against (drag-sort.tsx,
+// sidebar-rail.tsx, screenshot-viewer.tsx): a chainable builder, and a detector
+// that renders its child.
 // Rendering a draggable row is then testable; the gesture itself is device-only.
 //
 // Note: gesture-handler also reaches React Native's legacy Paper renderer
@@ -42,6 +44,9 @@ jest.mock('react-native-gesture-handler', () => {
       LongPress: () => gesture,
       // The links rail's width grip races its drag against a double-tap reset.
       Race: () => gesture,
+      // The screenshot viewer's pinch, drag and double-tap run together.
+      Pinch: () => gesture,
+      Simultaneous: () => gesture,
     },
     GestureDetector: ({ children }: { children: React.ReactNode }) => children,
     GestureHandlerRootView: ({ children }: { children: React.ReactNode }) => children,

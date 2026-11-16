@@ -207,6 +207,22 @@ test('a screenshot alone, free: the bare screenshot — that tab would lead only
   expect(screen.queryByText('Read mode')).toBeNull();
 });
 
+test('a tap on the screenshot opens it full screen, and the ✕ closes it', async () => {
+  mockExtraction = { screenshotId: 's1', facets: {} };
+  mockKeptCopies = false;
+  render(<ReaderScreen linkId="l1" />);
+  fireEvent.press(await screen.findByTestId('reader-screenshot'));
+
+  expect(screen.getByTestId('reader-screenshot-close')).toBeTruthy();
+  // The picture to zoom, named as the inline one is — and the screen-reader zoom.
+  const zoomable = screen.getByRole('adjustable');
+  expect(zoomable.props.accessibilityLabel).toMatch(/Screenshot of A post/);
+  expect(zoomable.props.accessibilityValue).toEqual({ text: '100%' });
+
+  fireEvent.press(screen.getByTestId('reader-screenshot-close'));
+  expect(screen.queryByTestId('reader-screenshot-close')).toBeNull();
+});
+
 test('a read-mode copy alone has no tabs — the phone takes no screenshot', async () => {
   mockExtraction = { readModeId: 'r1', facets: {} };
   render(<ReaderScreen linkId="l1" />);

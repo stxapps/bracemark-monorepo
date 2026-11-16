@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { type MouseEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowUpRight, BookOpen, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
@@ -42,6 +42,12 @@ import {
 } from '@stxapps/web-ui/components/ui/alert-dialog';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@stxapps/web-ui/components/ui/dialog';
 import { Label } from '@stxapps/web-ui/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@stxapps/web-ui/components/ui/tabs';
 import { cn } from '@stxapps/web-ui/lib/utils';
@@ -192,6 +198,10 @@ function ReadModeTab({
 
 function ScreenshotTab({ fileId, title }: { fileId: string; title: string }) {
   const url = useImageFileUrl(fileId);
+  const [open, setOpen] = useState(false);
+  // Bumped on each open, so every open starts fitted — while a close keeps the
+  // content mounted for its fade-out.
+  const [opens, setOpens] = useState(0);
   const slow = useSlow(url === undefined);
 
   if (!url) {
@@ -205,12 +215,109 @@ function ScreenshotTab({ fileId, title }: { fileId: string; title: string }) {
       </p>
     );
   }
+  // At the image's own shape (`h-auto`), never a fixed box or a crop: the capture is
+  // the browser's viewport as the window happened to be (docs/link-extraction-keep.md,
+  // _the screenshot is a capped JPEG of the fold_). A ~1500px page in this ~670px
+  // column has its text at under half size, so a click opens it full size.
   return (
-    <img
-      src={url}
-      alt={`Screenshot of ${title}, as it looked when it was saved`}
-      className={cn('mx-auto h-auto w-full rounded-lg border border-border')}
-    />
+    <>
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        onClick={() => {
+          setOpens((n) => n + 1);
+          setOpen(true);
+        }}
+        className={cn(
+          'block w-full cursor-zoom-in rounded-lg outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        )}
+      >
+        <img
+          src={url}
+          alt={`Screenshot of ${title}, as it looked when it was saved`}
+          className={cn('mx-auto h-auto w-full rounded-lg border border-border')}
+        />
+        <span className="sr-only">, open full size</span>
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <ScreenshotDialog key={opens} url={url} title={title} />
+      </Dialog>
+    </>
+  );
+}
+
+// The screenshot in a dialog the size of the window: fitted to it at first, and at its
+// actual size — 1600px wide at most, about the page's own width — on a click, scrolled
+// so the point clicked stays in view. A touch screen pinches the page as it always can.
+// One control, the picture itself, so the keyboard reaches what the mouse does.
+function ScreenshotDialog({ url, title }: { url: string; title: string }) {
+  const [actual, setActual] = useState(false);
+  // Where in the picture the last toggle aimed, as fractions of its size.
+  const aim = useRef({ x: 0.5, y: 0.5 });
+  const scroller = useRef<HTMLDivElement>(null);
+  const image = useRef<HTMLImageElement>(null);
+
+  useLayoutEffect(() => {
+    const box = scroller.current;
+    const img = image.current;
+    if (!actual || !box || !img) return;
+    box.scrollLeft = aim.current.x * img.offsetWidth - box.clientWidth / 2;
+    box.scrollTop = aim.current.y * img.offsetHeight - box.clientHeight / 2;
+  }, [actual]);
+
+  const toggle = (e: MouseEvent<HTMLButtonElement>) => {
+    const img = image.current;
+    // `detail` is 0 for a keyboard press: aim at the middle.
+    if (img && e.detail > 0 && img.naturalWidth > 0 && img.naturalHeight > 0) {
+      // Fitted, the element is the whole box and `object-contain` draws the picture
+      // inside it, so find the drawn rectangle; at actual size the two are the same.
+      const r = img.getBoundingClientRect();
+      const k = Math.min(r.width / img.naturalWidth, r.height / img.naturalHeight);
+      const w = actual ? r.width : img.naturalWidth * k;
+      const h = actual ? r.height : img.naturalHeight * k;
+      const left = r.left + (r.width - w) / 2;
+      const top = r.top + (r.height - h) / 2;
+      aim.current = {
+        x: Math.min(1, Math.max(0, (e.clientX - left) / w)),
+        y: Math.min(1, Math.max(0, (e.clientY - top) / h)),
+      };
+    } else {
+      aim.current = { x: 0.5, y: 0.5 };
+    }
+    setActual((v) => !v);
+  };
+
+  return (
+    <DialogContent className="flex h-(--dialog-max-h) flex-col gap-0 overflow-hidden p-0 [--dialog-max-w:100%]">
+      {/* `pr-16` clears the corner ✕ (top-4, 32px). */}
+      <div className="flex min-h-16 items-center border-b border-border py-4 pr-16 pl-6">
+        <DialogTitle className="min-w-0 truncate leading-normal">{title}</DialogTitle>
+        <DialogDescription className="sr-only">
+          A screenshot of the page, as it looked when it was saved.
+        </DialogDescription>
+      </div>
+      {/* `flex` + the button's `m-auto`: centred while it fits, and scrollable from
+          its true edge once it doesn't — `justify-center` would push the overflow
+          off the left, out of reach of the scrollbar. */}
+      <div ref={scroller} className="flex min-h-0 flex-1 overflow-auto bg-muted/40 p-4">
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={actual ? 'Fit to window' : 'Show at actual size'}
+          className={cn(
+            'm-auto shrink-0 rounded-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+            actual ? 'cursor-zoom-out' : 'h-full w-full cursor-zoom-in',
+          )}
+        >
+          <img
+            ref={image}
+            src={url}
+            alt=""
+            className={cn('block', actual ? 'max-w-none' : 'h-full w-full object-contain')}
+          />
+        </button>
+      </div>
+    </DialogContent>
   );
 }
 

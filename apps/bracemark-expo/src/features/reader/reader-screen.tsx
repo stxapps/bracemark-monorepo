@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import { router } from 'expo-router';
@@ -38,6 +38,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/ta
 import { Text } from '../../components/ui/text';
 import { openLink, openWayback } from '../../lib/open-url';
 import { ReaderArticle } from './reader-article';
+import { ScreenshotViewer } from './screenshot-viewer';
 import { ReaderTopbar, type ReaderTopbarAction } from './topbar';
 
 // The reader — one link's kept copies, on expo. The twin of bracemark-web's
@@ -167,19 +168,56 @@ function ReadModeCopy({
   );
 }
 
-function ScreenshotCopy({ fileId, title }: { fileId: string; title: string }) {
+// Until the image has loaded and said its own size: a laptop viewport's shape, so
+// the box has a height and the text below doesn't jump far when it lands.
+const PLACEHOLDER_RATIO = 16 / 10;
+
+// What the viewer is showing — the screenshot's file, its local uri, and its shape.
+type Viewing = { fileId: string; uri: string; ratio: number };
+
+function screenshotLabel(title: string): string {
+  return `Screenshot of ${title}, as it looked when it was saved`;
+}
+
+// At the image's OWN shape, never a fixed box: the capture is the browser's viewport
+// as the window happened to be (docs/link-extraction-keep.md, _the screenshot is a
+// capped JPEG of the fold_) — about 1.75:1 on a laptop, 2:1 on a maximized 1080p
+// monitor, portrait in a narrow window — so any fixed ratio bars most of them, and
+// `cover` would cut off the edges a copy is kept for. A tap opens the viewer, where it
+// is read: fitted to this column, its text is drawn at about a quarter of its size.
+function ScreenshotCopy({
+  fileId,
+  title,
+  onOpen,
+}: {
+  fileId: string;
+  title: string;
+  onOpen: (viewing: Viewing) => void;
+}) {
   const uri = useImageFileUri(fileId);
+  const [ratio, setRatio] = useState<number | undefined>(undefined);
   const slow = useSlow(!uri);
   if (!uri) return <Loading what="screenshot" slow={slow} />;
   return (
-    <Image
-      source={{ uri }}
-      contentFit="contain"
-      // The capture is a viewport, wider than tall on a desktop; `aspect-[16/10]`
-      // gives the box a height before the image's own size is known.
-      className="aspect-[16/10] w-full rounded-lg border border-border"
-      accessibilityLabel={`Screenshot of ${title}, as it looked when it was saved`}
-    />
+    <Pressable
+      role="button"
+      accessibilityLabel={screenshotLabel(title)}
+      accessibilityHint="Opens it full screen, to zoom in"
+      testID="reader-screenshot"
+      onPress={() => onOpen({ fileId, uri, ratio: ratio ?? PLACEHOLDER_RATIO })}
+      className="active:opacity-80"
+    >
+      <Image
+        source={{ uri }}
+        contentFit="contain"
+        onLoad={(e) => {
+          const { width, height } = e.source;
+          if (width > 0 && height > 0) setRatio(width / height);
+        }}
+        style={{ aspectRatio: ratio ?? PLACEHOLDER_RATIO }}
+        className="w-full rounded-lg border border-border"
+      />
+    </Pressable>
   );
 }
 
@@ -307,6 +345,8 @@ export function ReaderScreen({ linkId }: { linkId: string }) {
   // Set once the user picks a tab; until then derived, so a screenshot-only link opens
   // on the screenshot and not on the empty Read mode tab.
   const [pickedTab, setPickedTab] = useState<'read' | 'screenshot' | undefined>(undefined);
+  const [viewing, setViewing] = useState<Viewing | undefined>(undefined);
+  const closeViewer = useCallback(() => setViewing(undefined), []);
 
   const settled = link !== undefined && extraction !== undefined && lockStatus === 'ready';
   const locked = settled && link !== null && isListLocked(link.listId);
@@ -316,6 +356,9 @@ export function ReaderScreen({ linkId }: { linkId: string }) {
   const readModeId = locked ? undefined : (extraction?.readModeId ?? undefined);
   const readModeImagesId = locked ? undefined : (extraction?.readModeImagesId ?? undefined);
   const screenshotId = locked ? undefined : (extraction?.screenshotId ?? undefined);
+  // Only while the reader still shows that screenshot: a list lock, or a delete from
+  // another device, takes the viewer down with it.
+  const viewed = viewing && viewing.fileId === screenshotId ? viewing : undefined;
 
   // The ⋯ menu's rows. ReaderTopbar drops them all behind a lock as well.
   const actions: ReaderTopbarAction[] = [];
@@ -395,7 +438,7 @@ export function ReaderScreen({ linkId }: { linkId: string }) {
           )}
         </TabsContent>
         <TabsContent value="screenshot">
-          <ScreenshotCopy fileId={screenshotId} title={title} />
+          <ScreenshotCopy fileId={screenshotId} title={title} onOpen={setViewing} />
           <DeleteCopy link={link} facet="screenshot" />
         </TabsContent>
       </Tabs>
@@ -415,7 +458,7 @@ export function ReaderScreen({ linkId }: { linkId: string }) {
   } else if (screenshotId) {
     body = (
       <>
-        <ScreenshotCopy fileId={screenshotId} title={title} />
+        <ScreenshotCopy fileId={screenshotId} title={title} onOpen={setViewing} />
         <DeleteCopy link={link} facet="screenshot" />
       </>
     );
@@ -432,20 +475,38 @@ export function ReaderScreen({ linkId }: { linkId: string }) {
     );
   }
 
+  // The viewer is the content's SIBLING, inside this screen's tree — never a Modal or
+  // a portal, which a relock can't hide (screenshot-viewer.tsx). While it is up, the
+  // content leaves the accessibility tree: the viewer's `accessibilityViewIsModal` is
+  // iOS's half, this is Android's (docs/accessibility.md, _modality_).
   return (
-    <StyledSafeAreaView className="flex-1 bg-background">
-      <ReaderTopbar
-        host={host}
-        locked={locked}
-        fallback="Reader"
-        actions={actions}
-        closeLabel="Close reader"
-        testIDPrefix="reader"
-        onClose={close}
-      />
-      <ScrollView contentContainerClassName="mx-auto w-full max-w-2xl px-4 py-6 md:px-6">
-        {body}
-      </ScrollView>
-    </StyledSafeAreaView>
+    <View className="flex-1 bg-background">
+      <StyledSafeAreaView
+        className="flex-1"
+        importantForAccessibility={viewed ? 'no-hide-descendants' : 'auto'}
+        accessibilityElementsHidden={!!viewed}
+      >
+        <ReaderTopbar
+          host={host}
+          locked={locked}
+          fallback="Reader"
+          actions={actions}
+          closeLabel="Close reader"
+          testIDPrefix="reader"
+          onClose={close}
+        />
+        <ScrollView contentContainerClassName="mx-auto w-full max-w-2xl px-4 py-6 md:px-6">
+          {body}
+        </ScrollView>
+      </StyledSafeAreaView>
+      {viewed ? (
+        <ScreenshotViewer
+          uri={viewed.uri}
+          ratio={viewed.ratio}
+          label={screenshotLabel(title)}
+          onClose={closeViewer}
+        />
+      ) : null}
+    </View>
   );
 }

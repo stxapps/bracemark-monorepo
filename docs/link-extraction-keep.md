@@ -438,6 +438,12 @@ asks for JPEG and runs the preview path's `resizeImage` with its own ceiling
 (`SCREENSHOT_MAX_DIMENSION` 1600, `SCREENSHOT_JPEG_QUALITY` 0.8, `@stxapps/shared`
 `image/preview.ts`): wide enough that a price stays legible, and up to a few hundred KB (median 135 KB, measured above).
 
+Its **shape is the window's**, and nothing here crops it: about 1.75:1 from a laptop
+(the browser's tabs and toolbar come off the screen's 16:10), 2:1 from a maximized
+1080p monitor, portrait from a narrow window. So the readers show it at its own ratio,
+never in a fixed box and never with `cover`, and open it full size to read; the cap
+above was checked against that view ([reader.md](./reader.md), _the screenshot_).
+
 **Full page is not captured.** Scroll-and-stitch runs into Chrome's limit of about
 two `captureVisibleTab` calls a second, repeats sticky headers, and triggers lazy
 loaders and infinite scroll on the page the user is reading; the DevTools protocol's

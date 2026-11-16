@@ -272,6 +272,20 @@ test('a screenshot alone is shown as the image of the page', async () => {
   expect(img.getAttribute('src')).toBe('blob:s1');
 });
 
+test('a click on the screenshot opens it full size, and the picture toggles fit and actual size', async () => {
+  mockExtraction = { screenshotId: 's1', facets: {} };
+
+  render(<ReaderPage />);
+
+  fireEvent.click(await screen.findByRole('button', { name: /Screenshot of .*open full size/ }));
+  const dialog = await screen.findByRole('dialog');
+  expect(dialog.querySelector('img')?.getAttribute('src')).toBe('blob:s1');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Show at actual size' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Fit to window' }));
+  screen.getByRole('button', { name: 'Show at actual size' });
+});
+
 test('no copy, free: says how to get one and offers Plus', async () => {
   mockExtraction = { facets: {} };
 

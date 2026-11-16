@@ -524,6 +524,9 @@ and Advanced Search are all the kit's in-app sheet (`components/ui/sheet.tsx`),
 which is drawn in the links layout's own tree, INSIDE the gate
 (`(app)/links/_layout.tsx`), so the gate's `display: none` hides it like any other subtree and it comes back
 with its draft on unlock — on both platforms, needing no flag.
+The reader's full-screen screenshot viewer is built the same way, as a sibling of
+the reader's content rather than a `Modal` (`features/reader/screenshot-viewer.tsx`;
+[reader.md](./reader.md), _the screenshot_).
 
 The kit's overlays portal to the root `PortalHost`, outside the gate — on iOS
 inside a `FullWindowOverlay`, where the leaked menu also hid the pane from the

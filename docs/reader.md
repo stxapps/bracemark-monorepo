@@ -95,6 +95,8 @@ offset and view are exactly where they were.
   again_. (The browser extension's and the phone's buttons stay live after "no
   article": they read the page the user is looking at, which can change.) The same
   section is the Read mode tab of a link that has only a screenshot (_the tabs_).
+- **The screenshot** shows at its own shape and opens full size on a click (_the
+  screenshot_ below).
 - **Bytes on demand.** `useReaderDoc` (web-react) asks `FileContentProvider` for the
   blob at once — no settle delay, the reader is a deliberate open — then gunzips and
   parses it; bytes that aren't a copy settle as "can't be read", never a throw. A copy
@@ -111,7 +113,8 @@ rules as web — locks first, reading and deleting never gated, text only — th
 ways out, the same line under the title, and the same
 states, read through expo-react's `useReaderDoc`, which reads the decrypted file off
 disk and gunzips it with fflate (Hermes has no DecompressionStream). The screenshot is
-expo-image over the same file. Taking a copy is the capture screen's job
+expo-image over the same file, at its own shape, and a tap opens it full screen to
+zoom (_the screenshot_ below). Taking a copy is the capture screen's job
 (`/capture?link=<id>` — [link-extraction-keep.md](./link-extraction-keep.md), _per
 client_, bracemark-expo), so there is no keep section to host here. What it has
 instead, on a plan with `keptCopies`, is ways across to that screen: a top-bar
@@ -184,6 +187,56 @@ screen — and a screenshot on neither (only the browser extension takes one).
   repeating it; a successful keep comes back to the reader by that screen's _Kept —
   read it_, now with a copy to open on. A link with no copy at all gets the same
   notice and button as its empty state (_the expo reader_ above).
+
+### the screenshot — its own shape, and a full-size view
+
+Decided 2026-11-16, on both apps. The screenshot is the browser's viewport as the
+window happened to be ([link-extraction-keep.md](./link-extraction-keep.md), _the
+screenshot is a capped JPEG of the fold_), so it has no one shape: about 1.75:1 from a
+laptop (the browser's own tabs and toolbar take height, so it is wider than the
+screen's 16:10), 2:1 from a maximized 1080p monitor, and anything at all — portrait
+included — from a narrow or split window.
+
+- **Shown at its own shape, never in a fixed box.** Web's `<img>` is `w-full h-auto`;
+  expo's box takes the ratio expo-image reports on load (`onLoad`'s `source.width /
+height`), at a laptop's 16:10 only until then. Expo's box was a fixed `16/10` with
+  `contain`, which barred nearly every capture top and bottom, since nearly every one
+  is wider than that.
+- **Never `cover`.** It fills a box by cutting off what overflows, and the edges are
+  often what the copy was kept for — a price, a headline, the date on a post. `cover`
+  is for a thumbnail, not for a kept copy; at the image's own shape the two fits draw
+  the same anyway, so `contain` stays.
+- **A tap or click opens it full size, because in the column it can't be read.** A
+  ~1500px page in expo's ~358pt phone column is drawn at about a quarter of its size
+  (16px text at ~4pt), and in web's `max-w-2xl` column at under half. The 1600px cap is
+  enough for both views: a 3× phone is ~1170 device pixels across, and _actual size_ on
+  web is about the page's own CSS width. Only a full-window view on a 2× desktop is
+  soft, which is not worth doubling every screenshot's bytes for.
+- **Web: a dialog the size of the window** (`ScreenshotDialog`, `reader-page.tsx`),
+  fitted at first. The picture itself is the one control — a button, so the keyboard
+  reaches what the mouse does — and switches between _Fit to window_ and _Show at
+  actual size_, scrolled so the point clicked stays in view (the middle, from the
+  keyboard). A touch screen pinches the page as it always can. Every open starts
+  fitted.
+- **Expo: a full-screen viewer** (`features/reader/screenshot-viewer.tsx`): pinch about
+  the fingers, a drag when zoomed (flung, held at the edges with a rubber band),
+  double-tap to zoom in at the tap or back out, up to 4×; a ✕ in the corner and
+  Android's back close it. Gesture Handler and Reanimated, both already here — no
+  viewer package. All of it runs on the UI thread, and expo-image decodes the file
+  at full size there (`allowDownscaling={false}`), or every zoom would be a zoom of a
+  bitmap shrunk to the fitted box. VoiceOver and TalkBack can't pinch, so the picture
+  is `adjustable`: swiping up or down zooms in steps of 1.5×, and its value is the
+  zoom as a percentage.
+- ⚠ **The expo viewer is drawn in the reader's own tree — not a `Modal`, not a
+  portal.** Both of those draw outside AppLockGate's hidden wrapper, and would leave a
+  picture of the page up over the lock pane after a relock
+  ([locks.md](./locks.md), _overlays over a relock_). It is the reader content's
+  sibling, so the gate hides it with everything else, and it shows only while the
+  reader still shows that screenshot: a list lock, or a delete from another device,
+  takes it down. For the same reason a screen reader is kept inside it the way the
+  in-app sheet keeps one ([accessibility.md](./accessibility.md), _modality_):
+  `accessibilityViewIsModal` on the viewer, and the reader's content hidden while it
+  is up.
 
 ### the way in — one **Read** in the row menu
 
