@@ -365,6 +365,98 @@ test.describe('browser extension', () => {
     },
   );
 
+  // The one client that takes both kept copies, taking them from a real page and
+  // handing them to the web reader (docs/link-extraction-keep.md, _per client_). The
+  // reader's tabs and layout are READER-WEB-001's, over copies a backup brings; this
+  // is the capture: Readability and the walker over a live DOM, captureVisibleTab,
+  // both encrypted and pushed, and read back by another profile.
+  test(
+    'a Plus save keeps a read-mode copy and a screenshot that a separate web profile reads',
+    { tag: ['@EXT-KEEP-001', '@full', '@online', '@extension'] },
+    async ({ extensionApp, webApp }, testInfo) => {
+      // Kept copies are Plus. Granted before the popup first asks for the plan.
+      await grantPlus(webApp.credentials.username);
+      const url = controlledPageUrl('keep');
+      const heading = unique('Kept article heading');
+      const sentence = unique('A sentence only the kept copy carries');
+      const firstPopup = await extensionApp.signIn(url);
+      await waitForExtensionSync(firstPopup);
+      await firstPopup.close();
+
+      // The controlled page becomes an article Readability takes: a heading and
+      // paragraphs long enough to pass its pre-check, in place of the sign-in form.
+      await extensionApp.subject.evaluate(
+        ({ articleHeading, articleSentence }) => {
+          const filler =
+            'Paragraph text long enough that a reader view scores it as the body of an ' +
+            'article rather than the chrome around one, with commas, and full sentences.';
+          document.title = articleHeading;
+          document.body.innerHTML =
+            `<main><article><h1>${articleHeading}</h1>` +
+            `<p>${articleSentence}. ${filler}</p>` +
+            [1, 2, 3, 4].map(() => `<p>${filler} ${filler}</p>`).join('') +
+            '</article></main>';
+        },
+        { articleHeading: heading, articleSentence: sentence },
+      );
+
+      const popup = await openExtensionPopup(
+        extensionApp.context,
+        extensionApp.extensionId,
+        extensionApp.subject,
+      );
+      // The plan settles before the save reads it (IAP-ENTITLEMENT-001 has why).
+      await waitForExtensionSync(popup);
+      await popup.waitForFunction(() => {
+        const raw = localStorage.getItem('bracemark.subscriptionStatus');
+        return raw !== null && (JSON.parse(raw) as { plan?: string }).plan === 'plus';
+      });
+
+      // The save asks for read mode by itself (the default `keepReadModeOnSave`); the
+      // screenshot is a tap on the saved screen.
+      await popup.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(popup.getByText('Saved', { exact: true })).toBeVisible();
+      await expect(popup.getByRole('button', { name: 'Read mode kept — read it' })).toBeVisible({
+        timeout: 60_000,
+      });
+      await popup.getByRole('button', { name: 'Screenshot', exact: true }).click();
+      await expect(popup.getByRole('button', { name: 'Screenshot kept — read it' })).toBeVisible({
+        timeout: 60_000,
+      });
+      await requestSyncAndWait(popup);
+
+      const reader = await launchApp(
+        profileDir(`extension-reader-w${testInfo.workerIndex}-${unique('keep')}`),
+        { existing: webApp.credentials },
+      );
+      try {
+        const { page } = reader;
+        const row = webRowsFor(page, url);
+        await expect(row).toHaveCount(1, { timeout: 90_000 });
+        await row.getByRole('button', { name: 'Link options' }).click();
+        await page.getByRole('menuitem', { name: 'Read', exact: true }).click();
+        await expect(page.getByRole('tab', { name: 'Read mode', exact: true })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+        // The sentence is the copy's own: the heading is also the page title, which
+        // the link's row and the reader's title carry without any copy at all.
+        await expect(page.getByText(sentence, { exact: false })).toBeVisible({ timeout: 30_000 });
+
+        await page.getByRole('tab', { name: 'Screenshot', exact: true }).click();
+        const image = page.getByRole('img', { name: /^Screenshot of .*, as it looked when/ });
+        await expect(image).toBeVisible({ timeout: 30_000 });
+        await expect
+          .poll(() =>
+            image.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0),
+          )
+          .toBe(true);
+      } finally {
+        await reader.close();
+      }
+    },
+  );
+
   test(
     'a sync request wakes a terminated MV3 service worker',
     { tag: ['@EXT-SERVICE-WORKER-001', '@full', '@online', '@extension'] },

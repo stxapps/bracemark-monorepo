@@ -76,12 +76,24 @@ async function main(): Promise<void> {
     hostPermissions: [`${new URL(WEB_URL).origin}/*`],
   });
 
+  // EXT-KEEP-001's screenshot is `captureVisibleTab`, which Chrome allows only with
+  // `<all_urls>` or an activeTab grant — never a host permission on one origin,
+  // since a page can frame others. With no toolbar to click, the stand-in is
+  // `<all_urls>`, on this copy alone; the case navigates nowhere but its
+  // controlled page.
+  const keepStaged = await stageExtensionCopy(join(runDir, 'extension-keep-staged'), {
+    source: build,
+    permissions: ['tabs'],
+    hostPermissions: ['<all_urls>'],
+  });
+
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     E2E_RUN_ID: runId,
     E2E_RUN_DIR: runDir,
     E2E_EXTENSION_PATH: staged,
     E2E_EXTENSION_EXTRACTION_PATH: extractionStaged,
+    E2E_EXTENSION_KEEP_PATH: keepStaged,
   };
   if (stagingPlanFrom) {
     console.log(
@@ -143,6 +155,7 @@ async function main(): Promise<void> {
         permissions: ['tabs'],
         hostPermissions: [`${new URL(WEB_URL).origin}/*`],
       },
+      keep: { permissions: ['tabs'], hostPermissions: ['<all_urls>'] },
       activeTabToolbarGrantProven: false,
     },
     playwrightVersion: playwrightVersion.stdout.trim(),

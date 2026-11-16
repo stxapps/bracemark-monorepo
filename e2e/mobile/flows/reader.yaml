@@ -1,0 +1,46 @@
+# The reader over kept copies synced down from the web (docs/reader.md, _the expo
+# reader_). The runner imports a backup holding two links with copies on the web,
+# on Plus, before the device signs in (web/fixtures/kept-copies-library.ts): the
+# newest has a read-mode copy and a screenshot, the next a screenshot alone.
+#
+#   maestro test mobile/flows/reader.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e BOTH_TITLE=… -e HEADING=… -e SHOT_ONLY_TITLE=…
+#
+# Between the parts the runner measures the two tab triggers off the hierarchy
+# (`readerTabs`, runner/mobile.ts). That is the claim no assertion here can make:
+# on a wide window the triggers once laid out ZERO wide (`flex-1 sm:flex-none`,
+# docs/theme.md), and a zero-wide trigger still carries its testID and its name.
+#
+# No flow-level `env:` defaults: on Maestro 2.8.0 they beat `-e` (docs/e2e.md,
+# _driving the native apps_).
+appId: com.bracemark.app
+tags: [READER-NATIVE-001, full, online, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+
+# Both rows arrive with the first pull; the newest is the one with both copies.
+# A row is named by a composite ("<monogram>, <title>, <host>, Link options"), and a
+# Maestro text is a whole-string regex, hence the `.*` on each side.
+- extendedWaitUntil:
+    visible: '.*${BOTH_TITLE}.*'
+    timeout: 30000
+- runFlow:
+    file: subflows/dismiss-logbox.yaml
+- tapOn:
+    id: 'link-options'
+    index: 0
+- tapOn:
+    id: 'link-menu-read'
+
+# It opens on Read mode, the article read from its synced blob.
+- extendedWaitUntil:
+    visible:
+      id: 'reader-tab-read'
+    timeout: 15000
+- assertVisible:
+    id: 'reader-tab-screenshot'
+- extendedWaitUntil:
+    visible: '${HEADING}'
+    timeout: 15000
+- takeScreenshot: reader-read-mode

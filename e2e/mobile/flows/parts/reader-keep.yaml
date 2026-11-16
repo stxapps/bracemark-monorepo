@@ -1,0 +1,12 @@
+# READER-NATIVE-001, after the tabs were measured on the screenshot-only link: its
+# Read mode tab holds the way to take the copy — never an empty tab. Not pressed: it
+# replaces the reader with the capture screen, which loads the page.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'reader-tab-read'
+- extendedWaitUntil:
+    visible:
+      id: 'reader-keep-read-mode'
+    timeout: 10000
+- takeScreenshot: reader-keep-read-mode

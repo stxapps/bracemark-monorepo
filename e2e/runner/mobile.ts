@@ -14,6 +14,10 @@ import {
   type PendingExtractionLibrary,
   writePendingExtractionLibrary,
 } from '../web/fixtures/extraction';
+import {
+  type KeptCopiesLibrary,
+  writeKeptCopiesLibrary,
+} from '../web/fixtures/kept-copies-library';
 import { launchApp, type LaunchedApp } from '../web/fixtures/launch';
 import { writePagedLibrary } from '../web/fixtures/library';
 import { addLink, chooseRowMenuItem, displayUrl, linkRow } from '../web/fixtures/links';
@@ -61,7 +65,7 @@ import {
   openSystemShare,
   startPlainTextShareSource,
 } from './share';
-import { WIDE_MIN_WIDTH, wmDensity, wmSize } from './width';
+import { type E2EWidth, WIDE_MIN_WIDTH, wmDensity, wmSize } from './width';
 
 // Cases whose subject is a Plus lever get the existing `manual` grant before the
 // device signs in, so the sign-in's entitlement read already carries it
@@ -516,6 +520,43 @@ function surfaceShape(what: string, id: string, expected: 'dialog' | 'sheet') {
   };
 }
 
+// The reader's two tab triggers, read off the hierarchy (READER-NATIVE-001). Narrow,
+// they split the bar between them — two big targets, each near half the window;
+// wide, they are the fitted pill, each as wide as its label. Either way a trigger
+// is a real target. Measured rather than asserted visible, because a trigger laid
+// out ZERO wide keeps its testID and its name: that is how `flex-1 sm:flex-none`
+// hid both labels on every wide window (docs/theme.md, the uniwind `flex` note).
+const READER_TAB_MIN_WIDTH = 48;
+
+function readerTabs(width: E2EWidth, what: string) {
+  return async (context: CaseStepContext): Promise<null> => {
+    const root = parseHierarchy(await context.hierarchy());
+    const screen = screenBox(root);
+    const perPoint = await unitsPerPoint(context);
+    const screenWidth = (screen.right - screen.left) / perPoint;
+    for (const id of ['reader-tab-read', 'reader-tab-screenshot']) {
+      const tab = boxById(root, id);
+      const tabWidth = Math.round((tab.right - tab.left) / perPoint);
+      const share = tabWidth / screenWidth;
+      const shape =
+        tabWidth < READER_TAB_MIN_WIDTH
+          ? `under the ${READER_TAB_MIN_WIDTH}pt a label needs`
+          : width === 'narrow' && share < 0.4
+            ? 'not half of the bar, which a narrow window splits between the two'
+            : width === 'wide' && share > 0.4
+              ? 'not the fitted pill a wide window draws'
+              : undefined;
+      if (shape) {
+        throw new Error(
+          `${what}: #${id} is ${tabWidth}pt wide (${formatBox(tab)}) in a ` +
+            `${Math.round(screenWidth)}pt ${width} window — ${shape}`,
+        );
+      }
+    }
+    return null;
+  };
+}
+
 // The display's current width in dp, as the window configuration reports it.
 async function displayWidth(deviceId: string): Promise<number> {
   const dump = await adbShell(deviceId, ['dumpsys', 'window', 'displays']);
@@ -687,6 +728,7 @@ async function main(): Promise<void> {
         : undefined;
       let extractionLibrary: PendingExtractionLibrary | undefined;
       let scaleLibrary: ScaleLibrary | undefined;
+      let keptCopies: KeptCopiesLibrary | undefined;
       const account = await provisionAccount(`${run.runId}-${testCase.id}`, {
         withRecovery,
         prepare: async (app) => {
@@ -724,6 +766,18 @@ async function main(): Promise<void> {
             await createInSettings(app.page, 'tag', shareTagName);
             await app.page.goto('/links');
             await syncAndWait(app.page);
+          }
+          if (testCase.id === 'READER-NATIVE-001') {
+            // Copies only the browser extension takes, arriving as a backup's
+            // blobs. This browser imports them, so IT holds Plus as well: a
+            // screenshot-only link has its two tabs on a plan with `keptCopies`.
+            await grantPlusAndLoad(app.page, app.credentials.username);
+            keptCopies = await writeKeptCopiesLibrary(
+              join(run.runDir, 'cases', testCase.id, 'fixture', 'kept-copies.zip'),
+              unique('E2E reader'),
+            );
+            await importArchive(app.page, keptCopies.archivePath);
+            await waitForSync(app.page);
           }
           if (testCase.id === 'EXTRACT-NATIVE-ALL-001') {
             // Imported on the web and synced down, so the device meets these as
@@ -1370,6 +1424,19 @@ async function main(): Promise<void> {
             assertLeadsList(list, row, previous, 'a save at offset zero');
             return null;
           },
+        ];
+      }
+      if (testCase.id === 'READER-NATIVE-001') {
+        if (!keptCopies) throw new Error(`${testCase.id}: the kept copies were never imported`);
+        env.BOTH_TITLE = keptCopies.bothTitle;
+        env.HEADING = keptCopies.heading;
+        env.SHOT_ONLY_TITLE = keptCopies.shotOnlyTitle;
+        steps = [
+          testCase.path,
+          readerTabs(run.width, 'the link with both copies'),
+          'mobile/flows/parts/reader-screenshot.yaml',
+          readerTabs(run.width, 'the screenshot-only link'),
+          'mobile/flows/parts/reader-keep.yaml',
         ];
       }
       if (testCase.id === 'LAYOUT-WIDE-001') {

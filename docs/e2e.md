@@ -259,8 +259,16 @@ The `tabs` addition lets popup.html run as an attachable tab and still read the
 real active page behind it. It is not a substitute for the shipped manifest's
 toolbar-created `activeTab` grant. `EXT-EXTRACT-001` stages a second copy with one
 additional host permission — only the local web origin — so the background can
-inject the title/image collector into its controlled page. The run manifest
-records both differences and records `activeTabToolbarGrantProven: false`.
+inject the title/image collector into its controlled page. `EXT-KEEP-001` stages a
+third copy, with `<all_urls>`: its screenshot is `captureVisibleTab`, which Chrome
+allows only with `<all_urls>` or an `activeTab` grant — a page can frame other
+origins, so a host permission on the page's own origin is refused, and the popup
+says "Couldn’t keep a copy" while read mode, an injected script, is kept fine
+(measured 2026-11-16). The case turns the controlled page into an article, saves it
+on Plus (the save asks for read mode by itself), taps _Screenshot_, and opens both
+copies in a separate web profile's reader — the only case where a kept copy is
+taken rather than imported. The run manifest
+records all three copies' differences and `activeTabToolbarGrantProven: false`.
 `EXT-RELEASE-001` in `e2e/extension/RELEASE.md` owns the real Chrome-toolbar
 boundary; the Firefox production-build smoke is beside it.
 
@@ -1244,7 +1252,13 @@ All of them are in the app:
 | `tag-picker-done`             | `src/components/links/tags-field.tsx`                                                            |
 | `link-options`                | `src/features/links/link-row-menu.tsx` — a row's ⋯                                               |
 | `link-menu-<action>`          | ” — `edit` `pin` `unpin` `archive` `unarchive` `remove` `restore` `delete`                       |
+| `link-menu-read`              | ” — **Read**: the reader on a link with a copy, the capture screen on one without                |
 | `link-destroy-submit`         | `src/features/links/link-destroy-confirm.tsx`                                                    |
+| `reader-tab-<tab>`            | `src/features/reader/reader-screen.tsx` — `read` `screenshot`; their BOXES are measured          |
+| `reader-screenshot`           | ” — the screenshot in its tab; a press opens the viewer                                          |
+| `reader-screenshot-close`     | `src/features/reader/screenshot-viewer.tsx` — the viewer's ✕                                     |
+| `reader-keep-read-mode`       | `src/features/reader/reader-screen.tsx` — _Keep a read-mode copy_, to the capture screen         |
+| `reader-close`                | `src/features/reader/topbar.tsx` — the ✕ (`<prefix>-close`; the capture screen's is `capture-`)  |
 | `links-title`                 | `src/features/links/topbar.tsx` — the view the route projects                                    |
 | `links-search-toggle`         | ” — summons the search row                                                                       |
 | `links-search-input`          | `src/features/links/search-bar.tsx`                                                              |
@@ -2118,6 +2132,15 @@ neither cause. Admitted wide today:
   pickers and the configuration change under it;
 - `SHARE-CREATE-001` — a list and a tag typed into the pickers and created
   with the keyboard up, in that panel on the tablet on its side;
+- `READER-NATIVE-001` — the reader's tabs, which change shape at `sm`: split
+  across the bar on a phone, the fitted pill on a tablet. The runner measures
+  both triggers off the hierarchy at each width (`readerTabs`,
+  `runner/mobile.ts`), because the failure it was written for is invisible to an
+  assertion: `flex-1 sm:flex-none` laid both triggers out ZERO wide on every
+  wide window, labels gone, while each trigger kept its testID and its name
+  ([theme.md](./theme.md), the uniwind `flex` note). The copies come from a
+  backup imported on the web (`web/fixtures/kept-copies-library.ts`), since
+  only the browser extension takes a screenshot;
 - the four checkpoint cases.
 
 **Left narrow on purpose: the rest of the Android share cases.**
@@ -2213,6 +2236,7 @@ for the fork it crosses:
 | `BULK-ACTIONS-001`                | the bulk toolbar's overflow menu                                     |
 | `TAXONOMY-DND-001`                | a pointer drag at phone width; the tree in the drawer                |
 | `LOCK-LIST-001`                   | a list's Move to sheet; a locked list's pane reached from the drawer |
+| `READER-WEB-001`                  | the reader's tabs split across the bar, measured; the screenshot     |
 
 `LINK-MOVE-001` and `LOCK-FOCUS-WEB-001` keep the narrow legs they switch to
 inside the case. Each makes a claim about the crossing itself — the link row's

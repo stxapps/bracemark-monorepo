@@ -832,6 +832,16 @@
     "environments": ["local", "staging"]
   },
   {
+    "id": "EXT-KEEP-001",
+    "title": "A Plus save from the browser extension keeps a read-mode copy and a screenshot of the live page, and a separate web profile reads both in the reader",
+    "surface": "extension",
+    "tier": "full",
+    "traits": ["online", "extension"],
+    "fixture": "small",
+    "path": "extension/extension.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
     "id": "EXT-SERVICE-WORKER-001",
     "title": "A sync request wakes a terminated MV3 service worker",
     "surface": "extension",
@@ -1977,5 +1987,27 @@
     "path": "staging/hosting.e2e.ts",
     "artifacts": ["trace", "screenshot"],
     "environments": ["staging"]
+  },
+  {
+    "id": "READER-WEB-001",
+    "title": "Kept copies from a backup read back in the reader's tabs, laid out with their labels, the screenshot at its own shape and full size, and a deleted copy leaving the other",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "small",
+    "path": "web/reader.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "widths": ["wide", "narrow"]
+  },
+  {
+    "id": "READER-NATIVE-001",
+    "title": "A native reader over synced kept copies shows both tabs wide enough for their labels, the article, and the screenshot opening full screen",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/reader.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "widths": ["narrow", "wide"]
   }
 ]

@@ -1,0 +1,46 @@
+# READER-NATIVE-001, after the tabs were measured on the link with both copies: the
+# Screenshot tab, the full-screen viewer and its ✕, then back to the links.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'reader-tab-screenshot'
+- extendedWaitUntil:
+    visible:
+      id: 'reader-screenshot'
+    timeout: 15000
+- takeScreenshot: reader-screenshot-tab
+- tapOn:
+    id: 'reader-screenshot'
+- extendedWaitUntil:
+    visible:
+      id: 'reader-screenshot-close'
+    timeout: 10000
+- takeScreenshot: reader-screenshot-viewer
+- tapOn:
+    id: 'reader-screenshot-close'
+- extendedWaitUntil:
+    notVisible:
+      id: 'reader-screenshot-close'
+    timeout: 10000
+- assertVisible:
+    id: 'reader-tab-read'
+
+# The ✕ pops the reader back to the links screen it was pushed over.
+- tapOn:
+    id: 'reader-close'
+- extendedWaitUntil:
+    visible: '.*${SHOT_ONLY_TITLE}.*'
+    timeout: 10000
+
+# A screenshot alone, on Plus: the same two tabs, opening on the copy that exists.
+- tapOn:
+    id: 'link-options'
+    index: 1
+- tapOn:
+    id: 'link-menu-read'
+- extendedWaitUntil:
+    visible:
+      id: 'reader-screenshot'
+    timeout: 15000
+- assertVisible:
+    id: 'reader-tab-read'

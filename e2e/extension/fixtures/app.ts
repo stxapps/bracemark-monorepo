@@ -60,10 +60,14 @@ export const test = base.extend<ExtensionFixtures>({
   },
 
   extensionApp: async ({ webApp }, use, testInfo) => {
-    const extractionCase = testInfo.tags.includes('@EXT-EXTRACT-001');
-    const extension = extractionCase
+    // The cases that read the page itself get a build staged with a grant on it, in
+    // place of the toolbar's activeTab (runner/extension.ts): the title and image
+    // need the controlled page's origin, a screenshot `<all_urls>`.
+    const extension = testInfo.tags.includes('@EXT-EXTRACT-001')
       ? process.env.E2E_EXTENSION_EXTRACTION_PATH
-      : process.env.E2E_EXTENSION_PATH;
+      : testInfo.tags.includes('@EXT-KEEP-001')
+        ? process.env.E2E_EXTENSION_KEEP_PATH
+        : process.env.E2E_EXTENSION_PATH;
     if (!extension) {
       throw new Error(
         'run browser-extension specs through `npx nx e2e-extension @stxapps/e2e` ' +
