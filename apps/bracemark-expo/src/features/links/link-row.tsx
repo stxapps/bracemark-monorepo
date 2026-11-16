@@ -119,13 +119,24 @@ export const LinkRow = memo(function LinkRow({
         selected ? 'bg-muted' : 'active:bg-muted/50'
       }`}
     >
+      {/* The checkbox gets a size-8 slot: the ⋯ trigger's footprint
+          (link-row-menu.tsx), which it stands in for. A row gives up the same
+          32 + gap-3 to its text column in either mode, so no title re-wraps
+          when bulk-edit turns on or off. Bare, the 16pt box gave the title
+          16pt more, which turned two-line titles into one-line ones, so rows
+          changed height and the list shifted under the finger that just
+          long-pressed it. Web's LinkRowSelect has the same wrapper
+          (`_layouts/shared/link-row-widgets.tsx`), and link-card.tsx holds the
+          ⋯ slot with a spacer for the card's own reason. Change one size and
+          you have to change the other; nothing will flag it if they drift. */}
       {selectMode && (
-        <Checkbox
-          aria-label={`Select ${link.title || displayUrl(link.url)}`}
-          checked={selected}
-          onCheckedChange={() => onToggle(link)}
-          className="shrink-0"
-        />
+        <View className="size-8 shrink-0 items-center justify-center">
+          <Checkbox
+            aria-label={`Select ${link.title || displayUrl(link.url)}`}
+            checked={selected}
+            onCheckedChange={() => onToggle(link)}
+          />
+        </View>
       )}
       {/* Thumbnail + text share a TOP edge, so they get their own `items-start`
           box while the row stays `items-center` for the date and the ⋯ menu

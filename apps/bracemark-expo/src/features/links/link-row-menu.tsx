@@ -135,7 +135,9 @@ export function LinkRowMenu({
             testID="link-options"
             // 32, not the size's own 36 — the web twin pins the same box, and
             // for the same reason: growing it would push the 44pt target past
-            // the gap into the row's title anchor.
+            // the gap into the row's title anchor. The list row's bulk-edit
+            // checkbox slot (link-row.tsx) and the card's select-mode spacer
+            // (link-card.tsx) are sized to match it, so change all three together.
             className="size-8 shrink-0"
           >
             {/* 20, not 16 — three dots at the vertical centre carry a fraction of
