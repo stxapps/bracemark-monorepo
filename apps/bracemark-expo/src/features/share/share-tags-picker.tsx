@@ -20,17 +20,20 @@
 // on an exact case-insensitive match. Someone who has tagged a link in the app
 // should recognise this on sight.
 
-import { useCallback, useState } from 'react';
-import { ScrollView } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
 
 import type { ShareNewEntity, ShareTaxonomyTag } from '@stxapps/expo-react/data/share-store';
 
-import { TagPickerRows } from '../../components/links/tag-picker-rows';
+import {
+  TagPickerCreateRow,
+  TagPickerItem,
+  type TagPickerRow,
+} from '../../components/links/tag-picker-rows';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
-import { ScrollClaim } from '../../components/ui/scroll-claim';
 import { Text } from '../../components/ui/text';
 import { ShareHeader, ShareSheet } from './share-kit';
+import { SharePickerList } from './share-picker-list';
 
 export function ShareTagsPicker({
   tags,
@@ -82,6 +85,28 @@ export function ShareTagsPicker({
     setQuery('');
   }, [trimmed, onSubmitName]);
 
+  const selectedIds = new Set(selectedTagIds);
+  const rows: TagPickerRow[] = [
+    ...visibleNew.map((tag) => ({ ...tag, selected: true })),
+    ...visibleTags.map((tag) => ({ ...tag, selected: selectedIds.has(tag.id) })),
+  ];
+
+  const newIds = useMemo(() => new Set(newTags.map((tag) => tag.id)), [newTags]);
+  const toggle = useCallback(
+    (id: string) => (newIds.has(id) ? onRemoveNew(id) : onToggle(id)),
+    [newIds, onRemoveNew, onToggle],
+  );
+  const renderRow = useCallback(
+    ({ item }: { item: TagPickerRow }) => (
+      <TagPickerItem
+        row={item}
+        testID={newIds.has(item.id) ? `share-new-tag-${item.id}` : `share-tag-${item.id}`}
+        onToggle={toggle}
+      />
+    ),
+    [newIds, toggle],
+  );
+
   return (
     <ShareSheet memoryLabel="tags-picker" holdSwipe>
       <ShareHeader back={{ title: 'Add tags', onPress: onDone }} />
@@ -97,45 +122,25 @@ export function ShareTagsPicker({
         className="h-9"
       />
 
-      {/* Bounded, not `flex-1`, and `min-h-0 shrink` so this is what gives up
-          height to the keyboard — see the list picker's note, which also
-          carries why this is `interactive` rather than `on-drag`. */}
-      <ScrollView
-        className="max-h-72 min-h-0 shrink"
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="interactive"
-      >
-        {/* ScrollClaim: the list picker's reason. */}
-        <ScrollClaim>
-          <TagPickerRows
-            rows={[
-              ...visibleNew.map((tag) => ({ ...tag, selected: true })),
-              ...visibleTags.map((tag) => ({
-                ...tag,
-                selected: selectedTagIds.includes(tag.id),
-              })),
-            ]}
-            onToggle={(id) =>
-              newTags.some((tag) => tag.id === id) ? onRemoveNew(id) : onToggle(id)
-            }
-            emptyText={
-              visibleTags.length === 0 && visibleNew.length === 0 && !canCreate
-                ? tags.length === 0 && newTags.length === 0
-                  ? 'No tags yet. Type a name to make one.'
-                  : 'No tags found.'
-                : undefined
-            }
-            createName={canCreate ? trimmed : undefined}
-            onCreate={canCreate ? submit : undefined}
-            testIDForRow={(row) =>
-              newTags.some((tag) => tag.id === row.id)
-                ? `share-new-tag-${row.id}`
-                : `share-tag-${row.id}`
-            }
-            createTestID="share-tag-create"
-          />
-        </ScrollClaim>
-      </ScrollView>
+      {/* VIRTUALIZED, for the list picker's reason — see SharePickerList. */}
+      <SharePickerList
+        data={rows}
+        keyExtractor={(row) => row.id}
+        extraData={renderRow}
+        renderItem={renderRow}
+        emptyText={
+          visibleTags.length === 0 && visibleNew.length === 0 && !canCreate
+            ? tags.length === 0 && newTags.length === 0
+              ? 'No tags yet. Type a name to make one.'
+              : 'No tags found.'
+            : undefined
+        }
+        footer={
+          canCreate ? (
+            <TagPickerCreateRow name={trimmed} onCreate={submit} testID="share-tag-create" />
+          ) : null
+        }
+      />
 
       <Button variant="outline" size="lg" onPress={onDone}>
         <Text>Done</Text>

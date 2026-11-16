@@ -25,23 +25,24 @@ import { assertExtractionWritable, writeExtraction, writeFile } from './mutation
 // process, both after deciding the account keeps the copy (the plan's `keptCopies`,
 // and for a save, the synced setting):
 //
-//   - drainShareOutbox, for a copy a Safari share carried: the iOS share extension's
+//   - drainShareOutbox, for a copy a Safari share brought: the iOS share extension's
 //     preprocessing ran the converter inside the shared page (share-extension/
-//     preprocessing.js) and the draft brought the capture across;
+//     preprocessing.js), the extension's controller wrote the capture to a file in
+//     the App Group, and the draft names the file;
 //   - the capture screen, for a copy taken from its WebView
 //     (features/capture/capture-screen.tsx), through useKeptCopyMutations.
 //
 // Both are the user's own session on the live page, so the copy is written at the
 // active-page tier (`expo:fg`), like the browser extension's. It is re-validated
-// against `readerDocSchema` here: a share draft is read back off the App Group
+// against `readerDocSchema` here: a share's copy is read back off the App Group
 // container, and a WebView message is whatever the page's context posted.
 // docs/link-extraction-keep.md, _expo_.
 //
 // `readMode` is the CAPTURE — `{ doc, images }`, the document and beside it the
 // address of each figure it gave a key to — or that as JSON TEXT, or a bare document
-// (what a draft written before captures carried images holds). A share draft carries
-// text — the iOS share extension passes the copy along without ever parsing it, and
-// this is where it first becomes objects (docs/share-sheet.md, _what the sheet does
+// (what a capture from before captures carried images holds). A share's copy is text
+// — the iOS share extension writes it to a file without ever parsing it, and this is
+// where it first becomes objects (docs/share-sheet.md, _what the sheet does
 // and doesn't do_). Text that isn't JSON is a copy that can't be stored, like any
 // other.
 //
@@ -107,7 +108,7 @@ export async function storeReadModeCopy(
   const parsed = readerDocSchema.safeParse(isCapture ? capture.doc : candidate);
   if (!parsed.success) return false;
   // A forged capture is as likely as a real one on this door (the walker runs in the page's
-  // WebView, and a Safari draft is a string off the App Group), so the size ceilings are
+  // WebView, and a Safari share's copy is a string off the App Group), so the size ceilings are
   // re-applied here, before any image is fetched or blob written. Past them it is not an
   // article and is not kept.
   if (!readerDocWithinCaps(parsed.data)) return false;

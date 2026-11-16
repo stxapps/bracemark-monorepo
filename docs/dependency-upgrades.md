@@ -161,7 +161,7 @@ in which the sheet carries an article copy (the old script sent none, and from
 2026-10-28, or a larger taxonomy. **The discriminator**: the same account sharing
 a page that is not an article (no copy), the full five laps. Growth back near
 10 MB pins it on the copy; otherwise compare against a device build of the old
-`expo-share-extension` setup carrying the fixed script.
+`expo-share-extension` setup carrying the fixed script (dropped 2026-11-16, below).
 
 ⚠ **That first e2e pass needed the old `preprocessing.js`, and the reason was
 not the vendoring.** With the file `8a1b93e3` (2026-11-08) generated, Safari
@@ -192,6 +192,42 @@ attributing it, and keep the non-article run as the discriminator.
 `share-extension-prebuild.spec.ts` now runs `target.js`, `files.js` and
 `identity.js` against the SDK 54 template project, the way the Podfile spec
 runs `podfile.js`.
+
+**2026-11-16 — the comparison with the old setup is dropped; the memory gate is
+now absolute.** A device build of `expo-share-extension` would answer "did the
+vendoring cost memory", and that is already answered where it can be: the
+controller's whole job after boot is to mount one root, and boot is unchanged
+(21.2 MB against 21.1 at `compose` on open). The per-lap growth is the sheet's JS
+and its native views, which the vendoring did not touch. And the run it would be
+compared with is not repeatable — 2026-10-28's account was not recorded, and
+the 2026-11-09 run's was a different one with a larger taxonomy. So the gate is
+`SHARE-IOS-MEMORY-RELEASE-001` as rewritten that day (`e2e/mobile/RELEASE.md`):
+fixed seed accounts and pages, ten laps, an absolute bar (no warning, ≥ 40 MB
+available at the worst run's high point, laps 6–10 under 1 MB each), read with
+the `share-memory` line's new fields — the Hermes heap, a mount count, the copy's
+length and the process's age ([share-sheet.md](./share-sheet.md), _measure it
+where it is enforced_). The non-article run stays the copy's discriminator;
+`plus-full` against `plus-worst` is the taxonomy's.
+
+**Measured the same day, iPhone 12, release build, `plus-worst`, runs C and D:
+the 21 → 73 MB growth is attributed, and it is not the vendoring.** Both runs
+peak in their first laps (75.5 and 72.7 MB, lowest headroom 44.5 MB) and then
+settle at 60–64 MB through the rest — a plateau, not a leak. The copy is not the
+cause (a 19 K copy peaks no higher than a 2 K one); the first picker visit on a
+109-list, 100-tag account is, about half of it native views rather than JS. The
+2026-11-09 run stopped inside that first climb. The run also showed the
+vendored controller's cleanup working on hardware — every sheet gets a fresh
+runtime — and that iOS reuses the share extension's process across shares,
+which carries a ~19 MB high-water mark into the next sheet
+([share-sheet.md](./share-sheet.md), _`plus-worst` on the iPhone 12_). Still to
+run for the gate: `plus-full` (A and B), and the other hardware checks above.
+Later the same day a larger library found a real failure — not the vendoring's
+either: at 300 lists the list picker, every row mounted, took the share
+extension to its cap, and a read-mode copy at its cap tipped it over. The
+pickers are virtualized and the copy now goes to a file before the sheet
+exists; with both, the same runs read 57–63 MB of headroom and no warning
+([share-sheet.md](./share-sheet.md), _300 lists and 300 tags, and a copy at the
+cap_).
 
 Weighed and set aside:
 

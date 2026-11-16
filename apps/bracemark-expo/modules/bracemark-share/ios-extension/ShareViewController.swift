@@ -83,6 +83,11 @@ class ShareViewController: UIViewController, ShareExtensionHosting {
 
   override func viewDidLoad() {
     super.viewDidLoad()
+    // The memory log's first line for this sheet (docs/share-sheet.md, _the share
+    // extension has almost no memory to spare_): what the process costs before
+    // React Native starts, and — by its age — how long it took to get here, or
+    // that iOS kept this process from an earlier share.
+    BracemarkShareMemoryModule.logMark("controller")
     setupLoadingIndicator()
     isCleanedUp = false
     ShareExtensionHost.current = self
@@ -93,6 +98,15 @@ class ShareViewController: UIViewController, ShareExtensionHosting {
     // boots (`startReactNative`).
     startReactNative()
     loadReactNativeContent()
+  }
+
+  // A memory warning is the last thing before a jetsam kill, which itself leaves
+  // no line of ours. Logged under the same filter as the per-screen marks, so a
+  // warning reads in place among them rather than as UIKit's bare `Received
+  // memory warning.` under the process name.
+  override func didReceiveMemoryWarning() {
+    super.didReceiveMemoryWarning()
+    BracemarkShareMemoryModule.logMark("memory-warning")
   }
 
   override func viewWillDisappear(_ animated: Bool) {
@@ -170,6 +184,10 @@ class ShareViewController: UIViewController, ShareExtensionHosting {
       self.configureRootView(rootView)
       self.view.addSubview(rootView)
       self.rootView = rootView
+      // The item providers have answered here; the runtime may still be booting.
+      // So `age` on this line, against `controller`'s, is the share's wait, and
+      // the first JS line after it (`loading#1`) is when the sheet first drew.
+      BracemarkShareMemoryModule.logMark("root")
 
       self.loadingIndicator.stopAnimating()
       self.loadingIndicator.removeFromSuperview()
@@ -261,9 +279,15 @@ class ShareViewController: UIViewController, ShareExtensionHosting {
         if provider.hasItemConformingToTypeIdentifier(UTType.propertyList.identifier) {
           group.enter()
           provider.loadItem(forTypeIdentifier: UTType.propertyList.identifier, options: nil) { item, _ in
+            // Off the main queue, where the provider answered: the read-mode copy
+            // goes to a file here, before it can become a prop (below).
+            var results: NSDictionary?
+            if let itemDict = item as? NSDictionary,
+               let raw = itemDict[NSExtensionJavaScriptPreprocessingResultsKey] as? NSDictionary {
+              results = Self.movingReadModeToFile(raw)
+            }
             DispatchQueue.main.async {
-              if let itemDict = item as? NSDictionary,
-                 let results = itemDict[NSExtensionJavaScriptPreprocessingResultsKey] as? NSDictionary {
+              if let results = results {
                 sharedItems["preprocessingResults"] = results
               }
               group.leave()
@@ -288,5 +312,43 @@ class ShareViewController: UIViewController, ShareExtensionHosting {
     group.notify(queue: .main) {
       completion(sharedItems.isEmpty ? nil : sharedItems)
     }
+  }
+
+  // ⚠ SAFARI'S READ-MODE COPY NEVER BECOMES A PROP. preprocessing.js hands back
+  // the page's copy as JSON text under `readMode` — up to 3,000,000 characters
+  // (__bracemarkReaderDocJson's cap) — and as a prop it would sit in this
+  // process three times over (this dictionary, the surface's folly::dynamic, the
+  // JS heap) for the life of a sheet that never reads it. At the cap that was
+  // 10–20 MB before anything was tapped, and with a large library in the list
+  // picker it got the share extension killed (docs/share-sheet.md, _300 lists and
+  // 300 tags, and a copy at the cap_). So the text goes to a file in the App
+  // Group container — `share/copies/<uuid>.json`, under the `share/` tree the
+  // sign-out wipe deletes whole — and the root gets the file's NAME as
+  // `readModeFile`. The draft carries the name; the main app's drain reads the
+  // file, stores the copy, and deletes it (share-store.ts).
+  //
+  // A copy that can't be written is DROPPED, not passed inline: the copy is
+  // optional, the memory is not. Nothing fails if this is undone — the copy
+  // simply rides the props again, and only a phone at the cap shows it.
+  private static func movingReadModeToFile(_ results: NSDictionary) -> NSDictionary {
+    guard let text = results["readMode"] as? String else { return results }
+    let moved = results.mutableCopy() as! NSMutableDictionary
+    moved.removeObject(forKey: "readMode")
+    autoreleasepool {
+      guard let groupId = Bundle.main.object(forInfoDictionaryKey: "AppGroupIdentifier") as? String,
+            let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupId)
+      else { return }
+      let dir = container.appendingPathComponent("share/copies", isDirectory: true)
+      let name = "\(UUID().uuidString).json"
+      do {
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try text.write(to: dir.appendingPathComponent(name), atomically: true, encoding: .utf8)
+        moved["readModeFile"] = name
+        BracemarkShareMemoryModule.logMark("copy-file", stats: ["copyChars": Double(text.utf16.count)])
+      } catch {
+        // Dropped; see above.
+      }
+    }
+    return moved
   }
 }

@@ -24,7 +24,8 @@
     "ios:bundle": "bash ../../tools/scripts/store-release.sh build ios -- bash ../../tools/scripts/ios-bundle.sh",
     "ios:upload": "bash ../../tools/scripts/ios-upload.sh",
     "ios:tag": "bash ../../tools/scripts/store-release.sh tag ios",
-    "ios:check-archive": "node ../../tools/scripts/check-native-bundle.mjs --latest-archive"
+    "ios:check-archive": "node ../../tools/scripts/check-native-bundle.mjs --latest-archive",
+    "share:memory": "bash ../../tools/scripts/share-memory-log.sh"
   },
   "nx": {
     "tags": [

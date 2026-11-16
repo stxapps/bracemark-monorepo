@@ -35,19 +35,37 @@ describe('payloadFromInitialProps', () => {
   // Text in, the same text out — never parsed in the sheet, which only writes it
   // to the draft. An object is what a preprocessing.js older than this bundle
   // sent, and the iOS share extension has no memory for an article as a graph.
-  it('carries Safari’s read-mode copy through as the text it arrived as, and nothing else', () => {
+  // On a phone the controller moves the copy to a file before the props exist, and hands
+  // over the file's name (ShareViewController.swift). Only a name it could have minted
+  // passes — a path that climbs out of `share/copies/` is dropped like any bad copy.
+  it('carries the name of the file the controller wrote the copy to, and only such a name', () => {
+    const name = '0A1B2C3D-0000-4000-8000-000000000001.json';
+    expect(
+      payloadFromInitialProps({
+        url: 'https://a.example',
+        preprocessingResults: { readModeFile: name },
+      }).readModeFile,
+    ).toBe(name);
+    for (const readModeFile of ['../outbox/x.json', 'copy.json', `${name}/..`, 7, null]) {
+      expect(
+        payloadFromInitialProps({
+          url: 'https://a.example',
+          preprocessingResults: { readModeFile },
+        }),
+      ).not.toHaveProperty('readModeFile');
+    }
+  });
+
+  // The copy itself never crosses: the controller writes it to a file first. One that
+  // arrives inline anyway — a controller older than the bundle — is not carried.
+  it('never carries the read-mode copy itself', () => {
     const json = JSON.stringify({ version: 1, capturedAt: 1, blocks: [] });
     expect(
       payloadFromInitialProps({
         url: 'https://a.example',
         preprocessingResults: { readMode: json },
-      }).readMode,
-    ).toBe(json);
-    for (const readMode of [null, '', { version: 1, capturedAt: 1, blocks: [] }, 7]) {
-      expect(
-        payloadFromInitialProps({ url: 'https://a.example', preprocessingResults: { readMode } }),
-      ).not.toHaveProperty('readMode');
-    }
+      }),
+    ).toEqual({ url: 'https://a.example' });
   });
 
   it('takes the title from preprocessing, else the Android subject', () => {

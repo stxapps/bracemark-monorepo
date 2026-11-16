@@ -858,23 +858,40 @@ systemCrashLogs`), so an empty Analytics Data is not evidence it survived.
 
   **Measure it where it is enforced.** Each screen of the sheet logs its own
   footprint and headroom as it mounts (`features/share/share-memory.ts` →
-  `BracemarkShareMemoryModule.swift`): filter Console on `share-memory` and it
-  reads, per screen,
+  `BracemarkShareMemoryModule.swift`): filter Console on `share-memory`, or —
+  better, because it is a record rather than a stream read by eye — run
+  `npm run share:memory -- ios` from `apps/bracemark-expo` after the run
+  (`tools/scripts/share-memory-log.sh`; `log collect` from a device needs root,
+  so it asks for sudo). Per screen it reads
 
   ```
-  share-memory compose: footprint <MB> MB, available <MB> MB
+  share-memory compose#3: footprint <MB> MB, available <MB> MB, js <MB>/<MB> MB, js-ext <MB> MB, gcs <n>, age <s> s
   ```
 
   — `phys_footprint`, which is what jetsam compares with the cap, and
   `os_proc_available_memory()`, how far from it the process is; the two sum to
-  the cap. It is in every build, dev and release, at the unified log's default
+  the cap. Then what splits a growing footprint in two: `js` is the Hermes heap
+  (allocated, live and garbage / reserved) and `js-ext` the malloc its objects
+  hold outside it, so a footprint that grows with them is the sheet's JS holding
+  memory and one that grows past them is native — Fabric's views, text layout.
+  `#3` is the screen's third mount in this sheet, so laps read off the log;
+  `age` is the process's, so the line also times the boot. The controller adds
+  four lines of its own: `copy-file` with the read-mode copy's length in K
+  characters (a number, never the text) as it writes it to a file, so a run says
+  whether it had one (_what the sheet does and doesn't do_, below, the
+  read-mode entry); `controller` as it loads (before React Native starts; an `age`
+  far beyond a second there means iOS kept the process from an earlier share),
+  `root` once the item providers have answered, and `memory-warning` whenever
+  UIKit sends one — the last thing before a kill, which itself leaves no line of
+  ours. It is in every build, dev and release, at the unified log's default
   level, numbers only. With all three rules in place — iPhone 12, iOS 26.5, dev
   build, minified production bundle, 2026-10-28 — a full share (both pickers
   lapped with the keyboard up, then Save) read **`saved: footprint 68.9 MB,
 available 51.1 MB`**, with no memory warning at any point. `saved` comes
   after Save has loaded the crypto stack, so it is the share's high point. A
   **release** build (`ios:release:staging`, the same phone, the same day), run
-  through `SHARE-IOS-MEMORY-RELEASE-001` — five laps of both pickers, then Save:
+  through `SHARE-IOS-MEMORY-RELEASE-001` — five laps of both pickers, then Save,
+  on an account with a few dozen lists and tags whose name was not recorded:
 
   | screen                  | footprint | available |
   | ----------------------- | --------- | --------- |
@@ -884,7 +901,191 @@ available 51.1 MB`**, with no memory warning at any point. `saved` comes
   | `saved`                 | 31.8 MB   | 88.2 MB   |
 
   — about 10MB gained over the five laps and never given back, and ~88MB of
-  room at the high point.
+  room at the high point. That account is why the next run could not be
+  compared with it: `SHARE-IOS-MEMORY-RELEASE-001` (`e2e/mobile/RELEASE.md`) now
+  fixes the inputs — the seed catalog's `plus-full` and `plus-worst`, a page with
+  no read-mode copy and a long article, ten laps — and the bar: no warning, at
+  least 40 MB `available` at `plus-worst`'s article high point, and laps 6–10
+  adding under 1 MB each. **The pickers are the likely lever** if that bar is
+  missed (⏸ _deferred_, below): both draw every row in a plain `ScrollView`
+  (`share-list-picker.tsx`, `share-tags-picker.tsx`), so each lap mounts and
+  drops every list or tag — about 200 rows, each with its icons, on
+  `plus-worst` — against a few dozen on the account above.
+
+  **`plus-worst` on the iPhone 12, 2026-11-16** — iOS 26.5, release build
+  against the local api, the vendored controller with all three post-phase-1
+  changes, shared from Safari, the laps driven by hand, then Save:
+
+  | sheet (in order, one process)                   | `compose#1`  | high point                         | `compose`, last 10 mounts | `saved` |
+  | ----------------------------------------------- | ------------ | ---------------------------------- | ------------------------- | ------- |
+  | one lap, no copy                                | 23.8 MB      | 67.5 MB (`compose#3`), 52.5 avail. | —                         | 60.3 MB |
+  | **D** — Wikipedia's _World War II_, `copy 19 K` | 35.1 MB      | 72.7 MB (`compose#3`), 47.3 avail. | 52.7–63.3 MB              | 53.0 MB |
+  | **C** — `example.com`, `copy 2 K`               | 40.7 MB      | 75.5 MB (`compose#5`), 44.5 avail. | 54.3–63.8 MB              | 54.6 MB |
+  | the article again, Closed ×3, then Saved        | 40.4–41.8 MB | —                                  | —                         | 41.5 MB |
+
+  Four readings, each of which answers a question this section used to leave
+  open:
+
+  1. **The growth levels off, and then falls.** Both full runs climb for the
+     first two to four returns to `compose` and peak there (72.7 and 75.5 MB),
+     then settle at 60–64 MB for the rest of the laps — no `memory-warning`, no
+     jetsam line, lowest headroom **44.5 MB**. The 2026-11-09 run's 21 → 43 → 50
+     → 65 → 73 was that first climb, cut off before the plateau: three list and
+     two tag visits.
+  2. **It is the taxonomy, not the copy, and mostly not JS.** The first picker
+     visit is the jump — `list-picker#1` → `compose#2` adds 15–27 MB on
+     `plus-worst` — and D (a 19 K copy) peaks no higher than C (2 K). Across
+     the jump the Hermes heap goes from ~10 to ~21 MB allocated (12 → 24–28 MB
+     reserved), so roughly half is native: the picker's ~200 Fabric views and
+     their text. (`plus-worst`'s names run through Arabic, Japanese and emoji,
+     so the system's fallback fonts and their glyph caches are a likely share
+     of that; unmeasured.)
+  3. **iOS keeps the share extension's process between shares.** All eight
+     sheets above ran in ONE process (pid 48461, `age` 0.5 s → 973 s over 16
+     minutes). Each sheet gets a fresh runtime — `loading#1` reads `js
+6.6/12.0 MB` every time, so the controller's cleanup does tear the host
+     down — but the footprint does not go back to where it started:
+     `controller` read 5.7 MB in a new process and climbed through 11, 24 and
+     29 MB as long sheets followed, `compose#1` from 21.5 MB to ~40 MB, where
+     both then held. Repeated shares do not stack — four
+     in a row opened at 41.8, 40.4, 40.4, 40.5 MB — so it is a high-water mark
+     the process keeps, not a leak per share. But it is headroom spent before
+     the sheet draws: **run C's 44.5 MB low came from a sheet that opened 19 MB
+     up**, and a fresh process would have peaked near 56 MB. Read a run's
+     `controller` line first: its `age` says whether the process was fresh.
+  4. **The boot overlap works.** In a new process the sheet's first frame
+     (`loading#1`) came 0.6 s after the process started, and `root` 0.1 s after
+     `controller`; in a reused one, sharing the Wikipedia article, the item
+     providers took 0.6 s (Safari's preprocessing) and the sheet drew with them.
+
+  Still open: `plus-full` (runs A and B). The copy IS bounded: the capture
+  stops at `READER_DOC_MAX_CHARS` (1,000,000) or `READER_DOC_MAX_BLOCKS`
+  (10,000), and `__bracemarkReaderDocJson` drops a serialised copy over
+  3,000,000 characters, so the sheet gets none ([data-limits.md](./data-limits.md)).
+  Those caps were set for the store, not for this process — and the next read
+  shows what that costs.
+
+  ⚠ **300 lists and 300 tags, and a copy at the cap — killed, 2026-11-16.** The
+  same phone and build, `plus-worst` grown by a backup of 191 more lists (31
+  roots of five, the same mix of scripts) and 200 more tags. The capped page
+  was generated to sit at the ceiling — Japanese text with quotes, backslashes
+  and control characters, which JSON escaping inflates — and the app's own
+  `preprocessing.js` run on it in Chromium returned 2,856,616 characters in
+  9,525 blocks (`copy 2857 K` in the log). In order:
+
+  | sheet                                  | process                | `compose#1` | lowest `available`                 | end                                 |
+  | -------------------------------------- | ---------------------- | ----------- | ---------------------------------- | ----------------------------------- |
+  | **E** — `example.com`, `copy 2 K`      | reused (`age` 4,105 s) | 43.3 MB     | **2.4 MB** (117.6 MB), 31 warnings | survived ten laps; Saved            |
+  | **F** — the capped page, `copy 2857 K` | the same               | 55.2 MB     | —                                  | **killed** in the first list picker |
+  | **F again**                            | fresh (`age` 0.2 s)    | 32.1 MB     | 18.9 MB                            | **killed** in the third list picker |
+
+  Both kills are the kernel's `exceeded mem limit: ActiveHard 120 MB (fatal)` at
+  122,882 KB. What the lines say:
+
+  - **The list picker is what spikes, and it spikes while it is used, not as it
+    mounts.** It mounts at ~60 MB; every `memory-warning` but two follows a
+    `list-picker#N` line by a few seconds — the scroll to the bottom, then
+    typing and clearing the filter, which swaps the whole 300-row tree for the
+    flat filtered rows and back — reaching 107–118 MB, and `compose` reads
+    80–93 MB again after it, so most of it is transient. At 109 lists the same
+    laps raised no warning at all. The tags picker, at 300 flat rows, mounted at
+    56–65 MB and drew one warning in E's eleven visits.
+  - **A copy at the cap costs 10–20 MB before anything is tapped.** In a fresh
+    process `root` read 26.5 MB against 11.8 without a copy, and `compose#1`
+    32.1 against 21.5 — the property list, the root's props and the JS string.
+    That is what turned E's near miss into F's kill.
+  - **The reused process adds its high-water mark on top** (_iOS keeps the share
+    extension's process between shares_, above): F's first sheet opened 23 MB
+    higher than its second.
+
+  So a library of a few hundred lists — which a browser-bookmarks import makes
+  without trying — ends the iOS share sheet with no message, and with a long
+  article it does so even in a fresh process. Both levers went in the same day:
+
+  1. ⚠ **The pickers are virtualized** (`share-picker-list.tsx`, a `FlatList`
+     both pickers share): ~12 rows mount, ~30 at most as the list scrolls,
+     whatever the library holds. Deferred that morning because the sheet passed
+     with room at `plus-worst`'s 109 lists and the pickers sit in this doc's
+     most fragile corner (the keyboard, `ScrollClaim`, the swipe hold); the
+     trigger was a run under 40 MB `available`, and 300 lists read 2.4. RN's own
+     `FlatList`, not `@shopify/flash-list`: FlashList 2.x would not break rule 1
+     — it is JavaScript on the New Architecture, no native view — but the
+     extension's bundle does not carry it, and its init would be paid on every
+     cold share. The keyboard props, the bounds and the touch claim are the
+     `ScrollView`'s, moved with it (the file's header has why each);
+     `share-picker-list.spec.tsx` fails if either picker mounts a 300-row
+     library whole again.
+  2. ⚠ **The copy never reaches the sheet** — the controller writes it to a file
+     and the draft carries the name (_what the sheet does and doesn't do_,
+     below, the read-mode entry).
+
+  **After both, 2026-11-16** — the same phone, a release build with both, the
+  seed's `plus-large` (300 lists, 300 tags; `e2e/seed/large.ts`) and the capped
+  page from `npm run measure:capped-page`, five laps each, then Save:
+
+  | sheet                                  | process              | `compose#1` | high point            | `compose`, laps 3–5 | lowest `available` | warnings |
+  | -------------------------------------- | -------------------- | ----------- | --------------------- | ------------------- | ------------------ | -------- |
+  | **E** — `example.com`                  | fresh (`age` 0.4 s)  | 22.4 MB     | 57.1 MB (`compose#5`) | 46.0–48.9 MB        | **62.9 MB**        | none     |
+  | **F** — the capped page, `copy 2851 K` | reused (`age` 317 s) | 37.2 MB     | 62.9 MB (`compose#3`) | 54.6–56.7 MB        | **57.1 MB**        | none     |
+
+  Against the run before them — 2.4 MB left in E, F killed twice — that is the
+  list picker's spike gone and the copy's cost confined to the moment it is
+  written: in F the `copy-file` line read 45.3 MB, up 21 MB from `controller`
+  as the provider's string was encoded to the file, and `root` 34.4 MB right
+  after, with every JS line after it at `copy 0 K`. (Not quite the same
+  library as the failing run — that was `plus-worst` grown to 300 and 300,
+  hundred-deep chain included — but the same counts.)
+
+  **Android's numbers** are a different question. `ShareActivity` runs in the
+  app's process, under no extension cap, so what can end it is the app's own
+  limits: the Java heap's ceiling (an `OutOfMemoryError`) and the low-memory
+  killer, which ranks processes by PSS. The Android module of the same name
+  (`BracemarkShareMemoryModule.kt`) logs those to logcat under the tag
+  `share-memory` (`npm run share:memory -- android`):
+
+  ```
+  share-memory compose#3: pss <MB> MB (java <MB>, native <MB>, graphics <MB>), java <MB>/<MB> MB, class <MB> MB, js <MB>/<MB> MB, js-ext <MB> MB, gcs <n>, age <s> s
+  ```
+
+  — the process's PSS with its Java, native and graphics parts, the Java heap
+  against its ceiling and the device's per-app `memoryClass`, then the same JS
+  tail. `age` here says whether the sheet found the app's process warm or
+  started it cold. The emulator's numbers are meaningful (Android enforces no
+  extra cap on hardware that the emulator lacks), and a debug shell inflates
+  them as it does for every other measure (`e2e/measure/data-mobile.ts`), so on
+  a debug shell growth is the reading. `SHARE-ANDROID-MEMORY-001` is the run.
+
+  First readings, 2026-11-16 — `bracemark-pixel8` AVD (Android 16,
+  `memoryClass` 192 MB), debug shell, production bundle from Metro, ten laps of
+  both pickers driven by Maestro, then Save. `pss` at the end of laps 1, 5 and
+  6–10 (`compose#3`, `#11`, `#13`–`#21`), and the highest Java heap seen:
+
+  | run                                            | lap 1  | lap 5  | laps 6–10  | `saved` | java, high   |
+  | ---------------------------------------------- | ------ | ------ | ---------- | ------- | ------------ |
+  | `plus-worst`, warm                             | —      | 562 MB | 514–581 MB | 582 MB  | 62 MB of 192 |
+  | `plus-worst`, cold (`age` 51 s at `loading#1`) | 405 MB | 468 MB | 448–512 MB | 486 MB  | 47 MB of 192 |
+  | `plus-full`, warm                              | 483 MB | 477 MB | 427–482 MB | 431 MB  | 49 MB of 192 |
+
+  No run showed a trend across laps 6–10, every Java heap stayed under a third
+  of its ceiling, and the JS heap rose and fell with Hermes's collections
+  (`plus-worst` 31–60 MB of 64 reserved, `plus-full` 24–38 of 48). Two cautions
+  on reading them. On Android the `js` figures are the **whole app's** runtime —
+  the sheet shares it — so they are not the sheet's cost and say nothing about
+  the iOS share extension's, whose runtime holds the sheet alone. And the cold
+  run's 51 s to first render is the debug shell fetching its bundle from Metro;
+  a release build's cold start is a different number, not yet read (the release
+  APK is signed with the upload key, so it cannot replace a signed-in debug
+  build, and it refuses the local api's plain http).
+
+  **At 300 lists and 300 tags**, the same AVD and setup. Every row mounted
+  (`plus-worst` grown to 300 and 300, before the pickers were virtualized): ten
+  laps took ~80 s each, `pss` read 670–722 MB across laps 6–10, the Java heap
+  peaked at 73 MB and the JS heap reserved 108. Virtualized (`plus-large`):
+  ~53 s a lap and 577–607 MB across laps 6–10 — and a climb of ~7 MB a lap that
+  ten laps could not tell from a leak, so the same warm process ran twenty
+  more. Across those `pss` held at 562–620 MB, swinging ±20 MB lap to lap with
+  no climb to speak of, the JS heap's reservation stopped at 96 MB, and the
+  Java heap peaked at 65 of 192: the climb was the process warming, not a leak.
 
   **The simulator's footprint is still useful for proportions**, read off its
   own process with `footprint` (`pgrep -f BracemarkShareExtension.appex` finds
@@ -941,23 +1142,32 @@ available 51.1 MB`**, with no memory warning at any point. `saved` comes
   `reader-capture-generated.spec.ts` fails when it drifts) and also runs the
   browser extension's read-mode converter inside the shared page, so the payload
   can carry the page's `ReaderDoc` as `readMode`. Safari does that work in its own
-  process; the sheet only receives the result and puts it on the draft untouched
-  (`readMode`, `z.unknown()` — validated where it's stored, so a bad copy costs the
-  copy, never the draft). ⚠ **It crosses as JSON TEXT, and the share extension
-  never parses it.** What Safari hands over becomes the React root's initial
-  props, and an article as an object graph is thousands of small allocations
-  three times over — the property list's `NSDictionary`, the surface's
-  `folly::dynamic`, the JS heap — held for the life of a sheet that only ever
-  writes the copy to a file (_the share extension has almost no memory to
-  spare_, above). So the page serialises it once, where memory is free
+  process, and serialises it once, where memory is free
   (`__bracemarkReaderDocJson`, which needed the string anyway to apply its 3M
-  cap — the text is the capture, `{ doc, images }`: the document and the address of
-  each figure's picture, which the app fetches after the drain and never stores), `share-url.ts` accepts a string and nothing else, the draft holds that
-  string inside its own JSON, and it is parsed for the first time in the app
-  (`storeReadModeCopy`, which also takes the parsed doc — the capture screen's,
-  and a draft from before 2026-11-10 still in the outbox across an update).
-  Nothing fails if a later edit parses it in the sheet "to validate early"; the
-  footprint just grows with the article. Only the **app's drain** stores it
+  cap — the text is the capture, `{ doc, images }`: the document and the address
+  of each figure's picture, which the app fetches after the drain and never
+  stores). ⚠ **The text never reaches the sheet.** As a prop it would sit in the
+  share extension three times over — the property list's `NSDictionary`, the
+  surface's `folly::dynamic`, the JS heap — for the life of a sheet that never
+  reads it, and at the 3M cap that was 10–20 MB and got the share extension
+  killed (_300 lists and 300 tags, and a copy at the cap_, above). So the
+  controller takes `readMode` out of the preprocessing results as the provider
+  answers — off the main queue, before the props exist — and writes it to
+  `share/copies/<uuid>.json` in the App Group (`movingReadModeToFile`,
+  ShareViewController.swift; logged as a `copy-file` line with its length). The
+  root gets `readModeFile`, the file's NAME; `share-url.ts` admits only a UUID
+  and `.json`, and ignores a `readMode` that arrives inline anyway; the draft
+  carries the name; and the drain reads the file when the account keeps copies
+  — parsed for the first time there (`storeReadModeCopy`), so a bad copy costs
+  the copy, never the draft — then deletes it with the draft either way. A copy
+  that can't be written is dropped, never passed inline. A file no draft names —
+  a sheet closed without Save — is swept by the drain once it is an hour old,
+  and sign-out deletes the whole `share/` tree. Nothing fails if a later edit
+  hands the text to the sheet "to validate early"; the footprint just grows with
+  the article, on a phone. (The copy rode the draft INLINE, as `readMode`, until
+  2026-11-16 — in builds that never shipped, so the field is gone rather than
+  kept readable: such a draft in a dev phone's outbox lands its link and loses
+  its copy.) Only the **app's drain** stores it
   (`store-read-mode.ts`), and only when ShareBridge says the account keeps it: the
   plan's `keptCopies` and the synced save setting, read from the store at the
   drain. The immediate upload ignores it. Written at `expo:fg` — a live page, the
@@ -1491,7 +1701,9 @@ can neither see the share sheet nor anything in this process. →
 | iOS: the share extension's view controller — boots RN, reads the share while it boots, fills its superview, clear root                      | `apps/bracemark-expo/modules/bracemark-share/ios-extension/ShareViewController.swift` (extension target only, referenced in place) + `ShareExtensionHost.swift`/`BracemarkShareModule.swift` in the pod (`close()`, and the seam the modules reach it through)                                                                                                              |
 | Android ShareActivity + close() module                                                                                                      | `apps/bracemark-expo/modules/bracemark-share/android/` (autolinked local module; activity + intent-filter merged from its AndroidManifest)                                                                                                                                                                                                                                  |
 | iOS keyboard overlap for the extension (`BracemarkShareKeyboard`, a module measuring the frame's plain View) + the lift JS reads it through | `apps/bracemark-expo/modules/bracemark-share/ios/` (same local module, `BracemarkShare.podspec` path-linked into BOTH targets by `use_expo_modules!`) + `features/share/share-keyboard.ts`                                                                                                                                                                                  |
-| iOS: the share extension's memory per screen, in the device log (`BracemarkShareMemory`)                                                    | the same module's `ios/BracemarkShareMemoryModule.swift` + `features/share/share-memory.ts`, marked by each `ShareSheet`'s `memoryLabel`                                                                                                                                                                                                                                    |
+| the sheet's memory per screen, in the device log (`BracemarkShareMemory`, both platforms) + pulling it off a device                         | the same module's `ios/BracemarkShareMemoryModule.swift` and `android/…/BracemarkShareMemoryModule.kt` + `features/share/share-memory.ts`, marked by each `ShareSheet`'s `memoryLabel` and the controller's own three marks; `tools/scripts/share-memory-log.sh` (`npm run share:memory`)                                                                                   |
+| the pickers' virtualized scroller — mounts the rows on screen, not the library (memory, under the iOS cap)                                  | `features/share/share-picker-list.tsx` (both pickers), pinned by `share-picker-list.spec.tsx`; measured on `plus-large` (`e2e/seed/large.ts`)                                                                                                                                                                                                                               |
+| iOS: the read-mode copy as a file, not a prop — written by the controller, named by the draft, read and deleted by the drain                | `ShareViewController.swift` (`movingReadModeToFile`) → App Group `share/copies/<uuid>.json` → `share-url.ts` (`readModeFile`) → `@stxapps/expo-react` `data/share-store.ts` (`readModeFile`, the drain, `sweepCopyFiles`); the page at the cap: `e2e/measure/capped-copy-page.ts` (`npm run measure:capped-page`)                                                           |
 | iOS: which native modules the extension target links                                                                                        | `excludedExpoModules` + `excludedCommunityModules` in `app.config.ts`, applied by `plugins/with-share-extension/podfile.js` (`share-extension-podfile.spec.ts`)                                                                                                                                                                                                             |
 | iOS: the extension's bundle in a dev build is a production one                                                                              | `metro.config.js`, the `shareExtension=true` rewrite (`BRACEMARK_SHARE_DEV_BUNDLE=1` opts out)                                                                                                                                                                                                                                                                              |
 | iOS: holding the system's swipe-to-dismiss off on the pickers (`BracemarkShareSwipeGuard`)                                                  | the same module's `ios/BracemarkShareSwipeGuardModule.swift` (asks `ShareExtensionHost`) + `ShareViewController.setSwipeHeld` + `features/share/share-swipe-guard.tsx`, mounted by `share-kit`'s `holdSwipe`                                                                                                                                                                |

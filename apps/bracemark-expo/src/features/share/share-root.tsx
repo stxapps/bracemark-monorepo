@@ -6,6 +6,7 @@
 
 import { useMemo, useRef } from 'react';
 
+import { beginShareMemory } from './share-memory';
 import { ShareScreen } from './share-screen';
 import { applyShareTheme } from './share-theme';
 import { payloadFromInitialProps, type ShareInitialProps } from './share-url';
@@ -68,5 +69,15 @@ export function ShareRoot(props: ShareInitialProps) {
   }
 
   const payload = useMemo(() => payloadFromInitialProps(props), [props]);
-  return <ShareScreen url={payload.url} title={payload.title} readMode={payload.readMode} />;
+
+  // The memory log's per-sheet state (share-memory.ts): mount counts start over.
+  const begun = useRef(false);
+  if (!begun.current) {
+    begun.current = true;
+    beginShareMemory();
+  }
+
+  return (
+    <ShareScreen url={payload.url} title={payload.title} readModeFile={payload.readModeFile} />
+  );
 }

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Pressable, View } from 'react-native';
 import Check from 'lucide-react-native/icons/check';
 import Plus from 'lucide-react-native/icons/plus';
@@ -54,46 +55,89 @@ export function TagPickerRows({
   return (
     <>
       {rows.length === 0 && createName === undefined && emptyText !== undefined && (
-        <Text className="py-6 text-center text-sm text-muted-foreground">{emptyText}</Text>
+        <TagPickerEmpty text={emptyText} />
       )}
 
       {rows.map((row) => (
-        <Pressable
-          key={row.id}
-          testID={testIDForRow?.(row)}
-          onPress={() => onToggle(row.id)}
-          role="checkbox"
-          aria-checked={row.selected}
-          aria-label={row.name}
-          className="min-h-11 flex-row items-center justify-between gap-2 rounded-xl px-3 py-2.5 active:bg-muted"
-        >
-          <Text numberOfLines={1} className="min-w-0 flex-1">
-            {row.name}
-          </Text>
-          <View className="size-4 shrink-0 items-center justify-center">
-            {row.selected && <Icon as={Check} className="size-4 text-muted-foreground" />}
-          </View>
-        </Pressable>
+        <TagPickerItem key={row.id} row={row} testID={testIDForRow?.(row)} onToggle={onToggle} />
       ))}
 
       {createName !== undefined && onCreate !== undefined && (
-        <Pressable
+        <TagPickerCreateRow
+          name={createName}
+          creating={creating}
+          onCreate={onCreate}
           testID={createTestID}
-          disabled={creating}
-          onPress={onCreate}
-          role="button"
-          aria-label={`Create tag ${createName}`}
-          className={cn(
-            'min-h-11 flex-row items-center gap-2 rounded-xl px-3 py-2.5 active:bg-muted',
-            creating && 'opacity-50',
-          )}
-        >
-          <Icon as={Plus} className="size-4 shrink-0 text-muted-foreground" />
-          <Text numberOfLines={1} className="min-w-0 flex-1">
-            Create “{createName}”
-          </Text>
-        </Pressable>
+        />
       )}
     </>
+  );
+}
+
+// The three pieces TagPickerRows composes, exported for a host that lays the
+// rows out itself — the share sheet's tag picker, which hands them to a
+// FlatList so only the rows on screen are mounted (docs/share-sheet.md, _300
+// lists and 300 tags, and a copy at the cap_). Same markup either way.
+
+export function TagPickerEmpty({ text }: { text: string }) {
+  return <Text className="py-6 text-center text-sm text-muted-foreground">{text}</Text>;
+}
+
+export const TagPickerItem = memo(function TagPickerItem({
+  row,
+  testID,
+  onToggle,
+}: {
+  row: TagPickerRow;
+  testID?: string;
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <Pressable
+      testID={testID}
+      onPress={() => onToggle(row.id)}
+      role="checkbox"
+      aria-checked={row.selected}
+      aria-label={row.name}
+      className="min-h-11 flex-row items-center justify-between gap-2 rounded-xl px-3 py-2.5 active:bg-muted"
+    >
+      <Text numberOfLines={1} className="min-w-0 flex-1">
+        {row.name}
+      </Text>
+      <View className="size-4 shrink-0 items-center justify-center">
+        {row.selected && <Icon as={Check} className="size-4 text-muted-foreground" />}
+      </View>
+    </Pressable>
+  );
+});
+
+export function TagPickerCreateRow({
+  name,
+  creating = false,
+  onCreate,
+  testID,
+}: {
+  name: string;
+  creating?: boolean;
+  onCreate: () => void;
+  testID?: string;
+}) {
+  return (
+    <Pressable
+      testID={testID}
+      disabled={creating}
+      onPress={onCreate}
+      role="button"
+      aria-label={`Create tag ${name}`}
+      className={cn(
+        'min-h-11 flex-row items-center gap-2 rounded-xl px-3 py-2.5 active:bg-muted',
+        creating && 'opacity-50',
+      )}
+    >
+      <Icon as={Plus} className="size-4 shrink-0 text-muted-foreground" />
+      <Text numberOfLines={1} className="min-w-0 flex-1">
+        Create “{name}”
+      </Text>
+    </Pressable>
   );
 }

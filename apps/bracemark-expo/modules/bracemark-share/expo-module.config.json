@@ -1,7 +1,10 @@
 {
   "platforms": ["android", "apple"],
   "android": {
-    "modules": ["com.bracemark.share.BracemarkShareModule"]
+    "modules": [
+      "com.bracemark.share.BracemarkShareModule",
+      "com.bracemark.share.BracemarkShareMemoryModule"
+    ]
   },
   "apple": {
     "modules": [

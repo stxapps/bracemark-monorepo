@@ -117,6 +117,7 @@ at one, or importing it by hand, not for feeding the other. There is no bare
 | `free-full`  | `seed_free_full`  | Free | 190 links, 8 flat lists, 14 flat tags      |
 | `plus-full`  | `seed_plus_full`  | Plus | 1,000 links, 24 nested lists, 40 flat tags |
 | `plus-worst` | `seed_plus_worst` | Plus | the worst case — `seed/worst.ts`           |
+| `plus-large` | `seed_plus_large` | Plus | 300 lists, 300 tags — `seed/large.ts`      |
 
 Passwords land in `credentials/accounts.json` (gitignored). The whole design —
 why the library is imported through the app while the plan is written straight to

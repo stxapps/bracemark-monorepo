@@ -142,17 +142,25 @@ const shareDraftSchema = z.object({
   newTags: z.array(shareNewEntitySchema),
   newLists: z.array(shareNewEntitySchema),
   sharedAt: z.number().int(),
-  // The page's read-mode copy, from the iOS preprocessing file's run inside Safari —
-  // a `ReaderDoc` as JSON TEXT, a string inside this draft's own JSON: the share
-  // extension never holds the article as objects (its process has no room for one),
-  // so it is parsed for the first time in the app, where it is stored
-  // (store-read-mode.ts). `z.unknown()` and not `z.string()` on purpose, twice over:
-  // a copy that doesn't parse must cost the copy and never the draft, and a draft
-  // written by a build from before 2026-11-10 carries the doc as an OBJECT — still
-  // in the outbox across an app update, and store-read-mode takes either. Optional:
-  // absent for a share that isn't from Safari, or whose page has no article. The
-  // upload path ignores it — only the app's drain stores a copy.
-  readMode: z.unknown().optional(),
+  // Where the page's read-mode copy is, from the iOS preprocessing file's run inside
+  // Safari: the name of the file the share extension's controller wrote it to, under
+  // `share/copies/` in the App Group — a `ReaderDoc` as JSON TEXT, which the
+  // extension never holds as a prop or a JS value (bracemark-expo's
+  // ShareViewController.swift, `movingReadModeToFile`; docs/share-sheet.md, _300
+  // lists and 300 tags, and a copy at the cap_). The drain reads it — parsed for the
+  // first time there, where it is stored (store-read-mode.ts), so a copy that
+  // doesn't parse costs the copy and never the draft — and deletes it. A UUID and
+  // `.json`, nothing that names another directory. Optional: absent for a share that
+  // isn't from Safari, or whose page has no article. The upload path ignores it.
+  //
+  // The copy used to ride INLINE, as `readMode`. Never in a shipped build, so it is
+  // gone rather than kept readable: a draft that still carries it (a dev phone's
+  // outbox) parses — the schema drops a key it doesn't name — and lands its link
+  // without the copy.
+  readModeFile: z
+    .string()
+    .regex(/^[0-9A-Fa-f-]{36}\.json$/)
+    .optional(),
 });
 export type ShareDraft = z.infer<typeof shareDraftSchema>;
 
@@ -311,6 +319,56 @@ function outboxDir(group: Directory): Directory {
 // nesting it would make that depend on the scan skipping directories.
 function failedDir(group: Directory): Directory {
   return new Directory(group, 'share/failed');
+}
+
+// Where the iOS share extension's controller writes each read-mode copy, one file
+// per sheet (see `readModeFile` on the draft).
+function copiesDir(group: Directory): Directory {
+  return new Directory(group, 'share/copies');
+}
+
+// The copy a draft names, as the text it was written as — or undefined when the
+// draft names none, or the file is gone or unreadable: the copy is optional, and
+// losing it must never cost the draft.
+function readCopyFile(group: Directory, name: string | undefined): string | undefined {
+  if (name === undefined) return undefined;
+  try {
+    const file = new File(copiesDir(group), name);
+    return file.exists ? file.textSync() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function deleteCopyFile(group: Directory, name: string | undefined): void {
+  if (name === undefined) return;
+  try {
+    const file = new File(copiesDir(group), name);
+    if (file.exists) file.delete();
+  } catch {
+    // Swept later (sweepCopyFiles).
+  }
+}
+
+// A sheet closed without Save leaves its copy behind, and nothing else will ever
+// name it. Delete every copy no outbox draft names — but only one older than an
+// hour, so a sheet still open over Safari while the app drains (an iPad in split
+// view) keeps the copy it is about to save.
+const COPY_ORPHAN_AGE_MS = 60 * 60 * 1000;
+
+function sweepCopyFiles(group: Directory, named: Set<string>): void {
+  try {
+    const dir = copiesDir(group);
+    if (!dir.exists) return;
+    const now = Date.now();
+    for (const entry of dir.list()) {
+      if (!(entry instanceof File) || named.has(entry.name)) continue;
+      const modified = entry.modificationTime ?? 0;
+      if (now - modified > COPY_ORPHAN_AGE_MS) entry.delete();
+    }
+  } catch {
+    // The next drain tries again; a stray copy costs disk, not correctness.
+  }
 }
 
 // The iOS snapshot as it stands on disk, or null when there is none or it does
@@ -681,7 +739,12 @@ export async function drainShareOutbox(
   const group = appGroupDir();
   if (!group) return [];
   const dir = outboxDir(group);
-  if (!dir.exists) return [];
+  // Every copy a draft still in the outbox names — kept from the sweep below.
+  const named = new Set<string>();
+  if (!dir.exists) {
+    sweepCopyFiles(group, named);
+    return [];
+  }
   const applied: string[] = [];
   for (const entry of dir.list()) {
     if (!(entry instanceof File)) continue;
@@ -691,6 +754,7 @@ export async function drainShareOutbox(
       continue;
     }
     if (draft.owner !== session.username) {
+      deleteCopyFile(group, draft.readModeFile);
       entry.delete();
       continue;
     }
@@ -701,17 +765,26 @@ export async function drainShareOutbox(
       // so the server already holds something there. One such draft must not stop every
       // draft after it on every launch. It stays in the outbox for a later drain, after
       // the recheck has had its chance to open the path.
-      if (err instanceof UnreadablePathError) continue;
+      if (err instanceof UnreadablePathError) {
+        if (draft.readModeFile !== undefined) named.add(draft.readModeFile);
+        continue;
+      }
       throw err;
     }
-    if (options.keepReadMode && draft.readMode !== undefined) {
-      await storeReadMode().storeReadModeCopy(session.username, draft.id, draft.readMode, {
+    // Read only when the account keeps it.
+    const readMode = options.keepReadMode ? readCopyFile(group, draft.readModeFile) : undefined;
+    if (readMode !== undefined) {
+      await storeReadMode().storeReadModeCopy(session.username, draft.id, readMode, {
         images: options.keepReadModeImages === true,
       });
     }
     applied.push(pathFromId(draft.id, LINKS_PREFIX));
     entry.delete();
+    // After the draft: a copy file outliving its draft is swept; a draft outliving
+    // its copy would only lose the copy.
+    deleteCopyFile(group, draft.readModeFile);
   }
+  sweepCopyFiles(group, named);
   return applied;
 }
 

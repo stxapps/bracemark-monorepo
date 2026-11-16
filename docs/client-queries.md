@@ -623,15 +623,24 @@ lists or tags in the library, not with what fits on screen:
   _nothing that reads the list tree recurses_), so a virtualizer can take that
   array as it is.
 - **The list pickers** (`links/list-command.tsx`, both platforms) and **the tag
-  pickers** (`links/tags-command.tsx`; on expo a plain `ScrollView`).
+  pickers** (`links/tags-command.tsx`; on expo a plain `ScrollView`). The share
+  sheet's pair (`features/share/share-{list,tags}-picker.tsx`) is the one place
+  this costs more than time: in the iOS share extension the rows are memory
+  under a hard cap, and virtualizing them is deferred with a trigger
+  ([share-sheet.md](./share-sheet.md), _the share extension has almost no
+  memory to spare_).
 - **The settings Lists and Tags tables**, both platforms. These are
   drag-sortable, so virtualizing one has to keep the drag — and the Lists
   table's live depth projection ([editors.md](./editors.md)) — working against
   rows that are not mounted.
 
-None of this is a correctness risk: the limits bound depth, not count
-([data-limits.md](./data-limits.md), _counts: none per kind_), so a library
-with thousands of lists or tags renders, only slowly. The render leg's tree legs
+None of this is a correctness risk in the app: the limits bound depth, not
+count ([data-limits.md](./data-limits.md), _counts: none per kind_), so a library
+with thousands of lists or tags renders, only slowly. **The iOS share sheet is
+the exception**: its pickers run in the share extension, under a 120 MB cap,
+and at 300 lists the list picker alone took it there — a kill, not a stall
+([share-sheet.md](./share-sheet.md), _300 lists and 300 tags, and a copy at the
+cap_). The render leg's tree legs
 ([e2e.md](./e2e.md), _the render leg_) read what it costs:
 `--library worst --legs sidebar,settings`, on both platforms, with `--profile`
 on native for what owns the time.

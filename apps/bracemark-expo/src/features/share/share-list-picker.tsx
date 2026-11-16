@@ -27,7 +27,7 @@
 // snapshot, so this needed no change to the cross-process schema.
 
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView } from 'react-native';
+import { Pressable } from 'react-native';
 import Check from 'lucide-react-native/icons/check';
 import Plus from 'lucide-react-native/icons/plus';
 
@@ -38,10 +38,10 @@ import { GuideLines } from '../../components/links/guide-lines';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
-import { ScrollClaim } from '../../components/ui/scroll-claim';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
 import { ShareHeader, ShareSheet } from './share-kit';
+import { SharePickerList } from './share-picker-list';
 
 type PathRow = { list: ShareTaxonomyList; ancestors: string[] };
 
@@ -123,6 +123,23 @@ export function ShareListPicker({
     onDone();
   }, [trimmed, onCreateName, onDone]);
 
+  // Everything a mounted row reads besides its own data is in this callback's
+  // dependencies, so it doubles as FlatList's `extraData`: when it changes, the
+  // rows on screen re-render.
+  const renderRow = useCallback(
+    ({ item: { list, ancestors } }: { item: PathRow }) => (
+      <ListRow
+        testID={list.id === newList?.id ? 'share-new-list' : `share-list-${list.id}`}
+        name={list.name}
+        path={filtering && ancestors.length > 0 ? `${ancestors.join(' / ')} / ` : undefined}
+        indent={filtering ? 0 : list.depth}
+        selected={list.id === selectedId}
+        onPress={() => select(list.id)}
+      />
+    ),
+    [newList?.id, filtering, selectedId, select],
+  );
+
   return (
     <ShareSheet memoryLabel="list-picker" holdSwipe>
       <ShareHeader back={{ title: 'Choose list', onPress: onDone }} />
@@ -138,64 +155,19 @@ export function ShareListPicker({
         className="h-9"
       />
 
-      {/* Bounded rather than `flex-1`, since neither host gives the panel a
-          height to fill — both grow it to content (Android caps at 85%) — and a
-          max-height behaves correctly in both. No `nestedScrollEnabled` any
-          more: this no longer scrolls inside another scroller.
-
-          `min-h-0 shrink` is the LAST link of the sheet's squeeze chain
-          (share-kit.tsx's header): the scroller is the only child of either
-          picker that may lose height, so when the keyboard takes the room this
-          is what gives it up, and the header, the field and Done stay put. Miss
-          it and the panel overflows the frame instead — nothing clips, it just
-          paints outside its own background.
-
-          `keyboardDismissMode="interactive"`, not the app's usual `on-drag`,
-          for list-command.tsx's reason and a bigger jump than the one there:
-          the panel is parked on the keyboard, so `on-drag` dropped the keyboard
-          at the start of a scroll and the whole sheet fell a keyboard's height
-          out from under the finger while this list regrew. A scroll now keeps
-          the keyboard (Android maps the value to `none`). The input above is
-          `submitBehavior="submit"`, so return never blurs it either: the way
-          out is the tap layer in ShareSheet, whose header carries the whole
-          argument. `"handled"` beside it keeps a row tap a row tap: without it
-          the default `"never"` would swallow the first press on the very row
-          you filtered for.
-
-          A PULL DOWN FROM THE TOP OF THIS LIST IS NOT OURS on iOS, in either
-          mode: the share extension sits in a system sheet, and with the list at
-          its top the pull goes to that sheet's swipe-to-dismiss. A short one
-          tucks the keyboard away and brings it back, the field never having
-          blurred — so don't count on "drag down into the keys" as a keyboard
-          exit here. A long one used to close the sheet and the unsaved share
-          with it; `holdSwipe` on ShareSheet above is what holds that off
-          (share-kit.tsx, docs/share-sheet.md). */}
-      <ScrollView
-        className="max-h-72 min-h-0 shrink"
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="interactive"
-      >
-        {/* ScrollClaim: ShareSheet's frame around this claims touches, so a
-            drag from the empty text would not scroll on iOS
-            (components/ui/scroll-claim.tsx). */}
-        <ScrollClaim>
-          {visible.length === 0 && !canCreate && (
-            <Text className="py-6 text-center text-sm text-muted-foreground">No lists found.</Text>
-          )}
-
-          {visible.map(({ list, ancestors }) => (
-            <ListRow
-              key={list.id}
-              testID={list.id === newList?.id ? 'share-new-list' : `share-list-${list.id}`}
-              name={list.name}
-              path={filtering && ancestors.length > 0 ? `${ancestors.join(' / ')} / ` : undefined}
-              indent={filtering ? 0 : list.depth}
-              selected={list.id === selectedId}
-              onPress={() => select(list.id)}
-            />
-          ))}
-
-          {canCreate && (
+      {/* The rows are VIRTUALIZED, and must stay so: in the iOS share
+          extension a mounted row is memory under a hard cap, and 300 lists in a
+          ScrollView got the extension killed here. The window, the bounds, the
+          keyboard props and the touch claim are SharePickerList's — its header
+          carries why each is what it is. */}
+      <SharePickerList
+        data={visible}
+        keyExtractor={({ list }) => list.id}
+        extraData={renderRow}
+        renderItem={renderRow}
+        emptyText={!canCreate ? 'No lists found.' : undefined}
+        footer={
+          canCreate ? (
             <Pressable
               testID="share-list-create"
               onPress={create}
@@ -207,9 +179,9 @@ export function ShareListPicker({
                 Create “{trimmed}”
               </Text>
             </Pressable>
-          )}
-        </ScrollClaim>
-      </ScrollView>
+          ) : null
+        }
+      />
 
       {/* Outline, not primary: Save on the compose screen is the only primary
           action in the whole sheet, and this is the way back from a trip that

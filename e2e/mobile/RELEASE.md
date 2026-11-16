@@ -87,26 +87,94 @@ dev build is not the build that ships — it carries roughly 100 MiB a release
 build does not (docs/share-sheet.md, _almost no memory to spare_). Only a release
 build on hardware answers this.
 
-On the lowest-memory iPhone available, running a release build (TestFlight, or a
-Release run from Xcode), signed into an account with a few dozen lists and tags:
+**Fixed inputs**, so one release's numbers compare with the next's. A run whose
+account or page differs from these is a different measurement, not a regression:
 
-1. In Safari, share a page to Bracemark. The compose screen appears.
-2. Open the list picker, scroll it, type three characters to filter it, clear
-   them, and go back. Do the same in the tags picker, selecting four tags.
-3. Repeat step 2 five times without closing the sheet. The footprint grows a
-   little with every lap, so one lap is not the test.
+- **Device**: the lowest-memory iPhone available — the iPhone 12 (120 MB cap) as
+  of 2026-11. Note the model and iOS version.
+- **Build**: a release build (TestFlight, or `ios:release` / `ios:release:staging`
+  from `apps/bracemark-expo`), signed in.
+- **Accounts**: the seed catalog's `plus-full` (24 lists, 40 tags),
+  `plus-worst` (109 lists down a 100-deep chain, 100 tags) and `plus-large`
+  (300 lists, 300 tags) — docs/e2e.md, _seeded dev accounts_. On staging, an account restored from the same seed
+  archive (`npm run seed:fixtures`).
+- **Pages**, from Safari: a page with next to no read-mode copy
+  (`https://example.com` — `copy 2 K`) and a long article
+  (`https://en.wikipedia.org/wiki/World_War_II` — `copy 19 K` on 2026-11-16;
+  Safari's capture of the mobile page does not reach the hundreds of K the page
+  holds) — and a page whose copy sits AT the cap: `npm run
+measure:capped-page` builds it, checks it with the app's own capture, and
+  serves it on this Mac's LAN address (~2.85M JSON characters, of 3M allowed).
+  Record each run's copy size with its numbers — the `copy-file` line.
+
+So six runs — A `plus-full` × non-article, B `plus-full` × article,
+C `plus-worst` × non-article, D `plus-worst` × article, E `plus-large` ×
+non-article, F `plus-large` × the capped page — each:
+
+1. With the phone attached to the Mac, in Safari, share the page to Bracemark.
+   The compose screen appears.
+2. Open the list picker, scroll it to the bottom, type three characters to filter
+   it, clear them, and go back. Do the same in the tags picker, selecting four
+   tags.
+3. Repeat step 2 until it has run **ten** times without closing the sheet. Ten,
+   not one or five: the question is whether the footprint STOPS growing, and the
+   last five laps are what answer it.
 4. Save. Confirm "Saved to …" and that the sheet closes itself.
-5. **Pass:** the sheet never left on its own. **Fail:** it vanished at any point
-   in steps 1–4. Confirm what took it in Settings → Privacy & Security →
-   Analytics & Improvements → Analytics Data: look for a `JetsamEvent-…` entry
-   at that minute naming `BracemarkShareExtension`.
-6. Record the headroom, not only the verdict, so the next release has a number
-   to compare with rather than a second "it passed". With the phone streaming in
-   Console.app (on the Mac, select the phone, _Start streaming_), filter on
-   `share-memory`: every screen logs `share-memory <memoryLabel>: footprint … MB,
-available … MB` as it mounts. Note the lowest `available` across the laps,
-   and the screen it was on (docs/share-sheet.md, _the share extension has almost
-   no memory to spare_).
+5. Within the next 15 minutes, on the Mac, from `apps/bracemark-expo`:
+   `npm run share:memory -- ios` (it asks for sudo: `log collect` needs root to
+   read a device). It prints every `share-memory` line of the window with its
+   pid, every memory warning, and the kernel's jetsam line if there was one.
+   Keep the output with the release evidence, and the runs' key numbers in
+   docs/share-sheet.md's tables.
+
+Then, once, with `plus-worst`: share the article, Close, and share it again,
+three times in a row. If the pid repeats, iOS kept the process; `controller`'s
+`age` says so too. `compose#1` must open near the same figure each time — four
+shares in a row must not stack.
+
+**iOS keeps the process between shares**, and it keeps its footprint high-water
+mark with it: on 2026-11-16 all eight sheets of a session ran in one process,
+and `compose#1` opened at 21.5 MB fresh and ~40 MB once long sheets had run in it
+(docs/share-sheet.md, _`plus-worst` on the iPhone 12_). So the runs are not
+independent: note each run's `controller` line (its `age` says whether the
+process was fresh), and run E then F last, so the bar below is met by a reused
+process — the worse and the more common case.
+
+**Pass**, all of:
+
+- the sheet never left on its own, and there is no `memorystatus` line naming
+  `BracemarkShareExtension` and no `memory-warning` line;
+- in runs D, E and F, `available` never falls below **40 MB** (a third of the
+  iPhone 12's cap). E and F are the two that failed before the pickers were
+  virtualized and the copy moved to a file: 2.4 MB left in E, and F killed twice
+  (docs/share-sheet.md, _300 lists and 300 tags, and a copy at the cap_);
+- in every run, laps 6–10 add **under 1 MB each** to the footprint at the end of
+  the lap — `compose` mounts twice a lap (back from each picker), so lap _k_
+  ends at `compose#(2k+1)`: compare `#13`, `#15` … `#21`. Growth that levels off
+  is the allocator's high-water mark; growth that keeps climbing is a leak,
+  whatever the headroom.
+
+**Reading the runs**: B − A is what the article copy costs, C − A and E − C what
+the taxonomy's size costs, F − E what a copy at the cap costs. In each line, `js` is the Hermes heap (live+garbage /
+reserved): a footprint that grows with `js` is the sheet's JS holding memory; one
+that grows while `js` stays flat is native — Fabric's views, text layout
+(docs/share-sheet.md, _the share extension has almost no memory to spare_).
+
+`SHARE-ANDROID-MEMORY-001` `release` `online` `android`
+
+Android has no cap for the sheet — `ShareActivity` rides the app's process — so
+this is a watch on the app's own limits rather than a pass/fail against a number
+(docs/share-sheet.md, _Android's numbers_). On the `bracemark-pixel8` AVD or a real
+phone, release build, `plus-worst` and `plus-large`, with the app's process warm (open the app
+first) and once cold (`adb shell am force-stop com.bracemark.app` first): run the
+same laps as above through an `ACTION_SEND` (a browser's Share, or the e2e
+runner's `am start` in `e2e/runner/share.ts`), Save, then `npm run share:memory
+-- android`. Raise logcat's buffer first (`adb logcat -G 16M`): a debug shell
+logs enough that the default ring drops the first laps before the dump. **Pass**:
+the sheet survives, `java` stays under half its ceiling, and `pss` at the end of
+each lap shows no trend across laps 6–10 — on a debug shell it swings by tens of
+MB lap to lap as the collectors run, so a trend, not a single delta, is the
+reading.
 
 ## Store purchases
 

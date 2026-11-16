@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { SEED_ARCHIVES } from '../paths';
 import { buildBackupArchive } from './archive';
 import { SEED_USERS, type SeedUser } from './catalog';
+import { buildLargeLibrary } from './large';
 import { buildLibrary } from './library';
 import { buildWorstLibrary } from './worst';
 
@@ -41,7 +42,11 @@ export async function generateArchives(
     if (user.links === 0) continue;
 
     const library =
-      user.library === 'worst' ? buildWorstLibrary({ now }) : buildLibrary(user, { now });
+      user.library === 'worst'
+        ? buildWorstLibrary({ now })
+        : user.library === 'large'
+          ? buildLargeLibrary({ now })
+          : buildLibrary(user, { now });
     const archive = buildBackupArchive(library);
     const path = join(SEED_ARCHIVES, `${user.key}.zip`);
     await writeFile(path, archive);

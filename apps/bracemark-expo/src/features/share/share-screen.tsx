@@ -118,7 +118,7 @@ const SAVED_DISMISS_MS = 1200;
 // where the full set is seen and changed.
 const MAX_TAG_CHIPS = 6;
 
-export function ShareScreen({ url, title, readMode }: SharePayload) {
+export function ShareScreen({ url, title, readModeFile }: SharePayload) {
   // The link's id, minted ONCE for this sheet rather than per Save attempt.
   // "Idempotent by construction" (share-store's header) rests on the id being
   // stable across every path that can retry a draft — and a failed Save is one
@@ -288,10 +288,11 @@ export function ShareScreen({ url, title, readMode }: SharePayload) {
       // means it IS the destination — the guard is belt-and-bracemarks.
       newLists: newList && newList.id === listId ? [newList] : [],
       sharedAt: Date.now(),
-      // Safari's read-mode copy — JSON text, and it goes into the draft as that
-      // text — carried to the app's drain, which decides whether the account
-      // keeps it (share-store's drainShareOutbox). Nothing here reads or parses it.
-      ...(readMode !== undefined ? { readMode } : {}),
+      // Safari's read-mode copy, by the NAME of the file the controller wrote it
+      // to — the sheet never holds the text (share-url.ts, `readModeFile`). The
+      // app's drain reads it and decides whether the account keeps it
+      // (share-store's drainShareOutbox).
+      ...(readModeFile !== undefined ? { readModeFile } : {}),
     };
     try {
       // The api client powers saveSharedDraft's un-awaited post-write kick
@@ -324,7 +325,7 @@ export function ShareScreen({ url, title, readMode }: SharePayload) {
       setPhase('ready');
       setError('Couldn’t save. Try again.');
     }
-  }, [linkId, taxonomy, url, title, readMode, listId, newList, selectedTagIds, newTags]);
+  }, [linkId, taxonomy, url, title, readModeFile, listId, newList, selectedTagIds, newTags]);
 
   // ── the screens ───────────────────────────────────────────────────────────
 

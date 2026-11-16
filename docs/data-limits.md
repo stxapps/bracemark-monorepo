@@ -62,9 +62,17 @@ mutation hooks, an import — and that is where a new one goes.
 
 **Counts: none per kind.** Every link, list, tag, pin and extraction is one
 `.enc` file, so the server's `maxFiles` and `maxBytes` ([iap.md](./iap.md),
-_enforcement_) already bound all of them — a per-kind count would bound nothing
-those don't, and would add a limit sync then has to carry. `maxLinks` is the one
-count, a plan lever rather than a safety bound, and it is client-side.
+_enforcement_) bound all of them together — loosely: Plus's `maxFiles` is
+1,000,000, so for lists and tags it is a cost ceiling, not a size anyone's
+screens are built for. A per-kind count would still be the wrong tool, for this
+file's own reasons: it could only live at the doors that make data, so sync, a
+restore and a library from before it would carry past it all the same, and
+every reader would have to cope regardless; and the door it would bind hardest
+is the interop import, where a browser's bookmarks bring hundreds of folders
+that would have to be refused or merged. `maxLinks` is the one count, a plan
+lever rather than a safety bound, and it is client-side. So a surface whose cost
+grows with a count has to stop growing with it — by drawing what is on screen —
+rather than wait for a cap.
 
 **The kept copies are made at one door, the capture, and held at three edges.** No
 editor makes a read-mode copy or a screenshot; the capture does, so the _walker's_ caps
@@ -295,8 +303,13 @@ refusal changes nothing, but leaves them nothing either.
 - **The marketing site's converter's path copies** stay bounded by the limit
   rather than removed: it copies a path per folder, at most 101 names each.
 - **Tags on one link by hand**, as above.
-- **Counts, and so speed.** No count per kind is bounded (_counts: none per
-  kind_, above), so what grows with a library's size is time: the tree
-  surfaces mount every list or tag row ([client-queries.md](./client-queries.md),
-  _the tree surfaces mount every row_), and the import finds each folder by a
-  scan of its siblings ([data-lifecycle.md](./data-lifecycle.md), _deferred_).
+- **Counts, and so speed — and in one place, memory.** No count per kind is
+  bounded (_counts: none per kind_, above), so what grows with a library's size
+  is time: the tree surfaces mount every list or tag row
+  ([client-queries.md](./client-queries.md), _the tree surfaces mount every
+  row_), and the import finds each folder by a scan of its siblings
+  ([data-lifecycle.md](./data-lifecycle.md), _deferred_). In the iOS share
+  extension the same rows are memory under a hard per-process cap, and there
+  the count is a crash: at 300 lists and 300 tags the share sheet's list picker
+  took the process to the cap ([share-sheet.md](./share-sheet.md), _300 lists
+  and 300 tags, and a copy at the cap_).

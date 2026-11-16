@@ -3003,14 +3003,19 @@ and correct. A Durable Object's `-wal` and `-shm` belong to it, and go with it.
 ### seeding a dev account
 
 `e2e/seed/` is not a test. It is `init` for a session of looking at the app by
-hand: five accounts on the local stack, two of them with a full library, so
+hand: six accounts on the local stack, two of them with a full library, so
 "Show more", the list/tag tree, filtering, drag-and-drop and the search editor
-have something to work on without anyone typing 190 links into a form — and one
-holding the worst a real library renders (_the worst-case account_, below).
+have something to work on without anyone typing 190 links into a form — one
+holding the worst a real library renders (_the worst-case account_, below), and
+one holding the most it holds by count: `plus-large`'s 300 lists and 300 tags
+(`seed/large.ts`), the size at which the iOS share sheet's list picker, with
+every row mounted, took the share extension to its memory cap
+([share-sheet.md](./share-sheet.md), _300 lists and 300 tags, and a copy at the
+cap_).
 
 ```sh
 npm run dev            # the stack, as always
-npm run seed:accounts            # all five accounts
+npm run seed:accounts            # all six accounts
 npm run seed:accounts -- free-full   # or just one
 npm run seed:fixtures            # the archives only — no browser, no api
 ```
@@ -3026,13 +3031,14 @@ Credentials land in `e2e/credentials/accounts.json` (gitignored, and **not**
 under `.artifacts`: they outlive the run that made them, so clearing run output
 must not take them with it). The catalog:
 
-| key          | username          | plan | library                                         |
-| ------------ | ----------------- | ---- | ----------------------------------------------- |
-| `free-empty` | `seed_free_empty` | Free | nothing — the first-run screens                 |
-| `plus-empty` | `seed_plus_empty` | Plus | nothing — paid, and still empty                 |
-| `free-full`  | `seed_free_full`  | Free | 190 links, 8 flat lists, 14 flat tags           |
-| `plus-full`  | `seed_plus_full`  | Plus | 1,000 links, 24 nested lists, 40 flat tags      |
-| `plus-worst` | `seed_plus_worst` | Plus | the worst case — 112 links, 109 lists, 100 tags |
+| key          | username          | plan | library                                          |
+| ------------ | ----------------- | ---- | ------------------------------------------------ |
+| `free-empty` | `seed_free_empty` | Free | nothing — the first-run screens                  |
+| `plus-empty` | `seed_plus_empty` | Plus | nothing — paid, and still empty                  |
+| `free-full`  | `seed_free_full`  | Free | 190 links, 8 flat lists, 14 flat tags            |
+| `plus-full`  | `seed_plus_full`  | Plus | 1,000 links, 24 nested lists, 40 flat tags       |
+| `plus-worst` | `seed_plus_worst` | Plus | the worst case — 112 links, 109 lists, 100 tags  |
+| `plus-large` | `seed_plus_large` | Plus | by count — 120 links, 300 nested lists, 300 tags |
 
 #### the split down the encryption boundary
 

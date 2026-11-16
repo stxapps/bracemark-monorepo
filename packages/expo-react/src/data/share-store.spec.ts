@@ -57,6 +57,8 @@ import { readCachedStatus } from './subscription-store';
 // keeps the hoisted factory clear of the TDZ.
 const mockFiles = new Map<string, string>();
 const mockDirs = new Set<string>();
+// A file's modification time, for the copy sweep; a file with none reads as old.
+const mockMtimes = new Map<string, number>();
 
 // A stand-in for the app's api client. Nothing here reaches the network (the
 // upload and the sync are mocked); `withSession` hands back a client of its own,
@@ -102,6 +104,9 @@ jest.mock('expo-file-system', () => {
     }
     get exists(): boolean {
       return mockFiles.has(this.uri);
+    }
+    get modificationTime(): number | null {
+      return mockFiles.has(this.uri) ? (mockMtimes.get(this.uri) ?? 0) : null;
     }
     textSync(): string {
       const text = mockFiles.get(this.uri);
@@ -396,38 +401,88 @@ describe('drainShareOutbox', () => {
     mockDirs.add(OUTBOX);
   });
 
-  // The read-mode copy a Safari draft carries is stored only when the caller says the
-  // account keeps it (ShareBridge: the plan and the synced setting) — and either way
-  // the draft lands and its file goes.
-  it('stores a draft’s read-mode copy only when the caller keeps it', async () => {
+  // The copy used to ride the draft inline, as `readMode`, in unshipped builds only. Such a
+  // draft (a dev phone's outbox) still lands its link — the schema drops the key — and
+  // its copy is not stored.
+  it('lands a draft that still carries an inline copy, without the copy', async () => {
     const { storeReadModeCopy } =
       jest.requireMock<typeof import('./store-read-mode')>('./store-read-mode');
-    // As the sheet writes it: the copy is JSON text inside the draft's JSON, and
-    // the drain hands that text on unparsed (store-read-mode parses it).
-    const withCopy = {
+    jest.mocked(storeReadModeCopy).mockClear();
+    const inline = {
       ...draft,
       readMode: JSON.stringify({ version: 1, capturedAt: 1, blocks: [] }),
     };
+    mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify(inline));
+    await expect(drainShareOutbox({ keepReadMode: true })).resolves.toEqual(['links/link-1.enc']);
+    expect(storeReadModeCopy).not.toHaveBeenCalled();
+    expect([...mockFiles.keys()]).toEqual([]);
+  });
+
+  // On a phone the copy never rides the draft: the share extension's controller writes it
+  // to `share/copies/<uuid>.json` and the draft names the file (docs/share-sheet.md, _300
+  // lists and 300 tags, and a copy at the cap_). The drain reads it from there, and deletes
+  // it with the draft whether or not the account keeps copies.
+  it('stores a copy the draft names by file, and deletes the file', async () => {
+    const { storeReadModeCopy } =
+      jest.requireMock<typeof import('./store-read-mode')>('./store-read-mode');
+    const name = '0A1B2C3D-0000-4000-8000-000000000001.json';
+    const COPY = `group/share/copies/${name}`;
+    const text = JSON.stringify({ version: 1, capturedAt: 1, blocks: [] });
+    const withFile = { ...draft, readModeFile: name };
 
     jest.mocked(storeReadModeCopy).mockClear();
-    mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify(withCopy));
-    await expect(drainShareOutbox()).resolves.toEqual(['links/link-1.enc']);
-    expect(storeReadModeCopy).not.toHaveBeenCalled();
-
-    mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify(withCopy));
+    mockDirs.add('group/share/copies');
+    mockFiles.set(COPY, text);
+    mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify(withFile));
     await expect(drainShareOutbox({ keepReadMode: true })).resolves.toEqual(['links/link-1.enc']);
     // Images are a second verdict, and off unless the caller says so: fetching them
     // is this app making requests, which the device's fetch mode may forbid.
-    expect(storeReadModeCopy).toHaveBeenCalledWith('alice', 'link-1', withCopy.readMode, {
-      images: false,
-    });
-    expect([...mockFiles.keys()]).toEqual([]);
+    expect(storeReadModeCopy).toHaveBeenCalledWith('alice', 'link-1', text, { images: false });
+    expect(mockFiles.has(COPY)).toBe(false);
 
-    mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify(withCopy));
+    mockFiles.set(COPY, text);
+    mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify(withFile));
     await drainShareOutbox({ keepReadMode: true, keepReadModeImages: true });
-    expect(storeReadModeCopy).toHaveBeenLastCalledWith('alice', 'link-1', withCopy.readMode, {
-      images: true,
-    });
+    expect(storeReadModeCopy).toHaveBeenLastCalledWith('alice', 'link-1', text, { images: true });
+
+    // Not kept: the link lands, the copy is never read, and the file still goes.
+    jest.mocked(storeReadModeCopy).mockClear();
+    mockFiles.set(COPY, text);
+    mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify(withFile));
+    await expect(drainShareOutbox()).resolves.toEqual(['links/link-1.enc']);
+    expect(storeReadModeCopy).not.toHaveBeenCalled();
+    expect(mockFiles.has(COPY)).toBe(false);
+
+    // A named file that is gone costs the copy, never the draft.
+    mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify(withFile));
+    await expect(drainShareOutbox({ keepReadMode: true })).resolves.toEqual(['links/link-1.enc']);
+    expect(storeReadModeCopy).not.toHaveBeenCalled();
+  });
+
+  // A sheet closed without Save leaves its copy with no draft to name it. The drain sweeps
+  // such files once they are an hour old — not sooner, because a sheet can still be open
+  // over Safari while the app drains, about to save the copy it wrote.
+  it('sweeps copy files no draft names, once they are an hour old', async () => {
+    mockDirs.add('group/share/copies');
+    const OLD = 'group/share/copies/0A1B2C3D-0000-4000-8000-0000000000aa.json';
+    const FRESH = 'group/share/copies/0A1B2C3D-0000-4000-8000-0000000000bb.json';
+    const NAMED_NAME = '0A1B2C3D-0000-4000-8000-0000000000cc.json';
+    const NAMED = `group/share/copies/${NAMED_NAME}`;
+    mockFiles.set(OLD, '{}');
+    mockMtimes.set(OLD, Date.now() - 2 * 60 * 60 * 1000);
+    mockFiles.set(FRESH, '{}');
+    mockMtimes.set(FRESH, Date.now() - 60 * 1000);
+    mockFiles.set(NAMED, '{}');
+    mockMtimes.set(NAMED, Date.now() - 2 * 60 * 60 * 1000);
+    // A draft the write edge refuses stays in the outbox, and so does the copy it names.
+    const { writeLink } = jest.requireMock<typeof import('./mutations')>('./mutations');
+    jest.mocked(writeLink).mockRejectedValueOnce(new UnreadablePathError('links/link-1.enc'));
+    mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify({ ...draft, readModeFile: NAMED_NAME }));
+
+    await drainShareOutbox({ keepReadMode: true });
+    expect(mockFiles.has(OLD)).toBe(false);
+    expect(mockFiles.has(FRESH)).toBe(true);
+    expect(mockFiles.has(NAMED)).toBe(true);
   });
 
   // The write edge refuses a put to a path the pull could not open (UnreadablePathError). One
