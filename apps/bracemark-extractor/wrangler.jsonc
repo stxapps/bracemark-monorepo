@@ -210,8 +210,10 @@
       // page into a DOM and runs Readability over it, and the checks before and after
       // the parse price the shapes we know of, not every shape
       // (docs/link-extraction-server.md, _cost on the Worker_). Real pages took at most
-      // ~0.5 s of CPU, so 5 s leaves ten times that, and a page that slips past the
-      // checks dies here instead of running for minutes: the request ends in a 5xx,
+      // ~0.5 s (Node), and the heaviest local page 0.9 s in workerd, so 5 s leaves
+      // five times that or more; a page that slips past the checks dies here instead
+      // of running for minutes. The limit is per REQUEST (a read-mode request carries
+      // up to five pages, the web app sends one), and it ends in a 5xx,
       // which the client treats as a transport failure and does not retry by itself.
       // HERE and not at the top level, because `limits` is inherited by every env that
       // has none of its own, and the Workers Free plan refuses `cpu_ms`, and staging is

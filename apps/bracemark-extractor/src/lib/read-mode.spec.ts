@@ -31,6 +31,8 @@ const page = (article: string, head = '<title>A post</title>') =>
 
 const FINAL = new URL('https://example.com/blog/post');
 
+type Walked = Parameters<typeof withinReadModeBounds>[0];
+
 describe('readModeFromHtml', () => {
   it('turns an article into a ReaderDoc of numbered plain-text blocks', () => {
     const doc = readModeFromHtml(
@@ -204,7 +206,7 @@ describe('the work a page may ask of the parse', () => {
     const depth = MAX_READ_MODE_DEPTH + 1;
     const { document } = parseHTML(`<html><body>${'<div>'.repeat(depth)}x</body></html>`);
 
-    expect(withinReadModeBounds(document as unknown as { firstElementChild: unknown })).toBe(false);
+    expect(withinReadModeBounds(document as unknown as Walked)).toBe(false);
   });
 
   // Depth and element count are not a cost bound: the same 5,000 elements at depth 100 cost Readability
@@ -219,7 +221,7 @@ describe('the work a page may ask of the parse', () => {
     expect(withinReadModeMarkup(html)).toBe(true);
     expect(5000 * 101 * 101).toBeGreaterThan(MAX_READ_MODE_COST);
 
-    expect(withinReadModeBounds(document as unknown as { firstElementChild: unknown })).toBe(false);
+    expect(withinReadModeBounds(document as unknown as Walked)).toBe(false);
     const started = Date.now();
     expect(readModeFromHtml(html, FINAL, 7)).toBeNull();
     expect(Date.now() - started).toBeLessThan(1000);
@@ -232,13 +234,50 @@ describe('the work a page may ask of the parse', () => {
     const flat = (n: number) =>
       `<!doctype html><html><body><div id=main><p>${PROSE}</p><p>${PROSE}</p><p>${PROSE}</p></div>${'<p>a. </p>'.repeat(n)}</body></html>`;
     const tree = (html: string) =>
-      parseHTML(html).document as unknown as { firstElementChild: unknown };
+      parseHTML(html).document as unknown as Walked;
     const over = Math.ceil(Math.sqrt(MAX_READ_MODE_COST)) + 1;
 
     expect(withinReadModeBounds(tree(flat(over)))).toBe(false);
     expect(withinReadModeBounds(tree(flat(over - 200)))).toBe(true);
     const started = Date.now();
     expect(readModeFromHtml(flat(59_000), FINAL, 7)).toBeNull();
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  // Depth alone, with no wide parent: eight leaves at every level of a 250-deep chain.
+  it('refuses a page by depth squared alone', () => {
+    const html = `<!doctype html><html><body>${('<div>' + '<i></i>'.repeat(8)).repeat(250)}${'</div>'.repeat(250)}</body></html>`;
+    const tree = parseHTML(html).document as unknown as Walked;
+
+    expect(withinReadModeMarkup(html)).toBe(true);
+    expect(withinReadModeBounds(tree)).toBe(false);
+  });
+
+  // linkedom keeps an element's attributes in the same list as its children, and text runs and
+  // comments are nodes too, so Readability's walks step through all of them. Counted as elements
+  // only, each of these passed: 240 nested divs around a <p> with 5,000 attributes took 2.7 s on
+  // Node (155,000 attributes: 207 s in workerd), and 4,900 siblings among 55,000 comments 17 s.
+  it.each([
+    [
+      'attributes deep in the tree',
+      `${'<div>'.repeat(240)}<p${Array.from({ length: 5000 }, (_, i) => ` a${i}`).join('')}>${PROSE}</p><p>${PROSE}</p>${'</div>'.repeat(240)}`,
+    ],
+    [
+      'comments among wide siblings',
+      `<div id=main><p>${PROSE}</p><p>${PROSE}</p></div>${'<p>a. </p><!----><!----><!----><!---->'.repeat(4900)}`,
+    ],
+    [
+      'attributes on a wide parent',
+      `<div${Array.from({ length: 20_000 }, (_, i) => ` a${i}`).join('')}><p>${PROSE}</p>${'<p>a. </p>'.repeat(4000)}</div>`,
+    ],
+    ['text runs deep in the tree', `${'<section>'.repeat(240)}<p>${PROSE}${'&amp;'.repeat(5000)}</p>${'</section>'.repeat(240)}`],
+  ])('weighs the nodes elements carry, not only the elements: %s', (_, body) => {
+    const html = `<!doctype html><html><body>${body}</body></html>`;
+
+    expect(withinReadModeMarkup(html)).toBe(true);
+    expect(withinReadModeBounds(parseHTML(html).document as unknown as Walked)).toBe(false);
+    const started = Date.now();
+    expect(readModeFromHtml(html, FINAL, 7)).toBeNull();
     expect(Date.now() - started).toBeLessThan(1000);
   });
 
@@ -268,7 +307,7 @@ describe('the markup a page may hold before it is parsed', () => {
     const nest = (depth: number) =>
       `<html><body>${'<div>'.repeat(depth - 2)}x${'</div>'.repeat(depth - 2)}</body></html>`;
     const tree = (html: string) =>
-      parseHTML(html).document as unknown as { firstElementChild: unknown };
+      parseHTML(html).document as unknown as Walked;
 
     expect(withinReadModeMarkup(nest(MAX_READ_MODE_DEPTH))).toBe(true);
     expect(withinReadModeBounds(tree(nest(MAX_READ_MODE_DEPTH)))).toBe(true);
@@ -335,6 +374,8 @@ describe('the markup a page may hold before it is parsed', () => {
     expect(withinReadModeMarkup(body('&amp;', MAX_READ_MODE_NODES - 10))).toBe(true);
     expect(withinReadModeMarkup(body('&amp;', MAX_READ_MODE_NODES + 10))).toBe(false);
     expect(withinReadModeMarkup(body('<!---->', MAX_READ_MODE_NODES + 10))).toBe(false);
+    // And the limit itself stays where a page of them is cheap: 120,000 in one parent took 1.1 s.
+    expect(withinReadModeMarkup(body('&amp;', 120_000))).toBe(false);
   });
 
   it('is linear: tags that never close, and a `<` that opens nothing, cost one pass', () => {

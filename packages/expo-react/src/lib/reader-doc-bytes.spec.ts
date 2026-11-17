@@ -123,6 +123,34 @@ describe('a gzip header that never ends', () => {
     expect(pushesFor(both)).toBeLessThanOrEqual(MAX_HEADER_SLICES + 4);
   });
 
+  // The wait allowed is a header no honest gzip comes near (ours are 10 bytes, and node's,
+  // CompressionStream's and fflate's alike write no name), and small enough that the copies
+  // it costs stay linear: 16 slices of 4 KiB.
+  it('allows a header no more than 64 KiB of waiting', () => {
+    expect(MAX_HEADER_SLICES * INFLATE_SLICE_BYTES).toBe(64 * 1024);
+  });
+
+  // An honest copy near the store edge's ceilings decodes through many slices, every one of
+  // which inflates, so the wait never counts.
+  it('still reads a large honest copy, slice after slice', () => {
+    const big: ReaderDoc = {
+      ...DOC,
+      blocks: Array.from({ length: 5000 }, (_, i) => ({
+        id: `b${i}`,
+        kind: 'paragraph' as const,
+        runs: [
+          {
+            text: `Café ${i}: ${Array.from({ length: 30 }, (_, j) => ((i * 7919 + j * 104_729) % 1_000_003).toString(36)).join(' ')}`,
+          },
+        ],
+      })),
+    };
+    const bytes = new Uint8Array(nodeGzip(Buffer.from(JSON.stringify(big))));
+    expect(bytes.length).toBeGreaterThan(MAX_HEADER_SLICES * INFLATE_SLICE_BYTES);
+
+    expect(decodeReaderDoc(bytes)).toEqual(big);
+  });
+
   it('still reads a copy whose header names a file', () => {
     const plain = new Uint8Array(nodeGzip(Buffer.from(JSON.stringify(DOC))));
     const name = new TextEncoder().encode('copy.json\0');

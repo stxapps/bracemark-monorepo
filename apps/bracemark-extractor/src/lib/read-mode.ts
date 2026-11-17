@@ -87,30 +87,38 @@ type ReadabilityDocument = ConstructorParameters<typeof Readability>[0];
 //   passed four ways, with pages that then took 7 to 11 s — it is COUNTED by the same parser, with
 //   no tree, and stopped the moment it crosses a limit (`withinReadModeMarkup`). Stopped at
 //   MAX_READ_MODE_DEPTH, the parser's array never holds more than that, so the count is linear.
-// - READABILITY on the parsed tree costs time in the shape: about elements x depth^2 for nesting (a
-//   74 KB page 250 deep with 5,000 spans took 23.5 s), and the square of an element's child count
-//   for width — it re-reads a parent's `children` after each sibling it appends, and linkedom
-//   builds that list afresh each time (59,000 sibling paragraphs took 173 s in workerd). So the
-//   walk after the parse adds up depth^2 for every element and children^2 for every parent
-//   (MAX_READ_MODE_COST), and stops at the cap.
+// - READABILITY on the parsed tree costs time in the shape, and counts NODES, not elements:
+//   linkedom keeps an element's attributes in the same list as its children, and text runs and
+//   comments are nodes too, so every subtree walk steps through all of them. In nesting, about
+//   nodes x depth^2 (a 74 KB page 250 deep with 5,000 spans took 23.5 s in workerd; 240 nested
+//   `<div>`s around one `<p>` with 155,000 attributes, 207 s). In width, a parent's child nodes
+//   times its element children: Readability re-reads a parent's `children` after each sibling it
+//   appends, and linkedom builds that list afresh each time, stepping over attributes and every
+//   other child on the way (59,000 sibling paragraphs: 173 s; 4,900 among 55,000 comments: 17 s).
+//   So the walk after the parse weighs both (`withinReadModeBounds`, MAX_READ_MODE_COST) and stops
+//   at the cap.
 //
 // These price the shapes found, not every shape a page could pick — Readability is a heuristic, not
 // a bounded algorithm — so the Worker's own CPU limit (wrangler.jsonc, `limits.cpu_ms` on
-// production) is the backstop: a page that slips past both dies there, as a 5xx.
+// production) is the backstop: a request that slips past both dies there, as a 5xx. Staging, on the
+// Workers Free plan, has Free's own, tighter limit instead.
 //
-// The cap is a judgement from local pages, not from real traffic. The heaviest local document, a
-// 1.1 MB list of 22,000 elements, adds up to about 1.3e7; real article pages sit one to three orders
-// of magnitude under it. At 2.5e7 the slowest shape found took about 2 s on Node. A page past it is
-// answered `not-an-article`; the live set `measure:kept-copies` fetches would say whether a real
-// page is refused, and has not been run against it.
+// The cap is a judgement from local pages, not from real traffic. Over 650 local HTML files none is
+// refused; the heaviest, a 1 MB export of 10,000 bookmarks (19,000 elements), weighs 3.2e7 and took
+// about 0.8 s on Node, 0.9 s in workerd; real article pages weigh one to three orders of magnitude
+// less. Pages built to be slow, each scaled to just under the cap (attributes or text deep in the
+// tree, comments or attributes among wide siblings, flat siblings, long tables), took at most 0.7 s
+// on Node. A page past it is answered `not-an-article`; the live set `measure:kept-copies` fetches
+// would say whether a real page is refused, and has not been run against it.
 export const MAX_READ_MODE_DEPTH = 256;
 export const MAX_READ_MODE_ELEMENTS = 60_000;
-export const MAX_READ_MODE_COST = 25_000_000;
-// Nodes the parser may emit other than elements before the page is refused: comments, text runs and
-// processing instructions, each of which becomes a node linkedom builds and Readability walks — and
-// walks super-linearly when they share a parent (240,000 in one `<p>` took 4 s on Node; 60,000,
-// 0.7 s). htmlparser2 emits a text run per decoded entity, so a megabyte of `&amp;` is 200,000 of
-// them. The heaviest local page has 19,000.
+export const MAX_READ_MODE_COST = 40_000_000;
+// Nodes the parser may emit other than elements before the page is refused: text runs and comments,
+// each of which becomes a node linkedom builds and Readability walks — super-linearly when they
+// share a parent (240,000 in one `<p>` took 4 s on Node; 60,000, 0.7 s) — and processing
+// instructions (a doctype), which linkedom keeps as no node but which cost the parser the same.
+// htmlparser2 emits a text run per decoded entity, so a megabyte of `&amp;` is 200,000 of them. The
+// heaviest local page has 19,000.
 export const MAX_READ_MODE_NODES = 60_000;
 
 // Thrown out of the parser's own callbacks to stop it at the first limit crossed.
@@ -155,37 +163,56 @@ export function withinReadModeMarkup(html: string): boolean {
 }
 
 // Is this parsed document inside those bounds? One iterative walk (no recursion: the page chooses
-// the depth), stopping at the first element that crosses one. Each element adds its depth squared,
-// and each element with children adds their count squared (the root's included).
-export function withinReadModeBounds(root: { firstElementChild: unknown }): boolean {
-  type El = { firstElementChild: El | null; nextElementSibling: El | null };
-  const stack: { el: El; depth: number }[] = [];
+// the depth), stopping at the first element that crosses one.
+//
+// The cost weighs NODES, not elements. linkedom keeps an element's attributes in the same linked
+// list as its children, and text runs and comments are nodes too, so every subtree walk Readability
+// makes steps through all of them: 240 nested `<div>`s around one `<p>` with 5,000 attributes took
+// 2.7 s on Node, though its elements cost almost nothing. So each element adds its depth squared
+// times (1 + its attributes + its children that are not elements), and each parent adds its element
+// children times (all its child nodes + its attributes), the width term Readability's sibling loop
+// pays for.
+export function withinReadModeBounds(root: WalkedNode): boolean {
+  const stack: { el: WalkedNode; depth: number }[] = [];
   let count = 0;
   let cost = 0;
-  const push = (parent: { firstElementChild: unknown }, depth: number): boolean => {
+  // Pushes `parent`'s element children and charges its width; returns how many of its child nodes
+  // are not elements, or -1 past a limit.
+  const push = (parent: WalkedNode, depth: number, attributes: number): number => {
     let children = 0;
-    for (let c = parent.firstElementChild as El | null; c; c = c.nextElementSibling) {
+    for (let c = parent.firstElementChild; c; c = c.nextElementSibling) {
       stack.push({ el: c, depth });
-      if (++children > MAX_READ_MODE_ELEMENTS) return false;
+      if (++children > MAX_READ_MODE_ELEMENTS) return -1;
     }
-    cost += children * children;
-    return cost <= MAX_READ_MODE_COST;
+    const nodes = parent.childNodes.length;
+    cost += children * (nodes + attributes);
+    return cost > MAX_READ_MODE_COST ? -1 : nodes - children;
   };
-  if (!push(root, 1)) return false;
+  if (push(root, 1, 0) < 0) return false;
   while (stack.length > 0) {
-    const { el, depth } = stack.pop() as { el: El; depth: number };
-    cost += depth * depth;
+    const { el, depth } = stack.pop() as { el: WalkedNode; depth: number };
+    const attributes = el.attributes?.length ?? 0;
+    const other = push(el, depth + 1, attributes);
+    if (other < 0) return false;
+    cost += depth * depth * (1 + attributes + other);
     if (
       depth > MAX_READ_MODE_DEPTH ||
       ++count > MAX_READ_MODE_ELEMENTS ||
-      cost > MAX_READ_MODE_COST ||
-      !push(el, depth + 1)
+      cost > MAX_READ_MODE_COST
     ) {
       return false;
     }
   }
   return true;
 }
+
+// What the walk reads of linkedom's document and elements.
+type WalkedNode = {
+  firstElementChild: WalkedNode | null;
+  nextElementSibling: WalkedNode | null;
+  childNodes: { length: number };
+  attributes?: { length: number };
+};
 
 export function readModeFromHtml(
   html: string,
@@ -208,7 +235,7 @@ function readModeOrThrow(
   if (!withinReadModeMarkup(html)) return null;
   const { document } = parseHTML(html);
   // ... and before anything walks the tree: Readability's cost is not bounded by the bytes.
-  if (!withinReadModeBounds(document as unknown as { firstElementChild: unknown })) return null;
+  if (!withinReadModeBounds(document as unknown as WalkedNode)) return null;
   setBaseUrl(document, finalUrl);
 
   const page = document as unknown as ReadabilityDocument;

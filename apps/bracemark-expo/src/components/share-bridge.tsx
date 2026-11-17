@@ -89,7 +89,11 @@ export function ShareBridge() {
   // No answer is coming (the request failed, or is paused offline, with nothing
   // cached): keep the copy. The same fail-open as the sheet's link cap
   // (docs/share-sheet.md, _the plan's link cap_) — guessing free costs a paying
-  // user something unrecoverable, guessing Plus costs a free one a copy or two, once.
+  // user something unrecoverable; guessing Plus lets a free account keep the copy
+  // of every Safari share drained while its plan is unknown, on every launch until
+  // a plan is cached (an account kept offline from its first sign-in keeps them
+  // all). They are ordinary copies, within the free plan's storage: `keptCopies` is
+  // a client-side gate by design (docs/iap.md, _enforcement_).
   const entitled = isKnown ? entitlements.keptCopies : true;
   const entitledRef = useRef(entitled);
   entitledRef.current = entitled;

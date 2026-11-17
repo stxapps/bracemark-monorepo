@@ -501,7 +501,14 @@ describe('drainShareOutbox', () => {
     jest.mocked(storeReadModeCopy).mockClear();
     const SECRET = 'group/share/secret.json';
     mockFiles.set(SECRET, JSON.stringify({ version: 1, capturedAt: 1, blocks: [] }));
-    for (const readModeFile of ['../secret.json', '../../share/secret.json', 'a/../../secret.json']) {
+    for (const readModeFile of [
+      '../secret.json',
+      '../../share/secret.json',
+      'a/../../secret.json',
+      // A real name inside a longer one: the pattern must hold the WHOLE name.
+      '../0A1B2C3D-0000-4000-8000-000000000001.json',
+      '0A1B2C3D-0000-4000-8000-000000000001.json/../../secret.json',
+    ]) {
       mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify({ ...draft, readModeFile }));
       expect(parseShareDraft(JSON.stringify({ ...draft, readModeFile }))).toBeNull();
       await drainShareOutbox({ keepReadMode: true });
@@ -536,11 +543,18 @@ describe('drainShareOutbox', () => {
     expect(read.mock.contexts.some((file) => (file as { uri: string }).uri === COPY)).toBe(false);
     read.mockRestore();
 
-    const atCap = 'x'.repeat(READER_CAPTURE_MAX_PAYLOAD_CHARS);
-    mockFiles.set(COPY, atCap);
-    mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify({ ...draft, readModeFile: name }));
-    await drainShareOutbox({ keepReadMode: true });
-    expect(storeReadModeCopy).toHaveBeenCalledWith('alice', 'link-1', atCap, { images: false });
+    // At the cap, a copy is read however its characters encode: one UTF-16 unit is at most
+    // three bytes of UTF-8, so a cap of 3,000,000 characters is up to 9,000,000 bytes.
+    for (const atCap of [
+      'x'.repeat(READER_CAPTURE_MAX_PAYLOAD_CHARS),
+      '€'.repeat(READER_CAPTURE_MAX_PAYLOAD_CHARS),
+    ]) {
+      jest.mocked(storeReadModeCopy).mockClear();
+      mockFiles.set(COPY, atCap);
+      mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify({ ...draft, readModeFile: name }));
+      await drainShareOutbox({ keepReadMode: true });
+      expect(storeReadModeCopy).toHaveBeenCalledWith('alice', 'link-1', atCap, { images: false });
+    }
   });
 
   // A sheet closed without Save leaves its copy with no draft to name it. The drain sweeps

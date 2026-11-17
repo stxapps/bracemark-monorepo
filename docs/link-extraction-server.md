@@ -295,23 +295,30 @@ costs, so two checks:
   elements `MAX_READ_MODE_ELEMENTS`, or the text runs and comments `MAX_READ_MODE_NODES`
   (`withinReadModeMarkup`). Stopped there, the parser's array never grows past the depth
   limit, so the pass is linear.
-- **Readability** on the parsed tree is super-linear in two directions. In nesting: the
-  same 74 KB, 250 deep and 5,000 elements took 0.4 s with one article and 10 s with
-  another (23.5 s in workerd). In width: it re-reads a parent's `children` after every
-  sibling it appends to the article, and linkedom builds that list afresh each time, so
-  59,000 sibling paragraphs took 173 s in workerd; text runs that share a parent behave the
-  same way (240,000 `&amp;` in one `<p>`: 4 s on Node). The walk after the parse therefore
-  adds up depth squared over every element and children squared over every parent, and
-  stops at `MAX_READ_MODE_COST`.
+- **Readability** on the parsed tree is super-linear in two directions, and in both it pays
+  for NODES, not elements: linkedom keeps an element's attributes in the same list as its
+  children, and text runs and comments are nodes too, so every walk steps through all of
+  them. In nesting: the same 74 KB, 250 deep and 5,000 elements took 0.4 s with one
+  article and 10 s with another (23.5 s in workerd), and 240 nested `<div>`s around one
+  `<p>` with 155,000 attributes took 207 s. In width: it re-reads a parent's `children`
+  after every sibling it appends to the article, and linkedom builds that list afresh each
+  time, stepping over every attribute and child node on the way, so 59,000 sibling
+  paragraphs took 173 s in workerd and 4,900 among 55,000 comments 17 s. The walk after the
+  parse therefore weighs each element's depth squared by its attributes and its children
+  that aren't elements, and each parent's element children by its child nodes and
+  attributes, and stops at `MAX_READ_MODE_COST`.
 
 These price the shapes found, not every shape a page could pick; Readability is a heuristic,
 not a bounded algorithm. So production also sets the Worker's own CPU limit
-(`limits.cpu_ms`, 5 s, in `wrangler.jsonc`), the backstop for a page that slips past both
-checks: it dies as a 5xx instead of running for minutes. At the caps, the slowest shape
-found took about 2 s on Node. The caps are a judgement from local pages, not real traffic:
-none of 391 local HTML files is refused, the heaviest (a 1 MB bookmarks export of 19,000
-elements) costs 1.2e7 against the 2.5e7 cap and has 19,000 text runs against 60,000, and the
-real pages above sit one to three orders of magnitude under that. Whether a real page is
+(`limits.cpu_ms`, 5 s per request, in `wrangler.jsonc`; staging has Free's own), the
+backstop for a page that slips past both checks: the request dies as a 5xx instead of
+running for minutes. Pages built to be slow and scaled to just under the cap (attributes or
+text deep in the tree, comments or attributes among wide siblings, flat siblings, long
+tables) took at most 0.7 s on Node. The caps are a judgement from local pages, not real
+traffic: none of 650 local HTML files is refused; the heaviest (a 1 MB export of 10,000
+bookmarks, 19,000 elements) weighs 3.2e7 against the 4e7 cap, took 0.9 s in workerd, and
+has 19,000 text runs against 60,000; the real pages above sit one to three orders of
+magnitude under that. Whether a real page is
 refused — `measure:kept-copies` fetches live sites — has not been run against it. A
 `robots.txt` verdict has a step budget (`MAX_ROBOTS_MATCH_STEPS`) after which the answer is a
 disallow. That is why a read-mode request is
