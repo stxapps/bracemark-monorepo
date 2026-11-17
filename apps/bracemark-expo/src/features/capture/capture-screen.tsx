@@ -407,89 +407,98 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
             if (event.nativeEvent.statusCode >= 400) fallBackFromSecure();
           }}
         />
-        <View className="gap-2 border-t border-border px-4 py-3">
-          {/* The keep first, _Include images_ directly under it in its own column, and
+        {/* The bar spans the window; what is in it doesn't. On a wide window two
+            buttons sharing the full width were each half a landscape iPad wide (~580),
+            so the column stops at `max-w-xl` and centres — the in-app sheet's cap below
+            768 (docs/safe-area.md, _wide windows on native_). Upright, a phone is under it
+            and looks as before; on its side it gets the same centred column. */}
+        <View className="border-t border-border px-4 py-3">
+          <View className="w-full max-w-xl gap-2 self-center">
+            {/* The keep first, _Include images_ directly under it in its own column, and
               _Update preview_ beside — web's keep section's order (reader-page.tsx,
               EmptyCopies): the box qualifies the keep alone, so nothing but the keep
               is above it, and a screen reader meets the two in a row. `items-start`
               keeps the two buttons level while the left column is taller. */}
-          <View className="flex-row items-start gap-2">
-            <View className="flex-1">
-              {kept ? (
-                <>
-                  <Button
-                    variant="outline"
-                    testID="capture-read"
-                    onPress={() => router.replace(`/read?link=${encodeURIComponent(linkId)}`)}
-                  >
-                    <Icon as={Check} className="size-4 text-foreground" />
-                    <Text>Kept — read it</Text>
-                  </Button>
-                  <IncludeImages disabled />
-                </>
-              ) : (
-                <>
-                  <Button
-                    testID="capture-keep-read-mode"
-                    // On free the button is the upgrade, so it is never disabled there —
-                    // and its name says what it is (the browser extension's saved screen
-                    // does the same).
-                    aria-label={entitled ? undefined : `Keep a copy — a ${plus} feature`}
-                    disabled={entitled && !ready}
-                    onPress={() => void keep()}
-                  >
-                    <Icon as={BookOpen} className="size-4 text-primary-foreground" />
-                    <Text>
-                      {busy === 'readMode'
-                        ? 'Keeping…'
-                        : extraction?.readModeId
-                          ? 'Keep a new copy'
-                          : 'Keep a copy'}
-                    </Text>
-                    {entitled ? null : <Text className="text-xs opacity-80">{plus}</Text>}
-                  </Button>
-                  {entitled ? <IncludeImages disabled={busy === 'readMode'} /> : null}
-                </>
-              )}
+            <View className="flex-row items-start gap-2">
+              <View className="flex-1">
+                {kept ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      testID="capture-read"
+                      onPress={() => router.replace(`/read?link=${encodeURIComponent(linkId)}`)}
+                    >
+                      <Icon as={Check} className="size-4 text-foreground" />
+                      <Text>Kept — read it</Text>
+                    </Button>
+                    <IncludeImages disabled />
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      testID="capture-keep-read-mode"
+                      // On free the button is the upgrade, so it is never disabled there —
+                      // and its name says what it is (the browser extension's saved screen
+                      // does the same).
+                      aria-label={entitled ? undefined : `Keep a copy — a ${plus} feature`}
+                      disabled={entitled && !ready}
+                      onPress={() => void keep()}
+                    >
+                      <Icon as={BookOpen} className="size-4 text-primary-foreground" />
+                      <Text>
+                        {busy === 'readMode'
+                          ? 'Keeping…'
+                          : extraction?.readModeId
+                            ? 'Keep a new copy'
+                            : 'Keep a copy'}
+                      </Text>
+                      {entitled ? null : <Text className="text-xs opacity-80">{plus}</Text>}
+                    </Button>
+                    {entitled ? <IncludeImages disabled={busy === 'readMode'} /> : null}
+                  </>
+                )}
+              </View>
+              {entitled ? (
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  testID="capture-update-preview"
+                  disabled={!ready || previewDone !== null}
+                  onPress={() => void updatePreview()}
+                >
+                  <Icon as={previewDone ? Check : RefreshCw} className="size-4 text-foreground" />
+                  <Text>
+                    {busy === 'preview' ? 'Updating…' : (previewDone ?? 'Update preview')}
+                  </Text>
+                </Button>
+              ) : null}
             </View>
-            {entitled ? (
+            {/* Mounted only with something to say: an empty Text still takes a line,
+              and the column's gap-2 above it, as dead space under the buttons. */}
+            {message ? (
+              <ErrorText tone={message.tone} className="text-center text-xs">
+                {message.text}
+              </ErrorText>
+            ) : reason ? (
+              <Text className="text-center text-xs text-muted-foreground" role="status">
+                {reason}
+              </Text>
+            ) : null}
+            {/* A page that didn't load is the moment the Wayback Machine is for, so it is
+              said in words here, not left to the top bar's icon. */}
+            {loadFailed && waybackHref ? (
               <Button
                 variant="outline"
-                className="flex-1"
-                testID="capture-update-preview"
-                disabled={!ready || previewDone !== null}
-                onPress={() => void updatePreview()}
+                size="sm"
+                className="self-center"
+                testID="capture-wayback-load-failed"
+                onPress={() => openWayback(waybackHref)}
               >
-                <Icon as={previewDone ? Check : RefreshCw} className="size-4 text-foreground" />
-                <Text>{busy === 'preview' ? 'Updating…' : (previewDone ?? 'Update preview')}</Text>
+                <Icon as={History} className="size-4 text-foreground" />
+                <Text>Open in Wayback Machine</Text>
               </Button>
             ) : null}
           </View>
-          {/* Mounted only with something to say: an empty Text still takes a line,
-              and the column's gap-2 above it, as dead space under the buttons. */}
-          {message ? (
-            <ErrorText tone={message.tone} className="text-center text-xs">
-              {message.text}
-            </ErrorText>
-          ) : reason ? (
-            <Text className="text-center text-xs text-muted-foreground" role="status">
-              {reason}
-            </Text>
-          ) : null}
-          {/* A page that didn't load is the moment the Wayback Machine is for, so it is
-              said in words here, not left to the top bar's icon. */}
-          {loadFailed && waybackHref ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="self-center"
-              testID="capture-wayback-load-failed"
-              onPress={() => openWayback(waybackHref)}
-            >
-              <Icon as={History} className="size-4 text-foreground" />
-              <Text>Open in Wayback Machine</Text>
-            </Button>
-          ) : null}
         </View>
       </>
     );
