@@ -1,0 +1,85 @@
+{/_ DRAFT, not published. To publish: move this file up to blog/, and add to index.ts:
+slug: 'large-libraries'
+title: 'Hundreds of lists, on a phone'
+description: 'With 300 lists and 300 tags, our iOS share sheet ran out of memory. We explain what used it, what we changed, and how we measured it.'
+publishedAt: the day a release with these changes is live on both stores
+Before publishing: check that the release carries the share sheet's new pickers and the read-mode copy file, and re-check every number against docs/share-sheet.md and docs/client-queries.md. _/}
+
+You can start Bracemark by importing your browser bookmarks. Years of browser folders can turn into hundreds of lists in one import. We wanted to know what that does to the app on a phone. So we made a test account with 300 lists and 300 tags and used the app the way you would.
+
+Parts of the app slowed down. One part stopped working: on an iPhone, the share sheet closed itself while you were choosing a list. This post explains why, and what we changed.
+
+## The share sheet has very little memory
+
+When you share a page from Safari to Bracemark, the sheet that opens is our iOS share extension. It is a small program of its own, separate from the app. iOS gives it a fixed amount of memory. On our test phone, an iPhone 12, that is 120 MiB. If the sheet goes over, iOS ends it at once. There is no error and no message. The sheet just disappears.
+
+Our [earlier post on the share sheet](/blog/saving-from-the-share-sheet) explains how we kept it small. With a normal library, it left about 88 MiB unused. But that test used a few dozen lists. We hadn’t tried a few hundred.
+
+The iPhone simulator on a Mac has no memory limit, so it can’t show this problem. So we tested a release build on the iPhone 12 itself. Each screen of the sheet writes its memory use to the phone’s log. It writes numbers only, never the link or its title. We read the log on a Mac after each run.
+
+## What used the memory
+
+We used the same steps each time. Share a page. Open the list picker, scroll to the bottom, type 3 letters to filter, and clear them. Do the same in the tags picker. Repeat that 10 times, then save.
+
+With 300 lists and 300 tags, the sheet got down to 2.4 MiB of free memory. iOS warned it 31 times. Then we shared a page with a very long read-mode copy, at the largest size we keep. iOS ended the sheet twice, both times in the list picker.
+
+Two things were using the memory.
+
+- **The pickers drew every row.** When you opened the list picker, it built all 300 rows at once, with their icons and names. Typing a filter swapped all of them for a new set, and clearing it swapped them back.
+- **The read-mode copy sat in memory.** When you share from Safari, Safari can hand us the page’s text, so you can keep it in read mode. That text went into the sheet itself and stayed there while you used the pickers. A copy at our size limit cost 10 to 20 MiB before you tapped anything.
+
+## What we changed
+
+**The pickers now draw only what you can see.** A picker builds about 12 rows when it opens, and about 30 at most as you scroll. The number is the same with 30 lists or 300. Moving to this kind of list was careful work. The pickers already had to handle 3 things. The keyboard could be open. You could tap a row while it was up. And iOS lets you swipe the sheet closed. All 3 still work the same way. A test now fails if either picker builds a 300-row library all at once again.
+
+**The read-mode copy now goes to a file.** Before the sheet draws, the share extension writes the page’s text to a file on your phone. The sheet only holds the file’s name. The text stays in memory only while we write the file. Then it is gone from the sheet. When the app takes in the saved link, it reads the file and then deletes it.
+
+## The numbers after
+
+We ran the same steps on the same iPhone 12. Every run below ended with Save, and the sheet closed itself as it should.
+
+| test                                     | free memory at its lowest, before | after    |
+| ---------------------------------------- | --------------------------------- | -------- |
+| 300 lists and 300 tags, a short page     | 2.4 MiB, with 31 warnings         | 62.9 MiB |
+| 300 lists and 300 tags, the largest copy | none — iOS ended the sheet, twice | 57.1 MiB |
+| 24 lists and 40 tags, a short page       | —                                 | 65.0 MiB |
+| 24 lists and 40 tags, a long article     | —                                 | 58.3 MiB |
+
+None of the runs after the change got a single memory warning.
+
+We also checked that the memory stops growing. Over 10 trips through both pickers, it climbs for the first few and then stays level. It doesn’t keep rising, so nothing is piling up.
+
+iOS often keeps the sheet’s program running between shares. So we shared the same article, closed the sheet, and did it again, 4 times in a row. Each time the sheet opened using between 36.6 and 38.3 MiB. Sharing again and again doesn’t make the sheet use more memory.
+
+## The same lists inside the app
+
+The app has its own pickers: Move to, and the dialogs that choose a list or tags. They had the same problem, but it showed as waiting rather than closing. With 300 lists, the app was busy for a moment each time one opened, and couldn’t respond to a tap. They now use the same kind of list as the share sheet.
+
+We measured how long the app was busy, on an iPhone simulator and an Android emulator. The longest single wait as each dialog opened, with 300 lists and 300 tags:
+
+| dialog        | iPhone, before → after | Android, before → after |
+| ------------- | ---------------------- | ----------------------- |
+| Move to       | 353 ms → 56 ms         | 678 ms → 58 ms          |
+| Choosing tags | 342 ms → 64 ms         | 259 ms → 67 ms          |
+
+A small library opens these dialogs just as fast as before.
+
+## The sidebar, measured both ways
+
+The sidebar, where your lists and tags live, needed more care. The kind of list that draws only what you see has a cost of its own. It has to measure and reuse its rows, and that work doesn’t shrink when the library does. With 24 lists and 40 tags, it made the sidebar 4 to 7 times slower than the simple way.
+
+So we measured both at 3 sizes, and the lines crossed at about 240 to 350 rows. The sidebar now uses the simple way below 300 lists and tags together, and the new way from 300 up. With 300 lists and 300 tags, we folded and unfolded the sidebar 5 times. On the iPhone simulator, the app was busy for 977 ms in total before the change and 454 ms after. On the Android emulator, it went from 3,581 ms to 879 ms.
+
+The switch counts your whole library, not what is showing. Folding a section or typing a filter never swaps one kind of list for the other while you use it.
+
+## How we test a big library
+
+We keep a set of test accounts. Each has a fixed library, so we can compare a test today with one next month. One is ordinary, with 1,000 links, 24 lists, and 40 tags. One is the worst case we could build. It has 109 lists nested 100 deep. Its names mix Arabic, Japanese, and emoji, and some are as long as we allow. The newest has 300 lists and 300 tags. We also built a page with a read-mode copy just under our size limit. It tests the largest copy the sheet can get.
+
+For this change, our automated tests ran on an Android phone emulator, an iPhone simulator, and an iPad simulator. They save links and move them. They edit lists and tags, and lock a list. They also share from Safari on iPhone and from another app on Android. All of them passed.
+
+## What it costs to build it this way
+
+Bracemark encrypts each link on your device before it syncs. That choice has costs, and a big library makes some of them easier to see. Search runs on each device, over the copy of your library that device has synced. We cannot reset your password, because we hold no key that opens your library. Your recovery code is the second way in. And there are no shared lists. [How encryption and search work](/docs/how-encryption-and-search-work) explains why.
+
+If you have a big library of bookmarks, [importing them](/docs/import) is the quickest way to try this. Share a page to Bracemark, open the list picker, and scroll. If anything is slow for you, [tell us](/support).

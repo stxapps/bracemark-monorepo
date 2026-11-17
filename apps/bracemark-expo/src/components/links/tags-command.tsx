@@ -1,13 +1,13 @@
-import { useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { View } from 'react-native';
 
 import { useTags } from '@stxapps/expo-react';
 import { flattenTree } from '@stxapps/shared';
 
 import { cn } from '../../lib/utils';
 import { Input } from '../ui/input';
-import { ScrollClaim } from '../ui/scroll-claim';
-import { TagPickerRows } from './tag-picker-rows';
+import { PickerList } from './picker-list';
+import { TagPickerCreateRow, TagPickerItem, type TagPickerRow } from './tag-picker-rows';
 
 // The searchable, multi-select tag picker body — the expo port of web-ui's
 // TagsCommand (that header is canonical: multi-select, so a press toggles and
@@ -82,6 +82,15 @@ export function TagsCommand({
     }
   };
 
+  const rows = useMemo(() => {
+    const selected = new Set(value);
+    return visible.map((option) => ({ ...option, selected: selected.has(option.id) }));
+  }, [visible, value]);
+  const renderRow = useCallback(
+    ({ item }: { item: TagPickerRow }) => <TagPickerItem row={item} onToggle={onToggle} />,
+    [onToggle],
+  );
+
   return (
     // `shrink` on the wrapper AND the scroller: the host dialog is bounded by
     // what the keyboard leaves (dialog.tsx's `max-h-full`), and RN children
@@ -101,32 +110,32 @@ export function TagsCommand({
         aria-label="Search or create tags"
         className="h-9"
       />
-      {/* `interactive` for list-command.tsx's reason: the host Dialog
-          re-centres and this list regrows when the keyboard leaves, so
-          `on-drag` jumped the rows under the finger. The input is
-          `submitBehavior="submit"`, so return never blurs — the exits are
-          DialogContent's chrome tap, `"handled"` here, and (iOS) a drag down
-          into the keys. */}
-      <ScrollView
+      {/* VIRTUALIZED (PickerList, a FlatList) for list-command.tsx's reason,
+          and `interactive` for it too: the host Dialog re-centres and this list
+          regrows when the keyboard leaves, so `on-drag` jumped the rows under
+          the finger. The input is `submitBehavior="submit"`, so return never
+          blurs — the exits are DialogContent's chrome tap, `"handled"`, and
+          (iOS) a drag down into the keys. */}
+      <PickerList
         testID="tag-picker-rows"
         className={cn('max-h-80 shrink', className)}
         nestedScrollEnabled
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="interactive"
-      >
-        {/* ScrollClaim: list-command.tsx's reason. */}
-        <ScrollClaim>
-          <TagPickerRows
-            rows={visible.map((option) => ({ ...option, selected: value.includes(option.id) }))}
-            onToggle={onToggle}
-            emptyText="No tags found."
-            createName={canCreate ? trimmed : undefined}
-            creating={creating}
-            onCreate={canCreate ? () => void create() : undefined}
-            createTestID="tag-picker-create"
-          />
-        </ScrollClaim>
-      </ScrollView>
+        data={rows}
+        keyExtractor={(row) => row.id}
+        renderItem={renderRow}
+        extraData={renderRow}
+        emptyText={rows.length === 0 && !canCreate ? 'No tags found.' : undefined}
+        footer={
+          canCreate ? (
+            <TagPickerCreateRow
+              name={trimmed}
+              creating={creating}
+              onCreate={() => void create()}
+              testID="tag-picker-create"
+            />
+          ) : null
+        }
+      />
     </View>
   );
 }

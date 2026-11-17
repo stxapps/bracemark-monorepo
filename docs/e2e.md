@@ -4120,13 +4120,33 @@ Then, once and in whatever layout was picked last, the tree legs:
 - **settings**: from Settings → Misc, a switch to About, to Lists and to Tags,
   each window closed once the section's rows are in
   (`flows/render-settings.yaml`). The report has one row per section.
+- **dialogs** (native only): from the bulk bar with every link selected
+  (`flows/bulk-enter.yaml`), TOGGLES open/close pairs of the Move to dialog
+  (`dialogs-move`, ListCommand's tree) and of the Edit tags dialog
+  (`dialogs-tags`, TagsCommand's rows) — the pickers a link is filed with
+  (`flows/render-dialogs.yaml`). From the bulk bar and not a row's menu because
+  the row menu's Edit tags pushes the editor screen, which covers the probe's
+  controls. Web's pickers are cmdk lists, and a web run skips the leg. ⚠ The
+  probe's controls sit at `bottom-36` for this leg: flush with the bottom they
+  lay over the bulk bar's buttons, the flow's tap on Move to landed on a probe
+  control, and the dialog never opened.
 
-`--legs` picks any of `scroll,rail,sidebar,settings` (all four by default).
+`--legs` picks any of `scroll,rail,sidebar,settings,dialogs` (all by default).
 `--library worst` restores the `plus-worst` library (109 lists down a 100-deep
 chain, 100 tags, names at their bounds) instead of the `plus-full` shape, and
-refuses a `--links` beside it: that library's size is fixed. The tree legs are
-what it is for. `plus-full`'s 24 lists and 40 tags are not where anyone feels
-the tree surfaces.
+`--library large` the `plus-large` one (300 lists, 300 tags; `seed/large.ts`)
+— shape and count, the two ways a tree gets big. Both refuse a `--links`
+beside them: their size is fixed. The tree legs are what they are for.
+`plus-full`'s 24 lists and 40 tags are not where anyone feels the tree surfaces
+— which is also why a change to them is read on `plus-full` too: it is where a
+virtualizer's own overhead would show, with nothing to virtualize.
+
+⚠ **Clear Metro's transform cache between a production Metro of your own and a
+run** (`rm -rf "$TMPDIR/metro-cache"`). `EXPO_PUBLIC_MEASURE_STALLS` is inlined
+at transform time, so a cache warmed by `expo start --no-dev --minify` without it
+serves a bundle with no probe: the run's bundle check passes — the readout's
+testID is in the code either way — and the first leg fails on a
+`measure-begin-*` control that is not on screen.
 
 Each leg runs `--repeat` times (3 by default) and the report prints every run
 and the median. Why it is built the way it is:

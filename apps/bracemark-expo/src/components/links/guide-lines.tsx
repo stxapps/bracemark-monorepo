@@ -3,7 +3,7 @@
 // Both list pickers draw them: the in-app ListCommand and the share sheet's
 // snapshot-fed copy, which is why this is its own leaf module rather than an
 // export of either (the share bundle may reach a presentational file under
-// components/links — it already takes TagPickerRows — but not list-command.tsx,
+// components/links — it already takes tag-picker-rows.tsx — but not list-command.tsx,
 // whose live `useLists` read is the whole thing that file is kept away from.
 // docs/share-sheet.md, _keep index.share.js lean_).
 //

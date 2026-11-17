@@ -15,7 +15,7 @@ import { API_URL, CHROME_PATH, WEB_URL } from '../web/fixtures/env';
 import { launchApp } from '../web/fixtures/launch';
 import { openSidebarItem } from '../web/fixtures/links';
 import { grantPlusAndLoad } from '../web/fixtures/plan';
-import { writeBackupLibrary, writeWorstBackup } from './library';
+import { writeBackupLibrary, writeLargeBackup, writeWorstBackup } from './library';
 import { calibrate, type Calibration, instrument, type LegResult, measureLeg } from './main-thread';
 import { printTable } from './native';
 
@@ -68,8 +68,11 @@ const LAYOUTS = { list: 'List', card: 'Card' } as const;
 type Layout = keyof typeof LAYOUTS;
 
 // The legs, in run order. scroll and rail run per layout; the tree legs once.
-// Shared with render-mobile.ts, which runs the same four.
-export const LEGS = ['scroll', 'rail', 'sidebar', 'settings'] as const;
+// Shared with render-mobile.ts, which runs the same four and one more:
+// `dialogs`, the Move and Tags pickers a link row opens — expo's mount every row
+// in a dialog's ScrollView where web's are cmdk lists, so it is native-only and a
+// web run skips it.
+export const LEGS = ['scroll', 'rail', 'sidebar', 'settings', 'dialogs'] as const;
 export type Leg = (typeof LEGS)[number];
 
 export function parseLegs(raw: string): Leg[] {
@@ -79,12 +82,15 @@ export function parseLegs(raw: string): Leg[] {
   return names as Leg[];
 }
 
-// Which library the run restores — `plus-full`'s shape scaled to `--links`, or
-// `plus-worst` as it is.
-export type Library = 'full' | 'worst';
+// Which library the run restores — `plus-full`'s shape scaled to `--links`,
+// `plus-worst` as it is, or `plus-large`'s 300 lists and 300 tags as they are
+// (seed/large.ts): the tree legs by shape, and by count.
+export type Library = 'full' | 'worst' | 'large';
 
 export function parseLibrary(raw: string): Library {
-  if (raw !== 'full' && raw !== 'worst') throw new Error('--library is full or worst');
+  if (raw !== 'full' && raw !== 'worst' && raw !== 'large') {
+    throw new Error('--library is full, worst or large');
+  }
   return raw;
 }
 
@@ -205,11 +211,12 @@ function parseOptions(argv: string[]): Options {
   return options;
 }
 
-// `--links` sizes the `plus-full` shape; `plus-worst` is a fixed literal, so a
-// count beside it would be silently ignored, and a reading labelled with it wrong.
+// `--links` sizes the `plus-full` shape; `plus-worst` and `plus-large` are fixed,
+// so a count beside them would be silently ignored, and a reading labelled with
+// it wrong.
 export function assertLibraryLinks(library: Library, linksGiven: boolean): void {
-  if (library === 'worst' && linksGiven) {
-    throw new Error('--links sizes the plus-full library; --library worst has a fixed size');
+  if (library !== 'full' && linksGiven) {
+    throw new Error(`--links sizes the plus-full library; --library ${library} has a fixed size`);
   }
 }
 
@@ -276,7 +283,7 @@ async function main(): Promise<void> {
     calibration,
     browser: chrome.stdout.trim() || 'unknown',
     library: options.library,
-    links: options.library === 'worst' ? null : options.links,
+    links: options.library === 'full' ? options.links : null,
     wheels: options.wheels,
     toggles: options.toggles,
     checkout: { commit: commit.stdout.trim(), dirty: status.stdout.trim().length > 0 },
@@ -304,6 +311,13 @@ export async function restoreLibrary(
     const backup = join(runDir, 'backup-worst.zip');
     await writeWorstBackup(backup);
     console.log('restoring the plus-worst library…');
+    await importBackup(page, backup);
+    return;
+  }
+  if (library === 'large') {
+    const backup = join(runDir, 'backup-large.zip');
+    await writeLargeBackup(backup);
+    console.log('restoring the plus-large library…');
     await importBackup(page, backup);
     return;
   }

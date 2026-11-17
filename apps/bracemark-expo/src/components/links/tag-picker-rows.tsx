@@ -33,55 +33,10 @@ export type TagPickerRow = {
   selected: boolean;
 };
 
-export function TagPickerRows({
-  rows,
-  onToggle,
-  emptyText,
-  createName,
-  creating = false,
-  onCreate,
-  testIDForRow,
-  createTestID,
-}: {
-  rows: TagPickerRow[];
-  onToggle: (id: string) => void;
-  emptyText?: string;
-  createName?: string;
-  creating?: boolean;
-  onCreate?: () => void;
-  testIDForRow?: (row: TagPickerRow) => string | undefined;
-  createTestID?: string;
-}) {
-  return (
-    <>
-      {rows.length === 0 && createName === undefined && emptyText !== undefined && (
-        <TagPickerEmpty text={emptyText} />
-      )}
-
-      {rows.map((row) => (
-        <TagPickerItem key={row.id} row={row} testID={testIDForRow?.(row)} onToggle={onToggle} />
-      ))}
-
-      {createName !== undefined && onCreate !== undefined && (
-        <TagPickerCreateRow
-          name={createName}
-          creating={creating}
-          onCreate={onCreate}
-          testID={createTestID}
-        />
-      )}
-    </>
-  );
-}
-
-// The three pieces TagPickerRows composes, exported for a host that lays the
-// rows out itself — the share sheet's tag picker, which hands them to a
-// FlatList so only the rows on screen are mounted (docs/share-sheet.md, _300
-// lists and 300 tags, and a copy at the cap_). Same markup either way.
-
-export function TagPickerEmpty({ text }: { text: string }) {
-  return <Text className="py-6 text-center text-sm text-muted-foreground">{text}</Text>;
-}
+// The two pieces a tag picker lays out — one row per tag, and the Create row
+// beneath them — for a host that puts them in its own scroller: TagsCommand and
+// the share sheet's tag picker both hand them to PickerList (picker-list.tsx), a
+// FlatList, so only the rows on screen are mounted.
 
 export const TagPickerItem = memo(function TagPickerItem({
   row,

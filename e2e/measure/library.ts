@@ -5,6 +5,7 @@ import { type Extraction, EXTRACTIONS_PREFIX } from '@stxapps/shared';
 
 import { buildBackupArchive } from '../seed/archive';
 import { seedUser } from '../seed/catalog';
+import { buildLargeLibrary } from '../seed/large';
 import { buildLibrary } from '../seed/library';
 import { buildWorstLibrary } from '../seed/worst';
 
@@ -114,6 +115,17 @@ export async function writeBackupLibrary(
 export async function writeWorstBackup(path: string): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, buildBackupArchive(buildWorstLibrary({ now: Date.now() })));
+}
+
+// A Bracemark backup of the `plus-large` library (seed/large.ts): 300 lists and
+// 300 tags, the most a library is by count rather than by shape. Fixed, like
+// `plus-worst`. The render leg's tree legs restore it (`--library large`) — at
+// this size the iOS share sheet's list picker, every row mounted, took the share
+// extension to its memory cap (docs/share-sheet.md), and the in-app pickers and
+// the sidebar mount the same rows.
+export async function writeLargeBackup(path: string): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, buildBackupArchive(buildLargeLibrary({ now: Date.now() })));
 }
 
 // Every `seed-link-<n>` — a link's path, its extraction's and its pin's, and the

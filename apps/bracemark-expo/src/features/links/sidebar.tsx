@@ -17,10 +17,20 @@
 // no `title` tooltip to read a truncated name by, so a long-press shows it —
 // `Peek`, below).
 
-import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  memo,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Keyboard, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDrawerStatus } from '@react-navigation/drawer';
+import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
 import {
   Archive,
@@ -80,6 +90,31 @@ const StyledSafeAreaView = withUniwind(SafeAreaView);
 // as noise (web sidebar's FILTER_MIN_ITEMS, verbatim).
 const FILTER_MIN_ITEMS = 12;
 
+// The filter's no-match result, stable so the entries' memo holds unfiltered.
+const NO_MATCHES: { item: TreeItem & { name: string } }[] = [];
+
+// From how many rows (lists + tags, the whole library) the rail is a FlashList
+// rather than a ScrollView filled a slice a frame (lib/use-progressive-count.ts).
+// MEASURED, both ways, by the render leg's sidebar window (docs/e2e.md, _the
+// render leg_; docs/client-queries.md, _the tree surfaces mount every row_),
+// 2026-11-16, iPhone 17 Pro simulator and Pixel 8 emulator — five
+// collapse/expand pairs of both sections, total blocking (median of three):
+//
+//                         ScrollView, sliced      FlashList
+//   plus-full    (~64)    iOS 53     Android 168   iOS 387   Android 715
+//   plus-worst  (~212)    iOS 213    Android 792   iOS 500   Android 968
+//   plus-large  (~600)    iOS 977    Android 3,581 iOS 454   Android 879   (ms)
+//
+// A ScrollView pays per row; FlashList pays a near-constant price for its own
+// measuring and recycling, which a small library never earns back. The lines
+// cross at ~240 rows on the emulator and ~350 on the simulator; 300 sits between.
+// (FlashList drops fewer frames at every size — the sliced fill is many short
+// frames — but the stall a person feels is the blocking.)
+const VIRTUALIZE_MIN_ROWS = 300;
+
+// The rail's content inset — `px-2 pb-4`, as the ScrollView it replaced carried.
+const NAV_CONTENT_PADDING = { paddingHorizontal: 8, paddingBottom: 16 };
+
 // useTags' own empty default, stable so the trees' memos hold while pending.
 const NO_TAGS: TreeNode<TagItem>[] = [];
 
@@ -137,10 +172,6 @@ function listIcon(id: string): LucideIcon {
   if (id === ARCHIVE_ID) return Archive;
   if (id === TRASH_ID) return Trash2;
   return Folder;
-}
-
-function hashIcon(): LucideIcon {
-  return Hash;
 }
 
 // The row's stable handle for the mobile flows (docs/e2e.md, _the testID
@@ -221,6 +252,7 @@ const NavItem = memo(function NavItem({
   action,
   onPeek,
   onPeekEnd,
+  spaced = false,
 }: {
   icon: LucideIcon;
   label: string;
@@ -258,6 +290,10 @@ const NavItem = memo(function NavItem({
   // `onPress` on the release of a press its long-press fired on.
   onPeek?: PeekHandler;
   onPeekEnd?: () => void;
+  // The 2px above a section's row — what the section's `gap-0.5` gave it when
+  // the rows were children of a section view. A margin on the row's own view, not
+  // a wrapper: a View per row is cost on the path that mounts every row.
+  spaced?: boolean;
 }) {
   const selection = selectionOf(kind, id);
   const rowRef = useRef<View>(null);
@@ -270,7 +306,7 @@ const NavItem = memo(function NavItem({
   // The trailing action takes its own `ml-1` for the same 4px the gap gave it.
   return (
     <View
-      className="w-full flex-row items-center"
+      className={cn('w-full flex-row items-center', spaced && 'mt-0.5')}
       // Capped at TREE_INDENT_MAX_LEVELS_NARROW (@stxapps/shared sync/tree.ts): past it
       // a deep chain's labels had no width left, so the row numbers its level.
       style={
@@ -346,131 +382,255 @@ const NavItem = memo(function NavItem({
   );
 });
 
-// One forest → rows, parents before their children, each indented by its
-// depth; collapsed parents keep their subtree unrendered. Generic over lists
-// and tags — the two differ only in icon and selection kind.
+// What the rail scrolls: ONE flat array — each section's header, its rows (or
+// the line that stands in for them), and the utility band — handed to a single
+// FlashList, so only the entries on screen are mounted, once the library is big
+// enough for that to pay (VIRTUALIZE_MIN_ROWS); below it, the same entries in a
+// ScrollView, a slice a frame.
 //
-// Rendered FLAT, from `flattenToRows`, not by a component that renders itself
-// for each node's children (web's sidebar, verbatim): a row is indented by
-// padding and never nested in its parent's view, so the output is the same, but
-// a self-rendering component makes the React tree as deep as the list tree —
-// which is as deep as a `parentId` chain a restored backup or another device
-// decides (@stxapps/shared sync/tree.ts) — and React's commit walks its tree
-// with a call frame per level.
+// ⚠ VIRTUALIZED, because nothing bounds how many lists or tags a library holds
+// (docs/data-limits.md, _counts: none per kind_). The rail mounts with the links
+// screen, and it used to mount every row: in the links screen's first commits,
+// again each time a section opened, and (on a phone) under the drawer's slide —
+// a screenful a frame (lib/use-progressive-count.ts) at best, the whole tree's
+// native mounting at worst (docs/client-queries.md, _the tree surfaces mount
+// every row_). A section is no longer a view wrapping its rows: its header is an
+// entry like they are, and a collapsed one simply contributes no rows.
 //
-// And rendered a screenful first, the rest a slice a frame
-// (lib/use-progressive-count.ts): the rail mounts with the links screen, so a
-// big tree's every row used to land in the links screen's first commits, and
-// again in one commit each time its section is opened.
-function NavTree<T extends TreeItem & { name: string }>({
-  nodes,
-  kind,
-  iconFor,
-  activeId,
-  onSelect,
+// Rows stay FLAT, from `flattenToRows`, as they were before the list existed: a
+// row is indented by padding and never nested in its parent's view, so the
+// React tree stays shallow however deep a `parentId` chain a restored backup or
+// another device decides (@stxapps/shared sync/tree.ts).
+type NavEntry =
+  | {
+      type: 'header';
+      key: string;
+      id: string;
+      label: string;
+      // The header's handle for the mobile flows (docs/e2e.md, _the testID
+      // contract_) — the label is ambiguous with "Manage lists" and with a list
+      // the user named "Lists".
+      testID: string;
+      collapsed: boolean;
+    }
+  | {
+      type: 'list' | 'tag';
+      key: string;
+      id: string;
+      name: string;
+      depth: number;
+      // Present only on a tree row with children: whether its subtree shows.
+      expanded?: boolean;
+      // A tree row reserves the chevron's slot and indents; a filter match is
+      // flat, like the find-in-list it is.
+      tree: boolean;
+      active: boolean;
+    }
+  | { type: 'note'; key: string; text: string }
+  | { type: 'band'; key: string; active: boolean };
+
+function navEntries({
+  lists,
+  tags,
+  tagsLoaded,
   collapsed,
-  onToggle,
-  badgeFor,
-  actionFor,
-  onPeek,
-  onPeekEnd,
+  filtering,
+  listMatches,
+  tagMatches,
+  activeListId,
+  activeTagId,
+  allActive,
 }: {
-  nodes: TreeNode<T>[];
-  kind: 'list' | 'tag';
-  iconFor: (id: string) => LucideIcon;
-  activeId: string | null;
-  onSelect: (selection: Selection) => void;
+  lists: TreeNode<TreeItem & { name: string }>[];
+  tags: TreeNode<TreeItem & { name: string }>[];
+  tagsLoaded: boolean;
   collapsed: ReadonlySet<string>;
-  onToggle: (id: string) => void;
-  badgeFor?: (id: string) => ReactNode;
-  actionFor?: (id: string) => ReactNode;
-  onPeek: PeekHandler;
-  onPeekEnd: () => void;
-}) {
-  const rows = useMemo(() => flattenToRows(nodes, collapsed), [nodes, collapsed]);
-  const shown = useProgressiveCount(rows.length);
-  return (
-    <>
-      {rows.slice(0, shown).map(({ item, depth, hasChildren, parentId }) => (
-        <NavItem
-          // Scoped to the sibling group, as a key was when each level was its own
-          // list: a row that changes parent remounts, and a store holding one id
-          // twice under different parents does not hand React two equal keys.
-          key={`${parentId ?? ''}/${item.id}`}
-          icon={iconFor(item.id)}
-          label={item.name}
-          kind={kind}
-          id={item.id}
-          active={item.id === activeId}
-          onSelect={onSelect}
-          depth={depth}
-          expanded={hasChildren ? !collapsed.has(item.id) : undefined}
-          onToggle={hasChildren ? onToggle : undefined}
-          showSlot
-          badge={badgeFor?.(item.id)}
-          action={actionFor?.(item.id)}
-          onPeek={onPeek}
-          onPeekEnd={onPeekEnd}
-        />
-      ))}
-    </>
+  filtering: boolean;
+  listMatches: { item: TreeItem & { name: string } }[];
+  tagMatches: { item: TreeItem & { name: string } }[];
+  activeListId: string | null;
+  activeTagId: string | null;
+  allActive: boolean;
+}): NavEntry[] {
+  const out: NavEntry[] = [];
+  const section = (
+    kind: 'list' | 'tag',
+    id: string,
+    label: string,
+    testID: string,
+    nodes: TreeNode<TreeItem & { name: string }>[],
+    matches: { item: TreeItem & { name: string } }[],
+    activeId: string | null,
+    empty: string | null,
+  ) => {
+    // `filtering` overrides a stored collapse, so matches are never hidden
+    // behind a collapsed header (web parity).
+    const isCollapsed = !filtering && collapsed.has(id);
+    out.push({ type: 'header', key: `header:${kind}`, id, label, testID, collapsed: isCollapsed });
+    if (isCollapsed) return;
+    if (filtering) {
+      if (matches.length === 0) {
+        out.push({
+          type: 'note',
+          key: `note:${kind}`,
+          text: kind === 'list' ? 'No matching lists' : 'No matching tags',
+        });
+      }
+      for (const { item } of matches) {
+        out.push({
+          type: kind,
+          key: `${kind}-match:${item.id}`,
+          id: item.id,
+          name: item.name,
+          depth: 0,
+          tree: false,
+          active: item.id === activeId,
+        });
+      }
+      return;
+    }
+    if (empty !== null) {
+      out.push({ type: 'note', key: `note:${kind}`, text: empty });
+      return;
+    }
+    for (const { item, depth, hasChildren, parentId } of flattenToRows(nodes, collapsed)) {
+      out.push({
+        type: kind,
+        // Scoped to the sibling group, as a key was when each level was its own
+        // list: a row that changes parent remounts, and a store holding one id
+        // twice under different parents does not hand the list two equal keys.
+        key: `${kind}:${parentId ?? ''}/${item.id}`,
+        id: item.id,
+        name: item.name,
+        depth,
+        expanded: hasChildren ? !collapsed.has(item.id) : undefined,
+        tree: true,
+        active: item.id === activeId,
+      });
+    }
+  };
+
+  section(
+    'list',
+    SECTION_LISTS,
+    'Lists',
+    'links-nav-section-lists',
+    lists,
+    listMatches,
+    activeListId,
+    null,
   );
+  // Tags are all user-created — no system tag — so this section is empty until
+  // the user makes one; and says nothing until the read has landed.
+  if (!tagsLoaded && !filtering) {
+    out.push({
+      type: 'header',
+      key: 'header:tag',
+      id: SECTION_TAGS,
+      label: 'Tags',
+      testID: 'links-nav-section-tags',
+      collapsed: collapsed.has(SECTION_TAGS),
+    });
+  } else {
+    section(
+      'tag',
+      SECTION_TAGS,
+      'Tags',
+      'links-nav-section-tags',
+      tags,
+      tagMatches,
+      activeTagId,
+      tags.length === 0 ? 'No tags yet' : null,
+    );
+  }
+  // The utility band — hidden while filtering: none of it is a list or tag, so a
+  // find-in-nav query never matches it; clearing the box brings it back.
+  if (!filtering) out.push({ type: 'band', key: 'band', active: allActive });
+  return out;
 }
 
-// A collapsible section: a disclosure-button header (chevron + uppercase
-// label) over its rows. `forceOpen` overrides the stored collapse — used while
-// filtering so matches are never hidden behind a collapsed header (web parity).
-function Section({
+// Below VIRTUALIZE_MIN_ROWS the entries go into a ScrollView, each section's rows
+// a screenful in the commit that mounts them and the rest a slice a frame
+// (lib/use-progressive-count.ts) — what the rail did before the FlashList, and
+// still the cheaper path at this size. Per SECTION, as it was: a collapsed
+// section renders no group, so opening it again fills from the first slice
+// rather than committing every row it holds at once.
+type Segment =
+  { key: string; entry: NavEntry; rows?: undefined } | { key: string; rows: NavEntry[] };
+
+function slicedSegments(entries: readonly NavEntry[]): Segment[] {
+  const out: Segment[] = [];
+  let rows: NavEntry[] | null = null;
+  for (const entry of entries) {
+    if (entry.type === 'list' || entry.type === 'tag') {
+      if (!rows) {
+        rows = [];
+        out.push({ key: `rows:${entry.type}`, rows });
+      }
+      rows.push(entry);
+    } else {
+      rows = null;
+      out.push({ key: entry.key, entry });
+    }
+  }
+  return out;
+}
+
+function SlicedEntries({
+  entries,
+  render,
+}: {
+  entries: NavEntry[];
+  render: (info: { item: NavEntry }) => ReactNode;
+}) {
+  const shown = useProgressiveCount(entries.length);
+  return entries
+    .slice(0, shown)
+    .map((entry) => <Fragment key={entry.key}>{render({ item: entry })}</Fragment>);
+}
+
+// A section's header: a disclosure button (chevron + uppercase label) that
+// collapses and expands the section's rows.
+function SectionHeader({
   id,
   label,
   testID,
   collapsed,
   onToggle,
-  forceOpen = false,
-  children,
 }: {
   id: string;
   label: string;
-  // The header's handle for the mobile flows (docs/e2e.md, _the testID
-  // contract_) — the label is ambiguous with "Manage lists" and with a list
-  // the user named "Lists".
   testID: string;
-  collapsed: ReadonlySet<string>;
+  collapsed: boolean;
   onToggle: (id: string) => void;
-  forceOpen?: boolean;
-  children: React.ReactNode;
 }) {
-  const isCollapsed = !forceOpen && collapsed.has(id);
   return (
-    <View className="flex-col gap-0.5">
-      <Pressable
-        role="button"
-        testID={testID}
-        onPress={() => onToggle(id)}
-        aria-expanded={!isCollapsed}
-        // `pt-4 pb-1` — asymmetric on purpose, and NOT the split the web twin
-        // takes. There the section's top space had to move out onto the wrapper,
-        // because the button's box is what the focus ring outlines and the label
-        // sat jammed against the bottom of it. Nothing outlines this box: no
-        // focus ring, and this Pressable paints no pressed state. What the
-        // padding buys here instead is the TARGET — 16 + a 16px line + 4 = the
-        // 36px rung expo's pointer targets sit on (docs/accessibility.md). Move
-        // the 16 onto the wrapper for web parity and the row becomes 24px tall,
-        // thumb-sized for nothing.
-        className="w-full flex-row items-center gap-1 rounded-md px-2 pt-4 pb-1"
-      >
-        {/* Glyph swap, not a rotation — see the NavItem chevron above for why a
-            `rotate-90` class is silently inert here. */}
-        <Icon
-          as={isCollapsed ? ChevronRight : ChevronDown}
-          className="size-3.5 text-muted-foreground"
-        />
-        <Text className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-          {label}
-        </Text>
-      </Pressable>
-      {!isCollapsed && children}
-    </View>
+    <Pressable
+      role="button"
+      testID={testID}
+      onPress={() => onToggle(id)}
+      aria-expanded={!collapsed}
+      // `pt-4 pb-1` — asymmetric on purpose, and NOT the split the web twin
+      // takes. There the section's top space had to move out onto the wrapper,
+      // because the button's box is what the focus ring outlines and the label
+      // sat jammed against the bottom of it. Nothing outlines this box: no
+      // focus ring, and this Pressable paints no pressed state. What the
+      // padding buys here instead is the TARGET — 16 + a 16px line + 4 = the
+      // 36px rung expo's pointer targets sit on (docs/accessibility.md). Move
+      // the 16 onto the wrapper for web parity and the row becomes 24px tall,
+      // thumb-sized for nothing.
+      className="w-full flex-row items-center gap-1 rounded-md px-2 pt-4 pb-1"
+    >
+      {/* Glyph swap, not a rotation — see the NavItem chevron above for why a
+          `rotate-90` class is silently inert here. */}
+      <Icon
+        as={collapsed ? ChevronRight : ChevronDown}
+        className="size-3.5 text-muted-foreground"
+      />
+      <Text className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -532,6 +692,8 @@ export function Sidebar({
     },
     [setSimpleQuery],
   );
+  // The footer links' close, stable for the same reason.
+  const closeDrawerNow = useCallback(() => closeDrawerRef.current(), []);
   const activeListId = activeIdFor(selection, 'list');
   const activeTagId = activeIdFor(selection, 'tag');
   const { hiddenListIds, listLocks, lockList } = useLocks();
@@ -585,16 +747,24 @@ export function Sidebar({
   const listRows = useMemo(() => flattenTree(visibleLists), [visibleLists]);
   const tagRows = useMemo(() => flattenTree(tags), [tags]);
   const showFilter = listRows.length + tagRows.length >= FILTER_MIN_ITEMS;
+  // Which scroller (VIRTUALIZE_MIN_ROWS, above): counted over the whole library,
+  // not the rows a collapse or a filter leaves showing, so folding a section never
+  // swaps one list for the other under the finger.
+  const virtualize = listRows.length + tagRows.length >= VIRTUALIZE_MIN_ROWS;
 
   const q = filter.trim().toLowerCase();
   // Only actually filter while the box is shown: if the account shrinks below
   // the gate with stale text in state, the (now hidden) box mustn't keep the
   // trees filtered.
   const filtering = showFilter && q !== '';
-  const listMatches = filtering
-    ? listRows.filter((n) => n.item.name.toLowerCase().includes(q))
-    : [];
-  const tagMatches = filtering ? tagRows.filter((n) => n.item.name.toLowerCase().includes(q)) : [];
+  const listMatches = useMemo(
+    () => (filtering ? listRows.filter((n) => n.item.name.toLowerCase().includes(q)) : NO_MATCHES),
+    [filtering, listRows, q],
+  );
+  const tagMatches = useMemo(
+    () => (filtering ? tagRows.filter((n) => n.item.name.toLowerCase().includes(q)) : NO_MATCHES),
+    [filtering, tagRows, q],
+  );
 
   // Keep the active row reachable: expand its collapsed ancestors whenever the
   // selection (or the trees it lives in) changes — a selection can arrive from
@@ -637,10 +807,13 @@ export function Sidebar({
 
   // A lock marker on rows that carry their OWN engaged lock (children a lock
   // merely covers stay unmarked — the locked ancestor is the visual cue).
-  const listBadge = (id: string) =>
-    listLocks.get(id)?.locked ? (
-      <Icon as={Lock} className="size-3.5 text-muted-foreground" accessibilityLabel="Locked" />
-    ) : undefined;
+  const listBadge = useCallback(
+    (id: string) =>
+      listLocks.get(id)?.locked ? (
+        <Icon as={Lock} className="size-3.5 text-muted-foreground" accessibilityLabel="Locked" />
+      ) : undefined,
+    [listLocks],
+  );
 
   // A one-tap "Lock now" for a row's OWN lock while it's currently UNLOCKED —
   // re-engages it in-memory (no password; relocking is free). Only these rows
@@ -655,21 +828,141 @@ export function Sidebar({
   // re-prunes it from this rail on the next coverage recompute, so it simply
   // disappears. Web parity: sidebar.tsx's hover-revealed button (native has no
   // hover, so it's always shown).
-  const listAction = (id: string) => {
-    const info = listLocks.get(id);
-    if (!info || info.locked) return undefined;
-    return (
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Lock list"
-        onPress={() => lockList(id)}
-        className="ml-1 size-8 shrink-0"
-      >
-        <Icon as={LockOpen} className="size-3.5 text-muted-foreground" />
-      </Button>
-    );
-  };
+  const listAction = useCallback(
+    (id: string) => {
+      const info = listLocks.get(id);
+      if (!info || info.locked) return undefined;
+      return (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Lock list"
+          onPress={() => lockList(id)}
+          className="ml-1 size-8 shrink-0"
+        >
+          <Icon as={LockOpen} className="size-3.5 text-muted-foreground" />
+        </Button>
+      );
+    },
+    [listLocks, lockList],
+  );
+
+  // Everything the rail scrolls, as one flat array (navEntries, above).
+  const allActive = selection.kind === 'all';
+  const entries = useMemo(
+    () =>
+      navEntries({
+        lists: visibleLists,
+        tags,
+        tagsLoaded: loadedTags !== undefined,
+        collapsed,
+        filtering,
+        listMatches,
+        tagMatches,
+        activeListId,
+        activeTagId,
+        allActive,
+      }),
+    [
+      visibleLists,
+      tags,
+      loadedTags,
+      collapsed,
+      filtering,
+      listMatches,
+      tagMatches,
+      activeListId,
+      activeTagId,
+      allActive,
+    ],
+  );
+
+  // One entry. Everything it reads besides the entry is in the dependencies, so
+  // it doubles as the list's `extraData`: a lock engaged or released re-renders
+  // the rows on screen. A row's `spaced` and a note's `mt-0.5` are the 2px a
+  // section's `gap-0.5` used to put between its header and each of its rows.
+  const renderEntry = useCallback(
+    ({ item: entry }: { item: NavEntry }) => {
+      switch (entry.type) {
+        case 'header':
+          return (
+            <SectionHeader
+              id={entry.id}
+              label={entry.label}
+              testID={entry.testID}
+              collapsed={entry.collapsed}
+              onToggle={toggle}
+            />
+          );
+        case 'note':
+          return (
+            // `pl-6` parks the text under the section header's LABEL rather
+            // than under the rows it stands in for — an empty section has no
+            // row to align to, and a row's own text sits at 36px (matches) or
+            // 72px (tree rows, past the chevron slot), both of which read as
+            // indented for a one-line placeholder. This header's label starts
+            // at 26px (`px-2` + `size-3.5` chevron + `gap-1`), so 24px is the
+            // near miss we accept. Web makes the same CHOICE against its own
+            // header but lands on a different NUMBER (`pl-5.5`, 22px) — this
+            // side's chrome is a size up throughout, so the two files agree on
+            // the rule, not on the value. Don't sync them by hand.
+            <Text className="mt-0.5 py-1 pr-2 pl-6 text-xs text-muted-foreground">
+              {entry.text}
+            </Text>
+          );
+        case 'band':
+          return (
+            // Utility band: the Show All reset, a separator, then the Manage
+            // links out to settings (web's footer band).
+            <View className="mt-3 flex-col gap-0.5 border-t border-border pt-2">
+              <NavItem
+                icon={Layers}
+                label={ALL_LABEL}
+                kind="all"
+                active={entry.active}
+                onSelect={select}
+              />
+              <View className="my-1 border-t border-border" />
+              <FooterLink
+                icon={Settings2}
+                label="Manage lists"
+                href="/settings/lists"
+                onSelected={closeDrawerNow}
+              />
+              <FooterLink
+                icon={Settings2}
+                label="Manage tags"
+                href="/settings/tags"
+                onSelected={closeDrawerNow}
+              />
+            </View>
+          );
+        default: {
+          const isList = entry.type === 'list';
+          return (
+            <NavItem
+              spaced
+              icon={isList ? listIcon(entry.id) : Hash}
+              label={entry.name}
+              kind={entry.type}
+              id={entry.id}
+              active={entry.active}
+              onSelect={select}
+              depth={entry.depth}
+              expanded={entry.expanded}
+              onToggle={entry.expanded !== undefined ? toggle : undefined}
+              showSlot={entry.tree}
+              badge={isList ? listBadge(entry.id) : undefined}
+              action={isList ? listAction(entry.id) : undefined}
+              onPeek={showPeek}
+              onPeekEnd={endPeek}
+            />
+          );
+        }
+      }
+    },
+    [toggle, select, closeDrawerNow, listBadge, listAction, showPeek, endPeek],
+  );
 
   return (
     // `bg-popover` and a `border-r`, not the page's `bg-background` it used to
@@ -731,149 +1024,44 @@ export function Sidebar({
           navigated only on a second press. That is this rail's primary flow.
           It is also why the drawer-status effect above exists: a tap that
           reaches the row is a tap the keyboard doesn't get, so closing the
-          drawer has to put it away itself.
+          drawer has to put it away itself. FlashList forwards both to its
+          ScrollView.
           `on-drag` covers the other half: the tree is what you scroll to read
-          past the keyboard. */}
-      <ScrollView
-        className="flex-1 px-2 pb-4"
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-      >
-        {/* Lists: the system three (My List / Archive / Trash) plus the user's
-            own, merged in the read layer, ordered by `rank`, nested by
-            `parentId` (see use-lists). My List is the default landing
-            selection (page-provider). */}
-        <Section
-          id={SECTION_LISTS}
-          label="Lists"
-          testID="links-nav-section-lists"
-          collapsed={collapsed}
-          onToggle={toggle}
-          forceOpen={filtering}
+          past the keyboard.
+          Lists first: the system three (My List / Archive / Trash) plus the
+          user's own, merged in the read layer, ordered by `rank`, nested by
+          `parentId` (see use-lists). My List is the default landing selection
+          (page-provider). */}
+      {virtualize ? (
+        <View className="flex-1">
+          <FlashList
+            testID="links-nav"
+            data={entries}
+            renderItem={renderEntry}
+            extraData={renderEntry}
+            keyExtractor={(entry) => entry.key}
+            getItemType={(entry) => entry.type}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            contentContainerStyle={NAV_CONTENT_PADDING}
+          />
+        </View>
+      ) : (
+        <ScrollView
+          testID="links-nav"
+          className="flex-1 px-2 pb-4"
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
-          {filtering ? (
-            listMatches.length > 0 ? (
-              listMatches.map((node) => (
-                <NavItem
-                  key={node.item.id}
-                  icon={listIcon(node.item.id)}
-                  label={node.item.name}
-                  kind="list"
-                  id={node.item.id}
-                  active={node.item.id === activeListId}
-                  onSelect={select}
-                  badge={listBadge(node.item.id)}
-                  action={listAction(node.item.id)}
-                  onPeek={showPeek}
-                  onPeekEnd={endPeek}
-                />
-              ))
+          {slicedSegments(entries).map((segment) =>
+            segment.rows ? (
+              <SlicedEntries key={segment.key} entries={segment.rows} render={renderEntry} />
             ) : (
-              // `pl-6` parks the text under the section header's LABEL rather
-              // than under the rows it stands in for — an empty section has no
-              // row to align to, and a row's own text sits at 36px (matches) or
-              // 72px (tree rows, past the chevron slot), both of which read as
-              // indented for a one-line placeholder. This header's label starts
-              // at 26px (`px-2` + `size-3.5` chevron + `gap-1`), so 24px is the
-              // near miss we accept. Web makes the same CHOICE against its own
-              // header but lands on a different NUMBER (`pl-5.5`, 22px) — this
-              // side's chrome is a size up throughout, so the two files agree on
-              // the rule, not on the value. Don't sync them by hand.
-              <Text className="py-1 pr-2 pl-6 text-xs text-muted-foreground">
-                No matching lists
-              </Text>
-            )
-          ) : (
-            <NavTree
-              nodes={visibleLists}
-              kind="list"
-              iconFor={listIcon}
-              activeId={activeListId}
-              onSelect={select}
-              collapsed={collapsed}
-              onToggle={toggle}
-              badgeFor={listBadge}
-              actionFor={listAction}
-              onPeek={showPeek}
-              onPeekEnd={endPeek}
-            />
+              <Fragment key={segment.key}>{renderEntry({ item: segment.entry })}</Fragment>
+            ),
           )}
-        </Section>
-
-        {/* Tags are all user-created — no system tag — so this section is
-            empty until the user makes one. */}
-        <Section
-          id={SECTION_TAGS}
-          label="Tags"
-          testID="links-nav-section-tags"
-          collapsed={collapsed}
-          onToggle={toggle}
-          forceOpen={filtering}
-        >
-          {filtering ? (
-            tagMatches.length > 0 ? (
-              tagMatches.map((node) => (
-                <NavItem
-                  key={node.item.id}
-                  icon={Hash}
-                  label={node.item.name}
-                  kind="tag"
-                  id={node.item.id}
-                  active={node.item.id === activeTagId}
-                  onSelect={select}
-                  onPeek={showPeek}
-                  onPeekEnd={endPeek}
-                />
-              ))
-            ) : (
-              <Text className="py-1 pr-2 pl-6 text-xs text-muted-foreground">No matching tags</Text>
-            )
-          ) : loadedTags === undefined ? null : tags.length === 0 ? (
-            <Text className="py-1 pr-2 pl-6 text-xs text-muted-foreground">No tags yet</Text>
-          ) : (
-            <NavTree
-              nodes={tags}
-              kind="tag"
-              iconFor={hashIcon}
-              activeId={activeTagId}
-              onSelect={select}
-              collapsed={collapsed}
-              onToggle={toggle}
-              onPeek={showPeek}
-              onPeekEnd={endPeek}
-            />
-          )}
-        </Section>
-
-        {/* Utility band: the Show All reset, a separator, then the Manage
-            links out to settings (web's footer band). Hidden while filtering —
-            none of these are list/tag entities, so a find-in-nav query never
-            matches them; clearing the box brings the band back. */}
-        {!filtering && (
-          <View className="mt-3 flex-col gap-0.5 border-t border-border pt-2">
-            <NavItem
-              icon={Layers}
-              label={ALL_LABEL}
-              kind="all"
-              active={selection.kind === 'all'}
-              onSelect={select}
-            />
-            <View className="my-1 border-t border-border" />
-            <FooterLink
-              icon={Settings2}
-              label="Manage lists"
-              href="/settings/lists"
-              onSelected={closeDrawer}
-            />
-            <FooterLink
-              icon={Settings2}
-              label="Manage tags"
-              href="/settings/tags"
-              onSelected={closeDrawer}
-            />
-          </View>
-        )}
-      </ScrollView>
+        </ScrollView>
+      )}
       <Peek anchor={peek?.anchor ?? null} title={peek?.title ?? ''} detail={peek?.detail} />
     </StyledSafeAreaView>
   );

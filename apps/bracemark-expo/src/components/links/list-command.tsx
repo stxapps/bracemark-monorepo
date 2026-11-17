@@ -4,8 +4,9 @@
 // for the row menu + bulk bar, and the Lists settings reparent dialog embeds it
 // too — one implementation of the tree rendering, search behavior, and path
 // labels instead of per-surface drift. No anchored popover on a phone, so hosts
-// are Dialogs, and this renders plain content (Input + ScrollView, no shell)
-// for a host's DialogContent to lay out; cmdk's keyboard nav has no analogue
+// are Dialogs, and this renders plain content (Input + PickerList, no shell)
+// for a host's DialogContent to lay out — the rows virtualized (picker-list.tsx);
+// cmdk's keyboard nav has no analogue
 // here — rows are Pressables.
 //
 // Past SEARCH_THRESHOLD rows a filter input appears at the top (forced on
@@ -38,8 +39,8 @@
 // unmount this while closed (it does: the dialog portal renders null when
 // closed), or one live query per virtualized item (the useTagMap rationale).
 
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { Pressable, View } from 'react-native';
 import { Check, Plus } from 'lucide-react-native';
 
 import { type ListItem, useLists } from '@stxapps/expo-react';
@@ -48,9 +49,9 @@ import { flattenToPathRows, type TreePathRow } from '@stxapps/shared';
 import { cn } from '../../lib/utils';
 import { Icon } from '../ui/icon';
 import { Input } from '../ui/input';
-import { ScrollClaim } from '../ui/scroll-claim';
 import { Text } from '../ui/text';
 import { GuideLines } from './guide-lines';
+import { PickerList } from './picker-list';
 
 // Below this many lists, scrolling beats a filter box — don't render one
 // (unless the input is the create name field, above).
@@ -143,9 +144,49 @@ export function ListCommand({
   // list, so a pick let through here would run first and be followed by the
   // create's own. In the Move to dialog that is `onSelect` twice — a second move
   // the bulk bar drops while the first is in flight, leaving the new list empty.
-  const pick = (listId: string) => {
-    if (!creating) onSelect(listId);
-  };
+  // (The row's onPress below.)
+  //
+  // One row. Everything it reads besides its own data is in the dependencies,
+  // so it doubles as the list's `extraData`: the rows on screen re-render when
+  // the selection, the filter or a create in flight moves.
+  const renderRow = useCallback(
+    ({ item: { item, depth, ancestors } }: { item: ListRow }) => {
+      const disabled = disabledIds?.includes(item.id) === true;
+      return (
+        <Pressable
+          disabled={disabled}
+          onPress={() => {
+            if (!creating) onSelect(item.id);
+          }}
+          accessibilityRole="menuitem"
+          className={cn(
+            'min-h-11 flex-row items-center justify-between gap-2 rounded-xl px-3 py-2.5 active:bg-muted',
+            disabled && 'opacity-50',
+          )}
+        >
+          {!filtering && depth > 0 && <GuideLines depth={depth} />}
+          {/* `middle` while a path leads the name: at the tail, a long path
+              cut the list's own name off — the word just typed to find it.
+              The middle cut keeps the root and the name, and loses the
+              ancestors between (web-ui's ListPathLabel, the web form). */}
+          <Text
+            numberOfLines={1}
+            ellipsizeMode={filtering && ancestors.length > 0 ? 'middle' : 'tail'}
+            className="min-w-0 flex-1"
+          >
+            {filtering && ancestors.length > 0 && (
+              <Text className="text-muted-foreground">{`${ancestors.join(' / ')} / `}</Text>
+            )}
+            {item.name}
+          </Text>
+          {item.id === value && (
+            <Icon as={Check} className="size-4 shrink-0 text-muted-foreground" />
+          )}
+        </Pressable>
+      );
+    },
+    [disabledIds, creating, onSelect, filtering, value],
+  );
 
   return (
     <>
@@ -165,30 +206,27 @@ export function ListCommand({
           `max-h-full`), and RN children don't shrink by default — without this
           the list keeps its 320 and pushes the title off the top of a short
           phone instead of scrolling.
-          `interactive`, not the app's usual `on-drag`: every host is a centred
-          Dialog, and dropping the keyboard re-centres it and regrows this list
-          from its squeezed height to 320 — mid-drag, so the rows jump under the
-          finger. Scrolling the matches is also part of filtering (type, scan,
-          type more), which wants the keyboard kept. iOS: a scroll keeps it and a
-          drag down into the keys pulls it away; Android maps the value to
-          `none`. The tap-outside exit is DialogContent's chrome tap plus
-          `"handled"` here (docs/soft-keyboard.md, _dismissal_). */}
-      <ScrollView
+          VIRTUALIZED (PickerList, a FlatList): a dialog that mounted every row
+          stalled as it opened, in proportion to the library — which nothing
+          bounds (docs/client-queries.md, _the tree surfaces mount every row_).
+          The keyboard pair and the touch claim are PickerList's; `interactive`
+          rather than `on-drag` because every host is a centred Dialog, and
+          dropping the keyboard re-centres it and regrows this list from its
+          squeezed height to 320 — mid-drag, so the rows jump under the finger.
+          The tap-outside exit is DialogContent's chrome tap plus `"handled"`
+          (docs/soft-keyboard.md, _dismissal_). */}
+      <PickerList
         testID="list-picker-rows"
         className="max-h-80 shrink"
         nestedScrollEnabled
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="interactive"
-      >
-        {/* ScrollClaim: the DialogContent around this claims touches, so a
-            drag from the divider or the empty text would not scroll on iOS
-            (components/ui/scroll-claim.tsx). */}
-        <ScrollClaim>
-          {/* Suppressed when there's a Create row: that row IS the next step. */}
-          {visibleRows.length === 0 && !canCreate && (
-            <Text className="py-6 text-center text-sm text-muted-foreground">No lists found.</Text>
-          )}
-          {root && !filtering && (
+        data={visibleRows}
+        keyExtractor={(row) => row.item.id}
+        renderItem={renderRow}
+        extraData={renderRow}
+        // Suppressed when there's a Create row: that row IS the next step.
+        emptyText={!canCreate ? 'No lists found.' : undefined}
+        header={
+          root && !filtering ? (
             // Hidden while filtering: it has no name to match, and the flat
             // filtered view is name-matches only.
             <>
@@ -210,42 +248,10 @@ export function ListCommand({
               </Pressable>
               <View className="my-1 h-px bg-border" />
             </>
-          )}
-          {visibleRows.map(({ item, depth, ancestors }) => {
-            const disabled = disabledIds?.includes(item.id) === true;
-            return (
-              <Pressable
-                key={item.id}
-                disabled={disabled}
-                onPress={() => pick(item.id)}
-                accessibilityRole="menuitem"
-                className={cn(
-                  'min-h-11 flex-row items-center justify-between gap-2 rounded-xl px-3 py-2.5 active:bg-muted',
-                  disabled && 'opacity-50',
-                )}
-              >
-                {!filtering && depth > 0 && <GuideLines depth={depth} />}
-                {/* `middle` while a path leads the name: at the tail, a long path
-                  cut the list's own name off — the word just typed to find it.
-                  The middle cut keeps the root and the name, and loses the
-                  ancestors between (web-ui's ListPathLabel, the web form). */}
-                <Text
-                  numberOfLines={1}
-                  ellipsizeMode={filtering && ancestors.length > 0 ? 'middle' : 'tail'}
-                  className="min-w-0 flex-1"
-                >
-                  {filtering && ancestors.length > 0 && (
-                    <Text className="text-muted-foreground">{`${ancestors.join(' / ')} / `}</Text>
-                  )}
-                  {item.name}
-                </Text>
-                {item.id === value && (
-                  <Icon as={Check} className="size-4 shrink-0 text-muted-foreground" />
-                )}
-              </Pressable>
-            );
-          })}
-          {canCreate && (
+          ) : null
+        }
+        footer={
+          canCreate ? (
             <Pressable
               testID="list-picker-create"
               disabled={creating}
@@ -261,9 +267,9 @@ export function ListCommand({
                 Create “{trimmed}”
               </Text>
             </Pressable>
-          )}
-        </ScrollClaim>
-      </ScrollView>
+          ) : null
+        }
+      />
     </>
   );
 }

@@ -958,7 +958,7 @@ available 51.1 MB`**, with no memory warning at any point. `saved` comes
      `controller`; in a reused one, sharing the Wikipedia article, the item
      providers took 0.6 s (Safari's preprocessing) and the sheet drew with them.
 
-  Still open: `plus-full` (runs A and B). The copy IS bounded: the capture
+  `plus-full` (runs A and B) came after both fixes below, and passed. The copy IS bounded: the capture
   stops at `READER_DOC_MAX_CHARS` (1,000,000) or `READER_DOC_MAX_BLOCKS`
   (10,000), and `__bracemarkReaderDocJson` drops a serialised copy over
   3,000,000 characters, so the sheet gets none ([data-limits.md](./data-limits.md)).
@@ -1035,6 +1035,30 @@ available 51.1 MB`**, with no memory warning at any point. `saved` comes
   after, with every JS line after it at `copy 0 K`. (Not quite the same
   library as the failing run — that was `plus-worst` grown to 300 and 300,
   hundred-deep chain included — but the same counts.)
+
+  **`plus-full`, runs A and B, 2026-11-17** — the same phone (iOS 26.5), a
+  release build of that day's tree against the local api, ten laps by hand
+  (the hand ran over: A logged 15 list and 12 tag picker visits, B 16 and 14),
+  then Save, A then B in one process (pid 50103):
+
+  | sheet                               | process              | `compose#1` | high point             | `compose`, last 10 mounts | lowest `available` | `saved` | warnings |
+  | ----------------------------------- | -------------------- | ----------- | ---------------------- | ------------------------- | ------------------ | ------- | -------- |
+  | **A** — `example.com`, `copy 2 K`   | fresh (`age` 0.5 s)  | 21.7 MB     | 55.0 MB (`compose#26`) | 43.1–55.0 MB              | **65.0 MB**        | 52.2 MB | none     |
+  | **B** — _World War II_, `copy 19 K` | reused (`age` 543 s) | 35.5 MB     | 61.7 MB (`compose#8`)  | 50.4–54.4 MB              | **58.3 MB**        | 48.0 MB | none     |
+
+  Both level off: A climbs to 54.3 MB by `compose#9` and then holds 43–51 MB,
+  B peaks at `compose#8` and settles to 50.4–51.1 MB over its last eight
+  mounts. A's one late step — `compose#25` → `#26`, 43.1 → 55.0 MB with the
+  Hermes heap flat, so native — is its high point, and it went back to 51–52
+  rather than on. B − A is mostly the process, not the article: B's
+  `controller` opened at 23.8 MB, A's high-water mark carried over, and the
+  19 K copy cost 8.0 MB at `copy-file` against A's 5.4 MB for 2 K. `plus-full`'s
+  24 lists and 40 tags peak 11–20 MB under `plus-worst`'s D and C before the fix.
+
+  Then the repeat check, signed in as `plus-worst`, still the same process
+  (`age` 1,272 s → 1,306 s): the article shared, Closed ×3, then Saved.
+  `compose#1` read 38.3, 36.7, 36.6, 36.6 MB and `controller` 25.2–25.4 MB each
+  time — no stacking, and ~4 MB under the day before's 40.4–41.8.
 
   **Android's numbers** are a different question. `ShareActivity` runs in the
   app's process, under no extension cap, so what can end it is the app's own

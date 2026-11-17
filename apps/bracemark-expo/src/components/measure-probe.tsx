@@ -27,14 +27,19 @@ import { Text } from './ui/text';
 // from the leg before reads exactly like a fresh one otherwise. Which is why the
 // settings leg has a label per section rather than one for all three: its
 // targets run back to back, and each would accept the last one's reading.
-export const LINKS_WINDOWS = ['scroll', 'rail', 'sidebar'] as const;
+export const LINKS_WINDOWS = ['scroll', 'rail', 'sidebar', 'dialogs-move', 'dialogs-tags'] as const;
 export const SETTINGS_WINDOWS = ['settings-about', 'settings-lists', 'settings-tags'] as const;
 
 // The windows whose end waits for the JS thread to go quiet: the tree legs, whose
 // rows mount a slice a frame (lib/use-progressive-count.ts), so the first row a
 // flow can wait for is on screen while the rest are still coming. Not scroll or
 // rail, whose readings are recorded against an end at the tap.
-const QUIET_END: ReadonlySet<string> = new Set(['sidebar', ...SETTINGS_WINDOWS]);
+const QUIET_END: ReadonlySet<string> = new Set([
+  'sidebar',
+  'dialogs-move',
+  'dialogs-tags',
+  ...SETTINGS_WINDOWS,
+]);
 // The window the last begin press opened — what decides how `end` closes it.
 let openLabel: string | null = null;
 
@@ -51,7 +56,9 @@ export function StallReadout({ className }: { className?: string }) {
 // The render leg's window controls and its readout, floated in the screen's
 // bottom-leading corner: on the links screen that is clear of the FAB
 // (trailing) and of the swipe path down the middle, so no gesture the leg makes
-// lands on them. `pointerEvents="box-none"` lets a touch beside the controls
+// lands on them. `bottom-36`, not flush with the edge: the dialogs leg works the
+// bulk bar, which takes the bottom ~130pt, and controls laid over its buttons
+// took the flow's tap on Move to — the dialog never opened. `pointerEvents="box-none"` lets a touch beside the controls
 // reach what is under them, and the readout takes none at all: on an iPhone's
 // Export screen it wraps over the submit button, and the data leg's tap landed on
 // the text and the export never started.
@@ -63,7 +70,7 @@ export function RenderMeasureControls({
   const probe = useStallProbe();
   if (probe === null) return null;
   return (
-    <View pointerEvents="box-none" className="absolute bottom-2 left-2 max-w-[45%] gap-1">
+    <View pointerEvents="box-none" className="absolute bottom-36 left-2 max-w-[45%] gap-1">
       <View pointerEvents="none">
         <StallReadout className="bg-background text-[8px]" />
       </View>

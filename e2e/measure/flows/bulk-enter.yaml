@@ -1,0 +1,18 @@
+# Into bulk-edit mode with every link selected, for the render leg's dialogs
+# window (flows/render-dialogs.yaml) — outside the window: selecting re-renders
+# every mounted link row, which is not the cost the window reads.
+appId: com.bracemark.app
+---
+- tapOn:
+    text: 'Dismiss'
+    optional: true
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-select-links'
+- tapOn:
+    id: 'bulk-select-all'
+- extendedWaitUntil:
+    visible:
+      id: 'bulk-move'
+    timeout: 10000

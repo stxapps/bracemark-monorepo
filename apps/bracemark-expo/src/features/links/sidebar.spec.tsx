@@ -52,12 +52,47 @@ jest.mock('./page-provider', () => ({
 // keyboard dismissal, and the router only the footer links.
 jest.mock('@react-navigation/drawer', () => ({ useDrawerStatus: () => 'open' }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
-// Every row at once, so the cases below read whole trees: the frame-by-frame
-// fill is the hook's own spec (lib/use-progressive-count.spec.ts). One case
-// caps it, which is what pins the trees reading it at all.
+// The rail's entries (sidebar.tsx, `navEntries`) go to a ScrollView filled a slice
+// a frame below VIRTUALIZE_MIN_ROWS, and to a FlashList from it. Every row at once
+// on the first path, so the cases below read whole trees: the frame-by-frame fill
+// is the hook's own spec (lib/use-progressive-count.spec.ts), and one case caps
+// it. jest has no layout, so the FlashList stand-in renders EVERY entry and
+// records what it was handed — how the big-library cases pin that the rail hands
+// the list its entries rather than drawing them itself.
 jest.mock('../../lib/use-progressive-count', () => ({
   useProgressiveCount: jest.fn((total: number) => total),
 }));
+const mockFlashListProps: { data: readonly { type: string; key: string }[] }[] = [];
+const lastFlashList = () => {
+  const props = mockFlashListProps.at(-1);
+  if (!props) throw new Error('the sidebar rendered no FlashList');
+  return props;
+};
+jest.mock('@shopify/flash-list', () => {
+  const { ScrollView } = jest.requireActual<typeof import('react-native')>('react-native');
+  const { Fragment, createElement } = jest.requireActual<typeof import('react')>('react');
+  return {
+    FlashList: (props: {
+      data: readonly { type: string; key: string }[];
+      renderItem: (info: { item: unknown; index: number }) => React.ReactNode;
+      keyExtractor: (item: unknown) => string;
+      testID?: string;
+    }) => {
+      mockFlashListProps.push(props);
+      return createElement(
+        ScrollView,
+        { testID: props.testID },
+        props.data.map((item, index) =>
+          createElement(
+            Fragment,
+            { key: props.keyExtractor(item) },
+            props.renderItem({ item, index }),
+          ),
+        ),
+      );
+    },
+  };
+});
 
 let clock = 0;
 const rank = () => `a${(clock++).toString().padStart(4, '0')}`;
@@ -131,6 +166,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   clock = 0;
   mockSelection = { kind: 'all' };
+  mockFlashListProps.length = 0;
   // clearAllMocks keeps implementations; the one case that caps the count
   // must not cap every case after it.
   jest.mocked(useProgressiveCount).mockImplementation((total) => total);
@@ -338,15 +374,44 @@ describe('Sidebar — a tree that changes under it', () => {
 // every signed-in screen mounts). 3,000 is past where that version fell over
 // under jest; the list tree itself is built without recursion and is not what
 // is being tested (@stxapps/shared sync/tree.spec.ts goes far deeper).
-describe('Sidebar — a big tree mounts in slices', () => {
-  // A tree rendered whole in one commit is what froze the links screen's first
-  // load at `plus-worst` size (docs/e2e.md, _the render leg_). The tree renders
-  // the count the hook gives it, not the tree's length.
+describe('Sidebar — a small library is sliced, a big one virtualized', () => {
+  // Below VIRTUALIZE_MIN_ROWS the rows go into a ScrollView, each section's a
+  // slice a frame — the cheaper path there, measured (sidebar.tsx). The tree
+  // renders the count the hook gives it, not the tree's length.
   it('renders only the rows the progressive count has reached', () => {
     jest.mocked(useProgressiveCount).mockImplementation((total) => Math.min(total, 2));
     mount();
 
     expect(ids()).toEqual(['work', 'cooking']);
+    expect(mockFlashListProps).toEqual([]);
+  });
+
+  // From it, ONE FlashList takes every entry in order — the section headers and
+  // the utility band among them — so only what is on screen mounts, however big
+  // the library (docs/client-queries.md, _the tree surfaces mount every row_).
+  const BIG = Array.from({ length: 300 }, (_, i) => list(`l${i}`, `List ${i}`));
+
+  it('hands a big library to one FlashList, headers and band included', () => {
+    setLists(BIG);
+    setTags([tag('reading', 'Reading')]);
+    mount();
+
+    const { data } = lastFlashList();
+    const types = data.map((entry) => entry.type);
+    expect(types[0]).toBe('header');
+    expect(types.slice(-3)).toEqual(['header', 'tag', 'band']);
+    expect(types.filter((type) => type === 'list').length).toBeGreaterThanOrEqual(300);
+    expect(new Set(data.map((entry) => entry.key)).size).toBe(data.length);
+  });
+
+  it('leaves a collapsed section’s rows out of the list, header kept', () => {
+    setLists(BIG);
+    jest.mocked(readSidebarCollapsedIds).mockReturnValue(['section:lists']);
+    mount();
+
+    const { data } = lastFlashList();
+    expect(data.filter((entry) => entry.type === 'list')).toEqual([]);
+    expect(data[0]).toMatchObject({ type: 'header', key: 'header:list', collapsed: true });
   });
 });
 

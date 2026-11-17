@@ -1,0 +1,9 @@
+# Out of bulk-edit mode again (flows/bulk-enter.yaml).
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'bulk-exit'
+- extendedWaitUntil:
+    notVisible:
+      id: 'bulk-exit'
+    timeout: 10000

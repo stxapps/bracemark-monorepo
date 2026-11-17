@@ -1,0 +1,63 @@
+# The render leg's dialogs window (e2e/measure/render-mobile.ts): open the probe's
+# WINDOW, open and close one of the pickers a link is filed with TOGGLES times,
+# and stop on the reading. Starts and ends on the links screen in bulk-edit mode,
+# every link selected (the runner enters and leaves it around the window).
+#
+#   dialogs-move  the Move to dialog (features/links/move-to-dialog.tsx), whose
+#                 ListCommand draws the list tree;
+#   dialogs-tags  the bulk Edit tags dialog (bulk-tags-dialog.tsx), whose
+#                 TagsCommand draws every tag.
+#
+# Both from the bulk bar rather than a row's menu: the row menu's Edit tags pushes
+# the editor screen, which covers the probe's controls, and these two are the same
+# pickers in the same dialogs. Each open waits for the rows' scroller, each close
+# for it to go; the end waits for the thread to go quiet, so the window holds the
+# whole mount (components/measure-probe.tsx).
+#
+# Parameters: WINDOW — `dialogs-move` or `dialogs-tags`; TOGGLES — open/close pairs.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'measure-begin-${WINDOW}'
+- repeat:
+    times: ${TOGGLES}
+    commands:
+      - runFlow:
+          when:
+            true: ${WINDOW === 'dialogs-move'}
+          commands:
+            - tapOn:
+                id: 'bulk-move'
+            - extendedWaitUntil:
+                visible:
+                  id: 'list-picker-rows'
+                timeout: 20000
+            - tapOn: 'Close'
+            - extendedWaitUntil:
+                notVisible:
+                  id: 'list-picker-rows'
+                timeout: 10000
+      - runFlow:
+          when:
+            true: ${WINDOW === 'dialogs-tags'}
+          commands:
+            - tapOn:
+                id: 'bulk-more'
+            - tapOn:
+                id: 'bulk-menu-edit-tags'
+            - extendedWaitUntil:
+                visible:
+                  id: 'tag-picker-rows'
+                timeout: 20000
+            - tapOn: 'Close'
+            - extendedWaitUntil:
+                notVisible:
+                  id: 'tag-picker-rows'
+                timeout: 10000
+- tapOn:
+    id: 'measure-end'
+- extendedWaitUntil:
+    visible:
+      id: 'measure-stall-reading'
+      text: '.*"label":"${WINDOW}".*'
+    timeout: 20000

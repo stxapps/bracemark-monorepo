@@ -611,57 +611,89 @@ fast path at the cost of complexity, scroll-time UX, or a second code path for
 search/tag/pinned queries — so they wait until profiling or a product requirement
 forces the issue.
 
-### the tree surfaces mount every row (not virtualized)
+### the tree surfaces mount every row — except where it was measured not to pay
 
-Only the link layouts above are virtualized. Every surface that shows the list or
-tag tree mounts one element per row, so what it costs grows with the number of
-lists or tags in the library, not with what fits on screen:
+Besides the link layouts above, the surfaces that show the list or tag tree used
+to mount one element per row, so what they cost grew with the number of lists or
+tags in the library, not with what fits on screen. Nothing bounds that number —
+the limits bound depth, not count ([data-limits.md](./data-limits.md), _counts:
+none per kind_) — so since 2026-11-16 expo's are split by what measuring them
+both ways showed:
 
-- **The sidebars** (web `_panes/sidebar.tsx`, expo `features/links/sidebar.tsx`)
-  — the tree, and the list and tag matches while filtering. They already render
-  flat rows from `flattenToRows` ([data-lifecycle.md](./data-lifecycle.md),
-  _nothing that reads the list tree recurses_), so a virtualizer can take that
-  array as it is.
-- **The list pickers** (`links/list-command.tsx`, both platforms) and **the tag
-  pickers** (`links/tags-command.tsx`; on expo a plain `ScrollView`). The share
-  sheet's pair (`features/share/share-{list,tags}-picker.tsx`) is the one place
-  this costs more than time: in the iOS share extension the rows are memory
-  under a hard cap, and virtualizing them is deferred with a trigger
-  ([share-sheet.md](./share-sheet.md), _the share extension has almost no
-  memory to spare_).
-- **The settings Lists and Tags tables**, both platforms. These are
-  drag-sortable, so virtualizing one has to keep the drag — and the Lists
-  table's live depth projection ([editors.md](./editors.md)) — working against
-  rows that are not mounted.
+- **The list and tag pickers are virtualized, at every size**
+  (`components/links/picker-list.tsx`, a `FlatList`): the in-app Move to,
+  list-select and tag dialogs (`list-command.tsx`, `tags-command.tsx`) and the
+  share sheet's pair (`features/share/share-{list,tags}-picker.tsx`). A small
+  library, under a screenful, mounts every row in the first commit exactly as a
+  ScrollView did, so there is nothing to lose — `plus-full` read the same before
+  and after — and a big one mounts ~30 rows. In the iOS share extension this is
+  memory under a hard cap, and the reason it was done ([share-sheet.md](./share-sheet.md),
+  _300 lists and 300 tags, and a copy at the cap_); in the app it is the stall
+  as a dialog opens.
+- **The sidebar is virtualized from 300 rows** (`features/links/sidebar.tsx`,
+  `VIRTUALIZE_MIN_ROWS`): one FlashList over flat entries — headers, rows, the
+  utility band — from 300 lists and tags, and below it the same entries in a
+  ScrollView, each section's rows a slice a frame (_the slices_, below).
+  FlashList pays a near-constant price for its own measuring and recycling that a
+  small library never earns back: at `plus-full` it blocked 7× longer on iOS and
+  4× on Android than the sliced ScrollView. The count is the whole library's, not
+  what a collapse or a filter leaves showing, so folding a section never swaps
+  one list for the other under the finger. The rows are flat from
+  `flattenToRows` on both paths ([data-lifecycle.md](./data-lifecycle.md),
+  _nothing that reads the list tree recurses_).
+- **The settings Lists and Tags tables still mount every row**, sliced, both
+  platforms. They are drag-sortable, so virtualizing one has to keep the drag —
+  and the Lists table's live depth projection ([editors.md](./editors.md)) —
+  working against rows that are not mounted.
 
-None of this is a correctness risk in the app: the limits bound depth, not
-count ([data-limits.md](./data-limits.md), _counts: none per kind_), so a library
-with thousands of lists or tags renders, only slowly. **The iOS share sheet is
-the exception**: its pickers run in the share extension, under a 120 MB cap,
-and at 300 lists the list picker alone took it there — a kill, not a stall
-([share-sheet.md](./share-sheet.md), _300 lists and 300 tags, and a copy at the
-cap_). The render leg's tree legs
-([e2e.md](./e2e.md), _the render leg_) read what it costs:
-`--library worst --legs sidebar,settings`, on both platforms, with `--profile`
-on native for what owns the time.
+**Readings, 2026-11-16** — the render leg's `sidebar` and `dialogs` windows
+([e2e.md](./e2e.md), _the render leg_), iPhone 17 Pro simulator (iOS 26.5) and
+Pixel 8 emulator (Android 16), production bundle on the debug shell, five
+toggle pairs, median of three. Longest stall / total blocking, before → after:
+
+| leg                             | iOS                          | Android                        |
+| ------------------------------- | ---------------------------- | ------------------------------ |
+| Move to, `plus-large` (300/300) | 353 / 1,571 → **56 / 16** ms | 678 / 33,556 → **58 / 15** ms  |
+| Edit tags, `plus-large`         | 342 / 2,156 → **64 / 61** ms | 259 / 8,884 → **67 / 41** ms   |
+| Move to, `plus-full` (24/40)    | 0 / 0 → 0 / 0                | 0 / 0 → 0 / 0                  |
+| Edit tags, `plus-full`          | 72 / 63 → 60 / 10            | 51 / 1 → 0 / 0                 |
+| sidebar, `plus-large` (~600)    | 97 / 977 → **102 / 454** ms  | 208 / 3,581 → **133 / 879** ms |
+
+and the sidebar both ways at the sizes between, which is what put the threshold
+at 300 — total blocking, sliced ScrollView against FlashList: `plus-full` (~64
+rows) iOS 53 against 387, Android 168 against 715; `plus-worst` (~212) iOS 213
+against 500, Android 792 against 968; `plus-large` (~600) as above. The lines
+cross at ~240 rows on the emulator and ~350 on the simulator.
+
+None of this is a correctness risk in the app: a library with thousands of lists
+or tags renders, at worst slowly, and on the surfaces that still mount every row
+the memory grows with it. **The iOS share sheet was the exception** — its pickers
+run in the share extension, under a 120 MB cap, and at 300 lists the list picker
+alone took it there, a kill rather than a stall — and is why the pickers went
+first. The render leg's tree legs read what each surface costs:
+`--library worst|large --legs sidebar,settings,dialogs`, on both platforms, with
+`--profile` on native for what owns the time.
 
 **Web needs nothing.** At `plus-worst` (109 lists, 100 tags) and 4× CPU the
 longest task in any tree leg is 133 ms, and `plus-full` has none.
 
-**Expo mounts the trees in slices, and does not virtualize them.** At
+#### the slices
+
+**Expo mounts the tables — and a sidebar under 300 rows — in slices.** At
 `plus-worst`, switching Settings to Lists held the JS thread for 1.2 s on the
 iPad simulator and 1.4 s on a Pixel 8 emulator, in one stall, and the sidebar
 paid about 4 ms a row in the links screen's first commits. A virtualizer would
 cut the work as well as spread it, but on the tables it takes the drag layer
 with it: `drag-sort.tsx` measures a mounted row, shifts every mounted row by
-index, and auto-scrolls the page past rows that would not exist. For the
-sidebar it would be a FlashList in the drawer, with the section headers and the
-utility band as item types. A slice does neither, and it puts the switch on
-screen at once, which is the part a person feels:
+index, and auto-scrolls the page past rows that would not exist. The sidebar
+became exactly the FlashList this paragraph used to propose — section headers
+and the utility band as item types — but only from 300 rows, where it was
+measured to pay (above). A slice cuts nothing, but it puts the switch on screen
+at once, which is the part a person feels:
 
 - **`lib/use-progressive-count.ts`** renders a screenful (24) in the commit
-  that mounts a tree, then 16 more a frame. The sidebar's two trees and both
-  tables take their rows through it. The drag counts only rendered rows, so a
+  that mounts a tree, then 16 more a frame. Both tables take their rows
+  through it, and so does each section of a sidebar under 300 rows. The drag counts only rendered rows, so a
   row still to come is never a drop slot, and the projection still reads the
   whole order. A loading state instead would not help: a spinner shown before
   one big commit freezes with everything else for the length of it.

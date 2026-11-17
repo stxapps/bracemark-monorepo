@@ -72,9 +72,9 @@ import {
 //             is a drawer and the leg is skipped. Each toggle changes the list
 //             pane's width, which re-lays out every mounted item.
 //
-// and then once, whatever the layout, the two TREE legs — the surfaces that
-// mount a row per list and per tag, unvirtualized (docs/client-queries.md,
-// _the tree surfaces mount every row_):
+// and then once, whatever the layout, the TREE legs — the surfaces that mount a
+// row per list and per tag (docs/client-queries.md, _the tree surfaces mount
+// every row_):
 //
 //   sidebar   TOGGLES collapse/expand pairs of the links sidebar's Lists and
 //             Tags sections (flows/render-sidebar.yaml). An expand mounts every
@@ -85,8 +85,13 @@ import {
 //             with no table), to Lists and to Tags, each until its rows are in
 //             (flows/render-settings.yaml).
 //
+//   dialogs   TOGGLES open/close pairs of the Move to dialog and of the Edit tags
+//             dialog, from the bulk bar with every link selected
+//             (flows/render-dialogs.yaml) — the pickers a link is filed with.
+//
 // The tree legs want a big tree, which `plus-full`'s 24 lists and 40 tags are
-// not: `--library worst` restores `plus-worst` instead (measure/library.ts).
+// not: `--library worst` restores `plus-worst` instead, and `--library large`
+// `plus-large`'s 300 lists and 300 tags (measure/library.ts).
 //
 // Each leg runs `--repeat` times and the report gives every run and the median:
 // a single scroll reading moves with whatever the device was doing, and two
@@ -111,6 +116,7 @@ const SETTLE_MS = 3000;
 const FIRST_ROWS: Record<Library, { list: string; tag: string }> = {
   full: { list: 'seed-list-00', tag: 'seed-tag-00' },
   worst: { list: 'worst-list-00', tag: 'worst-tag-00' },
+  large: { list: 'large-list-00', tag: 'large-tag-00' },
 };
 
 interface Options {
@@ -264,7 +270,7 @@ async function main(): Promise<void> {
         ? 'production (--no-dev, unminified) on the development client, PROFILED'
         : 'production (--no-dev --minify) on the development client',
     library: options.library,
-    links: options.library === 'worst' ? null : options.links,
+    links: options.library === 'full' ? options.links : null,
     flings: options.flings,
     toggles: options.toggles,
     checkout: tree,
@@ -428,8 +434,31 @@ async function measureTrees(
     await flow('close-settings.yaml', options);
   }
 
+  if (options.legs.includes('dialogs')) {
+    await openShowAll(width, options);
+    await flow('bulk-enter.yaml', options);
+    await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
+    for (const window of DIALOG_WINDOWS) {
+      for (let run = 1; run <= options.repeat; run++) {
+        console.log(`\n${window}, run ${run}/${options.repeat}`);
+        await profiled(runDir, options, `${window}-${run}`, () =>
+          flow('render-dialogs.yaml', options, {
+            WINDOW: window,
+            TOGGLES: String(options.toggles),
+          }),
+        );
+        runs.push({ leg: window, layout: null, run, ...(await readProbe(options, window)) });
+      }
+    }
+    await flow('bulk-exit.yaml', options);
+  }
+
   return runs;
 }
+
+// The dialogs leg's two windows: the Move to dialog's list tree and the Edit tags
+// dialog's tag rows, both opened from the bulk bar (flows/render-dialogs.yaml).
+const DIALOG_WINDOWS = ['dialogs-move', 'dialogs-tags'] as const;
 
 // --- the report ---------------------------------------------------------------------
 
