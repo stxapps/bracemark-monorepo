@@ -53,6 +53,7 @@ let mockQuery: {
   isSuccess: boolean;
   isPlaceholderData: boolean;
   isPending: boolean;
+  fetchStatus?: 'fetching' | 'paused' | 'idle';
 };
 let mockPlaceholderSeen: (SubscriptionStatus | undefined)[];
 
@@ -213,6 +214,47 @@ describe('isLoading', () => {
     const { result } = renderHook(() => useEntitlements());
 
     expect(result.current.isLoading).toBe(false);
+  });
+});
+
+// For a caller whose mistake can't be undone (the expo share drain dropping a page copy),
+// the FREE fallback and a FREE answer are different things.
+describe('isKnown and isFetching', () => {
+  it('is not known while nothing is cached and nothing has answered', () => {
+    mockQuery = { ...mockQuery, fetchStatus: 'fetching' };
+
+    const { result } = renderHook(() => useEntitlements());
+
+    expect(result.current.isKnown).toBe(false);
+    expect(result.current.isFetching).toBe(true);
+  });
+
+  it('is known from the device’s cached copy, however pending the query', () => {
+    mockCached = PLUS;
+
+    const { result } = renderHook(() => useEntitlements());
+
+    expect(result.current.isKnown).toBe(true);
+  });
+
+  it('is known from a free answer — free is then the answer, not the fallback', () => {
+    mockQuery = { data: FREE, isSuccess: true, isPlaceholderData: false, isPending: false };
+
+    const { result } = renderHook(() => useEntitlements());
+
+    expect(result.current.isKnown).toBe(true);
+  });
+
+  // Offline, react-query holds the query pending with nothing in flight: isLoading
+  // stays true, but no answer is coming, and a caller waiting on one would wait forever.
+  it('is not fetching while the query is paused offline, though still loading', () => {
+    mockQuery = { ...mockQuery, fetchStatus: 'paused' };
+
+    const { result } = renderHook(() => useEntitlements());
+
+    expect(result.current.isLoading).toBe(true);
+    expect(result.current.isFetching).toBe(false);
+    expect(result.current.isKnown).toBe(false);
   });
 });
 

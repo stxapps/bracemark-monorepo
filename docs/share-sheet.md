@@ -1197,7 +1197,17 @@ available 51.1 MB`**, with no memory warning at any point. `saved` comes
   its copy.) Only the **app's drain** stores it
   (`store-read-mode.ts`), and only when ShareBridge says the account keeps it: the
   plan's `keptCopies` and the synced save setting, read from the store at the
-  drain. The immediate upload ignores it. Written at `expo:fg` — a live page, the
+  drain. ⚠ The plan is read off `useEntitlements`, which renders FREE on a
+  device with no cached plan (a first sign-in, the first launch after a
+  sign-out wipe) until `GET /v1/iap/status` answers — and a drain in that window
+  dropped a Plus account's copy for good, silently: the copy was taken in the
+  user's own Safari session, and nothing can take it again. So the drain
+  **waits** while that first answer is in flight (`!isKnown && isFetching`; the
+  drafts are durable in the outbox, so waiting costs nothing), and **keeps** the
+  copy when no answer is coming — the request failed, or is paused offline —
+  the same fail-open as _the plan's link cap_, below. Not `isLoading`:
+  react-query holds a query paused offline as pending, so waiting on it would
+  hold every share until the network came back. The immediate upload ignores it. Written at `expo:fg` — a live page, the
   user's own Safari session. ⚠ The bundle has to stay small: it runs in every
   page shared from Safari, before the sheet opens. It imports its values from the
   zod-free `@stxapps/shared/reader/reader-doc-core`; reaching for the barrel took it

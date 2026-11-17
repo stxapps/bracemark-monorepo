@@ -74,10 +74,25 @@ async function readModeOnSave(): Promise<{ copy: boolean; images: boolean }> {
 export function ShareBridge() {
   const { storeStatus, lastSyncAt, localWriteNonce, requestSync } = useSync();
   const { fetchPreviewsNow } = useLinkPreviews();
-  const ready = storeStatus === 'ready';
-  const { entitlements } = useEntitlements();
-  const entitledRef = useRef(entitlements.keptCopies);
-  entitledRef.current = entitlements.keptCopies;
+  const { entitlements, isKnown, isFetching } = useEntitlements();
+  // THE DRAIN ALSO WAITS FOR THE PLAN — but only while an answer is on its way.
+  // A device with no cached plan (a first sign-in, or the first launch after a
+  // sign-out wipe) renders FREE until `GET /v1/iap/status` answers, and a drain
+  // in that window dropped a Plus account's Safari copy for good: the copy came
+  // from the user's own Safari session, so nothing can take it again, and
+  // nothing said so. Waiting costs nothing, since the drafts are durable in the
+  // outbox (below). `isFetching`, not `isLoading`: offline, react-query PAUSES
+  // the query as pending with nothing in flight, and waiting on that would hold
+  // every share until the network came back.
+  const planPending = !isKnown && isFetching;
+  const canDrain = storeStatus === 'ready' && !planPending;
+  // No answer is coming (the request failed, or is paused offline, with nothing
+  // cached): keep the copy. The same fail-open as the sheet's link cap
+  // (docs/share-sheet.md, _the plan's link cap_) — guessing free costs a paying
+  // user something unrecoverable, guessing Plus costs a free one a copy or two, once.
+  const entitled = isKnown ? entitlements.keptCopies : true;
+  const entitledRef = useRef(entitled);
+  entitledRef.current = entitled;
 
   useEffect(() => {
     const pass = () => {
@@ -91,8 +106,9 @@ export function ShareBridge() {
         // a share with no page fetch, ever. The sync kick is declined too (the
         // engine runs no cycle before the first sync is done — sync/engine.ts
         // carries what happened when it did), and the draft's list is checked
-        // against a store that is still filling. `ready` is a dependency, so the
-        // pass that was skipped runs the moment the gate opens.
+        // against a store that is still filling. `canDrain` is a dependency, so the
+        // pass that was skipped runs the moment the gate opens. (It also holds
+        // while the plan's first answer is in flight — see above.)
         //
         // "Not ready" is not only a first sync. The status starts at `checking`
         // on EVERY launch, for as long as one read of the bookkeeping row takes,
@@ -108,14 +124,15 @@ export function ShareBridge() {
         //
         // A draft from Safari can carry the page's read-mode copy. Whether it is
         // kept is the account's call, made HERE at the drain: the plan
-        // (`keptCopies`, from the entitlement hook's last-known copy, read through a
-        // ref so a status change doesn't re-run the drain) and the synced save
+        // (`keptCopies`, from the entitlement hook's last-known copy — or kept when
+        // there is no answer at all, above — read through a ref so a status change
+        // doesn't re-run the drain) and the synced save
         // setting, read from the STORE now rather than a render's copy that answers
         // the defaults until it loads (docs/link-extraction-keep.md, the
         // read-at-the-save tripwire). A read that fails keeps nothing.
         const keep =
-          ready && entitledRef.current ? await readModeOnSave() : { copy: false, images: false };
-        const applied = ready
+          canDrain && entitledRef.current ? await readModeOnSave() : { copy: false, images: false };
+        const applied = canDrain
           ? [
               ...(await drainShareOutbox({
                 keepReadMode: keep.copy,
@@ -140,7 +157,7 @@ export function ShareBridge() {
     // when the session/store readiness or the extraction opt-in does, and a
     // re-run is harmless — the drain is idempotent, and an empty outbox or an
     // empty handoff is a no-op.
-  }, [ready, requestSync, fetchPreviewsNow]);
+  }, [canDrain, requestSync, fetchPreviewsNow]);
 
   useEffect(() => {
     // Skip the initial render (nothing synced/edited yet — the mount pass above

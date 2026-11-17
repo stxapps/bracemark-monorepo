@@ -29,6 +29,8 @@ const mockRequestSync = jest.fn();
 const mockExtractNow = jest.fn();
 const mockDrainShareOutbox = jest.fn<Promise<string[]>, [{ keepReadMode?: boolean }?]>();
 let mockKeptCopies = false;
+let mockPlanKnown = true;
+let mockPlanFetching = false;
 const mockReadSettingsGeneral = jest.fn<Promise<object | undefined>, []>();
 const mockTakeShareHandoffs = jest.fn<string[], []>();
 const mockRefreshShareTaxonomy = jest.fn<Promise<void>, []>();
@@ -36,7 +38,11 @@ const mockRefreshShareTaxonomy = jest.fn<Promise<void>, []>();
 jest.mock('@stxapps/expo-react', () => ({
   drainShareOutbox: (options?: { keepReadMode?: boolean }) => mockDrainShareOutbox(options),
   readSettingsGeneral: () => mockReadSettingsGeneral(),
-  useEntitlements: () => ({ entitlements: { keptCopies: mockKeptCopies } }),
+  useEntitlements: () => ({
+    entitlements: { keptCopies: mockKeptCopies },
+    isKnown: mockPlanKnown,
+    isFetching: mockPlanFetching,
+  }),
   takeShareHandoffs: () => mockTakeShareHandoffs(),
   refreshShareTaxonomy: () => mockRefreshShareTaxonomy(),
   useSync: () => ({
@@ -75,6 +81,8 @@ beforeEach(() => {
   mockStoreStatus = 'ready';
   mockDrainShareOutbox.mockResolvedValue([DRAFT_PATH]);
   mockKeptCopies = false;
+  mockPlanKnown = true;
+  mockPlanFetching = false;
   mockReadSettingsGeneral.mockResolvedValue(undefined);
   mockTakeShareHandoffs.mockReturnValue([]);
   mockRefreshShareTaxonomy.mockResolvedValue(undefined);
@@ -195,5 +203,74 @@ describe('the read-mode copy a Safari draft carries', () => {
     await settle();
     expect(keepAsked()).toBe(false);
     expect(mockReadSettingsGeneral).not.toHaveBeenCalled();
+  });
+
+  // A device with no cached plan renders FREE until the first answer lands. A drain
+  // in that window dropped a Plus account's copy for good — it came from the user's
+  // own Safari session — and said nothing. So the drain waits for the answer, and
+  // when none is coming it keeps the copy.
+  describe('on a device with no cached plan', () => {
+    beforeEach(() => {
+      mockPlanKnown = false;
+    });
+
+    test('waits while the first answer is in flight, then keeps on a Plus answer', async () => {
+      mockPlanFetching = true;
+      const view = render(<ShareBridge />);
+      await settle();
+      await foreground();
+
+      expect(mockDrainShareOutbox).not.toHaveBeenCalled();
+      expect(mockTakeShareHandoffs).not.toHaveBeenCalled();
+      // The control: the passes ran; only the drain was held.
+      expect(mockRefreshShareTaxonomy).toHaveBeenCalledTimes(2);
+
+      // The answer lands. No foreground: the held pass runs on its own.
+      mockPlanKnown = true;
+      mockPlanFetching = false;
+      mockKeptCopies = true;
+      view.rerender(<ShareBridge />);
+      await settle();
+
+      expect(mockDrainShareOutbox).toHaveBeenCalledTimes(1);
+      expect(keepAsked()).toBe(true);
+    });
+
+    test('drops it once the answer says free', async () => {
+      mockPlanFetching = true;
+      const view = render(<ShareBridge />);
+      await settle();
+
+      mockPlanKnown = true;
+      mockPlanFetching = false;
+      view.rerender(<ShareBridge />);
+      await settle();
+
+      expect(mockDrainShareOutbox).toHaveBeenCalledTimes(1);
+      expect(keepAsked()).toBe(false);
+    });
+
+    // Failed, or paused offline: react-query holds a paused query as pending, so
+    // waiting on "loading" would hold every share until the network came back.
+    test('drains at once and keeps the copy when no answer is coming', async () => {
+      mockPlanFetching = false;
+      render(<ShareBridge />);
+      await settle();
+
+      expect(mockDrainShareOutbox).toHaveBeenCalledTimes(1);
+      expect(keepAsked()).toBe(true);
+    });
+
+    test('still obeys the setting when it keeps without an answer', async () => {
+      mockReadSettingsGeneral.mockResolvedValue({
+        keepReadModeOnShare: false,
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      render(<ShareBridge />);
+      await settle();
+
+      expect(keepAsked()).toBe(false);
+    });
   });
 });

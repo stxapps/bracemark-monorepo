@@ -23,6 +23,17 @@ export type UseEntitlementsResult = {
   // True only on a cold start with nothing cached — callers can skip paywall
   // flashes while the very first answer is in flight.
   isLoading: boolean;
+  // True when the plan above is an ANSWER — the server's, or this device's cached
+  // copy of one. False when it is the FREE fallback standing in for no answer
+  // yet: nothing cached, and the query still in flight, paused offline, or
+  // failed. A caller whose mistake can't be undone (the share drain dropping a
+  // page copy) can then tell "free" from "don't know".
+  isKnown: boolean;
+  // True while a request for the plan is actually on the wire (retries
+  // included). False when the query is idle, settled, or PAUSED — react-query
+  // holds a query offline as pending (isLoading stays true) with nothing in
+  // flight, so `!isKnown && isFetching` is the one "an answer is coming" test.
+  isFetching: boolean;
   // Force a re-read (e.g. the post-checkout poll, a "Refresh status" button).
   // Resolves with the fresh status (undefined on failure) so a poll loop can
   // inspect the answer directly instead of racing a re-render.
@@ -52,6 +63,9 @@ export function useEntitlements(): UseEntitlementsResult {
     subscription,
     entitlements: entitlementsOf(subscription.plan),
     isLoading: query.isPending && cached === null,
+    // With nothing cached there is no placeholder, so any data is the server's.
+    isKnown: query.data !== undefined || cached !== null,
+    isFetching: query.fetchStatus === 'fetching',
     refetch: query.refetch,
   };
 }
