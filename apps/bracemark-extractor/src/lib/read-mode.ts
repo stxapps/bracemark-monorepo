@@ -1,4 +1,5 @@
 import { isProbablyReaderable, Readability } from '@mozilla/readability';
+import { Parser } from 'htmlparser2';
 import { parseHTML } from 'linkedom';
 
 import type { ReaderDoc, ReaderImageSource } from '@stxapps/shared';
@@ -73,99 +74,115 @@ type ReadabilityDocument = ConstructorParameters<typeof Readability>[0];
 // fetch through the image proxy (routes/image.ts), never this Worker's: fetching thirty
 // images inside the extract request would hold it open past its deadline and inline
 // megabytes into a JSON response. The walker has resolved each against the final URL.
-// The most work a page may ask of the parse before it is called "not an article". The byte cap
+// The most work a page may ask of read mode before it is called "not an article". The byte cap
 // (MAX_HTML_BYTES) bounds what is READ, not what it COSTS, and a stranger picks the page. Two
 // costs, so two checks:
 //
-// - PARSING (linkedom's `parseHTML`) is cheap until the nesting is absurd: a page of 1,000 or
-//   10,000 nested `<div>`s parses in milliseconds, 160,000 of them (950 KB) in 24 s. It runs before
-//   any walk can look at the tree, so it is bounded on the STRING: `withinReadModeMarkup`.
-// - READABILITY on the parsed tree is super-linear in nesting and depends on the page's shape. It
-//   was measured at about elements x depth^2 (a 74 KB page 250 deep with 5,000 spans took 23.5 s),
-//   and the same size and depth with a different article took 0.4 s, so a count of elements and a
-//   depth limit alone bound nothing. The walk adds up depth^2 over every element
-//   (MAX_READ_MODE_COST) and stops at the cap.
+// - PARSING (linkedom's `parseHTML`, which is htmlparser2 underneath) costs time in the square of
+//   the nesting: htmlparser2 keeps its open elements in an array it `unshift`s and searches, so
+//   160,000 nested `<div>`s (950 KB) took 24 s. A page can nest that deep without writing a single
+//   `<div>`: htmlparser2 ignores `/>` on an element that isn't void, leaves `<thead>` and
+//   `<colgroup>` open, and closes a `<p>` or `<li>` only when it is the innermost element. So the
+//   nesting is not ESTIMATED off the string — an estimate of this parser's recovery rules was
+//   passed four ways, with pages that then took 7 to 11 s — it is COUNTED by the same parser, with
+//   no tree, and stopped the moment it crosses a limit (`withinReadModeMarkup`). Stopped at
+//   MAX_READ_MODE_DEPTH, the parser's array never holds more than that, so the count is linear.
+// - READABILITY on the parsed tree costs time in the shape: about elements x depth^2 for nesting (a
+//   74 KB page 250 deep with 5,000 spans took 23.5 s), and the square of an element's child count
+//   for width — it re-reads a parent's `children` after each sibling it appends, and linkedom
+//   builds that list afresh each time (59,000 sibling paragraphs took 173 s in workerd). So the
+//   walk after the parse adds up depth^2 for every element and children^2 for every parent
+//   (MAX_READ_MODE_COST), and stops at the cap.
+//
+// These price the shapes found, not every shape a page could pick — Readability is a heuristic, not
+// a bounded algorithm — so the Worker's own CPU limit (wrangler.jsonc, `limits.cpu_ms` on
+// production) is the backstop: a page that slips past both dies there, as a 5xx.
 //
 // The cap is a judgement from local pages, not from real traffic. The heaviest local document, a
-// 1.1 MB list of 22,000 elements, adds up to 1.3e7; real article pages sit one to three orders of
-// magnitude under it (median 3e3, p99 1.3e6). At 2.5e7 the slowest page shape found took about 2 s
-// on Node. A page past it is answered `not-an-article`; the live set `measure:kept-copies` fetches
-// would say whether a real page is refused, and has not been run against it.
+// 1.1 MB list of 22,000 elements, adds up to about 1.3e7; real article pages sit one to three orders
+// of magnitude under it. At 2.5e7 the slowest shape found took about 2 s on Node. A page past it is
+// answered `not-an-article`; the live set `measure:kept-copies` fetches would say whether a real
+// page is refused, and has not been run against it.
 export const MAX_READ_MODE_DEPTH = 256;
 export const MAX_READ_MODE_ELEMENTS = 60_000;
 export const MAX_READ_MODE_COST = 25_000_000;
-// Markup the string may hold before it is parsed: `<` characters (tags, comments, and any `<` in
-// text or script), and the nesting its tags add up to with the implied closes left out. Both are
-// loose on purpose — an estimate off a string, never the document's truth — and sit well over a
-// real page (the local maximum is 32,000 `<` and a depth of 36).
-export const MAX_READ_MODE_MARKUP = 150_000;
-export const MAX_READ_MODE_NESTING_ESTIMATE = 4 * MAX_READ_MODE_DEPTH;
+// Nodes the parser may emit other than elements before the page is refused: comments, text runs and
+// processing instructions, each of which becomes a node linkedom builds and Readability walks — and
+// walks super-linearly when they share a parent (240,000 in one `<p>` took 4 s on Node; 60,000,
+// 0.7 s). htmlparser2 emits a text run per decoded entity, so a megabyte of `&amp;` is 200,000 of
+// them. The heaviest local page has 19,000.
+export const MAX_READ_MODE_NODES = 60_000;
 
-// Elements that never hold children, and elements whose end tag HTML lets a page leave out (so an
-// open one is not an open level). Everything else counts as opening a level until its end tag.
-const NON_NESTING = new Set(
-  (
-    'area base br col embed hr img input link meta param source track wbr ' +
-    'p li dt dd tr td th thead tbody tfoot option optgroup colgroup rt rp'
-  ).split(' '),
-);
+// Thrown out of the parser's own callbacks to stop it at the first limit crossed.
+class ReadModeLimit extends Error {}
 
-// Is the string inside the markup bounds? One linear pass, no tree: every index it asks for only
-// moves forward (a regex that backtracked to each `<` for a `>` that never comes would not be
-// linear). Cheap — a 1 MB page is a few milliseconds — and run BEFORE `parseHTML`, which is what
-// it protects. It reads names and the `/` before a `>` only; a `>` inside an attribute value ends
-// a tag early, which an estimate can afford.
+// Is the page inside the limits, as the parser linkedom uses would build it? One pass of
+// htmlparser2 with the options linkedom gives it (linkedom/esm/shared/parse-from-string.js),
+// building no tree: every element the parser opens is an `onopentagname` and every one it closes,
+// stated or implied, an `onclosetag`, so the depth counted here is the depth linkedom's tree will
+// have. Run BEFORE `parseHTML`, which is what it protects.
 export function withinReadModeMarkup(html: string): boolean {
-  let tags = 0;
   let depth = 0;
-  let close = html.indexOf('>');
-  for (let at = html.indexOf('<'); at !== -1; at = html.indexOf('<', at + 1)) {
-    if (++tags > MAX_READ_MODE_MARKUP) return false;
-    const closing = html.charCodeAt(at + 1) === 47; // '/'
-    let end = at + (closing ? 2 : 1);
-    while (end < html.length && isNameChar(html.charCodeAt(end), end === at + (closing ? 2 : 1))) {
-      end++;
-    }
-    if (end === at + (closing ? 2 : 1)) continue; // `<!--`, `<!doctype`, `<?`, a stray `<`
-    if (close !== -1 && close < end) close = html.indexOf('>', end);
-    if (NON_NESTING.has(html.slice(at + (closing ? 2 : 1), end).toLowerCase())) continue;
-    if (!closing && close !== -1 && html.charCodeAt(close - 1) === 47) continue; // `<x />`
-    if (closing) depth = Math.max(0, depth - 1);
-    else if (++depth > MAX_READ_MODE_NESTING_ESTIMATE) return false;
+  let elements = 0;
+  let nodes = 0;
+  const other = () => {
+    if (++nodes > MAX_READ_MODE_NODES) throw new ReadModeLimit();
+  };
+  const parser = new Parser(
+    {
+      onopentagname() {
+        if (++depth > MAX_READ_MODE_DEPTH || ++elements > MAX_READ_MODE_ELEMENTS) {
+          throw new ReadModeLimit();
+        }
+      },
+      onclosetag() {
+        depth--;
+      },
+      ontext: other,
+      oncomment: other,
+      onprocessinginstruction: other,
+    },
+    { lowerCaseAttributeNames: false, decodeEntities: true, xmlMode: false },
+  );
+  try {
+    parser.write(html);
+    parser.end();
+    return true;
+  } catch (err) {
+    if (err instanceof ReadModeLimit) return false;
+    throw err;
   }
-  return true;
-}
-
-// A tag name's characters: a letter first, then letters, digits and `-`.
-function isNameChar(code: number, first: boolean): boolean {
-  const letter = (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
-  return first ? letter : letter || (code >= 48 && code <= 57) || code === 45;
 }
 
 // Is this parsed document inside those bounds? One iterative walk (no recursion: the page chooses
-// the depth), stopping at the first element that crosses one.
+// the depth), stopping at the first element that crosses one. Each element adds its depth squared,
+// and each element with children adds their count squared (the root's included).
 export function withinReadModeBounds(root: { firstElementChild: unknown }): boolean {
   type El = { firstElementChild: El | null; nextElementSibling: El | null };
   const stack: { el: El; depth: number }[] = [];
-  const push = (parent: { firstElementChild: unknown }, depth: number) => {
-    for (let c = parent.firstElementChild as El | null; c; c = c.nextElementSibling) {
-      stack.push({ el: c, depth });
-    }
-  };
-  push(root, 1);
   let count = 0;
   let cost = 0;
+  const push = (parent: { firstElementChild: unknown }, depth: number): boolean => {
+    let children = 0;
+    for (let c = parent.firstElementChild as El | null; c; c = c.nextElementSibling) {
+      stack.push({ el: c, depth });
+      if (++children > MAX_READ_MODE_ELEMENTS) return false;
+    }
+    cost += children * children;
+    return cost <= MAX_READ_MODE_COST;
+  };
+  if (!push(root, 1)) return false;
   while (stack.length > 0) {
     const { el, depth } = stack.pop() as { el: El; depth: number };
     cost += depth * depth;
     if (
       depth > MAX_READ_MODE_DEPTH ||
       ++count > MAX_READ_MODE_ELEMENTS ||
-      cost > MAX_READ_MODE_COST
+      cost > MAX_READ_MODE_COST ||
+      !push(el, depth + 1)
     ) {
       return false;
     }
-    push(el, depth + 1);
   }
   return true;
 }

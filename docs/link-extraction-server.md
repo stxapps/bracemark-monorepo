@@ -277,20 +277,42 @@ threw on 2 of them under linkedom; `readModeFromHtml` now catches that and answe
 client asked again about, forever. Every one of those is past the Workers Free plan's 10 ms CPU limit, so
 ⚠ **read mode needs the Workers Paid plan on the account that serves it** before it is
 turned on for anyone; on Free, the request is killed for CPU and the whole batch comes
-back a 5xx, which the client reads as a transport failure and retries, forever and
-silently. Nothing in this repo can check which plan an account is on. The cost also depends on the page's SHAPE, not only its size, and a depth limit and an element
-limit are not a bound on it. Two costs, so two checks. **Parsing** (linkedom) is cheap until the
-nesting is absurd (10,000 nested `<div>`s in 13 ms, 160,000 in 24 s), and it runs before any walk
-has a tree, so it is bounded on the string: more than `MAX_READ_MODE_MARKUP` `<` characters, or an
-estimated nesting past `MAX_READ_MODE_NESTING_ESTIMATE` (void and optional-end-tag elements are not
-levels), answers `not-an-article` without parsing. **Readability** on the parsed tree is
-super-linear in nesting and depends on the shape: the same 74 KB, 250 deep and 5,000 elements took
-0.4 s with one article and 10 s with another (23.5 s in workerd). The walk therefore adds up depth
-squared over every element and stops at `MAX_READ_MODE_COST`, besides `MAX_READ_MODE_DEPTH` and
-`MAX_READ_MODE_ELEMENTS`; at the cap the slowest shape found took about 2 s on Node. The cap is a
-judgement from local pages, not real traffic: the heaviest local document (a 1.1 MB list of 22,000
-elements) adds up to 1.3e7, the median real page 3e3, and no local page of 562 is refused. Whether
-a real page is — `measure:kept-copies` fetches live sites — has not been run against it. A
+back a 5xx, which the client reads as a transport failure: nothing is recorded, and only
+another explicit ask sends it again. Nothing in this repo can check which plan an account is on
+(staging is on Free, so read mode can't be tested there). The cost also depends on the page's
+SHAPE, not only its size, and a depth limit and an element limit are not a bound on it. Two
+costs, so two checks:
+
+- **Parsing** (linkedom, which is htmlparser2 underneath) costs time in the square of the
+  nesting — htmlparser2 keeps its open elements in an array it `unshift`s and searches —
+  so 10,000 nested `<div>`s parse in 13 ms and 160,000 in 24 s. A page can nest that deep
+  without writing a single `<div>`: htmlparser2 ignores `/>` on an element that isn't void, never
+  closes `<thead>` or `<colgroup>` by itself, and closes a `<p>` or `<li>` only when it is
+  the innermost element. An estimate of that off the string was passed four ways, by pages
+  that then took 7–11 s in workerd. So the parse is preceded by a pass of the SAME parser
+  with the options linkedom gives it, building no tree: it counts every element the parser
+  opens and closes, and stops the moment the depth passes `MAX_READ_MODE_DEPTH`, the
+  elements `MAX_READ_MODE_ELEMENTS`, or the text runs and comments `MAX_READ_MODE_NODES`
+  (`withinReadModeMarkup`). Stopped there, the parser's array never grows past the depth
+  limit, so the pass is linear.
+- **Readability** on the parsed tree is super-linear in two directions. In nesting: the
+  same 74 KB, 250 deep and 5,000 elements took 0.4 s with one article and 10 s with
+  another (23.5 s in workerd). In width: it re-reads a parent's `children` after every
+  sibling it appends to the article, and linkedom builds that list afresh each time, so
+  59,000 sibling paragraphs took 173 s in workerd; text runs that share a parent behave the
+  same way (240,000 `&amp;` in one `<p>`: 4 s on Node). The walk after the parse therefore
+  adds up depth squared over every element and children squared over every parent, and
+  stops at `MAX_READ_MODE_COST`.
+
+These price the shapes found, not every shape a page could pick; Readability is a heuristic,
+not a bounded algorithm. So production also sets the Worker's own CPU limit
+(`limits.cpu_ms`, 5 s, in `wrangler.jsonc`), the backstop for a page that slips past both
+checks: it dies as a 5xx instead of running for minutes. At the caps, the slowest shape
+found took about 2 s on Node. The caps are a judgement from local pages, not real traffic:
+none of 391 local HTML files is refused, the heaviest (a 1 MB bookmarks export of 19,000
+elements) costs 1.2e7 against the 2.5e7 cap and has 19,000 text runs against 60,000, and the
+real pages above sit one to three orders of magnitude under that. Whether a real page is
+refused — `measure:kept-copies` fetches live sites — has not been run against it. A
 `robots.txt` verdict has a step budget (`MAX_ROBOTS_MATCH_STEPS`) after which the answer is a
 disallow. That is why a read-mode request is
 capped at `MAX_EXTRACT_READ_MODE_URLS` and why only an explicit per-link ask sends one

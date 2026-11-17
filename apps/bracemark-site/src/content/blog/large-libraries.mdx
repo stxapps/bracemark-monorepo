@@ -1,13 +1,8 @@
-{/_ DRAFT, not published. To publish: move this file up to blog/, and add to index.ts:
-slug: 'large-libraries'
-title: 'Hundreds of lists, on a phone'
-description: 'With 300 lists and 300 tags, our iOS share sheet ran out of memory. We explain what used it, what we changed, and how we measured it.'
-publishedAt: the day a release with these changes is live on both stores
-Before publishing: check that the release carries the share sheet's new pickers and the read-mode copy file, and re-check every number against docs/share-sheet.md and docs/client-queries.md. _/}
-
 You can start Bracemark by importing your browser bookmarks. Years of browser folders can turn into hundreds of lists in one import. We wanted to know what that does to the app on a phone. So we made a test account with 300 lists and 300 tags and used the app the way you would.
 
 Parts of the app slowed down. One part stopped working: on an iPhone, the share sheet closed itself while you were choosing a list. This post explains why, and what we changed.
+
+The Android changes are in the update we sent to Google Play on 17 November. The iPhone app is still waiting for its first App Store review. That first version doesn’t have these changes, so they’ll come to the iPhone in an update after it.
 
 ## The share sheet has very little memory
 

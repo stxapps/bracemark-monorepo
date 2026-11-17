@@ -316,7 +316,7 @@ class ShareViewController: UIViewController, ShareExtensionHosting {
 
   // ⚠ SAFARI'S READ-MODE COPY NEVER BECOMES A PROP. preprocessing.js hands back
   // the page's copy as JSON text under `readMode` — up to 3,000,000 characters
-  // (__bracemarkReaderDocJson's cap) — and as a prop it would sit in this
+  // from an honest page (__bracemarkReaderDocJson's cap, which runs in the page) — and as a prop it would sit in this
   // process three times over (this dictionary, the surface's folly::dynamic, the
   // JS heap) for the life of a sheet that never reads it. At the cap that was
   // 10–20 MB before anything was tapped, and with a large library in the list
@@ -330,10 +330,20 @@ class ShareViewController: UIViewController, ShareExtensionHosting {
   // A copy that can't be written is DROPPED, not passed inline: the copy is
   // optional, the memory is not. Nothing fails if this is undone — the copy
   // simply rides the props again, and only a phone at the cap shows it.
+  //
+  // A copy past the cap is dropped too. The 3,000,000 above is enforced by
+  // preprocessing.js, which runs in the shared page, so a hostile page can hand
+  // back a longer string; this is the first place that is ours. The main app's
+  // drain holds the file to the same cap again before it parses it
+  // (share-store.ts, `readCopyFile`). READER_CAPTURE_MAX_PAYLOAD_CHARS in
+  // @stxapps/shared reader-doc-core.ts; UTF-16 units, as JavaScript counts.
+  private static let readModeMaxChars = 3_000_000
+
   private static func movingReadModeToFile(_ results: NSDictionary) -> NSDictionary {
     guard let text = results["readMode"] as? String else { return results }
     let moved = results.mutableCopy() as! NSMutableDictionary
     moved.removeObject(forKey: "readMode")
+    guard text.utf16.count <= readModeMaxChars else { return moved }
     autoreleasepool {
       guard let groupId = Bundle.main.object(forInfoDictionaryKey: "AppGroupIdentifier") as? String,
             let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupId)

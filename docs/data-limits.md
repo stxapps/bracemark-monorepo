@@ -88,7 +88,12 @@ size, wherever it is stored or opened, and none of these is the walker's cap:
   characters, and the table ceilings (`READER_TABLE_MAX_COLUMNS` 24,
   `READER_TABLE_MAX_ROWS` 500). The capture's own message is held to
   `READER_CAPTURE_MAX_PAYLOAD_CHARS` 3,000,000 at the crossing, except through the
-  browser extension, which has no payload cap and meets only the store edge.
+  browser extension, which has no payload cap and meets only the store edge. On
+  Safari's share sheet the page-side check (`__bracemarkReaderDocJson`) runs where the
+  page could replace it, so the cap is applied again where it is ours: the share
+  extension's controller drops a longer copy before writing its file, and the app's
+  drain refuses a file larger than a capped copy can be before reading it
+  ([share-sheet.md](./share-sheet.md)).
 - **The decode** (web `lib/reader-doc-bytes.ts`, expo's twin): the inflated JSON is
   held to `READER_DOC_MAX_JSON_BYTES` 32 MiB. Web stops its stream at it; expo pushes
   fflate in 4 KiB slices, because fflate inflates a whole pushed chunk before it can be

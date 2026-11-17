@@ -67,6 +67,7 @@ import {
   LIST_NO_CHILDREN_IDS,
   LISTS_PREFIX,
   pathFromId,
+  READER_CAPTURE_MAX_PAYLOAD_CHARS,
   type Tag,
   TAGS_PREFIX,
   TRASH_ID,
@@ -328,13 +329,25 @@ function copiesDir(group: Directory): Directory {
 }
 
 // The copy a draft names, as the text it was written as — or undefined when the
-// draft names none, or the file is gone or unreadable: the copy is optional, and
-// losing it must never cost the draft.
+// draft names none, or the file is gone, unreadable or too big: the copy is optional,
+// and losing it must never cost the draft.
+//
+// SIZE FIRST, before the file is read. The 3,000,000-character cap a copy is captured
+// under runs inside the shared page (preprocessing.js's `__bracemarkReaderDocJson`),
+// where the page could replace it, so the file can hold whatever the share extension
+// survived writing — and a read is the whole file in this process's memory, then a
+// parse. A file past what a capped copy can take as UTF-8 (3 bytes for each UTF-16
+// unit, at most) is not read; one read is held to the cap in characters, as every other
+// door's crossing is (docs/data-limits.md).
+const COPY_FILE_MAX_BYTES = 3 * READER_CAPTURE_MAX_PAYLOAD_CHARS;
+
 function readCopyFile(group: Directory, name: string | undefined): string | undefined {
   if (name === undefined) return undefined;
   try {
     const file = new File(copiesDir(group), name);
-    return file.exists ? file.textSync() : undefined;
+    if (!file.exists || file.size > COPY_FILE_MAX_BYTES) return undefined;
+    const text = file.textSync();
+    return text.length <= READER_CAPTURE_MAX_PAYLOAD_CHARS ? text : undefined;
   } catch {
     return undefined;
   }

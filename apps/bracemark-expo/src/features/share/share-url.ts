@@ -28,7 +28,8 @@ export interface SharePayload {
   title?: string;
   // Where the page's read-mode copy is, when Safari's preprocessing found an
   // article: a file NAME under the App Group's `share/copies/`. The copy itself —
-  // a `ReaderDoc` as JSON text, up to 3M characters — never reaches this process's
+  // a `ReaderDoc` as JSON text, up to 3M characters (the controller drops a longer
+  // one, which only a page that replaced the cap could hand back) — never reaches this process's
   // JS: the controller takes it out of the preprocessing results and writes it to
   // that file before the props exist (ShareViewController.swift,
   // `movingReadModeToFile`; docs/share-sheet.md, _what the sheet does and doesn't

@@ -8,8 +8,7 @@ import {
   MAX_READ_MODE_COST,
   MAX_READ_MODE_DEPTH,
   MAX_READ_MODE_ELEMENTS,
-  MAX_READ_MODE_MARKUP,
-  MAX_READ_MODE_NESTING_ESTIMATE,
+  MAX_READ_MODE_NODES,
   readModeFromHtml,
   withinReadModeBounds,
   withinReadModeMarkup,
@@ -210,12 +209,12 @@ describe('the work a page may ask of the parse', () => {
 
   // Depth and element count are not a cost bound: the same 5,000 elements at depth 100 cost Readability
   // about 2 s on Node (and at depth 250, 10 s) where a flat page of 5,000 costs milliseconds. What is
-  // capped is the sum of depth squared over the elements.
+  // capped is the sum of depth squared over the elements, plus children squared over the parents.
   it('refuses a page whose depth and element count are each in bounds but whose product is not', () => {
     const body = `${'<div>'.repeat(100)}<p>${PROSE}</p><p>${PROSE}</p>${'<span>a</span>'.repeat(5000)}${'</div>'.repeat(100)}`;
     const html = `<!doctype html><html><body>${body}</body></html>`;
     const { document } = parseHTML(html);
-    // Each limit alone is met, and the string checks pass.
+    // Each limit alone is met, and the check before the parse passes.
     expect(5000 + 105).toBeLessThan(MAX_READ_MODE_ELEMENTS);
     expect(withinReadModeMarkup(html)).toBe(true);
     expect(5000 * 101 * 101).toBeGreaterThan(MAX_READ_MODE_COST);
@@ -223,6 +222,23 @@ describe('the work a page may ask of the parse', () => {
     expect(withinReadModeBounds(document as unknown as { firstElementChild: unknown })).toBe(false);
     const started = Date.now();
     expect(readModeFromHtml(html, FINAL, 7)).toBeNull();
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  // Width costs too: Readability re-reads a parent's `children` after each sibling it appends to the
+  // article, and linkedom builds that list afresh each time, so N siblings cost N squared — 59,000
+  // short paragraphs, 2% of the depth-squared cap, took 173 s in workerd.
+  it('refuses a parent with more children than the cost allows, though the page is shallow', () => {
+    const flat = (n: number) =>
+      `<!doctype html><html><body><div id=main><p>${PROSE}</p><p>${PROSE}</p><p>${PROSE}</p></div>${'<p>a. </p>'.repeat(n)}</body></html>`;
+    const tree = (html: string) =>
+      parseHTML(html).document as unknown as { firstElementChild: unknown };
+    const over = Math.ceil(Math.sqrt(MAX_READ_MODE_COST)) + 1;
+
+    expect(withinReadModeBounds(tree(flat(over)))).toBe(false);
+    expect(withinReadModeBounds(tree(flat(over - 200)))).toBe(true);
+    const started = Date.now();
+    expect(readModeFromHtml(flat(59_000), FINAL, 7)).toBeNull();
     expect(Date.now() - started).toBeLessThan(1000);
   });
 
@@ -234,9 +250,9 @@ describe('the work a page may ask of the parse', () => {
   });
 });
 
-// The parse itself (linkedom's `parseHTML`) is what a page of absurd nesting makes slow, and it runs
-// before any tree exists to walk — 160,000 nested <div>s (950 KB) took 24 s to parse — so the string
-// is checked first.
+// The parse itself (linkedom's `parseHTML`, htmlparser2 underneath) is what a page of absurd nesting
+// makes slow, and it runs before any tree exists to walk — 160,000 nested <div>s (950 KB) took 24 s
+// to parse — so the same parser counts the nesting first, building nothing, and stops at a limit.
 describe('the markup a page may hold before it is parsed', () => {
   it('answers not-an-article at once for 950 KB of nested divs, without parsing them', () => {
     const nested = `<!doctype html><html><body>${'<div>'.repeat(160_000)}x${'</div>'.repeat(160_000)}</body></html>`;
@@ -248,34 +264,77 @@ describe('the markup a page may hold before it is parsed', () => {
     expect(Date.now() - started).toBeLessThan(1000);
   });
 
-  it('counts the `<` characters: more than any real page holds is refused', () => {
-    expect(withinReadModeMarkup('<b>x</b>'.repeat(MAX_READ_MODE_MARKUP / 2 + 1))).toBe(false);
-    expect(withinReadModeMarkup('<b>x</b>'.repeat(MAX_READ_MODE_MARKUP / 2 - 1))).toBe(true);
+  it('counts nesting the way the parser builds it, at the same limit as the tree', () => {
+    const nest = (depth: number) =>
+      `<html><body>${'<div>'.repeat(depth - 2)}x${'</div>'.repeat(depth - 2)}</body></html>`;
+    const tree = (html: string) =>
+      parseHTML(html).document as unknown as { firstElementChild: unknown };
+
+    expect(withinReadModeMarkup(nest(MAX_READ_MODE_DEPTH))).toBe(true);
+    expect(withinReadModeBounds(tree(nest(MAX_READ_MODE_DEPTH)))).toBe(true);
+    expect(withinReadModeMarkup(nest(MAX_READ_MODE_DEPTH + 1))).toBe(false);
+    expect(withinReadModeBounds(tree(nest(MAX_READ_MODE_DEPTH + 1)))).toBe(false);
+    // Closes that come between the opens still leave one level per unit.
+    const stairs = (depth: number) =>
+      `<html><body>${'<i></i><div>'.repeat(depth - 2)}</body></html>`;
+    expect(withinReadModeMarkup(stairs(MAX_READ_MODE_DEPTH))).toBe(true);
+    expect(withinReadModeMarkup(stairs(MAX_READ_MODE_DEPTH + 1))).toBe(false);
   });
 
-  it('estimates nesting from the tags, and stops at a bound a real page is far inside', () => {
-    const nest = (depth: number) => '<div>'.repeat(depth) + '</div>'.repeat(depth);
+  // Each of these nests in htmlparser2 although a reading of the string says it doesn't: `/>` on an
+  // element that isn't void is ignored, `<thead>` and `<colgroup>` never close themselves, and an end
+  // tag with nothing of its name open closes nothing. An estimate off the string let ~1 MB of each
+  // through, and the parse then took 7 to 11 s in workerd.
+  it.each([
+    ['<div/>', '`/>` on an element that is not void'],
+    ['<div a=/>', 'an unquoted attribute ending in `/`'],
+    ['<thead>', 'an element that never closes itself'],
+    ['<colgroup>', 'another'],
+    ['<div></b>', 'an end tag with nothing of its name open'],
+    ['<p><b>', 'an implied close that applies only to the innermost element'],
+  ])('refuses %s repeated, which the parser nests (%s)', (unit) => {
+    const html = `<!doctype html><html><body>${unit.repeat(Math.floor(1_000_000 / unit.length))}</body></html>`;
 
-    expect(withinReadModeMarkup(nest(MAX_READ_MODE_NESTING_ESTIMATE))).toBe(true);
-    expect(withinReadModeMarkup(nest(MAX_READ_MODE_NESTING_ESTIMATE + 1))).toBe(false);
+    const started = Date.now();
+    expect(withinReadModeMarkup(html)).toBe(false);
+    expect(readModeFromHtml(html, FINAL, 7)).toBeNull();
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 
-  it('does not count what a real page leaves open or never nests', () => {
-    // Void elements, self-closed tags and end tags HTML lets a page leave out are not levels.
+  it('does not count what the parser closes for a page that leaves it open', () => {
+    // Void elements, and an `<li>`, `<p>` or `<td>` the next one closes, are not levels.
     const loose =
       '<ul>' +
       '<li>a'.repeat(3000) +
-      '</ul><p>x'.repeat(3000) +
+      '</ul>' +
+      '<p>x'.repeat(3000) +
       '<br>'.repeat(3000) +
       '<img src=x>'.repeat(3000) +
-      '<div/>'.repeat(3000) +
       '<table>' +
       '<tr><td>a<td>b'.repeat(3000) +
       '</table><!-- c --><!doctype html>';
 
-    expect(withinReadModeMarkup(loose)).toBe(true);
-    // Upper case and a stray close below zero are both read.
+    expect(withinReadModeMarkup(`<html><body>${loose}</body></html>`)).toBe(true);
+    // Upper case, and end tags with nothing open, are read as the parser reads them.
     expect(withinReadModeMarkup('</DIV></div>'.repeat(5000) + '<DIV>'.repeat(10))).toBe(true);
+  });
+
+  // An inline element left open inside a block that closes is closed with the block — depth 4 — and
+  // an estimate that counted the `<span>` as staying open refused this page.
+  it('reads a page whose blocks leave an inline element open', () => {
+    const html = page(`<p>${PROSE}</p><p>${PROSE}</p>${'<div class=c><span>x</div>'.repeat(1500)}`);
+
+    expect(withinReadModeMarkup(html)).toBe(true);
+    expect(readModeFromHtml(html, FINAL, 7)?.doc.blocks.length).toBeGreaterThan(0);
+  });
+
+  it('refuses more text runs and comments than a real page holds', () => {
+    // htmlparser2 emits a text run per decoded entity: a megabyte of `&amp;` is 200,000 nodes.
+    const body = (unit: string, n: number) => `<html><body><p>${unit.repeat(n)}</p></body></html>`;
+
+    expect(withinReadModeMarkup(body('&amp;', MAX_READ_MODE_NODES - 10))).toBe(true);
+    expect(withinReadModeMarkup(body('&amp;', MAX_READ_MODE_NODES + 10))).toBe(false);
+    expect(withinReadModeMarkup(body('<!---->', MAX_READ_MODE_NODES + 10))).toBe(false);
   });
 
   it('is linear: tags that never close, and a `<` that opens nothing, cost one pass', () => {

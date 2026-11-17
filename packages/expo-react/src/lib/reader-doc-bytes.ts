@@ -31,20 +31,36 @@ import { decodeUtf8 } from './utf8';
 // pushed). A copy that parses is then held to the store edge's size ceilings
 // (readerDocWithinCaps). Either way: undefined, like any other unreadable copy.
 export const INFLATE_SLICE_BYTES = 4096;
+//
+// Slicing has a cost of its own, and it is bounded here. While a member's HEADER is incomplete,
+// fflate's Gunzip copies everything pushed so far into one buffer and scans it again for the
+// header's end on every push, without inflating — so a header whose file name or comment never
+// ends (FNAME/FCOMMENT with no NUL) costs n² over the slices: 4 MB took 4.5 s on Node. A push that
+// inflates anything calls the callback (fflate calls it on every inflate step, empty or not); one
+// that only waits on a header does not. So a run of pushes with no callback is a header still
+// being read, and past MAX_HEADER_SLICES of them (64 KiB, over any header an honest gzip writes —
+// ours are 10 bytes) the copy is refused.
+export const MAX_HEADER_SLICES = 16;
 
 function inflateWithin(bytes: Uint8Array, limit: number): Uint8Array {
   const parts: Uint8Array[] = [];
   let total = 0;
+  let inflated = false;
   const gunzip = new Gunzip((chunk) => {
+    inflated = true;
     total += chunk.length;
     if (total > limit) throw new RangeError('reader copy too large');
     parts.push(chunk);
   });
+  let waiting = 0;
   for (let at = 0; at < bytes.length; at += INFLATE_SLICE_BYTES) {
+    inflated = false;
     gunzip.push(
       bytes.subarray(at, at + INFLATE_SLICE_BYTES),
       at + INFLATE_SLICE_BYTES >= bytes.length,
     );
+    if (inflated) waiting = 0;
+    else if (++waiting > MAX_HEADER_SLICES) throw new RangeError('reader copy header too long');
   }
   if (bytes.length === 0) gunzip.push(bytes, true);
   const out = new Uint8Array(total);

@@ -1,12 +1,4 @@
-{/_ DRAFT, not published. To publish: move this file up to blog/, and add to index.ts:
-slug: 'android-foldables'
-title: 'Folding and unfolding Bracemark on Android'
-description: 'A foldable hands Bracemark a phone screen and a near-square one. We tested what folding keeps, what it changes, and the bug we found.'
-publishedAt: the publishing day
-Publish after the tablet post, which this one links to. Before publishing:
-re-check the known-bug section against react/react-native#52952 and our own fix. _/}
-
-A foldable phone gives Bracemark two different screens. Folded, it’s a phone: about 443 points wide, and the app uses its phone layout. Open, it’s a near-square screen about 851 by 882 points, wide enough for the sidebar to stay docked beside your links, as it does [on a tablet](/blog/tablets-and-ipad).
+A foldable phone gives Bracemark two different screens. Folded, it’s a phone: about 443 points wide, and the app uses its phone layout. Open, it’s a near-square screen about 851 by 882 points, wide enough for the sidebar to stay docked beside your links, as it does on a tablet.
 
 So folding is the one everyday gesture that switches Bracemark between its two layouts while you’re using it. We wanted to know what that keeps and what it changes, so we ran the app on a Pixel 9 Pro Fold emulator, Android 16, folding and unfolding it from every state we could think of. Here’s what we found, including a bug we haven’t fixed yet.
 
@@ -30,7 +22,6 @@ Half-open, with the phone bent like a laptop or a book, Bracemark doesn’t chan
 
 ## A bug we haven’t fixed yet
 
-{/* TODO before publishing: re-check. If our fix or React Native’s has shipped, rewrite this section as fixed, with the version. */}
 Sometimes, after you fold the phone, Bracemark keeps its open-screen layout on the folded screen. The sidebar stays docked beside a list that is now only a few letters wide. Nothing is lost, and unfolding the phone puts it right. On the emulator, this happened in 3 of about 16 folds, and never on an unfold.
 
 The cause is below Bracemark, in React Native, the framework the app is built on. Android knew the screen had changed size. React Native didn’t pass the new size on, so the app went on laying itself out for the old one. Others have run into the same bug on foldables, and it’s [open in React Native’s tracker](https://github.com/react/react-native/issues/52952). Until it’s fixed there or we work around it, unfolding and folding again brings the right layout back.

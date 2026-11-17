@@ -1,27 +1,3 @@
-{/\_
-DRAFT, not published. Written 13 November 2026 against source revision f6e3a542d8137682ace9899056def1064d0f8ff4.
-
-To publish: move this file up to blog/, delete this comment, and add to index.ts:
-slug: 'source-security-review-2026-11'
-title: 'Source security review, November 2026'
-description: 'Our second AI-assisted source review: what a device may delete when a file is missing, what we fixed and rechecked, what we left, and what no one has reviewed.'
-publishedAt: the publish day (the series is dated; the October post keeps its date)
-
-Also, in the same change (docs/architecture.md, the marketing site’s /blog; security-reviews/README.md):
-
-- a new report, security-reviews/YYYY-MM-DD-source-review.md, and a new top row in security-reviews/README.md; this post links the series index until the report exists
-- a pointer line to this post at the end of the October post, plus updatedAt on its manifest entry; nothing else in the October post or report changes
-
-Before publishing, re-check every sentence marked TODO against what is live that day, and:
-
-- the pinned revision (the link in the last section) and the “what is in each release” section
-- the section on copies of a page: the claims that the feature is or isn’t in a release. If it hasn’t shipped, say so in one sentence or cut the section to that sentence (docs/brand-assets.md, only what ships)
-- the model sentence in the method section
-- the two items the section on what was live disclosed: both are in production and low in consequence
-  Gate: publish only if the fixes are in the revision the post pins. If that slips past the end of November, publish in December rather than describe code nobody has read.
-  Run brand-review, then the site’s lint, typecheck, test and production build; check the article, the sitemap, the feed and the mobile layout.
-  \_/}
-
 ## Why a second review
 
 October’s review found that a cleanup in the web app could delete a link’s saved preview on every device because the link was missing from one of them. The link was missing because a file that failed its integrity check was being skipped. We fixed that route and said some older ones remained. This review follows that thread, and it follows the code we wrote since: the same cleanups for the mobile apps, and code that keeps the text of an article as a read-mode copy.
@@ -42,8 +18,8 @@ October’s fix gave each device a record of the files it couldn’t open, and h
 
 A separate agent, starting from a fresh context, read the whole set. It found no ordinary path that deletes a file another device still names. The record, the gate on the cleanups, and the recheck did what they claim on the web and on mobile, in our test harness. Then it found what the record didn’t reach.
 
-- **Writers ignored the record.** Only the cleanups read it. A link whose preview file couldn’t be opened looked like a link with no preview, so the app fetched a new one and uploaded it over the server’s copy. The recheck then saw a newer local file and dropped the path from the record. After the 30-day grace, the cleanup for unreferenced files could delete what the unreadable file had pointed to, on every device. The overwrite is in the web app today. The deletion is in no release.
-- **A preview could reach the server before its link.** Changes go up in batches of up to 500, in path order, and a preview’s path sorts before its link’s. Between two batches, another device could see a preview with no link and delete it. This is in the web app today. In the cases we reproduced, the cost was a preview, which the app can fetch again.
+- **Writers ignored the record.** Only the cleanups read it. A link whose preview file couldn’t be opened looked like a link with no preview, so the app fetched a new one and uploaded it over the server’s copy. The recheck then saw a newer local file and dropped the path from the record. After the 30-day grace, the cleanup for unreferenced files could delete what the unreadable file had pointed to, on every device. The overwrite was in the web app until our release of 17 November. The deletion never reached a release.
+- **A preview could reach the server before its link.** Changes go up in batches of up to 500, in path order, and a preview’s path sorts before its link’s. Between two batches, another device could see a preview with no link and delete it. This was in the web app until 17 November. In the cases we reproduced, the cost was a preview, which the app can fetch again.
 - **The grace period used the device’s clock.** A clock set well ahead would shorten the 30 days.
 - **Smaller ones:** the cleanup of device-local list locks deleted the lock of a list that was only unreadable; the grace counted from when a file was uploaded, not from the owner’s last change; and a replaced image was deleted before its replacement uploaded.
 
@@ -78,20 +54,26 @@ The repository also holds code that keeps an article’s text, and optionally it
 
 We added limits where a copy is stored and where it’s opened, bounds on the image pack, a step budget for robots.txt, and depth and element limits in the link-extraction service. A second agent rechecked and found the work partly done. The service’s depth and element limits didn’t bound its cost: a 74 KB page passed both and took 23.5 seconds. The mobile app’s limit on how much a copy may decompress to didn’t bound memory, because the library decompresses a whole chunk before it can stop: 1 MiB of gzip took about 3 GB.
 
-We fixed those and the smaller ones. The mobile app now feeds the decompressor in 4 KiB slices. The link-extraction service checks a page’s markup before it parses it, and then adds up each element’s depth squared and refuses a page past a cap. Three things stay open. We chose that cap by running it over several hundred pages on our own disk, none of which it refused, so it isn’t calibrated on pages from the web, and no count can be exact: two pages of the same size and depth took 0.4 and 10 seconds, depending on their shape. We haven’t seen the mobile capture screen’s new-window handling on a device. And no separate agent has read these last fixes.
+We fixed those and most of the smaller ones. The mobile app now feeds the decompressor in 4 KiB slices.
 
-TODO: say what of this is in a release on the publish date. As of 13 November, the browser extension’s capture code is in the 1.2.0 builds on Chrome and Firefox (check whether it is reachable without the paid plan’s gate); the web reader, the mobile capture screen, and the link-extraction service’s read mode are in no release.
+Our first fix for the link-extraction service didn’t hold, and a third agent, reviewing everything up to the code we planned to release, showed why. The fix estimated a page’s nesting from its text, and the parser nests some markup the estimate didn’t count, so a 1 MB page still took about 10 seconds to parse. And the library that finds the article takes time that grows with the square of how many siblings it gathers: 59,000 short paragraphs side by side took 173 seconds. So the service now counts a page’s nesting with the same parser it reads the page with, before it builds anything, and stops at a limit. It counts how many children each element has, not only how deep it is. And our server stops any read that uses more than 5 seconds of processing, for a shape no check foresaw. The same agent found that the mobile app could stall on a malformed compressed copy, and that the iPhone share sheet read a copy’s file whole before checking its size. We fixed both. RECHECK-RESULT-PENDING
+
+Three things stay open. We chose the limits by running them over several hundred pages on our own disk, none of which they refused, so they aren’t calibrated on pages from the web. We haven’t seen the mobile capture screen’s new-window handling on a device. And a page in the Android capture screen can still start a download into your Downloads folder, as it could before. We also left three small ones that need a forged capture or a restored backup: the capture screen doesn’t cap how many images a capture names, the limits count characters rather than elements, and the browser extension refuses an honest copy with one very long block of text.
+
+None of this was in a release before 17 November, apart from an early version of the browser extension’s capture in its 1.2.0 builds. The reader, capture in the mobile app, read mode in the link-extraction service, and every limit above arrive with the release of that day.
 
 ## What is in each release
 
-TODO, filled in on the publish date from the deploy tags and the stores. As of 13 November, the web app, our API (the service behind sign-in, sync, and billing), and the link-extraction service run the code of 6 November, which has the October fixes and none of this review’s. The Android app live on Google Play has the October fixes. The iOS app was waiting for its first App Store review. Everything this post describes as fixed is committed, and none of it is deployed. The overwrite and the ordering problem in the section above are in the web app until it is.
+On 17 November we deployed the web app, our API (the service behind sign-in, sync, and billing), and the link-extraction service with the fixes this post describes. The same day we sent an Android update to Google Play and a browser extension update to Chrome and Firefox. Each reaches you once its store approves it. Until then, the Android app on Google Play has the October fixes and none of this review’s. The iOS app is still waiting for its first App Store review, and that first version has none of this review’s changes either.
+
+The release is built from a later revision than the one this post describes, [4c3f172](https://github.com/stxapps/bracemark-monorepo/tree/4c3f172c82f1928bae9d72c33a5ad201dd495ec3). It adds work on the screens around copies, the share sheet, and the list pickers. We read the changes that touch what this review covers, and so did the third agent: the iPhone share sheet now hands a copy to the app through a file, the capture screen and the reader were rearranged, and the web app syncs after you delete all data. Only the first needed a fix: the app read the copy’s file whole before checking its size, as described above.
 
 ## How we did it
 
-The method is October’s: we adapted Cloudflare’s [security-audit skill](https://github.com/cloudflare/security-audit-skill), a separate agent from a fresh context reviews each claim and each fix of ours, and no third party has audited Bracemark. The sessions that made these fixes and read the results ran on Claude Sonnet 5.5. The tooling didn’t record which model the separate reviewing agents ran on, so we can’t name it.
+The method is October’s: we adapted Cloudflare’s [security-audit skill](https://github.com/cloudflare/security-audit-skill), a separate agent from a fresh context reviews each claim and each fix of ours, and no third party has audited Bracemark. The session that ran the first of these reviews recorded that it ran on Claude Sonnet 5.5, and the reading of the release’s later changes ran on Claude Opus 5.5. The other sessions, and the separate reviewing agents, didn’t record which model they ran on, so we can’t name it.
 
 ## What this still doesn’t settle
 
 Nothing here has been retested on a device or on a running deployment. Our one staging run held an older build of the web app, so it says nothing about these changes. Open facts that need a device or a deployment: the mobile migration on a real first-release database; Android’s handling of a page that opens a new window; whether the phone’s network stack reads a response in pieces; and how a deployed Worker’s CPU limit treats a page near the link-extraction service’s cap.
 
-The next evidence has to be a build with these changes in it, run by us on a device or against staging. A report for this review will follow in the [series of source reviews](https://github.com/stxapps/bracemark-monorepo/blob/main/security-reviews/README.md), pinned to the revision it describes. This post describes [source revision f6e3a54](https://github.com/stxapps/bracemark-monorepo/tree/f6e3a542d8137682ace9899056def1064d0f8ff4). Read [October’s review](/blog/source-security-review-2026-10) for the first one, our [security page](/security) for what we claim, and the [public source](https://github.com/stxapps/bracemark-monorepo). Source availability doesn’t prove which build you’re running. If you find a problem, please send the details privately through our [security reporting policy](https://github.com/stxapps/bracemark-monorepo/blob/main/SECURITY.md).
+The next evidence has to be a build with these changes in it, run by us on a device or against staging. The [November 2026 source security review report](https://github.com/stxapps/bracemark-monorepo/blob/main/security-reviews/2026-11-17-source-review.md) has the details, and it sits in the [series of source reviews](https://github.com/stxapps/bracemark-monorepo/blob/main/security-reviews/README.md). This post describes [source revision f6e3a54](https://github.com/stxapps/bracemark-monorepo/tree/f6e3a542d8137682ace9899056def1064d0f8ff4). Read [October’s review](/blog/source-security-review-2026-10) for the first one, our [security page](/security) for what we claim, and the [public source](https://github.com/stxapps/bracemark-monorepo). Source availability doesn’t prove which build you’re running. If you find a problem, please send the details privately through our [security reporting policy](https://github.com/stxapps/bracemark-monorepo/blob/main/SECURITY.md).

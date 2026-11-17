@@ -27,6 +27,7 @@ export const BLOG_POSTS: BlogPost[] = [
     description:
       'Our AI-assisted source review recorded low-severity findings and open questions. We explain the method, what launch changed, and what still needs evidence.',
     publishedAt: '2026-10-26T00:00:00Z',
+    updatedAt: '2026-11-17T00:00:00Z',
   },
   {
     slug: 'importing-your-links',
@@ -62,6 +63,27 @@ export const BLOG_POSTS: BlogPost[] = [
     description:
       'We can’t reset your password, so the copy your password manager keeps has to be right. We measured what Chrome, Safari, iOS, and Android do with our forms.',
     publishedAt: '2026-11-06T00:00:00Z',
+  },
+  {
+    slug: 'source-security-review-2026-11',
+    title: 'Source security review, November 2026',
+    description:
+      'Our second AI-assisted source review: what a device may delete when a file is missing, what we fixed and rechecked, what we left, and what no one has reviewed.',
+    publishedAt: '2026-11-17T00:00:00Z',
+  },
+  {
+    slug: 'large-libraries',
+    title: 'Hundreds of lists, on a phone',
+    description:
+      'With 300 lists and 300 tags, our iOS share sheet ran out of memory. We explain what used it, what we changed, and how we measured it.',
+    publishedAt: '2026-11-18T00:00:00Z',
+  },
+  {
+    slug: 'android-foldables',
+    title: 'Folding and unfolding Bracemark on Android',
+    description:
+      'A foldable hands Bracemark a phone screen and a near-square one. We tested what folding keeps, what it changes, and the bug we found.',
+    publishedAt: '2026-11-19T00:00:00Z',
   },
 ];
 

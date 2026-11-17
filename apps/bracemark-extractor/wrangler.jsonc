@@ -205,6 +205,19 @@
       ],
       "routes": [{ "pattern": "extractor.bracemark.com", "custom_domain": true }],
       // See the staging note on never logging the URL.
+      //
+      // A BACKSTOP on read mode's cost, not its bound. Read mode parses a stranger's
+      // page into a DOM and runs Readability over it, and the checks before and after
+      // the parse price the shapes we know of, not every shape
+      // (docs/link-extraction-server.md, _cost on the Worker_). Real pages took at most
+      // ~0.5 s of CPU, so 5 s leaves ten times that, and a page that slips past the
+      // checks dies here instead of running for minutes: the request ends in a 5xx,
+      // which the client treats as a transport failure and does not retry by itself.
+      // HERE and not at the top level, because `limits` is inherited by every env that
+      // has none of its own, and the Workers Free plan refuses `cpu_ms`, and staging is
+      // on Free. Staging needs none: Free's own 10 ms limit is a tighter cap (and kills
+      // most real read-mode requests too, so read mode can't be tested there).
+      "limits": { "cpu_ms": 5000 },
     },
   },
 }

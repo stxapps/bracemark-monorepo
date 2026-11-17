@@ -50,6 +50,7 @@
     "@mozilla/readability": "^0.6.0",
     "@stxapps/shared": "*",
     "hono": "^4.12.23",
+    "htmlparser2": "^10.1.0",
     "linkedom": "^0.18.15",
     "zod": "^4.4.3"
   },

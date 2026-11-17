@@ -23,6 +23,7 @@ import {
   type List,
   MY_LIST_ID,
   rankBetween,
+  READER_CAPTURE_MAX_PAYLOAD_CHARS,
   SYSTEM_LIST_DEFAULTS,
   type Tag,
   TRASH_ID,
@@ -107,6 +108,10 @@ jest.mock('expo-file-system', () => {
     }
     get modificationTime(): number | null {
       return mockFiles.has(this.uri) ? (mockMtimes.get(this.uri) ?? 0) : null;
+    }
+    // Bytes, as the real File reports them; 0 for a file that isn't there.
+    get size(): number {
+      return new TextEncoder().encode(mockFiles.get(this.uri) ?? '').length;
     }
     textSync(): string {
       const text = mockFiles.get(this.uri);
@@ -457,6 +462,85 @@ describe('drainShareOutbox', () => {
     mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify(withFile));
     await expect(drainShareOutbox({ keepReadMode: true })).resolves.toEqual(['links/link-1.enc']);
     expect(storeReadModeCopy).not.toHaveBeenCalled();
+  });
+
+  // Each delete below is checked on a FRESH file, which the hour-old sweep would leave: the
+  // drain's own delete is what removes it, not the sweep after it.
+  it('deletes a copy as soon as its draft is applied, or refused as another account’s', async () => {
+    const name = '0A1B2C3D-0000-4000-8000-000000000002.json';
+    const COPY = `group/share/copies/${name}`;
+    const text = JSON.stringify({ version: 1, capturedAt: 1, blocks: [] });
+    mockDirs.add('group/share/copies');
+
+    mockFiles.set(COPY, text);
+    mockMtimes.set(COPY, Date.now());
+    mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify({ ...draft, readModeFile: name }));
+    await drainShareOutbox({ keepReadMode: true });
+    expect(mockFiles.has(COPY)).toBe(false);
+
+    const { storeReadModeCopy } =
+      jest.requireMock<typeof import('./store-read-mode')>('./store-read-mode');
+    jest.mocked(storeReadModeCopy).mockClear();
+    mockFiles.set(COPY, text);
+    mockMtimes.set(COPY, Date.now());
+    mockFiles.set(
+      `${OUTBOX}/link-1.json`,
+      JSON.stringify({ ...draft, owner: 'bob', readModeFile: name }),
+    );
+    await drainShareOutbox({ keepReadMode: true });
+    expect(storeReadModeCopy).not.toHaveBeenCalled();
+    expect(mockFiles.has(COPY)).toBe(false);
+  });
+
+  // The name is checked where the file is READ, not only where the sheet wrote it: a draft is a
+  // file in a shared container, and the name in it is the only thing between the read and any
+  // other path in that container.
+  it('never reads or deletes a file a draft names outside the copies directory', async () => {
+    const { storeReadModeCopy } =
+      jest.requireMock<typeof import('./store-read-mode')>('./store-read-mode');
+    jest.mocked(storeReadModeCopy).mockClear();
+    const SECRET = 'group/share/secret.json';
+    mockFiles.set(SECRET, JSON.stringify({ version: 1, capturedAt: 1, blocks: [] }));
+    for (const readModeFile of ['../secret.json', '../../share/secret.json', 'a/../../secret.json']) {
+      mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify({ ...draft, readModeFile }));
+      expect(parseShareDraft(JSON.stringify({ ...draft, readModeFile }))).toBeNull();
+      await drainShareOutbox({ keepReadMode: true });
+    }
+    expect(storeReadModeCopy).not.toHaveBeenCalled();
+    expect(mockFiles.has(SECRET)).toBe(true);
+  });
+
+  // The 3,000,000-character cap a copy is captured under runs inside the shared page, which can
+  // replace it; the drain holds the file to it again, and checks the size before reading.
+  it('neither stores nor keeps a copy file past the capture cap', async () => {
+    const { storeReadModeCopy } =
+      jest.requireMock<typeof import('./store-read-mode')>('./store-read-mode');
+    jest.mocked(storeReadModeCopy).mockClear();
+    const name = '0A1B2C3D-0000-4000-8000-000000000003.json';
+    const COPY = `group/share/copies/${name}`;
+    mockDirs.add('group/share/copies');
+    for (const text of ['x'.repeat(READER_CAPTURE_MAX_PAYLOAD_CHARS + 1), '€'.repeat(3_000_001)]) {
+      mockFiles.set(COPY, text);
+      mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify({ ...draft, readModeFile: name }));
+      await expect(drainShareOutbox({ keepReadMode: true })).resolves.toEqual(['links/link-1.enc']);
+      expect(mockFiles.has(COPY)).toBe(false);
+    }
+    expect(storeReadModeCopy).not.toHaveBeenCalled();
+
+    // Past what a capped copy can take as UTF-8, the file is not even read.
+    const { File } = jest.requireMock<typeof import('expo-file-system')>('expo-file-system');
+    const read = jest.spyOn(File.prototype, 'textSync');
+    mockFiles.set(COPY, '€'.repeat(3_000_001));
+    mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify({ ...draft, readModeFile: name }));
+    await drainShareOutbox({ keepReadMode: true });
+    expect(read.mock.contexts.some((file) => (file as { uri: string }).uri === COPY)).toBe(false);
+    read.mockRestore();
+
+    const atCap = 'x'.repeat(READER_CAPTURE_MAX_PAYLOAD_CHARS);
+    mockFiles.set(COPY, atCap);
+    mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify({ ...draft, readModeFile: name }));
+    await drainShareOutbox({ keepReadMode: true });
+    expect(storeReadModeCopy).toHaveBeenCalledWith('alice', 'link-1', atCap, { images: false });
   });
 
   // A sheet closed without Save leaves its copy with no draft to name it. The drain sweeps

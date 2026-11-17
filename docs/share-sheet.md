@@ -958,10 +958,12 @@ available 51.1 MB`**, with no memory warning at any point. `saved` comes
      `controller`; in a reused one, sharing the Wikipedia article, the item
      providers took 0.6 s (Safari's preprocessing) and the sheet drew with them.
 
-  `plus-full` (runs A and B) came after both fixes below, and passed. The copy IS bounded: the capture
-  stops at `READER_DOC_MAX_CHARS` (1,000,000) or `READER_DOC_MAX_BLOCKS`
-  (10,000), and `__bracemarkReaderDocJson` drops a serialised copy over
-  3,000,000 characters, so the sheet gets none ([data-limits.md](./data-limits.md)).
+  `plus-full` (runs A and B) came after both fixes below, and passed. An honest page's copy is
+  bounded: the capture stops at `READER_DOC_MAX_CHARS` (1,000,000) or
+  `READER_DOC_MAX_BLOCKS` (10,000), and `__bracemarkReaderDocJson` drops a serialised
+  copy over 3,000,000 characters. Both run in the shared page, which could replace
+  them, so the controller drops a longer string before writing the file, and the
+  app's drain checks the file's size before it reads it ([data-limits.md](./data-limits.md)).
   Those caps were set for the store, not for this process — and the next read
   shows what that costs.
 
@@ -1178,8 +1180,9 @@ available 51.1 MB`**, with no memory warning at any point. `saved` comes
   controller takes `readMode` out of the preprocessing results as the provider
   answers — off the main queue, before the props exist — and writes it to
   `share/copies/<uuid>.json` in the App Group (`movingReadModeToFile`,
-  ShareViewController.swift; logged as a `copy-file` line with its length). The
-  root gets `readModeFile`, the file's NAME; `share-url.ts` admits only a UUID
+  ShareViewController.swift; logged as a `copy-file` line with its length; a string
+  over 3,000,000 characters, which only a page that replaced the cap can hand back,
+  is dropped instead). The root gets `readModeFile`, the file's NAME; `share-url.ts` admits only a UUID
   and `.json`, and ignores a `readMode` that arrives inline anyway; the draft
   carries the name; and the drain reads the file when the account keeps copies
   — parsed for the first time there (`storeReadModeCopy`), so a bad copy costs
