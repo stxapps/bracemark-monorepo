@@ -356,6 +356,10 @@ export function LinkPreviewsProvider({ children }: { children: ReactNode }) {
               generateAllCursorRef.current,
               await unreadablePathSet(username),
             );
+            // Torn down while the reads were out — the opt-in switched off, the account or the
+            // extractor changed, unmount. The check at the top of the loop is behind us; a
+            // cancelled run must never reach the extractor.
+            if (cancelled) return;
             if (page.links.length > 0) {
               // One batched extract extracts the whole page — the server fans the URLs out,
               // so titles land together fast and images fill in pooled. Throws only on a
@@ -401,6 +405,7 @@ export function LinkPreviewsProvider({ children }: { children: ReactNode }) {
             )
           ).slice(0, take);
           if (links.length === 0) break;
+          if (cancelled) return; // as in generate-all: torn down during the reads
 
           // Returns the count processed (`take` already bounds it to the auto budget), or
           // throws on a wholesale transport failure (caught below — budget is left intact).

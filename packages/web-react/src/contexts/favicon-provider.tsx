@@ -211,6 +211,12 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
           // request may have resolved this host since it was queued.
           const existing = await readFavicon(host);
           if (stoppedRef.current || usernameRef.current !== owner) return;
+          // And again after the read: the opt-in may have been switched off, or the
+          // extractor changed, while it was out — checked above only before it.
+          if (!enabledRef.current || clientRef.current !== client) {
+            handledRef.current.delete(host);
+            return;
+          }
           if (!isFaviconStale(existing)) return;
 
           let icon: Uint8Array | undefined;
