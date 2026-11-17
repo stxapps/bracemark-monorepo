@@ -233,8 +233,7 @@ describe('the work a page may ask of the parse', () => {
   it('refuses a parent with more children than the cost allows, though the page is shallow', () => {
     const flat = (n: number) =>
       `<!doctype html><html><body><div id=main><p>${PROSE}</p><p>${PROSE}</p><p>${PROSE}</p></div>${'<p>a. </p>'.repeat(n)}</body></html>`;
-    const tree = (html: string) =>
-      parseHTML(html).document as unknown as Walked;
+    const tree = (html: string) => parseHTML(html).document as unknown as Walked;
     const over = Math.ceil(Math.sqrt(MAX_READ_MODE_COST)) + 1;
 
     expect(withinReadModeBounds(tree(flat(over)))).toBe(false);
@@ -270,7 +269,10 @@ describe('the work a page may ask of the parse', () => {
       'attributes on a wide parent',
       `<div${Array.from({ length: 20_000 }, (_, i) => ` a${i}`).join('')}><p>${PROSE}</p>${'<p>a. </p>'.repeat(4000)}</div>`,
     ],
-    ['text runs deep in the tree', `${'<section>'.repeat(240)}<p>${PROSE}${'&amp;'.repeat(5000)}</p>${'</section>'.repeat(240)}`],
+    [
+      'text runs deep in the tree',
+      `${'<section>'.repeat(240)}<p>${PROSE}${'&amp;'.repeat(5000)}</p>${'</section>'.repeat(240)}`,
+    ],
   ])('weighs the nodes elements carry, not only the elements: %s', (_, body) => {
     const html = `<!doctype html><html><body>${body}</body></html>`;
 
@@ -306,8 +308,7 @@ describe('the markup a page may hold before it is parsed', () => {
   it('counts nesting the way the parser builds it, at the same limit as the tree', () => {
     const nest = (depth: number) =>
       `<html><body>${'<div>'.repeat(depth - 2)}x${'</div>'.repeat(depth - 2)}</body></html>`;
-    const tree = (html: string) =>
-      parseHTML(html).document as unknown as Walked;
+    const tree = (html: string) => parseHTML(html).document as unknown as Walked;
 
     expect(withinReadModeMarkup(nest(MAX_READ_MODE_DEPTH))).toBe(true);
     expect(withinReadModeBounds(tree(nest(MAX_READ_MODE_DEPTH)))).toBe(true);
