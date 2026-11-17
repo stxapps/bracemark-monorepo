@@ -70,8 +70,16 @@ jest.mock('dexie-react-hooks', () => ({
 // One link, permanently pending — so the ONLY thing that can stop a request is the
 // gate. `runServerTitleImageBatch` is where the drain reaches the extractor.
 const mockPending = [{ id: 'l1', url: 'https://example.com/a' }];
+// When set, the DRAIN's reads (not the probe's, which only wakes it) wait on it: held open
+// between the drain's gate check and its request. Told apart by the caller's frame.
+let mockHoldDrainRead: Promise<void> | null = null;
+let mockDrainReads = 0;
 jest.mock('../data/queries', () => ({
-  readLinksPendingTitleImageForLinkPaths: () => Promise.resolve(mockPending),
+  readLinksPendingTitleImageForLinkPaths: () => {
+    if (!/\bat drain\b/.test(new Error().stack ?? '')) return Promise.resolve(mockPending);
+    mockDrainReads += 1;
+    return (mockHoldDrainRead ?? Promise.resolve()).then(() => mockPending);
+  },
   readLinksPendingTitleImagePage: () => Promise.resolve({ links: mockPending, cursor: null }),
   readRawPendingTitleImageCount: () => Promise.resolve(mockPending.length),
 }));
@@ -83,11 +91,12 @@ jest.mock('../lib/server-link-previews', () => ({
     mockRunBatch(username, links, client),
 }));
 
+let mockHoldFaviconRead: Promise<void> | null = null;
 // No cached answer, so a permitted request always goes out — the gate is the only
 // thing that can hold it back.
 const mockPutFaviconNone = jest.fn(() => Promise.resolve());
 jest.mock('../data/favicon-store', () => ({
-  readFavicon: () => Promise.resolve(undefined),
+  readFavicon: () => (mockHoldFaviconRead ?? Promise.resolve()).then(() => undefined),
   isFaviconStale: () => true,
   putFavicon: () => Promise.resolve(),
   putFaviconNone: () => mockPutFaviconNone(),
@@ -107,25 +116,32 @@ function AsksForAFavicon() {
 
 // `client` is what the app passes when an extractor origin is configured; `null` is
 // what it passes when there is none.
+const tree = (extractClient: ExtractClient | null) => (
+  <ExtractClientProvider client={extractClient}>
+    <LinkPreviewsProvider>
+      <ReportsAPage />
+    </LinkPreviewsProvider>
+    <FaviconProvider>
+      <AsksForAFavicon />
+    </FaviconProvider>
+  </ExtractClientProvider>
+);
+
 async function mount(extractClient: ExtractClient | null) {
+  let rendered: ReturnType<typeof render> | undefined;
   await act(async () => {
-    render(
-      <ExtractClientProvider client={extractClient}>
-        <LinkPreviewsProvider>
-          <ReportsAPage />
-        </LinkPreviewsProvider>
-        <FaviconProvider>
-          <AsksForAFavicon />
-        </FaviconProvider>
-      </ExtractClientProvider>,
-    );
+    rendered = render(tree(extractClient));
   });
+  return rendered as ReturnType<typeof render>;
 }
 
 describe('the server-extraction gate', () => {
   beforeEach(() => {
     mockUsername = 'alice';
     mockServerExtraction = true;
+    mockHoldDrainRead = null;
+    mockHoldFaviconRead = null;
+    mockDrainReads = 0;
     mockRunBatch.mockClear();
     mockFetchImage.mockClear();
     mockPutFaviconNone.mockClear();
@@ -155,6 +171,29 @@ describe('the server-extraction gate', () => {
     mockServerExtraction = false;
     await mount(extractor);
     await act(async () => void (await Promise.resolve()));
+    expect(mockRunBatch).not.toHaveBeenCalled();
+    expect(mockFetchImage).not.toHaveBeenCalled();
+  });
+
+  // Switched off while a request was being prepared: each provider checked the gate,
+  // then awaited a local read, and went on to the extractor without checking again —
+  // one more batch of URLs after the user said no. (It is also how this file's first
+  // test leaked a call into the next one, when its unmount landed on that read.)
+  it('sends nothing once the opt-in goes off while a read is out', async () => {
+    let releaseReads: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => (releaseReads = resolve));
+    mockHoldDrainRead = held;
+    mockHoldFaviconRead = held;
+    const { rerender } = await mount(extractor);
+    await waitFor(() => expect(mockDrainReads).toBe(1));
+
+    mockServerExtraction = false;
+    await act(async () => rerender(tree(extractor)));
+    await act(async () => {
+      releaseReads?.();
+      await held;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
     expect(mockRunBatch).not.toHaveBeenCalled();
     expect(mockFetchImage).not.toHaveBeenCalled();
   });
