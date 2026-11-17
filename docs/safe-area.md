@@ -679,6 +679,18 @@ Eight things nothing would flag:
   is tested. The sheets' host is mounted around the Drawer for this reason
   (`SheetHost`, `components/ui/sheet.tsx`). The portaled dialogs never had the
   problem: they land in the root PortalHost.
+- **⚠ On an iPad the status bar's tap reaches over the top bars.** iOS's
+  tap-the-status-bar scroll-to-top answers a tap anywhere in roughly the top 64
+  points there (iPad Pro 11" simulator, iPadOS 26: y ≤ 62 scrolled, y ≥ 65 did not)
+  while the status bar is 24 — so the upper half of every top bar's buttons (y
+  41–77) is a status-bar tap as well; our Pressables aren't UIControls, so iOS
+  doesn't count the touch as taken. It sent the links list to the top on a tap of
+  search or ⋯, and, acting ~350 ms late, on closing the reader or the capture
+  screen with their ✕, once the list under them was in front again. So every
+  scroller under a top bar takes `scrollsToTop={SCROLLS_TO_TOP}`
+  (`src/lib/status-bar-scroll.ts`), off on an iPad; a new one without it passes on
+  a phone and on Android and breaks only there. An iPhone's status bar is taller
+  than that region, so its top bars keep the gesture.
 - **Insets are per edge, and a side inset is not always a landscape notch.**
   The iPhone Duo's outer display reserves a strip down its trailing edge for
   the status bar and camera, at PHONE width, upright

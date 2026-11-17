@@ -50,6 +50,7 @@ import { withUniwind } from 'uniwind';
 import { BrandLockup } from '../../components/brand-lockup';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
+import { SCROLLS_TO_TOP } from '../../lib/status-bar-scroll';
 import { cn } from '../../lib/utils';
 import { SETTINGS_SECTIONS, type SettingsSection } from './sections';
 
@@ -122,7 +123,11 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
           group is deliberately absent — seven rows under a lockup need no
           "Settings" heading to explain them, and the topbar already names the
           one you are in. */}
-      <ScrollView className="flex-1 px-2 pt-2" contentContainerClassName="gap-0.5 pb-4">
+      <ScrollView
+        className="flex-1 px-2 pt-2"
+        contentContainerClassName="gap-0.5 pb-4"
+        scrollsToTop={SCROLLS_TO_TOP}
+      >
         {SETTINGS_SECTIONS.map((section) => (
           <NavItem key={section.id} section={section} onSelected={closeDrawer} />
         ))}

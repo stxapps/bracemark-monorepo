@@ -37,6 +37,7 @@ import { Icon } from '../../components/ui/icon';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Text } from '../../components/ui/text';
 import { openLink, openWayback } from '../../lib/open-url';
+import { SCROLLS_TO_TOP } from '../../lib/status-bar-scroll';
 import { ReaderArticle } from './reader-article';
 import { ScreenshotViewer } from './screenshot-viewer';
 import { ReaderTopbar, type ReaderTopbarAction } from './topbar';
@@ -507,7 +508,10 @@ export function ReaderScreen({ linkId }: { linkId: string }) {
           testIDPrefix="reader"
           onClose={close}
         />
-        <ScrollView contentContainerClassName="mx-auto w-full max-w-2xl px-4 py-6 md:px-6">
+        <ScrollView
+          scrollsToTop={SCROLLS_TO_TOP}
+          contentContainerClassName="mx-auto w-full max-w-2xl px-4 py-6 md:px-6"
+        >
           {body}
         </ScrollView>
       </StyledSafeAreaView>

@@ -47,6 +47,8 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { type SharedValue, useSharedValue } from 'react-native-reanimated';
 import { withUniwind } from 'uniwind';
 
+import { SCROLLS_TO_TOP } from '../../lib/status-bar-scroll';
+
 // Composites (not core hosts) need Uniwind's HOC to accept `className` — the
 // auth screens' pattern, including keyboard-controller's scroll view so a
 // focused field (rename, passwords) stays clear of the keyboard.
@@ -265,6 +267,7 @@ export function SettingsScrollHost({
       <SettingsScrollContext.Provider value={handle}>
         <StyledKeyboardAwareScrollView
           ref={scrollRef}
+          scrollsToTop={SCROLLS_TO_TOP}
           className="flex-1"
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"

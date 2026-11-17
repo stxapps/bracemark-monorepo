@@ -49,6 +49,7 @@ import { LOCK_COPY } from '@stxapps/react';
 import { type LinkSortOn } from '@stxapps/shared';
 
 import { LockPane } from '../../components/lock-pane';
+import { SCROLLS_TO_TOP } from '../../lib/status-bar-scroll';
 import { BulkEditBar } from './bulk-edit-bar';
 import { CARD_H_CHROME, LinkCard } from './link-card';
 import { bucketRowWidth, hasKnownTags, LinkRow } from './link-row';
@@ -510,6 +511,7 @@ function UnlockedMain() {
             // the screen by then). `"handled"` is the other half: FlashList
             // forwards these to its ScrollView, whose default `"never"` would
             // eat the first tap on a result and open nothing.
+            scrollsToTop={SCROLLS_TO_TOP}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
             contentContainerStyle={contentPadding ? { padding: contentPadding } : undefined}

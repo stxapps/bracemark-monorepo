@@ -79,6 +79,7 @@ import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
 import { Peek, type PeekAnchor } from '../../components/ui/peek';
 import { Text } from '../../components/ui/text';
+import { SCROLLS_TO_TOP } from '../../lib/status-bar-scroll';
 import { useProgressiveCount } from '../../lib/use-progressive-count';
 import { cn } from '../../lib/utils';
 import { type Selection, useLinksPage } from './page-provider';
@@ -1041,6 +1042,7 @@ export function Sidebar({
             extraData={renderEntry}
             keyExtractor={(entry) => entry.key}
             getItemType={(entry) => entry.type}
+            scrollsToTop={SCROLLS_TO_TOP}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
             contentContainerStyle={NAV_CONTENT_PADDING}
@@ -1050,6 +1052,7 @@ export function Sidebar({
         <ScrollView
           testID="links-nav"
           className="flex-1 px-2 pb-4"
+          scrollsToTop={SCROLLS_TO_TOP}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         >
