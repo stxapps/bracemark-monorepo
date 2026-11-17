@@ -80,16 +80,28 @@ export const DOC_GROUPS: DocGroup[] = [
         description:
           'Bring a removed link back from Trash, and understand what can and cannot be recovered after an edit or deletion.',
       },
+      {
+        slug: 'layout-sort-and-theme',
+        title: 'Layout, sort, and theme',
+        description:
+          'Show links as a list or cards, sort them by date, choose a light, dark, or timed theme, and keep a choice to one device.',
+      },
     ],
   },
   {
-    title: 'Previews',
+    title: 'Previews and copies',
     pages: [
       {
         slug: 'link-previews',
         title: 'Link previews',
         description:
           'Learn where titles and images come from on each platform, what the optional server sees, and why a preview may fail.',
+      },
+      {
+        slug: 'read-mode-and-screenshots',
+        title: 'Read mode and screenshots',
+        description:
+          'Keep a read-mode copy or a screenshot of a page, read it after the page changes or goes, and see which apps and plans take one.',
       },
     ],
   },
@@ -100,7 +112,7 @@ export const DOC_GROUPS: DocGroup[] = [
         slug: 'import',
         title: 'Import your links',
         description:
-          'Bring links in from a browser, Raindrop.io, Pocket, LinkWarden, or a Bracemark backup: which file to use, what comes across, and what happens at your limit.',
+          'Bring links in from a browser, Raindrop.io, Pocket, Linkwarden, or a Bracemark backup: which file to use, what comes across, what happens at your limit.',
       },
       {
         slug: 'export',
@@ -109,10 +121,10 @@ export const DOC_GROUPS: DocGroup[] = [
           'Save your library as a Bracemark backup, an HTML bookmarks file, a CSV, or a list of URLs: what each one includes, and what every export leaves out.',
       },
       {
-        slug: 'sign-out',
-        title: 'Sign out',
+        slug: 'delete-all-data',
+        title: 'Delete all data',
         description:
-          'Remove this device’s local copy and session, sign out other devices, and let pending changes sync first.',
+          'Empty your library on every device and keep your account: what to do first, what is deleted, and what stays.',
       },
     ],
   },
@@ -142,6 +154,12 @@ export const DOC_GROUPS: DocGroup[] = [
         title: 'Sync and devices',
         description:
           'See how offline changes reach your other devices, how to check sync, and what happens when two devices edit the same link.',
+      },
+      {
+        slug: 'sign-out',
+        title: 'Sign out',
+        description:
+          'Remove this device’s local copy and session, sign out other devices, and let pending changes sync first.',
       },
     ],
   },

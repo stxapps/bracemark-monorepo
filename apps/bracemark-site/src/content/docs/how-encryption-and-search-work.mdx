@@ -8,6 +8,6 @@ Searching needs readable words to compare. The app builds and searches against i
 
 ## What is visible outside that boundary
 
-Our API — the service behind sign-in, sync, and billing — holds the information needed to run them, including your username, public key, sessions, encrypted-file metadata, and a subscription record if you pay. Optional server previews receive a plaintext URL and your IP address while fetching a page. This is a separate service with no account key. You can leave it off and use the browser extension or mobile device for previews. See [security](/security), [privacy](/privacy), and [link previews](/docs/link-previews) for the full boundaries.
+Our API — the service behind sign-in, sync, and billing — holds the information needed to run them, including your username, public key, sessions, encrypted-file metadata, and a subscription record if you pay. Optional server previews and Server read mode send a plaintext URL to our link-extraction service, which also receives your IP address while fetching the page. This is a separate service with no account key. Both are off unless you turn them on; the browser extension and the phone apps read pages on your device instead. See [security](/security), [privacy](/privacy), [link previews](/docs/link-previews), and [read mode and screenshots](/docs/read-mode-and-screenshots) for the full boundaries.
 
 There is no email reset path if both your password and recovery code are gone. [Keep the recovery code](/docs/create-an-account) separately from your password.
