@@ -238,21 +238,43 @@ test('the copy’s images are asked of the page that was captured', async () => 
   await expect(images).resolves.toEqual(new Map([['i0', new Uint8Array([1, 2, 3])]]));
 });
 
-test('on another page the user followed a link to, both buttons are off', async () => {
-  await onPage('https://elsewhere.example/other');
-  expect(keep().props.accessibilityState?.disabled).toBe(true);
-  expect(preview().props.accessibilityState?.disabled).toBe(true);
+// A shortener, an `m.` or AMP host, a sign-in wall, or the user's own tap: the page on
+// screen is not the saved address, and there is no page to "go back" to. The buttons
+// take the page shown, and the top bar names its host so the user sees which.
+test('on a page the link redirected to, both buttons take that page', async () => {
+  await onPage('https://www.youtube.com/watch?v=abc');
+  expect(screen.getByTestId('capture-title')).toHaveTextContent('youtube.com');
+  expect(keep().props.accessibilityState?.disabled).toBeFalsy();
+  expect(preview().props.accessibilityState?.disabled).toBeFalsy();
   fireEvent.press(keep());
-  fireEvent.press(preview());
-  expect(mockInject).not.toHaveBeenCalled();
-  expect(
-    screen.getByText('Go back to the saved page to update its preview or keep a copy.'),
-  ).toBeTruthy();
+  await post({
+    type: 'bracemark-read-mode',
+    nonce: lastRequest().nonce,
+    href: 'https://www.youtube.com/watch?v=abc',
+    doc: CAPTURE,
+  });
+  expect(mockKeepReadMode).toHaveBeenCalledTimes(1);
+  expect(await screen.findByTestId('capture-read')).toBeTruthy();
+});
+
+test('moving to another page re-arms what was done on the last one', async () => {
+  await onPage();
+  fireEvent.press(keep());
+  await post({ type: 'bracemark-read-mode', nonce: lastRequest().nonce, href: URL_, doc: CAPTURE });
+  expect(await screen.findByTestId('capture-read')).toBeTruthy();
+  // The same page again (the https twin, a trailing slash) is not another page.
+  act(() => webviewProps.onNavigationStateChange({ url: `${URL_}/`, loading: false }));
+  expect(screen.getByTestId('capture-read')).toBeTruthy();
+  act(() =>
+    webviewProps.onNavigationStateChange({ url: 'https://example.com/next', loading: false }),
+  );
+  expect(screen.queryByTestId('capture-read')).toBeNull();
+  expect(keep().props.accessibilityState?.disabled).toBeFalsy();
 });
 
 // ⚠ The WebView can navigate between the tap and the page's answer; a copy taken then
-// is another page's, filed under this link at the tier nothing outranks.
-test('an answer from a page that is no longer the link’s is refused', async () => {
+// is of a page the user never saw, filed under this link at the tier nothing outranks.
+test('an answer from a page other than the one shown at the tap is refused', async () => {
   await onPage();
   fireEvent.press(keep());
   await post({

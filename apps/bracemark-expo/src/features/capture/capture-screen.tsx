@@ -82,14 +82,19 @@ import { usePageCapture } from './use-page-capture';
 //     mode_ is marked Plus and opens the upgrade instead of capturing (the browser
 //     extension's saved screen does the same). The page itself still loads: it is
 //     the user's own link, and the Wayback Machine is the same on every plan.
-//   - THE PAGE MUST STILL BE THE LINK'S. The user can follow links inside the
-//     WebView; a copy or a preview taken then would be ANOTHER page's, filed under this
-//     link at `expo:fg` — the top tier, which nothing outranks later. The buttons are
-//     live only while the WebView's current URL has the link's canonical identity
-//     (`canonicalUrlKey`, so http→https and a trailing slash still match), and the
-//     address the PAGE reports with its answer is checked again, for a navigation
-//     between the tap and the answer. The page re-checks it before every image fetch
-//     too (web-react lib/webview-capture.ts).
+//   - WHAT IS KEPT IS THE PAGE ON SCREEN. Not necessarily the saved address: a
+//     shortener, an `m.` or AMP host, a sign-in wall and the user's own taps all land
+//     somewhere else, and a rule that the page be the link's own left both buttons off
+//     on every link that redirects, with no page to "go back" to. Both actions are a
+//     tap on the page the user is looking at — its host is in the top bar — so they
+//     take that page, filed under this link at `expo:fg`; a tap on the wrong page is
+//     seen and redone. What IS checked is that the page answering is the one shown at
+//     the tap (`samePage`, `canonicalUrlKey`, so http→https and a trailing slash still
+//     match): a page can navigate itself between the tap and the answer, and a copy
+//     taken then would be one the user never saw. The page re-checks its own address
+//     before every image fetch too (web-react lib/webview-capture.ts). Moving to
+//     another page re-arms both buttons, so a page reached after one was kept can be
+//     kept instead.
 //   - THE CONVERSATION IS use-page-capture.ts's: one request at a time, an answer
 //     counted only with its request's nonce, every request ending.
 //
@@ -97,6 +102,12 @@ import { usePageCapture } from './use-page-capture';
 // (react-native-view-shot) is a second native dependency, not taken in this change.
 
 const StyledSafeAreaView = withUniwind(SafeAreaView);
+
+// One page, as the screen tells pages apart: the same canonical identity.
+function samePage(a: string | null | undefined, b: string | null | undefined): boolean {
+  const key = a ? canonicalUrlKey(a) : null;
+  return key !== null && b != null && key === canonicalUrlKey(b);
+}
 
 // The footer's words, and why only these mount a line. A tap that WORKED says so on its
 // own button — _Kept — read it_, _Preview updated_ — so the bar doesn't grow under the
@@ -109,7 +120,6 @@ const StyledSafeAreaView = withUniwind(SafeAreaView);
 // nothing either_) — and it comes and goes with a navigation, when the page above is
 // changing anyway.
 const REASON = {
-  offPage: 'Go back to the saved page to update its preview or keep a copy.',
   loadFailed: 'This page didn’t load, so there’s nothing to update or keep from it.',
 } as const;
 const FAILURE = {
@@ -255,7 +265,9 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
     if (sourceUri === secureHref) setSecureFailed(true);
     else setLoadFailed(true);
   };
-  const host = link ? hostFromText(link.url) : '';
+  // The page's own host, not the saved one: after a redirect or a tap they differ, and
+  // the top bar is how the user sees which page the buttons will take.
+  const host = link ? hostFromText(currentUrl ?? link.url) : '';
   // Both exits hide behind a lock, as the reader's do: the host is the list's contents.
   const waybackHref = link && !locked ? waybackUrl(link.url, link.createdAt) : undefined;
   const hasCopy = Boolean(extraction?.readModeId || extraction?.screenshotId);
@@ -276,13 +288,8 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
       onPress: () => openWayback(waybackHref),
     });
   }
-  const isLinkPage = (url: string | null | undefined): boolean =>
-    Boolean(link && url) &&
-    canonicalUrlKey(url as string) !== null &&
-    canonicalUrlKey(url as string) === canonicalUrlKey((link as LinkItem).url);
-  const onLinkPage = isLinkPage(currentUrl);
-  const ready = onLinkPage && !loading && !loadFailed && busy === null;
-  const reason = loadFailed ? REASON.loadFailed : !onLinkPage && !loading ? REASON.offPage : '';
+  const ready = currentUrl !== null && !loading && !loadFailed && busy === null;
+  const reason = loadFailed ? REASON.loadFailed : '';
   const fail = (text: string) => setMessage({ text, tone: 'error' });
 
   const keep = async () => {
@@ -291,11 +298,12 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
       return;
     }
     if (!link || !ready) return;
+    const shown = currentUrl;
     setBusy('readMode');
     setMessage(null);
     try {
       const answer = await page.readMode();
-      if (!answer || !isLinkPage(answer.href)) {
+      if (!answer || !samePage(answer.href, shown)) {
         fail(FAILURE.keep);
         return;
       }
@@ -320,11 +328,12 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
 
   const updatePreview = async () => {
     if (!entitled || !link || !ready || previewDone !== null) return;
+    const shown = currentUrl;
     setBusy('preview');
     setMessage(null);
     try {
       const answer = await page.meta();
-      if (!answer || !isLinkPage(answer.href)) {
+      if (!answer || !samePage(answer.href, shown)) {
         fail(FAILURE.preview);
         return;
       }
@@ -395,6 +404,11 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
             isCaptureNavigationAllowed(request.url, request.isTopFrame)
           }
           onNavigationStateChange={(nav) => {
+            // Another page: what was done was done to the last one (header, _what is kept_).
+            if (!samePage(nav.url, currentUrl)) {
+              setKept(false);
+              setPreviewDone(null);
+            }
             setCurrentUrl(nav.url);
             setLoading(nav.loading);
           }}

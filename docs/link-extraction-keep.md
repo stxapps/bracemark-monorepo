@@ -745,17 +745,24 @@ and Android's WebView has its own `CookieManager`, apart from Chrome's. So, in o
    says. A tap that worked says so on its own button (_Kept — read it_, _Preview
    updated_, which then goes off), so good news never grows the bar under the page;
    only a failure or a part-done result mounts a line, as an alert, and the one quiet
-   line left is why the buttons are off (another page, a failed load). **Both actions are `keptCopies`'**: no route brings a free account here,
+   line left is why the buttons are off (a failed load). **Both actions are `keptCopies`'**: no route brings a free account here,
    and one that arrives anyway (a plan lapsing on the screen, an old address) gets
    no _Update preview_ — a free account sets a title and image by hand in the editor
    — and a _Keep a copy_ marked Plus that opens the upgrade. Its top bar's menu also has
    the Wayback Machine, and a page that fails to load offers it in words (_when the
    page is gone_). A locked
-   list's page stays unloaded, and both top-bar exits with it; both actions are live only while the WebView is on
-   the link's own page (`canonicalUrlKey`) and only while the page actually loaded
-   (a failed load shows the WebView's own error page, so both go off and the screen
-   says the page didn't load), the address the page reports with its answer is
-   checked again, and the page re-checks it before every image fetch.
+   list's page stays unloaded, and both top-bar exits with it. **Both actions take the
+   page on screen, not the saved address**: a shortener, an `m.` or AMP host, a
+   sign-in wall and the user's own taps all land somewhere else, and requiring the
+   link's own page left both buttons off on every link that redirects, with no page
+   to go back to. The top bar names the host of the page shown, so the user sees which
+   page a tap takes, and one taken from the wrong page (a sign-in page's title as the
+   preview) is seen and redone. They are live only while the page actually loaded (a
+   failed load shows the WebView's own error page, so both go off and the screen says
+   the page didn't load); the address the page reports with its answer must be the
+   page shown at the tap (`canonicalUrlKey`, for a page that navigates itself between
+   the two), and the page re-checks its own address before every image fetch. Moving
+   to another page re-arms both buttons.
    The conversation is one injected request at a time, each with a fresh nonce
    its answers must echo (`features/capture/use-page-capture.ts`, the protocol in
    `@stxapps/shared` `reader/page-capture.ts`); the injected script is a second
@@ -766,11 +773,7 @@ and Android's WebView has its own `CookieManager`, apart from Chrome's. So, in o
    _react-native-webview_). Its cookie store persists, so a user signs in to a site
    once — which is what makes it the fallback for every save that couldn't read the
    page as the user sees it: an Android share, an iOS share from an app other than
-   Safari, a page behind a sign-in. Not done: a page that redirects on load (an `m.`
-   host, AMP, a shortener) lands somewhere `canonicalUrlKey` doesn't match, and the
-   buttons stay off. Accepting the address the first load settles on is not the fix
-   — a page behind a sign-in redirects to its sign-in page first, and its title would
-   become the link's. _Planned_: a **visible** batch over a scoped selection, one
+   Safari, a page behind a sign-in. _Planned_: a **visible** batch over a scoped selection, one
    page after another, with the screen on.
 3. **Later, a Safari Web Extension** in the iOS app: the browser extension itself,
    in Safari.
