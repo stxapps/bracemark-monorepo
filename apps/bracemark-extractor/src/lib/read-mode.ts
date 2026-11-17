@@ -75,8 +75,8 @@ type ReadabilityDocument = ConstructorParameters<typeof Readability>[0];
 // images inside the extract request would hold it open past its deadline and inline
 // megabytes into a JSON response. The walker has resolved each against the final URL.
 // The most work a page may ask of read mode before it is called "not an article". The byte cap
-// (MAX_HTML_BYTES) bounds what is READ, not what it COSTS, and a stranger picks the page. Two
-// costs, so two checks:
+// (MAX_HTML_BYTES) bounds what is READ, not what it COSTS, and a stranger picks the page. Three
+// costs:
 //
 // - PARSING (linkedom's `parseHTML`, which is htmlparser2 underneath) costs time in the square of
 //   the nesting: htmlparser2 keeps its open elements in an array it `unshift`s and searches, so
@@ -97,19 +97,29 @@ type ReadabilityDocument = ConstructorParameters<typeof Readability>[0];
 //   other child on the way (59,000 sibling paragraphs: 173 s; 4,900 among 55,000 comments: 17 s).
 //   So the walk after the parse weighs both (`withinReadModeBounds`, MAX_READ_MODE_COST) and stops
 //   at the cap.
+// - READABILITY's work no node count sees. It copies an element's attributes one by one when it
+//   renames the element, in a loop that re-reads a list linkedom rebuilds on every read, so A
+//   attributes cost A squared (40,000 on one `<div>`: 135 s); and it re-reads every element's text
+//   whole for each element above it (one 900 KB text run 240 deep: 10.8 s). The walk charges both
+//   against the same cap. The rest of what was found slow is work in one string — a regex that
+//   retries from every character, every word of a title compared with every word of a heading, a
+//   wrapper's attributes copied down a chain — and is made linear before or inside Readability
+//   instead of priced (`defuseForReadability`, `LinearReadability`).
 //
-// These price the shapes found, not every shape a page could pick — Readability is a heuristic, not
-// a bounded algorithm — so the Worker's own CPU limit (wrangler.jsonc, `limits.cpu_ms` on
-// production) is the backstop: a request that slips past both dies there, as a 5xx. Staging, on the
-// Workers Free plan, has Free's own, tighter limit instead.
+// These price and defuse the shapes found, not every shape a page could pick — Readability is a
+// heuristic, not a bounded algorithm — so the Worker's own CPU limit (wrangler.jsonc,
+// `limits.cpu_ms` on production) is the backstop: a request that slips past them all would die
+// there, as a 5xx. Staging, on the Workers Free plan, has Free's own, tighter limit instead.
 //
 // The cap is a judgement from local pages, not from real traffic. Over 650 local HTML files none is
-// refused; the heaviest, a 1 MB export of 10,000 bookmarks (19,000 elements), weighs 3.2e7 and took
-// about 0.8 s on Node, 0.9 s in workerd; real article pages weigh one to three orders of magnitude
-// less. Pages built to be slow, each scaled to just under the cap (attributes or text deep in the
-// tree, comments or attributes among wide siblings, flat siblings, long tables), took at most 0.7 s
-// on Node. A page past it is answered `not-an-article`; the live set `measure:kept-copies` fetches
-// would say whether a real page is refused, and has not been run against it.
+// refused; the heaviest, a 1 MB export of 10,000 bookmarks (19,000 elements), weighs 3.7e7 and took
+// about 0.7 s on Node, 0.9 s in workerd; real article pages weigh one to three orders of magnitude
+// less, and carry at most 11 attributes on an element. Every shape the reviews built to be slow,
+// scaled to the largest that passes, took at most about 2.5 s in workerd — the shapes found, not a
+// bound. A page past the cap is answered `not-an-article`; the live set `measure:kept-copies`
+// fetches would say whether a real page is refused, and has not been run against it. Pages built
+// to look honest come nearer: a pretty-printed 1 MB article weighs 0.9 of the cap, and a 1 MB docs
+// page with a large sidebar, or a comment thread 30 replies deep from 750 KB, are refused.
 export const MAX_READ_MODE_DEPTH = 256;
 export const MAX_READ_MODE_ELEMENTS = 60_000;
 export const MAX_READ_MODE_COST = 40_000_000;
@@ -171,22 +181,31 @@ export function withinReadModeMarkup(html: string): boolean {
 // 2.7 s on Node, though its elements cost almost nothing. So each element adds its depth squared
 // times (1 + its attributes + its children that are not elements), and each parent adds its element
 // children times (all its child nodes + its attributes), the width term Readability's sibling loop
-// pays for.
+// pays for. Then the work no walk of nodes is: each text run adds its length times its depth (the
+// re-reads of `textContent` above it), and each element ATTRIBUTE_COPY_WEIGHT times its attributes
+// squared (the copy `_setNodeTag` makes when Readability renames it). One unit of each costs about
+// the same in workerd. The other copy, down a chain of wrappers, is not priced but removed
+// (`LinearReadability`).
 export function withinReadModeBounds(root: WalkedNode): boolean {
   const stack: { el: WalkedNode; depth: number }[] = [];
   let count = 0;
   let cost = 0;
-  // Pushes `parent`'s element children and charges its width; returns how many of its child nodes
-  // are not elements, or -1 past a limit.
+  // Pushes `parent`'s element children, charges its width and its text runs; returns how many of
+  // its child nodes are not elements, or -1 past a limit.
   const push = (parent: WalkedNode, depth: number, attributes: number): number => {
+    const nodes = parent.childNodes;
     let children = 0;
-    for (let c = parent.firstElementChild; c; c = c.nextElementSibling) {
-      stack.push({ el: c, depth });
-      if (++children > MAX_READ_MODE_ELEMENTS) return -1;
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      if (node.nodeType === ELEMENT_NODE) {
+        stack.push({ el: node, depth });
+        if (++children > MAX_READ_MODE_ELEMENTS) return -1;
+      } else if (node.nodeType === TEXT_NODE) {
+        cost += depth * (node.data?.length ?? 0);
+      }
     }
-    const nodes = parent.childNodes.length;
-    cost += children * (nodes + attributes);
-    return cost > MAX_READ_MODE_COST ? -1 : nodes - children;
+    cost += children * (nodes.length + attributes);
+    return cost > MAX_READ_MODE_COST ? -1 : nodes.length - children;
   };
   if (push(root, 1, 0) < 0) return false;
   while (stack.length > 0) {
@@ -194,7 +213,8 @@ export function withinReadModeBounds(root: WalkedNode): boolean {
     const attributes = el.attributes?.length ?? 0;
     const other = push(el, depth + 1, attributes);
     if (other < 0) return false;
-    cost += depth * depth * (1 + attributes + other);
+    cost +=
+      depth * depth * (1 + attributes + other) + ATTRIBUTE_COPY_WEIGHT * attributes * attributes;
     if (
       depth > MAX_READ_MODE_DEPTH ||
       ++count > MAX_READ_MODE_ELEMENTS ||
@@ -206,12 +226,19 @@ export function withinReadModeBounds(root: WalkedNode): boolean {
   return true;
 }
 
-// What the walk reads of linkedom's document and elements.
+// An attribute pair in Readability's copy loops (`_setNodeTag`: rebuild the list, read one, look the
+// name up on the target) against a unit of the walk's: 40,000 attributes on one `<div>`, 1.6e9 pairs,
+// took 135 s in workerd, about 84 ns a pair; the walk's heaviest unit is about 60 ns.
+const ATTRIBUTE_COPY_WEIGHT = 2;
+const ELEMENT_NODE = 1;
+const TEXT_NODE = 3;
+
+// What the walk reads of linkedom's document and nodes.
 type WalkedNode = {
-  firstElementChild: WalkedNode | null;
-  nextElementSibling: WalkedNode | null;
-  childNodes: { length: number };
+  nodeType: number;
+  childNodes: ArrayLike<WalkedNode>;
   attributes?: { length: number };
+  data?: string;
 };
 
 export function readModeFromHtml(
@@ -238,11 +265,13 @@ function readModeOrThrow(
   if (!withinReadModeBounds(document as unknown as WalkedNode)) return null;
   setBaseUrl(document, finalUrl);
 
+  defuseForReadability(document);
+
   const page = document as unknown as ReadabilityDocument;
   if (!isProbablyReaderable(page)) return null;
   // No clone, unlike the live-page capture: this document is ours, built for this one
   // read, and nothing else looks at it after Readability has mutated it.
-  const article = new Readability(page).parse();
+  const article = new LinearReadability(page).parse();
   if (!article?.content) return null;
 
   const parsed = parseHTML(`<!doctype html><html><body>${article.content}</body></html>`);
@@ -252,6 +281,141 @@ function readModeOrThrow(
     finalUrl.toString(),
     now,
   );
+}
+
+// Readability with two of its own methods made linear. Both are Readability's internals, not its
+// API, so a spec fails if an upgrade stops having them.
+//
+// - `_textSimilarity` checks each word of one text against every word of the other
+//   (`Array.includes`), and it compares the article title with every `<h1>` and `<h2>`: a 960 KB
+//   `og:title` against an `<h2>` of other words took 55 s. The same answer from a Set, with the
+//   title's words kept between calls.
+// - `_simplifyNestedElements` replaces a `<div>` or `<section>` that only wraps another with that
+//   child, copying the wrapper's attributes onto it one by one (each copy rebuilds linkedom's list),
+//   and goes on down: a chain carries every wrapper's attributes above it, each level paying their
+//   count squared (276 wrappers of 250 attributes over 20-deep chains: 32 s). Nothing after it reads
+//   a wrapper's attributes — Readability only strips classes, and the walker reads links, images and
+//   table cells — so they are removed first, each in one step, and the chain has none to carry.
+//   (That includes the id of Readability's own `readability-page-1` wrapper, which the method spares;
+//   simplified, it leaves the same text.)
+class LinearReadability extends Readability {
+  private similarityText?: string;
+  private similarityWords = new Set<string>();
+
+  _textSimilarity(textA: string, textB: string): number {
+    if (textA !== this.similarityText) {
+      this.similarityText = textA;
+      this.similarityWords = new Set(words(textA));
+    }
+    return similarity(this.similarityWords, words(textB));
+  }
+
+  _simplifyNestedElements(articleContent: DefusedElement): void {
+    const wrappers = articleContent.querySelectorAll('div, section') as ArrayLike<DefusedElement>;
+    for (const wrapper of [articleContent, ...Array.from(wrappers)]) {
+      for (const { name } of Array.from(wrapper.attributes)) wrapper.removeAttribute(name);
+    }
+    readabilityMethod('_simplifyNestedElements').call(this, articleContent);
+  }
+}
+
+// One of Readability's own methods, by name, for an override to call through to.
+export function readabilityMethod(name: string): (this: unknown, ...args: unknown[]) => unknown {
+  return (Readability.prototype as unknown as Record<string, never>)[name];
+}
+
+const words = (text: string) => text.toLowerCase().split(/\W+/).filter(Boolean);
+
+// Readability's `_textSimilarity`, with `tokensA.includes` replaced by a Set lookup.
+export function textSimilarity(textA: string, textB: string): number {
+  return similarity(new Set(words(textA)), words(textB));
+}
+
+function similarity(wordsA: Set<string>, wordsB: string[]): number {
+  if (wordsA.size === 0 || wordsB.length === 0) return 0;
+  const unique = wordsB.filter((word) => !wordsA.has(word));
+  return 1 - unique.join(' ').length / wordsB.join(' ').length;
+}
+
+// The strings Readability runs a backtracking regex over, made safe before it runs, with the
+// answer each regex would give unchanged where it can be and the attribute dropped where not:
+//
+// - `<meta property>`: Readability matches `/\s*(article|…)\s*:…/g`, unanchored, so a long run of
+//   whitespace costs its length squared. Each run becomes one space, which every `\s*` in it
+//   matches the same way, and Readability strips the whitespace from what it keeps anyway.
+// - `srcset`, and an image's lazy-loading attribute that Readability would copy into one: its
+//   `srcsetUrl` regex retries from every character of a run whose end it can't match (81 KB: 24 s).
+//   `srcsetBacktracks` follows the regex's own scan and says whether it reaches such a run; an
+//   honest srcset never does, and an image without one keeps its `src`.
+// - Another lazy-loading attribute: `/^\s*\S+\.(jpg|jpeg|png|webp)\S*\s*$/` tries every extension
+//   in the first word of a value of several words, each to the end of that word.
+export function defuseForReadability(document: ParsedDocument): void {
+  const all = (selector: string) =>
+    Array.from(document.querySelectorAll(selector) as ArrayLike<DefusedElement>);
+  for (const meta of all('meta[property]')) {
+    const property = meta.getAttribute('property') ?? '';
+    const collapsed = property.replace(/\s+/g, ' ');
+    if (collapsed !== property) meta.setAttribute('property', collapsed);
+  }
+  for (const media of all(MEDIA)) {
+    const lazy = LAZY_IMAGE.has(media.tagName);
+    for (const { name, value } of Array.from(media.attributes)) {
+      if (name === 'src' || name === 'alt') continue;
+      const copiedAsSrcset = name === 'srcset' || (lazy && LAZY_SRCSET.test(value));
+      if (copiedAsSrcset ? srcsetBacktracks(value) : lazy && lazySrcBacktracks(value)) {
+        media.removeAttribute(name);
+      }
+    }
+  }
+}
+
+// What the pass reads and writes of linkedom's elements.
+type DefusedElement = {
+  tagName: string;
+  querySelectorAll(selector: string): unknown;
+  attributes: ArrayLike<{ name: string; value: string }>;
+  getAttribute(name: string): string | null;
+  setAttribute(name: string, value: string): void;
+  removeAttribute(name: string): void;
+};
+const MEDIA = 'img, picture, figure, video, audio, source';
+// The elements `_fixLazyImages` reads attributes of, and its two tests on each value.
+const LAZY_IMAGE = new Set(['IMG', 'PICTURE', 'FIGURE']);
+const LAZY_SRCSET = /\.(jpg|jpeg|png|webp)\s+\d/;
+const LAZY_SRC_EXTENSION = /\.(jpg|jpeg|png|webp)/g;
+const LAZY_SRC_MAX_EXTENSIONS = 8;
+
+// Does Readability's `/(\S+)(\s+[\d.]+[xw])?(\s*(?:,|$))/g` meet a run it retries from every
+// character? Its scan, run once: from each run of non-space, the match takes the whole run when what
+// follows it matches the tail, and the regex goes on after the tail. When the tail fails, the match
+// backs off to the run's last comma (`a.jpg, b.jpg` ends its first run in one), and every start
+// after that comma fails, each reading to the run's end — so it is a retried run unless that comma
+// ends the run.
+export function srcsetBacktracks(srcset: string): boolean {
+  const tail = /(?:\s+[\d.]+[xw])?\s*(?:,|$)/y;
+  let at = 0;
+  while (at < srcset.length) {
+    while (at < srcset.length && /\s/.test(srcset[at])) at++;
+    if (at >= srcset.length) return false;
+    let end = at;
+    while (end < srcset.length && !/\s/.test(srcset[end])) end++;
+    tail.lastIndex = end;
+    const match = tail.exec(srcset);
+    if (match) at = end + match[0].length;
+    else if (end - 1 > at && srcset[end - 1] === ',') at = end;
+    else return true;
+  }
+  return false;
+}
+
+// `/^\s*\S+\.(jpg|jpeg|png|webp)\S*\s*$/` can only fail when the value is more than one word, and
+// then it tries each extension in the first word to that word's end.
+function lazySrcBacktracks(value: string): boolean {
+  const trimmed = value.trim();
+  const space = trimmed.search(/\s/);
+  if (space < 0) return false;
+  const first = trimmed.slice(0, space);
+  return (first.match(LAZY_SRC_EXTENSION)?.length ?? 0) > LAZY_SRC_MAX_EXTENSIONS;
 }
 
 // The bytes of an HTML response as text, in the charset the response names — the

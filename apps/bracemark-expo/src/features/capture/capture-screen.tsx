@@ -386,6 +386,10 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
           // separate window's own client, which has no handler of ours — so a page could reach
           // an address the rule below refuses. False loads them in THIS WebView, where
           // `onShouldStartLoadWithRequest` sees them like any other navigation.
+          // ⚠ Not covered by any of this: on Android a navigation the rule allows whose answer is
+          // a FILE goes to the library's own DownloadListener → DownloadManager → the public
+          // Downloads folder, and no prop turns that off. Left open on purpose
+          // (docs/link-extraction-keep.md, _the capture WebView stays on the web_).
           setSupportMultipleWindows={false}
           onShouldStartLoadWithRequest={(request) =>
             isCaptureNavigationAllowed(request.url, request.isTopFrame)

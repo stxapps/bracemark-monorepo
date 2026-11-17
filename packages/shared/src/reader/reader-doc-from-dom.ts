@@ -197,7 +197,7 @@ class Builder {
   lineBreak(): void {
     let last = this.runs[this.runs.length - 1];
     while (last) {
-      last.text = last.text.replace(/[ \t]+$/, '');
+      last.text = trimSpacesAndTabsEnd(last.text);
       if (last.text !== '') break;
       this.runs.pop();
       last = this.runs[this.runs.length - 1];
@@ -247,6 +247,16 @@ function sameMarks(run: ReaderRun, marks: Marks): boolean {
   );
 }
 
+// The end of a text trimmed with a scan, never `/\s+$/`-style: a regex anchored only at the END is
+// tried from every character of a run of whitespace, each try reading to the run's end, so a page's
+// `<pre>` of 160,000 spaces and one letter took 40 s. `trimEnd()` (the same characters as `\s`) and
+// this loop read each character once.
+function trimSpacesAndTabsEnd(text: string): string {
+  let end = text.length;
+  while (end > 0 && (text[end - 1] === ' ' || text[end - 1] === '\t')) end--;
+  return end === text.length ? text : text.slice(0, end);
+}
+
 // Trim whitespace off the block's two ends (inside runs, a collapsed space between
 // words is content) and drop runs that end up empty.
 function trimRuns(runs: ReaderRun[]): ReaderRun[] {
@@ -258,7 +268,7 @@ function trimRuns(runs: ReaderRun[]): ReaderRun[] {
   }
   while (out.length > 0) {
     const last = out[out.length - 1];
-    last.text = last.text.replace(/\s+$/, '');
+    last.text = last.text.trimEnd();
     if (last.text !== '') break;
     out.pop();
   }
@@ -594,7 +604,7 @@ function walkBlocks(node: DomNode, builder: Builder, ctx: { quote: boolean; dept
         walkListItem(item, builder, { ordered, depth: ctx.depth });
       }
     } else if (tag === 'PRE') {
-      const text = (el.textContent ?? '').replace(/^\n+|\s+$/g, '');
+      const text = (el.textContent ?? '').replace(/^\n+/, '').trimEnd();
       if (text !== '') builder.push({ kind: 'code', text });
     } else if (tag === 'HR') {
       builder.push({ kind: 'rule' });

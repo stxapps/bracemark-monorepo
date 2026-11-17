@@ -353,6 +353,15 @@ an earlier copy's pack and `writeExtraction` reclaims it.
   `about:`, and `blob:` / `data:` only as frame content, never as where the window goes.
   A `mailto:` or `tel:` link tapped on the capture screen therefore does nothing there.
   A message from the page longer than an honest capture sends is dropped unparsed.
+  **Left open, knowingly: a download on Android.** A navigation to an http(s) address
+  passes the rule, and when the answer is a file (`Content-Disposition: attachment`, or a
+  type the WebView can't show) react-native-webview's own `DownloadListener` hands it to
+  Android's `DownloadManager`, which saves it to the public Downloads folder with a
+  notification and, from Android 10, no permission prompt (the library's
+  `RNCWebViewManagerImpl.kt` and `RNCWebViewModuleImpl.java`). No prop turns that off and
+  the rule never sees the response, so closing it means patching the library; a page can
+  put a file of its choosing in Downloads, and nothing in the app opens it. It predates the
+  capture rule, and has not been seen on a device. iOS has no such path.
 - **bracemark-extractor** returns the addresses and fetches none: thirty images
   inside the extract request would hold it past its deadline and inline megabytes
   into JSON. The proxy is rate-limited per address and shared with a bulk import's
