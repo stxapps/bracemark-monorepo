@@ -139,23 +139,49 @@ import { useLinksViewState } from '../_contexts/view-state-provider';
 
 type BulkAction = 'restore' | 'pin' | 'unpin' | 'archive' | 'copies' | 'remove';
 
-// Below this container width the secondary actions (Edit tags, Pin, Unpin,
-// Archive, Delete copies) collapse into a ⋯ overflow menu so the fixed button row never spills
-// off a narrow pane (the collapsible sidebar can widen the sidebar / shrink this
-// pane without a window resize, and the extension popup is narrower still).
+// Both thresholds are the toolbar's BORDER-BOX width, i.e. the pane's: the
+// toolbar's own padding shrinks in the icon tier, so a content-box reading would
+// move with the tier it decides, and the tier would flip every frame in the
+// 8px band between the two paddings (it did, at panes 584–591, before this was
+// measured; useElementWidth's `box` option).
+//
+// Below COLLAPSE_WIDTH the secondary actions (Edit tags, Pin, Unpin, Archive,
+// Delete copies) collapse into a ⋯ overflow menu so the fixed button row never
+// spills off a narrow pane (the collapsible sidebar can widen the sidebar / shrink
+// this pane without a window resize, and the extension popup is narrower still).
 // Copy, Move to, and the destructive Remove stay inline at every width. Measured
 // via `useElementWidth` (not a CSS container query) so each action is declared
 // once and rendered as either a Button or a menu item — no duplicated markup.
-// Tuned to roughly where the widest inline set (the normal non-Trash view, eight
-// right-hand buttons) stops fitting — 900 for seven, plus ~150 for Delete copies
-// (icon, a 13-character label, padding and the gap; estimated from the button's
-// metrics, not measured in a browser — re-measure if the row spills); below the return we keep the full set inline
-// until the first measurement lands (width 0), matching card-layout's approach.
-const COLLAPSE_WIDTH = 1050;
-// Below this the three surviving inline buttons drop their labels (see the
-// header). Tuned to where the widest labelled trio — Copy links / Move to /
-// Remove plus the ⋯ — stops fitting beside the left cluster's count.
-const ICON_WIDTH = 560;
+// Below the return we keep the full set inline until the first measurement lands
+// (width 0), matching card-layout's approach.
+//
+// Both numbers are MEASURED (headless Chrome, 2026-11-18), as the width the row
+// needs, labelled, in its widest steady state. Each extra digit in "N selected"
+// costs ~8px, so the count is part of it:
+//
+//   full row (eight right-hand buttons)  My List 1015 · Archive ("Unarchive") 1032
+//                                        · Archive with 999 selected 1050 · 9999 1058
+//   collapsed, labelled (… ⋯ …)          559 · with 9999 selected 585
+//   Trash (no ⋯: Copy, Restore,          579 · 999 selected 597 · 9999 fits 610
+//   Delete permanently)
+//
+// So each sits just above its widest set at four digits. A sweep of every even
+// pane width from 300 to 1120, in those three views at 2/999/9999 selected,
+// found no flicker and no spill at or above 320, with one exception: the icon tier
+// at 999+ selected spills on the narrowest panes (320–332 at 999, a few px past
+// that at 9999), from the count's digits alone. That is the 320px phone with a
+// hundred-plus links selected, and is left as it is. A busy label
+// ("Unpinning…" is the widest, +42px) can spill the row for the moment the write
+// takes; that is accepted rather than paying 42px of collapse at every width.
+// Re-measure if a label, a button or the count's wording changes.
+//
+// At the e2e wide window (1280, so a 1040px pane beside the rail) the row is
+// COLLAPSED — as at every common laptop width below ~1300. No safe COLLAPSE_WIDTH
+// changes that: Archive with 100+ selected needs 1050.
+const COLLAPSE_WIDTH = 1060;
+// Below this the surviving inline buttons drop their labels (see the header).
+// Set by the Trash trio, the widest labelled set below COLLAPSE_WIDTH.
+const ICON_WIDTH = 610;
 
 // One secondary action, renderable as an inline Button or an overflow menu item.
 type SecondaryAction = {
@@ -219,8 +245,10 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
   // menu on a narrow pane (see COLLAPSE_WIDTH). The root is held as STATE (via a
   // callback ref) rather than a RefObject so useElementWidth re-measures when the
   // toolbar mounts on entering bulk-edit — a RefObject would leave width at 0.
+  // The BORDER box, because the padding below depends on `iconOnly` (see the
+  // constants).
   const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null);
-  const width = useElementWidth(rootEl);
+  const width = useElementWidth(rootEl, { box: 'border-box' });
 
   // Live pin membership, so Pin/Unpin split the selection correctly even as a
   // pin lands from another device mid-selection.
@@ -468,10 +496,10 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
                   key={action.key}
                   icon={action.icon}
                   label={action.label}
-                  // Unreachable in practice (every width below COLLAPSE_WIDTH is
-                  // also below ICON_WIDTH, so this branch only runs on a wide
-                  // pane), but passed rather than hardcoded false so the two
-                  // tiers stay independent if either number moves.
+                  // Always false in practice (ICON_WIDTH < COLLAPSE_WIDTH, so this
+                  // branch only runs on a pane too wide for the icon tier), but
+                  // passed rather than hardcoded false so the two tiers stay
+                  // independent if either number moves.
                   iconOnly={iconOnly}
                   disabled={action.disabled}
                   onClick={action.run}

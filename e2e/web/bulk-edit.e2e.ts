@@ -3,7 +3,6 @@ import { type Locator, type Page } from '@playwright/test';
 import { importArchive } from '../seed/steps';
 import { expect, test } from './fixtures/app';
 import { unique, unresolvableUrl } from './fixtures/data';
-import { isNarrow } from './fixtures/layout';
 import { writePagedLibrary } from './fixtures/library';
 import {
   addLink,
@@ -49,14 +48,18 @@ function toolbarButton(page: Page, name: string): Locator {
   return page.getByRole('main').getByRole('button', { name, exact: true });
 }
 
-// The actions a pane under the toolbar's COLLAPSE_WIDTH (900px) folds into its ⋯
-// (bulk-edit-toolbar.tsx). Every narrow window is under it and the desktop
-// window's pane is not, so the window decides, never the menu's visibility.
-const OVERFLOWED = new Set(['Edit tags', 'Pin', 'Unpin', 'Archive']);
+// The actions a pane under the toolbar's COLLAPSE_WIDTH (1060px) folds into its ⋯
+// (bulk-edit-toolbar.tsx). BOTH windows are under it: narrow is 390, and wide is
+// 1280 with the rail docked, a 1040px pane. So these always go through the menu,
+// and the inline spelling of these buttons is covered by no case here. That is a
+// fact about the two windows, not about what is on screen: the window decides,
+// never the menu's visibility. If the wide window grows past ~1300 this becomes
+// an `isNarrow` branch again.
+const OVERFLOWED = new Set(['Edit tags', 'Pin', 'Unpin', 'Archive', 'Delete copies']);
 
 // Press one toolbar action, inline or from the overflow menu.
 async function pressAction(page: Page, name: string) {
-  if (isNarrow(page) && OVERFLOWED.has(name)) {
+  if (OVERFLOWED.has(name)) {
     await toolbarButton(page, 'More actions').click();
     await page.getByRole('menuitem', { name, exact: true }).click();
   } else {

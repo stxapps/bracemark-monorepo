@@ -6,18 +6,24 @@ import { useElementWidth } from './use-element-size';
 // — but as a real registry, because what this hook has to get right is WHICH
 // element is being observed at any moment (see the late-mount case below), and
 // that is only visible if the stub remembers.
-type Observer = { callback: ResizeObserverCallback; targets: Set<Element>; disconnected: boolean };
+type Observer = {
+  callback: ResizeObserverCallback;
+  targets: Set<Element>;
+  boxes: (ResizeObserverBoxOptions | undefined)[];
+  disconnected: boolean;
+};
 const observers: Observer[] = [];
 
 beforeAll(() => {
   class StubResizeObserver {
     private entry: Observer;
     constructor(callback: ResizeObserverCallback) {
-      this.entry = { callback, targets: new Set(), disconnected: false };
+      this.entry = { callback, targets: new Set(), boxes: [], disconnected: false };
       observers.push(this.entry);
     }
-    observe(target: Element) {
+    observe(target: Element, options?: ResizeObserverOptions) {
       this.entry.targets.add(target);
+      this.entry.boxes.push(options?.box);
     }
     unobserve(target: Element) {
       this.entry.targets.delete(target);
@@ -42,10 +48,10 @@ const resize = (target: Element, entry: Partial<ResizeObserverEntry>) => {
 };
 
 /** The callback-ref-into-state pattern the hook's doc block prescribes. */
-function probe(initial: HTMLElement | null) {
+function probe(initial: HTMLElement | null, options?: Parameters<typeof useElementWidth>[1]) {
   const seen: number[] = [];
   function Probe({ element }: { element: HTMLElement | null }) {
-    seen.push(useElementWidth(element));
+    seen.push(useElementWidth(element, options));
     return null;
   }
   const view = render(<Probe element={initial} />);
@@ -83,6 +89,32 @@ describe('useElementWidth', () => {
     resize(el, { contentRect: { width: 256 } as DOMRectReadOnly });
 
     expect(seen.at(-1)).toBe(256);
+  });
+
+  // The bulk-edit toolbar's case: its padding shrinks below ICON_WIDTH, so a
+  // content-box reading moves when the tier it decided changes, and the tier
+  // flip-flopped every frame. The border box ignores the element's own padding.
+  it('reports the border-box inline size, and observes that box, when asked', () => {
+    const el = box();
+    const { seen } = probe(el, { box: 'border-box' });
+
+    resize(el, {
+      contentBoxSize: [{ inlineSize: 568, blockSize: 48 }],
+      borderBoxSize: [{ inlineSize: 600, blockSize: 49 }],
+    });
+
+    expect(seen.at(-1)).toBe(600);
+    expect(observers.find((o) => o.targets.has(el))?.boxes).toEqual(['border-box']);
+  });
+
+  it('falls back to offsetWidth where borderBoxSize is unavailable', () => {
+    const el = box();
+    Object.defineProperty(el, 'offsetWidth', { value: 590 });
+    const { seen } = probe(el, { box: 'border-box' });
+
+    resize(el, { contentRect: { width: 558 } as DOMRectReadOnly });
+
+    expect(seen.at(-1)).toBe(590);
   });
 
   // THE REASON THE HOOK TAKES AN ELEMENT AND NOT A RefObject. A RefObject's

@@ -1384,7 +1384,12 @@ part of that change.) In the mode, items grow a `LinkRowSelect` checkbox
   fold into a ⋯ menu; below `ICON_WIDTH` the three that stay inline (Copy, Move
   to, Remove) drop their labels for square icon buttons, keeping their names in
   `aria-label`/`title`. That second tier is what fits the fixed set on a phone
-  without pushing the one irreversible-looking action into a menu.
+  without pushing the one irreversible-looking action into a menu. Both
+  thresholds are measured widths of the toolbar's **border box** (the numbers
+  and their date sit beside the constants). Measuring the content box made the
+  toolbar flicker, because the icon tier's padding is narrower: the tier changed
+  the width it was decided from, and in that 8px band it flipped every frame. At
+  e2e's wide window (a 1040px pane) the row is already collapsed.
 - **Non-Trash-view actions skip trashed links.** Show All, tag views and search
   never hold trashed links — `use-links` suppresses Trash unless the query names
   it (→ `search.md`) — but a query that does name it alongside something else
