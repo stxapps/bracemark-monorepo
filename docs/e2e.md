@@ -4569,6 +4569,41 @@ kept in [link-extraction-keep.md](./link-extraction-keep.md), _why these three_.
 Re-run it when a capture's cap or quality, the reader format, or the page list
 changes.
 
+### measuring server read mode
+
+`e2e/measure/server-read-mode.ts` (`npm run measure:server-read-mode`) runs the
+extractor's read-mode guards over the same real pages — the parser pass, the walk
+and the meter ([link-extraction-server.md](./link-extraction-server.md), _cost on
+the Worker_) — and says whether any of them turns a real page away. The guards were
+calibrated on pages on our own disk and on pages built to be slow; this is the run
+against the web.
+
+It runs **the extractor's own code**, bundled by path with esbuild as the
+kept-copies leg bundles the browser extension's (e2e may import no app): `safeFetch`
+with its user agent and redirect walk, `readCappedBytes` at `MAX_HTML_BYTES`, the
+robots.txt reader, and `readModeFromHtml`, in a read-mode-only request's order —
+robots.txt first, so a page it disallows is never fetched. Beside the verdict it
+records each guard on its own (the walk's cost against `MAX_READ_MODE_COST`, the
+meter's units against `MAX_READ_MODE_WORK`) and, for a page a guard refused, plain
+Readability and the walker with no guard: blocks back means a **false refusal**.
+
+It is Node, not workerd, so the **times** are Node's; the **verdicts** are counted,
+not timed, so they are production's. The unguarded run has no bound, which is fine
+for this list and is why the leg never points at an arbitrary one. It reaches real
+sites, so it never runs in CI; it needs no browser, account or dev stack.
+
+```sh
+npm run measure:server-read-mode                   # every page
+npm run measure:server-read-mode -- --kind article # articles only
+npm run measure:server-read-mode -- --limit 5
+```
+
+It prints one line per page and a summary (refusals by guard, false refusals,
+headroom against each cap, times) and writes `results.json` and `summary.txt` to
+`.artifacts/measure/<run>/`. Its results are kept in
+[link-extraction-server.md](./link-extraction-server.md), _cost on the Worker_.
+Re-run it when a read-mode cap, weight or guard changes, or the page list does.
+
 ### state today
 
 Web, native, and contract were measured 2026-09-16 from commit

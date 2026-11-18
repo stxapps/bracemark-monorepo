@@ -131,8 +131,9 @@ export function readModeWork(html: string, finalUrl: URL, budget = Infinity): nu
 // read, and at 1 MB the sidebar and the thread are refused by the walk. Every page the reviews built
 // to be slow, scaled to the largest the walk and the meter accept, took at most 2.4 s in workerd,
 // and all but the walk's own flat-sibling shapes under 1.4 s — the shapes found, not a bound. A page
-// past a cap is answered `not-an-article`; the live set `measure:kept-copies` fetches would say
-// whether a real page is refused, and has not been run against it.
+// past a cap is answered `not-an-article`. So are some honest pages: a few thousand sibling
+// paragraphs (docs/link-extraction-server.md, _cost on the Worker_). Over 52 real pages
+// (`measure:server-read-mode`, 2026-11-18) none is refused, and none comes within a quarter of a cap.
 function readModeOrThrow(
   html: string,
   finalUrl: URL,

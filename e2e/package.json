@@ -107,6 +107,9 @@
       },
       "measure:capped-page": {
         "cache": false
+      },
+      "measure:server-read-mode": {
+        "cache": false
       }
     }
   },
@@ -146,6 +149,7 @@
     "measure:sync": "tsx measure/sync.ts",
     "measure:sync:staging": "E2E_ENVIRONMENT=staging tsx measure/sync.ts",
     "measure:kept-copies": "tsx measure/kept-copies.ts",
+    "measure:server-read-mode": "tsx measure/server-read-mode.ts",
     "measure:capped-page": "tsx measure/capped-copy-page.ts"
   },
   "devDependencies": {

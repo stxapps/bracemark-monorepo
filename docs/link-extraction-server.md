@@ -350,9 +350,20 @@ against 60,000; the real pages above sit one to three orders of magnitude under 
 carries more than 11 attributes on an element. Pages generated to look honest read: a 1 MB
 article 40 wrappers deep spends 7e6, and up to 750 KB a docs page with a large sidebar, a
 comment thread 30 replies deep and a card grid all read; at 1 MB the sidebar and the thread
-are refused by the walk, and a pretty-printed table from 750 KB by the node limit. Whether a
-real page is
-refused — `measure:kept-copies` fetches live sites — has not been run against it. A
+are refused by the walk, and a pretty-printed table from 750 KB by the node limit. The walk
+also refuses long runs of sibling paragraphs that Readability alone reads in 0.1–0.26 s on Node
+(measured 2026-11-18): past about 4,350 side by side near the top of a page (a book on one
+page), 3,250 under 40 wrappers, or 1,700 there when each holds a link and an emphasis (650 KB).
+Its width term charges every parent as if it were the one Readability's sibling loop runs over,
+which on this shape is ten to twenty times what it costs. Left as it is for the 20 Nov 2026
+deploy, because the width term is the guard on 59,000 siblings (173 s) and a change to it needs
+its own review; a browser-extension copy of such a page is unaffected. Whether a real page is
+refused is `measure:server-read-mode`'s question ([e2e.md](./e2e.md), _measuring server read
+mode_). Run 2026-11-18 over the kept-copies page list: of 62 pages, 52 were read (2
+disallowed by robots.txt, 2 robots-unavailable, 6 answered an error status), none was refused by
+any guard, and 38 kept a copy. The closest page came to 25% of the walk's cap and 24% of the
+meter's budget (medians 2.2% and 0.3%); `readModeFromHtml` took a median of 34 ms on Node, p90
+122 ms, max 486 ms, and 12% of pages were under 10 ms. A
 `robots.txt` verdict has a step budget (`MAX_ROBOTS_MATCH_STEPS`) after which the answer is a
 disallow. That is why a read-mode request is
 capped at `MAX_EXTRACT_READ_MODE_URLS` and why only an explicit per-link ask sends one
