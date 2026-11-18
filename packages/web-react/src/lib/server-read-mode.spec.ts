@@ -27,11 +27,11 @@ import {
 import { db } from '../data/db';
 import { writeExtraction, writeSettingsGeneral } from '../data/mutations';
 import { readExtraction } from '../data/queries';
+import { storeReadModeCopy } from '../data/store-read-mode';
 import { recordUnreadablePaths, seedNewAccount } from '../data/sync-store';
 import { decodeReaderDoc } from './reader-doc-bytes';
 import { encodeReaderImage } from './reader-image';
 import { runServerReadMode } from './server-read-mode';
-import { storeReadModeCopy } from './store-read-mode';
 
 // The image encoder needs a canvas jsdom doesn't have; a seam, so the storing around
 // it runs for real (store-read-mode.ts, through the real mutations).

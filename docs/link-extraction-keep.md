@@ -267,9 +267,9 @@ image only from the map their caller built from the pack; a spec on each holds t
 nothing a block carries can become a `src`.
 
 ⚠ **Every capture settles its document before storing it** — `applyReaderImages`,
-called by the one writer on each platform (`storeReadModeCopy`: web-react
-`lib/store-read-mode.ts` for the browser extension and bracemark-web, expo-react
-`data/store-read-mode.ts`). It gives each kept figure its stored size and takes the
+called by the one writer on each platform (`storeReadModeCopy` in
+`data/store-read-mode.ts` — web-react's for the browser extension and bracemark-web,
+expo-react's for the app). It gives each kept figure its stored size and takes the
 key off every figure whose image is not in the pack, so with images off, or none
 fetched, the stored document names no image at all. A capture that wrote the
 walker's document as it came would promise images the pack doesn't hold. The same

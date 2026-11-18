@@ -14,8 +14,8 @@ import {
 
 import { assertExtractionWritable, writeExtraction } from '../data/mutations';
 import { type LinkItem, readExtraction, readSettingsGeneral } from '../data/queries';
+import { storeReadModeCopy } from '../data/store-read-mode';
 import { collectReaderImages } from './reader-images';
-import { storeReadModeCopy } from './store-read-mode';
 
 // The SERVER tier's read-mode copy for ONE link — bracemark-web's way to keep a page's
 // text, since a web page can't fetch another site (docs/link-extraction-keep.md, _per

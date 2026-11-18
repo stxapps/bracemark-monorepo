@@ -10,14 +10,14 @@ import {
 } from '@stxapps/shared';
 import { newId } from '@stxapps/web-crypto';
 
-import { assertExtractionWritable, writeExtraction, writeFile } from '../data/mutations';
-import { encodeReaderDoc } from './reader-doc-bytes';
+import { encodeReaderDoc } from '../lib/reader-doc-bytes';
+import { assertExtractionWritable, writeExtraction, writeFile } from './mutations';
 
 // Store ONE read-mode copy: the text, and the images kept with it. The single writer
 // for every web-side capture — the browser extension's active-tab capture
 // (extraction-worker.ts) and bracemark-web's server path (server-read-mode.ts) — so a
 // copy is the same two blobs and the same extraction fields whichever took it. The
-// expo twin is expo-react `data/store-read-mode.ts`.
+// expo twin is expo-react's file at the same path, `data/store-read-mode.ts`.
 //
 // `doc` is the document AS CAPTURED: its figures may carry keys the walker handed out.
 // `images` is what the caller managed to fetch and encode, in page order — empty when
