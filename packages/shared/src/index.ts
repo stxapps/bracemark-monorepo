@@ -34,6 +34,7 @@ export * from './extract/endpoints';
 export * from './extract/favicon';
 export * from './extract/retry';
 export * from './extract/select';
+export * from './html/charset';
 export * from './html/entities';
 export * from './iap/endpoints';
 export * from './iap/plans';

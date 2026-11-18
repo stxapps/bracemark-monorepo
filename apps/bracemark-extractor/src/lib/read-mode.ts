@@ -1,7 +1,7 @@
 import { isProbablyReaderable } from '@mozilla/readability';
 import { parseHTML } from 'linkedom';
 
-import type { ReaderDoc, ReaderImageSource } from '@stxapps/shared';
+import { declaredCharset, type ReaderDoc, type ReaderImageSource } from '@stxapps/shared';
 import { type DomNode, readerCaptureFromArticle } from '@stxapps/shared/reader/reader-doc-from-dom';
 
 import { readModeWalkCost, type WalkedNode, withinReadModeMarkup } from './read-mode-limits';
@@ -198,10 +198,13 @@ function setBaseUrl(document: ParsedDocument, finalUrl: URL): void {
 
 // The bytes of an HTML response as text, in the charset the response names — the
 // `content-type` parameter, else a `<meta charset>` (or its http-equiv spelling) in the
-// first KB, as a browser sniffs — and UTF-8 when it names none this runtime decodes.
+// first KB, as a browser sniffs; that sniff is `@stxapps/shared`'s `declaredCharset`
+// (html/charset.ts), shared with bracemark-expo's head scanner — and UTF-8 when it names
+// none this runtime decodes. workerd's `TextDecoder` knows every WHATWG label, which is
+// why this decode stays here and not beside the sniff: Hermes's knows only UTF-8.
 // `fatal: false` throughout: a stray bad byte is a replacement character, never a throw.
 export function decodeHtml(bytes: Uint8Array, contentTypeHeader: string | null): string {
-  const label = charsetFromHeader(contentTypeHeader) ?? charsetFromMeta(bytes);
+  const label = declaredCharset(bytes, contentTypeHeader);
   if (label) {
     try {
       return new TextDecoder(label).decode(bytes);
@@ -210,17 +213,4 @@ export function decodeHtml(bytes: Uint8Array, contentTypeHeader: string | null):
     }
   }
   return new TextDecoder().decode(bytes);
-}
-
-function charsetFromHeader(header: string | null): string | undefined {
-  const match = /;\s*charset\s*=\s*"?([^";\s]+)/i.exec(header ?? '');
-  return match?.[1];
-}
-
-function charsetFromMeta(bytes: Uint8Array): string | undefined {
-  const head = new TextDecoder('latin1').decode(bytes.subarray(0, 1024));
-  const match =
-    /<meta[^>]+charset\s*=\s*["']?([\w-]+)/i.exec(head) ??
-    /<meta[^>]+content\s*=\s*["'][^"']*charset=([\w-]+)/i.exec(head);
-  return match?.[1];
 }

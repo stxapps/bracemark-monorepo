@@ -1,4 +1,10 @@
-import { type CollectedMeta, CP1252_HIGH, decodeHtmlEntities } from '@stxapps/shared';
+import {
+  type CollectedMeta,
+  declaredCharset,
+  decodeCp1252,
+  decodeHtmlEntities,
+  isWindows1252Label,
+} from '@stxapps/shared';
 
 // Collect a page's title/image/icon CANDIDATES out of its raw HTML — the Hermes-side
 // counterpart of bracemark-extractor's `HTMLRewriter` pass (apps/bracemark-extractor/src/lib/
@@ -27,55 +33,22 @@ import { type CollectedMeta, CP1252_HIGH, decodeHtmlEntities } from '@stxapps/sh
 // SCAN, so a pathological body costs bounded regex work.
 export const MAX_HEAD_CHARS = 256 * 1024;
 
-// The windows-1252 high range is `@stxapps/shared`'s `CP1252_HIGH` (html/entities.ts),
-// shared with the numeric-reference remap that needs the same 32 characters. Pages
-// that declare (or are served as) `iso-8859-1` are windows-1252 in practice — smart
-// quotes, dashes and ellipsis, i.e. exactly the characters a real page title uses —
-// and every browser decodes them that way; matching that is the difference between
-// `It’s` and `It?s`.
-
-function decodeCp1252(bytes: Uint8Array): string {
-  let out = '';
-  for (const byte of bytes) {
-    // The five unassigned slots in that range are '' in the shared table; those (and
-    // every byte outside it) fall through to the latin-1 identity mapping.
-    const high = byte >= 0x80 && byte <= 0x9f ? CP1252_HIGH[byte - 0x80] : '';
-    out += high === '' ? String.fromCharCode(byte) : high;
-  }
-  return out;
-}
-
-// The charset a response declares, lowercased: the `Content-Type` header first (it
-// wins over the document per HTML's own precedence), then a `<meta charset>` /
-// `<meta http-equiv="content-type">` sniffed out of the first bytes — read as ASCII,
-// which every candidate encoding is a superset of in that range.
-function declaredCharset(bytes: Uint8Array, contentType: string | undefined): string | undefined {
-  const fromHeader = contentType ? /charset\s*=\s*"?([\w-]+)/i.exec(contentType) : null;
-  if (fromHeader) return fromHeader[1].toLowerCase();
-
-  const head = decodeCp1252(bytes.subarray(0, 2048));
-  const fromMeta =
-    /<meta[^>]+charset\s*=\s*["']?([\w-]+)/i.exec(head) ??
-    /<meta[^>]+content\s*=\s*["'][^"']*charset\s*=\s*([\w-]+)/i.exec(head);
-  return fromMeta ? fromMeta[1].toLowerCase() : undefined;
-}
-
-// Bytes → text, honoring the declared charset as far as the runtime allows.
+// Bytes → text, honoring the declared charset as far as the runtime allows. WHICH
+// charset is `@stxapps/shared`'s `declaredCharset` (html/charset.ts), the same sniff
+// bracemark-extractor's read mode runs; the decode is this runtime's own.
 //
 // Hermes ships `TextDecoder` for utf-8 only (Expo's winter runtime installs the
 // polyfill; neither implements the full encoding registry), so a legacy-encoded page
 // has no correct decoder available. Rather than hand a mojibake title to the writer we
-// degrade DELIBERATELY: utf-8 (the overwhelming default) decodes properly; anything
-// single-byte-Latin decodes as windows-1252, which is right for the western-European
-// long tail; a legacy multi-byte encoding (Shift_JIS, GB2312, EUC-KR) is the one case
+// degrade DELIBERATELY: utf-8 (the overwhelming default) decodes properly; every label
+// WHATWG maps to windows-1252 (latin-1, ascii and their aliases) decodes through the
+// cp1252 table, which is right for the western-European long tail; a legacy multi-byte encoding (Shift_JIS, GB2312, EUC-KR) is the one case
 // we can't serve — it yields a wrong title on a facet the user can override with
 // `customTitle`, and the alternative is bundling an encoding library for a shrinking
 // slice of the web. Don't "fix" this without measuring what it costs.
 export function decodeHtmlBytes(bytes: Uint8Array, contentType?: string): string {
   const charset = declaredCharset(bytes, contentType);
-  if (charset !== undefined && /^(iso-?8859-1|windows-1252|latin1|ascii|us-ascii)$/.test(charset)) {
-    return decodeCp1252(bytes);
-  }
+  if (charset !== undefined && isWindows1252Label(charset)) return decodeCp1252(bytes);
   try {
     return new TextDecoder('utf-8').decode(bytes);
   } catch {

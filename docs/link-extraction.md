@@ -979,6 +979,21 @@ already been decoded by the DOM; a page that wants to display `&amp;` writes
 `&amp;amp;`, so a second decode there would turn it into `&` for everyone. Same
 shape as the selection rule: parse per platform, agree afterwards.
 
+The bytes become text before any of that, and the **charset** follows the same
+split: sniff once, decode per platform. Two readers start from raw bytes:
+bracemark-expo's head scanner (`decodeHtmlBytes`, `parse-html-head.ts`) and
+`bracemark-extractor`'s server read mode (`decodeHtml`, `lib/read-mode.ts`). Both
+ask `declaredCharset` (`shared/html/charset.ts`) which charset the page names.
+The `Content-Type` parameter wins, then a `<meta>` in the first 1024 bytes,
+HTML's own prescan. Until that function existed each reader had its own copy, and
+the copies had drifted: different header patterns, a 1 KB vs. a 2 KB window, one
+lowercasing and one not. The **decode** can't be shared. workerd's `TextDecoder`
+knows every WHATWG label, but the one on Hermes knows only UTF-8. A shared
+`new TextDecoder(label)` would throw on the phone for every latin-1 page, fall
+back to UTF-8 and store a garbled title, and nothing would report it. So expo
+decodes the windows-1252 family through `decodeCp1252` (`isWindows1252Label`
+names that family), and the server hands the label to its own decoder.
+
 ### the queue is a query, not a structure
 
 Extension and Expo saves kick their own extraction, while the web app and Expo at
