@@ -5,23 +5,24 @@ import { describe, expect, it } from 'vitest';
 import { readerDocSchema } from '@stxapps/shared';
 import { type DomNode, readerCaptureFromArticle } from '@stxapps/shared/reader/reader-doc-from-dom';
 
+import { decodeHtml, readModeFromHtml, readModeWork } from './read-mode';
 import {
-  decodeHtml,
-  defuseForReadability,
-  LinearReadability,
   MAX_READ_MODE_COST,
   MAX_READ_MODE_DEPTH,
   MAX_READ_MODE_ELEMENTS,
   MAX_READ_MODE_NODES,
-  MAX_READ_MODE_WORK,
-  readabilityMethod,
-  readModeFromHtml,
-  readModeWork,
-  srcsetBacktracks,
-  textSimilarity,
+  type WalkedNode,
   withinReadModeBounds,
   withinReadModeMarkup,
-} from './read-mode';
+} from './read-mode-limits';
+import { MAX_READ_MODE_WORK } from './read-mode-meter';
+import {
+  defuseForReadability,
+  LinearReadability,
+  readabilityMethod,
+  srcsetBacktracks,
+  textSimilarity,
+} from './read-mode-readability';
 
 // Server read mode, in workerd itself — so linkedom and Readability are exercised in the
 // runtime they ship to, not in Node. What comes OUT is the point: the same blocks of
@@ -40,7 +41,7 @@ const page = (article: string, head = '<title>A post</title>') =>
 
 const FINAL = new URL('https://example.com/blog/post');
 
-type Walked = Parameters<typeof withinReadModeBounds>[0];
+type Walked = WalkedNode;
 
 const attributes = (n: number) => Array.from({ length: n }, (_, i) => ` a${i}`).join('');
 
@@ -447,9 +448,15 @@ describe('the strings Readability would read in quadratic time', () => {
     }
     // The class keeps the first text's words between calls; a different first text must not
     // be answered from them (Readability compares the JSON-LD `headline` after the `name`).
-    const reader = new LinearReadability(parseHTML('<html><body></body></html>').document as never, 0);
+    const reader = new LinearReadability(
+      parseHTML('<html><body></body></html>').document as never,
+      0,
+    );
     const similarity = (a: string, b: string) =>
-      (reader as unknown as { _textSimilarity(a: string, b: string): number })._textSimilarity(a, b);
+      (reader as unknown as { _textSimilarity(a: string, b: string): number })._textSimilarity(
+        a,
+        b,
+      );
     expect(similarity('alpha beta', 'beta gamma')).toBe(own.call(self, 'alpha beta', 'beta gamma'));
     expect(similarity('gamma delta', 'beta gamma')).toBe(
       own.call(self, 'gamma delta', 'beta gamma'),

@@ -266,7 +266,10 @@ specifically (the third option, a deliberate `bracemark-extractor` block made
 mechanical). Today that block is honoured by a `403`, which the page advises.
 
 **Cost on the Worker.** Read mode parses the page into a DOM (linkedom) and runs
-Readability over it, where the title is a streaming head scan. Measured on Node over
+Readability over it, where the title is a streaming head scan. The pipeline is
+`lib/read-mode.ts`; the guards below each have a module beside it —
+`read-mode-limits.ts` (the parser pass and the walk), `read-mode-meter.ts` (the
+meter) and `read-mode-readability.ts` (Readability's slow paths made linear). Measured on Node over
 synthetic article pages (not yet on workerd, and not on real pages): ~45 ms of CPU at
 35 KB of HTML, ~0.4 s at 300 KB, ~0.9 s at 1.5 MB — and the read stops at
 `MAX_HTML_BYTES`. Over **real** pages (2026-11-11, the 55 of `measure:kept-copies`'
