@@ -341,8 +341,14 @@ a getter Readability starts using in an upgrade — the checks above price or re
 production also keeps the Worker's own CPU limit (`limits.cpu_ms`, 5 s per request, in
 `wrangler.jsonc`; staging has Free's own) as the backstop: a request that slipped past them all
 would die as a 5xx instead of running for minutes. Every page the reviews built to be slow,
-scaled to the largest the walk and the meter accept, took at most 2.4 s in workerd, and all but
-one sibling shape the walk prices under 1.4 s; that is the shapes found, not a bound. The caps
+scaled to the largest the walk and the meter accept, took at most about 2.5 s in workerd, and all but
+one sibling shape the walk prices under 1.4 s; that is the shapes found, not a bound. The
+meter's weights are Node's: a later review measured the heaviest attribute shapes at up to
+~190 ns a unit in workerd, about eight times the ~22 ns they assume, so the budget allows about
+3 s of workerd CPU per read (a page the meter refuses spends up to ~2.9 s first), and a
+read-mode request of five such pages would meet `cpu_ms` and fail as a whole. Left for a later
+release: a heavier attribute weight needs its own calibration, and a flat cut of the budget
+would squeeze honest pages (the heaviest real page in the run below spends 4.7e6). The caps
 are a judgement from local pages, not real traffic: none of 616 local HTML files is refused;
 the heaviest (a 1 MB export of 10,000 bookmarks, 19,000 elements) weighs 3.2e7 against the
 walk's 4e7, spends 1.1e6 of the meter's 2e7, took 0.9 s in workerd, and has 19,000 text runs

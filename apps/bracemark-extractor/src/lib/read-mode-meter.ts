@@ -31,6 +31,8 @@ export function spend(units: number): void {
 // containers deep: 22 ns), a `children` entry (flat siblings: ~37 ns), a character of `textContent`
 // (a 1 MB article 40 deep, a 900 KB text run 240 deep: 0.5–1.2 ns) or of `innerHTML`, serialised
 // node by node. So the items of a read are weighted to time, and a page can't buy a cheap unit.
+// Those are Node's figures: in workerd the attribute-heavy shapes cost up to about eight times as
+// much a unit, so the budget is about 3 s of workerd CPU (docs/link-extraction-server.md).
 //
 // This table IS the list of what is wrapped: a read is metered exactly when it has a weight here.
 const GETTER_WEIGHTS = {

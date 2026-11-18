@@ -129,7 +129,7 @@ export function readModeWork(html: string, finalUrl: URL, budget = Infinity): nu
 // workerd. Pages generated to look honest read too: a 1 MB article 40 wrappers deep spends 7e6; up
 // to 750 KB a docs page with a large sidebar, a comment thread 30 replies deep and a card grid all
 // read, and at 1 MB the sidebar and the thread are refused by the walk. Every page the reviews built
-// to be slow, scaled to the largest the walk and the meter accept, took at most 2.4 s in workerd,
+// to be slow, scaled to the largest the walk and the meter accept, took at most about 2.5 s in workerd,
 // and all but the walk's own flat-sibling shapes under 1.4 s — the shapes found, not a bound. A page
 // past a cap is answered `not-an-article`. So are some honest pages: a few thousand sibling
 // paragraphs (docs/link-extraction-server.md, _cost on the Worker_). Over 52 real pages
