@@ -168,105 +168,82 @@ export default function Page() {
             services/signup-cap.ts). So the bullet says we count, and that we
             may cap.
 
-            8 NOVEMBER 2026 WENT UP ABOVE THEM, newest first, and may come out on
-            or after 8 December 2026. It changes HOW WE USE an address we were
-            already handed, not what we collect: server read mode
-            (docs/link-extraction-server.md, _robots.txt and read mode_) has the
-            link-extraction service return a page's text as well, on one person's
-            ask for one link. The bullet says what is new to the reader — what
-            comes back, and that it is only on request — and what is not: the
-            service still keeps nothing (the invariants _How link previews are
-            fetched_ lists). Per _Changes to this policy_ this page goes live
-            BEFORE the extractor that does it: deploy bracemark-site first.
+            20 NOVEMBER 2026 WENT UP ABOVE THEM, newest first, and may come out
+            on or after 20 December 2026. ONE ENTRY, DATED THE DAY IT WAS
+            PUBLISHED, NOT ONE PER DAY IT WAS WRITTEN. The changes in it were
+            drafted between 8 and 13 November and went live together; a reader
+            could only ever compare this version with the 4 November one, so the
+            entry describes that difference. Five entries dated by drafting day
+            would have backdated the page and described steps nobody saw — one
+            of them a read mode that "used to come with" server previews, which
+            never shipped that way. The date at the top (PRIVACY_UPDATED,
+            lib/site.ts) is the publish date for the same reason: a notice is
+            not in force before it can be read. What each bullet rests on:
 
-            9 NOVEMBER 2026 WENT UP ABOVE THEM, newest first, and may come out on
-            or after 9 December 2026. It is a change to WHAT WE COLLECT: counts,
-            per account and per month, of how much the account moves through
-            sync (bracemark-api services/transfer-budget.ts and
-            do/repositories/transfer-budget.ts). It is written for the whole
-            category on purpose — today the uploads and the commits that record
-            them are counted, and downloads and listings are planned — so a new
-            count of the same kind needs no new notice; _Your library_ says why.
-            Two of this page's sentences had to move first, and they did: the
-            carve-out under _Technical and security data_ said our counters were
-            "short-lived", which a month is not, and _Your library_ listed what
-            we hold per file and nothing per account. The retention line under
-            _How long we keep it_ already held, unchanged — the count is dropped
-            by an alarm shortly after its month ends, and that line is a rule,
-            not a number, so it names no period (its own comment says why). The
-            bullet also points at /terms, which gained the allowance the count
-            is for, because /terms promises to highlight a material change on
-            this website and has no notice of its own. Per _Changes to this
-            policy_, deploy bracemark-site BEFORE the api that counts.
+            - READ MODE THROUGH THE SERVICE changes HOW WE USE an address we were
+              already handed, not what we collect (docs/link-extraction-server.md,
+              _robots.txt and read mode_). It has its own opt-in, `serverReadMode`
+              (packages/shared sync/entities.ts says why), so _How link previews
+              and read-mode copies are fetched_ names two settings, each off until
+              turned on, and says the read-mode one sends a link only on an ask
+              for it. What is new to the reader is what comes back and that it is
+              only on request; what is not new is that the service keeps nothing
+              (the invariants that paragraph lists did not move).
+            - IMAGES IN READ MODE (docs/link-extraction-keep.md, _images in read
+              mode_), off by default with a switch of its own. Three sentences of
+              _How link previews and read-mode copies are fetched_ moved with it,
+              one per path, because each named what is fetched: the browser
+              extension's tab fetches the article's images as it already fetched
+              the preview image; the mobile apps fetch them themselves; and the
+              link-extraction service is sent the images' addresses and passes the
+              bytes through, as it does a preview image's.
+            - THE RENAME, "link-preview service" to "link-extraction service",
+              because the service no longer only previews (docs/brand-assets.md,
+              _terminology_). Said here so a reader of the old version can tell
+              it is the same service.
+            - THE SYNC COUNTS change WHAT WE COLLECT: counts, per account and per
+              month, of how much the account moves through sync (bracemark-api
+              services/transfer-budget.ts and do/repositories/transfer-budget.ts).
+              The bullet is written for the whole category on purpose — today the
+              uploads and the commits that record them are counted, and downloads
+              and listings are planned — so a new count of the same kind needs no
+              new notice; _Your library_ says why. Two of this page's sentences
+              moved with it: the carve-out under _Technical and security data_
+              said our counters were "short-lived", which a month is not, and
+              _Your library_ listed what we hold per file and nothing per
+              account. The retention line under _How long we keep it_ held
+              unchanged — it is a rule, not a number. The bullet points at
+              /terms, which gained the allowance the count is for, because /terms
+              promises to highlight a material change on this website and has no
+              notice of its own (TERMS_UPDATED moved to the same date).
+            - PLAINER WORDING (docs/brand-assets.md, _plain words for what a copy
+              holds and costs_ — "images", never "pictures") is neither a change
+              nor a correction, and the bullet says that nothing about what we
+              collect, how we use it or who receives it moved because of it.
 
-            10 NOVEMBER 2026 WENT UP ABOVE THEM, newest first, and may come out on
-            or after 10 December 2026. Like 8 November it changes HOW WE USE
-            addresses, not what we keep: a read-mode copy now keeps the article's
-            pictures with its text (docs/link-extraction-keep.md, _images in read
-            mode_), on by default with a switch of its own. Three sentences of
-            _How link previews and read-mode copies are fetched_ moved with it, one per path, because
-            each named what is fetched: the browser extension's tab now fetches
-            the article's pictures as it already fetched the preview image; the
-            mobile apps fetch them themselves; and the link-extraction service is
-            sent the pictures' addresses and passes the bytes through, as it does
-            a preview image's. The invariants in that paragraph did not move — it
-            still keeps nothing and logs no address. Per _Changes to this policy_,
-            deploy bracemark-site BEFORE the releases that fetch them.
-            12 NOVEMBER 2026 WENT UP ABOVE THEM, newest first, and may come out on
-            or after 12 December 2026. It changes WHEN an address is sent, not
-            what is collected or kept: a read-mode copy taken through the
-            link-extraction service now has its own opt-in, `serverReadMode`
-            (packages/shared sync/entities.ts says why), where it used to ride
-            the server-previews one. So _How link previews and read-mode copies are fetched_ names two
-            settings, each off until turned on, and says the read-mode one sends a
-            link only on an ask for it. The service's invariants did not move.
-            Per _Changes to this policy_, deploy bracemark-site BEFORE the web app
-            that reads the new setting.
-
-            13 NOVEMBER 2026 WENT UP ABOVE THEM, newest first, and may come out on
-            or after 13 December 2026. It is neither a change nor a correction of
-            a claim: it is plainer wording (docs/brand-assets.md, _plain words for
-            what a copy holds and costs_ — "images", never "pictures"), and the
-            bullet says so, including that nothing about what we collect, how we
-            use it or who receives it moved. It is listed anyway because the date
-            at the top moved, and a reader who compares versions should find the
-            reason here and not have to diff the history. */}
-        <h2>What changed on 13 November 2026</h2>
+            Per _Changes to this policy_, deploy bracemark-site BEFORE the api,
+            the extractor and the web app that do any of this. */}
+        <h2>What changed on 20 November 2026</h2>
         <ul>
           <li>
-            We made some of the wording in this policy, and in the app’s settings, simpler and
-            easier to read. For example, we now say “images” instead of “pictures”. What we collect,
-            how we use it, and who receives it have not changed.
+            The web app can now keep a read-mode copy of a link — the article’s text, to read later
+            — through our link-extraction service. It has a setting of its own, Server read mode,
+            off unless you turn it on. With it on, a link is sent to the service only when you ask
+            for its read-mode copy. The text goes to your device, where it is encrypted like the
+            rest of your library, and the service keeps none of it.
           </li>
-        </ul>
-
-        <h2>What changed on 12 November 2026</h2>
-        <ul>
           <li>
-            Keeping a read-mode copy of a link through the web app now has a setting of its own,
-            Server read mode, off unless you turn it on. It used to come with the setting for server
-            previews, so you could not have one without the other. With it on, a link is sent to our
-            link-extraction service only when you ask for its read-mode copy. And since that service
-            now does more than previews, this page calls it the link-extraction service, where it
-            used to say link-preview service; it is the same service.{' '}
-            <em>How link previews and read-mode copies are fetched</em> now says so.
+            A read-mode copy can also keep the images in the article, if you turn that on in
+            Settings. The browser extension and the mobile apps fetch those images themselves. For a
+            copy you ask the web app for, the link-extraction service is sent the addresses of the
+            images and passes them through to your device, as it already does for a preview image,
+            and keeps none of them.
           </li>
-        </ul>
-
-        <h2>What changed on 10 November 2026</h2>
-        <ul>
           <li>
-            A read-mode copy of a link can now keep the images in the article as well as its text,
-            if you turn that on in Settings. The browser extension and the mobile apps fetch those
-            images themselves. For a copy you ask the web app for, our link-extraction service is
-            sent the addresses of the images and passes them through to your device, as it already
-            does for a preview image, and keeps none of them.{' '}
-            <em>How link previews and read-mode copies are fetched</em> now says so.
+            Since that service now does more than previews, this page calls it the link-extraction
+            service, where it used to say link-preview service. It is the same service.{' '}
+            <em>How link previews and read-mode copies are fetched</em> now says all of this.
           </li>
-        </ul>
-
-        <h2>What changed on 9 November 2026</h2>
-        <ul>
           <li>
             We now count how much each account moves through sync each month, such as how many files
             it uploads, so we can spot an account moving far more than a library needs. The counts
@@ -275,16 +252,10 @@ export default function Page() {
             our <Link href="/terms">Terms of Service</Link> describe the monthly allowance it is
             for.
           </li>
-        </ul>
-
-        <h2>What changed on 8 November 2026</h2>
-        <ul>
           <li>
-            When you ask the web app for a read-mode copy of a link (the article’s text, to read
-            later), our link-extraction service now returns that text as well as the title and
-            preview image. It goes to your device, where it is encrypted like the rest of your
-            library, and the service keeps none of it.{' '}
-            <em>How link previews and read-mode copies are fetched</em> now says so.
+            We also made some of the wording in this policy, and in the app’s settings, simpler and
+            easier to read. That part changes nothing about what we collect, how we use it, or who
+            receives it.
           </li>
         </ul>
 
@@ -561,7 +532,7 @@ export default function Page() {
 
             "APART FROM COUNTERS … EACH DELETED SHORTLY AFTER THE PERIOD IT
             COUNTS" — THE ONE THING OF OUR OWN, NAMED BY KIND. It said
-            "short-lived counters" until 9 November 2026, which held while the
+            "short-lived counters" until 20 November 2026, which held while the
             longest counted a day; the monthly upload count (_Your library_) made
             "short-lived" a stretch, so the protection is now stated as what it
             is — deletion shortly after the period — the same rule as the
@@ -939,9 +910,10 @@ export default function Page() {
             so we can run it as a business, answered by totals that name nobody.
           </li>
           <li>
-            <strong>Your consent</strong> — the one optional thing, the {PLAN_LABELS.plus} setting
-            that lets our link-extraction service fetch a page for you. It is off until you turn it
-            on, and turning it off again withdraws that consent for everything after.
+            <strong>Your consent</strong> — the two {PLAN_LABELS.plus} settings that let our
+            link-extraction service fetch a page for you: Server previews and Server read mode. Each
+            is off until you turn it on, and turning it off again withdraws that consent for
+            everything after.
           </li>
           <li>
             <strong>A legal obligation</strong> — the payment and tax records that accounting law
@@ -973,9 +945,9 @@ export default function Page() {
               machines it runs on. (It is "the link-extraction service" everywhere on
               this page — one name, docs/brand-assets.md _terminology_. Two places
               once said "our extraction service" beside "link-preview service",
-              and a reader had no way to know they were the same thing; the 12
-              November 2026 rename to the name that covers read mode too is said
-              in that day's entry above.) Two sentences, not one with a
+              and a reader had no way to know they were the same thing; the
+              rename to the name that covers read mode too is said in the 20
+              November 2026 entry above.) Two sentences, not one with a
               comma before "and": two predicates are a pair (docs/brand-assets.md,
               _the mechanics_). */}
           <li>
@@ -1106,8 +1078,9 @@ export default function Page() {
             deletes the account itself.
           </li>
           <li>
-            <strong>Withdrawing consent</strong> — the only thing you consented to is server
-            previews, and Settings → Link previews switches them back off.
+            <strong>Withdrawing consent</strong> — the only things you consented to are those two
+            settings. Settings → Link previews switches Server previews back off, and Settings →
+            Read mode does the same for Server read mode.
           </li>
         </ul>
         <p>
