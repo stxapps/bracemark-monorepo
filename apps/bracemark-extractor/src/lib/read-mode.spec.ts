@@ -8,12 +8,15 @@ import { type DomNode, readerCaptureFromArticle } from '@stxapps/shared/reader/r
 import {
   decodeHtml,
   defuseForReadability,
+  LinearReadability,
   MAX_READ_MODE_COST,
   MAX_READ_MODE_DEPTH,
   MAX_READ_MODE_ELEMENTS,
   MAX_READ_MODE_NODES,
+  MAX_READ_MODE_WORK,
   readabilityMethod,
   readModeFromHtml,
+  readModeWork,
   srcsetBacktracks,
   textSimilarity,
   withinReadModeBounds,
@@ -327,18 +330,13 @@ describe('the work a page may ask of the parse', () => {
     expect(Date.now() - started).toBeLessThan(1000);
   });
 
-  // What no walk of nodes sees. Readability copies an element's attributes one by one when it renames
-  // it, re-reading a list linkedom rebuilds on every read, so A attributes cost A squared (40,000 on
-  // one shallow `<div>`: 135 s in workerd); and it re-reads every element's text whole for each
-  // element above it (one 900 KB text run 240 deep: 10.8 s).
+  // What no walk of nodes sees, priced once: Readability copies an element's attributes one by one
+  // when it renames it, re-reading a list linkedom rebuilds on every read, so A attributes cost A
+  // squared (40,000 on one shallow `<div>`: 135 s in workerd).
   it.each([
     [
       'attributes squared, on elements Readability renames',
       `${`<p>${PROSE}</p>`.repeat(3)}${`<div${attributes(250)}><h3>Heading</h3></div>`.repeat(400)}`,
-    ],
-    [
-      'one long text run deep in the tree',
-      `${'<div>'.repeat(240)}<p>${PROSE}</p><p>${'word '.repeat(180_000)}</p>${'</div>'.repeat(240)}`,
     ],
   ])('weighs the work no walk of nodes is: %s', (_, body) => {
     const html = `<!doctype html><html><body>${body}</body></html>`;
@@ -350,17 +348,9 @@ describe('the work a page may ask of the parse', () => {
     expect(Date.now() - started).toBeLessThan(1000);
   });
 
-  it('charges text by its depth, so the same megabyte shallower passes', () => {
-    const page = (depth: number) =>
-      `<!doctype html><html><body>${'<div>'.repeat(depth)}<p>${PROSE}</p><p>${'word '.repeat(180_000)}</p>${'</div>'.repeat(depth)}</body></html>`;
-    const tree = (html: string) => parseHTML(html).document as unknown as Walked;
-
-    expect(withinReadModeBounds(tree(page(10)))).toBe(true);
-    expect(withinReadModeBounds(tree(page(240)))).toBe(false);
-  });
-
   // The heaviest page on our disk, rebuilt: a 10,000-bookmark export cut at 1 MB, as the route
-  // reads it. It weighs about 0.93 of the cap, so a cap lowered far enough to refuse it fails here.
+  // reads it. It weighs about 0.8 of the cap, so a cap lowered far enough to refuse it fails here.
+  // (Readability itself throws on this rebuilt one, a shape linkedom builds; the measured file reads.)
   it('reads the heaviest honest page known, an export of 10,000 bookmarks', () => {
     const html = bookmarksExport(10_000).slice(0, 1_000_000);
     const tree = parseHTML(html).document as unknown as Walked;
@@ -374,6 +364,65 @@ describe('the work a page may ask of the parse', () => {
     const html = `<!doctype html><html><body>${'<div>'.repeat(30)}<article><h1>A post</h1><p>${PROSE}</p><p>${PROSE}</p>${rows}</article>${'</div>'.repeat(30)}</body></html>`;
 
     expect(readModeFromHtml(html, FINAL, 7)?.doc.blocks.length).toBeGreaterThan(0);
+  });
+});
+
+// What Readability does again and again, which no prediction from the tree's shape bounded — each
+// review found another path — is counted as it happens, and the read stops past a budget.
+describe('the work Readability repeats, counted as it runs', () => {
+  const article = `<article><h2>${'word '.repeat(150)}</h2></article>`;
+  const page = (body: string) =>
+    `<!doctype html><html><head><title>word</title></head><body>${body}</body></html>`;
+
+  it.each([
+    // An `<embed>`'s attributes re-read under each of 50 containers, on each of four attempts (the
+    // heading repeats the title, so the article found is short and Readability retries): 19 KB of it
+    // took 175 s in workerd.
+    [
+      'an embed’s attributes, once per container and per attempt',
+      page(
+        `${article}${'<div>'.repeat(50)}<p>Short text here, a few words.</p><embed${attributes(1000)} src="https://www.youtube.com/embed/x">${'</div>'.repeat(50)}`,
+      ),
+    ],
+    // One 900 KB text run, its text re-read for each of 240 elements above it: 10.8 s.
+    [
+      'one long text run, once per element above it',
+      `<!doctype html><html><body>${'<div>'.repeat(240)}<p>${PROSE}</p><p>${'word '.repeat(180_000)}</p>${'</div>'.repeat(240)}</body></html>`,
+    ],
+    // A page the walk admits for one pass, which forces every retry: each retry is charged the
+    // walk's prediction, so this one stops at the first; uncharged, four passes ran.
+    [
+      'the walk of a page that forces every retry',
+      page(
+        `${article}${'<div>'.repeat(200)}${'<i></i>'.repeat(600)}<p>Short text here, a few words.</p>${'</div>'.repeat(200)}`,
+      ),
+    ],
+  ])('stops %s', (_, html) => {
+    expect(withinReadModeMarkup(html)).toBe(true);
+    expect(withinReadModeBounds(parseHTML(html).document as unknown as Walked)).toBe(true);
+    const started = Date.now();
+    expect(readModeFromHtml(html, FINAL, 7)).toBeNull();
+    expect(Date.now() - started).toBeLessThan(3000);
+  });
+
+  // A long read, its text re-read for each wrapper above it, as Readability does for every page:
+  // charged by the character, it would be refused. A 1 MB article in 40 wrappers spends about a
+  // third of the budget, and reads.
+  it('lets a long article through', () => {
+    const open = Array.from({ length: 40 }, (_, i) => `<div class="w${i} mx-auto">`).join('');
+    let paragraphs = '';
+    const shell = (p: string) =>
+      `<!doctype html><html><head><title>A long read</title></head><body>${open}<article>${p}</article>${'</div>'.repeat(40)}</body></html>`;
+    while (shell(paragraphs).length < 1_000_000 - 400) paragraphs += `<p>${PROSE}</p>\n`;
+    const html = shell(paragraphs);
+
+    expect(readModeFromHtml(html, FINAL, 7)?.doc.blocks.length).toBeGreaterThan(100);
+    expect(readModeWork(html, FINAL)).toBeLessThan(MAX_READ_MODE_WORK / 2);
+  });
+
+  it('charges the retry where Readability makes it', () => {
+    // Readability's own method, not its API: if an upgrade renames it, this fails.
+    expect(typeof readabilityMethod('_removeFlag')).toBe('function');
   });
 });
 
@@ -396,6 +445,15 @@ describe('the strings Readability would read in quadratic time', () => {
     ]) {
       expect(textSimilarity(a, b)).toBe(own.call(self, a, b) as number);
     }
+    // The class keeps the first text's words between calls; a different first text must not
+    // be answered from them (Readability compares the JSON-LD `headline` after the `name`).
+    const reader = new LinearReadability(parseHTML('<html><body></body></html>').document as never, 0);
+    const similarity = (a: string, b: string) =>
+      (reader as unknown as { _textSimilarity(a: string, b: string): number })._textSimilarity(a, b);
+    expect(similarity('alpha beta', 'beta gamma')).toBe(own.call(self, 'alpha beta', 'beta gamma'));
+    expect(similarity('gamma delta', 'beta gamma')).toBe(
+      own.call(self, 'gamma delta', 'beta gamma'),
+    );
 
     // 960 KB of title against a heading of other words: 55 s when each word was looked up in a list.
     const words = (w: string, n: number) => `${w} `.repeat(n);
@@ -455,7 +513,7 @@ describe('the strings Readability would read in quadratic time', () => {
     ]) {
       expect(srcsetBacktracks(honest), honest).toBe(false);
     }
-    for (const hostile of ['aaaa b', 'x,aaaa b', 'a.jpg 1x, aaaa b', 'a.jpg 100w 50h']) {
+    for (const hostile of ['aaaa b', 'x,aaaa b', 'a.jpg 1x, aaaa b', 'a.jpg 100w 50h', ', a']) {
       expect(srcsetBacktracks(hostile), hostile).toBe(true);
     }
     // Against the regex itself, on every short string of its alphabet a seeded walk reaches: a start
@@ -469,20 +527,28 @@ describe('the strings Readability would read in quadratic time', () => {
       }
       return /\S/.test(srcset.slice(covered));
     };
-    let seed = 7;
+    // A 32-bit xorshift: an LCG's low bits cycle with a short period, and `% 8` of one gave 91
+    // distinct strings out of 20,000.
+    let seed = 0x9e3779b9;
+    const seen = new Set<string>();
     for (let i = 0; i < 20_000; i++) {
       let srcset = '';
       for (let n = (i % 12) + 1; n > 0; n--) {
-        seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
-        srcset += 'a,. 1x\tw'[seed % 8];
+        seed ^= seed << 13;
+        seed ^= seed >>> 17;
+        seed ^= seed << 5;
+        srcset += 'a,. 1x\tw'[(seed >>> 0) % 8];
       }
+      seen.add(srcset);
       expect(srcsetBacktracks(srcset), JSON.stringify(srcset)).toBe(retried(srcset));
     }
+    expect(seen.size).toBeGreaterThan(10_000);
 
     const { document } = parseHTML(
       `<html><head><meta property="og:   title" content=t></head><body>` +
         `<img id=honest src=a.jpg srcset="a.jpg 1x, b.jpg 2x">` +
         `<img id=hostile src=a.jpg srcset="${'a'.repeat(50)} b">` +
+        `<img id=alt src=a.jpg alt="photo.jpg 2 of 5">` +
         `<img id=lazy data-srcset="a.jpg 1 ${'a'.repeat(50)} b" data-src="${'x.jpg'.repeat(9)} b" data-ok="a.jpg 1x, b.jpg 2x">` +
         `</body></html>`,
     );
@@ -492,6 +558,7 @@ describe('the strings Readability would read in quadratic time', () => {
     expect(document.getElementById('honest')?.getAttribute('srcset')).toBe('a.jpg 1x, b.jpg 2x');
     expect(document.getElementById('hostile')?.hasAttribute('srcset')).toBe(false);
     expect(document.getElementById('hostile')?.getAttribute('src')).toBe('a.jpg');
+    expect(document.getElementById('alt')?.getAttribute('alt')).toBe('photo.jpg 2 of 5');
     const lazy = document.getElementById('lazy');
     expect(lazy?.hasAttribute('data-srcset')).toBe(false);
     expect(lazy?.hasAttribute('data-src')).toBe(false);

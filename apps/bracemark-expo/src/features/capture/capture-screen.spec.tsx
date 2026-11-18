@@ -291,6 +291,25 @@ test('an answer from a page other than the one shown at the tap is refused', asy
   );
 });
 
+test('_Update preview_ refuses an answer from a page other than the one shown at the tap', async () => {
+  await onPage();
+  fireEvent.press(preview());
+  await post({
+    type: 'bracemark-page-meta',
+    nonce: lastRequest().nonce,
+    href: 'https://elsewhere.example/other',
+    collected: {},
+  });
+  expect(mockUpdatePreview).not.toHaveBeenCalled();
+  expect(screen.getByRole('alert')).toHaveTextContent('Could not update the preview. Please try again.');
+});
+
+test('a page with no web address of its own is nothing to keep', async () => {
+  await onPage('about:blank');
+  expect(keep().props.accessibilityState?.disabled).toBe(true);
+  expect(preview().props.accessibilityState?.disabled).toBe(true);
+});
+
 test('a message nobody asked for is ignored', async () => {
   await onPage();
   await post({ type: 'bracemark-read-mode', nonce: 'nonce-1', href: URL_, doc: CAPTURE });

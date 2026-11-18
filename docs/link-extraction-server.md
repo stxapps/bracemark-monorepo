@@ -307,36 +307,48 @@ costs:
   parse therefore weighs each element's depth squared by its attributes and its children
   that aren't elements, and each parent's element children by its child nodes and
   attributes, and stops at `MAX_READ_MODE_COST`.
-- **Readability's work that no node count sees.** When it renames an element it copies the
-  attributes one by one, re-reading a list linkedom rebuilds on every read, so A attributes
-  cost A squared (40,000 on one `<div>`: 135 s in workerd); and it re-reads every element's
-  text whole for each element above it (one 900 KB text run 240 deep: 10.8 s). The same walk
-  charges both, against the same cap: each element its attributes squared, each text run its
-  length times its depth. The rest of what was found slow is work inside one string, and is
-  made linear instead of priced: a title compared word by word with every heading (960 KB of
-  `og:title`: 55 s) goes through a Set; a wrapper's attributes, which Readability copies onto
-  its only child level after level down a chain (32 s), are removed from `<div>`s and
-  `<section>`s first, since nothing after reads them; whitespace runs in `<meta property>`
-  become one space; and a `srcset`, or an image's lazy-loading attribute, that Readability's
-  regexes would retry from every character (81 KB: 24 s) is dropped, which an honest one
-  never is. The two methods replaced are Readability's internals, and a spec fails if an
-  upgrade renames them. The shared walker (`reader-doc-from-dom.ts`), which the live-page
-  captures use too, trims with `trimEnd()` and a scan instead of an end-anchored regex (a
-  `<pre>` of 160,000 spaces and a letter: 40 s).
+- **Readability's repeated work.** It copies an element's attributes one by one when it
+  renames it, re-reading a list linkedom rebuilds on every read (40,000 attributes on one
+  `<div>`: 135 s in workerd); re-reads an `<embed>`'s attributes under every container above
+  it; re-reads every element's text whole for each element above it (one 900 KB text run 240
+  deep: 10.8 s); and runs all of it again, up to four times, when the article it finds is short
+  (a 19 KB embed under 50 containers that forced every retry: 175 s). A prediction from the
+  tree's shape can't bound that, and each review found another path the walk couldn't see. So
+  it is **counted as it happens**: while Readability, the second parse and the walker run, a
+  meter wraps the linkedom reads that work goes through (`attributes`, `childNodes`,
+  `children`, `textContent`, `innerHTML`, the tag queries), charges each by its length weighted
+  to time (an attribute entry ~22 ns on Node, a character of text ~1 ns), charges each retry the
+  walk's prediction for one more pass, and stops the read past `MAX_READ_MODE_WORK` (2e7) as
+  `not-an-article`. A clock can't do it: a Worker's clock doesn't move during synchronous work.
+  The walk still prices one pass, and each element's attributes squared, before Readability
+  starts. The rest of what was found slow is work inside one string, made linear: a title
+  compared word by word with every heading (960 KB of `og:title`: 55 s) goes through a Set; a
+  wrapper's attributes, which Readability copies onto its only child level after level down a
+  chain (32 s), are removed from `<div>`s and `<section>`s first, since nothing after reads
+  them; whitespace runs in `<meta property>` become one space; and a `srcset`, or an image's
+  lazy-loading attribute, that Readability's regex would retry from every character (81 KB:
+  24 s) is dropped — including a few valid but unusual forms (a leading or doubled comma, an `h`
+  descriptor), where the image keeps its `src`. The methods replaced or wrapped are
+  Readability's internals, and a spec fails if an upgrade renames one. The shared walker
+  (`reader-doc-from-dom.ts`), which the live-page captures use too, trims with `trimEnd()` and
+  a scan instead of an end-anchored regex (a `<pre>` of 160,000 spaces and a letter: 40 s).
 
-These price and defuse the shapes found, not every shape a page could pick; Readability is a
-heuristic, not a bounded algorithm. So production also sets the Worker's own CPU limit
-(`limits.cpu_ms`, 5 s per request, in `wrangler.jsonc`; staging has Free's own), the
-backstop for a page that slips past them all: the request would die as a 5xx instead of
-running for minutes. Every shape the reviews built to be slow, scaled to the largest page
-that passes, took at most about 2.5 s in workerd; that is the shapes found, not a bound.
-The caps are a judgement from local pages, not real traffic: none of 650 local HTML files is
-refused; the heaviest (a 1 MB export of 10,000 bookmarks, 19,000 elements) weighs 3.7e7
-against the 4e7 cap, took 0.9 s in workerd, and has 19,000 text runs against 60,000; the
-real pages above sit one to three orders of magnitude under that, and none carries more than
-11 attributes on an element. Pages generated to look honest come nearer: a pretty-printed
-1 MB article weighs 0.9 of the cap, and a 1 MB docs page with a large sidebar, or a comment
-thread 30 replies deep from 750 KB, are refused. Whether a real page is
+What the meter doesn't count — one pass's node walks, the parse, the string work made linear,
+a getter Readability starts using in an upgrade — the checks above price or remove, so
+production also keeps the Worker's own CPU limit (`limits.cpu_ms`, 5 s per request, in
+`wrangler.jsonc`; staging has Free's own) as the backstop: a request that slipped past them all
+would die as a 5xx instead of running for minutes. Every page the reviews built to be slow,
+scaled to the largest the walk and the meter accept, took at most 2.4 s in workerd, and all but
+one sibling shape the walk prices under 1.4 s; that is the shapes found, not a bound. The caps
+are a judgement from local pages, not real traffic: none of 616 local HTML files is refused;
+the heaviest (a 1 MB export of 10,000 bookmarks, 19,000 elements) weighs 3.2e7 against the
+walk's 4e7, spends 1.1e6 of the meter's 2e7, took 0.9 s in workerd, and has 19,000 text runs
+against 60,000; the real pages above sit one to three orders of magnitude under that, and none
+carries more than 11 attributes on an element. Pages generated to look honest read: a 1 MB
+article 40 wrappers deep spends 7e6, and up to 750 KB a docs page with a large sidebar, a
+comment thread 30 replies deep and a card grid all read; at 1 MB the sidebar and the thread
+are refused by the walk, and a pretty-printed table from 750 KB by the node limit. Whether a
+real page is
 refused — `measure:kept-copies` fetches live sites — has not been run against it. A
 `robots.txt` verdict has a step budget (`MAX_ROBOTS_MATCH_STEPS`) after which the answer is a
 disallow. That is why a read-mode request is

@@ -288,7 +288,10 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
       onPress: () => openWayback(waybackHref),
     });
   }
-  const ready = currentUrl !== null && !loading && !loadFailed && busy === null;
+  // A page with no web address of its own (`about:blank`, a `data:` frame the rule let through as
+  // content) is nothing to keep: both buttons stay off, and `samePage` refuses it besides.
+  const onAPage = currentUrl !== null && canonicalUrlKey(currentUrl) !== null;
+  const ready = onAPage && !loading && !loadFailed && busy === null;
   const reason = loadFailed ? REASON.loadFailed : '';
   const fail = (text: string) => setMessage({ text, tone: 'error' });
 

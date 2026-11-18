@@ -27,7 +27,7 @@ export const BLOG_POSTS: BlogPost[] = [
     description:
       'Our AI-assisted source review recorded low-severity findings and open questions. We explain the method, what launch changed, and what still needs evidence.',
     publishedAt: '2026-10-26T00:00:00Z',
-    updatedAt: '2026-11-17T00:00:00Z',
+    updatedAt: '2026-11-20T00:00:00Z',
   },
   {
     slug: 'importing-your-links',
@@ -69,7 +69,7 @@ export const BLOG_POSTS: BlogPost[] = [
     title: 'Source security review, November 2026',
     description:
       'Our second AI-assisted source review: what a device may delete when a file is missing, what we fixed and rechecked, what we left, and what no one has reviewed.',
-    publishedAt: '2026-11-17T00:00:00Z',
+    publishedAt: '2026-11-20T00:00:00Z',
   },
   {
     slug: 'large-libraries',

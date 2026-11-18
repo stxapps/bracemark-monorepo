@@ -8,7 +8,7 @@ external professional audit.
 
 | Prepared         | Report                                                               | Source revision                                                                                          | Article                                                                         |
 | ---------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| 17 November 2026 | [Source security review, November 2026](2026-11-17-source-review.md) | [`f6e3a54`](https://github.com/stxapps/bracemark-monorepo/tree/f6e3a542d8137682ace9899056def1064d0f8ff4) | [bracemark.com/blog](https://bracemark.com/blog/source-security-review-2026-11) |
+| 20 November 2026 | [Source security review, November 2026](2026-11-20-source-review.md) | [`f6e3a54`](https://github.com/stxapps/bracemark-monorepo/tree/f6e3a542d8137682ace9899056def1064d0f8ff4) | [bracemark.com/blog](https://bracemark.com/blog/source-security-review-2026-11) |
 | 21 October 2026  | [Source security review, October 2026](2026-10-21-source-review.md)  | [`1310f66`](https://github.com/stxapps/bracemark-monorepo/tree/1310f66c8ae261fe23d4b6e3987f02c5ca84581e) | [bracemark.com/blog](https://bracemark.com/blog/source-security-review-2026-10) |
 
 To report a security issue, follow [SECURITY.md](../SECURITY.md).

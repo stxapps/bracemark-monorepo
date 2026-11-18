@@ -757,7 +757,8 @@ and Android's WebView has its own `CookieManager`, apart from Chrome's. So, in o
    link's own page left both buttons off on every link that redirects, with no page
    to go back to. The top bar names the host of the page shown, so the user sees which
    page a tap takes, and one taken from the wrong page (a sign-in page's title as the
-   preview) is seen and redone. They are live only while the page actually loaded (a
+   preview) is seen and redone. They are live only on a page with a web address of its own
+   (not `about:blank` or a `data:` frame), and only while it actually loaded (a
    failed load shows the WebView's own error page, so both go off and the screen says
    the page didn't load); the address the page reports with its answer must be the
    page shown at the tap (`canonicalUrlKey`, for a page that navigates itself between

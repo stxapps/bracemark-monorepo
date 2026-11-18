@@ -80,7 +80,14 @@ jest.mock('../data/queries', () => ({
     mockDrainReads += 1;
     return (mockHoldDrainRead ?? Promise.resolve()).then(() => mockPending);
   },
-  readLinksPendingTitleImagePage: () => Promise.resolve({ links: mockPending, cursor: null }),
+  // Generate-all's page read: only the drain makes it.
+  readLinksPendingTitleImagePage: () => {
+    mockDrainReads += 1;
+    return (mockHoldDrainRead ?? Promise.resolve()).then(() => ({
+      links: mockPending,
+      cursor: null,
+    }));
+  },
   readRawPendingTitleImageCount: () => Promise.resolve(mockPending.length),
 }));
 const mockRunBatch = jest.fn((_username: string, _links: LinkItem[], _client: ExtractClient) =>
@@ -108,6 +115,12 @@ function ReportsAPage() {
   return null;
 }
 
+function GeneratesAll() {
+  const { generateAll } = useLinkPreviews();
+  useEffect(() => generateAll(), [generateAll]);
+  return null;
+}
+
 function AsksForAFavicon() {
   const { requestFavicon } = useFavicon();
   useEffect(() => requestFavicon('example.com'), [requestFavicon]);
@@ -116,10 +129,10 @@ function AsksForAFavicon() {
 
 // `client` is what the app passes when an extractor origin is configured; `null` is
 // what it passes when there is none.
-const tree = (extractClient: ExtractClient | null) => (
+const tree = (extractClient: ExtractClient | null, all = false) => (
   <ExtractClientProvider client={extractClient}>
     <LinkPreviewsProvider>
-      <ReportsAPage />
+      {all ? <GeneratesAll /> : <ReportsAPage />}
     </LinkPreviewsProvider>
     <FaviconProvider>
       <AsksForAFavicon />
@@ -127,10 +140,10 @@ const tree = (extractClient: ExtractClient | null) => (
   </ExtractClientProvider>
 );
 
-async function mount(extractClient: ExtractClient | null) {
+async function mount(extractClient: ExtractClient | null, all = false) {
   let rendered: ReturnType<typeof render> | undefined;
   await act(async () => {
-    rendered = render(tree(extractClient));
+    rendered = render(tree(extractClient, all));
   });
   return rendered as ReturnType<typeof render>;
 }
@@ -270,5 +283,44 @@ describe('the server-extraction gate', () => {
     });
     await act(async () => void generateAll());
     expect(mockRunBatch).not.toHaveBeenCalled();
+  });
+
+  // The same window on generate-all's path, which reads a page of the whole library instead.
+  it('sends nothing once the opt-in goes off while generate-all’s read is out', async () => {
+    let releaseReads: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => (releaseReads = resolve));
+    mockHoldDrainRead = held;
+    mockHoldFaviconRead = held;
+    const { rerender } = await mount(extractor, true);
+    await waitFor(() => expect(mockDrainReads).toBe(1));
+
+    mockServerExtraction = false;
+    await act(async () => rerender(tree(extractor, true)));
+    await act(async () => {
+      releaseReads?.();
+      await held;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(mockRunBatch).not.toHaveBeenCalled();
+  });
+
+  // The extractor itself changing under a read: the request must not go to the one it was
+  // queued for.
+  it('asks no favicon of the client that was replaced while its read was out', async () => {
+    let releaseReads: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => (releaseReads = resolve));
+    mockHoldFaviconRead = held;
+    const { rerender } = await mount(extractor);
+    const replacement = {
+      ...extractor,
+      fetchImage: jest.fn(() => Promise.resolve(new Uint8Array([1, 2, 3, 4]))),
+    } as unknown as ExtractClient;
+    await act(async () => rerender(tree(replacement)));
+    await act(async () => {
+      releaseReads?.();
+      await held;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(mockFetchImage).not.toHaveBeenCalled();
   });
 });
