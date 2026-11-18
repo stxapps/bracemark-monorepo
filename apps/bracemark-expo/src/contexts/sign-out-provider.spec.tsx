@@ -53,8 +53,12 @@ jest.mock('@stxapps/expo-react', () => ({
 }));
 
 const mockClearMemoryCache = jest.fn(() => Promise.resolve(true));
+const mockClearDiskCache = jest.fn(() => Promise.resolve(true));
 jest.mock('expo-image', () => ({
-  Image: { clearMemoryCache: () => mockClearMemoryCache() },
+  Image: {
+    clearMemoryCache: () => mockClearMemoryCache(),
+    clearDiskCache: () => mockClearDiskCache(),
+  },
 }));
 
 function Trigger() {
@@ -105,6 +109,7 @@ beforeEach(() => {
   mockSync = () => Promise.resolve();
   mockSyncAndWait.mockClear();
   mockClearMemoryCache.mockClear();
+  mockClearDiskCache.mockClear();
 });
 
 describe('with nothing unsynced', () => {
@@ -347,13 +352,18 @@ it('asks before signing out when the count cannot be read', async () => {
 
 // The app layer's share of the teardown. An unmount cleanup also covers
 // revocation and delete-account, which never call requestSignOut.
-it('drops the decoded previews when the signed-in tree unmounts, however it ended', () => {
+// Both of expo-image's caches: the memory one holds the previews that were on screen,
+// and the disk one what builds before 2026-11-18 wrote there for the reader's figures
+// and screenshots — plaintext JPEGs in a directory the data wipe doesn't know about.
+it('drops expo-image’s memory and disk caches when the signed-in tree unmounts, however it ended', () => {
   const view = render(tree());
   expect(mockClearMemoryCache).not.toHaveBeenCalled();
+  expect(mockClearDiskCache).not.toHaveBeenCalled();
 
   view.unmount();
 
   expect(mockClearMemoryCache).toHaveBeenCalledTimes(1);
+  expect(mockClearDiskCache).toHaveBeenCalledTimes(1);
 });
 
 it('refuses reads outside its provider', () => {

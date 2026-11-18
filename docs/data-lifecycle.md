@@ -1231,11 +1231,17 @@ which is why each one shipped.
   the gathered library in memory for minutes, so its one write is fenced the
   same way: a sign-out midway used to end with the backup written after the
   sweep.
-- **Decoded previews stay in memory.** expo-image's memory cache holds what was
-  on screen, and belongs to a module `@stxapps/expo-react` does not depend on,
-  so the app layer drops it: `SignOutProvider`'s unmount cleanup calls
-  `Image.clearMemoryCache()`. An unmount cleanup rather than a step of the
-  sign-out, so a revocation and a delete-account run it too.
+- **Decoded previews stay in memory; the reader's images were on disk.** expo-image's
+  memory cache holds what was on screen, and belongs to a module `@stxapps/expo-react`
+  does not depend on, so the app layer drops it: `SignOutProvider`'s unmount cleanup
+  calls `Image.clearMemoryCache()`. It calls `Image.clearDiskCache()` too. No slot
+  writes to that cache now, but until 2026-11-18 the reader's figures and screenshots
+  left `cachePolicy` at its default, `'disk'`, and every one opened was left as a
+  plaintext JPEG in SDWebImage's (iOS) or Glide's (Android) disk cache, a directory
+  this wipe didn't know about (found on both platforms by reading the cache after
+  opening a copy; [expo-dependencies.md](./expo-dependencies.md), expo-image). An
+  unmount cleanup rather than a step of the sign-out, so a revocation and a
+  delete-account run it too.
 
 Delete-all-data deliberately keeps **one** member of that set: the cache
 directory. The export in it may be the backup the user took a minute ago

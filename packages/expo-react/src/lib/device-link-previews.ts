@@ -7,7 +7,9 @@ import {
   hostFromUrl,
   httpsUpgradeOf,
   idFromPath,
+  imageHeaderSize,
   INSECURE_HTTP_REASON,
+  isImageDecodable,
   isRenderableIconBytes,
   LINKS_PREFIX,
   mapLimit,
@@ -435,9 +437,15 @@ async function loadImageAt(imageUrl: string): Promise<ImageOutcome> {
 // the icon path's is now wider — a stored preview is measured, capped and re-encoded on
 // its way in (probeImageSize → resizeImage, both raster-only), so an SVG accepted here
 // would skip the cap and land whole in the user's quota.
+//
+// Sized from its HEADER before any decoder opens it (`imageHeaderSize`): a byte ceiling
+// doesn't bound a decode — a small PNG can claim 20000 × 20000 — and on Android
+// `probeImageSize` is itself a full decode, so an image past IMAGE_MAX_DECODE_PIXELS is
+// refused here rather than discovered there (@stxapps/shared image/header-size.ts).
 export async function previewFileFromBytes(bytes: Uint8Array): Promise<File | undefined> {
   if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES) return undefined;
   if (sniffImageMime(bytes) === undefined) return undefined;
+  if (!isImageDecodable(imageHeaderSize(bytes))) return undefined;
 
   let temp: File | undefined = newTempFile();
   try {

@@ -211,6 +211,11 @@ function ScreenshotCopy({
       <Image
         source={{ uri }}
         contentFit="contain"
+        // Never the default ('disk'), which writes a second plaintext copy of the
+        // screenshot into the module's own cache, out of sign-out's reach. 'memory', as
+        // for a link's preview: a file id is immutable, so the entry can't go stale.
+        // docs/expo-dependencies.md, expo-image.
+        cachePolicy="memory"
         onLoad={(e) => {
           const { width, height } = e.source;
           if (width > 0 && height > 0) setRatio(width / height);

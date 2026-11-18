@@ -215,6 +215,13 @@ function FigureBlock({ block, context }: { block: ReaderBlock; context: ImageCon
             <ExpoImage
               source={{ uri: view.uri }}
               contentFit="contain"
+              // Never the default ('disk'): that writes each figure out as a plaintext
+              // JPEG in the module's own cache, which sign-out doesn't reach. Not
+              // 'memory' either: the source is a `data:` URI of the whole image, so the
+              // cache key is the image again, and the article is a plain ScrollView —
+              // a figure mounts once, and nothing would read the entry back.
+              // docs/expo-dependencies.md, expo-image.
+              cachePolicy="none"
               style={{ width: '100%', height: '100%' }}
               accessibilityLabel={block.text || undefined}
               accessible={Boolean(block.text)}

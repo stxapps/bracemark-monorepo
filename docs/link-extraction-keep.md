@@ -307,6 +307,37 @@ an earlier copy's pack and `writeExtraction` reclaims it.
   runs a few at a time under one deadline for the article; the text is already in
   hand and does not wait on a slow image host.
 
+⚠ **The decode's memory, on expo.** Both native decoders open an image at FULL
+resolution — expo-image-manipulator's loader takes no target size, and on Android
+`probeImageSize` (React Native's `Image.getSize`) is a full Fresco decode, not a header
+read. The byte ceilings don't bound that: a 76 KB PNG can be 20000 × 20000, 1.6 GB of
+pixels, from bytes a page chose, to make a picture 1024 px wide. Measured 2026-11-18,
+before the guard: the 2.5 GB Android emulator decoded a 76 KB, 20000 × 20000 PNG and
+stored it, so it is not a crash on every device — it is a peak no phone should be asked
+for, and the one with less memory, or three such images at once, is the crash. So every
+native path that keeps a fetched image — the article's figures (expo-react
+`lib/reader-images.ts`) and a page's preview (`previewFileFromBytes`,
+`lib/device-link-previews.ts`) — reads its size off the HEADER first (`@stxapps/shared`
+`image/header-size.ts`, the formats `sniffImageMime` takes) and hands a decoder nothing
+past `IMAGE_MAX_DECODE_PIXELS` (32 Mi pixels, 128 MiB decoded) or that it can't size. An
+image the page posted must say it is within the 1024 px cap before it is probed at all.
+And an article's decodes run **one at a time** — fetches still overlap, three at a time —
+so three large photos never decode at once; a decode still queued at the deadline is
+skipped. Nothing reports breaking either: the specs on the collector pin both
+(`lib/reader-images.spec.ts`, _the decode_). The web encoder (`createImageBitmap`) has
+no such check yet; the browser's own decoder limits are what bound it there.
+
+**Not decoded smaller, and why.** expo-image's `Image.loadAsync` takes a maximum size and
+downsamples AS it decodes, which would bound the decode by the output instead of the
+input. It was rejected because it caches what it decoded on DISK — SDWebImage's disk
+cache on iOS (its loader hard-codes the policy) and Glide's resource cache on Android —
+so every article image would leave a plaintext copy the sign-out sweep never reaches,
+the duplicate the app's own `link-media.tsx` forbids. expo-image-manipulator's loader
+(expo-image-loader) caches nothing. Decoding smaller without a cache needs a native
+module of our own (ImageIO's `CGImageSourceCreateThumbnailAtIndex`, Android's
+`BitmapFactory` `inSampleSize`); not taken while the pixel ceiling and the one-at-a-time
+queue hold the peak.
+
 **Who fetches the bytes** — the same split as the preview image
 ([link-extraction.md](./link-extraction.md), _the preview image is a downloaded blob_):
 
@@ -338,10 +369,11 @@ an earlier copy's pack and `writeExtraction` reclaims it.
   `credentials: 'omit'` (React Native's is credentialed by default, and the WebView
   shares its cookies with the native side): it is the app's request, not the page's, and
   it carries none of the site's cookies. It is `expo/fetch`, not React Native's `fetch`
-  (whose `Response` has no `body`, so nothing could be read in pieces): `readBodyWithin`
-  refuses on a declared `content-length` past the ceiling, and otherwise reads the stream
-  chunk by chunk and cancels it the moment it passes, so a body that never ends costs a
-  cancelled request, not the phone's memory. The page's OWN fetch keeps the default credentials:
+  (whose `Response` has no `body`, so nothing could be read in pieces): `streamBodyTo`
+  refuses on a declared `content-length` past the ceiling, and otherwise writes the stream
+  to a scratch file chunk by chunk, keeping only its head in memory, and cancels it the
+  moment it passes, so a body that never ends costs a cancelled request, not the phone's
+  memory. The source is never whole in JS (_the decode's memory_, above). The page's OWN fetch keeps the default credentials:
   `include` would fail every cross-origin read against a host that answers
   `Access-Control-Allow-Origin: *`, which is most image CDNs. With images off the page
   is asked for nothing.
@@ -1013,6 +1045,11 @@ covers the pages we never copied; it is the reason page copy can wait.
   storing it** (_images in read mode_). Break the first and the orphan sweep deletes
   the images a month later; the second stores a remote URL in a copy; the third
   leaves figures naming images the pack doesn't hold.
+- **On expo, no fetched image reaches a native decoder before its header is sized, and
+  an article's decodes run one at a time** (_the decode's memory_). Drop the first and
+  a 76 KB PNG costs a 1.6 GB decode; drop the second and three large photos triple the peak.
+  And nothing that decodes a fetched image may use expo-image's `loadAsync`: it leaves a
+  plaintext copy in a disk cache that sign-out never clears.
 - **No `null` in what Safari's preprocessing hands over — strings only** — a
   property list has none, and one null loses the whole share on iOS. And the
   copy stays JSON **text** until the app's drain: parsed in the share

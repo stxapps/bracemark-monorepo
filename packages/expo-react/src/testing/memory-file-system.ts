@@ -135,6 +135,15 @@ export class File extends FileSystemNode {
     writeFileBytes(this.uri, typeof contents === 'string' ? encoder.encode(contents) : contents);
   }
 
+  // A handle for writing a file a piece at a time (lib/reader-images.ts streams a
+  // download through one). Opening a file that does not exist THROWS, as iOS's
+  // `FileHandle(forUpdating:)` does — Android's would create it, so a caller that
+  // forgets `create()` first would pass there and fail on an iPhone.
+  open(): FileHandle {
+    if (!this.exists) throw new Error(`No such file: ${this.uri}`);
+    return new FileHandle(this.uri);
+  }
+
   // Async on the real API, and awaited by both orchestrators. Returns a copy, so
   // a caller that transfers or mutates the array can't reach back into the
   // filesystem's own copy — the native one hands back fresh bytes too.
@@ -152,6 +161,29 @@ export class File extends FileSystemNode {
         ? `${destination.uri}/${this.uri.slice(this.uri.lastIndexOf('/') + 1)}`
         : destination.uri;
     writeFileBytes(target, readFileBytes(this.uri));
+  }
+}
+
+// Writes at the handle's offset, which starts at 0 and moves past each write — the
+// real handle's behaviour. A write after `close()` throws, as the native one does.
+export class FileHandle {
+  offset = 0;
+  private open = true;
+
+  constructor(private readonly uri: string) {}
+
+  writeBytes(bytes: Uint8Array): void {
+    if (!this.open) throw new Error('file handle is closed');
+    const current = readFileBytes(this.uri);
+    const next = new Uint8Array(Math.max(current.byteLength, this.offset + bytes.byteLength));
+    next.set(current);
+    next.set(bytes, this.offset);
+    writeFileBytes(this.uri, next);
+    this.offset += bytes.byteLength;
+  }
+
+  close(): void {
+    this.open = false;
   }
 }
 

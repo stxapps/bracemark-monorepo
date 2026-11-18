@@ -195,9 +195,17 @@ export function SignOutProvider({ children }: { children: ReactNode }) {
   // cleanup rather than a step of the flow above, so that it runs for EVERY end
   // of a session — a revocation and delete-account never pass through
   // requestSignOut, and all three unmount this.
+  //
+  // Its DISK cache too, though no slot writes there now (docs/expo-dependencies.md,
+  // expo-image): until 2026-11-18 the reader's figures and screenshots left the prop
+  // at its default, 'disk', and each one opened sits in SDWebImage's (iOS) or Glide's
+  // (Android) disk cache as a plaintext JPEG. This removes what those builds wrote,
+  // and whatever a future slot that forgets the prop would write. Nothing else in the
+  // app uses that cache, so clearing it whole costs nothing.
   useEffect(
     () => () => {
       void Image.clearMemoryCache().catch(() => undefined);
+      void Image.clearDiskCache().catch(() => undefined);
     },
     [],
   );

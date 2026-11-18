@@ -40,6 +40,7 @@ export * from './iap/endpoints';
 export * from './iap/plans';
 export * from './iap/storage';
 export * from './iap/store-products';
+export * from './image/header-size';
 export * from './image/preview';
 export * from './image/sniff';
 export * from './import/brace';

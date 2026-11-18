@@ -68,13 +68,28 @@ is the usual reason to reach for it:
 
 What did **not** buy it: remote fetching, disk caching, placeholders,
 transitions. Every source here is a local plaintext `file://` path this app
-already wrote, which constrains one prop — **no slot may use `cachePolicy:
-'disk' | 'memory-disk'`**, since that duplicates the user's image library into a
-second on-device copy. Preview images use `'memory'` (a file id is immutable, so
-a uri-keyed cache can't go stale, and it pays for the re-decode as rows recycle
-back into view); favicons use `'none'` (the per-host path is stable while its
-bytes are **replaceable** — the declared-icon capture landing over the guessed
-`/favicon.ico` — so any uri-keyed cache would go on serving the superseded icon).
+already wrote (or, for a read-mode figure, a `data:` URI of it), which constrains
+one prop — **no slot may use `cachePolicy: 'disk' | 'memory-disk'`**, since that
+duplicates the user's image library into a second on-device copy, in a directory
+the sign-out wipe doesn't know about. ⚠ **And `'disk'` is the DEFAULT**, so a slot
+that leaves the prop out breaks the rule without a word: every slot sets it. The
+reader's three did not until 2026-11-18, and every figure and screenshot opened
+was found sitting in SDWebImage's / Glide's disk cache as a plaintext JPEG
+(sign-out now clears that cache whole — [data-lifecycle.md](./data-lifecycle.md)).
+Which value each slot takes:
+
+- **Preview images and the reader's screenshot: `'memory'`.** A file id is
+  immutable, so a uri-keyed cache can't go stale, and it pays for the re-decode as
+  rows recycle back into view (or the reader's tabs are switched).
+- **Favicons: `'none'`.** The per-host path is stable while its bytes are
+  **replaceable** — the declared-icon capture landing over the guessed
+  `/favicon.ico` — so any uri-keyed cache would go on serving the superseded icon.
+- **Read-mode figures: `'none'`.** The source is a `data:` URI of the whole image,
+  so the key would be the image a second time, and the article is a plain
+  `ScrollView` where a figure mounts once.
+- **The screenshot viewer: `'none'`.** Its one full-resolution decode
+  (`allowDownscaling={false}`) is opened on purpose and read back by nothing once
+  the viewer closes.
 
 Two wiring notes: expo-image's `Image` is a composite, not a core RN host, so it
 needs `withUniwind()` to accept `className` (the `SafeAreaView` treatment —

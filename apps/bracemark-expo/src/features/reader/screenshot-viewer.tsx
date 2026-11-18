@@ -274,6 +274,11 @@ export function ScreenshotViewer({
                 // Decoded at full size, not the view's: the zoom is a transform, so a
                 // bitmap downscaled to the fitted box would blur at every zoom.
                 allowDownscaling={false}
+                // Never the default ('disk'), which writes a second plaintext copy into
+                // the module's own cache, out of sign-out's reach. And no memory entry:
+                // this is the one full-resolution decode, opened on purpose, and nothing
+                // reads it back once the viewer closes. docs/expo-dependencies.md, expo-image.
+                cachePolicy="none"
                 style={{ width: '100%', height: '100%' }}
               />
             </Animated.View>

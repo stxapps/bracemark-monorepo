@@ -77,7 +77,13 @@ const { listFileUris, resetFileSystem } = require('../testing/memory-file-system
 
 const USER = 'alice';
 const TIER = 'expo:fg' as const;
-const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
+// A PNG's signature and IHDR, 800 × 600 — what the probe stand-in reports. The worker
+// reads the size from the header before any decoder sees the bytes, so a fixture with
+// no header would be refused there.
+const PNG = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 3,
+  0x20, 0, 0, 2, 0x58,
+]);
 
 function linkItem(id: string, url: string): LinkItem {
   return {
