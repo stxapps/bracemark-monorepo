@@ -223,6 +223,19 @@ interface ShotLink {
 // the band exists to show — the kind of defect that is invisible in a diff and
 // obvious in the shipped PNG.
 //
+// ⚠ THE FIVE en.wikivoyage.org ROWS FAIL IT TODAY, AND NOT BY OUR HAND. Since
+// MediaWiki 1.48.0-wmf.5 reached en.wikivoyage (by 2026-11-19), its pages are
+// rendered with no og:image meta at all — the PageImages API still names the
+// image, de.wikivoyage and every other wiki on the same release still emit the
+// tag, and Wikipedia (then on wmf.4) was unaffected. `curl` can disagree for a
+// while, because Wikimedia's edge caches still hold older renders; the
+// extractor's answer is the newer page, and it is right. So preflight reports
+// all five Wikivoyage rows as "no og:image", and a
+// `shot:account -- --fresh` would leave them as monograms. An account built
+// before then keeps the covers it already drained, which is what the pictures of
+// 2026-11-19 were taken from. Re-check before replacing these rows: the fix
+// belongs upstream, and the rows carry the travel search and the Lisbon list.
+//
 // THE FIRST ROW IS THE HERO PANEL'S OWN SPECIMEN, which is what makes "aligned
 // with the hero" a fact about this library rather than a resemblance: it is the
 // same person's same act, under the same three tags, and the extractor returns

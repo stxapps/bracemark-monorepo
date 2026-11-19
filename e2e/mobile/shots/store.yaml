@@ -1,8 +1,9 @@
-# The three in-app mobile store captures, on a phone or — under
+# The four in-app mobile store captures, on a phone or — under
 # `E2E_WIDTH=wide`, from `--tablet` — on a tablet. `shot/mobile.ts` supplies the
-# durable shot-account credentials, the run-local screenshot names, `FRESH` and
-# `E2E_WIDTH`. The runner copies those captures into stable artifacts after
-# Maestro exits. The fourth capture is the platform share surface in share.yaml.
+# durable shot-account credentials, the run-local screenshot names, `FRESH`,
+# `E2E_WIDTH` and `READ_LINK_ID`. The runner copies those captures into stable
+# artifacts after Maestro exits. The fifth capture is the platform share surface
+# in share.yaml.
 appId: com.bracemark.app
 ---
 # Warm restart by default, wiped cold start under `--fresh` — subflows/start.yaml
@@ -150,3 +151,35 @@ appId: com.bracemark.app
 - assertVisible: 'Lisbon'
 - assertVisible: 'Tags'
 - takeScreenshot: ${LISTS_AND_TAGS_SHOT}
+
+# The reader, on the one link with a kept read-mode copy (shot/library.ts,
+# `SHOT_READ_URL` — the same page the browser extension's receipt and the web
+# `reader-window` picture show, so every listing tells one link's story).
+#
+# LAST, so the four pictures above are taken exactly as before this one existed.
+# And BY ADDRESS — the app's own `/read?link=<id>` route, the address web uses
+# too — rather than through a row's menu: the drawer is open on a phone at this
+# point and the row is not, a list's id is minted by the import (see the tablet
+# step above), and a row's options button is one generic `link-options` per row,
+# so reaching Porto through the UI means an index into an order this flow does
+# not own. The link id IS owned: `shotLinkId` derives it from the library, and
+# the runner passes it in.
+- openLink:
+    link: 'bracemark://read?link=${READ_LINK_ID}'
+# The article, read from its synced blob. NOT `reader-tab-read`, which
+# flows/reader.yaml waits on: the tab row exists only when a link has BOTH copies,
+# and this one has a read-mode copy alone, so the reader draws the article with
+# no tabs above it. The title is the article's own `<h1>` (the topbar shows only
+# the host), and `reader-figure-image` is the copy's first picture, which decodes
+# from its synced blob after the text paints — the picture is not finished
+# until it has.
+- extendedWaitUntil:
+    visible: '.*Travel guide at Wikivoyage.*'
+    timeout: 30000
+- extendedWaitUntil:
+    visible:
+      id: 'reader-figure-image'
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 15000
+- takeScreenshot: ${READER_SHOT}

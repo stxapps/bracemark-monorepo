@@ -12,7 +12,7 @@ import {
 } from '../runner/status-bar';
 import { seedPassword } from '../seed/catalog';
 import { findUserId } from '../seed/plan';
-import { SHOT_USER } from './library';
+import { SHOT_READ_URL, SHOT_USER, shotLinkId } from './library';
 
 const run = promisify(execFile);
 const SHARE_URL = 'https://en.wikipedia.org/wiki/Job_interview';
@@ -52,7 +52,7 @@ const SHOT_LOCALE = 'en_US';
 
 type Platform = 'ios' | 'android';
 
-// A phone capture or a tablet capture. The tablet leg is the same four scenes on
+// A phone capture or a tablet capture. The tablet leg is the same five scenes on
 // the `wide` device of each platform — the iPad on its side, the tablet AVD as it
 // boots — and it is what the iPad and Android-tablet store listings are composed
 // from. The device decides which one a run gets, so the flag is a CLAIM about the
@@ -284,7 +284,14 @@ async function openShareSource(platform: Platform): Promise<void> {
     'com.android.browser.application_id',
     'com.bracemark.shot',
   ]);
-  await new Promise((resolve) => setTimeout(resolve, 2_000));
+  // ⚠ LONG ENOUGH FOR CHROME'S FLAGS SNACKBAR TO LEAVE. The flags file pinned
+  // above makes Chrome post "Chrome is loading flags from a command-line file.
+  // Stability and security may be affected." along the bottom of the page — on
+  // a phone the share sheet covers it, but the tablet's centred panel leaves it
+  // in the picture (measured 2026-11-19, twice, at the 2s this used to wait). It
+  // times out on its own within a few seconds; nothing else here can see it,
+  // because it is not in the tree Maestro reads.
+  await new Promise((resolve) => setTimeout(resolve, 10_000));
   // `--activity-clear-task`, or the SECOND run of this script gets no sheet.
   // ShareActivity declares `taskAffinity=""` (bracemark-share's AndroidManifest),
   // so each share lands in a task of its own — and that task outlives the sheet.
@@ -464,6 +471,7 @@ async function main(): Promise<void> {
     onlyYou: rawPath(form, platform, 'only-you'),
     search: rawPath(form, platform, 'search-on-device'),
     listsAndTags: rawPath(form, platform, 'lists-and-tags'),
+    reader: rawPath(form, platform, 'reader'),
     share: rawPath(form, platform, 'save-from-any-app'),
   };
   const files = Object.values(paths);
@@ -494,6 +502,9 @@ async function main(): Promise<void> {
         ONLY_YOU_SHOT: 'only-you',
         SEARCH_SHOT: 'search-on-device',
         LISTS_AND_TAGS_SHOT: 'lists-and-tags',
+        READER_SHOT: 'reader',
+        // The one link with a kept read-mode copy, by the id the archive gave it.
+        READ_LINK_ID: shotLinkId(SHOT_READ_URL),
       },
       testOutputDir: storeRun,
     });
@@ -501,6 +512,7 @@ async function main(): Promise<void> {
       'only-you': paths.onlyYou,
       'search-on-device': paths.search,
       'lists-and-tags': paths.listsAndTags,
+      reader: paths.reader,
     });
 
     await openShareSource(platform);

@@ -3221,10 +3221,10 @@ npm run shot:web         # every web scene
 npm run shot:web -- library-narrow search-narrow   # …only these
 npm run shot:ext         # the browser extension's popup
 npm run shot:ext -- ext-sync                   # …only this PNG (the flow still runs whole)
-npm run shot:mobile -- ios      # four native iPhone captures
-npm run shot:mobile -- android  # four native Pixel captures; boot it separately
+npm run shot:mobile -- ios      # five native iPhone captures
+npm run shot:mobile -- android  # five native Pixel captures; boot it separately
 npm run shot:mobile -- ios --fresh             # …wiping the device first (see below)
-npm run shot:mobile -- ios --tablet            # the same four on the iPad Pro 11", on its side
+npm run shot:mobile -- ios --tablet            # the same five on the iPad Pro 11", on its side
 npm run shot:mobile -- android --tablet        # …and on the tablet AVD
 ```
 
@@ -3271,13 +3271,16 @@ run also prints the `tools/scripts/make-image-variants.sh` line that turns it in
 the `.webp` variants `SCREENSHOT` in `apps/bracemark-site/src/app/page.tsx` points
 at — likewise for `search-advanced` and its entry in
 `apps/bracemark-site/src/content/figures.ts`; the other docs figures are cut the
-same way, at the widths their entries there list. The mobile runner freezes the platform status bar, captures three app scenes
+same way, at the widths their entries there list. The mobile runner freezes the platform status bar, captures four app scenes
 plus the real platform share surface, verifies the native raster, and restores
-the status bar. Run iOS and Android separately: iOS uses Safari plus the share
+the status bar. The fourth app scene is the reader on the library's one kept
+read-mode copy (`SHOT_READ_URL` in `shot/library.ts`), opened last and by
+address — `bracemark://read?link=<id>`, with the id derived by `shotLinkId` —
+so the three before it are taken exactly as they were before it existed. Run iOS and Android separately: iOS uses Safari plus the share
 extension; Android uses Chrome behind `ShareActivity`. These are raw captures,
 not finished store canvases.
 
-**`--tablet` is the same four scenes on the `wide` device**, written beside the
+**`--tablet` is the same five scenes on the `wide` device**, written beside the
 phone's as `tablet-<platform>-<scene>.png`. The runner passes `E2E_WIDTH=wide`,
 so the flows take the docked-rail path the wide e2e cases take (_narrow and
 wide_, above), and `shots/subflows/tablet.yaml` holds the device the way a
@@ -3302,8 +3305,23 @@ reason:
   card plainly up. The runner opens Safari, prints the four steps, waits for
   Enter, and only then has Maestro press the shutter (`shots/shutter.yaml`) —
   its raster rather than `simctl io`'s, so the picture is on its side like the
-  other three. Android's tablet share runs `share.yaml` unchanged
+  other four. ⚠ The Enter has to reach the runner itself: under
+  `npm run shot:mobile` the prompt never received a newline piped in from a
+  script (nx runs the task without that stdin), while
+  `npx tsx shot/mobile.ts ios --tablet`, run from `e2e/`, took it. Typing it in
+  a terminal is the path the step was written for; an agent driving the leg
+  needs the direct form. Android's tablet share runs `share.yaml` unchanged
   (`SHARE-ANDROID-001` already drives that panel wide).
+- **⚠ The share pictures photograph the page behind the sheet, and the page
+  is not ours.** Wikipedia's own "Download the Wikipedia app" banner (a yellow
+  card with an Install button) appeared over the top of the article on
+  2026-11-19 — on the iPhone, and once in three runs on the Android tablet.
+  `share.yaml` taps its ✕ on iOS and asserts it gone; on Android it is not in
+  the tree Maestro reads, so a rerun is the fix and the picture has to be
+  looked at. Chrome's own "loading flags from a command-line file" snackbar is
+  the other one: the flags file below causes it, the phone's sheet covers it
+  and the tablet's centred panel does not, so the runner now waits it out
+  before starting the share.
 - **⚠ Chrome's toolbar is in the Android tablet's share picture**, above the
   sheet, and an AVD's Chrome is never updated — so a few months after the
   system image it swaps ⋮ for a red update badge, and the store picture
@@ -3360,6 +3378,17 @@ otherwise photograph the library it already held while sync caught up. It is a
 runner flag rather than a flow `env:` default because — measured on Maestro 2.8.0
 — a flow-level `env:` value **beats** `-e` from the command line instead of
 yielding to it, so a default would have made the flag a silent no-op.
+
+**`--fresh` is also the cure for a device signed into SOMEONE ELSE.** The warm
+start trusts whatever session it finds, and the e2e suites leave theirs behind —
+a reader case's two `e2e-reader-….invalid` links, a seeded account's grid. The
+run then fails on its first wait (`.*wikihow.com.*`, the shot library's first
+row) with the other account on screen, which is the tell. Measured 2026-11-19 on
+the iPhone, the iPad and the phone AVD alike: after any e2e run on a device, the
+first shot run on it wants `--fresh`. On the iPad that cold path itself failed
+the same day at `sign-in-fields.yaml`'s `hideKeyboard` (the password typed, no
+keyboard to hide); signing in by hand once — `sign-in-submit` by id, since the
+text `Sign in` also matches the card's heading — and then running warm worked.
 
 ⚠ **Android's frozen status bar is entered with `exit` first, and the reason is a
 leak that outlives the run.** SystemUI demo mode is not idempotent the way the

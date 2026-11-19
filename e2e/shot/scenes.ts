@@ -5,7 +5,6 @@ import { expect, type Locator, type Page } from '@playwright/test';
 import { SHOT_OUTPUT } from '../paths';
 import { newCredentials, submitCreateAccount } from '../web/fixtures/account';
 import { writeOverCapBookmarks } from '../web/fixtures/data-lifecycle';
-
 import { SHOT_READ_URL, shotLinkId } from './library';
 
 // WHAT to photograph. `web.ts` is the HOW, and the split is the point: the
@@ -619,6 +618,20 @@ export const SCENES: Scene[] = [
     id: 'reader-window',
     what: 'the web reader on a kept read-mode copy — the store listings’ read-mode picture',
     viewport: { width: 1152, height: 720 },
+    scale: 2,
+    goto: `/read?link=${shotLinkId(SHOT_READ_URL)}`,
+    settle: settleReader,
+  },
+  {
+    // The same kept copy at `library-wide`'s size, for the store video: that
+    // film shows ONE browser window going from the library to a search to this
+    // reader, and a cut between two captures of one screen is a visibility flip
+    // over one box — so this has to be exactly the size of the two it cuts
+    // from. 1280x800 at DPR 2, as they are; the composer refuses a pair that
+    // disagrees.
+    id: 'reader-wide',
+    what: 'the web reader on a kept read-mode copy, at the PWA wide size — the store video’s read-mode beat',
+    viewport: { width: 1280, height: 800 },
     scale: 2,
     goto: `/read?link=${shotLinkId(SHOT_READ_URL)}`,
     settle: settleReader,

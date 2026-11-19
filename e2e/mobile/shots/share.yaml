@@ -1,4 +1,4 @@
-# The fourth mobile-store capture. Android arrives here with ShareActivity
+# The fifth mobile-store capture (second in the listing order). Android arrives here with ShareActivity
 # already started explicitly over Chrome. iOS arrives in Safari and must cross
 # the system share sheet by coordinate: Maestro's semantic tap on the Bracemark
 # activity reports success but does not launch the extension (docs/share-sheet.md).
@@ -16,6 +16,25 @@ appId: com.bracemark.app
       - tapOn:
           text: 'Close'
           optional: true
+
+      # ⚠ Wikipedia's own "Download the Wikipedia app" banner (a yellow card with
+      # an Install button, first seen 2026-11-19) sits over the top of the page —
+      # another app's install pitch in OUR store picture, behind the dimmed sheet
+      # where nothing fails on it. Maestro sees the card as one element named by
+      # that text, with no separate node for its ✕, so the ✕ is tapped by
+      # coordinate: (375,88) on 402x874pt, the card's top-right corner. It shows
+      # only while Wikimedia runs the campaign and stays dismissed for a while
+      # after, hence the `when`. The assert is the point: if Safari's layout ever
+      # moves the ✕, the run stops here instead of photographing the banner.
+      - runFlow:
+          when:
+            visible: 'Download the Wikipedia app'
+          commands:
+            - tapOn:
+                point: '93%,10%'
+            - waitForAnimationToEnd:
+                timeout: 5000
+            - assertNotVisible: 'Download the Wikipedia app'
 
       # Safari 26 moved Share into the bottom-right menu.
       - tapOn: 'More'

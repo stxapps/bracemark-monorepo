@@ -326,7 +326,7 @@ WHAT IT ASKS FOR
 • No ads, no trackers, no analytics code
 
 WHERE YOUR LINKS GO
-Everything you save turns up in the Bracemark web app, on any device you sign in on — where you search, pin, import, and export it, and read the copies you kept. Export is in open formats, on every plan.
+Everything you save turns up in the Bracemark web app, on any device you sign in on — where you search, pin, import, and export it. You read the copies you keep there too. Export is in open formats, on every plan.
 
 YOU’LL NEED AN ACCOUNT
 Sign in with your Bracemark username and password. No account yet? The browser extension opens the web app to create one, and no email address is needed.
