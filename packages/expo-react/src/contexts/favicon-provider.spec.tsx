@@ -136,6 +136,8 @@ const sorted = (hosts: string[]) => [...hosts].sort();
 describe('the favicon queue, and what the gesture exempts', () => {
   beforeEach(() => {
     jest.useFakeTimers();
+    mockReadFavicon.mockReset();
+    mockReadFavicon.mockResolvedValue(undefined);
     mockUsername = 'alice';
     mockMode = 'all';
     mockFetchFaviconBytes.mockReset();
@@ -213,6 +215,61 @@ describe('the favicon queue, and what the gesture exempts', () => {
     await drain();
 
     expect(sorted(fetched())).toEqual(sorted(HOSTS));
+  });
+
+  // The same gate, on the far side of the cache read. The drain checks the mode before the
+  // read and again after it, because the read is an `await` and the mode can drop while it
+  // is out. Today the read is synchronous underneath (data/favicon-store.ts), so in the
+  // app that window is a microtask; a deferred mock opens it on purpose, so that a future
+  // async read can't make it real without this case noticing. The host is FORGOTTEN, not
+  // recorded, for the same reasons as the mid-queue drop above.
+  it('drops an un-gestured host whose cache read was out when the mode was lowered', async () => {
+    let answerRead!: (value: undefined) => void;
+    mockReadFavicon.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          answerRead = done;
+        }),
+    );
+    const { rerender } = await mount(['example.com']);
+    expect(mockReadFavicon).toHaveBeenCalledTimes(1);
+
+    mockMode = 'saves';
+    rerender(tree(['example.com'], NONE));
+    await act(async () => answerRead(undefined));
+    await drain();
+
+    expect(fetched()).toEqual([]);
+    expect(mockPutFaviconNone).not.toHaveBeenCalled();
+
+    // Forgotten, so the mode coming back fills it in.
+    mockMode = 'all';
+    rerender(tree(['example.com'], NONE));
+    await settle();
+    await drain();
+
+    expect(fetched()).toEqual(['example.com']);
+  });
+
+  // And the exemption holds on that side of the read too: a save's licence doesn't run
+  // out because the mode dropped while its cache read was out.
+  it('still fetches a gestured host whose cache read was out when the mode was lowered', async () => {
+    let answerRead!: (value: undefined) => void;
+    mockReadFavicon.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          answerRead = done;
+        }),
+    );
+    const { rerender } = await mount(NONE, ['example.com']);
+    expect(mockReadFavicon).toHaveBeenCalledTimes(1);
+
+    mockMode = 'saves';
+    rerender(tree(NONE, ['example.com']));
+    await act(async () => answerRead(undefined));
+    await drain();
+
+    expect(fetched()).toEqual(['example.com']);
   });
 
   // THE EXEMPTION, at the default mode. A share of a dozen links has to fill in a dozen

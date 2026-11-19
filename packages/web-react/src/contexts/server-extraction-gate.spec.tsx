@@ -131,9 +131,7 @@ function AsksForAFavicon() {
 // what it passes when there is none.
 const tree = (extractClient: ExtractClient | null, all = false) => (
   <ExtractClientProvider client={extractClient}>
-    <LinkPreviewsProvider>
-      {all ? <GeneratesAll /> : <ReportsAPage />}
-    </LinkPreviewsProvider>
+    <LinkPreviewsProvider>{all ? <GeneratesAll /> : <ReportsAPage />}</LinkPreviewsProvider>
     <FaviconProvider>
       <AsksForAFavicon />
     </FaviconProvider>

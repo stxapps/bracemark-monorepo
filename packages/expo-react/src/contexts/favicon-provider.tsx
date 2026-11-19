@@ -221,6 +221,15 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
           // resolved this host since it was queued.
           const existing = await readFavicon(host);
           if (stoppedRef.current || usernameRef.current !== owner) return;
+          // And the gate again after the read, as web does: the mode may have been
+          // lowered while it was out — checked above only before it. Today the read
+          // is synchronous underneath (favicon-store.ts), so the window is a
+          // microtask; the check is here so that an async read can't open it
+          // silently. Same shape as above, so a gestured host still survives.
+          if (!gestured && !enabledRef.current) {
+            handledRef.current.delete(host);
+            return;
+          }
           if (!isFaviconStale(existing)) return;
 
           let bytes: Uint8Array | undefined;

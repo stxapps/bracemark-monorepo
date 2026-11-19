@@ -301,7 +301,9 @@ test('_Update preview_ refuses an answer from a page other than the one shown at
     collected: {},
   });
   expect(mockUpdatePreview).not.toHaveBeenCalled();
-  expect(screen.getByRole('alert')).toHaveTextContent('Could not update the preview. Please try again.');
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'Could not update the preview. Please try again.',
+  );
 });
 
 test('a page with no web address of its own is nothing to keep', async () => {
