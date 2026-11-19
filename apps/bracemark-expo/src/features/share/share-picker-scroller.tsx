@@ -1,5 +1,5 @@
-// The scroller both share-sheet pickers put their rows in — the app's PickerList
-// (components/links/picker-list.tsx, a FlatList: the window, the keyboard props
+// The scroller both share-sheet pickers put their rows in — the app's PickerScroller
+// (components/links/picker-scroller.tsx, a FlatList: the window, the keyboard props
 // and the touch claim are its), with the share sheet's own bounds.
 //
 // ⚠ IT IS VIRTUALIZED FOR MEMORY, NOT SPEED. In the iOS share extension every
@@ -22,7 +22,7 @@
 //     the keyboard takes the room this is what gives it up, and the header, the
 //     field and Done stay put. Miss it and the panel overflows the frame instead —
 //     nothing clips, it just paints outside its own background.
-//   - Why `keyboardDismissMode` is `interactive` here, beyond PickerList's reason:
+//   - Why `keyboardDismissMode` is `interactive` here, beyond PickerScroller's reason:
 //     the panel is parked on the keyboard, so `on-drag` dropped the keyboard at
 //     the start of a scroll and the whole sheet fell a keyboard's height out from
 //     under the finger. The pickers' inputs are `submitBehavior="submit"`, so
@@ -40,9 +40,9 @@
 import type { ReactElement } from 'react';
 import type { ListRenderItem } from 'react-native';
 
-import { PickerList } from '../../components/links/picker-list';
+import { PickerScroller } from '../../components/links/picker-scroller';
 
-export function SharePickerList<T>(props: {
+export function SharePickerScroller<T>(props: {
   data: readonly T[];
   renderItem: ListRenderItem<T>;
   keyExtractor: (item: T) => string;
@@ -50,5 +50,5 @@ export function SharePickerList<T>(props: {
   emptyText?: string;
   footer?: ReactElement | null;
 }) {
-  return <PickerList {...props} className="max-h-72 min-h-0 shrink" />;
+  return <PickerScroller {...props} className="max-h-72 min-h-0 shrink" />;
 }

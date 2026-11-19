@@ -41,7 +41,7 @@ import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
 import { ShareHeader, ShareSheet } from './share-kit';
-import { SharePickerList } from './share-picker-list';
+import { SharePickerScroller } from './share-picker-scroller';
 
 type PathRow = { list: ShareTaxonomyList; ancestors: string[] };
 
@@ -158,9 +158,9 @@ export function ShareListPicker({
       {/* The rows are VIRTUALIZED, and must stay so: in the iOS share
           extension a mounted row is memory under a hard cap, and 300 lists in a
           ScrollView got the extension killed here. The window, the bounds, the
-          keyboard props and the touch claim are SharePickerList's — its header
+          keyboard props and the touch claim are SharePickerScroller's — its header
           carries why each is what it is. */}
-      <SharePickerList
+      <SharePickerScroller
         data={visible}
         keyExtractor={({ list }) => list.id}
         extraData={renderRow}

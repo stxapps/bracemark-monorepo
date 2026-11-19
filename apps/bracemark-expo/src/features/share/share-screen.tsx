@@ -83,9 +83,9 @@ import { apiClient } from '../../lib/api-client';
 import { closeShareSheet } from './share-host';
 import { ShareHeader, ShareNotice, ShareRow, ShareRowGroup, ShareSheet } from './share-kit';
 import { ShareListPicker } from './share-list-picker';
+import type { SharePayload } from './share-payload';
 import { ShareSpecimen } from './share-specimen';
 import { ShareTagsPicker } from './share-tags-picker';
-import type { SharePayload } from './share-payload';
 
 type Phase = 'loading' | 'ready' | 'saving' | 'saved';
 

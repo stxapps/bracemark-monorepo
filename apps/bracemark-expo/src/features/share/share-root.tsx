@@ -7,9 +7,9 @@
 import { useMemo, useRef } from 'react';
 
 import { beginShareMemory } from './share-memory';
+import { payloadFromInitialProps, type ShareInitialProps } from './share-payload';
 import { ShareScreen } from './share-screen';
 import { applyShareTheme } from './share-theme';
-import { payloadFromInitialProps, type ShareInitialProps } from './share-payload';
 
 // Uniwind wants its CSS imported once at the top of the rendered tree; the
 // root _layout does that for the router app, but BOTH share hosts mount this

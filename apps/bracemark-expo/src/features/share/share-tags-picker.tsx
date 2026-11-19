@@ -33,7 +33,7 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
 import { ShareHeader, ShareSheet } from './share-kit';
-import { SharePickerList } from './share-picker-list';
+import { SharePickerScroller } from './share-picker-scroller';
 
 export function ShareTagsPicker({
   tags,
@@ -122,8 +122,8 @@ export function ShareTagsPicker({
         className="h-9"
       />
 
-      {/* VIRTUALIZED, for the list picker's reason — see SharePickerList. */}
-      <SharePickerList
+      {/* VIRTUALIZED, for the list picker's reason — see SharePickerScroller. */}
+      <SharePickerScroller
         data={rows}
         keyExtractor={(row) => row.id}
         extraData={renderRow}

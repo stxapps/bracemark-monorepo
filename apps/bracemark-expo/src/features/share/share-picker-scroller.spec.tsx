@@ -1,4 +1,4 @@
-// The share pickers mount the rows on screen, not the library (share-picker-list.tsx).
+// The share pickers mount the rows on screen, not the library (share-picker-scroller.tsx).
 // The cost of the alternative is invisible here — jest has no memory cap, and a
 // ScrollView of 300 rows renders fine — and on an iPhone it was the share
 // extension killed at 120 MB (docs/share-sheet.md, _300 lists and 300 tags, and

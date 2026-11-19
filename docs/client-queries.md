@@ -621,7 +621,7 @@ none per kind_) — so since 2026-11-16 expo's are split by what measuring them
 both ways showed:
 
 - **The list and tag pickers are virtualized, at every size**
-  (`components/links/picker-list.tsx`, a `FlatList`): the in-app Move to,
+  (`components/links/picker-scroller.tsx`, a `FlatList`): the in-app Move to,
   list-select and tag dialogs (`list-command.tsx`, `tags-command.tsx`) and the
   share sheet's pair (`features/share/share-{list,tags}-picker.tsx`). A small
   library, under a screenful, mounts every row in the first commit exactly as a

@@ -1,6 +1,6 @@
 // The scroller every list and tag picker puts its rows in — the in-app Move to,
 // list-select and tag dialogs (list-command.tsx, tags-command.tsx) and the share
-// sheet's two pickers (features/share/share-picker-list.tsx). A FlatList, so the
+// sheet's two pickers (features/share/share-picker-scroller.tsx). A FlatList, so the
 // rows on screen and a few screens either side are mounted, not the library.
 //
 // Why: nothing bounds how many lists or tags an account holds — the limits bound
@@ -42,7 +42,7 @@ import { FlatList, type ListRenderItem } from 'react-native';
 import { ScrollClaim } from '../ui/scroll-claim';
 import { Text } from '../ui/text';
 
-export function PickerList<T>({
+export function PickerScroller<T>({
   data,
   renderItem,
   keyExtractor,

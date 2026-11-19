@@ -4,8 +4,8 @@
 // for the row menu + bulk bar, and the Lists settings reparent dialog embeds it
 // too — one implementation of the tree rendering, search behavior, and path
 // labels instead of per-surface drift. No anchored popover on a phone, so hosts
-// are Dialogs, and this renders plain content (Input + PickerList, no shell)
-// for a host's DialogContent to lay out — the rows virtualized (picker-list.tsx);
+// are Dialogs, and this renders plain content (Input + PickerScroller, no shell)
+// for a host's DialogContent to lay out — the rows virtualized (picker-scroller.tsx);
 // cmdk's keyboard nav has no analogue
 // here — rows are Pressables.
 //
@@ -51,7 +51,7 @@ import { Icon } from '../ui/icon';
 import { Input } from '../ui/input';
 import { Text } from '../ui/text';
 import { GuideLines } from './guide-lines';
-import { PickerList } from './picker-list';
+import { PickerScroller } from './picker-scroller';
 
 // Below this many lists, scrolling beats a filter box — don't render one
 // (unless the input is the create name field, above).
@@ -206,16 +206,16 @@ export function ListCommand({
           `max-h-full`), and RN children don't shrink by default — without this
           the list keeps its 320 and pushes the title off the top of a short
           phone instead of scrolling.
-          VIRTUALIZED (PickerList, a FlatList): a dialog that mounted every row
+          VIRTUALIZED (PickerScroller, a FlatList): a dialog that mounted every row
           stalled as it opened, in proportion to the library — which nothing
           bounds (docs/client-queries.md, _the tree surfaces mount every row_).
-          The keyboard pair and the touch claim are PickerList's; `interactive`
+          The keyboard pair and the touch claim are PickerScroller's; `interactive`
           rather than `on-drag` because every host is a centred Dialog, and
           dropping the keyboard re-centres it and regrows this list from its
           squeezed height to 320 — mid-drag, so the rows jump under the finger.
           The tap-outside exit is DialogContent's chrome tap plus `"handled"`
           (docs/soft-keyboard.md, _dismissal_). */}
-      <PickerList
+      <PickerScroller
         testID="list-picker-rows"
         className="max-h-80 shrink"
         nestedScrollEnabled

@@ -6,7 +6,7 @@ import { flattenTree } from '@stxapps/shared';
 
 import { cn } from '../../lib/utils';
 import { Input } from '../ui/input';
-import { PickerList } from './picker-list';
+import { PickerScroller } from './picker-scroller';
 import { TagPickerCreateRow, TagPickerItem, type TagPickerRow } from './tag-picker-rows';
 
 // The searchable, multi-select tag picker body — the expo port of web-ui's
@@ -110,13 +110,13 @@ export function TagsCommand({
         aria-label="Search or create tags"
         className="h-9"
       />
-      {/* VIRTUALIZED (PickerList, a FlatList) for list-command.tsx's reason,
+      {/* VIRTUALIZED (PickerScroller, a FlatList) for list-command.tsx's reason,
           and `interactive` for it too: the host Dialog re-centres and this list
           regrows when the keyboard leaves, so `on-drag` jumped the rows under
           the finger. The input is `submitBehavior="submit"`, so return never
           blurs — the exits are DialogContent's chrome tap, `"handled"`, and
           (iOS) a drag down into the keys. */}
-      <PickerList
+      <PickerScroller
         testID="tag-picker-rows"
         className={cn('max-h-80 shrink', className)}
         nestedScrollEnabled

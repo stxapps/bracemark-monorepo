@@ -35,7 +35,7 @@ export type TagPickerRow = {
 
 // The two pieces a tag picker lays out — one row per tag, and the Create row
 // beneath them — for a host that puts them in its own scroller: TagsCommand and
-// the share sheet's tag picker both hand them to PickerList (picker-list.tsx), a
+// the share sheet's tag picker both hand them to PickerScroller (picker-scroller.tsx), a
 // FlatList, so only the rows on screen are mounted.
 
 export const TagPickerItem = memo(function TagPickerItem({
