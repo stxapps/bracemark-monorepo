@@ -171,7 +171,7 @@ class ShareViewController: UIViewController, ShareExtensionHosting {
 
       var initialProps = sharedData ?? [:]
       // The container's size and scale, for JS that wants them
-      // (features/share/share-url.ts reads only the share itself).
+      // (features/share/share-payload.ts reads only the share itself).
       initialProps["initialViewWidth"] = self.view.bounds.width
       initialProps["initialViewHeight"] = self.view.bounds.height
       initialProps["pixelRatio"] = UIScreen.main.scale
@@ -241,7 +241,7 @@ class ShareViewController: UIViewController, ShareExtensionHosting {
 
   // MARK: The share
 
-  // What the host shared, as the initial props features/share/share-url.ts
+  // What the host shared, as the initial props features/share/share-payload.ts
   // reads: `url` for a web URL attachment, `preprocessingResults` for Safari's
   // run of share-extension/preprocessing.js, `text` for a text attachment that
   // carries no URL. The Info.plist's activation rule admits nothing else.

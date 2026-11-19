@@ -85,7 +85,7 @@ import { ShareHeader, ShareNotice, ShareRow, ShareRowGroup, ShareSheet } from '.
 import { ShareListPicker } from './share-list-picker';
 import { ShareSpecimen } from './share-specimen';
 import { ShareTagsPicker } from './share-tags-picker';
-import type { SharePayload } from './share-url';
+import type { SharePayload } from './share-payload';
 
 type Phase = 'loading' | 'ready' | 'saving' | 'saved';
 
@@ -289,7 +289,7 @@ export function ShareScreen({ url, title, readModeFile }: SharePayload) {
       newLists: newList && newList.id === listId ? [newList] : [],
       sharedAt: Date.now(),
       // Safari's read-mode copy, by the NAME of the file the controller wrote it
-      // to — the sheet never holds the text (share-url.ts, `readModeFile`). The
+      // to — the sheet never holds the text (share-payload.ts, `readModeFile`). The
       // app's drain reads it and decides whether the account keeps it
       // (share-store's drainShareOutbox).
       ...(readModeFile !== undefined ? { readModeFile } : {}),

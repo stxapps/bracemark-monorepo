@@ -138,7 +138,7 @@ export async function renderReaderCapture(): Promise<{
 // The NSExtensionJavaScriptPreprocessingFile of the iOS share extension (wired by
 // the \`preprocessingFile\` option of plugins/with-share-extension, in app.config.ts). Safari runs it
 // inside the shared page; the result lands on the RN root of the sheet as
-// \`preprocessingResults\` and is read by src/features/share/share-url.ts.
+// \`preprocessingResults\` and is read by src/features/share/share-payload.ts.
 // docs/share-sheet.md, the section on what the sheet does.
 /* eslint-disable */
 ${code}

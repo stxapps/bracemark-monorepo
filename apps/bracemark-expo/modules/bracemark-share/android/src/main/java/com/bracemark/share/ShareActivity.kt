@@ -27,7 +27,7 @@ class ShareActivity : ReactActivity() {
       // The ACTION_SEND payload → the share root's initial props: `text` is
       // EXTRA_TEXT (the URL, sometimes wrapped in prose by Chrome), `subject`
       // is EXTRA_SUBJECT (often the page title). Parsing/normalizing is the JS
-      // side's job (share-url.ts) so both platforms share it.
+      // side's job (share-payload.ts) so both platforms share it.
       override fun getLaunchOptions(): Bundle {
         val props = Bundle()
         val intent = this@ShareActivity.intent

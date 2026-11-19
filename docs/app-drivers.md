@@ -952,7 +952,7 @@ Both are also where **the simulator is least representative and neither tool
 earns its cost.** The share extension's real risk surface is logic — the
 idempotent draft, the drain that never destroys what it couldn't read, the
 immediate upload — all of it already reachable from jest, and already covered by
-`share-screen.spec.tsx`, `share-url.spec.ts` and `share-theme.spec.ts`. What a
+`share-screen.spec.tsx`, `share-payload.spec.ts` and `share-theme.spec.ts`. What a
 device driver adds on top is one thin assertion ("the sheet appeared when I hit
 Share in Safari") that changes rarely and is a 30-second manual check. Simulator
 Face ID is a synthetic match, so a green biometric test proves the wiring is

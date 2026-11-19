@@ -1,4 +1,4 @@
-import { payloadFromInitialProps, urlFromSharedText } from './share-url';
+import { payloadFromInitialProps, urlFromSharedText } from './share-payload';
 
 describe('urlFromSharedText', () => {
   it('pulls the first http(s) URL out of prose (Chrome EXTRA_TEXT)', () => {
