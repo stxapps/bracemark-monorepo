@@ -17,7 +17,7 @@ import { profileDir, SHOT_OUTPUT, SHOT_STAGED_EXTENSION } from '../paths';
 import { waitForApi } from '../runner/lib';
 import { seedPassword } from '../seed/catalog';
 import { findUserId } from '../seed/plan';
-import { SHOT_USER, shotLinkList } from './library';
+import { SHOT_READ_URL, SHOT_USER, shotLinkList } from './library';
 
 // The browser extension's popup, photographed for the Chrome Web Store and AMO.
 //
@@ -201,8 +201,18 @@ const SCALE = 2;
 // address is plain ASCII. The other is `Óbidos`, and the receipt prints a
 // link's address as stored: `en.wikivoyage.org/wiki/%C3%93bidos`, under the
 // title, in a picture a store listing is composed from.
-const UNSAVED_URL = 'https://en.wikipedia.org/wiki/Alfama';
-const SAVED_URL = 'https://en.wikivoyage.org/wiki/Porto';
+//
+// And it is `SHOT_READ_URL` itself, not a copy of the string: Porto is also the
+// one link `shot:account` keeps a read-mode copy of, so the receipt's keep row
+// reads _Read mode_ ✓ and the reader picture beside it in the listing is that
+// copy opened (library.ts, above `SHOT_READ_URL`).
+//
+// `UNSAVED_URL` was `Alfama` until `Alfama` joined the library to fill the
+// tablet's `Lisbon` picture (library.ts, its last four rows) — the failure
+// `assertFixtureAgrees` exists for, caught there. `Bairro Alto` is the next
+// neighbourhood over: the same trip, a Wikipedia article, an ASCII address.
+const UNSAVED_URL = 'https://en.wikipedia.org/wiki/Bairro_Alto';
+const SAVED_URL = SHOT_READ_URL;
 
 // What the person does to the unsaved one, driven through the real controls
 // rather than prefilled: the list the trip is already filed under, and two tags
@@ -228,7 +238,10 @@ interface ExtScene {
 // whole flow and only writes the PNGs asked for — the flow IS the setup.
 export const EXT_SCENES: ExtScene[] = [
   { id: 'ext-save', what: 'the popup on a page — list and tags chosen, Save unpressed' },
-  { id: 'ext-saved', what: 'a page the library already holds — the corner cut, the list named' },
+  {
+    id: 'ext-saved',
+    what: 'a page the library already holds — the corner cut, the list named, its read-mode copy kept',
+  },
   { id: 'ext-sync', what: 'the sync panel — status, pending changes, last sync' },
 ];
 
@@ -311,6 +324,13 @@ async function main(): Promise<void> {
     // about.
     await expect(revisit.getByText(`In ${TAB_LIST}`)).toBeVisible({ timeout: 30_000 });
     await assertTileIdentifiesPage(revisit);
+    // The keep row reads the link's synced extraction, which can land a beat after
+    // the link itself — and a capture before it photographs _Read mode_ as an
+    // offer rather than as kept. No copy at all is `shot:account`'s to fix.
+    await expect(
+      revisit.getByRole('button', { name: 'Read mode kept — read it' }),
+      `no read-mode copy of ${SAVED_URL} — run \`npm run shot:account\` (it keeps one)`,
+    ).toBeVisible({ timeout: 30_000 });
     if (shooting('ext-saved')) await shoot(revisit, EXT_SCENES[1]);
 
     await openSync(revisit);

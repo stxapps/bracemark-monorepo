@@ -6,6 +6,8 @@ import { SHOT_OUTPUT } from '../paths';
 import { newCredentials, submitCreateAccount } from '../web/fixtures/account';
 import { writeOverCapBookmarks } from '../web/fixtures/data-lifecycle';
 
+import { SHOT_READ_URL, shotLinkId } from './library';
+
 // WHAT to photograph. `web.ts` is the HOW, and the split is the point: the
 // account, the import, the extraction drain and the waits are one apparatus that
 // every picture needs, and the only thing that varies between pictures is a
@@ -160,6 +162,31 @@ async function settleList(page: Page): Promise<void> {
 }
 
 /** The lead scenes are the real default inbox, not a relabelled all-links view. */
+// The reader on a kept copy: its article, its title, and every image in the fold
+// decoded. `img.complete` with a width is the decode — an image still loading is a
+// grey plate in the middle of the one picture whose subject is the page's content.
+async function settleReader(page: Page): Promise<void> {
+  const article = page.locator('article');
+  await expect(
+    article,
+    `no read-mode copy of ${SHOT_READ_URL} — run \`npm run shot:account\` (it keeps one)`,
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(article.locator('h1')).toBeVisible();
+  await expect
+    .poll(
+      () =>
+        article.locator('img').evaluateAll((images) =>
+          images.every((img) => {
+            const image = img as HTMLImageElement;
+            if (image.getBoundingClientRect().top > window.innerHeight) return true;
+            return image.complete && image.naturalWidth > 0;
+          }),
+        ),
+      { timeout: 30_000 },
+    )
+    .toBe(true);
+}
+
 async function settleMyList(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'My List', exact: true })).toBeVisible();
   await settleList(page);
@@ -574,6 +601,27 @@ export const SCENES: Scene[] = [
     scale: 2,
     goto: '/links',
     settle: settleMyList,
+  },
+  {
+    // ⚠ A STORE LISTING's, and the same contract as `library-window` above: 1152
+    // CSS px is the content width of the window the compositor draws, so the app's
+    // type lands at 1:1. The browser extension's read-mode picture — the copy its
+    // receipt says was kept, opened where a person reads it.
+    //
+    // `SHOT_READ_URL` is the one link with a copy, kept by `shot:account`
+    // (`keepReadModeCopy`); this scene only reads it. A missing copy is a missing
+    // prerequisite, and the settle fails on it rather than photographing the
+    // reader's "Keep a copy of this page" empty state, which is a perfectly
+    // rendered picture of the feature NOT having been used.
+    //
+    // 720 tall, as the library's, and for the same reason: the window runs off the
+    // bottom of the canvas, so the article reads as continuing past it.
+    id: 'reader-window',
+    what: 'the web reader on a kept read-mode copy — the store listings’ read-mode picture',
+    viewport: { width: 1152, height: 720 },
+    scale: 2,
+    goto: `/read?link=${shotLinkId(SHOT_READ_URL)}`,
+    settle: settleReader,
   },
   {
     // ⚠ A DOCS FIGURE, and its contract is with `advanced-search` in
