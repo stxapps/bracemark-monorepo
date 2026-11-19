@@ -27,9 +27,12 @@
 // web app reads them and keeps read mode through the link-extraction service, and the
 // mobile apps read them and keep read mode (from a Safari share on iOS, and from a
 // link's capture screen) but take no screenshot yet (docs/link-extraction-keep.md).
-// They are a Plus feature (`keptCopies`). None of these strings names them yet: that
-// is a copy decision for each listing, with the platform scope stated — the mobile
-// listings in particular must not promise a screenshot the app cannot take.
+// They are a Plus feature (`keptCopies`). The two long descriptions and one
+// screenshot caption name READ MODE, each with its scope — "with Plus", and the
+// screenshot only in BROWSER_EXTENSION_FULL_DESCRIPTION, the one listing whose
+// product takes one. The mobile listings must not promise a screenshot the app
+// cannot take, which is why FULL_DESCRIPTION's line is read mode alone. The short
+// fields still name neither: there is no room to state the scope in them.
 //
 // ITS SIBLING, AND THE ONE THAT BIT: no claim about the server may read as
 // EXHAUSTIVE unless it is. "Our servers hold a path, a size, and bytes we have no
@@ -251,6 +254,7 @@ FINDING IT AGAIN
 • Card or list layouts, set per device
 • Previews with titles and images, from the browser extension, the mobile app, or server previews, an opt-in
 • The whole library lives on the device, so it opens and searches offline
+• With ${PLAN_LABELS.plus}, keep a read-mode copy of a page — its text, and its images if you choose — to read after the page changes or disappears
 
 YOURS TO LEAVE WITH
 • Full export in open formats, on every plan, forever
@@ -315,13 +319,14 @@ WHAT THE BROWSER EXTENSION DOES
 • Files it into your lists and tags, the same ones you use everywhere else in Bracemark
 • Picks up the page’s title and image from the tab itself
 • Shows when it last synced, and what is still waiting to
+• With ${PLAN_LABELS.plus}, keeps a copy of the page as you save it — its article in read mode, and a screenshot of what’s on screen if you ask for one
 
 WHAT IT ASKS FOR
 • Access to a tab only when you click the button on it — never “Read and change all your data on all websites”
 • No ads, no trackers, no analytics code
 
 WHERE YOUR LINKS GO
-Everything you save turns up in the Bracemark web app, on any device you sign in on — where you search, pin, import, and export it. Export is in open formats, on every plan.
+Everything you save turns up in the Bracemark web app, on any device you sign in on — where you search, pin, import, and export it, and read the copies you kept. Export is in open formats, on every plan.
 
 YOU’LL NEED AN ACCOUNT
 Sign in with your Bracemark username and password. No account yet? The browser extension opens the web app to create one, and no email address is needed.
@@ -414,6 +419,19 @@ export const SCREENSHOT_CAPTIONS = {
    * ("Search runs on your device rather than ours"); here it is the feature.
    */
   searchNotOurs: 'Search runs on your device, not ours',
+  /**
+   * A read-mode copy, opened: bracemark-web's reader in the browser extension's
+   * set, the mobile app's reader in the mobile sets. The button's own words
+   * (docs/brand-assets.md, _terminology_: "a read-mode copy", the hyphen before
+   * the noun), so the caption and the control a reader then looks for agree.
+   *
+   * NOT "…to read offline": "offline copies" is on the same row's barred list —
+   * an availability nothing guarantees. And no "with Plus" — forty characters
+   * have no room for the scope, so the long descriptions carry it, and this line
+   * names only what every Plus account's copy is. It says nothing about a
+   * screenshot, so it is true over the mobile reader too.
+   */
+  readModeCopy: 'Keep a read-mode copy of the page',
 } as const;
 
 // --- the PWA install dialog --------------------------------------------------
