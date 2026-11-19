@@ -82,6 +82,10 @@ const PLUS_CASES = new Set([
 // rather than the 60-link paged one. A thousand links is past the free cap, so
 // they take the same `manual` Plus grant.
 const SCALE_LIBRARY_CASES = new Set(['SCALE-IOS-001', 'SCALE-ANDROID-001', 'SKELETON-NATIVE-001']);
+// The cases that start from the kept-copies backup (web/fixtures/kept-copies-library.ts),
+// imported on the web before the device signs in: the reader reads the copies, bulk
+// edit deletes them.
+const KEPT_COPIES_CASES = new Set(['READER-NATIVE-001', 'BULK-COPIES-001']);
 
 // The least share of a row's box a painted row covers in ink (text, thumbnail,
 // chips) — a blank recycled cell is one flat colour, ~0. Measured on the paged
@@ -767,7 +771,7 @@ async function main(): Promise<void> {
             await app.page.goto('/links');
             await syncAndWait(app.page);
           }
-          if (testCase.id === 'READER-NATIVE-001') {
+          if (KEPT_COPIES_CASES.has(testCase.id)) {
             // Copies only the browser extension takes, arriving as a backup's
             // blobs. This browser imports them, so IT holds Plus as well: a
             // screenshot-only link has its two tabs on a plan with `keptCopies`.
@@ -1425,6 +1429,11 @@ async function main(): Promise<void> {
             return null;
           },
         ];
+      }
+      if (testCase.id === 'BULK-COPIES-001') {
+        if (!keptCopies) throw new Error(`${testCase.id}: the kept copies were never imported`);
+        env.BOTH_TITLE = keptCopies.bothTitle;
+        env.SHOT_ONLY_TITLE = keptCopies.shotOnlyTitle;
       }
       if (testCase.id === 'READER-NATIVE-001') {
         if (!keptCopies) throw new Error(`${testCase.id}: the kept copies were never imported`);

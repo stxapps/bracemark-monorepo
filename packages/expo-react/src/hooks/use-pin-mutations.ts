@@ -3,15 +3,23 @@
 // verbatim (that file is the canonical doc: pins are their own LWW point, so
 // pinning never rewrites the link's blob; reorder is just a new fractional
 // `rank`, computed against a fresh read of the pins so a pin added on another
-// device since render is accounted for).
+// device since render is accounted for; and `pinMany`/`unpinMany` are a
+// selection's pins in one write, minted at once by `ranksBetween`).
 
 import { useCallback, useMemo } from 'react';
 
-import { compareRank, pathFromId, PINS_PREFIX, placeAtIndex, rankForIndex } from '@stxapps/shared';
+import {
+  compareRank,
+  pathFromId,
+  PINS_PREFIX,
+  placeAtIndex,
+  rankForIndex,
+  ranksBetween,
+} from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
-import { deletePin, writePin } from '../data/mutations';
+import { bulkDeletePins, bulkWritePins, deletePin, writePin } from '../data/mutations';
 import { linkIdOf, type LinkItem, type PinItem, readPins } from '../data/queries';
 
 // The pin shadows the link at `pins/{id}.enc`, keyed by the link's id (linkIdOf).
@@ -24,6 +32,10 @@ export interface PinMutations {
   pin: (link: LinkItem) => Promise<void>;
   // Remove a link's pin (the link itself is untouched).
   unpin: (link: LinkItem) => Promise<void>;
+  // `pin`/`unpin` over a selection, each in ONE write — web-react's, verbatim:
+  // the first link ends topmost, the rest below it in the order given.
+  pinMany: (links: readonly LinkItem[]) => Promise<void>;
+  unpinMany: (links: readonly LinkItem[]) => Promise<void>;
   // Move a pinned link one slot toward the top / bottom of the pinned section
   // AS THE VIEW SHOWS IT: to just above `above` / just below `below`, the
   // adjacent pinned link the caller renders. A no-op (no write) if either link
@@ -62,6 +74,44 @@ export function usePinMutations(): PinMutations {
       if (!username) throw new Error('usePinMutations: no active account');
 
       await deletePin(username, linkIdOf(link));
+      requestSync();
+    },
+    [username, requestSync],
+  );
+
+  const pinMany = useCallback(
+    async (links: readonly LinkItem[]) => {
+      if (!username) throw new Error('usePinMutations: no active account');
+
+      const ids = [...new Set(links.map(linkIdOf))];
+      if (ids.length === 0) return;
+      // Above the first pin NOT in the run — web-react's pinMany.
+      const inRun = new Set(ids);
+      const head = (await readPins()).sort(compareRank).find((p) => !inRun.has(p.id));
+      const ranks = ranksBetween(null, head?.rank ?? null, ids.length);
+
+      await bulkWritePins(
+        username,
+        ids.map((id, i) => ({
+          id,
+          rank: ranks[i],
+          createdAt: 0,
+          updatedAt: 0,
+          path: pinPathOf(id),
+        })),
+      );
+      requestSync();
+    },
+    [username, requestSync],
+  );
+
+  const unpinMany = useCallback(
+    async (links: readonly LinkItem[]) => {
+      if (!username) throw new Error('usePinMutations: no active account');
+
+      const ids = [...new Set(links.map(linkIdOf))];
+      if (ids.length === 0) return;
+      await bulkDeletePins(username, ids);
       requestSync();
     },
     [username, requestSync],
@@ -111,7 +161,7 @@ export function usePinMutations(): PinMutations {
   );
 
   return useMemo<PinMutations>(
-    () => ({ pin, unpin, moveUp, moveDown }),
-    [pin, unpin, moveUp, moveDown],
+    () => ({ pin, unpin, pinMany, unpinMany, moveUp, moveDown }),
+    [pin, unpin, pinMany, unpinMany, moveUp, moveDown],
   );
 }

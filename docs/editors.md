@@ -1401,9 +1401,12 @@ part of that change.) In the mode, items grow a `LinkRowSelect` checkbox
   buttons. Every action also drops links already in its target state, so it
   never writes a no-op patch (no `updatedAt` bump reordering the date-modified
   sort).
-- **A bulk action is ONE write, never a loop.** Every action rides
-  `useLinkMutations`'s batched `updateMany(edits)` / `destroyMany(links)` — one
-  Dexie/SQLite transaction, one pending-op batch, one `requestSync()`. Looping the
+- **A bulk action is ONE write, never a loop.** Every action rides a batched
+  mutation — `useLinkMutations`'s `updateMany(edits)` / `destroyMany(links)`,
+  `usePinMutations`' `pinMany` / `unpinMany`, `useKeptCopyMutations`'
+  `removeAllCopies` — one Dexie/SQLite transaction, one pending-op batch, one
+  `requestSync()` (Delete copies takes two: the extractions, then the blobs they
+  stop naming, in the single-copy delete's order). Looping the
   single-link `update`/`destroy` is the shape this replaced, and it is quadratic in
   the wrong place: each iteration is its own transaction AND its own re-run of
   `readLinks` plus a full repaint of the virtualized list, so a twenty-link move
@@ -1413,11 +1416,12 @@ part of that change.) In the mode, items grow a `LinkRowSelect` checkbox
   their targets, and callers pass only the links that actually change (an
   `updatedAt` bump for no change reorders the date-modified sort). Batching also
   retires `destroy`'s content-before-entities ordering — one transaction can't be
-  interrupted halfway, so the sweep is a flat set of paths. **Pin/unpin are the
-  deliberate exception**: `pin()` inserts each link at the TOP of the pinned
-  section, so the sequence IS the resulting order (hence the reversed list), and
-  there is no batched spelling of that. Same rule and same code shape on
-  bracemark-expo.
+  interrupted halfway, so the sweep is a flat set of paths. **Pin was a loop until
+  2026-11-19**, on the belief that it had no batched spelling: `pin()` mints the key
+  above the current top, so the selection went through it reversed, one write each.
+  `pinMany` mints the whole run at once with `ranksBetween(null, head, n)` — `head`
+  the first pin outside the run — in selection order, the same order the loop left.
+  Same rule and same code shape on bracemark-expo.
 - **Bulk Edit tags** (`BulkTagsDialog` — hoisted at the page level like the edit
   dialog, driven by `retagging` in `view-state-provider`) seeds one `TagsCommand`
   with the **intersection** of the selection's tags and saves the **diff**:

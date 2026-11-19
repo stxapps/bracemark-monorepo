@@ -1270,7 +1270,8 @@ All of them are in the app:
 | `links-lock-app`              | ” — relocks the app                                                                              |
 | `bulk-count`                  | `src/features/links/bulk-edit-bar.tsx`                                                           |
 | `bulk-<action>`               | ” — `exit` `select-all` `copy` `move` `more` `remove` `restore` `delete`                         |
-| `bulk-menu-<action>`          | ” — `edit-tags` `pin` `unpin` `archive` `unarchive`                                              |
+| `bulk-menu-<action>`          | ” — `edit-tags` `pin` `unpin` `archive` `unarchive` `delete-copies`                              |
+| `bulk-delete-copies-submit`   | ” — Delete copies' confirm, behind `bulk-menu-delete-copies`                                     |
 | `bulk-tags-save`              | `src/features/links/bulk-tags-dialog.tsx`                                                        |
 | `list-picker-rows`            | `src/components/links/list-command.tsx` — the rows' scroller, for `childOf`                      |
 | `list-menu-<action>`          | `src/features/settings/lists-section.tsx` — `move-to` `lock` `unlock` `remove-lock`              |
@@ -2217,8 +2218,9 @@ bracemark-web changes shape at `md` (768, its `MD_QUERY`), and below it five
 surfaces take another form: the links rail is a drawer behind the page title
 (`sidebar-drawer.tsx`), search is a row the topbar summons, quick-add is a bottom
 sheet, Move to (a link's and a list's) is a sheet, and the settings rail is a
-section menu in the topbar. The bulk toolbar folds Edit tags, Pin, Unpin and
-Archive into its ⋯ below a 900px pane, which every narrow window is. A case whose
+section menu in the topbar. The bulk toolbar folds Edit tags, Pin, Unpin, Archive
+and Delete copies into its ⋯ below a 1060px pane (`COLLAPSE_WIDTH`), which every
+narrow window is. A case whose
 journey crosses one of them carries `"widths": ["wide", "narrow"]`, and
 `playwright.config.ts` runs it a second time in the `narrow` project at the
 visual catalog's 390×844 (`web/fixtures/layout.ts`, `WEB_VIEWPORTS`). The window is

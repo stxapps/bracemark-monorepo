@@ -473,6 +473,35 @@ export function deletePin(username: string, linkId: string): Promise<void> {
   return deleteEntity(username, pathFromId(linkId, PINS_PREFIX));
 }
 
+// writePin for N pins in ONE transaction (bulkWriteEntities) — a bulk-edit Pin
+// over a selection. Each pin is stamped and validated exactly as writePin does it,
+// and no patch: the caller hands over the finished pins, ranks minted
+// (usePinMutations.pinMany).
+export async function bulkWritePins(username: string, pins: WithPath<Pin>[]): Promise<void> {
+  const now = Date.now();
+  const entries = pins.map((pin) => {
+    const { path, ...blob } = {
+      ...pin,
+      createdAt: pin.createdAt === 0 ? now : pin.createdAt,
+      updatedAt: now,
+    };
+    if (!pinSchema.safeParse(blob).success) {
+      throw new Error(`bulkWritePins: invalid pin ${pin.id}`);
+    }
+    return { path, data: blob };
+  });
+  await bulkWriteEntities(username, entries);
+}
+
+// deletePin for N links in ONE transaction (bulkDeleteEntities) — a bulk-edit
+// Unpin over a selection.
+export function bulkDeletePins(username: string, linkIds: readonly string[]): Promise<void> {
+  return bulkDeleteEntities(
+    username,
+    linkIds.map((linkId) => pathFromId(linkId, PINS_PREFIX)),
+  );
+}
+
 // Patch the synced general-settings blob (`settings/general.enc`) and write it —
 // the SYNCED side of a setting (the "Sync" tab), so it rides the same
 // pending-op → R2 path as every other entity. Unlike the others this is a single
@@ -657,7 +686,8 @@ const hasKeptCopy = (extraction: Extraction | undefined, facet: KeptCopyFacet): 
 // (the keep doc's tripwire).
 //
 // Returns whether anything was removed: no extraction, or one without this copy, is
-// a no-op that writes nothing (a bulk removal over a selection is mostly these).
+// a no-op that writes nothing. A selection's copies go through removeKeptCopies,
+// below, in one transaction.
 export async function removeKeptCopy(
   username: string,
   linkId: string,
@@ -671,31 +701,19 @@ export async function removeKeptCopy(
   let removed: string[] = [];
   try {
     await writeEntityWith(username, path, (record) => {
-      const current = parseBlob(record?.data, extractionSchema);
       // Re-checked inside the transaction: a sync may have landed between the read
       // above and this write. Nothing to remove now — ABORT, never write back: the
       // extraction may have been deleted meanwhile, and writing the earlier copy
       // would resurrect it (the dangling-extraction race, made by us).
-      if (!current || !hasKeptCopy(current, facet)) throw NOTHING_TO_REMOVE;
-      const prior = current.facets[facet];
-      const next: Extraction = {
-        ...current,
-        ...Object.fromEntries(KEPT_COPY_FIELDS[facet].map((field) => [field, undefined])),
-        facets: {
-          ...current.facets,
-          [facet]: {
-            ...(prior ?? { status: 'done', attempts: 0 }),
-            status: 'done',
-            removedAt: now,
-          },
-        },
-        updatedAt: now,
-      };
-      if (!extractionSchema.safeParse(next).success) {
-        throw new Error(`removeKeptCopy: invalid extraction ${linkId}`);
-      }
-      removed = replacedExtractionFileIds(current, next);
-      return next;
+      const change = withoutKeptCopies(
+        parseBlob(record?.data, extractionSchema),
+        [facet],
+        now,
+        linkId,
+      );
+      if (!change) throw NOTHING_TO_REMOVE;
+      removed = change.fileIds;
+      return change.next;
     });
   } catch (err) {
     if (err === NOTHING_TO_REMOVE) return false;
@@ -703,6 +721,95 @@ export async function removeKeptCopy(
   }
   for (const fileId of removed) await deleteFile(username, fileId);
   return removed.length > 0;
+}
+
+// removeKeptCopy over a selection — every `facets` copy of every link — as ONE
+// transaction for the extractions and one for the blobs (bulkDeleteEntities), in
+// removeKeptCopy's order: the refs leave first, so an interruption between the two
+// leaves orphaned blobs for the sweep and never a ref to a deleted one. Bulk edit's
+// "Delete copies"; a loop of removeKeptCopy was a transaction per copy and per blob,
+// each a re-read and repaint of the list (docs/editors.md, bulk edit).
+//
+// Same rules, per link, decided INSIDE the transaction: a link whose extraction has
+// none of `facets` (or no extraction) is skipped — never written back, for
+// removeKeptCopy's resurrection reason — and a link with one whose path this device
+// could not read refuses the whole batch with UnreadablePathError, as every write
+// edge does (bulkWriteLinks). Resolves how many copies were removed.
+export async function removeKeptCopies(
+  username: string,
+  linkIds: readonly string[],
+  facets: readonly KeptCopyFacet[],
+): Promise<number> {
+  const ids = [...new Set(linkIds)];
+  if (ids.length === 0 || facets.length === 0) return 0;
+  const paths = ids.map((id) => pathFromId(id, EXTRACTIONS_PREFIX));
+  const now = Date.now();
+  let copies = 0;
+  const written: string[] = [];
+  const fileIds: string[] = [];
+  await db.transaction('rw', WRITE_EDGE_STORES, async () => {
+    await assertAccountStillOwnsStore(username);
+    const unreadable = await unreadablePathSet(username);
+    const existing = await db.items.bulkGet(paths);
+    const records: ItemRecord[] = [];
+    const ops: PendingOpRecord[] = [];
+    for (let i = 0; i < paths.length; i++) {
+      const path = paths[i];
+      const change = withoutKeptCopies(
+        parseBlob(existing[i]?.data, extractionSchema),
+        facets,
+        now,
+        ids[i],
+      );
+      if (!change) continue;
+      if (unreadable.has(path)) throw new UnreadablePathError(path);
+      const baseUpdatedAt = existing[i]?.updatedAt ?? 0;
+      records.push(toItemRecord(path, baseUpdatedAt, utf8(JSON.stringify(change.next))));
+      // Through the shared factory — see bulkWriteEntities, and db.ts on `writeId`.
+      ops.push(pendingPutRecord(username, path, baseUpdatedAt));
+      written.push(path);
+      fileIds.push(...change.fileIds);
+      copies += change.copies;
+    }
+    if (records.length === 0) return;
+    await db.items.bulkPut(records);
+    await db.pendingOps.bulkPut(ops);
+  });
+  for (const path of written) dropCachedPath(path);
+  await bulkDeleteEntities(
+    username,
+    fileIds.map((fileId) => pathFromId(fileId, FILES_PREFIX)),
+  );
+  return copies;
+}
+
+// The one definition of what removing kept copies does to an extraction, for
+// removeKeptCopy and removeKeptCopies alike: each of `facets` that holds a copy has
+// its refs cleared and is marked `done` with a `removedAt` (removeKeptCopy's header
+// says why it stays). Undefined when none of them holds one — no extraction, or none
+// of these copies — which is the caller's cue to write nothing.
+function withoutKeptCopies(
+  current: Extraction | undefined,
+  facets: readonly KeptCopyFacet[],
+  now: number,
+  linkId: string,
+): { next: Extraction; fileIds: string[]; copies: number } | undefined {
+  if (!current) return undefined;
+  const held = facets.filter((facet) => hasKeptCopy(current, facet));
+  if (held.length === 0) return undefined;
+  const next: Extraction = { ...current, facets: { ...current.facets }, updatedAt: now };
+  for (const facet of held) {
+    for (const field of KEPT_COPY_FIELDS[facet]) next[field] = undefined;
+    next.facets[facet] = {
+      ...(current.facets[facet] ?? { status: 'done', attempts: 0 }),
+      status: 'done',
+      removedAt: now,
+    };
+  }
+  if (!extractionSchema.safeParse(next).success) {
+    throw new Error(`removeKeptCopy: invalid extraction ${linkId}`);
+  }
+  return { next, fileIds: replacedExtractionFileIds(current, next), copies: held.length };
 }
 
 // Thrown inside removeKeptCopy's write to abort its transaction (rolling back the

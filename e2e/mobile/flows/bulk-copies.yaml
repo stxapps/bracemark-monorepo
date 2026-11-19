@@ -1,0 +1,89 @@
+# Delete the kept copies of a selection from the native bulk bar's ⋯ menu, through
+# its confirmation, and read back that the selection holds no copy any more. The
+# runner imports two links with copies on the web before the device signs in
+# (web/fixtures/kept-copies-library.ts — READER-NATIVE-001's library): one with a
+# read-mode copy and a screenshot, one with a screenshot alone.
+#
+# What only a device shows: the ⋯ menu is the one in this bar that opens a dialog
+# from an item, so the menu has to close and the portaled confirmation open in front
+# of the list; and the removal is one batched expo-sqlite write (docs/editors.md,
+# _a bulk action is ONE write_) that the mounted list re-reads, after which the
+# rows' own copy refs are gone — so Delete copies, offered only while a selected
+# link keeps a copy, comes back disabled over the same two.
+#
+#   maestro test mobile/flows/bulk-copies.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e BOTH_TITLE=… -e SHOT_ONLY_TITLE=…
+#
+# No flow-level `env:` defaults: on Maestro 2.8.0 they beat `-e` (docs/e2e.md,
+# _driving the native apps_).
+appId: com.bracemark.app
+tags: [BULK-COPIES-001, full, online, destructive, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- extendedWaitUntil:
+    visible: '.*${BOTH_TITLE}.*'
+    timeout: 30000
+- runFlow:
+    file: subflows/dismiss-logbox.yaml
+# The "links without a preview" prompt, if it is up, holds the middle of the screen
+# where select-row presses (flows/bulk-actions.yaml).
+- tapOn:
+    text: 'Dismiss'
+    optional: true
+
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-select-links'
+- runFlow:
+    file: subflows/select-row.yaml
+    env:
+      ROW: ${BOTH_TITLE}
+- runFlow:
+    file: subflows/select-row.yaml
+    env:
+      ROW: ${SHOT_ONLY_TITLE}
+- assertVisible:
+    id: 'bulk-count'
+    text: '2 selected'
+- tapOn:
+    id: 'bulk-more'
+- tapOn:
+    id: 'bulk-menu-delete-copies'
+- extendedWaitUntil:
+    visible: 'Delete the copies kept with 2 links\?'
+    timeout: 10000
+- takeScreenshot: bulk-copies-confirm
+- tapOn:
+    id: 'bulk-delete-copies-submit'
+# Every completed write leaves the mode.
+- extendedWaitUntil:
+    notVisible:
+      id: 'bulk-count'
+    timeout: 10000
+- assertNotVisible: 'Delete the copies kept with 2 links\?'
+
+# The same two, selected again: neither keeps a copy, so the action is offered
+# disabled — read off the rows the list re-read, not off anything the bar held.
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-select-links'
+- runFlow:
+    file: subflows/select-row.yaml
+    env:
+      ROW: ${BOTH_TITLE}
+- runFlow:
+    file: subflows/select-row.yaml
+    env:
+      ROW: ${SHOT_ONLY_TITLE}
+- assertVisible:
+    id: 'bulk-count'
+    text: '2 selected'
+- tapOn:
+    id: 'bulk-more'
+- assertVisible:
+    id: 'bulk-menu-delete-copies'
+    enabled: false
+- takeScreenshot: bulk-copies-none-left

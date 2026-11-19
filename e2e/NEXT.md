@@ -328,6 +328,9 @@ below E2E.
 - [x] `BULK-COPY-001` Web and native: copy ordered URLs without leaving bulk mode.
       Clipboard formatting remains unit-tested; E2E proves platform permission and
       feedback.
+- [x] `BULK-COPIES-001` Web and native: Delete copies from the ⋯ menu through its
+      confirmation, over the kept-copies backup; the same selection then offers
+      it disabled, and on web a second client reads the copies gone.
 
 ### Locks
 

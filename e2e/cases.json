@@ -405,6 +405,16 @@
     "widths": ["wide", "narrow"]
   },
   {
+    "id": "BULK-COPIES-001",
+    "title": "Bulk Delete copies confirms, then removes every kept copy of the selection, on this client and another",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "small",
+    "path": "web/bulk-edit.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
     "id": "BULK-TRASH-001",
     "title": "Trash restores and permanently deletes a selection through the bulk confirmation",
     "surface": "web",
@@ -1213,6 +1223,16 @@
     "path": "mobile/flows/bulk-actions.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
     "environments": ["local", "staging"]
+  },
+  {
+    "id": "BULK-COPIES-001",
+    "title": "Native bulk Delete copies confirms, then removes every kept copy of the selection",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/bulk-copies.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
   },
   {
     "id": "BULK-TRASH-001",

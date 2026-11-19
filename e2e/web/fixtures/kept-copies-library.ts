@@ -16,11 +16,12 @@ import { buildBackupArchive } from '../../seed/archive';
 import { previewPng } from '../../seed/png';
 
 // A backup holding kept copies, for the reader cases (READER-WEB-001,
-// READER-NATIVE-001). Only the browser extension takes a screenshot, and a spec
-// cannot drive a real page into one (docs/e2e.md, _what e2e may not assert_), so
-// the copies arrive the way a restored backup brings them: an extraction naming
-// `readModeId` / `screenshotId`, and the `files/` blobs it names. The import writes
-// them through the normal edge, so the reader meets copies a real account holds.
+// READER-NATIVE-001) and bulk Delete copies (BULK-COPIES-001). Only the browser
+// extension takes a screenshot, and a spec cannot drive a real page into one
+// (docs/e2e.md, _what e2e may not assert_), so the copies arrive the way a
+// restored backup brings them: an extraction naming `readModeId` / `screenshotId`,
+// and the `files/` blobs it names. The import writes them through the normal edge,
+// so the reader meets copies a real account holds.
 //
 // Two links, the two shapes whose tabs differ (docs/reader.md, _the tabs_):
 //   - `both` — a read-mode copy and a screenshot: two tabs, opening on Read mode;

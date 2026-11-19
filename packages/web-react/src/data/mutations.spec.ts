@@ -13,7 +13,9 @@
 // paths at once, plus one the single-path spelling gets for free: they re-read each
 // current blob inside their own transaction, so a caller's stale row snapshot can't
 // resurrect a field a sync overwrote. Every bulk action in both apps rides them, so a
-// regression here is a whole selection's worth of edits, not one.
+// regression here is a whole selection's worth of edits, not one. The selection-shaped
+// writers above them (bulkWritePins/bulkDeletePins, removeKeptCopies) owe the same,
+// and are counted in transactions: one per write, whatever the selection's size.
 
 import {
   ARCHIVE_ID,
@@ -24,6 +26,7 @@ import {
   LINKS_PREFIX,
   newFacet,
   pathFromId,
+  PINS_PREFIX,
   UnreadablePathError,
 } from '@stxapps/shared';
 
@@ -31,14 +34,17 @@ import { db } from './db';
 import {
   assertExtractionWritable,
   bulkDeleteEntities,
+  bulkDeletePins,
   bulkWriteEntities,
   bulkWriteLinks,
+  bulkWritePins,
+  removeKeptCopies,
   removeKeptCopy,
   writeExtraction,
   writeFile,
   writeLink,
 } from './mutations';
-import { type LinkItem, readExtraction, readLinkById } from './queries';
+import { type LinkItem, readExtraction, readLinkById, readPins } from './queries';
 import { forgetUnreadablePaths, recordUnreadablePaths, seedNewAccount } from './sync-store';
 
 const USER = 'alice';
@@ -521,6 +527,149 @@ describe('removeKeptCopy', () => {
     await db.pendingOps.clear();
     await expect(removeKeptCopy(USER, LINK_ID, 'screenshot')).resolves.toBe(false);
     expect(await pendingFor(PATH)).toBeUndefined();
+  });
+});
+
+describe('removeKeptCopies', () => {
+  // removeKeptCopy over a selection: the same per-link outcome, in one transaction for
+  // the extractions and one for the blobs — not one per copy and per blob.
+  const bytes = new Uint8Array([1, 2, 3]);
+  const A = 'l_a';
+  const B = 'l_b';
+
+  async function seedCopies() {
+    for (const id of ['read-a', 'pack-a', 'shot-a', 'shot-b']) await writeFile(USER, id, bytes);
+    await writeExtraction(USER, A, {
+      fields: { readModeId: 'read-a', readModeImagesId: 'pack-a', screenshotId: 'shot-a' },
+      facet: 'readMode',
+      state: newFacet('done', 'extension:fg'),
+    });
+    await writeExtraction(USER, B, {
+      fields: { screenshotId: 'shot-b' },
+      facet: 'screenshot',
+      state: newFacet('done', 'extension:fg'),
+    });
+    // A link with an extraction and no copy, and one with no extraction at all.
+    await writeExtraction(USER, 'l_title', { fields: { title: 'Google' } });
+    await db.pendingOps.clear();
+  }
+
+  it('removes every copy of every link, marked, in two transactions', async () => {
+    await seedCopies();
+    const transaction = jest.spyOn(db, 'transaction');
+
+    await expect(
+      removeKeptCopies(USER, [A, B, 'l_title', 'l_none'], ['readMode', 'screenshot']),
+    ).resolves.toBe(3);
+
+    expect(transaction).toHaveBeenCalledTimes(2);
+    transaction.mockRestore();
+    const a = await readExtraction(A);
+    expect(a?.readModeId).toBeUndefined();
+    expect(a?.readModeImagesId).toBeUndefined();
+    expect(a?.screenshotId).toBeUndefined();
+    expect(a?.facets.readMode).toMatchObject({ status: 'done', removedAt: expect.any(Number) });
+    expect(a?.facets.screenshot).toMatchObject({ status: 'done', removedAt: expect.any(Number) });
+    expect((await readExtraction(B))?.screenshotId).toBeUndefined();
+    for (const id of ['read-a', 'pack-a', 'shot-a', 'shot-b']) {
+      const path = pathFromId(id, FILES_PREFIX);
+      expect(await db.items.get(path)).toBeUndefined();
+      expect(await pendingFor(path)).toMatchObject({ op: 'delete' });
+    }
+    // The two links without a copy: nothing written, nothing created.
+    expect(await pendingFor(pathFromId('l_title', EXTRACTIONS_PREFIX))).toBeUndefined();
+    expect(await db.items.get(pathFromId('l_none', EXTRACTIONS_PREFIX))).toBeUndefined();
+  });
+
+  it('takes only the copies it is asked for', async () => {
+    await seedCopies();
+
+    await expect(removeKeptCopies(USER, [A, B], ['screenshot'])).resolves.toBe(2);
+
+    const a = await readExtraction(A);
+    expect(a?.readModeId).toBe('read-a');
+    expect(a?.screenshotId).toBeUndefined();
+    expect(await db.items.get(pathFromId('read-a', FILES_PREFIX))).toBeDefined();
+  });
+
+  it('counts a link named twice once, and writes nothing for an empty selection', async () => {
+    await seedCopies();
+    await expect(removeKeptCopies(USER, [], ['readMode', 'screenshot'])).resolves.toBe(0);
+    expect(await db.pendingOps.count()).toBe(0);
+
+    await expect(removeKeptCopies(USER, [B, B], ['screenshot'])).resolves.toBe(1);
+  });
+
+  it('refuses the whole batch when a link with a copy is recorded unreadable', async () => {
+    // As every write edge does (bulkWriteLinks): the server holds a copy this device
+    // could not open, and a write built on the older local one would overwrite it.
+    await seedCopies();
+    await recordUnreadablePaths(USER, [{ path: pathFromId(B, EXTRACTIONS_PREFIX), updatedAt: 1 }]);
+
+    await expect(removeKeptCopies(USER, [A, B], ['readMode', 'screenshot'])).rejects.toThrow(
+      UnreadablePathError,
+    );
+
+    expect((await readExtraction(A))?.screenshotId).toBe('shot-a');
+    expect(await db.items.get(pathFromId('shot-a', FILES_PREFIX))).toBeDefined();
+    expect(await db.pendingOps.count()).toBe(0);
+  });
+
+  it('is not refused by a recorded path it would not write', async () => {
+    await seedCopies();
+    await recordUnreadablePaths(USER, [
+      { path: pathFromId('l_none', EXTRACTIONS_PREFIX), updatedAt: 1 },
+    ]);
+
+    await expect(removeKeptCopies(USER, [B, 'l_none'], ['screenshot'])).resolves.toBe(1);
+  });
+});
+
+describe('bulkWritePins / bulkDeletePins', () => {
+  const pin = (id: string, rank: string) => ({
+    id,
+    rank,
+    createdAt: 0,
+    updatedAt: 0,
+    path: pathFromId(id, PINS_PREFIX),
+  });
+
+  it('writes every pin, stamped, with its pending op, in one transaction', async () => {
+    const transaction = jest.spyOn(db, 'transaction');
+
+    await bulkWritePins(USER, [pin('l_a', 'a0'), pin('l_b', 'a1')]);
+
+    expect(transaction).toHaveBeenCalledTimes(1);
+    transaction.mockRestore();
+    const pins = await readPins();
+    expect(pins.map((p) => [p.id, p.rank])).toEqual(
+      expect.arrayContaining([
+        ['l_a', 'a0'],
+        ['l_b', 'a1'],
+      ]),
+    );
+    expect(pins.every((p) => p.createdAt > 0 && p.updatedAt > 0)).toBe(true);
+    expect(await pendingFor(pathFromId('l_b', PINS_PREFIX))).toMatchObject({ op: 'put' });
+  });
+
+  it('writes none of the batch when one pin is invalid', async () => {
+    await expect(
+      bulkWritePins(USER, [pin('l_a', 'a0'), { ...pin('l_b', 'a1'), rank: 1 as never }]),
+    ).rejects.toThrow(/invalid pin l_b/);
+    expect(await readPins()).toEqual([]);
+    expect(await db.pendingOps.count()).toBe(0);
+  });
+
+  it('deletes every pin and queues one delete each, in one transaction', async () => {
+    await bulkWritePins(USER, [pin('l_a', 'a0'), pin('l_b', 'a1'), pin('l_c', 'a2')]);
+    const transaction = jest.spyOn(db, 'transaction');
+
+    await bulkDeletePins(USER, ['l_a', 'l_c']);
+
+    expect(transaction).toHaveBeenCalledTimes(1);
+    transaction.mockRestore();
+    expect((await readPins()).map((p) => p.id)).toEqual(['l_b']);
+    expect(await pendingFor(pathFromId('l_c', PINS_PREFIX))).toMatchObject({ op: 'delete' });
   });
 });
 

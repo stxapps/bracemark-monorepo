@@ -31,7 +31,7 @@ import {
 import { getDb, items, itemTagIds, rowsPerStatement, syncMeta } from './db';
 import { dataFileFor } from './file-store';
 import { getItem, putItemsTx } from './item-store';
-import { bulkWriteEntities, writeFile, writePin } from './mutations';
+import { bulkDeletePins, bulkWriteEntities, bulkWritePins, writeFile, writePin } from './mutations';
 import { listPendingOps } from './pending-store';
 import { parseBlob, toItemRecord } from './projection';
 import { readPins } from './queries';
@@ -190,4 +190,58 @@ it('stores the path id when a pin read through readPins is written back', async 
 
   const stored = parseBlob((await getItem(path))?.data ?? undefined, pinSchema);
   expect(stored).toMatchObject({ id: 'lnk-a', rank: rankB });
+});
+
+// A bulk-edit Pin / Unpin over a selection: every pin in one transaction, stamped
+// and validated as writePin does it (web's mutations.spec has the same pair).
+describe('bulkWritePins / bulkDeletePins', () => {
+  const pin = (id: string, rank: string) => ({
+    id,
+    rank,
+    createdAt: 0,
+    updatedAt: 0,
+    path: pathFromId(id, PINS_PREFIX),
+  });
+
+  it('writes every pin, stamped, with its pending op, in one transaction', async () => {
+    const [r0, r1] = ranksBetween(null, null, 2);
+    const transaction = jest.spyOn(getDb(), 'transaction');
+
+    await bulkWritePins(USER, [pin('l_a', r0), pin('l_b', r1)]);
+
+    expect(transaction).toHaveBeenCalledTimes(1);
+    transaction.mockRestore();
+    const pins = await readPins();
+    expect(pins.map((p) => p.id).sort()).toEqual(['l_a', 'l_b']);
+    expect(pins.every((p) => p.createdAt > 0 && p.updatedAt > 0)).toBe(true);
+    expect((await listPendingOps(USER)).map((op) => op.path).sort()).toEqual([
+      pathFromId('l_a', PINS_PREFIX),
+      pathFromId('l_b', PINS_PREFIX),
+    ]);
+  });
+
+  it('writes none of the batch when one pin is invalid', async () => {
+    await expect(
+      bulkWritePins(USER, [pin('l_a', 'a0'), { ...pin('l_b', 'a1'), rank: 1 as never }]),
+    ).rejects.toThrow(/invalid pin l_b/);
+    expect(await readPins()).toEqual([]);
+    expect(await listPendingOps(USER)).toHaveLength(0);
+  });
+
+  it('deletes every pin and queues one delete each, in one transaction', async () => {
+    const ranks = ranksBetween(null, null, 3);
+    await bulkWritePins(USER, [pin('l_a', ranks[0]), pin('l_b', ranks[1]), pin('l_c', ranks[2])]);
+    const transaction = jest.spyOn(getDb(), 'transaction');
+
+    await bulkDeletePins(USER, ['l_a', 'l_c']);
+
+    expect(transaction).toHaveBeenCalledTimes(1);
+    transaction.mockRestore();
+    expect((await readPins()).map((p) => p.id)).toEqual(['l_b']);
+    const deletes = (await listPendingOps(USER)).filter((op) => op.op === 'delete');
+    expect(deletes.map((op) => op.path).sort()).toEqual([
+      pathFromId('l_a', PINS_PREFIX),
+      pathFromId('l_c', PINS_PREFIX),
+    ]);
+  });
 });

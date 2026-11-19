@@ -929,8 +929,8 @@ Two rules:
   resurrect one deleted meanwhile. Reached from the web reader's _Delete this copy_
   and bulk edit's _Delete copies_ (both confirm first — a copy can't be re-taken
   from a page that changed), through `useKeptCopyMutations`. Never gated on the plan.
-  Expo has the same per-copy delete in its reader (expo-react ports
-  `removeKeptCopy`); bulk delete is web-only for now.
+  Expo has both: the same per-copy delete in its reader and _Delete copies_ in
+  its bulk bar's ⋯ menu (expo-react ports `removeKeptCopy` and the hook).
 - ⚠ **The orphaned-file sweep** — `sweepOrphanFiles` (web-react and expo-react
   `data/sweep-orphan-files.ts`, whose rules are ONE copy in shared's
   `sync/sweeps.ts`), run by bracemark-web and bracemark-expo after the dangling

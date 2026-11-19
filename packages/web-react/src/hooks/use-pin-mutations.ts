@@ -6,6 +6,13 @@
 // their own LWW point (entities.ts), so pinning/reordering a link never rewrites
 // the link's blob and concurrent pin moves on two devices don't collide.
 //
+// `pinMany`/`unpinMany` are the same two ops over a bulk-edit SELECTION, batched
+// like useLinkMutations' updateMany: one transaction, one sync kick, one re-read
+// and repaint of the list — not one of each per link (docs/editors.md, bulk edit).
+// A loop of `pin` was also the only way to get the order right while each call
+// minted the head key from a fresh read; `ranksBetween` mints the whole run at
+// once above the first pin outside it, in the order given.
+//
 // Reorder is just a new `rank` (rank.ts fractional index), the same way
 // useListMutations reorders lists: pick the destination index, placeAtIndex turns
 // it into the key to persist, and nothing else is rewritten — short of a slot
@@ -15,11 +22,18 @@
 
 import { useCallback, useMemo } from 'react';
 
-import { compareRank, pathFromId, PINS_PREFIX, placeAtIndex, rankForIndex } from '@stxapps/shared';
+import {
+  compareRank,
+  pathFromId,
+  PINS_PREFIX,
+  placeAtIndex,
+  rankForIndex,
+  ranksBetween,
+} from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
-import { deletePin, writePin } from '../data/mutations';
+import { bulkDeletePins, bulkWritePins, deletePin, writePin } from '../data/mutations';
 import { linkIdOf, type LinkItem, type PinItem, readPins } from '../data/queries';
 
 // The pin shadows the link at `pins/{id}.enc`, keyed by the link's id (linkIdOf).
@@ -32,6 +46,14 @@ export interface PinMutations {
   pin: (link: LinkItem) => Promise<void>;
   // Remove a link's pin (the link itself is untouched).
   unpin: (link: LinkItem) => Promise<void>;
+  // Pin every link to the top of the pinned section in ONE write, the first link
+  // topmost and the rest below it in the order given. An already-pinned link in
+  // the run moves to its place in it, as `pin` moves it to the top — callers that
+  // don't want that filter it out first.
+  pinMany: (links: readonly LinkItem[]) => Promise<void>;
+  // Remove every link's pin in ONE write. A link with no pin costs a harmless
+  // tombstone, as `unpin`'s does.
+  unpinMany: (links: readonly LinkItem[]) => Promise<void>;
   // Move a pinned link one slot toward the top / bottom of the pinned section
   // AS THE VIEW SHOWS IT: to just above `above` / just below `below`, the
   // adjacent pinned link the caller renders. A no-op (no write) if either link
@@ -70,6 +92,46 @@ export function usePinMutations(): PinMutations {
       if (!username) throw new Error('usePinMutations: no active account');
 
       await deletePin(username, linkIdOf(link));
+      requestSync();
+    },
+    [username, requestSync],
+  );
+
+  const pinMany = useCallback(
+    async (links: readonly LinkItem[]) => {
+      if (!username) throw new Error('usePinMutations: no active account');
+
+      const ids = [...new Set(links.map(linkIdOf))];
+      if (ids.length === 0) return;
+      // The run goes above the first pin NOT in it — a pin in the run is being
+      // re-keyed, so bounding by it would only crowd the keys. Open at the top,
+      // so a key always exists, even above a tied pair.
+      const inRun = new Set(ids);
+      const head = (await readPins()).sort(compareRank).find((p) => !inRun.has(p.id));
+      const ranks = ranksBetween(null, head?.rank ?? null, ids.length);
+
+      await bulkWritePins(
+        username,
+        ids.map((id, i) => ({
+          id,
+          rank: ranks[i],
+          createdAt: 0,
+          updatedAt: 0,
+          path: pinPathOf(id),
+        })),
+      );
+      requestSync();
+    },
+    [username, requestSync],
+  );
+
+  const unpinMany = useCallback(
+    async (links: readonly LinkItem[]) => {
+      if (!username) throw new Error('usePinMutations: no active account');
+
+      const ids = [...new Set(links.map(linkIdOf))];
+      if (ids.length === 0) return;
+      await bulkDeletePins(username, ids);
       requestSync();
     },
     [username, requestSync],
@@ -119,7 +181,7 @@ export function usePinMutations(): PinMutations {
   );
 
   return useMemo<PinMutations>(
-    () => ({ pin, unpin, moveUp, moveDown }),
-    [pin, unpin, moveUp, moveDown],
+    () => ({ pin, unpin, pinMany, unpinMany, moveUp, moveDown }),
+    [pin, unpin, pinMany, unpinMany, moveUp, moveDown],
   );
 }

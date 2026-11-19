@@ -451,6 +451,32 @@ export async function deletePin(username: string, linkId: string): Promise<void>
   deleteEntity(username, pathFromId(linkId, PINS_PREFIX));
 }
 
+// writePin / deletePin over a selection, each in ONE transaction — web's
+// bulkWritePins / bulkDeletePins, same contract (each pin stamped and validated as
+// writePin does it; the caller mints the ranks).
+export async function bulkWritePins(username: string, pins: WithPath<Pin>[]): Promise<void> {
+  const now = Date.now();
+  const entries = pins.map((pin) => {
+    const { path, ...blob } = {
+      ...pin,
+      createdAt: pin.createdAt === 0 ? now : pin.createdAt,
+      updatedAt: now,
+    };
+    if (!pinSchema.safeParse(blob).success) {
+      throw new Error(`bulkWritePins: invalid pin ${pin.id}`);
+    }
+    return { path, data: blob };
+  });
+  await bulkWriteEntities(username, entries);
+}
+
+export function bulkDeletePins(username: string, linkIds: readonly string[]): Promise<void> {
+  return bulkDeleteEntities(
+    username,
+    linkIds.map((linkId) => pathFromId(linkId, PINS_PREFIX)),
+  );
+}
+
 // One extraction facet name / the machine-written display fields / one
 // write-back's payload — web-react mutations.ts's types, verbatim.
 export type ExtractionFacet = keyof Extraction['facets'];
@@ -538,33 +564,20 @@ export async function removeKeptCopy(
   linkId: string,
   facet: KeptCopyFacet,
 ): Promise<boolean> {
-  const fields = KEPT_COPY_FIELDS[facet];
   const path = pathFromId(linkId, EXTRACTIONS_PREFIX);
   const now = Date.now();
   let removed: string[] = [];
   try {
     writeEntityWith(username, path, (existing) => {
-      const current = parseBlob(existing?.data ?? undefined, extractionSchema);
-      if (!current || !fields.some((field) => current[field])) throw NOTHING_TO_REMOVE;
-      const prior = current.facets[facet];
-      const next: Extraction = {
-        ...current,
-        ...Object.fromEntries(fields.map((field) => [field, undefined])),
-        facets: {
-          ...current.facets,
-          [facet]: {
-            ...(prior ?? { status: 'done', attempts: 0 }),
-            status: 'done',
-            removedAt: now,
-          },
-        },
-        updatedAt: now,
-      };
-      if (!extractionSchema.safeParse(next).success) {
-        throw new Error(`removeKeptCopy: invalid extraction ${linkId}`);
-      }
-      removed = replacedExtractionFileIds(current, next);
-      return next;
+      const change = withoutKeptCopies(
+        parseBlob(existing?.data ?? undefined, extractionSchema),
+        [facet],
+        now,
+        linkId,
+      );
+      if (!change) throw NOTHING_TO_REMOVE;
+      removed = change.fileIds;
+      return change.next;
     });
   } catch (err) {
     if (err === NOTHING_TO_REMOVE) return false;
@@ -572,6 +585,84 @@ export async function removeKeptCopy(
   }
   for (const fileId of removed) await deleteFile(username, fileId);
   return removed.length > 0;
+}
+
+// removeKeptCopy over a selection — web-react's removeKeptCopies, same contract
+// (see there): the extractions in ONE transaction, decided per link inside it (a
+// link without a copy is skipped, never written back; an unreadable path with one
+// refuses the batch), then the blobs in one bulkDeleteEntities, which also removes their
+// plaintext files from disk — the refs first, as removeKeptCopy orders it.
+export async function removeKeptCopies(
+  username: string,
+  linkIds: readonly string[],
+  facets: readonly KeptCopyFacet[],
+): Promise<number> {
+  const ids = [...new Set(linkIds)];
+  if (ids.length === 0 || facets.length === 0) return 0;
+  const now = Date.now();
+  let copies = 0;
+  const written: string[] = [];
+  const fileIds: string[] = [];
+  getDb().transaction((tx: DbTx) => {
+    assertAccountOwnsStoreTx(tx, username);
+    const unreadable = unreadablePathSetTx(tx, username);
+    const records: ItemRecord[] = [];
+    const puts: { path: string; baseUpdatedAt: number }[] = [];
+    for (const linkId of ids) {
+      const path = pathFromId(linkId, EXTRACTIONS_PREFIX);
+      const existing = tx.select().from(items).where(eq(items.path, path)).get();
+      const change = withoutKeptCopies(
+        parseBlob(existing?.data ?? undefined, extractionSchema),
+        facets,
+        now,
+        linkId,
+      );
+      if (!change) continue;
+      if (unreadable.has(path)) throw new UnreadablePathError(path);
+      const baseUpdatedAt = existing?.updatedAt ?? 0;
+      records.push(toItemRecord(path, baseUpdatedAt, utf8(JSON.stringify(change.next))));
+      puts.push({ path, baseUpdatedAt });
+      written.push(path);
+      fileIds.push(...change.fileIds);
+      copies += change.copies;
+    }
+    if (records.length === 0) return;
+    putItemsTx(tx, records);
+    enqueuePutsTx(tx, username, puts);
+  });
+  for (const path of written) dropCachedPath(path);
+  await bulkDeleteEntities(
+    username,
+    fileIds.map((fileId) => pathFromId(fileId, FILES_PREFIX)),
+  );
+  return copies;
+}
+
+// What removing kept copies does to an extraction — web-react's withoutKeptCopies,
+// verbatim: each of `facets` holding a copy has its refs cleared and is marked `done`
+// with a `removedAt`; undefined when none holds one, the cue to write nothing.
+function withoutKeptCopies(
+  current: Extraction | undefined,
+  facets: readonly KeptCopyFacet[],
+  now: number,
+  linkId: string,
+): { next: Extraction; fileIds: string[]; copies: number } | undefined {
+  if (!current) return undefined;
+  const held = facets.filter((facet) => KEPT_COPY_FIELDS[facet].some((field) => current[field]));
+  if (held.length === 0) return undefined;
+  const next: Extraction = { ...current, facets: { ...current.facets }, updatedAt: now };
+  for (const facet of held) {
+    for (const field of KEPT_COPY_FIELDS[facet]) next[field] = undefined;
+    next.facets[facet] = {
+      ...(current.facets[facet] ?? { status: 'done', attempts: 0 }),
+      status: 'done',
+      removedAt: now,
+    };
+  }
+  if (!extractionSchema.safeParse(next).success) {
+    throw new Error(`removeKeptCopy: invalid extraction ${linkId}`);
+  }
+  return { next, fileIds: replacedExtractionFileIds(current, next), copies: held.length };
 }
 
 // Delete one link's `extractions/{id}.enc` — the machine half's counterpart of

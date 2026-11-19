@@ -11,13 +11,20 @@
 //  - Bottom-anchored (thumb reach), not a row under the topbar; the dismiss ✕ /
 //    count / Select all live in its top row, the actions below — web's
 //    left-cluster/right-cluster split becomes a two-row split.
-//  - The secondary actions (Edit tags, Pin, Unpin, Archive) sit behind a ⋯ menu
-//    at EVERY width — web collapses them below a measured 900px, and a phone is
-//    always below it, so the split is fixed rather than measured. Copy, Move to,
-//    and the destructive Remove stay inline, exactly web's collapsed set.
+//  - The secondary actions (Edit tags, Pin, Unpin, Archive, Delete copies) sit
+//    behind a ⋯ menu at EVERY width — web collapses them below a measured
+//    COLLAPSE_WIDTH, and a phone is always below it, so the split is fixed rather
+//    than measured. Copy, Move to, and the destructive Remove stay inline,
+//    exactly web's collapsed set.
+//  - Delete copies confirms in an AlertDialog of its own, as on web (it removes
+//    the selection's kept copies on every device, and a copy can't be re-taken
+//    from a page that has changed), but its confirm is a plain destructive
+//    Button, not AlertDialogAction — the rn-primitives Action closes the root
+//    before its handler runs (link-destroy-confirm.tsx), and the dialog must stay
+//    up, busy, until the removal resolves.
 //  - Below the wide window (768, `useWideWindow`), those inline actions are
 //    GLYPHS with no label — web's second tier, the icon-only one below its
-//    measured 560px. They carried labels once, and the row was wider than a
+//    measured ICON_WIDTH. They carried labels once, and the row was wider than a
 //    narrow Android phone: Button is `shrink-0`, so the surplus pushed Remove
 //    past the right edge, further while Copy read "Copied" or the font scale was
 //    raised. Each name lives in `aria-label` there, busy and "Copied" wording
@@ -28,10 +35,10 @@
 //    gathered at the row's end — web's labelled tier, with Remove on the outer
 //    edge where web puts it. Stretched across a tablet's pane, four `flex-1`
 //    glyphs were ~240dp boxes that said nothing. The switch is the window's
-//    768, not web's measured 560 — the app's one layout number
+//    768, not web's measured ICON_WIDTH — the app's one layout number
 //    (docs/safe-area.md, _wide windows on native_) — and it holds at the
 //    narrowest wide pane: 768 less the docked rail leaves 488, and the labelled
-//    set takes ~335 of it at 1× and still fits at 1.5×. Web's 900 tier, the ⋯
+//    set takes ~335 of it at 1× and still fits at 1.5×. Web's COLLAPSE_WIDTH tier, the ⋯
 //    items inline, would not (another ~380), so the ⋯ menu stays at every
 //    width.
 //  - Select all is a plain boolean checkbox — the reusables Checkbox has no
@@ -61,6 +68,7 @@ import * as Clipboard from 'expo-clipboard';
 import {
   Archive,
   ArchiveRestore,
+  BookX,
   Check,
   Copy,
   FolderInput,
@@ -78,12 +86,22 @@ import {
   linkIdOf,
   type LinkView,
   readPins,
+  useKeptCopyMutations,
   useLinkMutations,
   useLiveRead,
   usePinMutations,
 } from '@stxapps/expo-react';
 import { ARCHIVE_ID, DEFAULT_LIST_ID, TRASH_ID } from '@stxapps/shared';
 
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
 import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
 import {
@@ -100,7 +118,7 @@ import { MoveToDialog } from './move-to-dialog';
 import { useLinksPage } from './page-provider';
 import { useLinksViewState } from './view-state-provider';
 
-type BulkAction = 'restore' | 'move' | 'pin' | 'unpin' | 'archive' | 'remove';
+type BulkAction = 'restore' | 'move' | 'pin' | 'unpin' | 'archive' | 'copies' | 'remove';
 
 // Every target in this bar is under the platform floors as drawn — the top row
 // is 40 tall, the actions 36 — and `hitSlop` makes up the difference rather
@@ -158,10 +176,12 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
     requestRetag,
   } = useLinksViewState();
   const { updateMany } = useLinkMutations();
-  const { pin, unpin } = usePinMutations();
+  const { pinMany, unpinMany } = usePinMutations();
+  const { removeAllCopies } = useKeptCopyMutations();
   const wide = useWideWindow();
   const [busy, setBusy] = useState<BulkAction | null>(null);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [confirmingCopies, setConfirmingCopies] = useState(false);
   // The "Copied" flash on Copy links; the timer is cleared on unmount so a
   // pending flash can't set state on an unmounted bar.
   const [copied, setCopied] = useState(false);
@@ -201,6 +221,9 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
   const toPin = actionable.filter((l) => !pinnedIds.has(linkIdOf(l)));
   const toUnpin = actionable.filter((l) => pinnedIds.has(linkIdOf(l)));
   const toArchive = actionable.filter((l) => l.listId !== ARCHIVE_ID);
+  // Every selected link with a kept copy — Trash included, as on web: a copy is
+  // the user's to delete wherever its link sits.
+  const withCopies = selected.filter((l) => l.readModeId || l.screenshotId);
 
   // If the whole selection sits in one list (always true in a plain list view),
   // mark it checked-but-disabled in Move to; a mixed selection has no such
@@ -210,11 +233,10 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
 
   // The busy/exit wrapper every bulk action shares — web's bulk-edit-toolbar,
   // same shape and same reason: `run` performs the WHOLE action in one call,
-  // because the list moves below are a single batched write (runMove) and a loop
-  // of `update` costs a transaction, a sync kick and a full re-read + repaint of
-  // the list PER LINK (useLinkMutations). Pin/unpin stay loops: `pin()` inserts
-  // each link at the TOP of the pinned section, so the sequence IS the resulting
-  // order (hence the reversed list at its call site).
+  // because every action below is a single batched write (runMove, pinMany/
+  // unpinMany, removeAllCopies) and a loop of the single-link op costs a
+  // transaction, a sync kick and a full re-read + repaint of the list PER LINK
+  // (useLinkMutations).
   const runBulk = async (action: BulkAction, run: () => Promise<void>) => {
     if (busy) return;
     setBusy(action);
@@ -393,15 +415,10 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
                 <DropdownMenuItem
                   testID="bulk-menu-pin"
                   disabled={toPin.length === 0}
-                  // Reversed so the first-selected link ends up topmost: pin()
-                  // inserts each at the top of the pinned section.
-                  // Already-pinned links are skipped, so their manual order
-                  // isn't churned.
-                  onPress={() =>
-                    void runBulk('pin', async () => {
-                      for (const link of [...toPin].reverse()) await pin(link);
-                    })
-                  }
+                  // The first-selected link ends up topmost (pinMany keeps the
+                  // order given). Already-pinned links are left out, so their
+                  // manual order isn't churned.
+                  onPress={() => void runBulk('pin', () => pinMany(toPin))}
                 >
                   <Icon as={Pin} className="size-4" />
                   <Text>Pin</Text>
@@ -409,11 +426,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
                 <DropdownMenuItem
                   testID="bulk-menu-unpin"
                   disabled={toUnpin.length === 0}
-                  onPress={() =>
-                    void runBulk('unpin', async () => {
-                      for (const link of toUnpin) await unpin(link);
-                    })
-                  }
+                  onPress={() => void runBulk('unpin', () => unpinMany(toUnpin))}
                 >
                   <Icon as={PinOff} className="size-4" />
                   <Text>Unpin</Text>
@@ -436,6 +449,14 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
                     <Text>Archive</Text>
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuItem
+                  testID="bulk-menu-delete-copies"
+                  disabled={withCopies.length === 0}
+                  onPress={() => setConfirmingCopies(true)}
+                >
+                  <Icon as={BookX} className="size-4" />
+                  <Text>Delete copies</Text>
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             <BarAction
@@ -456,6 +477,43 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
         sharedListId={sharedListId}
         onSelect={onMoveTo}
       />
+      <AlertDialog
+        open={confirmingCopies}
+        // Held open while the removal runs: closing mid-write would hide the
+        // only sign that it is still going.
+        onOpenChange={(next) => busy !== 'copies' && setConfirmingCopies(next)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete the copies kept with {withCopies.length} link
+              {withCopies.length === 1 ? '' : 's'}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              The copies kept with them are removed from all your devices. The links stay. A new
+              copy is taken from the page as it is then, which may not match.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy === 'copies'}>
+              <Text>Keep them</Text>
+            </AlertDialogCancel>
+            <Button
+              variant="destructive"
+              testID="bulk-delete-copies-submit"
+              disabled={busy !== null}
+              onPress={() =>
+                void runBulk('copies', async () => {
+                  await removeAllCopies(withCopies);
+                  setConfirmingCopies(false);
+                })
+              }
+            >
+              <Text>{busy === 'copies' ? 'Deleting…' : 'Delete copies'}</Text>
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </View>
   );
 }

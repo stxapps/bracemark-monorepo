@@ -1,8 +1,12 @@
 import { type Locator, type Page } from '@playwright/test';
 
-import { importArchive } from '../seed/steps';
+import { profileDir } from '../paths';
+import { importArchive, waitForSync } from '../seed/steps';
 import { expect, test } from './fixtures/app';
 import { unique, unresolvableUrl } from './fixtures/data';
+import { writeKeptCopiesLibrary } from './fixtures/kept-copies-library';
+import { launchApp } from './fixtures/launch';
+import { WEB_VIEWPORTS } from './fixtures/layout';
 import { writePagedLibrary } from './fixtures/library';
 import {
   addLink,
@@ -12,6 +16,7 @@ import {
   openSidebarItem,
 } from './fixtures/links';
 import { scrollerOf, scrollToTop, scrollUntilRendered } from './fixtures/scroll';
+import { syncAndWait } from './fixtures/sync';
 import { createInSettings } from './fixtures/taxonomy';
 
 // Bulk edit against a real Dexie and a real virtualizer. The selection
@@ -83,6 +88,20 @@ async function pinnedOrder(page: Page): Promise<string[]> {
       .filter((row) => row.querySelector('[aria-label="Pinned"]'))
       .map((row) => row.querySelector('a[href]')?.getAttribute('href') ?? ''),
   );
+}
+
+// The names in one row's options menu. Closed again with Escape, so the next step
+// starts from the list.
+async function rowMenuItems(page: Page, url: string): Promise<string[]> {
+  const row = linkRow(page, url);
+  await expect(row).toHaveCount(1);
+  await row.getByRole('button', { name: 'Link options' }).click();
+  const menu = page.getByRole('menu');
+  await expect(menu).toBeVisible();
+  const names = (await menu.getByRole('menuitem').allInnerTexts()).map((name) => name.trim());
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  return names;
 }
 
 async function addTagged(page: Page, url: string, tags: string[]) {
@@ -254,6 +273,69 @@ test.describe('bulk edit', () => {
       await openSidebarItem(page, 'My List');
       await expect(linkRow(page, keep)).toHaveCount(1);
       await expect(linkRow(page, keep).getByLabel('Pinned')).toHaveCount(0);
+    },
+  );
+
+  test(
+    'Delete copies removes every kept copy of the selection, here and on another device',
+    { tag: ['@BULK-COPIES-001', '@full', '@online', '@destructive'] },
+    async ({ isolatedApp: app }, testInfo) => {
+      // On the free plan on purpose: there a link offers Read only while it keeps a
+      // copy (link-row-menu.tsx), so the row menu says whether one is left, on this
+      // client and on the other, without opening the reader. Removal is never gated.
+      const { page, credentials } = app;
+      const library = await writeKeptCopiesLibrary(
+        testInfo.outputPath('kept-copies.zip'),
+        unique('E2E bulk copies'),
+      );
+      await importArchive(page, library.archivePath);
+      await waitForSync(page);
+      // A link with no copy in the selection too: it is not counted, and not written.
+      const bare = unresolvableUrl(unique('copies-bare'));
+      await page.goto('/links');
+      await addLink(page, bare);
+      const kept = [library.bothUrl, library.shotOnlyUrl];
+      for (const url of kept) expect(await rowMenuItems(page, url)).toContain('Read');
+
+      // --- through the confirmation ------------------------------------------------
+      await enterBulkEdit(page);
+      await select(page, [...kept, bare]);
+      await pressAction(page, 'Delete copies');
+      const confirm = page.getByRole('alertdialog', {
+        name: 'Delete the copies kept with 2 links?',
+      });
+      await expect(confirm).toBeVisible();
+      await confirm.getByRole('button', { name: 'Delete copies', exact: true }).click();
+      await expect(confirm).toHaveCount(0);
+      await expect(bulkToggle(page)).toHaveAttribute('aria-pressed', 'false');
+
+      // --- nothing left to delete, read off the rows the list re-read ---------------
+      for (const url of kept) expect(await rowMenuItems(page, url)).not.toContain('Read');
+      await enterBulkEdit(page);
+      await select(page, kept);
+      await toolbarButton(page, 'More actions').click();
+      await expect(
+        page.getByRole('menuitem', { name: 'Delete copies', exact: true }),
+      ).toBeDisabled();
+      await page.keyboard.press('Escape');
+      // The links themselves stay.
+      for (const url of [...kept, bare]) await expect(linkRow(page, url)).toHaveCount(1);
+
+      // --- and on another device, from the server ----------------------------------
+      await syncAndWait(page);
+      const other = await launchApp(profileDir(`copies-other-w${testInfo.workerIndex}`), {
+        existing: credentials,
+        viewport: WEB_VIEWPORTS.wide,
+      });
+      try {
+        await other.page.goto('/links');
+        for (const url of kept) {
+          await expect(linkRow(other.page, url)).toHaveCount(1, { timeout: 30_000 });
+          expect(await rowMenuItems(other.page, url)).not.toContain('Read');
+        }
+      } finally {
+        await other.close();
+      }
     },
   );
 

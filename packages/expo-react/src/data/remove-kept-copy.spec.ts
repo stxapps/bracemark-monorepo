@@ -16,6 +16,7 @@ import {
   bulkDeleteEntities,
   bulkWriteEntities,
   bulkWriteLinks,
+  removeKeptCopies,
   removeKeptCopy,
   writeExtraction,
   writeFile,
@@ -24,10 +25,11 @@ import {
 import { readExtraction } from './queries';
 import { recordUnreadablePaths, seedNewAccount } from './sync-store';
 
-// expo's removeKeptCopy — the port of web-react's (data/mutations.spec.ts there has
-// the reasoning). The two properties pinned on both platforms: a removed copy is GONE
-// (row and file) and MARKED rather than forgotten, and removing a copy that isn't
-// there writes nothing at all.
+// expo's removeKeptCopy and removeKeptCopies — the ports of web-react's
+// (data/mutations.spec.ts there has the reasoning). The properties pinned on both
+// platforms: a removed copy is GONE (row and file) and MARKED rather than forgotten,
+// removing a copy that isn't there writes nothing at all, and a selection's copies go
+// in one transaction for the extractions and one for the blobs.
 
 jest.mock('expo-sqlite', () => require('../testing/node-sqlite'));
 jest.mock('expo-file-system', () => require('../testing/memory-file-system'));
@@ -99,6 +101,85 @@ it('removes a read-mode copy’s image pack with its text', async () => {
 it('writes nothing when there is no such copy — and never creates an extraction', async () => {
   await expect(removeKeptCopy(USER, LINK_ID, 'screenshot')).resolves.toBe(false);
   expect(rowExists(pathFromId(LINK_ID, EXTRACTIONS_PREFIX))).toBe(false);
+});
+
+describe('removeKeptCopies', () => {
+  const A = 'l_a';
+  const B = 'l_b';
+
+  async function seedCopies() {
+    for (const id of ['read-a', 'pack-a', 'shot-a', 'shot-b']) await file(id);
+    await writeExtraction(USER, A, {
+      fields: { readModeId: 'read-a', readModeImagesId: 'pack-a', screenshotId: 'shot-a' },
+      facet: 'readMode',
+      state: newFacet('done', 'expo:fg'),
+    });
+    await writeExtraction(USER, B, {
+      fields: { screenshotId: 'shot-b' },
+      facet: 'screenshot',
+      state: newFacet('done', 'expo:fg'),
+    });
+    await writeExtraction(USER, 'l_title', { fields: { title: 'Google' } });
+  }
+
+  it('removes every copy of every link, marked, in two transactions', async () => {
+    await seedCopies();
+    const titleRow = getDb()
+      .select()
+      .from(items)
+      .all()
+      .find((row) => row.path === pathFromId('l_title', EXTRACTIONS_PREFIX));
+    const transaction = jest.spyOn(getDb(), 'transaction');
+
+    await expect(
+      removeKeptCopies(USER, [A, B, 'l_title', 'l_none'], ['readMode', 'screenshot']),
+    ).resolves.toBe(3);
+
+    expect(transaction).toHaveBeenCalledTimes(2);
+    transaction.mockRestore();
+    const a = await readExtraction(A);
+    expect(a?.readModeId).toBeUndefined();
+    expect(a?.readModeImagesId).toBeUndefined();
+    expect(a?.screenshotId).toBeUndefined();
+    expect(a?.facets.readMode).toMatchObject({ status: 'done', removedAt: expect.any(Number) });
+    expect(a?.facets.screenshot).toMatchObject({ status: 'done', removedAt: expect.any(Number) });
+    expect((await readExtraction(B))?.screenshotId).toBeUndefined();
+    for (const id of ['read-a', 'pack-a', 'shot-a', 'shot-b']) {
+      expect(rowExists(pathFromId(id, FILES_PREFIX))).toBe(false);
+    }
+    // The links without a copy: the one with an extraction is not rewritten, and
+    // none is created for the one without.
+    const titleAfter = getDb()
+      .select()
+      .from(items)
+      .all()
+      .find((row) => row.path === pathFromId('l_title', EXTRACTIONS_PREFIX));
+    expect(titleAfter?.itemUpdatedAt).toBe(titleRow?.itemUpdatedAt);
+    expect(rowExists(pathFromId('l_none', EXTRACTIONS_PREFIX))).toBe(false);
+  });
+
+  it('takes only the copies it is asked for', async () => {
+    await seedCopies();
+
+    await expect(removeKeptCopies(USER, [A, B], ['screenshot'])).resolves.toBe(2);
+
+    const a = await readExtraction(A);
+    expect(a?.readModeId).toBe('read-a');
+    expect(a?.screenshotId).toBeUndefined();
+    expect(rowExists(pathFromId('read-a', FILES_PREFIX))).toBe(true);
+  });
+
+  it('refuses the whole batch when a link with a copy is recorded unreadable', async () => {
+    await seedCopies();
+    await recordUnreadablePaths(USER, [{ path: pathFromId(B, EXTRACTIONS_PREFIX), updatedAt: 1 }]);
+
+    await expect(removeKeptCopies(USER, [A, B], ['readMode', 'screenshot'])).rejects.toThrow(
+      UnreadablePathError,
+    );
+
+    expect((await readExtraction(A))?.screenshotId).toBe('shot-a');
+    expect(rowExists(pathFromId('shot-a', FILES_PREFIX))).toBe(true);
+  });
 });
 
 it('writeExtraction refuses a link whose extraction the device could not open', async () => {

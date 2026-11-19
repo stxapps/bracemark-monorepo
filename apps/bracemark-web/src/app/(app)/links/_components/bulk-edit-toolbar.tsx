@@ -231,7 +231,7 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
     requestMove,
   } = useLinksViewState();
   const { updateMany } = useLinkMutations();
-  const { pin, unpin } = usePinMutations();
+  const { pinMany, unpinMany } = usePinMutations();
   const { removeAllCopies } = useKeptCopyMutations();
   const [busy, setBusy] = useState<BulkAction | null>(null);
   const [confirmingCopies, setConfirmingCopies] = useState(false);
@@ -272,12 +272,10 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
   const withCopies = selected.filter((l) => l.readModeId || l.screenshotId);
 
   // The busy/exit wrapper every bulk action shares. `run` performs the WHOLE
-  // action in one call rather than being applied per link, because the list moves
-  // below are a single batched write (runMove) — a loop of `update` costs a
-  // transaction, a sync kick and a full re-read + repaint of the list PER LINK
-  // (useLinkMutations). Pin/unpin stay loops: `pin()` inserts each link at the TOP
-  // of the pinned section, so the sequence IS the resulting order, and there is no
-  // batched spelling of that (hence the reversed list at its call site).
+  // action in one call rather than being applied per link, because every action
+  // below is a single batched write — the list moves (runMove), pinMany/unpinMany
+  // and removeAllCopies alike. A loop of the single-link op costs a transaction, a
+  // sync kick and a full re-read + repaint of the list PER LINK (useLinkMutations).
   const runBulk = async (action: BulkAction, run: () => Promise<void>) => {
     if (busy) return;
     setBusy(action);
@@ -347,23 +345,16 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
       icon: <Pin data-icon="inline-start" className="size-4" />,
       label: busy === 'pin' ? 'Pinning…' : 'Pin',
       disabled: disabled || toPin.length === 0,
-      // Reversed so the first-selected link ends up topmost: pin() inserts each
-      // at the top of the pinned section. Already-pinned links are skipped, so
-      // their manual order isn't churned.
-      run: () =>
-        void runBulk('pin', async () => {
-          for (const link of [...toPin].reverse()) await pin(link);
-        }),
+      // The first-selected link ends up topmost (pinMany keeps the order given).
+      // Already-pinned links are left out, so their manual order isn't churned.
+      run: () => void runBulk('pin', () => pinMany(toPin)),
     },
     {
       key: 'unpin',
       icon: <PinOff data-icon="inline-start" className="size-4" />,
       label: busy === 'unpin' ? 'Unpinning…' : 'Unpin',
       disabled: disabled || toUnpin.length === 0,
-      run: () =>
-        void runBulk('unpin', async () => {
-          for (const link of toUnpin) await unpin(link);
-        }),
+      run: () => void runBulk('unpin', () => unpinMany(toUnpin)),
     },
     inArchive
       ? {

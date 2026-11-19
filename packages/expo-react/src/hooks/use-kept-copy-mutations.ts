@@ -4,7 +4,7 @@ import { keepOnSaveOf } from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
-import { type KeptCopyFacet, removeKeptCopy } from '../data/mutations';
+import { type KeptCopyFacet, removeKeptCopies, removeKeptCopy } from '../data/mutations';
 import { linkIdOf, type LinkItem, readSettingsGeneral } from '../data/queries';
 import { storeReadModeCopy, type StoreReadModeOptions } from '../data/store-read-mode';
 
@@ -46,12 +46,8 @@ export function useKeptCopyMutations(): KeptCopyMutations {
   const removeAllCopies = useCallback(
     async (links: readonly LinkItem[]) => {
       if (!username) throw new Error('useKeptCopyMutations: no active account');
-      let count = 0;
-      for (const link of links) {
-        for (const facet of ALL_KEPT_COPIES) {
-          if (await removeKeptCopy(username, linkIdOf(link), facet)) count += 1;
-        }
-      }
+      // One write for the selection — web-react's removeAllCopies.
+      const count = await removeKeptCopies(username, links.map(linkIdOf), ALL_KEPT_COPIES);
       if (count > 0) requestSync();
       return count;
     },
