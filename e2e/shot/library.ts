@@ -443,6 +443,33 @@ export function shotLinkList(url: string): string | undefined {
   return SHOT_LINKS.find((link) => link.url === url)?.list;
 }
 
+/**
+ * The link id the archive gives a URL — `shot-link-NN`, by its index in
+ * `SHOT_LINKS` — for a leg that has to open ONE link by address (the reader is
+ * `/read?link=<id>`). Derived, never typed: an insertion above a row renumbers
+ * every id below it, and a typed one would silently open a different page.
+ */
+export function shotLinkId(url: string): string {
+  const index = SHOT_LINKS.findIndex((link) => link.url === url);
+  if (index < 0) throw new Error(`${url} is not in the shot library — shot/library.ts`);
+  return `shot-link-${pad(index)}`;
+}
+
+// ⚠ THE ONE LINK WITH A READ-MODE COPY, and every picture of read mode is of it:
+// `shot:account` keeps it (`keepReadModeCopy`), `shot:web`'s `reader-window`
+// reads it, the browser extension's receipt is standing on it, and the mobile
+// leg opens it. One page, so the listing tells one link's story — saved from
+// the tab, filed under Lisbon, its copy kept, read later in the web app.
+//
+// Porto, for the reason the receipt already chose it (`shot/extension.ts`, above
+// `SAVED_URL`): it is in `Lisbon` and its address is plain ASCII. And for the
+// read-mode reason on top: a read-mode copy prints the PAGE'S OWN TEXT, whole
+// paragraphs of it, at a size a reader can read — a stricter frame than any
+// cover. Wikivoyage is CC BY-SA, written by its travellers, with no masthead to
+// infringe; a newspaper or a magazine here would be someone else's journalism
+// across most of a store screenshot.
+export const SHOT_READ_URL = 'https://en.wikivoyage.org/wiki/Porto';
+
 // ~14 hours between links, so thirty of them span about two and a half weeks and the
 // list's dates read as one recent, ordinary stretch. The big seed walks back at
 // 3.7h because it has a thousand to place; this one is a fortnight of somebody's

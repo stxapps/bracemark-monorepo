@@ -11,7 +11,7 @@ import { seedPassword } from '../seed/catalog';
 import { findUserId, grantPlan, readGrantedPlan } from '../seed/plan';
 import { deleteAllData, importArchive, waitForSync } from '../seed/steps';
 import { launchApp } from '../web/fixtures/launch';
-import { buildShotLibrary, SHOT_USER } from './library';
+import { buildShotLibrary, SHOT_READ_URL, SHOT_USER, shotLinkId } from './library';
 
 // THE ACCOUNT every published screenshot is taken of — built once, photographed
 // by three separate legs.
@@ -150,6 +150,7 @@ async function prepareAccount(
   await enableServerExtraction(page);
   await fillPreviews(page);
   await useListLayout(page);
+  await keepReadModeCopy(page);
   // The drain wrote an `extractions/` record and a `files/` blob per link, all
   // of which are pending ops. Not strictly needed for the photograph — the
   // rendering reads Dexie, not the server — but this account is meant to be
@@ -174,6 +175,51 @@ async function enableServerExtraction(page: Page): Promise<void> {
   if ((await toggle.getAttribute('data-state')) !== 'checked') await toggle.click();
   await expect(toggle).toHaveAttribute('data-state', 'checked');
   console.log('server extraction on');
+}
+
+// ONE read-mode copy, of `SHOT_READ_URL`, for every picture of read mode
+// (library.ts says why that page). Taken through the web app's own route — Settings
+// → Read mode's two switches, then the reader's _Keep a read-mode copy_ — so the
+// copy in the pictures is one `bracemark-extractor` actually fetched and the client
+// actually encrypted and stored, by the path a paying user's takes. Nothing here
+// writes a reader document by hand, for the reason the archive carries no
+// `extractions/` (library.ts, at the bottom).
+//
+// _Include images_ is on, and that is the picture's choice rather than the
+// product's default (off, for storage — docs/link-extraction-keep.md, _images in
+// read mode_): a
+// read-mode copy with its figures is what the setting exists to offer, and a
+// screenshot of a wall of text undersells the copy every Plus account can keep.
+// It is a synced opt-in, photographed as one, like `serverExtraction` above.
+//
+// Idempotent on purpose: the account is reused, and a link that already holds a
+// copy opens straight on the article, so the keep is pressed only when the empty
+// state is what comes up. `--fresh` drops the copy with everything else and this
+// takes a new one.
+async function keepReadModeCopy(page: Page): Promise<void> {
+  await page.goto('/settings/read-mode');
+  const server = page.getByRole('switch', { name: 'Server read mode' });
+  await expect(server).toBeVisible();
+  if ((await server.getAttribute('data-state')) !== 'checked') await server.click();
+  await expect(server).toHaveAttribute('data-state', 'checked');
+  const images = page.getByRole('switch', { name: 'Include images in read-mode copies' });
+  await expect(images).toBeVisible();
+  if ((await images.getAttribute('data-state')) !== 'checked') await images.click();
+  await expect(images).toHaveAttribute('data-state', 'checked');
+
+  await page.goto(`/read?link=${shotLinkId(SHOT_READ_URL)}`);
+  const article = page.locator('article');
+  const keep = page.getByRole('button', { name: 'Keep a read-mode copy' });
+  await expect(article.or(keep).first()).toBeVisible({ timeout: 30_000 });
+  if (await keep.isVisible()) {
+    await keep.click();
+    // A server fetch, a Readability pass, and the images pulled through the
+    // proxy — seconds, bounded by a real site.
+    await expect(article).toBeVisible({ timeout: 120_000 });
+    console.log(`read-mode copy kept: ${SHOT_READ_URL}`);
+  } else {
+    console.log(`read-mode copy already kept: ${SHOT_READ_URL}`);
+  }
 }
 
 // Settings → Misc → Layout → List, taken through the real radio for the same
