@@ -10,7 +10,7 @@ import { grantPlusAndLoad } from './fixtures/plan';
 // Server extraction, end to end: bracemark-web orchestrating the REAL local
 // bracemark-extractor, which fetches a REAL public page. These are the only web
 // cases allowed to assert on an extracted value, and they pay for it with the
-// `internet` trait — `--exclude-trait internet` leaves an offline run whole.
+// `internet` trait — `--omit-trait internet` leaves an offline run whole.
 //
 // What each one owns that no unit spec can see: the opt-in reaching the
 // provider through a real Switch and a real Plus entitlement, the drain waking
@@ -48,7 +48,7 @@ test.describe('server extraction', () => {
           (IS_STAGING
             ? 'Deploy it with `npm run deploy:extractor:staging`'
             : 'Run `npm run dev` (it starts api, web and extractor)') +
-          ' or exclude these cases with `--exclude-trait internet`.',
+          ' or leave these cases out with `--omit-trait internet`.',
       );
     }
   });
@@ -185,11 +185,12 @@ test.describe('server extraction', () => {
   //
   // The page is an ARTICLE, so it is ours (web/fixtures/extraction.ts says why
   // example.com can't be). And it costs real CPU: on staging the read took ~67 ms,
-  // past the Workers Free plan's documented 10 ms. Free let it finish (e2e/STAGING.md
-  // has the readings), but a pass that rests on a limit not being enforced is not one
-  // a default run should depend on, so this case carries `workers-paid`: a staging run
-  // leaves it out unless it is named (docs/link-extraction-server.md, _cost on the
-  // Worker_).
+  // past the Workers Free plan's documented 10 ms, and Free let it finish
+  // (e2e/STAGING.md has the readings). It runs in every staging run on that
+  // evidence. `workers-paid` is a label, nothing more: it names the one case that
+  // rests on Free not enforcing its limit, so if Free starts to, the run drops it
+  // with `--omit-trait workers-paid` (e2e/STAGING.md; docs/link-extraction-server.md,
+  // _cost on the Worker_).
   test(
     'a server read-mode copy with its image lands in the reader and survives a reload',
     { tag: ['@EXTRACT-READ-MODE-WEB-001', '@full', '@online', '@internet', '@workers-paid'] },
@@ -234,8 +235,9 @@ test.describe('server extraction', () => {
         throw new Error(
           `the extractor answered ${response.status()} to the read-mode ask` +
             (IS_STAGING
-              ? ' — on staging, check the Worker’s analytics for an exceeded-CPU outcome' +
-                ' (the account is on Workers Free unless it was upgraded for this run)'
+              ? ' — on staging, check the extractor’s analytics for an exceeded-CPU outcome:' +
+                ' if Workers Free has started enforcing its CPU limit, leave this case out with' +
+                ' `npm run e2e:web:staging -- --omit-trait workers-paid`'
               : ''),
         );
       }

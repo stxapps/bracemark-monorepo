@@ -290,7 +290,7 @@ does hold to it would die for CPU and the whole batch come back a 5xx, which
 the client reads as a transport failure: nothing is recorded, and only another explicit ask
 sends it again. So a read-mode pass on Free proves nothing about the plan, and nothing in
 this repo can check which plan an account is on. `EXTRACT-READ-MODE-WEB-001` is the journey
-that runs read mode on staging, left out of a staging run unless asked for (same section).
+that runs read mode on staging, in every staging run on that evidence (same section).
 The cost also depends on the page's
 SHAPE, not only its size, and a depth limit and an element limit are not a bound on it. Three
 costs:

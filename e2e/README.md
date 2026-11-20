@@ -71,7 +71,8 @@ admitted to Firefox in Playwright's own Firefox build; install it once with
 `--suite smoke` selects only smoke cases; `full` includes smoke and full (never
 release qualification). Narrow any
 runner with repeatable/comma-separated `--case`, `--include-trait`, and
-`--exclude-trait`. After a native run fails, `--from <case-id>` (`e2e-mobile`
+`--omit-trait` (not `--exclude-trait`, which `nx` silently drops on the way in
+from `npm run`: `docs/e2e.md`, _cases, suites and fixtures_). After a native run fails, `--from <case-id>` (`e2e-mobile`
 and `e2e-contract` only) restarts at that case and runs the rest:
 `npm run e2e:android:phone -- --from TAXONOMY-DND-002`. The registry is [`cases.json`](./cases.json); its ids and tags
 are checked against the specs and flows by `npm run check:registry -w
@@ -187,7 +188,7 @@ The extraction cases (Phase 7: `EXTRACT-*`, and Phase 6's `SHARE-EXTRACT-*` pair
 are the only ones that reach the
 public internet — example.com, from `fixtures.json` — and carry the `internet`
 trait for it. They need the extractor on 8788, which `npm run dev` starts with
-the api and web. `--exclude-trait internet` gives
+the api and web. `--omit-trait internet` gives
 a run with no third-party network dependency; `online` does not, because every
 stack-backed case carries it.
 

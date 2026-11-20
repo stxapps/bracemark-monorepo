@@ -28,7 +28,7 @@ async function main(): Promise<void> {
     )
   ) {
     throw new Error(
-      'use --case/--suite/--include-trait/--exclude-trait; do not combine them with --grep',
+      'use --case/--suite/--include-trait/--omit-trait; do not combine them with --grep',
     );
   }
   const selected = selectCases('pwa', options);

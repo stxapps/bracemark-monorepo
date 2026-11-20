@@ -505,7 +505,7 @@ user or production data.
       copy of a real article with _Include images_, and prove the article and its
       figure draw from the stored blobs, then again after a reload. The article is
       a help page on bracemark.com, not example.com (`docs/e2e.md`, _what e2e may
-      not assert_). Admitted to staging under `workers-paid`.
+      not assert_). Admitted to staging; it rests on Free not enforcing its CPU limit (`workers-paid`).
 - [x] `CAPTURE-NATIVE-001` On the capture screen, keep a read-mode copy of the
       same article with its image, and prove the reader draws both before and
       after a cold start; iOS and Android. Local only: a native run can't grant
@@ -513,7 +513,7 @@ user or production data.
 
 The deliberately-online cases carry the `internet` trait (every stack-backed
 case already carries `online`) and are `full`, so they never block a smoke run;
-`--exclude-trait internet` gives an offline/local run.
+`--omit-trait internet` gives an offline/local run.
 
 ## Phase 8 — scale, loading, and offline operation
 

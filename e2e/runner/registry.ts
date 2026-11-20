@@ -204,33 +204,6 @@ export function validateCaseRegistry(cases = readCaseRegistry()): void {
   validateVisualCatalog(cases);
 }
 
-// A staging case whose Worker work is past a Workers Free limit as Cloudflare
-// documents it — staging's plan (e2e/STAGING.md). Free has been seen letting such
-// requests finish, which is not a promise, so the case is left out of a staging
-// run unless it is asked for by `--case` or `--include-trait`: an ordinary run
-// doesn't rest on a limit going unenforced, and an operator who asks takes that
-// on (or has upgraded the account for the run). It can't tell which: nothing
-// reads the plan, and a pass on Free looks like a pass on Paid.
-// Locally it is an ordinary trait: `wrangler dev` has no plan.
-export const WORKERS_PAID_TRAIT = 'workers-paid';
-
-// The operator's filters with the staging default above applied. Called by the
-// WRAPPERS only (runner/web.ts, runner/extension.ts), never inside `selectCases`:
-// both Playwright configs call `selectCases` again with no `--case`, to intersect
-// the wrapper's selection with the registry's ADMISSION list, and a default
-// applied there dropped the very case `--case` had asked for ("No tests found").
-// Admission is the registry's; this is a default for a run nobody narrowed.
-export function withStagingDefaults(filters: CaseFilters): CaseFilters {
-  if (
-    filters.environment !== 'staging' ||
-    (filters.cases?.length ?? 0) > 0 ||
-    filters.includeTraits?.includes(WORKERS_PAID_TRAIT)
-  ) {
-    return filters;
-  }
-  return { ...filters, excludeTraits: [...(filters.excludeTraits ?? []), WORKERS_PAID_TRAIT] };
-}
-
 export function selectCases(surface: E2ESurface, filters: CaseFilters = {}): E2ECase[] {
   const include = new Set(filters.includeTraits ?? []);
   const exclude = new Set(filters.excludeTraits ?? []);

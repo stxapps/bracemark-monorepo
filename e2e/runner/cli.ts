@@ -78,15 +78,37 @@ function filters(values: Map<string, string[]>): CommonFilters {
   if (suite !== 'smoke' && suite !== 'full') {
     throw new Error(`--suite must be "smoke" or "full", got ${suite}`);
   }
+  if (values.has(RETIRED_EXCLUDE_FLAG)) {
+    throw new Error(
+      `--${RETIRED_EXCLUDE_FLAG} is now --omit-trait. Through \`npm run\`, nx takes any ` +
+        '--exclude… flag as its own and drops it, so the run silently kept the trait ' +
+        '(docs/e2e.md, _cases, suites and fixtures_).',
+    );
+  }
   return {
     suite,
     cases: commaList(values, 'case'),
     includeTraits: commaList(values, 'include-trait'),
-    excludeTraits: commaList(values, 'exclude-trait'),
+    excludeTraits: commaList(values, 'omit-trait'),
   };
 }
 
-const FILTER_FLAGS = new Set(['suite', 'case', 'include-trait', 'exclude-trait']);
+// `--omit-trait`, not `--exclude-trait`: the root scripts are `nx <target> …`, and
+// nx (23.1) treats every `--exclude…` flag that reaches it from `npm run … --` as
+// its own and drops it, so `npm run e2e:ios:iphone -- --exclude-trait destructive`
+// ran the destructive cases with nothing said. The old name is still KNOWN here
+// only to be refused by name, for the forms that do deliver it (`npx nx … -- …`).
+// A new flag needs a name nx doesn't claim — no `--exclude…`, no `--skip…` — and
+// a check that it survives `npm run <script> -- --flag x` (the runner's own
+// `tsx runner/… ` line shows what arrived).
+const RETIRED_EXCLUDE_FLAG = 'exclude-trait';
+const FILTER_FLAGS = new Set([
+  'suite',
+  'case',
+  'include-trait',
+  'omit-trait',
+  RETIRED_EXCLUDE_FLAG,
+]);
 
 function width(values: Map<string, string[]>): E2EWidth | undefined {
   const value = one(values, 'width');

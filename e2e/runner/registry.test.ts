@@ -8,8 +8,6 @@ import {
   selectCasesForPlatform,
   validateCaseRegistry,
   widthsOf,
-  withStagingDefaults,
-  WORKERS_PAID_TRAIT,
 } from './registry';
 
 const ids = (cases: { id: string }[]) => cases.map((testCase) => testCase.id);
@@ -167,31 +165,20 @@ test('--width is the web wrapper’s, unset means both windows, and the others h
   assert.deepEqual(parseWebCli(['--width', 'narrow']).playwrightArgs, ['--width', 'narrow']);
 });
 
-test('a staging run leaves out workers-paid cases unless one is asked for', () => {
-  const paid = readCaseRegistry().filter(
-    (testCase) =>
-      testCase.surface === 'web' &&
-      testCase.traits.includes(WORKERS_PAID_TRAIT) &&
-      testCase.environments?.includes('staging'),
+test('--omit-trait leaves a trait out, and the retired --exclude-trait is refused by name', () => {
+  // nx drops any `--exclude…` flag that arrives through `npm run`, so the old name
+  // ran the trait it meant to leave out (runner/cli.ts, RETIRED_EXCLUDE_FLAG).
+  assert.deepEqual(parseWebCli(['--omit-trait', 'internet,destructive']).excludeTraits, [
+    'internet',
+    'destructive',
+  ]);
+  assert.deepEqual(
+    parseNativeCli(['--platform', 'ios', '--omit-trait=destructive']).excludeTraits,
+    ['destructive'],
   );
-  assert.ok(paid.length > 0, 'the registry holds a staging-admitted workers-paid web case');
-  const target = paid[0].id;
-  const wrapper = (filters: Parameters<typeof withStagingDefaults>[0]) =>
-    ids(selectCases('web', withStagingDefaults(filters)));
-
-  // The wrapper's default staging run: on Free, so the case is out. Local: an
-  // ordinary trait.
-  assert.ok(!wrapper({ environment: 'staging' }).includes(target));
-  assert.ok(wrapper({ environment: 'local' }).includes(target));
-
-  // Asked for, by id or by trait: the operator saying the account is on Paid.
-  assert.deepEqual(wrapper({ environment: 'staging', cases: [target] }), [target]);
-  assert.ok(
-    wrapper({ environment: 'staging', includeTraits: [WORKERS_PAID_TRAIT] }).includes(target),
+  assert.throws(() => parseWebCli(['--exclude-trait', 'internet']), /is now --omit-trait/);
+  assert.throws(
+    () => parseNativeCli(['--platform', 'ios', '--exclude-trait', 'destructive']),
+    /is now --omit-trait/,
   );
-
-  // ADMISSION keeps it: playwright.config.ts intersects the wrapper's selection
-  // with a bare `selectCases` call, and the default applied there once left
-  // `--case` with "No tests found".
-  assert.ok(ids(selectCases('web', { environment: 'staging' })).includes(target));
 });

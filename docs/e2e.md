@@ -526,7 +526,7 @@ in the same edit. A deploy of the marketing site can therefore turn these red,
 which is the cost of a page that is ours.
 
 Those cases carry the **`internet`** trait, and it is not `online`: every
-stack-backed case already carries `online`, so only `--exclude-trait internet`
+stack-backed case already carries `online`, so only `--omit-trait internet`
 yields a run with no third-party dependency. A red `internet` case whose
 `fetch` to example.com itself failed is an availability fact, not a product one —
 `curl -sI https://example.com/` settles which before anything else is read.
@@ -2543,14 +2543,14 @@ sake: with the plan granted as above, they send a real extraction from the
 shipped bundle to the deployed Worker under the policy. The pinned header and
 the CORS case's fetch from the page hold the extractor origin too, but neither
 uses the origin the bundle was built with, and neither asks the Worker to fetch
-anything. `EXTRACT-READ-MODE-WEB-001` is admitted beside them, for read mode — but
-a real article costs tens of milliseconds of CPU, past the Workers Free plan's
-documented 10 ms, and staging is on Free. Free has been measured letting those
-requests finish (up to 88 ms, every one answered —
-[e2e/STAGING.md](../e2e/STAGING.md), _the cases that grant a plan_), which is an
-observation, not a promise, so the case carries the **`workers-paid`** trait: a
-staging run leaves it out unless `--case` or `--include-trait` asks for it. A
-pass doesn't say which plan the account is on. Locally it is an ordinary trait.
+anything. `EXTRACT-READ-MODE-WEB-001` is admitted beside them, for read mode, and
+runs in every staging run. A real article costs tens of milliseconds of CPU, past
+the Workers Free plan's documented 10 ms, and staging is on Free — but Free has
+been measured letting those requests finish (up to 88 ms, every one answered —
+[e2e/STAGING.md](../e2e/STAGING.md), _the cases that grant a plan_), so the case
+needs no upgrade, and a pass doesn't say which plan the account is on. It carries
+the **`workers-paid`** trait as a label only: if Free starts enforcing,
+`npm run e2e:web:staging -- --omit-trait workers-paid` drops it from staging.
 
 `check:headers` runs the header comparison and the refusals outside the runner,
 against either tier. It is the only thing here that may name production: it
@@ -2774,16 +2774,29 @@ fixture size, path, and expected artifacts. `npm run check:registry -w
 id on both entries so their results line up, and every runner selects within its
 own surface, so one invocation never picks up both. Automated
 `full` includes smoke and full but never release qualification; `smoke` selects
-only smoke. `--case`, `--include-trait`, and `--exclude-trait` are repeatable or
+only smoke. `--case`, `--include-trait`, and `--omit-trait` are repeatable or
 comma-separated and work across the wrappers:
 
 ```sh
 npm run e2e:web -- --suite smoke
 npm run e2e:web -- --case WEB-LINK-001
 npm run e2e:extension -- --case EXT-AUTH-001
-npm run e2e:ios:iphone -- --device <udid> --exclude-trait destructive
+npm run e2e:ios:iphone -- --device <udid> --omit-trait destructive
 npm run e2e:android:phone -- --from TAXONOMY-DND-002
 ```
+
+⚠ **A runner flag's name must be one `nx` doesn't claim.** The root scripts are
+`nx <target> …`, and npm hands `nx` the flags after its own `--` with no separator
+left, so `nx` (23.1) reads them first — and it takes every `--exclude…` flag as its
+own and drops it, silently. The leave-out flag was `--exclude-trait` until
+2026-11-20, so `npm run e2e:ios:iphone -- --exclude-trait destructive` ran the
+destructive cases with nothing said, and the example above was written that way.
+It is `--omit-trait` now; the old name is refused by name wherever it still arrives
+(`npx nx … -- --exclude-trait`), and through `npm run` it can't arrive at all, so
+an old habit fails only as an exclusion that didn't happen. Before naming a new
+flag, keep clear of `--exclude…` and `--skip…`, and check it survives
+`npm run <script> -- --flag x`: the runner's own `tsx runner/…` line, printed
+first, shows what arrived (`runner/cli.ts`, `RETIRED_EXCLUDE_FLAG`).
 
 `--from <case-id>` picks a native run back up where one failed: it drops every
 selected case ahead of the named one and runs that case and the rest. The id is

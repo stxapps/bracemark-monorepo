@@ -49,17 +49,11 @@ make it work. These are the journeys that send a server extraction through the
 deployed CSP and the deployed extractor Worker, using the extractor origin baked
 into the shipped bundle.
 
-**`EXTRACT-READ-MODE-WEB-001` takes the same grant, and is past a Workers Free
-limit as Cloudflare documents it.** It keeps a server read-mode copy of a real
-article (a help page on bracemark.com) with its image, and Readability over that
-page costs tens of milliseconds of CPU against Free's documented 10. So it carries
-the `workers-paid` trait, and **a staging run leaves a `workers-paid` case out
-unless it is asked for** (`runner/registry.ts`, `WORKERS_PAID_TRAIT`):
-
-```sh
-npm run e2e:web:staging -- --case EXTRACT-READ-MODE-WEB-001
-npm run e2e:web:staging -- --include-trait workers-paid   # every such case
-```
+**`EXTRACT-READ-MODE-WEB-001` takes the same grant, and runs in every staging
+run — past a Workers Free limit as Cloudflare documents it.** It keeps a server
+read-mode copy of a real article (a help page on bracemark.com) with its image,
+and Readability over that page costs tens of milliseconds of CPU against Free's
+documented 10.
 
 **Measured on Free, 2026-11-20: Free did not enforce the limit.** The case passed
 against staging on Workers Free. In the Worker's own analytics its minute held one
@@ -67,13 +61,22 @@ invocation at 67 ms of CPU, `success`. Eleven more read-mode requests sent strai
 to staging's extractor over the same page and two others of ~110 KB from the same
 docs all answered 200 with an article, at 32–36 ms median and 88 ms worst, every
 invocation `success` — up to nine times the documented limit, and no
-exceeded-CPU outcome on the Worker all week. So a run while staging is on Free is
-expected to pass, and **a pass does not say which plan the account is on**. What
-it can't promise is that it always will: the documented limit is 10 ms, and
-nothing here shows when, or whether, Free would start holding a request to it.
-That is why the trait stays and an ordinary run leaves the case out. If the case
-fails at the extract response with a 5xx, it says so; look for an exceeded-CPU
-outcome in the Worker's analytics before reading anything into the product.
+exceeded-CPU outcome on the Worker all week. On that, the case is in the default
+run with no plan upgrade, and **a pass does not say which plan the account is
+on**.
+
+Nothing here shows when, or whether, Free would start holding a request to its
+10 ms, so the case carries the **`workers-paid`** trait — a label with no
+behaviour of its own, naming the one case that rests on it. If the case fails at
+the extract response with a 5xx, it says so: look for an exceeded-CPU outcome in
+the extractor's analytics before reading anything into the product, and if Free
+has started enforcing, leave it out of staging until the account is on Paid:
+
+```sh
+npm run e2e:web:staging -- --omit-trait workers-paid
+```
+
+Production is not affected either way: it is on Paid, with a 5 s cap of its own.
 
 It is the only journey that sends the `readMode` facet through the deployed CSP
 and lets workerd's own CPU time price a real page; the local run prices it on
