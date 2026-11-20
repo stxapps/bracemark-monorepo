@@ -3390,6 +3390,18 @@ the same day at `sign-in-fields.yaml`'s `hideKeyboard` (the password typed, no
 keyboard to hide); signing in by hand once — `sign-in-submit` by id, since the
 text `Sign in` also matches the card's heading — and then running warm worked.
 
+⚠ **Run the shot legs from the checkout whose api is on :8787.** Every leg
+reads the account's server state straight out of D1 — `findUserId`, and
+`grantPlan` in `shot:account` — through `wrangler d1 execute --local`, which
+runs in THIS checkout's `apps/bracemark-api` and so opens this checkout's
+`.wrangler/` state. With another checkout's `npm run dev` holding the port, the
+legs ask one database and sign in against another. The symptom is not a refusal:
+`shot:account` reads the username as free, prints "creating account", and then
+finds Create account disabled, because the api that is actually serving already
+has that username. Unlike the e2e runner, the shot legs do not check whose api
+they are talking to; resolve the port's owner first (`.claude/skills/verify/SKILL.md`,
+_a port can belong to another clone_, has the command).
+
 ⚠ **Android's frozen status bar is entered with `exit` first, and the reason is a
 leak that outlives the run.** SystemUI demo mode is not idempotent the way the
 broadcast makes it look: `enter` builds its `DemoStatusIcons` only when there is
