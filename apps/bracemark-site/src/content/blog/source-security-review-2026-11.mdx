@@ -35,6 +35,8 @@ We made the fixes and then had them checked the way we did in October: a separat
 
 The recheck found the routes closed, and no new deletion by absence. It also found small things, and two of them were ours: our new refusal could stop the iOS share-sheet drain from saving later drafts, and a refused write left files it had already uploaded with nothing pointing to them. We fixed both. That fix, and every change since the recheck, was read by us and by tests, not by a separate agent.
 
+On 20 November we ran the mobile migration on two devices, against our staging server. An Android tablet held a library from our first Android release, and an iPhone held one from a build of our first iOS version, the one waiting for App Store review. We updated each to a build of this release, and on both the library opened and synced.
+
 ## What we decided to leave
 
 - **A file that can never be opened is never deleted, and we don’t tell you.** There’s nothing you could do about a file you can’t open, and nothing about it that we could show. The cost is that on that device the cleanup of unreferenced files stays off, so those files stay until the file opens.
@@ -42,7 +44,6 @@ The recheck found the routes closed, and no new deletion by absence. It also fou
 - **Some libraries share one custom image between links.** Earlier imports did that. Changing or deleting the image on one of those links removes it under the others. New imports give each link its own.
 - **A replaced image is deleted before its replacement uploads.** If the upload then fails, the old one is already gone.
 - **The 30 days count from upload.** A file’s grace starts when it was uploaded, not when its owner last changed the link, so a file can have less time left than you’d expect.
-- **The mobile migration hasn’t run on a device.** We tested it against a file shaped like the first release’s, in the test harness only.
 
 ## Read-mode copies
 
@@ -82,6 +83,6 @@ The method is October’s: we adapted Cloudflare’s [security-audit skill](http
 
 ## What this still doesn’t settle
 
-Nothing here has been retested on a device or on a running deployment. Our one staging run held an older build of the web app, so it says nothing about these changes. Open facts that need a device or a deployment: the mobile migration on a real first-release database; Android’s handling of a page that opens a new window; whether the phone’s network stack reads a response in pieces; and how a deployed Worker’s CPU limit treats a page near the link-extraction service’s cap.
+Apart from the mobile migration on an Android tablet and an iPhone, nothing here has been retested on a device or on a running deployment. Our one staging run held an older build of the web app, so it says nothing about these changes. Open facts that need a device or a deployment: Android’s handling of a page that opens a new window; whether the phone’s network stack reads a response in pieces; and how a deployed Worker’s CPU limit treats a page near the link-extraction service’s cap.
 
 The next evidence has to be a build with these changes in it, run by us on a device or against staging. The [November 2026 source security review report](https://github.com/stxapps/bracemark-monorepo/blob/main/security-reviews/2026-11-20-source-review.md) has the details, and it sits in the [series of source reviews](https://github.com/stxapps/bracemark-monorepo/blob/main/security-reviews/README.md). This post describes [source revision f6e3a54](https://github.com/stxapps/bracemark-monorepo/tree/f6e3a542d8137682ace9899056def1064d0f8ff4). Read [October’s review](/blog/source-security-review-2026-10) for the first one, our [security page](/security) for what we claim, and the [public source](https://github.com/stxapps/bracemark-monorepo). Source availability doesn’t prove which build you’re running. If you find a problem, please send the details privately through our [security reporting policy](https://github.com/stxapps/bracemark-monorepo/blob/main/SECURITY.md).

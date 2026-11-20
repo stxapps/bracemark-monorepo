@@ -34,7 +34,7 @@ Decisions rest on reading source and on running our own code on a development ma
 
 One run used our staging deployment, with test accounts and existing end-to-end cases. Staging held a web build from 5 November, before every change described here, so that run says nothing about them. It did confirm, for the API deployed on staging, that the file route added in October refuses a request with no token or a bad one, and admits only the staging origin.
 
-Nothing in this report has been retested on a device or against a running deployment of the changed code. A probe shows what a function does with a given input; it is not a test of a deployed service or of a device.
+Apart from the mobile migration on an Android tablet and an iPhone, described under what we changed in the cleanups, nothing in this report has been retested on a device or against a running deployment of the changed code. A probe shows what a function does with a given input; it is not a test of a deployed service or of a device.
 
 ## Cleanups that delete by absence
 
@@ -71,6 +71,8 @@ The review also found six statements in our comments and design notes that claim
 
 A separate agent rechecked the fixes. It re-ran the earlier reproductions against them and found the routes closed, with no new deletion by absence. It also found small things. Two were introduced by the fixes themselves: the new refusal could stop the iOS share sheet’s queue of saved drafts from saving the drafts after it, and a refused write left files it had already uploaded with nothing pointing to them. Both were fixed. Others predate the fixes: two other writers, removing a kept copy and a backup restore, can still overwrite a recorded preview; and a link whose own upload fails can leave its preview committed without it. That fix, and every change since the recheck, was read by us and by tests, not by a separate agent.
 
+On 20 November the mobile migration ran on two devices against our staging server, each updated in place to a build of this release. An Android tablet held a library from the first Android release. An iPhone held a library from a build of the first iOS version, the one waiting for App Store review; its database read version 0 before the update and version 1 after it, with the same library and the migration’s four columns. On both, the library opened and synced.
+
 ### What we decided to leave
 
 - **A file that can never be opened is never deleted, and the owner is not told.** There is nothing the owner could do about it, and nothing about it the app could show. The cost is that on that device the cleanup of unreferenced files stays off, so those files stay until the file opens.
@@ -78,7 +80,6 @@ A separate agent rechecked the fixes. It re-ran the earlier reproductions agains
 - **Some libraries share one custom image between links.** Earlier imports did that. Changing or deleting the image on one of those links removes it under the others. New imports give each link its own.
 - **A replaced image is deleted before its replacement uploads.** If the upload then fails, the old one is already gone.
 - **The 30 days count from upload,** not from the owner’s last change to the link, so a file can have less time left than expected.
-- **The mobile migration has not run on a device.** It was tested against a file shaped like the first release’s, in the test harness only.
 
 ## Copies of a page
 
@@ -167,7 +168,6 @@ Three changes since October have had no review beyond our own reading of them: a
 
 Open facts that need a device or a deployment:
 
-- The mobile migration on a real first-release database, on iOS and Android.
 - Android’s handling of a page that opens a new window in the capture screen.
 - Whether the phone’s network stack reads a response in pieces.
 - How a deployed Worker’s CPU limit treats a page near the link-extraction service’s cap. A read-mode request of five pages, each built to reach the count’s budget, would cost about 3 seconds each in our test runtime, so it would meet the 5-second limit and fail as a whole.
