@@ -277,12 +277,21 @@ synthetic article pages (not yet on workerd, and not on real pages): ~45 ms of C
 median 25 ms, p90 127 ms, max 494 ms — and 16 of 54 under 10 ms. Readability also
 threw on 2 of them under linkedom; `readModeFromHtml` now catches that and answers
 `not-an-article`, where the route's catch-all had made it a transient failure the
-client asked again about, forever. Every one of those is past the Workers Free plan's 10 ms CPU limit, so
+client asked again about, forever. Most of those are past the Workers Free plan's
+documented 10 ms CPU limit, so
 ⚠ **read mode needs the Workers Paid plan on the account that serves it** before it is
-turned on for anyone; on Free, the request is killed for CPU and the whole batch comes
-back a 5xx, which the client reads as a transport failure: nothing is recorded, and only
-another explicit ask sends it again. Nothing in this repo can check which plan an account is on
-(staging is on Free, so read mode can't be tested there). The cost also depends on the page's
+turned on for anyone. **Free has been seen not enforcing that limit**, and that changes
+nothing here: on staging (Free), 2026-11-20, twelve read-mode requests over our own help
+pages took tens of milliseconds of CPU (a minute's median 32–36 ms, the worst 88 ms) and
+every one was answered, `success` in the Worker's
+analytics ([e2e/STAGING.md](../e2e/STAGING.md), _the cases that grant a plan_). That is
+an observation of one account on one day, not a limit anyone has promised; a request Free
+does hold to it would die for CPU and the whole batch come back a 5xx, which
+the client reads as a transport failure: nothing is recorded, and only another explicit ask
+sends it again. So a read-mode pass on Free proves nothing about the plan, and nothing in
+this repo can check which plan an account is on. `EXTRACT-READ-MODE-WEB-001` is the journey
+that runs read mode on staging, left out of a staging run unless asked for (same section).
+The cost also depends on the page's
 SHAPE, not only its size, and a depth limit and an element limit are not a bound on it. Three
 costs:
 
@@ -339,8 +348,10 @@ costs:
 What the meter doesn't count — one pass's node walks, the parse, the string work made linear,
 a getter Readability starts using in an upgrade — the checks above price or remove, so
 production also keeps the Worker's own CPU limit (`limits.cpu_ms`, 5 s per request, in
-`wrangler.jsonc`; staging has Free's own) as the backstop: a request that slipped past them all
-would die as a 5xx instead of running for minutes. Every page the reviews built to be slow,
+`wrangler.jsonc`) as the backstop: a request that slipped past them all
+would die as a 5xx instead of running for minutes. Staging has no such backstop it can count
+on — Free refuses `cpu_ms`, and its own 10 ms went unenforced above — so there the checks
+are the only bound. Every page the reviews built to be slow,
 scaled to the largest the walk and the meter accept, took at most about 2.5 s in workerd, and all but
 one sibling shape the walk prices under 1.4 s; that is the shapes found, not a bound. The
 meter's weights are Node's: a later review measured the heaviest attribute shapes at up to

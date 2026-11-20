@@ -49,6 +49,40 @@ make it work. These are the journeys that send a server extraction through the
 deployed CSP and the deployed extractor Worker, using the extractor origin baked
 into the shipped bundle.
 
+**`EXTRACT-READ-MODE-WEB-001` takes the same grant, and is past a Workers Free
+limit as Cloudflare documents it.** It keeps a server read-mode copy of a real
+article (a help page on bracemark.com) with its image, and Readability over that
+page costs tens of milliseconds of CPU against Free's documented 10. So it carries
+the `workers-paid` trait, and **a staging run leaves a `workers-paid` case out
+unless it is asked for** (`runner/registry.ts`, `WORKERS_PAID_TRAIT`):
+
+```sh
+npm run e2e:web:staging -- --case EXTRACT-READ-MODE-WEB-001
+npm run e2e:web:staging -- --include-trait workers-paid   # every such case
+```
+
+**Measured on Free, 2026-11-20: Free did not enforce the limit.** The case passed
+against staging on Workers Free. In the Worker's own analytics its minute held one
+invocation at 67 ms of CPU, `success`. Eleven more read-mode requests sent straight
+to staging's extractor over the same page and two others of ~110 KB from the same
+docs all answered 200 with an article, at 32–36 ms median and 88 ms worst, every
+invocation `success` — up to nine times the documented limit, and no
+exceeded-CPU outcome on the Worker all week. So a run while staging is on Free is
+expected to pass, and **a pass does not say which plan the account is on**. What
+it can't promise is that it always will: the documented limit is 10 ms, and
+nothing here shows when, or whether, Free would start holding a request to it.
+That is why the trait stays and an ordinary run leaves the case out. If the case
+fails at the extract response with a 5xx, it says so; look for an exceeded-CPU
+outcome in the Worker's analytics before reading anything into the product.
+
+It is the only journey that sends the `readMode` facet through the deployed CSP
+and lets workerd's own CPU time price a real page; the local run prices it on
+`wrangler dev`, which has no plan. A pass on staging says nothing about
+production's 5 s `limits.cpu_ms` cap — staging sets none, since Free refuses the
+setting — and nothing about whether production's account is on Paid: that is
+[docs/link-extraction-server.md](../docs/link-extraction-server.md), _cost on the
+Worker_.
+
 That row is the **only write a runner makes outside the app**, and the only thing
 on this page that needs a credential:
 

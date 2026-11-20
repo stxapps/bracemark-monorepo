@@ -217,8 +217,10 @@
       // which the client treats as a transport failure and does not retry by itself.
       // HERE and not at the top level, because `limits` is inherited by every env that
       // has none of its own, and the Workers Free plan refuses `cpu_ms`, and staging is
-      // on Free. Staging needs none: Free's own 10 ms limit is a tighter cap (and kills
-      // most real read-mode requests too, so read mode can't be tested there).
+      // on Free. So staging has no CPU cap of ours, and can't count on Free's documented
+      // 10 ms either: measured there, read-mode requests up to 88 ms were all allowed
+      // (e2e/STAGING.md, _the cases that grant a plan_). The read-mode checks are its
+      // only bound.
       "limits": { "cpu_ms": 5000 },
     },
   },

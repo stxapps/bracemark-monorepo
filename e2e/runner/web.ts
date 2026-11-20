@@ -10,7 +10,12 @@ import { parseWebCli } from './cli';
 import { E2E_ENVIRONMENT, E2E_ORIGINS, IS_STAGING } from './environment';
 import { createRunId, writeJson } from './lib';
 import { capture, inherit } from './process';
-import { readCaseRegistry, selectCases, validateCaseRegistry } from './registry';
+import {
+  readCaseRegistry,
+  selectCases,
+  validateCaseRegistry,
+  withStagingDefaults,
+} from './registry';
 import { assertStackOwnedByRepo } from './stack';
 import { STAGING_PLAN_GRANTS } from './staging-credential';
 
@@ -41,11 +46,10 @@ async function main(): Promise<void> {
       'the narrow window runs on local Chrome only (docs/e2e.md, _the narrow web project_)',
     );
   }
-  const selected = selectCases('web', {
-    ...options,
-    environment: E2E_ENVIRONMENT,
-    browser: E2E_BROWSER,
-  });
+  const selected = selectCases(
+    'web',
+    withStagingDefaults({ ...options, environment: E2E_ENVIRONMENT, browser: E2E_BROWSER }),
+  );
   // Playwright's own Firefox, not the one in /Applications (runner/browser.ts).
   // Checked before anything waits on the stack, as the browser extension's
   // Chromium is in runner/extension.ts.

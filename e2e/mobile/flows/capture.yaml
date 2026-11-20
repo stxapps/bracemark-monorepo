@@ -1,0 +1,107 @@
+# The capture screen keeps a read-mode copy, with its image, of a real page
+# (docs/link-extraction-keep.md, _per client_, bracemark-expo, 2). The pieces are
+# specs apart (capture-screen.spec.tsx, use-page-capture, store-read-mode); what
+# only a device has is the join: the WebView loading a public page, the injected
+# capture answering through it, the article's image fetched and encoded IN the
+# page (`createImageBitmap` + `OffscreenCanvas` in WKWebView or Android's
+# WebView, with the native fetch for whatever the page couldn't), and the pack
+# and the text written as `files/` blobs the reader draws — then again after a
+# cold start. READER-NATIVE-001 reads copies that came from elsewhere; this is
+# the phone taking its own.
+#
+#   maestro test mobile/flows/capture.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e LINK_URL=… -e HEADING=…
+#
+# LINK_URL is the article fixture — a help page on bracemark.com, with a
+# run-scoped query — and HEADING one of its section headings (e2e/fixtures.json,
+# web/fixtures/extraction.ts says why that page). The account is on Plus before
+# it signs in (runner/mobile.ts, PLUS_CASES): no route brings a free account here.
+#
+# No flow-level `env:` defaults: on Maestro 2.8.0 they beat `-e` (docs/e2e.md,
+# _driving the native apps_).
+appId: com.bracemark.app
+tags: [CAPTURE-NATIVE-001, full, online, internet, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- runFlow:
+    file: subflows/dismiss-logbox.yaml
+
+- tapOn: 'Add link'
+- runFlow:
+    file: subflows/type-autofocused.yaml
+    env:
+      FIELD: add-link-url
+      TEXT: ${LINK_URL}
+# No hideKeyboard: see add-link.yaml — the panel sits above the keyboard.
+- tapOn:
+    id: 'add-link-save'
+
+# The only row. Read on a Plus link with no copy goes to the capture screen.
+- extendedWaitUntil:
+    visible:
+      id: 'link-options'
+    timeout: 15000
+- tapOn:
+    id: 'link-options'
+    index: 0
+- tapOn:
+    id: 'link-menu-read'
+
+# The keep is live only once the page has loaded and reported an address of its
+# own — the WebView reaching the public page is the first thing this proves.
+- extendedWaitUntil:
+    visible:
+      id: 'capture-keep-read-mode'
+      enabled: true
+    timeout: 60000
+- takeScreenshot: capture-loaded
+
+# _Include images_ is off by default; the press turns it on. Its state reads
+# differently on each platform (subflows/assert-radio-checked.yaml has the two
+# spellings), so the proof it took is the figure the reader draws below — a
+# text-only copy has no `reader-figure-image`.
+- tapOn:
+    id: 'capture-include-images'
+- tapOn:
+    id: 'capture-keep-read-mode'
+- extendedWaitUntil:
+    visible:
+      id: 'capture-read'
+    timeout: 60000
+- takeScreenshot: capture-kept
+
+# Into the reader: the article, and its figure drawn from the pack.
+- tapOn:
+    id: 'capture-read'
+- extendedWaitUntil:
+    visible: '${HEADING}'
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: 'reader-figure-image'
+    direction: DOWN
+    timeout: 30000
+- takeScreenshot: capture-reader
+
+# Written, not merely shown: after a cold start, Read now opens the copy itself.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: 'link-options'
+    timeout: 30000
+- tapOn:
+    id: 'link-options'
+    index: 0
+- tapOn:
+    id: 'link-menu-read'
+- extendedWaitUntil:
+    visible: '${HEADING}'
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: 'reader-figure-image'
+    direction: DOWN
+    timeout: 30000
+- takeScreenshot: capture-reader-after-cold-start

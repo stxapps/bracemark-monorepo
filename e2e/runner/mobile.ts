@@ -10,6 +10,7 @@ import { unique, unresolvableUrl } from '../web/fixtures/data';
 import { writeSmallDataArchive } from '../web/fixtures/data-lifecycle';
 import { API_URL } from '../web/fixtures/env';
 import {
+  articlePage,
   knownPage,
   type PendingExtractionLibrary,
   writePendingExtractionLibrary,
@@ -76,6 +77,8 @@ const PLUS_CASES = new Set([
   'LOCK-APP-002',
   'LOCK-LIST-001',
   'LOCK-AUTORELOCK-001',
+  // Kept copies are `keptCopies`'; on free the capture screen's keep is the upgrade.
+  'CAPTURE-NATIVE-001',
 ]);
 
 // Cases that need the generated 1,000-link library (web/fixtures/scale-library.ts)
@@ -1012,6 +1015,11 @@ async function main(): Promise<void> {
         const known = knownPage('e2e-device-save');
         env.LINK_URL = known.url;
         env.LINK_TITLE = known.title;
+      }
+      if (testCase.id === 'CAPTURE-NATIVE-001') {
+        const article = articlePage('e2e-device-capture');
+        env.LINK_URL = article.url;
+        env.HEADING = article.heading;
       }
       if (extractionLibrary) {
         env.LINK_TITLE = extractionLibrary.known.title;

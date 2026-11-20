@@ -3,8 +3,8 @@ import { type Page } from '@playwright/test';
 import { IS_STAGING } from '../runner/environment';
 import { expect, test } from './fixtures/app';
 import { EXTRACTOR_URL } from './fixtures/env';
-import { knownPage, writePendingExtractionLibrary } from './fixtures/extraction';
-import { addLinkButton, displayUrl, linkRow } from './fixtures/links';
+import { articlePage, knownPage, writePendingExtractionLibrary } from './fixtures/extraction';
+import { addLinkButton, chooseRowMenuItem, displayUrl, linkRow } from './fixtures/links';
 import { grantPlusAndLoad } from './fixtures/plan';
 
 // Server extraction, end to end: bracemark-web orchestrating the REAL local
@@ -175,6 +175,79 @@ test.describe('server extraction', () => {
     },
   );
 
+  // Server read mode, the web app's only way to a kept copy (it can't read another
+  // site's page: CORS). The pieces are proved apart — the route and Readability in
+  // workerd (apps/bracemark-extractor), the opt-in and the keep in web-react and the
+  // reader page's specs, a stored copy read back by READER-WEB-001 — and this is the
+  // one run of the join: the reader's in-place opt-in, the press sending the
+  // `readMode` facet to the real extractor, the copy and its image pack written as
+  // `files/` blobs, and the reader drawing both, then again from a fresh document.
+  //
+  // The page is an ARTICLE, so it is ours (web/fixtures/extraction.ts says why
+  // example.com can't be). And it costs real CPU: on staging the read took ~67 ms,
+  // past the Workers Free plan's documented 10 ms. Free let it finish (e2e/STAGING.md
+  // has the readings), but a pass that rests on a limit not being enforced is not one
+  // a default run should depend on, so this case carries `workers-paid`: a staging run
+  // leaves it out unless it is named (docs/link-extraction-server.md, _cost on the
+  // Worker_).
+  test(
+    'a server read-mode copy with its image lands in the reader and survives a reload',
+    { tag: ['@EXTRACT-READ-MODE-WEB-001', '@full', '@online', '@internet', '@workers-paid'] },
+    async ({ isolatedApp: app }) => {
+      const { page } = app;
+      const article = articlePage('e2e-web-read-mode');
+
+      await grantPlusAndLoad(page, app.credentials.username);
+      await page.goto('/links');
+      await saveThroughQuickAdd(page, article.url);
+
+      // A Plus link with no copy: Read opens the reader on its keep section.
+      await chooseRowMenuItem(page, article.url, 'Read');
+      await expect(page).toHaveURL(/\/read\?link=/);
+
+      // Both presses, in place: server read mode is off by default, and turning it
+      // on fetches nothing — it hands focus to the keep (docs/link-extraction-keep.md,
+      // _per client_, bracemark-web).
+      await page.getByRole('button', { name: 'Turn on server read mode' }).click();
+      const keep = page.getByRole('button', { name: 'Keep a read-mode copy' });
+      await expect(keep).toBeFocused();
+      const images = page.getByRole('checkbox', { name: 'Include images' });
+      await expect(images).not.toBeChecked();
+      // A click, not `check()`: the box is the synced `keepReadModeImages`, drawn
+      // from the store once the write lands, and `check()` reads its state at once.
+      await images.click();
+      await expect(images).toBeChecked();
+
+      const extracted = page.waitForResponse(
+        (response) =>
+          response.url() === `${EXTRACTOR_URL}/v1/extract` &&
+          response.request().method() === 'POST',
+      );
+      await keep.click();
+      const response = await extracted;
+      const body = response.request().postData() ?? '';
+      expect(body).toContain(article.url);
+      expect(body).toContain('readMode');
+      if (!response.ok()) {
+        // The client reads a 5xx as a transport failure and records nothing, so
+        // without this the case fails later as a copy that never arrived.
+        throw new Error(
+          `the extractor answered ${response.status()} to the read-mode ask` +
+            (IS_STAGING
+              ? ' — on staging, check the Worker’s analytics for an exceeded-CPU outcome' +
+                ' (the account is on Workers Free unless it was upgraded for this run)'
+              : ''),
+        );
+      }
+
+      await expectArticleDrawn(page, article);
+
+      // Written, not merely rendered: a fresh document reads both blobs back.
+      await page.reload();
+      await expectArticleDrawn(page, article);
+    },
+  );
+
   test(
     'a save stays successful and pending while extraction is down, then enriches',
     { tag: ['@EXTRACT-OFFLINE-001', '@full', '@online', '@internet'] },
@@ -245,6 +318,26 @@ async function saveThroughQuickAdd(page: Page, url: string): Promise<void> {
   await page.locator('#link-url').fill(url);
   await page.getByRole('button', { name: /^(Save|Confirm)$/ }).click();
   await expect(page.locator('#link-url')).toHaveCount(0);
+}
+
+// The kept copy on screen: the article's section heading, and every figure drawn
+// from the pack — a decoded `blob:` image, never the page's own address (a copy
+// never renders a remote URL: docs/link-extraction-keep.md, _images in read mode_).
+async function expectArticleDrawn(
+  page: Page,
+  article: { heading: string; figures: number },
+): Promise<void> {
+  await expect(page.getByRole('heading', { name: article.heading, exact: true })).toBeVisible({
+    timeout: 60_000,
+  });
+  const figures = page.locator('main figure img');
+  await expect(figures).toHaveCount(article.figures, { timeout: 30_000 });
+  for (const figure of await figures.all()) {
+    await expect(figure).toHaveAttribute('src', /^blob:/);
+    await expect
+      .poll(() => figure.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
+      .toBe(true);
+  }
 }
 
 // One of the section's four count tiles, by its label. The tile's text is the

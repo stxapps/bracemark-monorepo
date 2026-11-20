@@ -121,7 +121,8 @@ export function readModeWork(html: string, finalUrl: URL, budget = Infinity): nu
 // linear — the checks above price or remove; a getter Readability starts using in an upgrade isn't
 // counted until it is added. So the Worker's own CPU limit (wrangler.jsonc, `limits.cpu_ms` on
 // production) stays the backstop: a request that slipped past them all would die there, as a 5xx.
-// Staging, on the Workers Free plan, has Free's own, tighter limit instead.
+// Staging, on the Workers Free plan, can't set one, and Free's documented 10 ms has been seen
+// going unenforced (e2e/STAGING.md), so there the checks are the only bound.
 //
 // The caps are a judgement from local pages, not from real traffic. Over 616 local HTML files none
 // is refused; the heaviest, a 1 MB export of 10,000 bookmarks (19,000 elements), weighs 3.2e7 of

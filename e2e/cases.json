@@ -641,6 +641,18 @@
     "stagingGrants": ["plan"]
   },
   {
+    "id": "EXTRACT-READ-MODE-WEB-001",
+    "title": "A server read-mode copy with its image lands in the reader and survives a reload",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "internet", "workers-paid"],
+    "fixture": "empty",
+    "path": "web/extraction.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"],
+    "stagingGrants": ["plan"]
+  },
+  {
     "id": "EXTRACT-OFFLINE-001",
     "title": "A save stays successful and pending while extraction is down, then enriches",
     "surface": "web",
@@ -2029,5 +2041,15 @@
     "path": "mobile/flows/reader.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
     "widths": ["narrow", "wide"]
+  },
+  {
+    "id": "CAPTURE-NATIVE-001",
+    "title": "The capture screen keeps a read-mode copy of a real page with its image, and the reader draws both before and after a cold start",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "internet", "ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/capture.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
   }
 ]

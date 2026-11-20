@@ -509,6 +509,22 @@ proposed and deliberately not built: it would add a public deployment to own,
 monitor and keep honest; `EXTRACT-FIXTURE-001` in `e2e/NEXT.md` stays open as the
 record of that choice. Nothing weakens the SSRF guard either way.
 
+**A kept read-mode copy is the one claim example.com can't carry**, and it gets
+an origin we already own instead of a new one. example.com's 577 bytes are not
+an article — Readability answers `not-an-article` — so `EXTRACT-READ-MODE-WEB-001`
+and `CAPTURE-NATIVE-001` read **a help page on the production marketing site**,
+`bracemark.com/docs/create-an-account` (`bracemark-article-page` in
+`fixtures.json`): already public, already monitored as the site, allowed by its
+robots.txt — which matters, because read mode honours robots.txt and the title
+fetch doesn't — and an article with one figure, so the image pack is proved
+too. Two things it can't be swapped for: **staging's own marketing site**, which
+answers `Disallow: /` and so settles every page `robots-disallowed`; and a local
+page, which the SSRF guard refuses. The page is product copy and gets edited, so
+the cases pin a section heading and the figure count and nothing else, and the
+`.mdx` carries a comment naming them — change either and change `fixtures.json`
+in the same edit. A deploy of the marketing site can therefore turn these red,
+which is the cost of a page that is ours.
+
 Those cases carry the **`internet`** trait, and it is not `online`: every
 stack-backed case already carries `online`, so only `--exclude-trait internet`
 yields a run with no third-party dependency. A red `internet` case whose
@@ -2527,7 +2543,14 @@ sake: with the plan granted as above, they send a real extraction from the
 shipped bundle to the deployed Worker under the policy. The pinned header and
 the CORS case's fetch from the page hold the extractor origin too, but neither
 uses the origin the bundle was built with, and neither asks the Worker to fetch
-anything.
+anything. `EXTRACT-READ-MODE-WEB-001` is admitted beside them, for read mode — but
+a real article costs tens of milliseconds of CPU, past the Workers Free plan's
+documented 10 ms, and staging is on Free. Free has been measured letting those
+requests finish (up to 88 ms, every one answered —
+[e2e/STAGING.md](../e2e/STAGING.md), _the cases that grant a plan_), which is an
+observation, not a promise, so the case carries the **`workers-paid`** trait: a
+staging run leaves it out unless `--case` or `--include-trait` asks for it. A
+pass doesn't say which plan the account is on. Locally it is an ordinary trait.
 
 `check:headers` runs the header comparison and the refusals outside the runner,
 against either tier. It is the only thing here that may name production: it
@@ -4821,6 +4844,22 @@ and the dead-host stall above (`EXTRACT-NATIVE-ALL-001`, iOS, before the fix).
 iOS cannot remove the extractor from one simulator — it shares this Mac's
 loopback — so "without calling the server extractor" is proved on Android only;
 expo has no extractor origin configured at all.
+
+The two kept-copy cases on the article fixture were measured 2026-11-20 from
+commit `fc6a0860` with their changes in the working tree — system Chrome, the
+iPhone 17 Pro simulator on iOS 26.5, `bracemark-pixel8` on Android, against live
+bracemark.com: `EXTRACT-READ-MODE-WEB-001` passed alone and beside the other three
+web extraction cases (4/4, no retry), and `CAPTURE-NATIVE-001` passed on iOS
+(99 s) and Android (91 s). Each failed against the behaviour it guards: the web
+case with the image pack never collected (at the figure count) and with the copy
+never stored (at the heading); the native case, on iOS, with the capture's images
+switched off (at `reader-figure-image`). Neither tells the capture screen's
+in-page image encode from its native-fetch fallback — the figure lands either
+way — so `createImageBitmap`/`OffscreenCanvas` in the WebView stays an open item
+in [link-extraction-keep.md](./link-extraction-keep.md), _images in read mode_.
+`EXTRACT-READ-MODE-WEB-001` then passed against staging the same day, on
+Workers Free, with its one read at 67 ms of CPU and allowed
+([e2e/STAGING.md](../e2e/STAGING.md), _the cases that grant a plan_).
 
 The Phase 8 scale, loading, viewport and offline cases were measured 2026-09-23
 from commit `783141b` with their changes present in the working tree — system

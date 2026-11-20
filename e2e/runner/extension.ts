@@ -13,7 +13,12 @@ import { E2E_ENVIRONMENT, E2E_ORIGINS, IS_STAGING } from './environment';
 import { assertExtensionBundle } from './extension-bundle';
 import { createRunId, writeJson } from './lib';
 import { capture, inherit } from './process';
-import { readCaseRegistry, selectCases, validateCaseRegistry } from './registry';
+import {
+  readCaseRegistry,
+  selectCases,
+  validateCaseRegistry,
+  withStagingDefaults,
+} from './registry';
 import { assertStackOwnedByRepo } from './stack';
 import { STAGING_PLAN_GRANTS } from './staging-credential';
 
@@ -29,7 +34,10 @@ async function main(): Promise<void> {
       'use --case/--suite/--include-trait/--exclude-trait; do not combine them with --grep',
     );
   }
-  const selected = selectCases('extension', { ...options, environment: E2E_ENVIRONMENT });
+  const selected = selectCases(
+    'extension',
+    withStagingDefaults({ ...options, environment: E2E_ENVIRONMENT }),
+  );
 
   // Before the browser extension is built: the stack is `npm run dev`'s. Staging
   // origins are not local and pass through.

@@ -8,6 +8,8 @@ import {
   selectCasesForPlatform,
   validateCaseRegistry,
   widthsOf,
+  withStagingDefaults,
+  WORKERS_PAID_TRAIT,
 } from './registry';
 
 const ids = (cases: { id: string }[]) => cases.map((testCase) => testCase.id);
@@ -163,4 +165,33 @@ test('--width is the web wrapper’s, unset means both windows, and the others h
   );
   assert.throws(() => parseWebCli(['--width'], true), /--width requires a value/);
   assert.deepEqual(parseWebCli(['--width', 'narrow']).playwrightArgs, ['--width', 'narrow']);
+});
+
+test('a staging run leaves out workers-paid cases unless one is asked for', () => {
+  const paid = readCaseRegistry().filter(
+    (testCase) =>
+      testCase.surface === 'web' &&
+      testCase.traits.includes(WORKERS_PAID_TRAIT) &&
+      testCase.environments?.includes('staging'),
+  );
+  assert.ok(paid.length > 0, 'the registry holds a staging-admitted workers-paid web case');
+  const target = paid[0].id;
+  const wrapper = (filters: Parameters<typeof withStagingDefaults>[0]) =>
+    ids(selectCases('web', withStagingDefaults(filters)));
+
+  // The wrapper's default staging run: on Free, so the case is out. Local: an
+  // ordinary trait.
+  assert.ok(!wrapper({ environment: 'staging' }).includes(target));
+  assert.ok(wrapper({ environment: 'local' }).includes(target));
+
+  // Asked for, by id or by trait: the operator saying the account is on Paid.
+  assert.deepEqual(wrapper({ environment: 'staging', cases: [target] }), [target]);
+  assert.ok(
+    wrapper({ environment: 'staging', includeTraits: [WORKERS_PAID_TRAIT] }).includes(target),
+  );
+
+  // ADMISSION keeps it: playwright.config.ts intersects the wrapper's selection
+  // with a bare `selectCases` call, and the default applied there once left
+  // `--case` with "No tests found".
+  assert.ok(ids(selectCases('web', { environment: 'staging' })).includes(target));
 });

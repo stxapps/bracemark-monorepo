@@ -37,6 +37,16 @@
         "expectedVerdict": "permanent",
         "trait": "internet",
         "description": "Any unknown path on the same origin answers a real 404, which settles as a permanent failure. A run-scoped suffix keeps each URL unique."
+      },
+      {
+        "id": "bracemark-article-page",
+        "url": "https://bracemark.com/docs/create-an-account",
+        "namespace": "query",
+        "expectedHeading": "Create your account",
+        "expectedFigures": 1,
+        "expectedVerdict": "done",
+        "trait": "internet",
+        "description": "A help page on the production marketing site: ours, robots.txt allows it, and Readability reads it as an article with one figure. The only fixture that proves a read-mode copy lands. Staging's own site answers Disallow: /, so it can't stand in. A run-scoped ?e2e= query keeps each saved URL unique."
       }
     ]
   }
