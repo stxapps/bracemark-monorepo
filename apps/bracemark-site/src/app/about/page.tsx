@@ -154,7 +154,7 @@ const TRADEOFFS: [string, string][] = [
   // overwrite mode, both are wrong rather than stale.
   [
     'No version history',
-    'Each link is its own encrypted file and the newest write is the one that survives. We hold no readable copy of your links to keep earlier versions in, so an edit you regret can’t be rolled back from our side. A backup export taken beforehand keeps the old version where you can read it. Restoring that backup brings back links you deleted and leaves the ones you still have untouched, so an old title or note is yours to copy back in.',
+    'Each link is its own encrypted file and the last version to sync is the one that survives. We hold no readable copy of your links to keep earlier versions in, so an edit you regret can’t be rolled back from our side. A backup export taken beforehand keeps the old version where you can read it. Restoring that backup brings back links you deleted and leaves the ones you still have untouched, so an old title or note is yours to copy back in.',
   ],
   // "AND WHY WE CANNOT OFFER TO SEARCH FOR YOU" was the closing clause, and the
   // negative attaches to the wrong noun: read quickly it says there is no search

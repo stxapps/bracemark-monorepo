@@ -467,8 +467,13 @@ const TRADE: { aspect: string; hosted: string; ours: string }[] = [
     // has a second job (see its own note): arriving one section before the
     // claim band's stark version. Insert anything new by that ordering.
     //
-    // "The later edit is the one that survives" is the shipped LWW policy stated
-    // in the user's terms. Do not soften it to "we keep the newest version" —
+    // "The one that syncs last is the one that survives" is the shipped LWW
+    // policy stated in the user's terms. Last to SYNC, not last to edit:
+    // reconcile is local-wins, so a pending edit is pushed over the server copy
+    // whenever it was made — this row said "the later edit" for a stretch, which
+    // is false for a device that edited first and synced last (/faq
+    // `two-devices` carries the mechanism). Do not soften it to "we keep the
+    // newest version" —
     // there is no version kept, which is the actual cost — and do not mention the
     // conditional-write upgrade, which is deferred. /faq `two-devices` carries the
     // long form, including the extraction split.
@@ -484,7 +489,7 @@ const TRADE: { aspect: string; hosted: string; ours: string }[] = [
     aspect: 'One link, two devices',
     hosted:
       'Their server holds the readable copy, so it can merge two edits, keep a version history, and give you back the one you wanted.',
-    ours: 'Each link is its own encrypted file, so edits to different links never collide. Edit the same link on two devices before they sync and the later edit is the one that survives — we hold nothing readable from your links to merge, and no earlier version to restore.',
+    ours: 'Each link is its own encrypted file, so edits to different links never collide. Edit the same link on two devices before they sync and the one that syncs last is the one that survives — we hold nothing readable from your links to merge, and no earlier version to restore.',
   },
   {
     // THE COST THIS BAND SHIPPED WITHOUT, twice over. docs/brand-assets.md names

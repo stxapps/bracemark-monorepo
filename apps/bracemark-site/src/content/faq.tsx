@@ -1141,12 +1141,24 @@ export const FAQ_GROUPS: FaqGroup[] = [
         //     `tags/{id}.enc`) is what makes the granularity claim true: two
         //     devices touching different links write different R2 objects and
         //     never contend.
-        //   - LAST-WRITER-WINS on the same path, and the earlier edit is lost
+        //   - LAST-WRITER-WINS on the same path, and the losing edit is lost
         //     SILENTLY. Said plainly because it is the real cost, and because the
         //     reason we cannot do better is the same architecture the rest of the
         //     page sells: there is no readable copy server-side to merge, and no
         //     version history to roll back to. The band on the landing page makes
         //     the same trade in the same words.
+        //   - THE WRITER IS THE LAST TO SYNC, NOT THE LAST TO EDIT. Reconcile is
+        //     local-wins: a path with a pending op skips the server copy and is
+        //     pushed over it (`pendingPaths.has(op.path)` in both sync engines,
+        //     web-react and expo-react). So a device that edited first and syncs
+        //     last wins. This answer said "the later edit is the one that
+        //     survives" for a stretch, which is false in exactly that case — the
+        //     one a reader with an offline laptop meets. "Even if its edit was
+        //     made first" is there so the clause can't be read back as time of
+        //     edit. If the deferred conditional-write upgrade ships (a stale PUT
+        //     412s and re-pulls), the winner changes and so does this sentence,
+        //     with its three siblings: the landing band, /about's
+        //     `No version history`, and /docs/sync-and-devices.
         //   - THE EXTRACTION SPLIT is not a detail, it is the reassurance: the
         //     metadata blob is split by WRITER — `links/{id}.enc` user-authored,
         //     `extractions/{id}.enc` machine-derived, same id — precisely so a
@@ -1195,12 +1207,13 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             Each link, list, and tag is stored as its own encrypted file, so two devices working on
             different things never collide. If the same link is edited in both places before they
-            sync, the later edit is the one that survives and the earlier one is replaced — we hold
-            nothing readable from your links, so there is no merge we could do for you and no older
-            version to restore (see <HashLink id="undo-edit">can I undo a change</HashLink>).
-            Anything you change offline queues up and goes out in order the next time you have a
-            network. Titles and preview images fetched in the background live in a separate
-            encrypted file from what you write, so one never overwrites the other. See{' '}
+            sync, the device that syncs last wins, even if its edit was made first, and the other
+            edit is replaced — we hold nothing readable from your links, so there is no merge we
+            could do for you and no older version to restore (see{' '}
+            <HashLink id="undo-edit">can I undo a change</HashLink>). Anything you change offline
+            queues up and goes out in order the next time you have a network. Titles and preview
+            images fetched in the background live in a separate encrypted file from what you write,
+            so one never overwrites the other. See{' '}
             <PageLink href="/docs/sync-and-devices#when-two-devices-change-the-same-link">
               Sync and devices
             </PageLink>{' '}
