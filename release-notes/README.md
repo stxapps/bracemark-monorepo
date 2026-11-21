@@ -38,6 +38,9 @@ Found a bug, or need help? bracemark.com/support
   editors”, not “Bug fixes and improvements”.
 - **Only what shipped** in this version, and nothing planned.
 - **No version number** — both stores print it beside the notes.
+- **`https://bracemark.com/support` on Firefox Add-ons only.** AMO turns a
+  bare domain into an `http://` link. Leave it bare elsewhere: Google Play
+  allows 500 characters, and past notes have used up to 496.
 
 Everything else is the voice in
 [docs/brand-assets.md](../docs/brand-assets.md#the-voice), which holds this
