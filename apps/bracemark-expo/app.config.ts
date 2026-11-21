@@ -83,10 +83,15 @@ const config: ExpoConfig = {
     allowBackup: false,
     // Android 13+ system pickers and app-private files need no legacy storage
     // access, and the app deliberately has no vibration/haptic feedback.
+    // ACCESS_WIFI_STATE comes from netinfo, and the app reads only `isConnected`
+    // (ACCESS_NETWORK_STATE). Play counts the permission as a REQUIRED
+    // android.hardware.wifi, which hides the app from devices with no Wi-Fi and
+    // blocks review. netinfo checks the permission before every Wi-Fi read.
     blockedPermissions: [
       'android.permission.READ_EXTERNAL_STORAGE',
       'android.permission.WRITE_EXTERNAL_STORAGE',
       'android.permission.VIBRATE',
+      'android.permission.ACCESS_WIFI_STATE',
     ],
   },
   web: {

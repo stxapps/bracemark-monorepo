@@ -420,17 +420,26 @@ device locale. Re-enable only with RTL layout/gesture verification. This setting
 controls layout direction, not whether saved text may contain Arabic or Hebrew.
 
 **Unused permissions are blocked at prebuild.** `android.blockedPermissions`
-removes `READ_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE`, and `VIBRATE`, using
-manifest-merger removal markers. The Android floor is 13: photo/document pickers,
-app-private files, and sharing exports need no legacy storage permission, and
-the app deliberately has no vibration feedback. `SYSTEM_ALERT_WINDOW` is
+removes `READ_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE`, `VIBRATE`, and
+`ACCESS_WIFI_STATE`, using manifest-merger removal markers. The Android floor is
+13: photo/document pickers, app-private files, and sharing exports need no legacy
+storage permission, and the app deliberately has no vibration feedback.
+`ACCESS_WIFI_STATE` comes from `@react-native-community/netinfo`, and the app
+reads only `isConnected`, which needs `ACCESS_NETWORK_STATE` alone. netinfo
+checks the permission before each Wi-Fi read, so without it netinfo just leaves
+out the Wi-Fi details. ⚠ Keep it out. Play treats the permission as a
+_required_ `android.hardware.wifi`, so it hides the app from every device with
+no Wi-Fi. Since 2026-11-21, Play also stops **Send for review** with "Required
+hardware feature declarations are restricting your app's availability" until
+someone clicks _Proceed for now_. Every release up to 1.4.0 (versionCode 6)
+shipped with the permission. `SYSTEM_ALERT_WINDOW` is
 removed only in the release manifest emitted by
 `plugins/with-android-release-trim.js`; debug keeps it for Expo's performance
 monitor. That plugin owns the release overlay so another writer cannot silently
 erase either the permission removal or the ML Kit metadata removal.
 
 After changing this policy, prebuild Android and inspect **both merged variant
-manifests**: all three blocked permissions must be absent, backup/RTL attributes
+manifests**: all four blocked permissions must be absent, backup/RTL attributes
 must be false, and the extraction-rule resource must be present. The overlay
 permission must be absent from release and retained in debug. Verify photo
 picking and file import/export/share in the rebuilt app; the generated main
