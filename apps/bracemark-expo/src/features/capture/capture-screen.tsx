@@ -45,8 +45,9 @@ import { usePageCapture } from './use-page-capture';
 // read-mode copy — with its images when _Include images_, under it, is ticked
 // (IncludeImages, below); _Update preview_ re-reads the link's title and preview image
 // from the page. "Keep a copy", not the reader's "Keep a read-mode copy": the two
-// buttons share one row, at half a phone's width each, and the longer label wraps
-// there. The short one is still exact — a read-mode copy is the only kind the phone
+// buttons share one row, at about half a phone's width each, and the longer label
+// doesn't fit there (the row wraps when even these don't — below, at the buttons).
+// The short one is still exact — a read-mode copy is the only kind the phone
 // takes — and it is the family its other states belong to (_Keep a new copy_, _Kept —
 // read it_). docs/brand-assets.md, _terminology_, the read mode row. The one way this
 // app takes either from a live page on its own (an iOS share
@@ -435,9 +436,20 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
               _Update preview_ beside — web's keep section's order (reader-page.tsx,
               EmptyCopies): the box qualifies the keep alone, so nothing but the keep
               is above it, and a screen reader meets the two in a row. `items-start`
-              keeps the two buttons level while the left column is taller. */}
-            <View className="flex-row items-start gap-2">
-              <View className="flex-1">
+              keeps the two buttons level while the left column is taller.
+              THE ROW WRAPS rather than halving the width. Each side starts at its own
+              content (`basis-auto`) and shares what is left (`grow`), so the pair sits
+              side by side only where both labels fit, and _Update preview_ drops under
+              _Include images_ where they don't — the same order, one line lower. Halves
+              (`flex-1`) left _Keep a new copy_ (97 at 1×, Inter 14 medium) 106 of label
+              room on a 360-wide phone, so at the 1.3 font-scale cap its content was ~20
+              wider than the button's inside; a `shrink-0` button centres what overflows,
+              and that came out of both paddings, leaving ~2 and ~6. It overflowed at 1×
+              on a 320 too, and _Update preview_ (89) does the same at the cap. The cost
+              is that side by side the two are not exactly equal: they differ by their
+              labels' difference. */}
+            <View className="flex-row flex-wrap items-start gap-2">
+              <View className="grow basis-auto">
                 {kept ? (
                   <>
                     <Button
@@ -478,7 +490,7 @@ export function CaptureScreen({ linkId }: { linkId: string }) {
               {entitled ? (
                 <Button
                   variant="outline"
-                  className="flex-1"
+                  className="grow basis-auto"
                   testID="capture-update-preview"
                   disabled={!ready || previewDone !== null}
                   onPress={() => void updatePreview()}
