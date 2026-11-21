@@ -15,15 +15,19 @@ stranger has), [browser-extension.md](./browser-extension.md) (_releasing to the
 stores_), [expo-build.md](./expo-build.md) (why the store apps are a different
 problem).
 
-> **STATUS — not built, and not promised.** One measurement exists: bracemark-web
-> built twice for production **on one machine** with `BUILD_ID` fixed. All 217
-> files came out, every JS chunk matched, and 16 files differed: 15 HTML files
-> carrying Next's own random build ID, plus `sw.js`, most likely because its
-> precache revisions hash those HTML files. Nothing has been compared across
-> machines, nothing has been compared against the live site, and the browser
-> extension has not been tried. `/security` says "We are not promising either one
-> is coming", so ⚠ **nothing public changes until this ships**
-> ([the claim](#the-claim--what-changes-when-it-ships)).
+> **STATUS — not built, and not promised.** Two measurements exist, both **on
+> one machine**. First, bracemark-web built twice for production with `BUILD_ID`
+> fixed. All 217 files came out, every JS chunk matched, and 16 files differed:
+> 15 HTML files carrying Next's own random build ID, plus `sw.js`, most likely
+> because its precache revisions hash those HTML files. Second, on 2026-11-21 a
+> Chrome Web Store release of bracemark-extension was rebuilt at its `chrome/`
+> tag and compared against the package the store was serving. Every file
+> matched except what the store adds
+> ([below](#bracemark-extension--it-already-matches-the-store)). Nothing has been
+> compared across machines, the web app has not been compared against the live
+> site, and Firefox Add-ons has not been tried. `/security` says "We are not
+> promising either one is coming", so ⚠ **nothing public changes until this
+> ships** ([the claim](#the-claim--what-changes-when-it-ships)).
 
 ### what it proves, and what it doesn't
 
@@ -121,6 +125,37 @@ Read [offline-mode.md](./offline-mode.md) before touching `next.config.js` eithe
 way. The `??=` there is load-bearing (static generation runs in worker
 processes that must see the main process's id), and `generateBuildId` has to
 return that same value.
+
+### bracemark-extension — it already matches the store
+
+Nothing had to change for this. WXT's output has no build id or timestamp in
+it, so one clean build at the tag (`npm ci`, then
+`npx nx build @stxapps/bracemark-extension --skip-nx-cache`) gives the same
+bytes as the build that was uploaded. The comparison:
+
+1. Download what the store serves. The CRX is a zip with a signed header in
+   front, so `unzip` warns about extra bytes and then unpacks it fine. The id
+   is `CHROME_WEB_STORE_URL` in `packages/shared/src/stores/listings.ts`.
+
+   ```bash
+   curl -sSL -o live.crx "https://clients2.google.com/service/update2/crx?response=redirect&prodversion=<a current Chrome version>&acceptformat=crx2,crx3&x=id%3D<extension id>%26uc"
+   ```
+
+2. Check that `manifest.json`'s `version` is the tag you mean to compare. A
+   store build is only ever compared with its own tag.
+3. Rebuild at that tag in a clean worktree, and compare it with
+   `.output/chrome-mv3/` file by file.
+
+What is expected to differ, and nothing else:
+
+- **`_metadata/`**, the store's signature folder, which only the live copy has.
+- **`"update_url"` in `manifest.json`**, which the store adds. Compare the
+  manifests as parsed JSON with that key removed, not as bytes.
+
+That makes this the strongest platform for the claim in the
+[table above](#per-platform--what-it-is-worth-what-it-costs), and close to the
+cheapest. What is still missing is the rest of the list below: a second machine,
+a pinned Node, Firefox, and a script so that someone else can run the check.
 
 ### what a stranger needs to rebuild
 
@@ -225,9 +260,11 @@ happens.
 2. **The compare script:** rebuild a commit with the live `BUILD_ID` and compare
    against the live host, as [above](#comparing-against-the-live-site). Run it
    after each production deploy.
-3. **bracemark-extension:** rebuild `zip` and `zip:firefox` at a `chrome/` or
-   `firefox/` tag and compare against the package each store serves, signature
-   files excluded. It may be the stronger claim, and possibly the easier one.
+3. **bracemark-extension:** rebuild at a `chrome/` or `firefox/` tag and compare
+   against the package each store serves, signature files excluded. **Chrome:
+   done once, by hand, and it matched**
+   ([above](#bracemark-extension--it-already-matches-the-store)). Left: Firefox,
+   and a script so that the check runs after each release passes review.
 4. **A second machine and a pinned Node**, for both of the above.
 5. **Then the claim**, per platform, on every surface at once.
 6. **Android and iOS:** not planned. Name them in the claim as not covered.
