@@ -69,13 +69,21 @@ jest.mock('@stxapps/web-react', () => ({
 }));
 
 // The storage readout is its own query; null is what it draws on Free and while
-// it loads. A test that needs it on screen assigns it.
-let mockStorageReadout: { text: string; fraction: number; full: boolean; note: string } | null =
-  null;
+// it loads. A test that needs it on screen assigns it. `settled` true by
+// default: the read has answered. False is a read still in flight.
+type MockReadout = {
+  text: string;
+  fraction: number;
+  full: boolean;
+  note: string;
+  kept: string | null;
+};
+let mockStorageReadout: MockReadout | null = null;
+let mockStorageSettled = true;
 
 jest.mock('@stxapps/react', () => ({
   useApiClient: () => ({ call: mockApiCall }),
-  useStorageReadout: () => mockStorageReadout,
+  useStorageReadout: () => ({ readout: mockStorageReadout, settled: mockStorageSettled }),
 }));
 
 jest.mock('@/lib/paddle', () => ({
@@ -115,6 +123,7 @@ describe('SubscriptionSection', () => {
     mockApiCall.mockClear();
     mockOpenPaddleCheckout.mockClear();
     mockStorageReadout = null;
+    mockStorageSettled = true;
     mockPrices = undefined;
     mockPricesFetched = true;
   });
@@ -172,7 +181,7 @@ describe('SubscriptionSection', () => {
     expect(screen.queryByRole('group', { name: 'Plus plan' })).toBeNull();
 
     act(() => {
-      // PRICE_WAIT_MS (3000) in the section.
+      // REVEAL_WAIT_MS (3000) in the section.
       jest.advanceTimersByTime(3000);
     });
 
@@ -193,6 +202,7 @@ describe('SubscriptionSection', () => {
       fraction: 0.24,
       full: false,
       note: 'Images take the most storage: previews and the images in read-mode copies.',
+      kept: null,
     };
 
     render(<SubscriptionSection />);
@@ -200,6 +210,63 @@ describe('SubscriptionSection', () => {
     const box = within(screen.getByRole('group', { name: 'Current plan' }));
     expect(box.getByText('Storage')).toBeTruthy();
     expect(box.getByText('1.2 GB of 5 GB used')).toBeTruthy();
+  });
+
+  // A lapsed Plus account keeps Plus's ceiling (the high-water rule), so its box
+  // says Free over "of 5 GB" — the line is what keeps the two from disagreeing.
+  it('says where the ceiling came from when it outlived the plan', () => {
+    mockStorageReadout = {
+      text: '1.2 GB of 5 GB used',
+      fraction: 0.24,
+      full: false,
+      note: 'Images take the most storage: previews and the images in read-mode copies.',
+      kept: 'Your 5 GB of storage comes from your earlier Plus plan.',
+    };
+
+    render(<SubscriptionSection />);
+
+    const box = within(screen.getByRole('group', { name: 'Current plan' }));
+    expect(box.getByText('Free')).toBeTruthy();
+    expect(box.getByText('Your 5 GB of storage comes from your earlier Plus plan.')).toBeTruthy();
+  });
+
+  // The readout is the plan box's last block. Drawn after the page was up, it
+  // grew the box under the user — so the first paint waits for it too, on every
+  // plan, not only on the free one that waits for prices.
+  it('holds the page until the storage read settles', () => {
+    mockSubscription = PLUS;
+    mockStorageSettled = false;
+    const { rerender } = render(<SubscriptionSection />);
+    expect(screen.getByText('Loading your subscription…')).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'Current plan' })).toBeNull();
+
+    mockStorageReadout = {
+      text: '1.2 GB of 5 GB used',
+      fraction: 0.24,
+      full: false,
+      note: 'Images take the most storage: previews and the images in read-mode copies.',
+      kept: null,
+    };
+    mockStorageSettled = true;
+    rerender(<SubscriptionSection />);
+
+    const box = within(screen.getByRole('group', { name: 'Current plan' }));
+    expect(box.getByText('1.2 GB of 5 GB used')).toBeTruthy();
+  });
+
+  it('renders without the readout once the wait runs out', () => {
+    mockSubscription = PLUS;
+    mockStorageSettled = false;
+    render(<SubscriptionSection />);
+    expect(screen.queryByRole('group', { name: 'Current plan' })).toBeNull();
+
+    act(() => {
+      // REVEAL_WAIT_MS (3000) in the section.
+      jest.advanceTimersByTime(3000);
+    });
+
+    expect(screen.getByRole('group', { name: 'Current plan' })).toBeTruthy();
+    expect(screen.queryByText('Storage')).toBeNull();
   });
 
   it('draws no storage line when the readout has nothing to show', () => {

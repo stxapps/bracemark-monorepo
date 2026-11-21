@@ -41,12 +41,20 @@ jest.mock('../../components/legal-consent', () => ({
 }));
 
 // The storage readout is its own query; null is what it draws on Free and while
-// it loads. A test that needs it on screen assigns it.
-let mockStorageReadout: { text: string; fraction: number; full: boolean; note: string } | null =
-  null;
+// it loads. A test that needs it on screen assigns it. `settled` true by
+// default: the read has answered. False is a read still in flight.
+type MockReadout = {
+  text: string;
+  fraction: number;
+  full: boolean;
+  note: string;
+  kept: string | null;
+};
+let mockStorageReadout: MockReadout | null = null;
+let mockStorageSettled = true;
 jest.mock('@stxapps/react', () => ({
   ...jest.requireActual('@stxapps/react'),
-  useStorageReadout: () => mockStorageReadout,
+  useStorageReadout: () => ({ readout: mockStorageReadout, settled: mockStorageSettled }),
 }));
 
 const useEntitlementsMock = useEntitlements as jest.Mock;
@@ -84,6 +92,7 @@ let subscription: typeof FREE | typeof PLUS_ON_PADDLE = FREE;
 beforeEach(() => {
   subscription = FREE;
   mockStorageReadout = null;
+  mockStorageSettled = true;
   useEntitlementsMock.mockImplementation(() => ({
     subscription,
     isLoading: false,
@@ -207,6 +216,7 @@ test('shows the storage readout for a plan with a published ceiling', async () =
     fraction: 0.24,
     full: false,
     note: 'Images take the most storage: previews and the images in read-mode copies.',
+    kept: null,
   };
   const { getByTestId, getByText } = render(<SubscriptionSection />);
   await act(async () => {
@@ -215,6 +225,48 @@ test('shows the storage readout for a plan with a published ceiling', async () =
 
   expect(getByTestId('storage-usage')).toBeTruthy();
   expect(getByText('1.2 GB of 5 GB used')).toBeTruthy();
+});
+
+// A lapsed Plus account keeps Plus's ceiling, so its box says Free over "of
+// 5 GB" — the line is what keeps the two from disagreeing.
+test('says where the ceiling came from when it outlived the plan', async () => {
+  mockStorageReadout = {
+    text: '1.2 GB of 5 GB used',
+    fraction: 0.24,
+    full: false,
+    note: 'Images take the most storage: previews and the images in read-mode copies.',
+    kept: 'Your 5 GB of storage comes from your earlier Plus plan.',
+  };
+  const { getByTestId, getByText } = render(<SubscriptionSection />);
+  await act(async () => {
+    await Promise.resolve();
+  });
+
+  expect(getByTestId('subscription-plan')).toHaveTextContent('Free');
+  expect(getByText('Your 5 GB of storage comes from your earlier Plus plan.')).toBeTruthy();
+});
+
+// The readout is the plan box's last block; drawn after the screen was up, it
+// grew the box under the user. So the first paint waits for it on every plan.
+test('holds the screen until the storage read settles, capped', async () => {
+  jest.useFakeTimers();
+  try {
+    subscription = PLUS_ON_PADDLE;
+    mockStorageSettled = false;
+    const { getByText, queryByTestId, getByTestId } = render(<SubscriptionSection />);
+    expect(getByText('Loading your subscription…')).toBeTruthy();
+    expect(queryByTestId('subscription-plan')).toBeNull();
+
+    act(() => {
+      // REVEAL_WAIT_MS (3000) in the section.
+      jest.advanceTimersByTime(3000);
+    });
+
+    expect(getByTestId('subscription-plan')).toHaveTextContent('Plus');
+    expect(queryByTestId('storage-usage')).toBeNull();
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 test('draws no storage line when the readout has nothing to show', async () => {

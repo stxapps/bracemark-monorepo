@@ -20,7 +20,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
 
-import { useApiClient } from '@stxapps/react';
+import { useApiClient, useStorageReadout } from '@stxapps/react';
 import {
   type AvailablePaidPlan,
   entitlementsOf,
@@ -54,13 +54,26 @@ import { openPaddleCheckout } from '@/lib/paddle';
 const ACTIVATION_TRIES = 15;
 const ACTIVATION_INTERVAL_MS = 2000;
 
-// How long the page waits for Paddle's price preview before rendering on the
-// USD fallback anyway — see `cardsReady` in the section. Paddle.js is loaded
+// How long the first paint waits for each read it holds for — Paddle's price
+// preview on a free account, the storage read on every account — before
+// rendering without it anyway; see `ready` in the section. Paddle.js is loaded
 // lazily from a third party and then answers a two-hop lookup, so a cold load
 // routinely outruns 1.5s; a cap that low rendered the fallback and then took
 // the late update, i.e. the very jump the hold exists to prevent.
-// bracemark-expo's CATALOG_WAIT_MS is the same wait; change the two together.
-const PRICE_WAIT_MS = 3000;
+// bracemark-expo's REVEAL_WAIT_MS is the same wait; change the two together.
+const REVEAL_WAIT_MS = 3000;
+
+// True once `ms` has passed with `active` true. Never goes back to false: it
+// caps the FIRST reveal, which is latched anyway.
+function useWaitOver(active: boolean, ms: number): boolean {
+  const [over, setOver] = useState(false);
+  useEffect(() => {
+    if (!active) return;
+    const timer = setTimeout(() => setOver(true), ms);
+    return () => clearTimeout(timer);
+  }, [active, ms]);
+  return over;
+}
 
 // Paddle's checkout PAYMENT LINK: `<default payment link>?_ptxn=txn_…`. This
 // page is the default payment link (docs/iap.md, _the payment link_), so it is
@@ -153,6 +166,15 @@ export function SubscriptionSection() {
   const pricesWanted = !isLoading && plan === 'free';
   const { data: prices, isFetched: pricesFetched } = usePaddlePrices({ enabled: pricesWanted });
 
+  // The storage readout, read HERE rather than inside StorageUsage so the gate
+  // below can wait on it. From mount and on every plan, in parallel with
+  // `iap/status`: the read doesn't depend on the plan, and it has to run on Free
+  // too, because only its answer tells a lapsed Plus account (which keeps its
+  // ceiling, and its readout) from one that never paid.
+  const { readout: storage, settled: storageSettled } = useStorageReadout(plan);
+  const storageWaitOver = useWaitOver(true, REVEAL_WAIT_MS);
+  const storageReady = storageSettled || storageWaitOver;
+
   // The page reveals ONCE, when the lookup settles, rather than rendering on the
   // base price and then changing under the user: the preview changes the price
   // figure AND adds the trial line between the feature list and the button, a
@@ -161,18 +183,20 @@ export function SubscriptionSection() {
   // second or two later under it, which read as the page loading twice.
   // Holding costs nothing real — the Upgrade button awaits the same Paddle.js
   // the preview loads (openPaddleCheckout → getPaddle), so a card shown earlier
-  // would not open a checkout any sooner. A paid account never waits:
-  // `pricesWanted` is false for it.
+  // would not open a checkout any sooner. A paid account never waits for
+  // prices: `pricesWanted` is false for it.
   //
-  // Capped, though: a slow or stalled Paddle.js must not keep the page off the
-  // screen. Past PRICE_WAIT_MS everything renders on the USD fallback and the
-  // cards take the late update — the old behaviour, now the exception.
-  const [priceWaitOver, setPriceWaitOver] = useState(false);
-  useEffect(() => {
-    if (!pricesWanted) return;
-    const timer = setTimeout(() => setPriceWaitOver(true), PRICE_WAIT_MS);
-    return () => clearTimeout(timer);
-  }, [pricesWanted]);
+  // Every account waits for the storage read, for the same reason: it is the
+  // last block of the plan box, and arriving late it grew the box under a page
+  // already on screen — on a lapsed account pushing the upgrade cards down with
+  // it. It started at mount, so by the time `iap/status` answers it has usually
+  // answered too.
+  //
+  // Capped, though: a slow or stalled Paddle.js (or usage read) must not keep
+  // the page off the screen. Past REVEAL_WAIT_MS everything renders on the USD
+  // fallback, without the readout, and either takes the late update — the old
+  // behaviour, now the exception.
+  const priceWaitOver = useWaitOver(pricesWanted, REVEAL_WAIT_MS);
   const cardsReady = pricesFetched || priceWaitOver;
 
   // Latched: the gate guards the FIRST reveal only. Unlatched, a paid account
@@ -180,7 +204,7 @@ export function SubscriptionSection() {
   // true with the lookup unfetched and swap the whole page — plan box, notice
   // and all — for the loading pane. (Adjusting state during render, the
   // documented pattern for deriving it from other state.)
-  const ready = !isLoading && (!pricesWanted || cardsReady);
+  const ready = !isLoading && storageReady && (!pricesWanted || cardsReady);
   const [revealed, setRevealed] = useState(false);
   if (ready && !revealed) setRevealed(true);
 
@@ -554,7 +578,7 @@ export function SubscriptionSection() {
         {/* After what the plan includes, for the reason that block is last: it is
             reference, with no urgency. Renders nothing on Free, whose ceiling is
             not published, and nothing until the usage read lands. */}
-        <StorageUsage />
+        <StorageUsage readout={storage} />
       </div>
 
       {/* The ONLY pending notice on this surface that gets a spinner, because it
@@ -600,7 +624,7 @@ export function SubscriptionSection() {
                     <span className="text-sm text-muted-foreground">
                       {/* Paddle's number for THIS buyer — their currency, their
                         tax, the figure the overlay will repeat. If the lookup
-                        failed (or outran PRICE_WAIT_MS and hasn't landed yet)
+                        failed (or outran REVEAL_WAIT_MS and hasn't landed yet)
                         the USD base price from plans.ts, which is what the
                         marketing site shows and what a buyer in an unpriced
                         country actually pays. */}

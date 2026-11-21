@@ -336,7 +336,12 @@ gate**, and each is printed only where an honest library can reach it:
   is one rule in `@stxapps/shared` `iap/storage.ts`, `isPublishedStorageCeiling`
   (the plans that keep copies), and so is the formatter all three surfaces print
   through, so the card and the readout can't disagree. The readout follows the
-  high-water ceiling, like the gate, so a lapsed Plus account keeps seeing it.
+  high-water ceiling, like the gate, so a lapsed Plus account keeps seeing it —
+  on Free too, deliberately: it is the ceiling that account is actually held to.
+  Since the plan box above it then says Free over "of 5 GB", the readout adds
+  where the number came from ("Your 5 GB of storage comes from your earlier Plus
+  plan.") whenever the ceiling isn't the current plan's own (`kept`,
+  `useStorageReadout(plan)`).
 - **Free's `maxBytes` and every `maxFiles` are not.** A free library keeps no
   copies, and its link cap binds long before its bytes (a maxed one is ~16 MB
   against 100 MiB); no honest library reaches a file ceiling. Printing a ceiling
@@ -1242,11 +1247,17 @@ a crossgrade inside the existing subscription rather than a second purchase.
   the plan box and the cards arrive together. The hold costs nothing real,
   because the button can't act sooner anyway: web's checkout awaits the same
   Paddle.js the preview loads, and expo's button is disabled until the products
-  land. A paid account never waits, since the lookup runs only on `free`. The
-  gate is **latched** to the first reveal, so a paid account that lapses to
-  `free` while the page is open doesn't swap itself for the loading pane. It is
-  capped at 3s (`PRICE_WAIT_MS` / `CATALOG_WAIT_MS`), past which everything
-  renders on the base price and the cards take the late update. 1.5s was too
+  land. A paid account never waits for prices, since the lookup runs only on
+  `free`. **Every account waits for the storage read**, though: the readout is
+  the plan box's last block, and arriving after the reveal it grew the box under
+  the user (on a lapsed account, pushing the cards down). The section reads it
+  itself, from mount and in parallel with `iap/status` — not after it, since it
+  doesn't depend on the plan — and passes it to `StorageUsage`; a failed or
+  paused (offline) read counts as settled. The gate is **latched** to the first
+  reveal, so a paid account that lapses to `free` while the page is open doesn't
+  swap itself for the loading pane. Each wait is capped at 3s
+  (`REVEAL_WAIT_MS` in both sections), past which everything renders on the
+  base price, without the readout, and takes the late update. 1.5s was too
   low: Paddle.js is a cold third-party load followed by a two-hop lookup, and it
   routinely outran the cap, which rendered the fallback and then jumped anyway.
   A stalled third-party script still shouldn't keep the plans off the page.

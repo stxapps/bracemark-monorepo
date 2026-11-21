@@ -22,6 +22,7 @@ import type { ProductSubscription } from 'expo-iap';
 import { Check, ExternalLink, RefreshCw, RotateCcw } from 'lucide-react-native';
 
 import { useEntitlements, useSync } from '@stxapps/expo-react';
+import { useStorageReadout } from '@stxapps/react';
 import {
   type AvailablePaidPlan,
   entitlementsOf,
@@ -53,10 +54,24 @@ import { StorageUsage } from './storage-usage';
 // @stxapps/shared iap/plans.ts, next to the entitlements table they render —
 // the SAME cards the web section renders, so the two storefronts can't drift.
 
-// How long the screen waits for the store catalog before rendering on the
-// planning price anyway — see `cardsReady` in the section. Web's
-// PRICE_WAIT_MS; change the two together.
-const CATALOG_WAIT_MS = 3000;
+// How long the first paint waits for each read it holds for — the store catalog
+// on a free account, the storage read on every account — before rendering
+// without it anyway; see `ready` in the section. Web's REVEAL_WAIT_MS; change
+// the two together.
+const REVEAL_WAIT_MS = 3000;
+
+// True once `ms` has passed with `active` true. Never goes back to false: it
+// caps the FIRST reveal, which is latched anyway. Web's section has the same
+// helper.
+function useWaitOver(active: boolean, ms: number): boolean {
+  const [over, setOver] = useState(false);
+  useEffect(() => {
+    if (!active) return;
+    const timer = setTimeout(() => setOver(true), ms);
+    return () => clearTimeout(timer);
+  }, [active, ms]);
+  return over;
+}
 
 function formatDate(epochMs: number): string {
   return new Date(epochMs).toLocaleDateString(undefined, {
@@ -135,6 +150,14 @@ export function SubscriptionSection() {
     };
   }, [catalogWanted, products]);
 
+  // The storage readout, read HERE rather than inside StorageUsage so the gate
+  // below can wait on it — from mount, on every plan, in parallel with
+  // `iap/status` (bracemark-web's section carries the reasoning, including why
+  // Free reads it too: a lapsed Plus account keeps its readout).
+  const { readout: storage, settled: storageSettled } = useStorageReadout(plan);
+  const storageWaitOver = useWaitOver(true, REVEAL_WAIT_MS);
+  const storageReady = storageSettled || storageWaitOver;
+
   // The screen reveals ONCE, when the catalog settles, rather than on the
   // planning price and then changing under the user (the web section's
   // `cardsReady`, same reasoning) — and the WHOLE body waits, not just the cards:
@@ -142,23 +165,21 @@ export function SubscriptionSection() {
   // later, which read as the screen loading twice. On this single-column screen
   // a late card also pushed everything below it down. It costs nothing here:
   // the button is disabled until the products land anyway. A paid account never
-  // waits (`catalogWanted` is false for it). Capped by CATALOG_WAIT_MS so a
-  // slow store connection can't keep the screen blank; past it everything
-  // renders on the planning price with the button disabled, and the price,
-  // trial line and enabled button then arrive together.
-  const [catalogWaitOver, setCatalogWaitOver] = useState(false);
-  useEffect(() => {
-    if (!catalogWanted) return;
-    const timer = setTimeout(() => setCatalogWaitOver(true), CATALOG_WAIT_MS);
-    return () => clearTimeout(timer);
-  }, [catalogWanted]);
+  // waits for the catalog (`catalogWanted` is false for it). Every account
+  // waits for the storage read: it is the plan box's last block, and arriving
+  // late it grew the box — and on a lapsed account pushed the cards down.
+  // Capped by REVEAL_WAIT_MS so a slow store connection (or usage read) can't
+  // keep the screen blank; past it everything renders on the planning price
+  // with the button disabled, without the readout, and the late parts then
+  // arrive — the price, trial line and enabled button together.
+  const catalogWaitOver = useWaitOver(catalogWanted, REVEAL_WAIT_MS);
   const cardsReady = products !== null || catalogWaitOver;
 
   // Latched: the gate guards the FIRST reveal only, so a paid account that
   // lapses to `free` while this is open doesn't swap the whole screen — plan
   // box, notice and all — for the loading pane. (Adjusting state during
   // render, the documented pattern for deriving it from other state.)
-  const ready = !isLoading && (!catalogWanted || cardsReady);
+  const ready = !isLoading && storageReady && (!catalogWanted || cardsReady);
   const [revealed, setRevealed] = useState(false);
   if (ready && !revealed) setRevealed(true);
 
@@ -427,7 +448,7 @@ export function SubscriptionSection() {
             reference, with no urgency. Renders nothing on Free, whose ceiling is
             not published, and nothing until the usage read lands. bracemark-web's
             box places it the same way. */}
-        <StorageUsage />
+        <StorageUsage readout={storage} />
       </View>
 
       {notice && (
@@ -467,7 +488,7 @@ export function SubscriptionSection() {
                     >
                       {/* The store's localized price; the USD planning price
                           only when the store gave no product (or the catalog
-                          outran CATALOG_WAIT_MS and hasn't landed yet). */}
+                          outran REVEAL_WAIT_MS and hasn't landed yet). */}
                       {product
                         ? `${product.displayPrice}/year`
                         : `$${PLAN_USD_PER_YEAR[cardPlan]}/year`}

@@ -4,10 +4,14 @@ import { queryOptions, useQuery } from '@tanstack/react-query';
 
 import {
   type ApiClient,
+  entitlementsOf,
   filesUsageEndpoint,
   formatStorageBytes,
   formatStorageCeiling,
   isPublishedStorageCeiling,
+  type Plan,
+  PLAN_LABELS,
+  PLANS,
 } from '@stxapps/shared';
 
 import { useApiClient } from '../contexts/api-client-provider';
@@ -38,6 +42,12 @@ export type StorageReadout = {
   // Below full, it names what fills a library and the way to make room, which is
   // the one thing a person reading a storage number can act on.
   note: string;
+  // Set when the ceiling is NOT the current plan's: the endpoint reports the
+  // account's high-water ceiling (docs/iap.md, _the two ceilings are not
+  // retroactive_), so a lapsed Plus account reads "of 5 GB" under a plan box
+  // that says Free. Without this line the two disagree on screen; with it the
+  // number says where it came from. Null when the ceiling is the plan's own.
+  kept: string | null;
 };
 
 // Two kinds of picture, in the order most libraries hold them: every link has a
@@ -52,19 +62,37 @@ const NOTE_FULL =
   'Full — new changes wait to sync until there’s room. Deleting copies you’ve kept, or links in Trash, frees space.';
 
 // The readout both settings screens draw, or null when there is nothing to show:
-// still loading, failed (the screen has nothing else that depends on it, so it is
-// simply left out), or a ceiling the product does not publish
-// (`isPublishedStorageCeiling` — Free's, today).
-export function useStorageReadout(): StorageReadout | null {
+// still loading, failed (left out rather than guessed), or a ceiling the product
+// does not publish (`isPublishedStorageCeiling` — Free's, today). `plan` is the
+// account's CURRENT plan, which is what tells a kept ceiling from its own.
+//
+// `settled` is for the screen's reveal gate: true once the read has answered
+// (either way), or when it is not on the wire at all — react-query holds an
+// offline query as `paused`, and a screen waiting on that would wait its whole
+// cap for an answer that is not coming. Settings → Subscription holds its first
+// paint on it so the block doesn't drop in under a page already on screen.
+export function useStorageReadout(plan: Plan): {
+  readout: StorageReadout | null;
+  settled: boolean;
+} {
   const client = useApiClient();
-  const { data } = useQuery(storageUsageQueryOptions(client));
-  if (!data || !isPublishedStorageCeiling(data.maxBytes)) return null;
+  const { data, isFetched, fetchStatus } = useQuery(storageUsageQueryOptions(client));
+  const settled = isFetched || fetchStatus !== 'fetching';
+  if (!data || !isPublishedStorageCeiling(data.maxBytes)) return { readout: null, settled };
   const { usedBytes, maxBytes } = data;
   const full = usedBytes >= maxBytes;
+  const ceilingPlan = PLANS.find((p) => entitlementsOf(p).maxBytes === maxBytes);
   return {
-    text: `${formatStorageBytes(usedBytes)} of ${formatStorageCeiling(maxBytes)} used`,
-    fraction: Math.min(1, usedBytes / maxBytes),
-    full,
-    note: full ? NOTE_FULL : NOTE_STORAGE,
+    readout: {
+      text: `${formatStorageBytes(usedBytes)} of ${formatStorageCeiling(maxBytes)} used`,
+      fraction: Math.min(1, usedBytes / maxBytes),
+      full,
+      note: full ? NOTE_FULL : NOTE_STORAGE,
+      kept:
+        ceilingPlan && ceilingPlan !== plan
+          ? `Your ${formatStorageCeiling(maxBytes)} of storage comes from your earlier ${PLAN_LABELS[ceilingPlan]} plan.`
+          : null,
+    },
+    settled,
   };
 }
