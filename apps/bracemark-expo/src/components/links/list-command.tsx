@@ -219,6 +219,7 @@ export function ListCommand({
         testID="list-picker-rows"
         className="max-h-80 shrink"
         nestedScrollEnabled
+        scrollResetKey={q}
         data={visibleRows}
         keyExtractor={(row) => row.item.id}
         renderItem={renderRow}

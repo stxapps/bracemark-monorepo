@@ -161,6 +161,7 @@ export function ShareListPicker({
           keyboard props and the touch claim are SharePickerScroller's — its header
           carries why each is what it is. */}
       <SharePickerScroller
+        scrollResetKey={q}
         data={visible}
         keyExtractor={({ list }) => list.id}
         extraData={renderRow}

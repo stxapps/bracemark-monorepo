@@ -124,6 +124,7 @@ export function ShareTagsPicker({
 
       {/* VIRTUALIZED, for the list picker's reason — see SharePickerScroller. */}
       <SharePickerScroller
+        scrollResetKey={q}
         data={rows}
         keyExtractor={(row) => row.id}
         extraData={renderRow}

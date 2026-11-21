@@ -39,9 +39,10 @@
 // Past that a row keeps the indent of the level at it and TreeLevelMarker
 // (tree-level-marker.tsx, a leaf the share bundle may reach too) numbers its
 // level over the last slot, the full row height like the lines. The bound also
-// caps the views: both pickers mount every row in a ScrollView, so a view per
-// level per row is the square of a deep `parentId` chain's length — and how
-// deep a chain is gets decided by a restored backup or another device, not here.
+// caps the views: a view per level per mounted row grows with a deep
+// `parentId` chain's length — the pickers are virtualized (picker-scroller.tsx),
+// but every mounted row in the window still pays its levels — and how deep a
+// chain is gets decided by a restored backup or another device, not here.
 // web-ui's links/guide-lines.tsx carries the same bound.
 
 import { View } from 'react-native';

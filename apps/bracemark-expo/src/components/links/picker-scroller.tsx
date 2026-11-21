@@ -32,11 +32,20 @@
 //     (components/ui/scroll-claim.tsx). Rows and Create rows are Pressables, which
 //     claim from below the scroller on their own.
 //
+// A NEW QUERY STARTS AT THE TOP. A FlatList keeps its offset when `data` is
+// replaced, so a list scrolled down and then filtered showed its matches from
+// that offset on — the best ones above the box, out of sight, and nothing to
+// say they were there. Each host passes its normalized query as
+// `scrollResetKey` (trimmed and lowercased, so a trailing space doesn't move
+// anything), and a change scrolls back to 0 in the layout effect, before the
+// frame paints, so the stale offset never shows. Toggling a tag or picking a
+// row leaves the query alone and so leaves the scroll alone.
+//
 // Each host passes its own bounds as `className` — `max-h-80 shrink` in a dialog
 // (bounded by what the keyboard leaves), `max-h-72 min-h-0 shrink` in the share
 // sheet (the last link of its squeeze chain) — and those comments stay with them.
 
-import type { ReactElement } from 'react';
+import { type ReactElement, useLayoutEffect, useRef } from 'react';
 import { FlatList, type ListRenderItem } from 'react-native';
 
 import { ScrollClaim } from '../ui/scroll-claim';
@@ -53,6 +62,7 @@ export function PickerScroller<T>({
   className,
   testID,
   nestedScrollEnabled,
+  scrollResetKey,
 }: {
   data: readonly T[];
   renderItem: ListRenderItem<T>;
@@ -68,9 +78,20 @@ export function PickerScroller<T>({
   className: string;
   testID?: string;
   nestedScrollEnabled?: boolean;
+  // The host's normalized query: a change scrolls back to the top (the header).
+  scrollResetKey?: string;
 }) {
+  const listRef = useRef<FlatList<T>>(null);
+  const lastResetKey = useRef(scrollResetKey);
+  useLayoutEffect(() => {
+    if (lastResetKey.current === scrollResetKey) return;
+    lastResetKey.current = scrollResetKey;
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [scrollResetKey]);
+
   return (
     <FlatList
+      ref={listRef}
       testID={testID}
       className={className}
       data={data}

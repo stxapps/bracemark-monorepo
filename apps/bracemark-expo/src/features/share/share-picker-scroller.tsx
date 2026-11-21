@@ -49,6 +49,7 @@ export function SharePickerScroller<T>(props: {
   extraData?: unknown;
   emptyText?: string;
   footer?: ReactElement | null;
+  scrollResetKey?: string;
 }) {
   return <PickerScroller {...props} className="max-h-72 min-h-0 shrink" />;
 }

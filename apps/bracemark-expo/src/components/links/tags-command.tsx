@@ -120,6 +120,7 @@ export function TagsCommand({
         testID="tag-picker-rows"
         className={cn('max-h-80 shrink', className)}
         nestedScrollEnabled
+        scrollResetKey={q}
         data={rows}
         keyExtractor={(row) => row.id}
         renderItem={renderRow}
