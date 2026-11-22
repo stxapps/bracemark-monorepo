@@ -280,6 +280,36 @@ it('settles a 404 the way the title does', async () => {
   expect(outcome).toMatchObject({ kind: 'none', status: 'permanent' });
 });
 
+// YouTube's answer to the extractor, measured 2026-11-22: the facet stays transient, as a
+// 429 is from every tier, but the outcome says the site refused — so the reader doesn't
+// say "Please try again" over a press that never works.
+it.each([401, 403, 429])('marks a %d from the site as the site’s refusal', async (status) => {
+  const outcome = await runServerReadMode(
+    USER,
+    LINK,
+    client(async () => ({ url: URL_A, ok: false, error: 'bad_status', status })),
+  );
+  expect(outcome).toMatchObject({ kind: 'none', siteRefused: true });
+});
+
+it('keeps a 429 transient on the facet', async () => {
+  await runServerReadMode(
+    USER,
+    LINK,
+    client(async () => ({ url: URL_A, ok: false, error: 'bad_status', status: 429 })),
+  );
+  expect((await readExtraction('l_1'))?.facets.readMode).toMatchObject({ status: 'failed' });
+});
+
+it.each([404, 503])('does not call a %d a refusal', async (status) => {
+  const outcome = await runServerReadMode(
+    USER,
+    LINK,
+    client(async () => ({ url: URL_A, ok: false, error: 'bad_status', status })),
+  );
+  expect(outcome).not.toHaveProperty('siteRefused');
+});
+
 it('never overwrites a better tier’s settled answer with a server failure', async () => {
   await writeExtraction(USER, 'l_1', {
     facet: 'readMode',

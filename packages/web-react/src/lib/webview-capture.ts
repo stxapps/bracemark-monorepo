@@ -11,7 +11,7 @@ import {
   READER_IMAGE_MAX_SOURCE_BYTES,
 } from '@stxapps/shared/reader/reader-doc-core';
 
-import { collectPageMeta } from './page-meta';
+import { collectLivePageMeta } from './page-meta';
 import { readerCaptureFromPage } from './reader-doc-from-page';
 import { collectReaderImages } from './reader-images';
 import { resizeImage } from './resize-image';
@@ -28,7 +28,7 @@ import { resizeImage } from './resize-image';
 //   - `readMode` — the read-mode capture, `{ doc, images }`, the converter every
 //     live-page capture runs (reader-doc-from-page.ts), as JSON TEXT;
 //   - `meta` — the title and preview-image candidates (page-meta.ts), the same
-//     collector the browser extension injects;
+//     collector the browser extension injects, with a stale head re-read;
 //   - `readerImages` — fetch the article's images FROM THE PAGE and re-encode them here
 //     (reader-images.ts → reader-image.ts, the encoder bracemark-web and the browser
 //     extension use);
@@ -128,9 +128,11 @@ export async function runPageCapture(
     }
 
     case 'meta': {
-      let meta: ReturnType<typeof collectPageMeta>;
+      let meta: Awaited<ReturnType<typeof collectLivePageMeta>>;
       try {
-        meta = collectPageMeta(page);
+        // A head left stale by an in-page move is re-read from the page's own address
+        // (page-meta.ts, _a stale head_) — inside META_TIMEOUT_MS on the app's side.
+        meta = await collectLivePageMeta(page);
       } catch {
         meta = { href: hrefOf(page), collected: {} };
       }

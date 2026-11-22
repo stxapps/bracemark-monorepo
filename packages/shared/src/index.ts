@@ -36,6 +36,7 @@ export * from './extract/retry';
 export * from './extract/select';
 export * from './html/charset';
 export * from './html/entities';
+export * from './html/scan-meta';
 export * from './iap/endpoints';
 export * from './iap/plans';
 export * from './iap/storage';

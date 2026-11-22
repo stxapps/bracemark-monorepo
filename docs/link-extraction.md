@@ -934,6 +934,36 @@ because each parses a page with what its runtime has:
 | `bracemark-extractor` | `HTMLRewriter` (`lib/html.ts`)         | **decoded by us**        |
 | `bracemark-expo`      | a regex scanner (`parse-html-head.ts`) | **decoded by us**        |
 
+The scanner itself is `@stxapps/shared` `html/scan-meta.ts` (`scanHtmlMeta`);
+`parse-html-head.ts` is its expo caller. It reads the head, stopping at the first
+`</head>` outside a script or comment, and only when that head declared no og,
+Twitter or `image_src` tag does it read on through the body, as the live DOM and
+`HTMLRewriter` do, which both find a `<meta>` anywhere. Both reads stop at
+`MAX_HEAD_CHARS`, **1 MiB**, the same amount the extractor reads (`MAX_HTML_BYTES`).
+
+**Why 1 MiB.** Measured 2026-11-22 over 87 pages fetched with the app's User-Agent
+(the kept-copies set plus ~25 large sites). Every page but YouTube's had its title
+and image within 128 KB. Every YouTube page needed ~900 KB: a watch page declares
+og:title at 828–856 KB, inside a head the size of its inline data, and a channel page
+at 876 KB, in the body after a head that closes at 825 KB. Nothing fell between. At
+the old 256 KB the app took no title or image from any YouTube link. With the change,
+those five pages went from nothing to title and image, and no other page's result
+moved. The cap is not what an ordinary page costs: the head read stops at `</head>`,
+so a 1.9 MB Wikipedia article whose head closes at 16 KB costs 16 KB. A page with no
+og tags in its head (Hacker News, The Guardian's front page, an Amazon product page)
+pays for the body read too: under 2.5 ms on V8 for a 1.4 MB page. On Hermes that is
+perhaps ten times more, and on a low-end Android phone a few times more again, so
+30–45 ms for a page this size: two or three frames. Each scan follows its own page
+fetch (`CONCURRENCY` in `device-link-previews.ts`), so they never run back to back as
+one long stall.
+
+Its second caller is the live-DOM collector, after an in-page move: a page whose head went
+stale re-fetches its own address and scans the answer through the whole document,
+since a page enforcing Trusted Types (YouTube) can't parse a string into a DOM
+([link-extraction-keep.md](./link-extraction-keep.md), _⚠ a page moved in place_). It
+lives in `shared`, imports by relative path only, and is reached by subpath, because
+it is bundled into scripts that run inside a stranger's page.
+
 ⚠ **The scanner must stay linear on a hostile page**, and nothing a real page
 does will show it isn't. Every construct it reads — a comment, a `<script>` or
 `<style>` body, a `<title>`, a `<meta …>` or `<link …>` — is an opener then a
@@ -947,9 +977,16 @@ before → after the rewrite: `<!--x` × 48,000 went from 32 s to 9 ms, `<meta `
 8.5 s to 1 ms. A real page with 200 scripts and comments reads the same, 5–6 ms,
 either way.
 
-So `parse-html-head.ts` finds each opener by regex, then searches forward for its
-`>` and its closer, and stops at the first one missing. A closer absent after one
-opener is absent after every later one, so each character is scanned about once.
+So the scanner (`scan-meta.ts`) walks the page once, in document order, skipping
+whichever comment, script or style opens first, as HTML does (a `<!--` inside a
+script is script). It finds each kind's next opener by regex and keeps it until the
+walk passes it, so no stretch is searched twice for the same opener. It then searches
+forward for the opener's `>` and its closer, and drops that kind at the first one
+missing: a closer absent after one opener is absent after every later one. So each
+character is scanned about once. The spec sizes every hostile shape to the full 1 MiB
+cap, and adds two the walk could get wrong: thousands of closed spans of all three
+kinds interleaved (14 ms per MiB on V8, doubling with the size), and a hostile body
+after an empty head.
 `parseAttrs` makes the value optional, so a name with no `=` is consumed rather
 than backtracked through. Its spec pins each hostile shape to a 250 ms budget.
 They take a few ms linear and 0.4–14 s under the old regexes on V8, so a revert

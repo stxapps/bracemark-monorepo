@@ -1,4 +1,4 @@
-import { collectPageMeta } from '@stxapps/web-react/lib/page-meta';
+import { collectLivePageMeta } from '@stxapps/web-react/lib/page-meta';
 
 // The title + preview-image candidates of the active tab, as a file the background
 // injects (`captureTitleImage` in utils/capture.ts: `scripting.executeScript({ files:
@@ -9,4 +9,8 @@ import { collectPageMeta } from '@stxapps/web-react/lib/page-meta';
 // A file rather than an inline func because the collector is shared — expo's capture
 // screen injects the same one into its WebView (web-react lib/page-meta.ts). It decides
 // nothing: `selectTitleImage` runs in the background over what it returns.
-export default defineUnlistedScript(() => collectPageMeta(document));
+//
+// It returns a PROMISE when the tab's head went stale after an in-page move and is
+// re-read from the tab's own address (web-react lib/page-meta.ts, _a stale head_);
+// `executeScript` waits for it to settle and hands back its value.
+export default defineUnlistedScript(() => collectLivePageMeta(document));

@@ -167,7 +167,9 @@ screen — and a screenshot on neither (only the browser extension takes one).
   was deleted, and removal marks the copy removed so nothing retakes it by itself. The
   Read mode tab is then the one place on the screen to ask for it again. It is not
   hidden for the "not an article" pages: asking is the user's, and the answer
-  (_no article on this page_) is said in place.
+  (_no article on this page_) is said in place — as is a site that turned the server
+  away (YouTube's 429, [link-extraction-keep.md](./link-extraction-keep.md), _per
+  client_, bracemark-web), which is an answer too, not a "try again".
 - **It opens on the copy that exists.** The tab shown is the user's pick once they have
   made one; until then it is Read mode when there is a read-mode copy and Screenshot
   when there is not. Never an empty tab on arrival.

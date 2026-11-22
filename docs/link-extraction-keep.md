@@ -771,7 +771,9 @@ and Android's WebView has its own `CookieManager`, apart from Chrome's. So, in o
    page — the same collector the browser extension injects (web-react
    `lib/page-meta.ts`), `selectTitleImage` in the app, the image fetched in the
    page and natively where the page couldn't, and written at `expo:fg` whatever
-   tier held it, since it is a tap (expo-react `data/store-page-preview.ts`). Only
+   tier held it, since it is a tap (expo-react `data/store-page-preview.ts`). A page
+   that moved in place since it loaded (YouTube, tapping from video to video) has its
+   head read again from its own address first (_⚠ a page moved in place_). Only
    what was had is written: a page whose image couldn't be fetched keeps the old
    one, and a title or image the user set by hand still wins, which the screen
    says. A tap that worked says so on its own button (_Kept — read it_, _Preview
@@ -861,6 +863,20 @@ row menu's **Read** opens the reader on a paid plan's link with no copy, and its
 state has _Keep a read-mode copy_ while `useServerReadMode().available` (signed in, a
 ready store, the `serverReadMode` opt-in, an extractor in this build, and `keptCopies`).
 
+**A site that turns the extractor away says so, not "try again".** YouTube answers
+every watch page with a **429** to the extractor (measured 2026-11-22 on staging: both
+`www.` and `m.`, the preview and read mode alike — Cloudflare's addresses are in its
+penalty box), and a 401 or 403 is a sign-in or bot wall. The facet's verdict is the
+same as for any other tier (a 429 stays `failed`, `verdictForStatus`), but the outcome
+carries `siteRefused` (web-react `lib/server-read-mode.ts`, `SITE_REFUSED_STATUSES`) and
+the reader reads it as an answer, like robots.txt's: _This site didn’t let our server
+read the page…_, the way that still works (the page itself, with the browser extension),
+and _Keep_ off. Before, it was _Could not keep a read-mode copy. Please try again._ — over
+a press that never works. The extractor's User-Agent stays honest; nothing here
+disguises it. A YouTube watch page has no article for read mode in any case: the
+server's own `readModeFromHtml` over its HTML, fetched from elsewhere, finds none, which
+is what the capture screen says.
+
 **Its own opt-in, not the preview one.** It rode `serverExtraction` at first, and that
 made one read-mode copy cost the whole un-gestured preview drain: the two send the same
 thing to the same service, but previews send every pending link as it comes into view
@@ -886,6 +902,50 @@ no copy on its own (the settings' wording promises exactly that), because a stan
 "fetch the article of everything I save" through the server is the un-gestured rule
 _when a copy is taken_ turns down. A link saved in the web app still gets a live-page
 copy when the user opens it with the extension or the app.
+
+### ⚠ a page moved in place — a stale head
+
+A page that moves in place (`history.pushState`, a single-page app) changes its
+address and, usually, its `<title>` — and nothing makes it rewrite the rest of its
+head. **YouTube doesn't**: tap another video and `location.href` and `document.title`
+are the new video's while `og:title`, `og:image` and `og:url` stay the first one's
+(measured in Chromium with the iPhone 12 preset and on the desktop site, and on an
+iPhone 12, 2026-11-20). Read as it stood, the capture screen's _Update preview_ said
+"Preview updated" over the first video's title and picture, since the address really
+had changed and `selectTitleImage` prefers og:title; the browser extension's save from
+such a tab gave the new link the old preview. Nothing shows it short of looking at the
+picture.
+
+So both take the page's candidates through `collectLivePageMeta` (web-react
+`lib/page-meta.ts`), which guards `collectPageMeta`:
+
+- **The signal.** The navigation entry (`performance.getEntriesByType('navigation')`)
+  keeps the address the document was _loaded_ at. The same page as the address now
+  (`canonicalUrlKey`) — the head came with it, read as it stands. Different, the head
+  may be stale, unless its own og:url names the page shown: a site that rewrites its
+  head (Next.js metadata, react-helmet) rewrites that too, and is read as it stands, so
+  one whose server sends a generic head for every route keeps the tags its scripts set.
+  No navigation entry, nothing can be said, read as it stands.
+- **The re-read.** Otherwise the page fetches **its own address** again — same origin,
+  so its own cookies, and no reload: the video plays on and nothing on screen moves —
+  and the head tags come from that answer, scanned as text by the shared markup
+  collector (`shared/html/scan-meta.ts`) **through the whole document**: YouTube
+  enforces Trusted Types, so `DOMParser` throws in its page, and m.youtube.com closes
+  its head after ~5 KB and declares og:title ~575 KB into the body. The title stays the
+  live `document.title`, which the page does keep current (m.youtube.com's server sends
+  "YouTube" for every video); og:title wins over it anyway. About a second on
+  YouTube, under a 6 s deadline (`PAGE_REFETCH_TIMEOUT_MS`) inside the capture screen's
+  10 s wait for the answer.
+- **When the re-read fails** (offline, an error, a redirect to another page, not HTML)
+  the stale tags are **dropped**: `document.title` and no image. A missing preview is
+  fixed by a second tap; a wrong one is announced as right.
+
+The GET is the one a reload of the page would make, on a tap the user made on that
+page, and never otherwise. YouTube also rewrites its address on load (it appends
+`&pp=…`), so on YouTube the re-read runs on every tap, even on the page first loaded —
+the same answer, a second later. `page-meta.spec.ts` holds the rules; the real page
+was checked by injecting the bundled collector into m.youtube.com and www.youtube.com
+and tapping to another video.
 
 ### the gate — `entitlements.keptCopies`
 
@@ -1032,6 +1092,10 @@ covers the pages we never copied; it is the reason page copy can wait.
   facet passthrough — the read-mode copy's first home, which nothing exported,
   restored or deleted ([link-extraction.md](./link-extraction.md), the
   `EXTRACTION_FILE_REF_FIELDS` note).
+- **The live head is not trusted after an in-page move** — read through
+  `collectLivePageMeta`, never `collectPageMeta` straight, in anything injected (_⚠ a
+  page moved in place_). The bare collector reads the first video's og tags on every
+  YouTube video tapped to since, and says nothing.
 - **No new value in `facetSchema.status`.** It is a `z.enum`; a value an older
   client doesn't know fails its parse. New states ride as passthrough fields
   (`reason`, `removedAt`) on an existing status.

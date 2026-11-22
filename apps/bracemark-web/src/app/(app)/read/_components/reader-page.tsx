@@ -400,6 +400,15 @@ const KEEP_FAILED: OutcomeNotice = {
 function outcomeNotice(outcome: ServerReadModeOutcome | 'error'): OutcomeNotice | null {
   if (outcome === 'error') return KEEP_FAILED;
   if (outcome.kind !== 'none') return null;
+  // The site turned our server away (a 401/403/429 — YouTube's every watch page). Not
+  // ours to fix and not fixed by a second press, so it reads as an answer, like
+  // robots.txt's, with the way that still works.
+  if (outcome.siteRefused) {
+    return {
+      text: 'This site didn’t let our server read the page, so we couldn’t keep a copy. You can still keep one from the page itself, with the browser extension.',
+      failure: false,
+    };
+  }
   switch (outcome.reason) {
     case READ_MODE_REASONS.notAnArticle:
       return {

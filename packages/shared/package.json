@@ -47,6 +47,16 @@
       "import": "./src/image/preview.ts",
       "default": "./src/image/preview.ts"
     },
+    "./html/scan-meta": {
+      "types": "./src/html/scan-meta.ts",
+      "import": "./src/html/scan-meta.ts",
+      "default": "./src/html/scan-meta.ts"
+    },
+    "./url/url": {
+      "types": "./src/url/url.ts",
+      "import": "./src/url/url.ts",
+      "default": "./src/url/url.ts"
+    },
     "./testing": {
       "types": "./src/testing/backup-fixtures.ts",
       "import": "./src/testing/backup-fixtures.ts",

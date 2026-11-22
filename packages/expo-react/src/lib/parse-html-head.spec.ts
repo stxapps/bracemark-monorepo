@@ -1,6 +1,6 @@
 import { selectFaviconUrl, selectTitleImage } from '@stxapps/shared';
 
-import { decodeHtmlBytes, parseHtmlHead } from './parse-html-head';
+import { decodeHtmlBytes, MAX_HEAD_CHARS, parseHtmlHead } from './parse-html-head';
 
 // The scanner's contract is "collect what the extractor's HTMLRewriter would collect",
 // so these fixtures are the malformed-input hazards a regex scan can actually get
@@ -99,12 +99,62 @@ describe('parseHtmlHead', () => {
     expect(collected.icons).toBeUndefined();
   });
 
-  it('stops at </head> so body content cannot contribute', () => {
+  it('stops at </head> once the head has declared its metadata', () => {
     const collected = parseHtmlHead(`
-      <head><title>Real</title></head>
-      <body><meta property="og:title" content="From body"></body>
+      <head><title>Real</title><meta property="og:title" content="Head"></head>
+      <body><meta property="og:image" content="/from-body.png"></body>
     `);
-    expect(collected.ogTitle).toBeUndefined();
+    expect(collected).toEqual({ docTitle: 'Real', ogTitle: 'Head' });
+  });
+
+  // YouTube's channel pages, measured 2026-11-22: the head closes at 825 KB with only a
+  // <title>, and og:title and og:image follow in the body — where the live DOM and the
+  // extractor's HTMLRewriter both find them.
+  it('reads the body when the head declared no og or twitter tag', () => {
+    const collected = parseHtmlHead(`
+      <head><title>Veritasium - YouTube</title><link rel="icon" href="/head.ico"></head>
+      <body><script>${'x'.repeat(50_000)}</script>
+        <meta property="og:title" content="Veritasium">
+        <meta property="og:image" content="https://yt3.example/v.jpg">
+        <link rel="icon" href="/body.ico"></body>
+    `);
+    expect(collected).toEqual({
+      docTitle: 'Veritasium - YouTube',
+      ogTitle: 'Veritasium',
+      ogImage: 'https://yt3.example/v.jpg',
+      icons: [{ href: '/head.ico', rel: 'icon', sizes: undefined, type: undefined }],
+    });
+  });
+
+  // YouTube's watch pages: og:title ~850 KB in, inside a head the size of its inline
+  // data — past the old 256 KB cap, under MAX_HEAD_CHARS.
+  it('reaches og tags ~850 KB into a long head', () => {
+    const collected = parseHtmlHead(
+      `<head><title>A video - YouTube</title>${'<link rel="preload" href="/x">'.repeat(28_000)}` +
+        `<meta property="og:title" content="A video"></head>`,
+    );
+    expect(collected.ogTitle).toBe('A video');
+  });
+
+  // The head's end is the first `</head>` OUTSIDE a script or comment.
+  it('does not take a `</head>` inside a script or comment for the head’s end', () => {
+    const collected = parseHtmlHead(`
+      <head><script>document.write("</head>")</script><!-- </head> -->
+      <meta property="og:title" content="Still head"></head>
+      <body><meta property="og:image" content="/body.png"></body>
+    `);
+    expect(collected).toEqual({ ogTitle: 'Still head' });
+  });
+
+  // A `<!--` inside a script is script, as HTML reads it: the comment it seems to open
+  // must not swallow the metadata after the script.
+  it('skips whichever span opens first', () => {
+    const collected = parseHtmlHead(`
+      <script>if (a <!--b) {}</script>
+      <meta property="og:title" content="After the script">
+      <!-- a real comment -->
+    `);
+    expect(collected.ogTitle).toBe('After the script');
   });
 
   // A page that never closes <head> is common enough (and a scanner has no tree to
@@ -149,7 +199,7 @@ describe('parseHtmlHead', () => {
 
 // A page can be built to stall a regex scanner: thousands of openers with no closer
 // make a `[^>]*>` or `.*?-->` retry from each one to the end, quadratic on EVERY
-// engine (parse-html-head.ts, _why the scan below is hand-rolled_). The drain fetches
+// engine (@stxapps/shared html/scan-meta.ts, _why the scan below is hand-rolled_). The drain fetches
 // pages nobody gestured for, on the JS thread, so each case is sized near
 // MAX_HEAD_CHARS and must finish inside a budget. The margin is deliberately wide:
 // these take a few ms linear, and the regexes they replaced took 1–13 s each on V8,
@@ -174,7 +224,30 @@ describe('parseHtmlHead on hostile input', () => {
     ['meta with no `>`', '<meta '],
     ['link with no `>`', '<link '],
   ])('stays linear on thousands of unclosed %s openers', (_name, opener) => {
-    const { ogTitle, ms } = timed(REAL + opener.repeat(Math.floor(240_000 / opener.length)));
+    const { ogTitle, ms } = timed(
+      REAL + opener.repeat(Math.floor((MAX_HEAD_CHARS - 1024) / opener.length)),
+    );
+    expect(ogTitle).toBe('Real');
+    expect(ms).toBeLessThan(BUDGET_MS);
+  });
+
+  // The walk keeps each kind's next opener until it passes it; one that re-searched every
+  // kind at every span would be quadratic here.
+  it('stays linear on thousands of closed spans of every kind, interleaved', () => {
+    const unit = '<!----><script></script><style></style>';
+    const { ogTitle, ms } = timed(
+      REAL + unit.repeat(Math.floor((MAX_HEAD_CHARS - 1024) / unit.length)),
+    );
+    expect(ogTitle).toBe('Real');
+    expect(ms).toBeLessThan(BUDGET_MS);
+  });
+
+  // An empty head sends the scan through the whole page: the second read must be as
+  // linear as the first.
+  it('stays linear reading a hostile body after an empty head', () => {
+    const { ogTitle, ms } = timed(
+      '<head></head>' + REAL + '<meta '.repeat(Math.floor((MAX_HEAD_CHARS - 1024) / 6)),
+    );
     expect(ogTitle).toBe('Real');
     expect(ms).toBeLessThan(BUDGET_MS);
   });

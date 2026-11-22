@@ -56,8 +56,19 @@ export type ServerReadModeOutcome =
   // A copy was already there (or arrived meanwhile) — left alone.
   | { kind: 'exists' }
   // The page has no copy to give, for a settled reason (READ_MODE_REASONS) — or for a
-  // passing one (`status: 'failed'`).
-  | { kind: 'none'; status: 'failed' | 'permanent'; reason?: string };
+  // passing one (`status: 'failed'`). `siteRefused`: the SITE turned the extractor away
+  // (SITE_REFUSED_STATUSES), which the verdict alone can't tell from our own fault.
+  | { kind: 'none'; status: 'failed' | 'permanent'; reason?: string; siteRefused?: true };
+
+// The upstream answers that mean "this site won't serve our server", not "something
+// broke": a sign-in wall, a bot wall, a rate limit on the extractor's addresses. YouTube
+// answers every watch page with a 429 from Cloudflare's data centres (measured
+// 2026-11-22 on staging, both hosts, both facets), and the reader said "Please try
+// again" over it — a press that never works. The facet's verdict is NOT changed by this:
+// a 429 stays transient there (retry.ts, `verdictForStatus`), as it is from every tier.
+// Only what the reader SAYS changes — the site's refusal, and the way that still works,
+// the page itself. docs/link-extraction-keep.md, _per client_, bracemark-web.
+const SITE_REFUSED_STATUSES: ReadonlySet<number> = new Set([401, 403, 429]);
 
 export async function runServerReadMode(
   username: string,
@@ -141,9 +152,15 @@ export async function runServerReadMode(
       ),
     });
   }
+  const siteRefused =
+    !result.ok &&
+    result.error === 'bad_status' &&
+    result.status !== undefined &&
+    SITE_REFUSED_STATUSES.has(result.status);
   return {
     kind: 'none',
     status: verdict.status,
     ...(verdict.reason ? { reason: verdict.reason } : {}),
+    ...(siteRefused ? { siteRefused: true as const } : {}),
   };
 }

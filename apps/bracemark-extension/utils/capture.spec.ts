@@ -1,4 +1,4 @@
-import { collectPageMeta } from '@stxapps/web-react/lib/page-meta';
+import { collectLivePageMeta } from '@stxapps/web-react/lib/page-meta';
 
 import { type FakeBrowser, installFakeBrowser } from '../testing/fake-browser';
 import {
@@ -18,7 +18,7 @@ import {
 // So the fake `executeScript` here does what the browser does: call the function
 // with `args` and hand back `[{ result }]` — and for the bundled collector file
 // (entrypoints/page-meta.ts), run what WXT bundles into it, web-react's
-// `collectPageMeta`, against this document. jsdom is the page. That makes these
+// `collectLivePageMeta`, against this document. jsdom is the page. That makes these
 // specs a real check on the collectors, and on the three decisions the background
 // makes about what comes back:
 //
@@ -60,7 +60,7 @@ function injectFor(after?: () => void) {
       let result: unknown;
       if (files) {
         if (files[0] !== PAGE_META_SCRIPT) throw new Error(`no fake for ${files.join()}`);
-        result = collectPageMeta(document);
+        result = await collectLivePageMeta(document);
       } else {
         result = await func?.(...((args ?? []) as never[]));
       }

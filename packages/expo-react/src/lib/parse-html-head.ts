@@ -2,36 +2,39 @@ import {
   type CollectedMeta,
   declaredCharset,
   decodeCp1252,
-  decodeHtmlEntities,
   isWindows1252Label,
+  scanHtmlMeta,
 } from '@stxapps/shared';
 
-// Collect a page's title/image/icon CANDIDATES out of its raw HTML — the Hermes-side
-// counterpart of bracemark-extractor's `HTMLRewriter` pass (apps/bracemark-extractor/src/lib/
-// html.ts). It fills the same `CollectedMeta` bag, and WHICH candidate wins is decided
-// by the shared `selectTitleImage`/`selectFaviconUrl` (shared extract/select.ts), so
-// `expo:fg` and `server` can never disagree about what "the page's title" means — the
-// property that makes a tier upgrade an improvement rather than a change.
-//
-// WHY A REGEX SCANNER AND NOT A PARSER. React Native has no DOM (`DOMParser`,
-// `HTMLRewriter` — neither exists on Hermes), so the choice is a JS parser dependency
-// (htmlparser2 & co.) or a scanner. We need five tag shapes out of `<head>` —
-// `<title>`, `<meta>`, `<link rel=icon|image_src>` — from bounded, already-fetched
-// bytes, with no tree, no scripts and no error recovery to speak of. A dependency
-// would buy correctness we can't use and ship a parser into the app bundle for it, so:
-// a scanner, kept honest by fixtures (parse-html-head.spec.ts). The pieces below are
-// the malformed-input hazards that actually bite in the wild — comments and inline
-// scripts containing tag-like text, single/unquoted attributes — not a general-purpose
-// HTML implementation. The other thing a real parser does for free, resolving
-// character references, is `@stxapps/shared`'s `decodeHtmlEntities` (html/entities.ts),
-// shared with bracemark-extractor because `HTMLRewriter` doesn't decode either; every
-// value collected here goes through it, since the DOM the extension reads would have.
+// Collect a page's title/image/icon CANDIDATES out of the raw HTML the app fetched — the
+// Hermes-side counterpart of bracemark-extractor's `HTMLRewriter` pass
+// (apps/bracemark-extractor/src/lib/html.ts). The scanner itself is `@stxapps/shared`
+// html/scan-meta.ts — linear on a hostile page, and why a scanner rather than a parser
+// is said there — shared with web-react's in-page re-read of a stale head
+// (lib/page-meta.ts). What is this file's own is the byte decode below and the cap.
 
-// How much of the response we look at. Everything we want is in `<head>`, which is
-// tiny; this is the backstop for a page that never closes it (or a multi-MB inline
-// script above the metadata). The fetcher caps the response separately — this caps the
-// SCAN, so a pathological body costs bounded regex work.
-export const MAX_HEAD_CHARS = 256 * 1024;
+// How much of the response the scan reads. Not what a page's head costs — the head
+// scan stops at `</head>`, so a 2 MB Wikipedia article whose head closes at 16 KB costs
+// 16 KB — but how far it will go to FIND the metadata, which bounds a page that never
+// closes its head, or declares its og tags in its body, and every hostile shape.
+//
+// 1 MiB, measured 2026-11-22 over 87 pages fetched with the app's User-Agent (the
+// kept-copies set, e2e/measure/kept-copies-pages.ts, and ~25 large sites): every page
+// but YouTube's had its title and image within 128 KB (Facebook and Instagram the
+// furthest), and every YouTube page needed ~900 KB — its watch pages declare og:title
+// at 828–856 KB, inside a head the size of its inline data, and its channel pages at
+// 876 KB, in the body after a head that closes at 825 KB. Nothing fell between. The
+// cap was 256 KB, and the app took no title or image from any YouTube link. 1 MiB is
+// also what bracemark-extractor reads of the same page (`MAX_HTML_BYTES`, its
+// lib/safe-fetch.ts): a tier that reads further than the other would find tags the other
+// can't, and a tier upgrade must be an improvement, not a change.
+//
+// The cost lands on the JS thread: a scan through the whole cap is ~8–9 ms per MB on
+// Hermes on an M1 (from the 244 KB head's 2 ms, docs/link-extraction.md, _three
+// collectors_), so perhaps 30–45 ms on a low-end Android phone — two or three frames,
+// once per such page. Each scan follows its own page fetch (CONCURRENCY in
+// device-link-previews.ts), so they never run back to back as one long stall.
+export const MAX_HEAD_CHARS = 1024 * 1024;
 
 // Bytes → text, honoring the declared charset as far as the runtime allows. WHICH
 // charset is `@stxapps/shared`'s `declaredCharset` (html/charset.ts), the same sniff
@@ -56,186 +59,31 @@ export function decodeHtmlBytes(bytes: Uint8Array, contentType?: string): string
   }
 }
 
-// One tag's attributes as a lowercase-keyed map. Handles double-quoted, single-quoted
-// and bare values — all three appear in the wild, and a missed `content` is a missed
-// og:title.
-//
-// The value is OPTIONAL in the pattern so that a name with no `=` (`crossorigin`,
-// `async`, or a hostile page's 100 KB of letters) is consumed as a match and skipped.
-// Required, a failed `=` backtracks through the whole name and then retries from its
-// second letter, its third…: quadratic in the name's length on every engine.
-function parseAttrs(raw: string): Record<string, string> {
-  const attrs: Record<string, string> = {};
-  const re = /([a-z_:][-a-z0-9_:.]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/gi;
-  for (let m = re.exec(raw); m !== null; m = re.exec(raw)) {
-    const value = m[2] ?? m[3] ?? m[4];
-    if (value !== undefined) attrs[m[1].toLowerCase()] = decodeHtmlEntities(value);
-  }
-  return attrs;
-}
+// The fields that say a head declared its metadata — OpenGraph, Twitter, image_src.
+// `<title>` and icons don't count: a head with only those is the shape of a page that put
+// its og tags in the body.
+const DECLARED_FIELDS = [
+  'ogTitle',
+  'ogImage',
+  'ogImageUrl',
+  'ogImageSecure',
+  'twitterImage',
+  'imageSrc',
+] as const satisfies readonly (keyof CollectedMeta)[];
 
-// WHY THE SCAN BELOW IS HAND-ROLLED. Every construct it reads — a comment, a
-// script/style body, a `<title>`, a `<meta …>` — is an opener followed by a closer,
-// and the obvious regex for one (`/<meta\b[^>]*>/g`, `/<!--.*?-->/gs`) is quadratic
-// when an opener never closes: the engine scans to the end, fails, and starts over
-// from the NEXT opener, which fails the same way. The fact a regex can't use is that
-// a closer missing after one opener is missing after every later one — so these
-// helpers find the opener by regex, its end by searching forward from it, and stop
-// at the first miss. Each character is then scanned about once. Nothing a real page
-// does trips the regex version; a hostile one did, on every engine — `<meta ` ×
-// 32,000 (156 KB) held Hermes for 24 s. docs/link-extraction.md, _three collectors_.
-//
-// ⚠ Where a body IS matched by regex, it is `.*?` + `s`, never `[\s\S]*?`: on Hermes
-// the class spelling costs time in proportion to the rest of the input on every
-// match (`@stxapps/shared` import/netscape.ts). The `REGEX_SYNTAX` lint rule holds it.
-
-// The next tag `open` finds at or after `from` (`open` must be global): where it
-// starts, its attribute text, and the index just past its `>`. Undefined at the end,
-// or at the first opener with no `>` after it — no later one has one either.
-function nextTag(
-  text: string,
-  open: RegExp,
-  from: number,
-): { start: number; attrs: string; end: number } | undefined {
-  open.lastIndex = from;
-  const opener = open.exec(text);
-  if (opener === null) return undefined;
-  const attrsStart = opener.index + opener[0].length;
-  const gt = text.indexOf('>', attrsStart);
-  if (gt === -1) return undefined;
-  return { start: opener.index, attrs: text.slice(attrsStart, gt), end: gt + 1 };
-}
-
-// The next `open … close` span at or after `from` (both global; `openIsTag` when the
-// opener runs on to a `>`, as `<script …>` does and `<!--` doesn't): where it starts,
-// its body, and the index just past the closer. Undefined when there's no complete one.
-function nextSpan(
-  text: string,
-  open: RegExp,
-  close: RegExp,
-  openIsTag: boolean,
-  from: number,
-): { start: number; body: string; end: number } | undefined {
-  let start: number;
-  let bodyStart: number;
-  if (openIsTag) {
-    const tag = nextTag(text, open, from);
-    if (tag === undefined) return undefined;
-    ({ start, end: bodyStart } = tag);
-  } else {
-    open.lastIndex = from;
-    const opener = open.exec(text);
-    if (opener === null) return undefined;
-    start = opener.index;
-    bodyStart = opener.index + opener[0].length;
-  }
-  close.lastIndex = bodyStart;
-  const closer = close.exec(text);
-  if (closer === null) return undefined;
-  return {
-    start,
-    body: text.slice(bodyStart, closer.index),
-    end: closer.index + closer[0].length,
-  };
-}
-
-// Every complete `open … close` span replaced by a space; an unclosed opener and all
-// that follows it are left as they are (a page that never closes a comment keeps its
-// later metadata — the scanner's choice, not HTML's).
-function stripSpans(text: string, open: RegExp, close: RegExp, openIsTag: boolean): string {
-  const kept: string[] = [];
-  let pos = 0;
-  for (
-    let span = nextSpan(text, open, close, openIsTag, pos);
-    span !== undefined;
-    span = nextSpan(text, open, close, openIsTag, pos)
-  ) {
-    kept.push(text.slice(pos, span.start));
-    pos = span.end;
-  }
-  kept.push(text.slice(pos));
-  return kept.join(' ');
-}
-
-// Everything before `</head>` (or the whole capped input if the page never closes it),
-// with comments and inline script/style bodies removed FIRST. That order matters: both
-// routinely contain tag-like text — a commented-out `<meta property="og:image">` left
-// by a CMS, or a JS string containing `<title>` — and a scanner that doesn't strip
-// them will happily collect it as if the page had declared it.
-function headOf(html: string): string {
-  const capped = html.length > MAX_HEAD_CHARS ? html.slice(0, MAX_HEAD_CHARS) : html;
-  let stripped = stripSpans(capped, /<!--/g, /-->/g, false);
-  stripped = stripSpans(stripped, /<script\b/gi, /<\/script\s*>/gi, true);
-  stripped = stripSpans(stripped, /<style\b/gi, /<\/style\s*>/gi, true);
-  const end = stripped.search(/<\/head\s*>/i);
-  return end === -1 ? stripped : stripped.slice(0, end);
-}
-
-// Every `<name …>` tag's attribute text, in document order.
-function tagAttrs(head: string, open: RegExp): string[] {
-  const found: string[] = [];
-  for (let tag = nextTag(head, open, 0); tag !== undefined; tag = nextTag(head, open, tag.end)) {
-    found.push(tag.attrs);
-  }
-  return found;
-}
-
-// Fill the shared candidate bag. FIRST non-empty value per key wins (head order ≈ page
-// intent — the extractor's `??=` rule, matched exactly); icons are collected in
-// document order because choosing between them is `selectFaviconUrl`'s job.
+// A fetched page as `CollectedMeta`: its head, scanned up to `</head>`; and when the head
+// declared none of DECLARED_FIELDS, the whole page under MAX_HEAD_CHARS, for the og tags
+// a page declares in its body (YouTube's channel pages) — where the other two collectors
+// find them too, since the live DOM and `HTMLRewriter` read a `<meta>` anywhere. Only a
+// head with nothing pays for the body: one that has og:title and no image has said what
+// it has. The icons stay the head's, the place a favicon is declared. WHICH candidate
+// wins is `selectTitleImage`'s call.
 export function parseHtmlHead(html: string): CollectedMeta {
-  const head = headOf(html);
-  const collected: CollectedMeta = {};
+  const head = scanHtmlMeta(html, { maxChars: MAX_HEAD_CHARS, through: 'head' });
+  if (DECLARED_FIELDS.some((field) => head[field] !== undefined)) return head;
 
-  const title = nextSpan(head, /<title/gi, /<\/title\s*>/gi, true, 0);
-  if (title) collected.docTitle = decodeHtmlEntities(title.body);
-
-  for (const raw of tagAttrs(head, /<meta\b/gi)) {
-    const attrs = parseAttrs(raw);
-    const content = attrs.content?.trim();
-    if (!content) continue;
-
-    // `property` (OpenGraph) and `name` (Twitter/legacy) both checked — sites use
-    // either, and some use both on one tag.
-    for (const key of [attrs.property, attrs.name]) {
-      switch (key?.toLowerCase()) {
-        case 'og:title':
-          collected.ogTitle ??= content;
-          break;
-        case 'og:image':
-          collected.ogImage ??= content;
-          break;
-        case 'og:image:url':
-          collected.ogImageUrl ??= content;
-          break;
-        case 'og:image:secure_url':
-          collected.ogImageSecure ??= content;
-          break;
-        case 'twitter:image':
-        case 'twitter:image:src':
-          collected.twitterImage ??= content;
-          break;
-        default:
-          break;
-      }
-    }
-  }
-
-  for (const raw of tagAttrs(head, /<link\b/gi)) {
-    const attrs = parseAttrs(raw);
-    const rel = attrs.rel?.toLowerCase();
-    const href = attrs.href?.trim();
-    if (!rel || !href) continue;
-
-    const rels = rel.split(/\s+/);
-    if (rels.includes('image_src')) collected.imageSrc ??= href;
-    // Every icon-ish rel is collected raw (`icon`, `shortcut icon`, `apple-touch-icon`,
-    // `mask-icon`); selectFaviconUrl filters the unrenderable ones and ranks the rest.
-    if (rels.some((token) => token.includes('icon'))) {
-      collected.icons ??= [];
-      collected.icons.push({ href, rel, sizes: attrs.sizes, type: attrs.type });
-    }
-  }
-
-  return collected;
+  const whole = scanHtmlMeta(html, { maxChars: MAX_HEAD_CHARS, through: 'document' });
+  delete whole.icons;
+  if (head.icons) whole.icons = head.icons;
+  return whole;
 }

@@ -376,6 +376,24 @@ describe('keeping read mode through the link-extraction service', () => {
     expect(mockKeep).toHaveBeenCalledTimes(1);
   });
 
+  // YouTube answers the extractor with a 429 on every watch page: a press that never
+  // works, so it reads as the site's answer, with the button off, not as "try again".
+  test('a site that refused our server says so, and the button goes off', async () => {
+    mockKeptCopies = true;
+    mockServerAvailable = true;
+    mockKeep.mockResolvedValueOnce({ kind: 'none', status: 'failed', siteRefused: true });
+    render(<ReaderPage />);
+
+    const keep = await screen.findByRole('button', { name: 'Keep a read-mode copy' });
+    fireEvent.click(keep);
+
+    expect((await screen.findByRole('status')).textContent).toMatch(
+      /didn’t let our server read the page/,
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
+    await waitFor(() => expect((keep as HTMLButtonElement).disabled).toBe(true));
+  });
+
   test('beside the action, Include images writes the synced setting', async () => {
     mockKeptCopies = true;
     mockServerAvailable = true;
