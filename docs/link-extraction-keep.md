@@ -27,9 +27,13 @@ bracemark-expo) — which also re-reads a link's title and preview image from th
 page, _Update preview_, on a plan with `keptCopies`. A read-mode copy keeps a page's **tables** as tables (_tables_) and
 its **images** in a pack beside the text, on every tier that takes a copy (_images in
 read mode_), and the reader and the capture screen have a way to the **Wayback
-Machine** for the page that is gone (_when the page is gone_). None of it has been released yet — which is why the
-table block and the figure's image fields could still go into the format's first
-version.
+Machine** for the page that is gone (_when the page is gone_). **Released 20 November
+2026:** the web app, the API and the link-extraction service, browser extension 1.3.0,
+and the Android app 1.4.0; the iOS app's first version, still waiting for App Store
+review, predates all of it, so iOS gets copies in the update after it. Before that
+release nothing had carried the format, which is why the table block and the figure's
+image fields could still go into its first version. From here on the format has
+readers in the field, so a change to it has to read the copies they already hold.
 
 Not built: a per-link _Keep screenshot_ outside the extension's saved screen, the
 scoped bulk job, and — within images — SVG
@@ -908,9 +912,11 @@ Two rules:
   and the screenshot are built on desktop. /pricing's comparison table names read mode
   alone — the screenshot is the browser extension's, of the fold only, and a row for it
   set the expectation of a page capture — and has to go live with or after the
-  release that carries it. The plan cards and the store listings don't name them
-  yet — adding them is a copy change for those surfaces (with the brand review it
-  needs), not something this gate implies. Page copy not before it exists.
+  release that carries it. The plan cards don't name them yet — adding them is a
+  copy change for the cards, /pricing and both settings sections at once (with the
+  brand review it needs), not something this gate implies. The store listings name
+  read mode in the two long descriptions and one screenshot caption, each with its
+  scope (`listing-copy.ts`). Page copy not before it exists.
 
 ### removal, cleanup, export
 
