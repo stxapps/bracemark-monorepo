@@ -387,9 +387,10 @@ describe('keeping read mode through the link-extraction service', () => {
     const keep = await screen.findByRole('button', { name: 'Keep a read-mode copy' });
     fireEvent.click(keep);
 
-    expect((await screen.findByRole('status')).textContent).toMatch(
-      /didn’t let our server read the page/,
-    );
+    const notice = (await screen.findByRole('status')).textContent;
+    expect(notice).toMatch(/didn’t let our server read the page/);
+    // Both ways that read the page itself: a desktop browser's and a phone's.
+    expect(notice).toMatch(/with the browser extension or the mobile app\./);
     expect(screen.queryByRole('alert')).toBeNull();
     await waitFor(() => expect((keep as HTMLButtonElement).disabled).toBe(true));
   });

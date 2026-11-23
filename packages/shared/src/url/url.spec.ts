@@ -62,6 +62,25 @@ describe('normalizeUrl', () => {
 });
 
 describe('canonicalUrlKey', () => {
+  // A Firefox content script — where the browser extension's injected collector calls
+  // this (web-react lib/page-meta.ts) — hands back URLSearchParams iterators that are
+  // not themselves iterable, so a spread of `entries()` threw there on every page. This
+  // makes jest's URLSearchParams do the same.
+  it('keys a query in a Firefox content script, whose param iterators are not iterable', () => {
+    // An iterator with `next` and no `Symbol.iterator`, as Firefox's Xray hands back.
+    const notIterable = () => ({ next: () => ({ done: true, value: undefined }) }) as never;
+    const spies = (['entries', 'keys', 'values', Symbol.iterator] as const).map((name) =>
+      jest.spyOn(URLSearchParams.prototype, name).mockImplementation(notIterable),
+    );
+    try {
+      expect(canonicalUrlKey('https://example.com/watch?v=b&a=1')).toBe(
+        'example.com/watch?a=1&v=b',
+      );
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
+  });
+
   it('folds the http/https scheme', () => {
     expect(canonicalUrlKey('http://example.com')).toBe(canonicalUrlKey('https://example.com'));
   });

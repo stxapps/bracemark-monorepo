@@ -66,11 +66,15 @@ const NOTE_FULL =
 // does not publish (`isPublishedStorageCeiling` — Free's, today). `plan` is the
 // account's CURRENT plan, which is what tells a kept ceiling from its own.
 //
-// `settled` is for the screen's reveal gate: true once the read has answered
-// (either way), or when it is not on the wire at all — react-query holds an
-// offline query as `paused`, and a screen waiting on that would wait its whole
-// cap for an answer that is not coming. Settings → Subscription holds its first
-// paint on it so the block doesn't drop in under a page already on screen.
+// `settled` is for the screen's reveal gate: true once the read has answered,
+// or when it is not on the wire at all — react-query holds an offline query as
+// `paused`, and a screen waiting on that would wait its whole cap for an answer
+// that is not coming. Settings → Subscription holds its first paint on it so the
+// block doesn't drop in under a page already on screen. A FAILING read is not
+// settled quickly, though: `fetchStatus` stays `fetching` through its retries —
+// react-query's own three (1 s, 2 s, 4 s), each over the api client's for a 5xx,
+// a 429 or a network error (@stxapps/shared api/retry.ts) — far past the screens'
+// REVEAL_WAIT_MS, so on a failure it is that cap that ends the wait.
 export function useStorageReadout(plan: Plan): {
   readout: StorageReadout | null;
   settled: boolean;

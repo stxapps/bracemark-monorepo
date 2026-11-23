@@ -40,6 +40,39 @@ describe('scanHtmlMeta', () => {
     expect(scanHtmlMeta(html, { maxChars: BIG, through: 'document' })).toEqual({});
   });
 
+  // A `>` ends a tag only outside a quoted value (scan-meta.ts, tagEnd), as the live DOM
+  // and HTMLRewriter read it. Breadcrumb titles carry one.
+  it('keeps a tag whole when a quoted value holds a `>`', () => {
+    const html = `<head>
+      <meta property="og:title" content="Home > Shop > Lamp">
+      <meta content='https://e.com/a.jpg?x=1>2' name='twitter:image'>
+      <link rel="icon" href="/i.png" title="a > b">
+    </head>`;
+    expect(scanHtmlMeta(html, { maxChars: BIG, through: 'head' })).toEqual({
+      ogTitle: 'Home > Shop > Lamp',
+      twitterImage: 'https://e.com/a.jpg?x=1>2',
+      icons: [{ href: '/i.png', rel: 'icon', sizes: undefined, type: undefined }],
+    });
+  });
+
+  it('opens a value only after `=`: a stray quote is a character', () => {
+    const html = `<head><meta " property="og:title" content="Real"><meta property="og:image" content="/i.jpg"></head>`;
+    expect(scanHtmlMeta(html, { maxChars: BIG, through: 'head' })).toEqual({
+      ogTitle: 'Real',
+      ogImage: '/i.jpg',
+    });
+  });
+
+  // An unclosed quote is the last of its kind in the input. A browser would let it swallow
+  // the rest; the scanner ends that tag at its next `>` and reads on.
+  it('lets a quote that never closes cost its own tag only', () => {
+    const html = `<head><meta property="og:image" content="/i.jpg"><meta name=twitter:image content='/broken.jpg><meta property=og:title content=After></head>`;
+    expect(scanHtmlMeta(html, { maxChars: BIG, through: 'head' })).toEqual({
+      ogImage: '/i.jpg',
+      ogTitle: 'After',
+    });
+  });
+
   it('reads no further than maxChars', () => {
     expect(scanHtmlMeta(MOBILE_YOUTUBE, { maxChars: 100_000, through: 'document' })).toEqual({
       docTitle: 'The new video - YouTube',

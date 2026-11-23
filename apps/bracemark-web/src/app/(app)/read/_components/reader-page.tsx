@@ -405,7 +405,7 @@ function outcomeNotice(outcome: ServerReadModeOutcome | 'error'): OutcomeNotice 
   // robots.txt's, with the way that still works.
   if (outcome.siteRefused) {
     return {
-      text: 'This site didn’t let our server read the page, so we couldn’t keep a copy. You can still keep one from the page itself, with the browser extension.',
+      text: 'This site didn’t let our server read the page, so we couldn’t keep a copy. You can still keep one from the page itself, with the browser extension or the mobile app.',
       failure: false,
     };
   }
@@ -419,7 +419,7 @@ function outcomeNotice(outcome: ServerReadModeOutcome | 'error'): OutcomeNotice 
       return { text: 'This address isn’t a web page, so there’s no text to keep.', failure: false };
     case READ_MODE_REASONS.robotsDisallowed:
       return {
-        text: 'This site asks services like ours not to copy its pages, so we don’t take one. You can still keep a copy from the page itself, with the browser extension.',
+        text: 'This site asks services like ours not to copy its pages, so we don’t take one. You can still keep a copy from the page itself, with the browser extension or the mobile app.',
         failure: false,
       };
     default:

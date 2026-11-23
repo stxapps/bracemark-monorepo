@@ -24,10 +24,13 @@ import {
 // furthest), and every YouTube page needed ~900 KB — its watch pages declare og:title
 // at 828–856 KB, inside a head the size of its inline data, and its channel pages at
 // 876 KB, in the body after a head that closes at 825 KB. Nothing fell between. The
-// cap was 256 KB, and the app took no title or image from any YouTube link. 1 MiB is
-// also what bracemark-extractor reads of the same page (`MAX_HTML_BYTES`, its
-// lib/safe-fetch.ts): a tier that reads further than the other would find tags the other
-// can't, and a tier upgrade must be an improvement, not a change.
+// cap was 256 KB, and the app took no title or image from any YouTube link. It is CLOSE
+// to what bracemark-extractor reads of the same page, not equal: its `MAX_HTML_BYTES`
+// (lib/safe-fetch.ts) is 1,000,000 bytes and this is 1,048,576 characters, so this reads
+// ~48 K further on an ASCII page and more on a multi-byte one. Every offset measured
+// above sits under both. Keep the two near each other: a tier that reads much further
+// than another finds tags the other can't, and a tier upgrade must be an improvement,
+// not a change.
 //
 // The cost lands on the JS thread: a scan through the whole cap is ~8–9 ms per MB on
 // Hermes on an M1 (from the 244 KB head's 2 ms, docs/link-extraction.md, _three

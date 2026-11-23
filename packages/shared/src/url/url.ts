@@ -227,9 +227,15 @@ export function canonicalUrlKey(value: string): string | null {
   // Deterministic codepoint sort (not localeCompare, which is locale-dependent)
   // so the same URL keys identically across every runtime.
   const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
-  const params = [...u.searchParams.entries()].sort(
-    ([ak, av], [bk, bv]) => cmp(ak, bk) || cmp(av, bv),
-  );
+  // ⚠ `forEach`, never `[...u.searchParams.entries()]`. This runs INSIDE a stranger's
+  // page too (web-react lib/page-meta.ts, the browser extension's injected collector),
+  // and in a Firefox content script the iterator `entries()` hands back is not itself
+  // iterable: the spread threw "entries() is not iterable" there on every page, so the
+  // Firefox build captured no title or image at all. No spec sees it — jsdom and V8
+  // iterate it fine; EXT-EXTRACT-003 (`npm run e2e:extension:firefox`) is what does.
+  const params: [string, string][] = [];
+  u.searchParams.forEach((value, key) => params.push([key, value]));
+  params.sort(([ak, av], [bk, bv]) => cmp(ak, bk) || cmp(av, bv));
   const query = params.length ? '?' + params.map(([k, v]) => `${k}=${v}`).join('&') : '';
 
   return `${host}${port}${path}${query}`;

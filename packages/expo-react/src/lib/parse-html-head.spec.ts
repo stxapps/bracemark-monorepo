@@ -252,6 +252,19 @@ describe('parseHtmlHead on hostile input', () => {
     expect(ms).toBeLessThan(BUDGET_MS);
   });
 
+  // The quote-aware tag end (scan-meta.ts, tagEnd): each quote's closer is searched once
+  // and jumped past, so neither quoted `>`s nor a chain of `="` with no `>` re-scans.
+  it.each([
+    ['quoted values holding `>`', '<meta a="x>y" b=\'>\'>'],
+    ['`="` with no closing `>`', '<meta a="'],
+  ])('stays linear on thousands of tags with %s', (_name, unit) => {
+    const { ogTitle, ms } = timed(
+      REAL + unit.repeat(Math.floor((MAX_HEAD_CHARS - 1024) / unit.length)),
+    );
+    expect(ogTitle).toBe('Real');
+    expect(ms).toBeLessThan(BUDGET_MS);
+  });
+
   it('stays linear on one enormous attribute name with no `=`', () => {
     const { ogTitle, ms } = timed(
       `<meta ${'a'.repeat(30_000)} property="og:title" content="Real">`,

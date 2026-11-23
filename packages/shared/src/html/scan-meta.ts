@@ -25,8 +25,9 @@ import { decodeHtmlEntities } from './entities';
 // correctness we can't use and ship a parser into the app bundle for it, so: a scanner,
 // kept honest by fixtures (expo-react parse-html-head.spec.ts, scan-meta.spec.ts). The
 // pieces below are the malformed-input hazards that actually bite in the wild —
-// comments and inline scripts containing tag-like text, single/unquoted attributes —
-// not a general-purpose HTML implementation. The other thing a real parser does for
+// comments and inline scripts containing tag-like text, single/unquoted attributes, a
+// `>` inside a quoted value (`content="Home > Shop"`, tagEnd) — not a general-purpose
+// HTML implementation. The other thing a real parser does for
 // free, resolving character references, is `decodeHtmlEntities` (entities.ts), shared
 // with bracemark-extractor because `HTMLRewriter` doesn't decode either; every value
 // collected here goes through it, since the DOM the extension reads would have.
@@ -64,9 +65,44 @@ function parseAttrs(raw: string): Record<string, string> {
 // the class spelling costs time in proportion to the rest of the input on every
 // match (`@stxapps/shared` import/netscape.ts). The `REGEX_SYNTAX` lint rule holds it.
 
+// Where the tag whose attributes begin at `from` ends: the first `>` outside a quoted
+// attribute VALUE, as the HTML tokenizer has it — a quote opens a value only right
+// after `=` (and any spaces), so a stray `"` elsewhere in a tag is just a character.
+// The first `>` alone cut `<meta property="og:title" content="Home > Shop">` at
+// "Home ", losing the title, where the live DOM and `HTMLRewriter` read it whole.
+// -1 when no `>` ends it.
+//
+// A value whose quote never closes would, in a browser, swallow the rest of the input;
+// here it falls back to the first `>` after the quote — the rule before quotes were
+// honoured — so one unclosed quote costs that tag, not every tag after it. Linear: the
+// walk only moves forward, and each quote's closer is searched once and jumped past.
+// An unclosed quote is the LAST of its character in the input (any later one would
+// close it), so that fallback can happen at most once per quote character.
+const TAG_STOP = /[>=]/g;
+function tagEnd(text: string, from: number): number {
+  let at = from;
+  for (;;) {
+    TAG_STOP.lastIndex = at;
+    const stop = TAG_STOP.exec(text);
+    if (stop === null) return -1;
+    if (stop[0] === '>') return stop.index;
+    let valueAt = stop.index + 1;
+    while (valueAt < text.length && /\s/.test(text[valueAt])) valueAt++;
+    const quote = text[valueAt];
+    if (quote !== '"' && quote !== "'") {
+      at = valueAt;
+      continue;
+    }
+    const close = text.indexOf(quote, valueAt + 1);
+    if (close === -1) return text.indexOf('>', valueAt + 1);
+    at = close + 1;
+  }
+}
+
 // The next tag `open` finds at or after `from` (`open` must be global): where it
-// starts, its attribute text, and the index just past its `>`. Undefined at the end,
-// or at the first opener with no `>` after it — no later one has one either.
+// starts, its attribute text, and the index just past its closing `>` (tagEnd).
+// Undefined at the end, or at the first opener with no `>` after it — no later one
+// has one either.
 function nextTag(
   text: string,
   open: RegExp,
@@ -76,7 +112,7 @@ function nextTag(
   const opener = open.exec(text);
   if (opener === null) return undefined;
   const attrsStart = opener.index + opener[0].length;
-  const gt = text.indexOf('>', attrsStart);
+  const gt = tagEnd(text, attrsStart);
   if (gt === -1) return undefined;
   return { start: opener.index, attrs: text.slice(attrsStart, gt), end: gt + 1 };
 }
