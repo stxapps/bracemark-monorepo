@@ -531,6 +531,28 @@ is `expired` they don't call the API at all — the browser extension's
 under the rule above. A verdict their requests provoke reaches no listener: they
 run no `AuthProvider`.
 
+**So the browser extension's popup asks for itself when a background cycle
+fails.** The popup learns a verdict only from its own requests, and the one it
+makes unprompted is the save editor's plan check, which never mounts on a page
+the popup can't save (a `chrome://` or `about:` tab). There, a revoked session
+read "Sync failed" with a Retry that could only fail again, and the device was
+never told to forget. While the popup is signed in and the mirror's
+`bgSyncStatus` is `error`, it sends the probe (`sessionProbeEndpoint`) once per
+failure through its own api client
+(`apps/bracemark-extension/hooks/use-session-check-on-sync-failure.ts`); the
+answer goes to its `AuthProvider` like any other, so `session_revoked` wipes and
+`session_expired` / `session_unknown` pause. A session that is fine answers 200
+and changes nothing. The worker still decides nothing: the popup's request is
+the one that carries the verdict.
+
+**The sign-in screen's revoked notice is a block, not a line**, on every client
+(bracemark-web `(auth)/_components/revoked-notice.tsx`, bracemark-expo
+`features/auth/revoked-notice.tsx`, the browser extension's `popup/SignIn.tsx`):
+the paused notice's bordered `bg-muted/40` shape with an icon, the words in the
+foreground colour, `role="status"`. As a muted caption under the heading it
+matched the standing prose around it and was read past — on the browser
+extension, by someone who knows the screen, the one time it mattered.
+
 ### the contract
 
 - **`expiresAt` is off the wire.** It is gone from `createAccountResponseSchema`

@@ -356,7 +356,10 @@ inherit the session out of shared storage.) Which of its contexts may act on a
 401, and which must never, is in [sessions.md](./sessions.md), _who acts on a
 401_ — the popup and options page run the `AuthProvider` and own the session;
 the background worker only reads its state, and while it is `expired` calls
-nothing (`utils/sync-runner.ts` mirrors `paused`). The popup's sync pill reads
+nothing (`utils/sync-runner.ts` mirrors `paused`). Because the worker never acts
+on the verdict its own cycle earns, a failed cycle gets one session probe from the
+popup instead (`hooks/use-session-check-on-sync-failure.ts`; sessions.md, _who
+acts on a 401_). The popup's sync pill reads
 "Sync paused — sign in to resume", and its detail view opens a `Resume` view:
 the shared sign-in form with the username locked. What it can still open with
 the server gone is in [offline-mode.md](./offline-mode.md), _the browser

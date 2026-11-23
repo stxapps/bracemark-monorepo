@@ -14,6 +14,8 @@ import { PopupMessage, PopupShell } from './Shell';
 import { Resume, SignIn } from './SignIn';
 import { SyncDetail, SyncPill } from './Sync';
 
+import { useSessionCheckOnSyncFailure } from '@/hooks/use-session-check-on-sync-failure';
+
 // The active tab the popup is acting on. `null` once we know there's no usable tab
 // (e.g. a chrome:// page the extension can't save); `undefined` while still loading.
 export interface ActiveTab {
@@ -83,6 +85,10 @@ function AuthedApp() {
   useEffect(() => {
     requestSync();
   }, [requestSync]);
+
+  // The background never acts on a verdict its own cycle earns, so a failed cycle
+  // gets one session check from here (hooks/use-session-check-on-sync-failure.ts).
+  useSessionCheckOnSyncFailure();
 
   // A resume that succeeded flips the session back to active: leave the form, and
   // kick the cycle that pushes whatever was saved while sync was paused.

@@ -45,6 +45,11 @@ jest.mock('@stxapps/web-react', () => ({
   },
 }));
 
+// Pinned in its own spec; here it needs no api client.
+jest.mock('@/hooks/use-session-check-on-sync-failure', () => ({
+  useSessionCheckOnSyncFailure: () => undefined,
+}));
+
 // The store reads go through a stand-in that keeps the two properties App depends
 // on — the querier runs, and it answers `undefined` until it settles.
 jest.mock('dexie-react-hooks', () => require('../../testing/live-query'));

@@ -1,8 +1,6 @@
-import { useAuth } from '@stxapps/expo-react';
-import { SESSION_COPY } from '@stxapps/react';
-
 import { AuthAltAction } from '../../../features/auth/auth-alt-action';
 import { AuthScreen } from '../../../features/auth/auth-screen';
+import { RevokedNotice } from '../../../features/auth/revoked-notice';
 import { SignInForm } from '../../../features/auth/sign-in-form';
 
 // `/sign-in` — mirrors bracemark-web's `(auth)/sign-in/page.tsx`: the card chrome
@@ -20,19 +18,20 @@ import { SignInForm } from '../../../features/auth/sign-in-form';
 // encryption story, and AuthScreen already says that once, below the card, for
 // both screens. A signup has expectations to set; a sign-in just needs to ask.
 //
-// The one line it may carry: after the server told this device to forget
-// (`session_revoked`), why the library is gone — web's sign-in page says the same
-// (docs/sessions.md). In memory only, so a relaunch drops it.
+// After the server told this device to forget (`session_revoked`), the card says
+// why the library is gone — as a notice block above the form, not as a
+// description line: as a muted line under the heading it read as standing
+// prose and went unread (features/auth/revoked-notice.tsx; web's sign-in page
+// does the same).
 export default function SignInScreen() {
-  const { reason } = useAuth();
   return (
     <AuthScreen
       title="Sign in"
-      description={reason === 'revoked' ? SESSION_COPY.revoked : undefined}
       footer={
         <AuthAltAction prompt="New to Bracemark?" href="/create-account" action="Create account" />
       }
     >
+      <RevokedNotice />
       <SignInForm />
     </AuthScreen>
   );

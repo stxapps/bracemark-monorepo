@@ -1,3 +1,5 @@
+import { LogOut } from 'lucide-react';
+
 import { SESSION_COPY } from '@stxapps/react';
 import { useAuth } from '@stxapps/web-react';
 import { SignInForm } from '@stxapps/web-ui/components/auth/sign-in-form';
@@ -71,16 +73,38 @@ export function SignIn() {
       <PopupBody>
         <div className={cn('flex flex-col gap-1.5')}>
           <PopupTitle>Sign in</PopupTitle>
-          {reason === 'revoked' ? (
-            <p role="status" className={cn('text-xs leading-5 text-muted-foreground')}>
-              {SESSION_COPY.revoked}
-            </p>
-          ) : null}
           <p className={cn('text-xs leading-5 text-muted-foreground')}>
             Signing in here is separate from the web app — the extension keeps its own encryption
             key in this browser.
           </p>
         </div>
+
+        {/* A BLOCK, not a line, and that is the whole fix. It used to be a second
+            12px muted line under the heading, the same size and grey as the note
+            above, so the two read as one standing paragraph and the one piece of
+            news on the screen — this browser's library was erased — went unread
+            (reproduced: the popup flipped from the editor to this screen in ~30ms
+            with the line present). So it sits apart, between the heading and the
+            form as on bracemark-web's /sign-in, in the paused notice's shape — a
+            bordered `bg-muted/40` block with an icon — and in the foreground
+            colour. Grey, not amber: amber means "this wants a click"
+            (Sync.tsx, DOT_STYLES), and there is nothing to click but the form
+            under it. `role="status"`: the user didn't cause it
+            (docs/accessibility.md, _what must NOT announce_). */}
+        {reason === 'revoked' ? (
+          <div
+            role="status"
+            className={cn(
+              'flex items-start gap-2 rounded-md border border-border bg-muted/40 p-2.5 text-xs leading-5',
+            )}
+          >
+            <LogOut
+              aria-hidden="true"
+              className={cn('mt-0.5 size-3.5 shrink-0 text-muted-foreground')}
+            />
+            <p>{SESSION_COPY.revoked}</p>
+          </div>
+        ) : null}
 
         {/* `dense` because this is a 360px popup, not the web app's auth card —
             see sign-in-form.tsx's density note, and Editor.tsx's List/Tags/Note
