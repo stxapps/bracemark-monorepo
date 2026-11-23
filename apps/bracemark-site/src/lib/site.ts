@@ -45,6 +45,14 @@ export const APP_URL = appUrl;
  */
 export const SITE_URL = 'https://bracemark.com';
 
+/**
+ * The site's meta description — the one sentence the landing page, its card and
+ * `/llms.txt` all open with. Every word of it is argued in `app/layout.tsx`, above
+ * `DESCRIPTION`, along with the two other repos that carry a copy — read that before changing it.
+ */
+export const SITE_DESCRIPTION =
+  'Bracemark is an end-to-end encrypted bookmark manager. Links are encrypted on your device before they sync: of your library we hold ciphertext we cannot open.';
+
 /** Deep links into bracemark-web. The site never renders auth UI itself. */
 export const SIGN_IN_URL = `${APP_URL}/sign-in`;
 export const CREATE_ACCOUNT_URL = `${APP_URL}/create-account`;

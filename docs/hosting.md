@@ -837,6 +837,35 @@ graph on the landing page, and an `FAQPage` on `/faq`.
   ([above](#security-headers--where-the-csp-has-to-live)). `<` is escaped as
   `\u003c` so a string containing `</script>` cannot close the tag.
 
+- **A blog post carries its publisher in full**, the same `Organization` node
+  under the same `@id`, not a bare `{ "@id" }` pointing at the landing page.
+  Google reads each page's structured data on its own, so a reference into
+  another page's graph is a publisher with no name. Its `image` is the
+  `opengraph-image.png` card the page already publishes.
+
+**`/llms.txt`** is a static GET route (`app/llms.txt/route.ts`, built by
+`lib/llms-txt.ts`) in the [llmstxt.org](https://llmstxt.org/) shape: `# Bracemark`,
+the site description as its summary, a section per docs group, the footer's links,
+and the blog.
+
+- **It is for agents, not rankings.** Server-log studies through mid-2026 found
+  AI search crawlers almost never fetch the file; coding agents and documentation
+  tools do. Nothing on the site may claim it does more than that.
+- **It holds no copy of its own**, under the same rule as the JSON-LD: the summary
+  is `SITE_DESCRIPTION` (`lib/site.ts`, argued in `app/layout.tsx`), each entry is
+  a manifest's title and meta description, and the site section is
+  `FOOTER_LINKS`. A better line for a page is a better meta description on it.
+- **`lib/llms-txt.spec.ts` holds it to the sitemap**: every docs page and post
+  listed once with its own description, and every own-origin link a sitemap URL,
+  because a renamed page or a trailing slash is a 404 or a 301 the agent will not
+  route around.
+- **No `<link rel="llms">`** on the pages: it is not part of the convention.
+  `llms-full.txt` (the docs as plain markdown) is not built yet.
+- The CloudFront function passes it through on its dot (`rewrite-url.test.mjs`).
+  The deploy script re-uploads it as `text/plain; charset=utf-8` after the sync,
+  as it does the feed, because sync publishes `.txt` as bare `text/plain` and the
+  file carries curly quotes.
+
 ### IndexNow — the key file
 
 [IndexNow](https://www.indexnow.org/) is a ping that tells Bing (and Yandex,

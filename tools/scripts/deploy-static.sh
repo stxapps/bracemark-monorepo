@@ -457,6 +457,12 @@ if [ "$APP" = "site" ]; then
   aws s3 cp "$OUT_DIR/feed.xml" "$S3_URI/feed.xml" "${SYNC_FLAGS[@]}" \
     --content-type "application/rss+xml; charset=utf-8" \
     --cache-control "$CACHE_DOCUMENT"
+  # /llms.txt carries curly quotes, and sync publishes `.txt` as bare
+  # `text/plain` — no charset, so a reader is left to guess the encoding.
+  step "Setting the llms.txt charset"
+  aws s3 cp "$OUT_DIR/llms.txt" "$S3_URI/llms.txt" "${SYNC_FLAGS[@]}" \
+    --content-type "text/plain; charset=utf-8" \
+    --cache-control "$CACHE_DOCUMENT"
 fi
 
 # --- record ----------------------------------------------------------------

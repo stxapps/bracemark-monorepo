@@ -6,7 +6,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { SiteFooter } from '../components/site-footer';
 import { SiteHeader } from '../components/site-header';
-import { SITE_URL } from '../lib/site';
+import { SITE_DESCRIPTION, SITE_URL } from '../lib/site';
 
 import './globals.css';
 
@@ -116,14 +116,16 @@ export const viewport = {
 // falsified by a field being added on the other side of it.
 // 158 characters, inside the ~160 Google shows.
 //
+// The string itself is SITE_DESCRIPTION in lib/site.ts, so /llms.txt can print the
+// same sentence without importing this layout; the argument for it stays here.
+//
 // ⚠ THE SAME SENTENCE IS IN bracemark-web's `app/layout.tsx`, and the two must
 // move together. That app is a separate origin and cannot import this config, so
 // a comment in each naming the other is the whole of what holds them — the
 // pattern the lockup measurements already use. A third copy sits in the company
 // site's repo (stxapps/stxapps-site, `src/content/bracemark.ts`, `description`)
 // and has to move with them.
-const DESCRIPTION =
-  'Bracemark is an end-to-end encrypted bookmark manager. Links are encrypted on your device before they sync: of your library we hold ciphertext we cannot open.';
+const DESCRIPTION = SITE_DESCRIPTION;
 
 // The tagline itself, verbatim from shared's brand/brand.ts, so the OG
 // title, the hero, and every store listing say one sentence rather than four
