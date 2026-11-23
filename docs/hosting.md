@@ -812,7 +812,8 @@ infers generic XML from the extension rather than preserving the route's header.
 
 **The JSON-LD** is `apps/bracemark-site/src/lib/structured-data.ts`, rendered by
 `components/json-ld.tsx`: an `Organization` + `WebSite` + `SoftwareApplication`
-graph on the landing page, and an `FAQPage` on `/faq`.
+graph on the landing page, an `FAQPage` on `/faq`, a `BlogPosting` on each post,
+and a `TechArticle` plus `BreadcrumbList` on each docs page.
 
 - **It holds no copy of its own.** Every string is a constant a visible page
   already prints — `BRAND.descriptor` as the app's description, `COMPANY` for the
@@ -842,6 +843,14 @@ graph on the landing page, and an `FAQPage` on `/faq`.
   Google reads each page's structured data on its own, so a reference into
   another page's graph is a publisher with no name. Its `image` is the
   `opengraph-image.png` card the page already publishes.
+
+- **A docs page is a `TechArticle` with a two-step breadcrumb**, Docs › the
+  page, built from the docs manifest: the H1, the description printed under it,
+  and the group (its eyebrow) as `articleSection`. Two steps because Google needs
+  every step but the last to be a URL, and a group has none. **No dates**: the
+  page shows none, and a hand-kept manifest date that nobody updates would tell an
+  engine a page was checked when it was not. `structured-data.spec.tsx` holds each
+  article to its manifest entry and each breadcrumb step to a sitemap URL.
 
 **`/llms.txt`** is a static GET route (`app/llms.txt/route.ts`, built by
 `lib/llms-txt.ts`) in the [llmstxt.org](https://llmstxt.org/) shape: `# Bracemark`,

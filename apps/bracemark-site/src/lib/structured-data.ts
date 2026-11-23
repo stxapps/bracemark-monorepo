@@ -1,6 +1,7 @@
 // The schema.org JSON-LD the marketing site publishes, rendered by
-// components/json-ld.tsx: the site-wide graph on the landing page, and an
-// FAQPage on /faq.
+// components/json-ld.tsx: the site-wide graph on the landing page, an FAQPage
+// on /faq, a BlogPosting on each post, and a TechArticle with its breadcrumb on
+// each docs page.
 //
 // NOTHING IN HERE IS NEW COPY, and that is the rule for adding to it. Structured
 // data is read by machines and proofread by nobody — no one sees it rendered, so
@@ -38,6 +39,7 @@ import {
 } from '@stxapps/shared';
 
 import type { BlogPost } from '../content/blog';
+import type { DocGroup, DocPage } from '../content/docs';
 import type { FaqGroup } from '../content/faq';
 import { SITE_URL } from './site';
 
@@ -192,6 +194,48 @@ export function blogPosting(post: BlogPost) {
     ...(post.updatedAt && { dateModified: post.updatedAt }),
     author: { '@type': 'Organization', name: BRAND.name, url: `${SITE_URL}/about` },
     publisher: ORGANIZATION,
+  };
+}
+
+/**
+ * A docs page as a TechArticle, with the breadcrumb trail a reader takes to it.
+ * Everything is the manifest's own: the title the page prints as its H1, the
+ * description it prints under it, and the group it prints as its eyebrow.
+ *
+ * Two steps in the trail, not three. Google needs every step but the last to be
+ * a URL, and a docs group has none — /docs lists the groups without anchors — so
+ * the group goes in as `articleSection` instead.
+ *
+ * No dates. A docs page carries none on screen, and a manifest date nobody keeps
+ * current would tell an engine a page was checked when it was not.
+ */
+export function docsArticle(page: DocPage, group: DocGroup) {
+  const url = `${SITE_URL}/docs/${page.slug}`;
+  return {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'TechArticle',
+        '@id': `${url}#article`,
+        headline: page.title,
+        description: page.description,
+        articleSection: group.title,
+        url,
+        mainEntityOfPage: url,
+        inLanguage: 'en',
+        image: CARD_IMAGE,
+        author: { '@type': 'Organization', name: BRAND.name, url: `${SITE_URL}/about` },
+        publisher: ORGANIZATION,
+      },
+      {
+        '@type': 'BreadcrumbList',
+        '@id': `${url}#breadcrumb`,
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Docs', item: `${SITE_URL}/docs` },
+          { '@type': 'ListItem', position: 2, name: page.title, item: url },
+        ],
+      },
+    ],
   };
 }
 

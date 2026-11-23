@@ -3,11 +3,13 @@ import { join } from 'node:path';
 
 import { render } from '@testing-library/react';
 
+import sitemap from '../app/sitemap';
 import { JsonLd } from '../components/json-ld';
 import { BLOG_POSTS } from '../content/blog';
+import { DOC_GROUPS } from '../content/docs';
 import { FAQ_GROUPS } from '../content/faq';
 import { SITE_URL } from './site';
-import { blogPosting, faqPage, plainText, SITE_GRAPH } from './structured-data';
+import { blogPosting, docsArticle, faqPage, plainText, SITE_GRAPH } from './structured-data';
 
 const ALL_ITEMS = FAQ_GROUPS.flatMap((group) => group.items);
 
@@ -62,6 +64,40 @@ describe('BlogPosting', () => {
     expect(image.startsWith(`${SITE_URL}/`)).toBe(true);
     const file = image.slice(SITE_URL.length + 1);
     expect(existsSync(join(__dirname, '..', 'app', file))).toBe(true);
+  });
+});
+
+// A docs page's article and breadcrumb are read by machines and proofread by
+// nobody, so they may only say what the page prints: its H1, the description
+// under it, and the group as its eyebrow. And a breadcrumb step is a URL a
+// search result links to — one that is not a sitemap URL is a 404 or a 301 under
+// the page's own name in the results.
+describe('docs TechArticle', () => {
+  const listed = new Set(sitemap().map((entry) => entry.url));
+  const organization = SITE_GRAPH['@graph'].find((node) => node['@type'] === 'Organization');
+  const cases = DOC_GROUPS.flatMap((group) =>
+    group.pages.map((page) => [page.slug, page, group] as const),
+  );
+
+  it.each(cases)('%s says what the page prints, under its own URL', (slug, page, group) => {
+    const [article] = docsArticle(page, group)['@graph'];
+    expect(article).toMatchObject({
+      '@type': 'TechArticle',
+      headline: page.title,
+      description: page.description,
+      articleSection: group.title,
+      url: `${SITE_URL}/docs/${slug}`,
+    });
+    expect(listed.has(article.url as string)).toBe(true);
+    expect(article.publisher).toEqual(organization);
+  });
+
+  it.each(cases)('%s has a breadcrumb of sitemap URLs ending at itself', (slug, page, group) => {
+    const [, breadcrumb] = docsArticle(page, group)['@graph'];
+    const steps = breadcrumb.itemListElement as { position: number; item: string; name: string }[];
+    expect(steps.map((step) => step.position)).toEqual(steps.map((_, index) => index + 1));
+    for (const step of steps) expect([step.item, listed.has(step.item)]).toEqual([step.item, true]);
+    expect(steps.at(-1)).toMatchObject({ name: page.title, item: `${SITE_URL}/docs/${slug}` });
   });
 });
 
