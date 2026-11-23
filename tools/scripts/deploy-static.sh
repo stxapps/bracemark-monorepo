@@ -48,11 +48,27 @@ readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 #   week       icons, social images, favicon, and the marketing site's demo
 #              clip — real files with stable names, so a changed one needs the
 #              CloudFront invalidation to appear.
-#   revalidate HTML, the `.txt` RSC payloads Next 16 emits beside it, sw.js,
-#              manifest.json, robots.txt, sitemap.xml. These point at the hashed
-#              assets above or at pages, so they must never be served stale.
+#   document   HTML, the `.txt` RSC payloads Next 16 emits beside it,
+#              manifest.json, build.json, robots.txt, sitemap.xml, feed.xml.
+#              They change under a stable name, so a BROWSER revalidates them
+#              on every load (`max-age=0, must-revalidate`). CloudFront does
+#              not: `s-maxage` is read by shared caches only, and the deploy's
+#              `/*` invalidation is what makes the edge fetch a new copy. Without it
+#              every page view was a conditional GET from the edge to S3 — a
+#              `RefreshHit`, ~0.9 s to first byte from a far POP against ~0.13 s
+#              for a `Hit`. A week is the bound for a deploy run with
+#              `--no-invalidate`, the same as the week class above.
+#   revalidate bracemark-web's sw.js and /deploy.json — never held at the edge.
+#              sw.js because a worker that installs while the edge still holds
+#              the previous build's HTML precaches that HTML under THIS build's
+#              revisions, and keeps it until the next deploy; so it is also
+#              uploaded last, once the invalidation has completed (_publish the
+#              worker_, below). deploy.json because it is written before the
+#              invalidation and must be true with `--no-invalidate` too.
+#              docs/hosting.md, _deploying the static sites_.
 readonly CACHE_IMMUTABLE="public, max-age=31536000, immutable"
 readonly CACHE_WEEK="public, max-age=604800"
+readonly CACHE_DOCUMENT="public, max-age=0, must-revalidate, s-maxage=604800"
 readonly CACHE_REVALIDATE="public, max-age=0, must-revalidate"
 
 usage() {
@@ -64,9 +80,10 @@ Options:
                         The tier check still runs.
   --dry-run             Print what would sync; upload nothing, invalidate nothing.
   --no-invalidate       Skip the CloudFront invalidation (opt out explicitly).
-                        Also skips the check of the deployed service worker.
+                        Pages already at the edge stay for up to a week.
+                        web: also leaves sw.js unpublished and unchecked.
   --no-wait             Create the invalidation but don't wait for it to finish.
-                        Also skips the check of the deployed service worker.
+                        web: also leaves sw.js unpublished and unchecked.
   --distribution-id ID  Override the distribution id for this run.
   --allow-dirty         Deploy with uncommitted changes, untagged.
                         A warning on staging; required on production.
@@ -391,9 +408,15 @@ MEDIA=(
 # `deploy.json` is excluded because it is not in out/ at all: `record_deploy`
 # below writes it straight to the bucket, and without the exclusion this pass's
 # --delete would remove the previous deploy's copy a moment before it is replaced.
+#
+# `sw.js` is excluded for the reason in the cache classes above: it goes up on
+# its own, after the invalidation (_publish the worker_). Excluded rather than
+# synced, so this pass's --delete leaves the live copy alone until then. The
+# marketing site has no worker, so for it the filter matches nothing.
 DOCUMENTS=(
   --exclude "_next/*"
   --exclude "deploy.json"
+  --exclude "sw.js"
   --exclude "*.png" --exclude "*.jpg" --exclude "*.jpeg" --exclude "*.gif"
   --exclude "*.svg" --exclude "*.webp" --exclude "*.avif" --exclude "*.ico"
   --exclude "*.mp4"
@@ -419,13 +442,13 @@ aws s3 sync "$OUT_DIR" "$S3_URI" "${SYNC_FLAGS[@]}" \
   "${JUNK[@]}" \
   --cache-control "$CACHE_WEEK"
 
-step "Syncing HTML, RSC payloads and manifests (must-revalidate)"
+step "Syncing HTML, RSC payloads and manifests (browser revalidates; edge holds until invalidated)"
 # Deliberately NOT --size-only: an edited page very often keeps its byte count.
 aws s3 sync "$OUT_DIR" "$S3_URI" "${SYNC_FLAGS[@]}" \
   --delete \
   "${DOCUMENTS[@]}" \
   "${JUNK[@]}" \
-  --cache-control "$CACHE_REVALIDATE"
+  --cache-control "$CACHE_DOCUMENT"
 
 # `aws s3 sync` guesses `.xml` as generic XML and does not preserve the build
 # route's Content-Type. Re-upload the site's small feed with its RSS MIME type.
@@ -433,7 +456,7 @@ if [ "$APP" = "site" ]; then
   step "Setting the RSS feed content type"
   aws s3 cp "$OUT_DIR/feed.xml" "$S3_URI/feed.xml" "${SYNC_FLAGS[@]}" \
     --content-type "application/rss+xml; charset=utf-8" \
-    --cache-control "$CACHE_REVALIDATE"
+    --cache-control "$CACHE_DOCUMENT"
 fi
 
 # --- record ----------------------------------------------------------------
@@ -480,18 +503,52 @@ if [ "$DRY_RUN" = false ]; then record_deploy; fi
 
 # --- invalidate ------------------------------------------------------------
 
+#
+# _publish the worker_ — bracemark-web's `/sw.js` goes up only once the edge can
+# no longer answer with the previous build's documents. The DOCUMENTS pass held
+# it back. Two orders were possible, and only one of them heals by itself:
+#
+#   - new worker, old edge (what uploading it with the HTML allowed): a browser
+#     that re-fetches /sw.js mid-invalidation installs the new worker, whose
+#     precache then fetches each page THROUGH the edge — still holding the old
+#     HTML for up to a week (CACHE_DOCUMENT) — and files it under the new
+#     revision. Nothing re-fetches it until a later deploy changes the revision,
+#     so the device opens the old build offline, against a worker that thinks it
+#     is current. Silent: every URL still answers 200 (docs/offline-mode.md,
+#     _`/sw.js` is permanent_, case 3).
+#   - old worker, new edge (this order): a browser still on the old worker sees
+#     new pages online, exactly as it does after any deploy, and installs the
+#     new worker on its next navigation once it is up.
+#
+# No second invalidation for it: sw.js is CACHE_REVALIDATE, so the edge keeps
+# any copy it fetched in between for CachingOptimized's minimum TTL (1 s) only.
+publish_service_worker() {
+  step "Publishing the service worker (after the invalidation)"
+  aws s3 cp "$OUT_DIR/sw.js" "$S3_URI/sw.js" --no-progress \
+    --content-type "text/javascript" \
+    --cache-control "$CACHE_REVALIDATE" \
+    || die "the bucket holds this build EXCEPT /sw.js, which is still the previous
+       build's. Re-run the deploy with --skip-build to publish it."
+}
+
+# Printed whenever the run ends without publishing it, so the bucket is never
+# left on the previous worker without saying how to finish.
+service_worker_unpublished() {
+  note "/sw.js NOT published — the bucket still serves the previous build's worker,"
+  note "so installed browsers stay on the previous precache. To finish, once the"
+  note "invalidation has completed, re-run: npm run deploy:web:$TIER -- --skip-build"
+}
+
 if [ "$DRY_RUN" = true ]; then
+  if [ "$APP" = "web" ]; then note "(a real run uploads sw.js last, after the invalidation completes)"; fi
   step "Dry run — nothing was uploaded and no invalidation was created"
   exit 0
 fi
 
 if [ "$INVALIDATE" = false ]; then
   step "Skipping CloudFront invalidation (--no-invalidate)"
-  note "the 1-week assets and any changed HTML will serve stale until the TTL expires"
-  if [ "$APP" = "web" ]; then
-    note "deployed service worker NOT checked — once the CDN serves this build:"
-    note "  node tools/scripts/check-service-worker.mjs $OUT_DIR --origin $(app_origin)"
-  fi
+  note "the 1-week assets and any page already at the edge serve stale for up to a week"
+  if [ "$APP" = "web" ]; then service_worker_unpublished; fi
   push_deploy_tags
   exit 0
 fi
@@ -510,11 +567,13 @@ if [ "$WAIT_FOR_INVALIDATION" = true ]; then
   note "waiting for it to complete (usually under 3 minutes; --no-wait to skip)"
   aws cloudfront wait invalidation-completed \
     --distribution-id "$DISTRIBUTION_ID" --id "$INVALIDATION_ID"
-  # Only now is the CDN's `/sw.js` certain to be this build's.
-  if [ "$APP" = "web" ]; then verify_service_worker_live; fi
+  # Only now can no edge answer with the previous build's documents.
+  if [ "$APP" = "web" ]; then
+    publish_service_worker
+    verify_service_worker_live
+  fi
 elif [ "$APP" = "web" ]; then
-  note "deployed service worker NOT checked (--no-wait) — once the invalidation completes:"
-  note "  node tools/scripts/check-service-worker.mjs $OUT_DIR --origin $(app_origin)"
+  service_worker_unpublished
 fi
 
 push_deploy_tags

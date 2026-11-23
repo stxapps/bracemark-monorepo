@@ -775,7 +775,7 @@ not). Three things to know:
   ([above](#clean-urls--the-cloudfront-function)). `/about/` or `/about.html` is a
   301, which a search console reports as a sitemap error. The function passes
   `/sitemap.xml` through on its dot, pinned in `rewrite-url.test.mjs` beside
-  `robots.txt`; `deploy-static.sh` uploads it in the must-revalidate pass.
+  `robots.txt`; `deploy-static.sh` uploads it in the documents pass.
 - **No `changefreq` or `priority`, and no generated `lastmod`.** Google ignores
   the first two and trusts `lastmod` only where it has proven accurate. Blog
   articles alone carry it, from their author-set publication or substantive
@@ -806,7 +806,7 @@ not). Three things to know:
 
 `/feed.xml` is a static GET route compiled from the blog manifest at build time.
 The CloudFront clean-URL function passes the dotted path through. The deploy
-script uploads `.xml` with the must-revalidate documents, then overwrites the
+script uploads `.xml` with the documents, then overwrites the
 feed object with `application/rss+xml; charset=utf-8`, because `aws s3 sync`
 infers generic XML from the extension rather than preserving the route's header.
 
@@ -850,7 +850,7 @@ path for a new blog post to reach it. The marketing site only.
   `public/` file, not a route like `security.txt`, because nothing in it ever
   needs to change. The CloudFront function passes it through on its dot, pinned
   in `rewrite-url.test.mjs`, and `deploy-static.sh` uploads it in the
-  must-revalidate pass.
+  documents pass.
 - **The key is typed in three places**: the filename, the file's contents, and
   `KEY` in `tools/scripts/indexnow.sh`, plus the test case. Rotate all of them
   together. The script fetches the key file and compares it with `KEY` before it
@@ -1026,20 +1026,52 @@ hard-coded to `https://app.bracemark.com`, so every staging build advertised
 production's origin in its card metadata. That is now
 `NEXT_PUBLIC_APP_URL` ([env-files.md](./env-files.md#bracemark-web--nextjs-static-export)).
 
-**Three cache classes, keyed off the path rather than a list of filenames.**
+**Four cache classes, keyed off the path rather than a list of filenames.**
 
-| what                                         | `Cache-Control`               | `--delete` |
-| -------------------------------------------- | ----------------------------- | ---------- |
-| `_next/**` — content-hashed, build-ID-scoped | `max-age=31536000, immutable` | no         |
-| images, icons and `.mp4` — stable names      | `max-age=604800`              | yes        |
-| `.html`, `.txt`, `.xml`, `sw.js`, `*.json`   | `max-age=0, must-revalidate`  | yes        |
+| what                                                   | `Cache-Control`                               | `--delete` |
+| ------------------------------------------------------ | --------------------------------------------- | ---------- |
+| `_next/**` — content-hashed, build-ID-scoped           | `max-age=31536000, immutable`                 | no         |
+| images, icons and `.mp4` — stable names                | `max-age=604800`                              | yes        |
+| documents — `.html`, `.txt`, `.xml`, `*.json`          | `max-age=0, must-revalidate, s-maxage=604800` | yes        |
+| bracemark-web's `sw.js`, and `deploy.json` (both apps) | `max-age=0, must-revalidate`                  | —          |
 
 Uploaded in that order, so a client loading a page mid-deploy can always resolve
-the chunks it was just handed. The middle class is an extension list in
+the chunks it was just handed. The second class is an extension list in
 `deploy-static.sh`, and an extension missing from it is not an error: the file
-falls into the last class and is revalidated on every request, which is how a
+falls into the documents and is revalidated on every request, which is how a
 video would have shipped had `.mp4` not been added beside the image types. The `.txt` files are Next 16's RSC payloads and
-travel with the HTML, not with the assets — they must not outlive it. `_next/`
+travel with the HTML, not with the assets — they must not outlive it.
+
+**A document is revalidated by the browser and held by the edge.** `max-age=0,
+must-revalidate` makes every browser load ask; `s-maxage` is read by shared
+caches only, so CloudFront answers that question itself until the deploy's `/*`
+invalidation drops its copy. Both distributions use the managed
+`CachingOptimized` cache policy, which honours `s-maxage` (its 1-second minimum
+TTL is what the documents fell to before). The difference is the edge-to-S3 round
+trip on every view: measured from the Bangkok POP in November 2026, a `RefreshHit`
+— the edge revalidating its copy against S3 — took ~0.9 s to first byte, a `Hit`
+~0.13 s. bracemark-web pays it too: its worker answers a navigation from the network
+first ([offline-mode.md](./offline-mode.md), _what answers a navigation_), so
+every launch was a `RefreshHit`. The invalidation is what keeps this correct,
+and the week is the bound for a deploy run without one (`--no-invalidate`): the
+same week the media class already accepts.
+
+**⚠ bracemark-web's `/sw.js` is never held at the edge, and goes up last.** The
+documents pass excludes it; `deploy-static.sh` uploads it on its own once the
+invalidation has completed, and only then runs the live worker check below. In
+the other order a browser that re-fetches `/sw.js` mid-invalidation installs the
+new worker, and its precache fetches each page **through the edge**, which can
+still hold the previous build's HTML for a week, and files that HTML under the
+new revision. Nothing fetches it again until a later deploy changes the
+revision, so the device opens the old build offline under a worker that counts
+itself current, and every URL still answers 200
+([offline-mode.md](./offline-mode.md), _`/sw.js` is permanent_, case 3). The
+order this script uses is harmless: an old worker on new pages is
+what every deploy already produces, and it updates on the next navigation.
+Nothing fails if this order is undone — no check reads the precache's
+**content** — so keep `sw.js` out of the documents class. `deploy.json` is
+revalidated for a different reason: it is written before the invalidation and
+must be true with `--no-invalidate` as well. `_next/`
 is the one pass without `--delete`: a client on the previous build is still
 fetching chunks by hash, and deleting them mid-session breaks navigation. That
 means old builds accumulate — a build is ~10 MB, so they are left to.
@@ -1069,15 +1101,18 @@ clean-URL function and the keys in the bucket. So `deploy-static.sh` runs
   manifest names a file in the export, by the function's own mapping (`/links` →
   `links.html`, never `links/index.html`), and only `/_next/static/` entries lack
   a revision. A failure here publishes nothing.
-- **After the invalidation completes**, against the tier's own host
-  (`NEXT_PUBLIC_APP_URL` from its env file): `/sw.js` answers 200, as
-  JavaScript, with no redirect, byte-identical to `out/sw.js`; and every
+- **After the invalidation completes and `/sw.js` is published**, against the
+  tier's own host (`NEXT_PUBLIC_APP_URL` from its env file): `/sw.js` answers
+  200, as JavaScript, with no redirect, byte-identical to `out/sw.js`; and every
   manifest URL answers 200. A failure here exits non-zero with the bucket
   **already updated** — fix and redeploy; the message says what is at stake.
 
-`--no-invalidate` and `--no-wait` skip the second half, since the CDN may still
-be serving the previous build, and print the command to run it by hand:
-`node tools/scripts/check-service-worker.mjs apps/bracemark-web/out --origin <host>`.
+`--no-invalidate` and `--no-wait` publish everything **except** `/sw.js`, since
+the edge may still hold the previous build's pages, and skip the second half.
+The script says so and how to finish: once the invalidation has completed,
+re-run `npm run deploy:web:<tier> -- --skip-build`, which syncs nothing new,
+invalidates, publishes the worker and checks it. Until then installed browsers
+stay on the previous worker, which is safe.
 `npm run check:service-worker` is the first half alone. A change to
 `tools/cloudfront/rewrite-url.js` is the other moment to run the second half —
 it can turn a precached URL into a 404 without any deploy of the app.

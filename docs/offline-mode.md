@@ -381,7 +381,12 @@ these three things happens. None fails a lint, a typecheck or a unit test.
    `revision` is what makes a new worker re-fetch a URL whose name did not
    change. A stable-named file shipped with `revision: null` keeps the copy the
    first worker fetched. Today only `/_next/static/` entries have no revision,
-   and those are content-addressed.
+   and those are content-addressed. The CDN can do the same to a revisioned
+   entry: CloudFront holds pages until the deploy's invalidation, and a worker
+   that installs before then precaches the **old** page under the **new**
+   revision. That is why `/sw.js` is never edge-cached and is uploaded only
+   after the invalidation completes ([hosting.md](./hosting.md), _deploying the
+   static sites_). Nothing checks the order, so keep it.
 
 **As built — `tools/scripts/check-service-worker.mjs`**, run by `deploy-static.sh`
 ([hosting.md](./hosting.md), _deploying the static sites_) and by hand as
