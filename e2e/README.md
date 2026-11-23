@@ -66,7 +66,10 @@ not prove Chrome's real toolbar-created `activeTab` grant; release checks live i
 `npm run e2e:web:firefox` (and `e2e:web:firefox:staging`) runs the web cases
 admitted to Firefox in Playwright's own Firefox build; install it once with
 `npx playwright install firefox`. Which cases, and why only those:
-`docs/e2e.md`, _firefox_.
+`docs/e2e.md`, _firefox_. `npm run e2e:extension:firefox` runs the browser
+extension's Firefox cases in that same Firefox, through Marionette, against pages
+the case serves itself — no `npm run dev` needed (`docs/e2e.md`, _the Firefox
+browser-extension target_).
 
 `--suite smoke` selects only smoke cases; `full` includes smoke and full (never
 release qualification). Narrow any

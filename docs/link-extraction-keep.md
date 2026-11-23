@@ -874,7 +874,9 @@ penalty box), and a 401 or 403 is a sign-in or bot wall. The facet's verdict is 
 same as for any other tier (a 429 stays `failed`, `verdictForStatus`), but the outcome
 carries `siteRefused` (web-react `lib/server-read-mode.ts`, `SITE_REFUSED_STATUSES`) and
 the reader reads it as an answer, like robots.txt's: _This site didn’t let our server
-read the page…_, the way that still works (the page itself, with the browser extension),
+read the page…_, the way that still works (the page itself, with the browser extension
+or the mobile app, whose capture screen loads the page on the phone; the robots.txt
+notice names the same two),
 and _Keep_ off. Before, it was _Could not keep a read-mode copy. Please try again._ — over
 a press that never works. The extractor's User-Agent stays honest; nothing here
 disguises it. A YouTube watch page has no article for read mode in any case: the
@@ -950,6 +952,27 @@ page, and never otherwise. YouTube also rewrites its address on load (it appends
 the same answer, a second later. `page-meta.spec.ts` holds the rules; the real page
 was checked by injecting the bundled collector into m.youtube.com and www.youtube.com
 and tapping to another video.
+
+**⚠ Firefox runs this as a content script, and a content script sees the page's DOM
+objects through Xray wrappers.** An iterator one of them hands back is not itself
+iterable there: `[...u.searchParams.entries()]` in `canonicalUrlKey` (shared
+`url/url.ts`), which the signal calls on every page, threw "entries() is not
+iterable", so `page-meta.js` rejected and the Firefox build of the browser extension
+saved every link with no title or image — while every spec passed and Chrome was
+fine. It now builds the list with `forEach`, and `url.spec.ts` stubs the iterators
+Firefox's way. The rule for anything bundled into an injected script: no spread or
+`for…of` over what a DOM object returns (`URLSearchParams`, `Headers`, `FormData`, a
+`NodeList`); use its `forEach`, an index loop, or `Array.from`. Found 2026-11-23 by
+loading a probe extension into Firefox 160 (Marionette, a throwaway profile) that
+injects the built `.output/firefox-mv3/page-meta.js`. The same run settled the other
+Firefox question: the re-read carries the page's cookies (`Sec-Fetch-Site:
+same-origin`), the navigation entry keeps the loaded address after `pushState`, and
+`executeScript` hands back what the promise resolves to. On www.youtube.com, after an
+in-page move to another video, it returned that video's og:title and image (the
+re-read: 1.49 MB, og:title at 857 KB). That probe is now `EXT-EXTRACT-003`
+(`npm run e2e:extension:firefox`, docs/e2e.md, _the Firefox browser-extension
+target_), on pages it serves itself, and fails on the old spread; `EXT-RELEASE-002`
+repeats the YouTube check by hand.
 
 ### the gate — `entitlements.keptCopies`
 

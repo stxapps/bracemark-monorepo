@@ -36,3 +36,16 @@ does not make this claim.
 4. Sign in, save an unsaved HTTP page with a list/tag/note, close and reopen the
    popup, and confirm the saved state remains.
 5. Request sync and confirm a separate signed-in web profile reads the link.
+6. Open a video on www.youtube.com, then click another video **in the page** (no
+   reload, so the address changes by `pushState`), and save it. Confirm the
+   popup's preview shows the **second** video's title and thumbnail, and so does
+   the synced row in the web profile.
+
+Step 6 is the injected collector's check on a real site, and on the build as the
+store gets it; `EXT-EXTRACT-003` (`npm run e2e:extension:firefox`) runs the same
+collector in Firefox on every change, against pages it serves itself. It has failed
+silently before: Firefox runs `page-meta.js` as a content script, where a DOM object's
+iterator is not iterable, and a spread of one made every Firefox save arrive with
+no title or image while Chrome and every spec passed
+(`docs/link-extraction-keep.md`, _⚠ a page moved in place_). Step 4 alone does not
+show it: a save with no preview still saves.

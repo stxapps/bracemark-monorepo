@@ -46,15 +46,18 @@ test('firefox runs only the web cases that list it, and only the backup round tr
   );
 });
 
-test('browsers is accepted on an automated web case only', () => {
-  const [web] = readCaseRegistry().filter((entry) => entry.browsers);
-  const extension = readCaseRegistry().find((entry) => entry.surface === 'extension');
+test('browsers is accepted on an automated web case, and as ["firefox"] on a browser-extension one', () => {
+  const [web] = readCaseRegistry().filter((entry) => entry.surface === 'web' && entry.browsers);
+  const extension = readCaseRegistry().find(
+    (entry) => entry.surface === 'extension' && !entry.browsers && entry.tier !== 'release',
+  );
   assert.ok(web && extension);
   for (const bad of [
     { ...web, browsers: [] },
     { ...web, browsers: ['firefox', 'firefox'] },
     { ...web, browsers: ['webkit'] },
     { ...extension, browsers: ['chrome', 'firefox'] },
+    { ...extension, browsers: ['chrome'] },
   ]) {
     assert.throws(
       () => validateCaseRegistry([bad as typeof web]),
@@ -62,4 +65,16 @@ test('browsers is accepted on an automated web case only', () => {
       JSON.stringify(bad.browsers),
     );
   }
+});
+
+test('the Firefox browser-extension cases run only under e2e-extension:firefox', () => {
+  const firefox = selectCases('extension', { browser: 'firefox' });
+  assert.ok(firefox.length > 0);
+  assert.ok(firefox.every((entry) => entry.browsers?.join() === 'firefox'));
+  const chrome = new Set(selectCases('extension').map((entry) => entry.id));
+  assert.ok(firefox.every((entry) => !chrome.has(entry.id)));
+  assert.throws(
+    () => selectCases('extension', { cases: [firefox[0].id] }),
+    /does not run on chrome/,
+  );
 });

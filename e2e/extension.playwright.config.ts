@@ -25,6 +25,8 @@ const stagingAdmitted = IS_STAGING
 export default defineConfig({
   testDir: './extension',
   testMatch: '**/*.e2e.ts',
+  // Firefox's cases have their own harness and config (extension-firefox.playwright.config.ts).
+  testIgnore: 'firefox/**',
   globalSetup: './extension/global-setup.ts',
   grep: stagingAdmitted,
   fullyParallel: true,

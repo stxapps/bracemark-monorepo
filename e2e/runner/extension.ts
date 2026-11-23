@@ -70,7 +70,7 @@ async function main(): Promise<void> {
   const extractionStaged = await stageExtensionCopy(join(runDir, 'extension-extraction-staged'), {
     source: build,
     permissions: ['tabs'],
-    // Only the controlled page used by EXT-EXTRACT-001, on the run's web origin.
+    // Only the controlled pages used by EXT-EXTRACT-001/-002, on the run's web origin.
     // This substitutes for the toolbar-created activeTab grant; release
     // qualification owns that browser-chrome boundary.
     hostPermissions: [`${new URL(WEB_URL).origin}/*`],

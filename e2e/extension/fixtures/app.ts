@@ -63,7 +63,9 @@ export const test = base.extend<ExtensionFixtures>({
     // The cases that read the page itself get a build staged with a grant on it, in
     // place of the toolbar's activeTab (runner/extension.ts): the title and image
     // need the controlled page's origin, a screenshot `<all_urls>`.
-    const extension = testInfo.tags.includes('@EXT-EXTRACT-001')
+    const extension = ['@EXT-EXTRACT-001', '@EXT-EXTRACT-002'].some((tag) =>
+      testInfo.tags.includes(tag),
+    )
       ? process.env.E2E_EXTENSION_EXTRACTION_PATH
       : testInfo.tags.includes('@EXT-KEEP-001')
         ? process.env.E2E_EXTENSION_KEEP_PATH

@@ -351,6 +351,15 @@ not an account is signed in — 28 updated packages on the Pixel 8, 2.6 GB of
 dev build is ~140 MB of that. A 4 GB cap would hold about half of those updates
 and then post Android's low-storage warning, which lands in a shot. The
 cap only goes down with `-wipe-data` anyway, and the updates come back after.
+
+**When `/data` runs out mid-session, roll the updates back instead of wiping.** On
+2026-11-17 the Pixel 8 reached 96% (YouTube, Photos, Maps and Gmail had updated
+again), and the next e2e run failed at Maestro's own driver install, which said
+"not enough space". That failure reads as Maestro's, not the disk's.
+`adb shell pm uninstall-system-updates <package>` returns each app to its system
+image copy and frees the space, and it keeps the dev build and everything else in
+userdata. Play updates them again later.
+
 A wipe is how to get space back from an AVD (to ~1 GB, rising to ~5 GB again
 over weeks); it loses what lives in userdata — the dev build, the tablet's
 on-screen keyboard setting below, Chrome's first run, the fold's account. The cold-boot settings do hold
@@ -890,6 +899,73 @@ This is the same failure shape as the share-sheet handoff below: the driver sees
 the system surface, a selector resolves, and the gesture reports success without
 the operating system performing the action. A receipt inside Bracemark is the
 proof that the picker handoff actually occurred.
+
+#### ⚠ a Maestro `point` takes whole percentages
+
+**`tapOn: point: '50%,84.6%'` throws `NumberFormatException` before it taps.**
+Only integers parse. The run's output never says `FAILED` for it, so a filter that
+greps for `FAILED` reports a step that did nothing. On 2026-11-20 that looked like
+a dead zone at the bottom of the iOS share sheet, until a tap by hand disproved
+it. Round to a whole percentage, and surface `Exception` in any filter over
+Maestro's output.
+
+#### ⚠ the iOS share extension is invisible to Maestro
+
+In the share extension's sheet (a staging Release build, 2026-11-20),
+`maestro hierarchy` holds **Safari and the keyboard and none of the extension's
+own views**, so no selector reaches them. Tap by position, measured from a
+screenshot (the next section). Two more things fail on the way:
+
+- `takeScreenshot` refuses a path outside its own output folder. Take the shot
+  with `xcrun simctl io <udid> screenshot <path>` instead.
+- `MAESTRO_*` environment variables were not read: the flow typed `undefined`
+  into the field. Pass each value with `-e KEY=VAL`.
+
+This is the cross-process weakness _the driver_ (below) names for the share
+invocation, seen from inside the sheet.
+
+#### ⚠ coordinates come from a screenshot at the device's own scale
+
+**Measure a tap position on a full-size screenshot, and only that one.** Mixing
+one full-size screenshot with half-size copies put a tap
+on _Sign out_, which has no confirm, and it wiped the device's local copy of the
+library. When you drive by position, re-measure after any change of scale,
+rotation or window size.
+
+On a real Android tablet (Android 13, 2026-11-20), `adb shell uiautomator dump`
+was killed (exit 143) on Bracemark's screens, so there was no tree to query.
+Drive such a device by screenshots and positions.
+
+On a device signed in to a Google account, **dismiss Google's "Save password?"
+sheet with Back, never with "Never".** "Never" puts the app on that account's
+never-save list, and the sheet that [password-manager.md](./password-manager.md)
+checks then stops appearing on every device signed in to that account.
+
+#### ⚠ one Maestro leg at a time
+
+**Run an iOS-simulator leg and an Android-emulator leg one after the other, not
+at once.** On 2026-11-17 Maestro's iOS driver crashed while both ran together.
+
+#### ⚠ a live text-size change needs a relaunch on the simulator
+
+**`xcrun simctl ui <udid> content_size <size>` doesn't re-lay out a running
+app.** The text draws at the new size but clips at the old bounds, which looks
+like a layout bug in the app. Terminate and relaunch the app for each size. And
+because `lib/font-scale.ts` caps the multiplier at 1.3
+([accessibility.md](./accessibility.md)), `extra-extra-extra-large` and every
+accessibility size above it render the same.
+
+#### ⚠ the iPhone SE and a fresh simulator
+
+Measured 2026-11-23 on an iPhone SE simulator:
+
+- **`hideKeyboard` fails** with "Couldn't hide the keyboard", so
+  `flows/subflows/sign-in-fields.yaml` can't sign in there. Tap `sign-in-submit`
+  with the keyboard up instead.
+- A fresh simulator's first `openurl` asks _Open in "Bracemark"?_. Tap `Open`,
+  and make that step optional, since later runs don't ask.
+- On `plus-worst`, the first visible `link-options` button sits under the
+  floating Add-link button. Tap `Dismiss` on the previews banner first.
 
 #### the driver: Maestro, not Appium
 

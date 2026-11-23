@@ -1252,8 +1252,11 @@ a crossgrade inside the existing subscription rather than a second purchase.
   the plan box's last block, and arriving after the reveal it grew the box under
   the user (on a lapsed account, pushing the cards down). The section reads it
   itself, from mount and in parallel with `iap/status` — not after it, since it
-  doesn't depend on the plan — and passes it to `StorageUsage`; a failed or
-  paused (offline) read counts as settled. The gate is **latched** to the first
+  doesn't depend on the plan — and passes it to `StorageUsage`. A paused
+  (offline) read counts as settled at once. A failing one does not: it stays
+  `fetching` through react-query's three retries (each over the api client's own
+  for a 5xx, 429 or network error), which outlast the cap, so on a failure the
+  page waits the full 3s and renders without the readout. The gate is **latched** to the first
   reveal, so a paid account that lapses to `free` while the page is open doesn't
   swap itself for the loading pane. Each wait is capped at 3s
   (`REVEAL_WAIT_MS` in both sections), past which everything renders on the

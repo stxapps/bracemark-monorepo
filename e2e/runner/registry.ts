@@ -141,13 +141,20 @@ export function validateCaseRegistry(cases = readCaseRegistry()): void {
       (testCase.browsers.length === 0 ||
         new Set(testCase.browsers).size !== testCase.browsers.length ||
         testCase.browsers.some((value) => !E2E_BROWSERS.includes(value)) ||
-        // Only the web runner switches engines. The browser extension is a
-        // Chromium build, the PWA target installs through Chromium's CDP, and
-        // native has no browser of its own to choose.
-        testCase.surface !== 'web' ||
+        // Only the web runner switches engines for one case. A browser-extension
+        // case is one harness or the other — Chrome's popup in Playwright's
+        // Chromium (e2e-extension), or the Firefox build driven through Marionette
+        // (e2e-extension:firefox) — so it lists `firefox` alone or nothing. The PWA
+        // target installs through Chromium's CDP, and native has no browser of its
+        // own to choose.
+        (testCase.surface === 'extension'
+          ? testCase.browsers.join() !== 'firefox'
+          : testCase.surface !== 'web') ||
         testCase.tier === 'release')
     ) {
-      throw new Error(`${testCase.id}: invalid browsers (an automated web case only)`);
+      throw new Error(
+        `${testCase.id}: invalid browsers (an automated web case, or ["firefox"] on a browser-extension case)`,
+      );
     }
     if (
       testCase.widths &&

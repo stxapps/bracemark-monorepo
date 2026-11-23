@@ -1,5 +1,7 @@
 import { type BrowserContext, type Locator, type Page } from '@playwright/test';
 
+import { scanHtmlMeta, selectTitleImage } from '@stxapps/shared';
+
 import { profileDir } from '../paths';
 import { importArchive, waitForSync } from '../seed/steps';
 import { unique } from '../web/fixtures/data';
@@ -359,6 +361,85 @@ test.describe('browser extension', () => {
         await expect(row).toHaveCount(1, { timeout: 90_000 });
         await expect(row.getByText(title, { exact: true })).toBeVisible();
         await expect(row.locator('img.object-cover')).toBeVisible({ timeout: 60_000 });
+      } finally {
+        await reader.close();
+      }
+    },
+  );
+
+  // A tab that moved in place (`pushState`) still carries the head it was LOADED with
+  // (docs/link-extraction-keep.md, _⚠ a page moved in place_). The collector must see
+  // that, read the new address again and take ITS tags. The subject is bracemark-web's
+  // sign-in page, whose server head names the app (og:title, og:image, an og:url that is
+  // never the page), so the right answer is the server's. What only a real browser
+  // proves: Chrome's `executeScript` handing back the collector's PROMISE, and the
+  // page's own re-read.
+  test(
+    'a save after an in-page move takes the new address’s tags, not the stale head’s',
+    { tag: ['@EXT-EXTRACT-002', '@full', '@online', '@extension'] },
+    async ({ extensionApp, webApp }, testInfo) => {
+      const loadedUrl = controlledPageUrl('moved-from');
+      const movedUrl = controlledPageUrl('moved-to');
+      const staleTitle = unique('Stale head title');
+      const movedTitle = unique('Moved page title');
+      const firstPopup = await extensionApp.signIn(loadedUrl);
+      await waitForExtensionSync(firstPopup);
+      await firstPopup.close();
+
+      // The head the page loaded with, then the move: a new address and a new <title>,
+      // and nothing else rewritten — YouTube's shape.
+      await extensionApp.subject.evaluate(
+        ({ stale, image, to, title }) => {
+          for (const [property, content] of [
+            ['og:title', stale],
+            ['og:image', image],
+          ]) {
+            const meta =
+              document.querySelector<HTMLMetaElement>(`meta[property="${property}"]`) ??
+              document.head.appendChild(document.createElement('meta'));
+            meta.setAttribute('property', property);
+            meta.setAttribute('content', content);
+          }
+          history.pushState({}, '', to);
+          document.title = title;
+        },
+        { stale: staleTitle, image: `${WEB_URL}/logo512.png`, to: movedUrl, title: movedTitle },
+      );
+      await expect(extensionApp.subject).toHaveURL(movedUrl);
+
+      // What the re-read should find: the server's answer for the new address, chosen the
+      // way the background chooses (selectTitleImage), over the live <title>.
+      const served = await (await fetch(movedUrl)).text();
+      const expected = selectTitleImage(
+        {
+          ...scanHtmlMeta(served, { maxChars: 3 * 1024 * 1024, through: 'document' }),
+          docTitle: movedTitle,
+        },
+        new URL(movedUrl),
+      ).title;
+      expect(expected).toBeTruthy();
+      expect(expected).not.toBe(staleTitle);
+
+      const popup = await openExtensionPopup(
+        extensionApp.context,
+        extensionApp.extensionId,
+        extensionApp.subject,
+      );
+      await popup.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(popup.getByText('Saved', { exact: true })).toBeVisible();
+      await requestSyncAndWait(popup);
+
+      const reader = await launchApp(
+        profileDir(`extension-reader-w${testInfo.workerIndex}-${unique('moved')}`),
+        { existing: webApp.credentials },
+      );
+      try {
+        const row = webRowsFor(reader.page, movedUrl);
+        await expect(row).toHaveCount(1, { timeout: 90_000 });
+        await expect(row.getByText(expected as string, { exact: true })).toBeVisible({
+          timeout: 60_000,
+        });
+        await expect(row.getByText(staleTitle)).toHaveCount(0);
       } finally {
         await reader.close();
       }

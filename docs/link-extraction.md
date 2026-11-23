@@ -939,7 +939,11 @@ The scanner itself is `@stxapps/shared` `html/scan-meta.ts` (`scanHtmlMeta`);
 `</head>` outside a script or comment, and only when that head declared no og,
 Twitter or `image_src` tag does it read on through the body, as the live DOM and
 `HTMLRewriter` do, which both find a `<meta>` anywhere. Both reads stop at
-`MAX_HEAD_CHARS`, **1 MiB**, the same amount the extractor reads (`MAX_HTML_BYTES`).
+`MAX_HEAD_CHARS`, **1 MiB of characters** (1,048,576). That is close to what the
+extractor reads, not equal to it: `MAX_HTML_BYTES` is 1,000,000 **bytes**, so the
+device reads ~48 K further on an ASCII page, and further still on a page whose text
+is mostly multi-byte (a character there is 2–4 bytes). Every measured YouTube offset
+below sits under both caps.
 
 **Why 1 MiB.** Measured 2026-11-22 over 87 pages fetched with the app's User-Agent
 (the kept-copies set plus ~25 large sites). Every page but YouTube's had its title
@@ -983,7 +987,14 @@ script is script). It finds each kind's next opener by regex and keeps it until 
 walk passes it, so no stretch is searched twice for the same opener. It then searches
 forward for the opener's `>` and its closer, and drops that kind at the first one
 missing: a closer absent after one opener is absent after every later one. So each
-character is scanned about once. The spec sizes every hostile shape to the full 1 MiB
+character is scanned about once. The `>` that ends a tag is the first one **outside a
+quoted value**, as the HTML tokenizer has it (`tagEnd`): a quote opens a value only
+right after `=`, and its closer is searched once and jumped past. The first `>` alone
+cut `content="Home > Shop"` at "Home ", losing a title the live DOM and
+`HTMLRewriter` read whole. A quote that never closes would swallow the rest of the
+page in a browser; here it ends its tag at the next `>`, the old rule, so it costs
+that tag only. It can happen at most once per quote character, since any later quote
+of the same kind would have closed it. The spec sizes every hostile shape to the full 1 MiB
 cap, and adds two the walk could get wrong: thousands of closed spans of all three
 kinds interleaved (14 ms per MiB on V8, doubling with the size), and a hostile body
 after an empty head.

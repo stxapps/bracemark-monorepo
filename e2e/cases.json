@@ -854,6 +854,27 @@
     "environments": ["local", "staging"]
   },
   {
+    "id": "EXT-EXTRACT-002",
+    "title": "A save from a tab that moved in place takes the new address's title, not the stale head's",
+    "surface": "extension",
+    "tier": "full",
+    "traits": ["online", "extension"],
+    "fixture": "small",
+    "path": "extension/extension.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "EXT-EXTRACT-003",
+    "title": "The Firefox build's page collector reads a page as it stands, and re-reads one that moved in place from its own address, with its cookies",
+    "surface": "extension",
+    "tier": "full",
+    "traits": ["extension"],
+    "fixture": "empty",
+    "path": "extension/firefox/firefox.e2e.ts",
+    "browsers": ["firefox"],
+    "artifacts": ["trace-on-failure", "html-report"]
+  },
+  {
     "id": "EXT-KEEP-001",
     "title": "A Plus save from the browser extension keeps a read-mode copy and a screenshot of the live page, and a separate web profile reads both in the reader",
     "surface": "extension",
@@ -885,7 +906,7 @@
   },
   {
     "id": "EXT-RELEASE-002",
-    "title": "Firefox production build signs in, saves, reopens, and syncs",
+    "title": "Firefox production build signs in, saves, reopens, and syncs, and a save after an in-page move takes the new page's preview",
     "surface": "extension",
     "tier": "release",
     "traits": ["online", "extension"],

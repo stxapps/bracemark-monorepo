@@ -185,8 +185,9 @@ breaks a protocol assumption; `E2E_CHROME_PATH` overrides the location, and
 #### firefox
 
 **The second sanctioned download is Playwright's Firefox**
-(`npx playwright install firefox`), for `e2e-web:firefox` and
-`e2e-web:firefox:staging`. It cannot be the system Firefox: Playwright drives
+(`npx playwright install firefox`), for `e2e-web:firefox`,
+`e2e-web:firefox:staging` and `e2e-extension:firefox` (_the Firefox
+browser-extension target_, below). It cannot be the system Firefox: Playwright drives
 Firefox through its own patched build (the Juggler protocol), and a stock
 Firefox from `/Applications` does not speak it. So the version under test is the
 one this Playwright release pins (`firefox-1538`, Firefox 153 at 1.62.1), and it
@@ -233,8 +234,10 @@ does not depend on the engine. What is admitted is what Gecko does its own way:
 Left on Chrome by necessity: `BULK-COPY-001` (Playwright cannot grant Firefox
 `clipboard-read`), `STAGING-CSP-004` (it asks Chrome's DevTools protocol for the
 manifest) and every other CDP-driven path, the PWA target (Playwright supports
-service workers in Chromium only), and the browser extension, whose Firefox build
-remains `EXT-RELEASE-002`'s manual check. Admit another case by adding `firefox`
+service workers in Chromium only), and the browser extension's popup, sign-in and
+sync, whose Firefox build remains `EXT-RELEASE-002`'s manual check — only its page
+scripts have an automated Firefox case (_the Firefox browser-extension target_,
+below). Admit another case by adding `firefox`
 to its `browsers` and running it on both engines; the rule is the one above —
 something Gecko does differently has to be on the path.
 
@@ -257,9 +260,11 @@ profile as the other client.
 
 The `tabs` addition lets popup.html run as an attachable tab and still read the
 real active page behind it. It is not a substitute for the shipped manifest's
-toolbar-created `activeTab` grant. `EXT-EXTRACT-001` stages a second copy with one
-additional host permission — only the local web origin — so the background can
-inject the title/image collector into its controlled page. `EXT-KEEP-001` stages a
+toolbar-created `activeTab` grant. `EXT-EXTRACT-001` and `EXT-EXTRACT-002` share
+a second copy with one additional host permission — only the local web origin — so
+the background can inject the title/image collector into their controlled page
+(`-002` moves that page in place first and checks the save takes the new
+address's tags: docs/link-extraction-keep.md, _⚠ a page moved in place_). `EXT-KEEP-001` stages a
 third copy, with `<all_urls>`: its screenshot is `captureVisibleTab`, which Chrome
 allows only with `<all_urls>` or an `activeTab` grant — a page can frame other
 origins, so a host permission on the page's own origin is refused, and the popup
@@ -271,6 +276,37 @@ taken rather than imported. The run manifest
 records all three copies' differences and `activeTabToolbarGrantProven: false`.
 `EXT-RELEASE-001` in `e2e/extension/RELEASE.md` owns the real Chrome-toolbar
 boundary; the Firefox production-build smoke is beside it.
+
+#### the Firefox browser-extension target
+
+`e2e-extension:firefox` (`npm run e2e:extension:firefox`) runs the
+browser-extension cases only Firefox can answer: an entry with `browsers:
+["firefox"]`, which the registry allows on the extension surface as that one value
+(a case is one harness or the other, never both). Playwright loads no extension
+into Firefox, so it does not share the popup harness above. Each case launches
+**Playwright's pinned Firefox** (the sanctioned download, _firefox_, above), headless,
+with Marionette — Firefox's own remote protocol, so no other driver — in a fresh
+profile, installs a small probe extension (`extension/firefox/probe/`) as a
+temporary add-on, and lets it inject the **Firefox production build's own**
+scripts into pages the case serves from `127.0.0.1` (`extension/firefox/fixture.ts`).
+So it needs no stack, no account and no `npm run dev`, takes seconds, and is
+local-only by construction; the runner refuses staging.
+
+`EXT-EXTRACT-003` is the first: the title/image collector (`page-meta.js`) on a page
+read as it stands, and on one that moved in place by `pushState` and has to be read
+again from its own address, with the page's cookie. It exists because Firefox runs
+that file as a content script, where DOM objects behave unlike Chrome's or jsdom's:
+a spread of a `URLSearchParams` iterator threw there on every page, so every Firefox
+save arrived with no title or image while every spec and Chrome case passed
+(docs/link-extraction-keep.md, _⚠ a page moved in place_). Reverting that fix fails
+the case with Firefox's own "entries() is not iterable". Two traps met building
+it, both silent: a new tab is `about:blank` and already `complete` before it
+loads, so an injection that waits only for `complete` lands in the blank page
+("Missing host permission for the tab"); and the probe's origin placeholder appears
+twice in its source, so a single `replace` left the code pointing nowhere and the
+probe never reported. Add a case here for anything else the browser extension
+injects or runs that Firefox could do differently: `read-mode.js` is the obvious
+next one.
 
 `EXT-SIGN-OUT-001` signs out through the options page and checks both an
 already-open popup and a popup opened after a browser-profile restart. The
@@ -2716,7 +2752,8 @@ device class, which is its `--width`: `e2e:ios:iphone` / `e2e:ios:ipad` and
 with no class, since the contract runs on a phone only. Each is the target plus
 `--platform` and `--width`, not a target of its own, the way `e2e:web:headed` is.
 `e2e:web:firefox` and `e2e:web:firefox:staging` are the Firefox subset, local
-and deployed (_firefox_, above). The staging scripts put the mode last:
+and deployed (_firefox_, above), and `e2e:extension:firefox` the browser
+extension's Firefox cases (_the Firefox browser-extension target_, above). The staging scripts put the mode last:
 `e2e:extension:staging`, `e2e:ios:iphone:staging`, `e2e:contract:android:staging`,
 `e2e:build:ios:staging` — and there is no `ipad` or `tablet` staging script. There
 is deliberately no bare `npm run e2e`: no honest fan-out

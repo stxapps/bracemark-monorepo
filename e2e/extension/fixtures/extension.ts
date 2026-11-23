@@ -10,13 +10,16 @@ import { type Credentials } from '../../web/fixtures/account';
 const REPO_ROOT = join(E2E_ROOT, '..');
 const EXTENSION_PROJECT = '@stxapps/bracemark-extension';
 
-// The two Chrome MV3 builds a run can drive, by WXT mode: `development` talks to
-// the local api, `staging` is the bundle built for the deployed dryrunbase.com
-// tier (`.env.staging`). Each output directory is its Nx target's declared output,
-// so a cache hit restores it in place.
+// The builds a run can drive. The two Chrome MV3 ones by WXT mode: `development`
+// talks to the local api, `staging` is the bundle built for the deployed
+// dryrunbase.com tier (`.env.staging`). `firefox` is the Firefox MV3 production
+// build, the one the store gets; its cases inject only its page scripts, which name
+// no origin (runner/extension-firefox.ts). Each output directory is its Nx target's
+// declared output, so a cache hit restores it in place.
 const BUILDS = {
   development: { target: 'build:development', output: 'chrome-mv3-dev' },
   staging: { target: 'build:staging', output: 'chrome-mv3-staging' },
+  firefox: { target: 'build:firefox', output: 'firefox-mv3' },
 } as const;
 
 export type ExtensionBuildMode = keyof typeof BUILDS;

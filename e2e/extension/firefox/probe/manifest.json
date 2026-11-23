@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "Bracemark e2e page-meta probe",
+  "version": "1.0",
+  "browser_specific_settings": { "gecko": { "id": "page-meta-probe@e2e.invalid" } },
+  "background": { "scripts": ["background.js"] },
+  "permissions": ["scripting", "tabs"],
+  "host_permissions": ["http://127.0.0.1/*"]
+}
