@@ -122,4 +122,27 @@ describe('/sitemap.xml', () => {
     const metadata = await metadataOf(path);
     expect(metadata.description?.length ?? 0).toBeLessThanOrEqual(160);
   });
+
+  // A title or description shared by two pages makes a search engine pick one
+  // of them to show and fold the other into it — the likely way being a docs or
+  // blog entry cloned from its neighbour that kept the neighbour's line, which
+  // renders, builds and links exactly as before. A page that declares NO title or
+  // description gets the root layout's, which is the home page's, so that is the
+  // same collision; only `/` may inherit, because those lines are its own.
+  it('gives every page its own title and description', async () => {
+    const titles = new Map<string, string>();
+    const descriptions = new Map<string, string>();
+    for (const path of LISTED) {
+      if (path === '/') continue;
+      const { title, description } = await metadataOf(path);
+      expect([path, typeof title]).toEqual([path, 'string']);
+      expect([path, typeof description]).toEqual([path, 'string']);
+      expect([path, titles.get(title as string)]).toEqual([path, undefined]);
+      expect([path, descriptions.get(description as string)]).toEqual([path, undefined]);
+      titles.set(title as string, path);
+      descriptions.set(description as string, path);
+    }
+    // The positive control: the loop really ran over the whole site.
+    expect(titles.size).toBe(LISTED.length - 1);
+  });
 });

@@ -973,7 +973,14 @@ export default function Page() {
                           three-in-colour-plus-black-Apple row to exactly the
                           visitors who cannot see it resolve on hover.
                           `focus-visible` gets the reveal as well as the ring, so
-                          a keyboard reaches the same state a pointer does. */}
+                          a keyboard reaches the same state a pointer does.
+
+                          The NAME is on the link, and the mark is hidden. It
+                          used to be an `aria-label` on the `<svg>`, with no
+                          `role="img"`: whether that names the link depends on
+                          the screen reader, and axe counts these four as links
+                          with no text. An icon-only control carries its own
+                          label (docs/accessibility.md). */}
                       <a
                         className={cn(
                           'block rounded-sm text-muted-foreground grayscale transition duration-200 hover:text-foreground hover:grayscale-0 focus-visible:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:grayscale-0 focus-visible:outline-none',
@@ -981,8 +988,9 @@ export default function Page() {
                         href={href}
                         target="_blank"
                         rel="noreferrer"
+                        aria-label={label}
                       >
-                        <Icon className={cn(width)} aria-label={label} />
+                        <Icon className={cn(width)} aria-hidden="true" />
                       </a>
                     </li>
                   ))}

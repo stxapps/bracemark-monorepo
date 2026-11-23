@@ -43,6 +43,29 @@ import { SITE_URL } from './site';
 
 const ORGANIZATION_ID = `${SITE_URL}/#organization`;
 
+// The legal entity from COMPANY, not the brand: it is who /terms and /privacy
+// name, and its website is the company's own. One node, written in full wherever
+// it appears — on the landing page's graph and as each post's publisher.
+//
+// In full rather than as a bare `{ '@id': ORGANIZATION_ID }` reference, because
+// Google reads each page's structured data on its own: an `@id` points INTO the
+// page it sits on, and a post page that only referenced the node on `/` had a
+// publisher with no name at all. Repeating the node under the same `@id` is how
+// schema.org says "the same entity", so the two copies merge rather than compete.
+const ORGANIZATION = {
+  '@type': 'Organization',
+  '@id': ORGANIZATION_ID,
+  name: COMPANY.shortName,
+  legalName: COMPANY.legalName,
+  url: COMPANY.url,
+  address: COMPANY.addressLines.join(', '),
+};
+
+// The card every page already publishes as `og:image` (app/opengraph-image.png,
+// 1200×630), at the path Next serves it from. Not a new picture of any post: the
+// posts have none of their own, so their card IS this one.
+const CARD_IMAGE = `${SITE_URL}/opengraph-image.png`;
+
 // The prices /pricing prints, from the same constants: the BASE price in USD,
 // which is what a country with no local price is actually billed
 // (PLAN_USD_PER_YEAR's header in @stxapps/shared). The lifetime offer follows
@@ -78,9 +101,8 @@ const OFFERS = [
  * Who we are, what the product is, and every other place it lives — for the
  * landing page, which is where a crawler looks for the site's own identity.
  *
- * Three nodes, linked by `@id`. The Organization is the legal entity from
- * COMPANY, not the brand: it is who /terms and /privacy name, and its website is
- * the company's own. The product is the SoftwareApplication, whose `sameAs` is
+ * Three nodes, linked by `@id`. The Organization is ORGANIZATION above. The
+ * product is the SoftwareApplication, whose `sameAs` is
  * what ties the store listings, the X account and the repository to this domain
  * as one thing rather than several similarly named ones. The WebSite node is what
  * Google reads a site name from, so results say "Bracemark" and not the host.
@@ -92,14 +114,7 @@ const OFFERS = [
 export const SITE_GRAPH = {
   '@context': 'https://schema.org',
   '@graph': [
-    {
-      '@type': 'Organization',
-      '@id': ORGANIZATION_ID,
-      name: COMPANY.shortName,
-      legalName: COMPANY.legalName,
-      url: COMPANY.url,
-      address: COMPANY.addressLines.join(', '),
-    },
+    ORGANIZATION,
     {
       '@type': 'WebSite',
       '@id': `${SITE_URL}/#website`,
@@ -156,7 +171,12 @@ export function faqPage(groups: FaqGroup[]) {
   };
 }
 
-/** The article's visible title, description and dates, with no new claims. */
+/**
+ * The article's visible title, description and dates, with no new claims —
+ * plus the two fields Google's article guidance asks for that a post page had
+ * no way to resolve: a publisher with a name (ORGANIZATION, above) and an
+ * `image` (the page's own card).
+ */
 export function blogPosting(post: BlogPost) {
   const url = `${SITE_URL}/blog/${post.slug}`;
   return {
@@ -167,10 +187,11 @@ export function blogPosting(post: BlogPost) {
     description: post.description,
     url,
     mainEntityOfPage: url,
+    image: CARD_IMAGE,
     datePublished: post.publishedAt,
     ...(post.updatedAt && { dateModified: post.updatedAt }),
     author: { '@type': 'Organization', name: BRAND.name, url: `${SITE_URL}/about` },
-    publisher: { '@id': ORGANIZATION_ID },
+    publisher: ORGANIZATION,
   };
 }
 
