@@ -10,6 +10,7 @@ import {
   SYNC_PHASE_LABELS,
   syncBlockedDetail,
   syncCycleProgressLabel,
+  type SyncCycleStep,
   type SyncPhase,
 } from '@stxapps/shared';
 import { usePendingChangesCount, useSync } from '@stxapps/web-react';
@@ -90,6 +91,16 @@ function pillLabel(phase: SyncPhase, lastSyncAt: number | null): string {
   }
 }
 
+// The pill's line while a cycle's leg is counting: the leg's name, cut to fit
+// the pill's row (the detail view carries the full SYNC_CYCLE_STEP_LABELS).
+// Each leg counts its own 0→100% — the download's denominator isn't a fact
+// until the upload is done, so one percent across both would be invented — and
+// under a bare "Syncing…" the second leg read as the first one starting over.
+const PILL_STEP_LABELS: Record<SyncCycleStep, string> = {
+  upload: 'Sending changes…',
+  download: 'Getting changes…',
+};
+
 // What a run in flight can say with numbers, read once for both surfaces: the
 // first sync's count while the store is still being set up, a background
 // cycle's leg while one is moving something. Null for every other phase — a
@@ -97,6 +108,8 @@ function pillLabel(phase: SyncPhase, lastSyncAt: number | null): string {
 interface SyncReadout {
   // The line naming what is happening ("Setting up this device…").
   what: string;
+  // The same, at the pill's width.
+  short: string;
   // The progressbar's accessible name: that line without its ellipsis.
   label: string;
   done: number;
@@ -111,6 +124,7 @@ function useSyncReadout(phase: SyncPhase): SyncReadout | null {
     const what = SYNC_PHASE_LABELS['initial-syncing'];
     return {
       what,
+      short: what,
       label: what.replace(/…$/, ''),
       ...initialSyncProgress,
       count: initialSyncProgressLabel(initialSyncProgress),
@@ -120,6 +134,7 @@ function useSyncReadout(phase: SyncPhase): SyncReadout | null {
     const what = SYNC_CYCLE_STEP_LABELS[syncProgress.step];
     return {
       what,
+      short: PILL_STEP_LABELS[syncProgress.step],
       label: what.replace(/…$/, ''),
       done: syncProgress.done,
       total: syncProgress.total,
@@ -164,7 +179,9 @@ export function SyncPill({ onClick }: { onClick: () => void }) {
         </span>
       )}
       <StatusDot phase={phase} />
-      <span className={cn('truncate text-muted-foreground')}>{pillLabel(phase, lastSyncAt)}</span>
+      <span className={cn('truncate text-muted-foreground')}>
+        {readout?.short ?? pillLabel(phase, lastSyncAt)}
+      </span>
       {readout && (
         <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">
           {progressPercent(readout.done, readout.total)}%

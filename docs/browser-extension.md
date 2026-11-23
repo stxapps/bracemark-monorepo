@@ -198,7 +198,11 @@ silent visual regression, so they're written down:
   pill's own top hairline fills in `bg-foreground/50` and the percent sits
   beside the label — the footer's existing line, not a new element, so the pill
   at rest is unchanged. The full count and the real progressbar are the detail
-  view's (`popup/Sync.tsx`).
+  view's (`popup/Sync.tsx`). **While a cycle counts, the label names its leg**
+  ("Sending changes…", "Getting changes…") rather than "Syncing…": each leg runs
+  its own 0→100% — the download's total isn't known until the upload is done, so
+  one percent across both would be invented — and under one word the second leg
+  read as the first starting over.
 
 ### storage across extension contexts
 

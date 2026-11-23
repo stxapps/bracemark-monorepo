@@ -128,6 +128,20 @@ describe('SyncPill — a run in flight', () => {
     expect(screen.getByRole('button').textContent).toContain('25%');
   });
 
+  // Each leg counts 0→100% on its own; named the same, the download read as the
+  // upload starting over.
+  it.each([
+    ['upload' as const, 'Sending changes…'],
+    ['download' as const, 'Getting changes…'],
+  ])('names the %s leg it is counting', (step, label) => {
+    setSync('ready', 'syncing', { syncProgress: { step, done: 1, total: 4 } });
+
+    render(<SyncPill onClick={jest.fn()} />);
+
+    expect(screen.getByRole('button').textContent).toContain(label);
+    expect(screen.getByRole('button').textContent).not.toContain('Syncing…');
+  });
+
   // The provider may still hold the last leg's count; once the phase has moved
   // on it is history, and a percent beside "Synced just now" would contradict it.
   it('shows no percent at rest, whatever the provider still holds', () => {
