@@ -2,9 +2,10 @@ import { z } from 'zod';
 
 // THE ONLY PLACE `zod` IS IMPORTED FOR ITS VALUE. Everything else in the
 // workspace takes `z` from here (inside `shared`: `from '../zod'`; outside it:
-// `from '@stxapps/shared'`), and `eslint.config.mjs` restricts the bare
-// 'zod' specifier to keep it that way. A type-only `import type { z } from 'zod'`
-// is exempt and stays: it erases, so it constructs nothing.
+// `from '@stxapps/shared'`), and `eslint.config.mjs` restricts 'zod' and its
+// subpaths ('zod/v4', 'zod/mini', …) to keep it that way. A type-only
+// `import type { z } from 'zod'` is exempt and stays: it erases, so it
+// constructs nothing.
 //
 // WHY: zod 4 JIT-compiles a "fastpass" parser for every object schema by
 // building the function source as a string and handing it to `new Function`

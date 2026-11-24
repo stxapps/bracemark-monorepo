@@ -91,13 +91,20 @@ export const ZIP_JS_SYNTAX = [
 // under this rule replaces these rather than adding to them. Spread them in.
 // apps/bracemark-expo's share-extension fence does; before it did, every file
 // in the share tree could import 'zod' bare with lint green.
+//
+// `paths` matches a specifier exactly, so each zod entry point that builds
+// schemas is listed by itself. Without the subpaths, `from 'zod/v4'` skipped
+// the shim with lint green. Not listed: `zod/v3` (the old API, which has no JIT)
+// and the locale entries (no schemas).
+const ZOD_ENTRY_POINTS = ['zod', 'zod/mini', 'zod/v4', 'zod/v4-mini', 'zod/v4/mini', 'zod/v4/core'];
+
 export const RESTRICTED_IMPORT_PATHS = [
-  {
-    name: 'zod',
+  ...ZOD_ENTRY_POINTS.map((name) => ({
+    name,
     message:
       "Import { z } from '@stxapps/shared' (or '../zod' inside that package) — it sets `jitless` before any schema is built, which is what keeps 'unsafe-eval' out of the CSP. A type-only import may stay.",
     allowTypeImports: true,
-  },
+  })),
   {
     // The static half of ZIP_JS_SYNTAX, which carries the why. A type-only
     // import erases, so it may stay.
@@ -283,8 +290,8 @@ export default [
   },
   {
     // `z` comes from `@stxapps/shared` (or, inside that package, `../zod`) —
-    // never from the bare 'zod' specifier. That module calls
-    // `z.config({ jitless: true })` before it re-exports the binding, which is
+    // never from 'zod' or any of its subpaths (ZOD_ENTRY_POINTS). That module
+    // calls `z.config({ jitless: true })` before it re-exports the binding, which is
     // the only reason bracemark-web's CSP can withhold 'unsafe-eval': zod 4
     // JIT-compiles each object schema through `new Function`, and probes for
     // eval support with a `new Function('')` whose caught throw is STILL a

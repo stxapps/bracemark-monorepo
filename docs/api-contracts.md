@@ -44,8 +44,9 @@ internal paths:
 `packages/shared/src/zod.ts` calls `z.config({ jitless: true })` and then
 re-exports `z`. Every value import of zod in the workspace goes through it —
 `from '../zod'` inside `shared`, `from '@stxapps/shared'` everywhere else — and
-`eslint.config.mjs` restricts the bare `'zod'` specifier so it stays that way. A
-type-only `import type { z } from 'zod'` is exempt and stays as it is: it erases.
+`eslint.config.mjs` restricts `'zod'` and its subpaths (`'zod/v4'`, `'zod/mini'`,
+…) so it stays that way. A type-only `import type { z } from 'zod'` is exempt and
+stays as it is: it erases.
 
 **What it buys is bracemark-web's CSP.** zod 4 JIT-compiles a fast parser for
 every object schema by building the function source as a string and handing it
