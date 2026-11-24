@@ -26,17 +26,27 @@ one-path/`currentColor` invariant and the 428×512 grid it is constructed on. Th
 comment is the source of truth for _what the shape is doing_ and is not repeated
 here; this page owns the inventory and the rules that span files.
 
-**Two source components and 29 raster assets:**
+**Two source components, one icon file, and 29 raster assets:**
 
 | where                                                                                                                                                                                          | what                                                                                                                                                      |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/web-ui/src/components/icons/bracemark-icon.tsx`                                                                                                                                      | the source of truth                                                                                                                                       |
 | `apps/bracemark-expo/src/components/icons/bracemark-icon.tsx`                                                                                                                                  | the RN port — **byte-identical path and viewBox**, colour from `useCSSVariable` because `react-native-svg` takes fill as a prop and has no `currentColor` |
+| `apps/bracemark-macos/App/AppIcon.icon` (`Assets/mark.svg`)                                                                                                                                    | the Mac app icon — **the same path**, in an Icon Composer file; Xcode renders the older-macOS sizes from it                                               |
 | `apps/bracemark-web/public/` (9), `apps/bracemark-web/src/app/` (4), `apps/bracemark-site/src/app/` (4), `apps/bracemark-expo/assets/images/` (8), `apps/bracemark-extension/public/icon/` (4) | 29 PNG/ICO files rendered from that path                                                                                                                  |
 
 ⚠ **The two components must not drift, and nothing enforces it** — no test
 compares the two `d` strings. A retouch of the mark is a **two-file** change plus
-a re-render of every raster.
+a re-render of every raster, and the Mac app's `mark.svg` is a third copy of the
+same `d` that moves with them.
+
+**The Mac app icon is not one of the raster classes below.** macOS 26 draws an
+icon in its own rounded square only from an Icon Composer file; a hand-rendered
+rounded-square PNG set was shown shrunk inside a grey square, the treatment it
+gives an old-style icon (measured 2026-11-24). So `AppIcon.icon` holds a white fill and the
+mark as one layer at **52% of the canvas height**, the app-tile rule's ink height,
+and Xcode compiles the `.icns` older macOS reads from it. Change it in Icon
+Composer (Xcode → Open Developer Tool) or by hand; both are plain JSON and SVG.
 
 **The raster conventions, which are a rule and not a per-file judgement:**
 

@@ -24,7 +24,9 @@ that only discusses one of them (share-sheet.md does exactly this). Say
 **"browser extension"**, never "web extension" — `web` is already taken by
 bracemark-web, the `web-*` packages, and `platform:web` (which covers
 bracemark-extension too), and `web/extension` is established shorthand for bracemark-web
-_vs._ bracemark-extension.
+_vs._ bracemark-extension. Apple calls a browser extension in Safari a "Safari web
+extension"; here it is **the browser extension's Safari build**, because it is the
+same wxt code, not a third extension.
 
 **Naming — `bracemark-web` and `bracemark-site` are different properties, not two
 words for the same one.** `web` / `expo` / `extension` sit on the **platform**
@@ -124,6 +126,22 @@ bounded; the worker is terminated if conversion takes too long.
   each web project (`bracemark-web`, `bracemark-extension`, `web-ui`) — pins
   `tailwindcss@^4.x` itself; there is no root `overrides` split anymore
   (see expo-dependencies.md — _uniwind_).
+- **bracemark-macos** — the Mac app, a native Xcode project (SwiftUI, no
+  JavaScript of its own). Safari takes a browser extension only inside an app,
+  a macOS or iOS app that carries it as a target, so this is that app: one
+  window that says whether the extension is on and opens Safari's settings, and
+  a "Bracemark Extension" target that carries `bracemark-extension`'s Safari
+  build. The extension's code stays in `bracemark-extension` (`wxt build -b
+safari`); `tools/scripts/macos-app.sh` builds it through Nx and copies it in,
+  and the Xcode target copies that folder into the appex. It is named for the
+  platform, not for Safari, because the same app can grow into a full Mac app.
+  `bracemark-desktop` stays free for a cross-platform app downloaded outside the
+  stores (Electron, say), which can't easily carry a Safari extension anyway.
+  Its bundle id is `com.bracemark.app`, bracemark-expo's, so it joins the iOS
+  app's App Store record as its macOS app (universal purchase). Safari on iPhone
+  and iPad is not here: it would be a target inside `bracemark-expo`, beside the
+  share extension, not a second iOS app. How it is built, what Safari needed, and
+  how to drive it: [browser-extension.md](./browser-extension.md), _Safari_.
 
 A separate **bracemark-docs** app was planned here once. It's gone:
 `bracemark-site` owns `/docs` as a path on the apex, so the docs accrue SEO
@@ -512,6 +530,7 @@ Enforcement is driven by two tag dimensions set in each project's
 | bracemark-web       | `type:app`    | `platform:web`      |
 | bracemark-extension | `type:app`    | `platform:web`      |
 | bracemark-api       | `type:app`    | `platform:worker`   |
+| bracemark-macos     | `type:app`    | `platform:macos`    |
 | bracemark-extractor | `type:app`    | `platform:worker`   |
 | bracemark-expo      | `type:app`    | `platform:expo`     |
 
@@ -582,16 +601,18 @@ catches ones that are **supposed** to be and aren't. Neither can see import
 ### project versions — `0.0.0` unless a store reads it
 
 **A `version` exists only where something reads it and something forces it to
-move.** That is true in exactly two places, and every other `package.json` in
+move.** That is true in exactly three places, and every other `package.json` in
 the workspace says `0.0.0` and is never bumped.
 
-| where                                   | value   | read by                                                            |
-| --------------------------------------- | ------- | ------------------------------------------------------------------ |
-| `apps/bracemark-expo/app.config.ts`     | real    | both stores, the iOS share extension, Settings → About             |
-| `apps/bracemark-extension/package.json` | real    | wxt copies it into `manifest.json`; the stores, the options page   |
-| `apps/bracemark-expo/package.json`      | `0.0.0` | nothing — a number here would be a second opinion on the one above |
-| bracemark-web, -site, -api, -extractor  | `0.0.0` | nothing                                                            |
-| root, every `packages/*`, `e2e`         | `0.0.0` | nothing — all private, consumed as `"*"`                           |
+| where                                       | value   | read by                                                                   |
+| ------------------------------------------- | ------- | ------------------------------------------------------------------------- |
+| `apps/bracemark-expo/app.config.ts`         | real    | both stores, the iOS share extension, Settings → About                    |
+| `apps/bracemark-extension/package.json`     | real    | wxt copies it into `manifest.json`; the stores, the options page          |
+| `apps/bracemark-macos/Config/Base.xcconfig` | real    | `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`: App Store Connect, About |
+| `apps/bracemark-macos/package.json`         | `0.0.0` | nothing — an Nx project file for a project with no JavaScript             |
+| `apps/bracemark-expo/package.json`          | `0.0.0` | nothing — a number here would be a second opinion on the one above        |
+| bracemark-web, -site, -api, -extractor      | `0.0.0` | nothing                                                                   |
+| root, every `packages/*`, `e2e`             | `0.0.0` | nothing — all private, consumed as `"*"`                                  |
 
 `0.0.0` rather than the `0.0.1` the Nx generators write, because it cannot be
 mistaken for a release and so does not invite a `0.0.2`. **A freshly generated

@@ -31,6 +31,7 @@ module.exports = {
     // swapped for the value the development build resolves to. Must precede the
     // general `@/` rule below — jest takes the first pattern that matches.
     '^@/utils/web-app-url$': '<rootDir>/testing/web-app-url.ts',
+    '^@/utils/target$': '<rootDir>/testing/target.ts',
     // WXT's alias (see .wxt/tsconfig.json): `@/` is the PROJECT root, not `src/`.
     '^@/(.*)$': '<rootDir>/$1',
   },

@@ -836,7 +836,10 @@ browser frontends — bracemark-web and bracemark-site — need an allowed origi
   for the frontends (bracemark-expo: the first and last only) — every value in
   them is public.
 - **gitignored:** `.env*.local` (frontend personal overrides — and bracemark-expo's
-  `APPLE_TEAM_ID` and domain switch, above), `.dev.vars` (still ignored, but
+  `APPLE_TEAM_ID` and domain switch, above), `apps/bracemark-macos/Config/Local.xcconfig`
+  (one line, `DEVELOPMENT_TEAM = <the same team id>`, which the Mac app's Xcode
+  project includes; an identifier kept out of the tree for the same reason as
+  `APPLE_TEAM_ID`, and the Mac app has no env file of its own), `.dev.vars` (still ignored, but
   bracemark-api's local secrets are in the keychain now — _bracemark-api local
   secrets_, above), and all real secrets. These never enter git.
 - **in no env file at all:** the per-tier **Cloudflare API token**. Wrangler

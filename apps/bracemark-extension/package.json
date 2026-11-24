@@ -40,6 +40,16 @@
           "{projectRoot}/.output/firefox-mv3-staging"
         ]
       },
+      "build:staging:safari": {
+        "cache": true,
+        "inputs": [
+          "production",
+          "^production"
+        ],
+        "outputs": [
+          "{projectRoot}/.output/safari-mv3-staging"
+        ]
+      },
       "build": {
         "cache": true,
         "inputs": [
@@ -60,6 +70,16 @@
           "{projectRoot}/.output/firefox-mv3"
         ]
       },
+      "build:safari": {
+        "cache": true,
+        "inputs": [
+          "production",
+          "^production"
+        ],
+        "outputs": [
+          "{projectRoot}/.output/safari-mv3"
+        ]
+      },
       "zip": {
         "cache": false
       },
@@ -74,8 +94,10 @@
     "build:development": "wxt build --mode development",
     "build:staging": "wxt build --mode staging",
     "build:staging:firefox": "wxt build -b firefox --mode staging",
+    "build:staging:safari": "wxt build -b safari --mode staging",
     "build": "wxt build",
     "build:firefox": "wxt build -b firefox",
+    "build:safari": "wxt build -b safari",
     "zip": "bash ../../tools/scripts/store-release.sh build chrome -- wxt zip",
     "zip:firefox": "bash ../../tools/scripts/store-release.sh build firefox -- wxt zip -b firefox",
     "tag:chrome": "bash ../../tools/scripts/store-release.sh tag chrome",

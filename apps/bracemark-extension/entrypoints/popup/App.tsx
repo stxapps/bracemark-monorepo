@@ -7,6 +7,7 @@ import { type LinkItem, readLinkByUrlKey, useAuth, useSync } from '@stxapps/web-
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
+import { ApiAccess, ApiAccessDone, isApiAccessTab, useApiAccess } from './ApiAccess';
 import { Complete } from './Complete';
 import { Editor } from './Editor';
 import { type KeepRequest } from './KeptCopies';
@@ -49,11 +50,17 @@ function Loading() {
 // If the active URL is already in the local store, we skip the editor and open the
 // complete page straight away (covers reopening a saved tab, and the bonus path of
 // opening a web-app-saved link then clicking the icon). A match in TRASH is the
-// exception — see SaveFlow.
+// exception — see SaveFlow. On Safari one step comes before all of it: access to
+// bracemark-api, which Safari doesn't grant at install, asked for from this page
+// opened as a tab (ApiAccess.tsx).
 function App() {
   const { status } = useAuth();
+  const [apiAccess, grantApiAccess] = useApiAccess();
+  const [inTab] = useState(isApiAccessTab);
 
-  if (status === 'loading') {
+  if (apiAccess === false) return <ApiAccess inTab={inTab} onGranted={grantApiAccess} />;
+  if (inTab && apiAccess) return <ApiAccessDone />;
+  if (status === 'loading' || apiAccess === undefined) {
     return (
       <PopupShell>
         <Loading />

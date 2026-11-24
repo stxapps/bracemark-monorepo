@@ -126,6 +126,24 @@ export default defineConfig({
         if (/\.(spec|test)\.[cm]?[jt]sx?$/.test(infos[i].inputPath)) infos.splice(i, 1);
       }
     },
+    // SAFARI GETS AN EVENT PAGE, NOT A SERVICE WORKER. WXT gives every MV3 build
+    // but Firefox's `background.service_worker`. In Safari 27.2 that worker, once
+    // signed in, stopped receiving `runtime.sendMessage` from the popup: the call
+    // resolved at once with `undefined`, so KICK_SYNC did nothing and a save sat on
+    // "Not synced yet". The same bundle as a non-persistent background page
+    // answered, and synced. Firefox already runs it this way, so the background's
+    // lifetime rules are the ones docs/browser-extension.md already holds for
+    // Firefox (_a cycle outlives the idle timeout_). What failed and what didn't:
+    // docs/browser-extension.md, _Safari_.
+    'build:manifestGenerated': (wxt, manifest) => {
+      if (wxt.config.browser !== 'safari') return;
+      const worker =
+        manifest.background && 'service_worker' in manifest.background
+          ? manifest.background.service_worker
+          : undefined;
+      if (!worker) throw new Error('Safari build: expected WXT to emit background.service_worker');
+      manifest.background = { scripts: [worker], persistent: false };
+    },
   },
   // Both neighbouring dev servers are already spoken for: bracemark-web's `npm run
   // dev` owns :3000 and bracemark-site's `npm run dev:site` owns :3001 (see each
@@ -145,6 +163,7 @@ export default defineConfig({
   manifestVersion: 3,
   manifest: ({ browser, mode }) => {
     const isFirefox = browser === 'firefox';
+    const isSafari = browser === 'safari';
     // bracemark-api host the extension talks to, per build mode. Single source of
     // truth: the same WXT_PUBLIC_API_URL that utils/api-client.ts reads, loaded here at
     // config time from `.env.<mode>` (dev :8787, staging/prod custom domains).
@@ -305,24 +324,35 @@ export default defineConfig({
               gecko_android: { strict_min_version: '142.0' },
             },
           }
-        : {
-            // Chrome 111 (Mar 2023), and it is DERIVED the same way gecko's floor is:
-            // it's exactly where Vite's default JS target and Tailwind v4's CSS floor
-            // both land, and nothing in the graph needs newer (Dexie feature-detects
-            // Promise.withResolvers rather than requiring it; CompressionStream never
-            // reaches this bundle). Chrome has no equivalent of the Firefox 140 rule —
-            // its data disclosure is the Web Store dashboard's Privacy tab, not a
-            // manifest key — so the two numbers differ by three years and that's fine.
-            //
-            // Do NOT track this to "latest minus a few". These fields gate INSTALL AND
-            // UPDATE DELIVERY, not testing: a browser below the floor silently stops
-            // receiving new versions, so every bump strands whoever installed under the
-            // old one. Set it once at the real floor and leave it. Too HIGH costs reach
-            // for no quality gain; too LOW is the actual bug, and it was — the previous
-            // '93' let Chrome ship a popup whose CSS Tailwind v4 cannot render and whose
-            // JS Vite no longer targets.
-            minimum_chrome_version: '111',
-          }),
+        : isSafari
+          ? {
+              // Safari 16.4, DERIVED the same way as the two floors around it: Vite's
+              // default JS target (`baseline-widely-available`, which names
+              // safari16.4) and Tailwind v4's CSS floor both land there. In practice
+              // the container app's macOS floor is the binding one — apps/bracemark-macos
+              // installs on macOS 15 and up, whose Safari is already newer than this —
+              // but the manifest says what the code needs, not what the wrapper allows.
+              // Nothing below Safari 27.2 has been run.
+              browser_specific_settings: { safari: { strict_min_version: '16.4' } },
+            }
+          : {
+              // Chrome 111 (Mar 2023), and it is DERIVED the same way gecko's floor is:
+              // it's exactly where Vite's default JS target and Tailwind v4's CSS floor
+              // both land, and nothing in the graph needs newer (Dexie feature-detects
+              // Promise.withResolvers rather than requiring it; CompressionStream never
+              // reaches this bundle). Chrome has no equivalent of the Firefox 140 rule —
+              // its data disclosure is the Web Store dashboard's Privacy tab, not a
+              // manifest key — so the two numbers differ by three years and that's fine.
+              //
+              // Do NOT track this to "latest minus a few". These fields gate INSTALL AND
+              // UPDATE DELIVERY, not testing: a browser below the floor silently stops
+              // receiving new versions, so every bump strands whoever installed under the
+              // old one. Set it once at the real floor and leave it. Too HIGH costs reach
+              // for no quality gain; too LOW is the actual bug, and it was — the previous
+              // '93' let Chrome ship a popup whose CSS Tailwind v4 cannot render and whose
+              // JS Vite no longer targets.
+              minimum_chrome_version: '111',
+            }),
     };
   },
   vite: () => ({

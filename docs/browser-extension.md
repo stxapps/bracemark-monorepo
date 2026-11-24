@@ -543,3 +543,105 @@ from. Uploads are by hand. After releasing, `npm run tag:chrome` and
 ([hosting.md](./hosting.md#which-build-is-in-a-store--store-tags), _which build is
 in a store_). Plain `wxt zip` records nothing, and neither target may be cached by
 Nx, for the reason that section gives.
+
+Microsoft Edge Add-ons would take the Chrome package as it is. There is no Edge
+listing yet, and no `edge/` tag to record which build it carries. Safari is
+different: it takes the extension only inside an app, the next section.
+
+### Safari — the Mac app, measured 2026-11-24
+
+Safari takes a browser extension only inside an app, so the Safari build ships
+inside `apps/bracemark-macos` ([architecture.md](./architecture.md), _apps_).
+Not yet in any store. Everything below was run on Safari 27.2, macOS 26.7.2,
+Xcode 26.6, against staging, with a seed account; how to drive it is in
+[app-drivers.md](./app-drivers.md), _driving the browser extension in Safari_.
+
+**The pieces.** `npm run build:safari` (or `build:staging:safari`) here makes
+`.output/safari-mv3[-staging]`. `apps/bracemark-macos` never builds it itself:
+`tools/scripts/macos-app.sh` runs that target through Nx, copies the output to
+`apps/bracemark-macos/build/extension`, and the Xcode project's "Bracemark
+Extension" target copies that folder into the appex. From
+`apps/bracemark-macos`:
+
+- `npm run app:staging` — Debug build against staging, opened once so Safari
+  lists it. Safari then wants the extension turned on in Settings → Extensions,
+  which asks for Touch ID when a script did the clicking.
+- `npm run bundle` — the App Store build: production api (the script refuses
+  anything else), Release archive in `build/`, build number checked against App
+  Store Connect, commit recorded (`store-release.sh`).
+- `npm run upload`, then after release `npm run tag` (`macos/<version>-<build>`,
+  [hosting.md](./hosting.md#which-build-is-in-a-store--store-tags)).
+
+**What works unchanged:** the popup and options page draw as in Chrome; sign-in,
+including the Argon2id KDF in WASM under `'wasm-unsafe-eval'` (WebKit once broke
+that directive in extensions, bug 290153); the non-extractable key across
+reloads and rebuilds; `activeTab` reads; save, and sync both ways.
+
+**What the Safari build changes**, each a silent failure before it was fixed:
+
+- ⚠ **An event page, not a service worker.** WXT gives every MV3 build except
+  Firefox's `background.service_worker`; `wxt.config.ts` rewrites the Safari
+  manifest to `background: { scripts, persistent: false }`. With the worker,
+  once signed in, the popup's `runtime.sendMessage` either resolved at once with
+  `undefined` or never resolved, so `KICK_SYNC` did nothing and a save sat on
+  "Not synced yet"; meanwhile every extension page, the options page included,
+  loaded blank and never finished. The same bundle as an event page answered in
+  345 ms and synced. Firefox already runs it this way, so the Firefox caveats
+  hold for Safari too: the event page has `localStorage` (_storage across
+  extension contexts_), and Safari's idle timeout (_a cycle outlives the idle
+  timeout_) has not been measured.
+  **What is known of the cause.** A bare worker in the same harness answered
+  messages fresh and after 90 s idle (Safari restarted it), and so did this
+  bundle signed out. Signed in, an instrumented copy logged the end of its top
+  level and then nothing: no 10 s heartbeat, no message, not even its first
+  `fetch`. So it froze in the span where the startup cycle reads the session
+  from IndexedDB and arms its resume alarm, waiting rather than spinning (no
+  CPU). Which of those WebKit stalls on was not found.
+- ⚠ **Asking for the api host.** Safari grants no `host_permissions` at install:
+  the host sits at Ask in Settings → Websites, and every call fails with "Load
+  failed" (sign-in said only "Could not sign in. Please try again."). The popup
+  now opens on _Allow Bracemark to connect_ (`entrypoints/popup/ApiAccess.tsx`)
+  until `permissions.contains` says yes. **The request happens in a tab, not the
+  popup:** `permissions.request` from the toolbar popup raised nothing and left
+  the host at Ask, while the same call from the popup page opened as a tab
+  (`popup.html?api-access`), inside a click, raised Safari's dialog (Deny /
+  Always Allow / Allow for One Day) and resolved with the answer. So the popup's
+  Continue opens that tab. "Allow for One Day" lapses, and the screen returns.
+  Chrome and Firefox never render it (`IS_SAFARI`, `utils/target.ts`).
+- **The options page opens as a tab**, whatever `open_in_tab` says, so the
+  Safari build alone draws the header the other hosts make redundant
+  (`options/Shell.tsx`, `SafariHeader`).
+- **The floor** is `browser_specific_settings.safari.strict_min_version: 16.4`,
+  derived as the other two are (_the browser floors are derived_). The Mac app
+  installs on macOS 15 and up, the oldest macOS the current Safari ships for, so
+  in practice that is the floor; nothing below 26 has run.
+
+**Traps in the Xcode project**, none of which fails a build:
+
+- ⚠ **Re-sign after the copy.** The copy phase changes the appex's files after
+  Xcode has decided what to sign. On an incremental build that left the old
+  signature over new files, and Safari quietly refused the extension: no toolbar
+  button, no background. The phase now declares `manifest.json` as its output and
+  touches it, which makes Xcode re-sign, and `macos-app.sh` runs
+  `codesign --verify --deep --strict` after every build.
+- **Copy the folder, don't list files.** Apple's converter lists each resource in
+  the project; WXT renames its chunks on every build, and a file added later (an
+  options page) was silently left out. The copy phase takes the whole folder.
+- **The converter ignores `--bundle-identifier` for the app**, so its first build
+  fails ("Embedded binary's bundle identifier is not prefixed with the parent
+  app's bundle identifier"). This project sets both ids in `Config/Base.xcconfig`.
+- **The icon is an Icon Composer file.** macOS 26 put a hand-rendered rounded
+  square inside a grey square ([brand-visuals.md](./brand-visuals.md), _the mark_).
+
+**Still open before a submission:**
+
+- **"Upgrade to Plus".** The popup and the options page send a free user to
+  bracemark-web to pay. An app sold through the App Store may be asked to use
+  in-app purchase there or drop the button ([iap.md](./iap.md)).
+- **The App Store record.** `com.bracemark.app` makes this the macOS app of the
+  iOS app's record (universal purchase); App Store Connect needs the macOS
+  platform added to that record, and the first upload creates the macOS signing
+  profiles (`macos-upload.sh`). Export compliance is answered there as for iOS.
+- **Not run:** the read-mode and screenshot captures (Plus), a production build,
+  App Review, Safari on iPhone and iPad (a target inside `bracemark-expo`, not
+  this app).

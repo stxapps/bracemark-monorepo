@@ -45,6 +45,7 @@ export interface FakeBrowser {
     sendMessage: jest.Mock;
     openOptionsPage: jest.Mock;
     getManifest: jest.Mock<{ version: string }, []>;
+    getURL: jest.Mock<string, [string]>;
     onMessage: {
       addListener: jest.Mock<void, [MessageListener]>;
       /** The listener background.ts registered, for a spec to drive directly. */
@@ -62,6 +63,11 @@ export interface FakeBrowser {
   };
   scripting: {
     executeScript: jest.Mock;
+  };
+  /** Only Safari's popup calls these (entrypoints/popup/ApiAccess.tsx). Granted by default. */
+  permissions: {
+    contains: jest.Mock<Promise<boolean>, [{ origins: string[] }]>;
+    request: jest.Mock<Promise<boolean>, [{ origins: string[] }]>;
   };
   alarms: {
     create: jest.Mock;
@@ -150,6 +156,7 @@ export function createFakeBrowser(): FakeBrowser {
       sendMessage: jest.fn(async () => ({ ok: true })),
       openOptionsPage: jest.fn(),
       getManifest: jest.fn(() => ({ version: '0.0.1' })),
+      getURL: jest.fn((path: string) => `chrome-extension://test${path}`),
       onMessage: {
         addListener: jest.fn((l: MessageListener) => {
           fake.runtime.onMessage.listener = l;
@@ -167,6 +174,10 @@ export function createFakeBrowser(): FakeBrowser {
     },
     scripting: {
       executeScript: jest.fn(async () => [{ result: undefined }]),
+    },
+    permissions: {
+      contains: jest.fn(async (_query: { origins: string[] }) => true),
+      request: jest.fn(async (_query: { origins: string[] }) => true),
     },
     alarms: {
       create: jest.fn(),

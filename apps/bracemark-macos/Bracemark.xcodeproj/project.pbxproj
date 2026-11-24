@@ -1,0 +1,407 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B0A0C0D0E0F0000000000030 /* BracemarkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0A0C0D0E0F0000000000020 /* BracemarkApp.swift */; };
+		B0A0C0D0E0F0000000000031 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0A0C0D0E0F0000000000021 /* ContentView.swift */; };
+		B0A0C0D0E0F0000000000032 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = B0A0C0D0E0F0000000000022 /* AppIcon.icon */; };
+		B0A0C0D0E0F0000000000033 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0A0C0D0E0F0000000000024 /* SafariWebExtensionHandler.swift */; };
+		B0A0C0D0E0F0000000000034 /* Bracemark Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B0A0C0D0E0F0000000000011 /* Bracemark Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B0A0C0D0E0F0000000000060 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B0A0C0D0E0F0000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B0A0C0D0E0F0000000000041;
+			remoteInfo = "Bracemark Extension";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B0A0C0D0E0F0000000000053 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				B0A0C0D0E0F0000000000034 /* Bracemark Extension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		B0A0C0D0E0F0000000000010 /* Bracemark.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Bracemark.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B0A0C0D0E0F0000000000011 /* Bracemark Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Bracemark Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		B0A0C0D0E0F0000000000020 /* BracemarkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BracemarkApp.swift; sourceTree = "<group>"; };
+		B0A0C0D0E0F0000000000021 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		B0A0C0D0E0F0000000000022 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
+		B0A0C0D0E0F0000000000023 /* Bracemark.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Bracemark.entitlements; sourceTree = "<group>"; };
+		B0A0C0D0E0F0000000000024 /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
+		B0A0C0D0E0F0000000000025 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B0A0C0D0E0F0000000000026 /* SafariExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SafariExtension.entitlements; sourceTree = "<group>"; };
+		B0A0C0D0E0F0000000000027 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B0A0C0D0E0F0000000000052 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B0A0C0D0E0F0000000000056 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		B0A0C0D0E0F0000000000002 = {
+			isa = PBXGroup;
+			children = (
+				B0A0C0D0E0F0000000000004 /* App */,
+				B0A0C0D0E0F0000000000005 /* SafariExtension */,
+				B0A0C0D0E0F0000000000006 /* Config */,
+				B0A0C0D0E0F0000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		B0A0C0D0E0F0000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B0A0C0D0E0F0000000000010 /* Bracemark.app */,
+				B0A0C0D0E0F0000000000011 /* Bracemark Extension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		B0A0C0D0E0F0000000000004 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				B0A0C0D0E0F0000000000020 /* BracemarkApp.swift */,
+				B0A0C0D0E0F0000000000021 /* ContentView.swift */,
+				B0A0C0D0E0F0000000000022 /* AppIcon.icon */,
+				B0A0C0D0E0F0000000000023 /* Bracemark.entitlements */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		B0A0C0D0E0F0000000000005 /* SafariExtension */ = {
+			isa = PBXGroup;
+			children = (
+				B0A0C0D0E0F0000000000024 /* SafariWebExtensionHandler.swift */,
+				B0A0C0D0E0F0000000000025 /* Info.plist */,
+				B0A0C0D0E0F0000000000026 /* SafariExtension.entitlements */,
+			);
+			path = SafariExtension;
+			sourceTree = "<group>";
+		};
+		B0A0C0D0E0F0000000000006 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				B0A0C0D0E0F0000000000027 /* Base.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		B0A0C0D0E0F0000000000040 /* Bracemark */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B0A0C0D0E0F0000000000073 /* Build configuration list for PBXNativeTarget "Bracemark" */;
+			buildPhases = (
+				B0A0C0D0E0F0000000000050 /* Sources */,
+				B0A0C0D0E0F0000000000052 /* Frameworks */,
+				B0A0C0D0E0F0000000000051 /* Resources */,
+				B0A0C0D0E0F0000000000053 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B0A0C0D0E0F0000000000061 /* PBXTargetDependency */,
+			);
+			name = Bracemark;
+			productName = Bracemark;
+			productReference = B0A0C0D0E0F0000000000010 /* Bracemark.app */;
+			productType = "com.apple.product-type.application";
+		};
+		B0A0C0D0E0F0000000000041 /* Bracemark Extension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B0A0C0D0E0F0000000000076 /* Build configuration list for PBXNativeTarget "Bracemark Extension" */;
+			buildPhases = (
+				B0A0C0D0E0F0000000000054 /* Sources */,
+				B0A0C0D0E0F0000000000056 /* Frameworks */,
+				B0A0C0D0E0F0000000000055 /* Resources */,
+				B0A0C0D0E0F0000000000057 /* Copy the browser extension build */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "Bracemark Extension";
+			productName = "Bracemark Extension";
+			productReference = B0A0C0D0E0F0000000000011 /* Bracemark Extension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B0A0C0D0E0F0000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					B0A0C0D0E0F0000000000040 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					B0A0C0D0E0F0000000000041 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+				};
+			};
+			buildConfigurationList = B0A0C0D0E0F0000000000070 /* Build configuration list for PBXProject "Bracemark" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = B0A0C0D0E0F0000000000002;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = B0A0C0D0E0F0000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B0A0C0D0E0F0000000000040 /* Bracemark */,
+				B0A0C0D0E0F0000000000041 /* Bracemark Extension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		B0A0C0D0E0F0000000000051 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B0A0C0D0E0F0000000000032 /* AppIcon.icon in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B0A0C0D0E0F0000000000055 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		B0A0C0D0E0F0000000000057 /* Copy the browser extension build */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Copy the browser extension build";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/manifest.json",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# The browser extension itself is apps/bracemark-extension's Safari build,\n# copied into build/extension by tools/scripts/macos-app.sh. Safari reads\n# manifest.json from the root of this appex's Resources, and WXT renames its\n# chunks on every build, so the whole folder is copied here rather than\n# listed file by file in this project. docs/browser-extension.md, _Safari_.\nset -eu\nsrc=\"${PROJECT_DIR}/build/extension\"\nif [ ! -f \"${src}/manifest.json\" ]; then\n  echo \"error: no browser extension build in apps/bracemark-macos/build/extension. Run npm run app:staging or npm run bundle from apps/bracemark-macos first.\" >&2\n  exit 1\nfi\ndest=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}\"\nmkdir -p \"${dest}\"\nrsync -a --delete \"${src}/\" \"${dest}/\"\n# Declared as this phase's output and touched on every run: that is what makes\n# Xcode re-sign the appex after the copy. Without it an incremental build kept\n# the old signature over new files, and Safari silently refused to load the\n# extension (no toolbar button, no background).\ntouch \"${dest}/manifest.json\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B0A0C0D0E0F0000000000050 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B0A0C0D0E0F0000000000030 /* BracemarkApp.swift in Sources */,
+				B0A0C0D0E0F0000000000031 /* ContentView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B0A0C0D0E0F0000000000054 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B0A0C0D0E0F0000000000033 /* SafariWebExtensionHandler.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B0A0C0D0E0F0000000000061 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B0A0C0D0E0F0000000000041 /* Bracemark Extension */;
+			targetProxy = B0A0C0D0E0F0000000000060 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		B0A0C0D0E0F0000000000071 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = B0A0C0D0E0F0000000000027 /* Base.xcconfig */;
+			buildSettings = {
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		B0A0C0D0E0F0000000000072 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = B0A0C0D0E0F0000000000027 /* Base.xcconfig */;
+			buildSettings = {
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		B0A0C0D0E0F0000000000074 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/Bracemark.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Bracemark;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(BRACEMARK_APP_ID)";
+				PRODUCT_NAME = Bracemark;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Debug;
+		};
+		B0A0C0D0E0F0000000000075 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/Bracemark.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Bracemark;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(BRACEMARK_APP_ID)";
+				PRODUCT_NAME = Bracemark;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Release;
+		};
+		B0A0C0D0E0F0000000000077 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SafariExtension/SafariExtension.entitlements;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SafariExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Bracemark;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(BRACEMARK_EXTENSION_ID)";
+				PRODUCT_NAME = "Bracemark Extension";
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+		B0A0C0D0E0F0000000000078 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SafariExtension/SafariExtension.entitlements;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SafariExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Bracemark;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(BRACEMARK_EXTENSION_ID)";
+				PRODUCT_NAME = "Bracemark Extension";
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		B0A0C0D0E0F0000000000070 /* Build configuration list for PBXProject "Bracemark" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B0A0C0D0E0F0000000000071 /* Debug */,
+				B0A0C0D0E0F0000000000072 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B0A0C0D0E0F0000000000073 /* Build configuration list for PBXNativeTarget "Bracemark" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B0A0C0D0E0F0000000000074 /* Debug */,
+				B0A0C0D0E0F0000000000075 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B0A0C0D0E0F0000000000076 /* Build configuration list for PBXNativeTarget "Bracemark Extension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B0A0C0D0E0F0000000000077 /* Debug */,
+				B0A0C0D0E0F0000000000078 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = B0A0C0D0E0F0000000000001 /* Project object */;
+}

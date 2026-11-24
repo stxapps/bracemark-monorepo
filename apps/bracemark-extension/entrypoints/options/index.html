@@ -13,8 +13,10 @@
       with no host chrome at all: nothing names the product, and nothing tells it
       apart from bracemark-web's Settings, which carries the same title and could
       then sit in the next tab over. Restore the header in the same change if you
-      ever do. WXT reads `manifest.*` meta tags as per-entrypoint config; false is
-      also its default, written out so the choice is visible where it'd be changed.
+      ever do. Safari ignores this key and always opens a tab, which is why its
+      build alone draws that header (Shell.tsx, `SafariHeader`). WXT reads
+      `manifest.*` meta tags as per-entrypoint config; false is also its default,
+      written out so the choice is visible where it'd be changed.
     -->
     <meta name="manifest.open_in_tab" content="false" />
     <!--

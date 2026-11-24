@@ -119,6 +119,12 @@ node_modules/
 # which builds ios/BlobFrame.swift for the host so its suite needs no simulator)
 # drops its output beside the committed Swift sources.
 /packages/*/.build/
+# apps/bracemark-macos: the browser extension build its Xcode project copies in,
+# the DerivedData and the .xcarchive (all under build/), Xcode's per-user state,
+# and Local.xcconfig, which holds the developer's DEVELOPMENT_TEAM.
+/apps/bracemark-macos/build/
+/apps/bracemark-macos/Config/Local.xcconfig
+xcuserdata/
 .yarn/
 dist/
 npm-debug.*

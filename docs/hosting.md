@@ -1427,9 +1427,13 @@ commit records when the number moved, and a tag records what went out, in
 | Google Play      | `android/<version>-<versionCode>` | `android:bundle` | `npm run android:tag` |
 | Chrome Web Store | `chrome/<version>`                | `zip`            | `npm run tag:chrome`  |
 | Firefox Add-ons  | `firefox/<version>`               | `zip:firefox`    | `npm run tag:firefox` |
+| Mac App Store    | `macos/<version>-<buildNumber>`   | `bundle`         | `npm run tag`         |
 
-The first two run from `apps/bracemark-expo`, the last two from
-`apps/bracemark-extension`.
+The first two run from `apps/bracemark-expo`, the next two from
+`apps/bracemark-extension`, and the last from `apps/bracemark-macos`, the Mac app
+that carries the browser extension's Safari build. Its numbers are
+`MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `Config/Base.xcconfig`; the
+Safari build inside it keeps the browser extension's own version.
 
 ```bash
 git log firefox/1.1.0..firefox/1.2.0 -- apps packages   # what a release contained

@@ -1,0 +1,45 @@
+// Every build setting this project chooses, in one place. The two targets'
+// own settings in project.pbxproj are only what differs between an app and an
+// app extension. docs/architecture.md, _apps_; docs/browser-extension.md, _Safari_.
+
+// THE APP JOINS bracemark-expo's App Store record. Universal purchase needs the
+// same bundle id on every platform, so the Mac app is com.bracemark.app, as the
+// iOS app is, and appears as a macOS app on the one listing. The extension's id
+// has to start with the app's.
+BRACEMARK_APP_ID = com.bracemark.app
+BRACEMARK_EXTENSION_ID = $(BRACEMARK_APP_ID).safari-extension
+
+// Read by App Store Connect, which refuses an upload that reuses a build number
+// for a version: bump CURRENT_PROJECT_VERSION for every upload, and
+// MARKETING_VERSION for every release. Separate from the iOS app's numbers,
+// which live in apps/bracemark-expo/app.config.ts. docs/architecture.md,
+// _project versions_.
+MARKETING_VERSION = 1.0.0
+CURRENT_PROJECT_VERSION = 1
+
+// macOS 15, the oldest macOS that gets the current Safari (Safari 27 ships for
+// Sequoia and Tahoe, as of 2026-11), so every Mac that can install this has a
+// supported Safari. It is a choice, not a measured floor: only macOS 26 has
+// run. Lowering it later is free; raising it strands whoever installed under
+// the old one.
+MACOSX_DEPLOYMENT_TARGET = 15.0
+
+SDKROOT = macosx
+SWIFT_VERSION = 5.0
+DEAD_CODE_STRIPPING = YES
+COPY_PHASE_STRIP = NO
+ALWAYS_SEARCH_USER_PATHS = NO
+ENABLE_HARDENED_RUNTIME = YES
+
+// Signed with the developer's Apple Development certificate and no provisioning
+// profile: enough for Safari to load it locally, and it registers nothing in the
+// developer account. `npm run upload` re-signs the archive for the App Store.
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = Apple Development
+PROVISIONING_PROFILE_SPECIFIER =
+
+// DEVELOPMENT_TEAM comes from here: gitignored, one line, the same team id as
+// APPLE_TEAM_ID in apps/bracemark-expo/.env.local. An identifier, not a
+// credential (docs/env-files.md); kept out of the tree because it is
+// per-developer, not per-project.
+#include? "Local.xcconfig"

@@ -1,7 +1,9 @@
 import { ArrowUpRight } from 'lucide-react';
 
+import { BrandLockup } from '@stxapps/web-ui/components/brand-lockup';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
+import { IS_SAFARI } from '@/utils/target';
 import { WEB_APP_URL } from '@/utils/web-app-url';
 
 // Chrome for the Settings page — and deliberately less of it than a page gets. This
@@ -53,11 +55,9 @@ import { WEB_APP_URL } from '@/utils/web-app-url';
 //
 // 24px is the value that survives all three hosts. Under a host header it reads as
 // one deliberate gap rather than two stacked ones; standing alone it's still a
-// margin. That last case is Safari, which is why this doesn't go lower: Safari's
-// web-extension support has never had an embedded options host of Chrome's or
-// Firefox's kind, so if this page ships there at all it most likely opens in its
-// own window or tab, where this padding is the ONLY inset above the title and a
-// 16px one would read as text jammed against the top of the frame. 24 is also on
+// margin. That last case is Safari, which opens this page as a plain tab (measured
+// 2026-11-24): under its own header there, a 16px inset would read as the title
+// jammed against the rule. 24 is also on
 // the scale this page already uses — between the 32 of a section break and the 16
 // of the horizontal inset — rather than a fourth number.
 
@@ -73,15 +73,38 @@ import { WEB_APP_URL } from '@/utils/web-app-url';
 // over `vh` is house idiom only: the two differ where a mobile browser's URL bar
 // collapses — the reason bracemark-web cites — and no surface in the browser
 // extension has one.
+//
+// SAFARI IS THE EXCEPTION, and now a measured one rather than a guess
+// (docs/browser-extension.md, _Safari_). It has no embedded host:
+// `open_in_tab: false` has no effect there, and the page opens as a plain tab
+// with nothing above it naming the product. So the Safari build, and only it,
+// draws the header the other two hosts make redundant: the popup's lockup, and
+// the label that tells this page apart from bracemark-web's Settings in the next
+// tab. It is `IS_SAFARI`, a build-time constant, so Chrome and Firefox bundles
+// carry none of it.
 export function OptionsShell({ children }: { children: React.ReactNode }) {
   return (
     <div className={cn('flex min-h-dvh flex-col bg-background text-foreground')}>
+      {IS_SAFARI ? <SafariHeader /> : null}
       <main className={cn('mx-auto w-full max-w-2xl flex-1 px-4 pt-6 pb-10 md:px-6')}>
         {children}
       </main>
 
       <Footer />
     </div>
+  );
+}
+
+function SafariHeader() {
+  return (
+    <header className={cn('shrink-0 border-b border-border')}>
+      <div className={cn('mx-auto flex h-14 max-w-2xl items-center px-4 md:px-6')}>
+        <BrandLockup
+          className={cn('w-full')}
+          action={<span className={cn('text-xs text-muted-foreground')}>Browser extension</span>}
+        />
+      </div>
+    </header>
   );
 }
 

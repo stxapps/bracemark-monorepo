@@ -74,8 +74,9 @@ section. Keep them there; this doc is the design record.
 ### ⚠ driving real Safari on macOS
 
 **Use this only for what Safari alone shows**: AutoFill, Passwords, and the offers
-and prompts around them. Those belong to the Safari app rather than to WebKit, and
-they are browser chrome, so no spec and no scripted run sees them. The commands are
+and prompts around them, and the browser extension's Safari build (below). Those
+belong to the Safari app rather than to WebKit, and they are browser chrome, so no
+spec and no scripted run sees them. The commands are
 in `.claude/skills/verify/SKILL.md`, _Drive real Safari on macOS_.
 
 | route                                       | status                          | use here                                                                                 |
@@ -144,6 +145,48 @@ setter plus an `input` event, and a Radix menu needs pointer events rather than
 `click()`. Sign-out takes several seconds. Navigating before it lands redirects to
 the signed-in app, and the next keystrokes go to the wrong page, so read
 `location.pathname` before typing.
+
+#### driving the browser extension in Safari
+
+Same app, same grants, same real profile. Measured 2026-11-24 on Safari 27.2
+([browser-extension.md](./browser-extension.md), _Safari — the Mac app_). Build
+with `npm run app:staging` in `apps/bracemark-macos`, and sign the extension out
+at the end, because its key and library live in the real profile.
+
+- ⚠ **Turning the extension on needs the owner.** After scripted clicks, Safari
+  answers a tick in Settings → Extensions with "Safari detected an app or service
+  that interfered with clicking" and asks for Touch ID. Ask for it once: a
+  rebuild under the same bundle id keeps it on.
+- **A rebuild reloads the extension**: its tabs close, its UUID changes, and its
+  website access may go back to Ask.
+- **Click the toolbar button with a real mouse click.** A System Events `click`,
+  and sometimes `AXPress`, also opened a **Manage Extension…** menu, and while
+  that menu is open every Apple Event to Safari hangs, `activate` included. Only
+  a System Events key code 53 (Escape) closes it, so wrap each `osascript` in
+  `timeout`. Read the button's position from the accessibility tree and post the
+  click with a few lines of Swift (`CGEvent` `leftMouseDown`/`leftMouseUp`, built
+  with `xcrun swiftc`). Screen points are screenshot pixels ÷ 2.
+- **The popup is not in the accessibility tree**, and a System Events `click at`
+  inside it does nothing; the same real click works. Keystrokes reach it only
+  while a field in it has focus, as the sign-in form's username field does when it
+  opens.
+- **`do JavaScript` works in an extension page opened as a tab**:
+  `safari-web-extension://<UUID>/popup.html`, then click buttons and call
+  `browser.*` from there. Store an async result on `window` and read it in a
+  second call. To find the UUID, open Safari Settings → Extensions → the
+  extension → **Settings**, which opens the options page in a tab, and read that
+  tab's URL.
+- **A blank extension page that never finishes loading means the background is
+  stuck**, not the page: every page of the extension hung that way while the
+  service worker was frozen. `do JavaScript` into such a tab hangs too.
+- **The background has no usable console.** Develop → Web Extension Background
+  Content opens an inspector, but typed commands did not run. Patch the copied
+  `background.js` in `apps/bracemark-macos/build/extension` to write markers with
+  unique keys to `storage.local`, rebuild with `xcodebuild`, and read them from a
+  tab; `npm run app:staging` puts the real build back.
+- **Website access is in Safari Settings → Websites**, under Extensions at the
+  bottom of the list, one Ask/Deny/Allow menu per host. Escape on Safari's own
+  access prompt counts as Deny.
 
 ### ⚠ driving Safari in the iOS Simulator
 

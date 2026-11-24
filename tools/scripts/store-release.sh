@@ -9,10 +9,12 @@
 #   tools/scripts/store-release.sh name <store>
 #
 # <store> is ios, android (bracemark-expo), chrome or firefox (the browser
-# extension). Reached through the app-level scripts rather than by hand:
+# extension), or macos (bracemark-macos, which carries the browser extension's
+# Safari build). Reached through the app-level scripts rather than by hand:
 #
 #   apps/bracemark-expo        ios:bundle  android:bundle    ios:tag  android:tag
 #   apps/bracemark-extension   zip         zip:firefox       tag:chrome  tag:firefox
+#   apps/bracemark-macos       bundle                        tag
 #
 # WHY THERE ARE TWO STEPS
 #
@@ -31,7 +33,7 @@
 #   problem=<why this build cannot be tagged, or nothing>
 #
 # WHAT A TAG SAYS. <store>/<version>, plus the build number where the store has
-# one (ios/1.2.0-1, android/1.2.0-4, chrome/1.2.0, firefox/1.2.0): the numbers a
+# one (ios/1.2.0-1, android/1.2.0-4, macos/1.0.0-1, chrome/1.2.0, firefox/1.2.0): the numbers a
 # bug report, the console and Settings → About all print, read back from the
 # native project or archive the build used rather than from app.config.ts. The
 # tag means RELEASED, because `tag` is run after releasing, so a build a store
@@ -41,7 +43,7 @@
 # is a warning at build time, because a trial build is a normal thing to want, and
 # a refusal at tag time, because a tag has to name a commit that holds what shipped.
 # That refusal comes after the build is live, so `check` makes the same one before
-# an upload. `ios:upload` runs it; the other three uploads are by hand, so the
+# an upload. `ios:upload` and macos's `upload` run it; the other three uploads are by hand, so the
 # warning at the end of their build is the last word.
 #
 # `build` also warns on release notes `npm run check:release-notes` would reject.
@@ -53,7 +55,7 @@
 # upload, which is why `tag` shows the commit and asks: a rebuild under the same
 # number after uploading would otherwise tag the wrong one.
 #
-# Requires: git, node; plutil (macOS) for ios.
+# Requires: git, node; plutil (macOS) for ios and macos.
 
 set -euo pipefail
 
@@ -61,10 +63,10 @@ readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: store-release.sh build <ios|android|chrome|firefox> -- <build command...>
-       store-release.sh check <ios|android|chrome|firefox>
-       store-release.sh tag   <ios|android|chrome|firefox> [options]
-       store-release.sh name  <ios|android|chrome|firefox>
+Usage: store-release.sh build <ios|android|macos|chrome|firefox> -- <build command...>
+       store-release.sh check <ios|android|macos|chrome|firefox>
+       store-release.sh tag   <ios|android|macos|chrome|firefox> [options]
+       store-release.sh name  <ios|android|macos|chrome|firefox>
 
   build   Run the build, and record the commit it came from.
   check   Fail unless the last build can be uploaded and later tagged.
@@ -100,12 +102,17 @@ case "$STORE" in
     readonly RECORD="$APP_DIR/build/$STORE.store-build"
     readonly TAG_COMMAND="android:tag"
     ;;
+  macos)
+    readonly APP_DIR="$REPO_ROOT/apps/bracemark-macos"
+    readonly RECORD="$APP_DIR/build/$STORE.store-build"
+    readonly TAG_COMMAND="tag"
+    ;;
   chrome|firefox)
     readonly APP_DIR="$REPO_ROOT/apps/bracemark-extension"
     readonly RECORD="$APP_DIR/.output/$STORE.store-build"
     readonly TAG_COMMAND="tag:$STORE"
     ;;
-  *) die "unknown store '$STORE' (expected ios, android, chrome or firefox)" ;;
+  *) die "unknown store '$STORE' (expected ios, android, macos, chrome or firefox)" ;;
 esac
 
 head_commit() { git -C "$REPO_ROOT" rev-parse --verify 'HEAD^{commit}'; }
@@ -127,6 +134,11 @@ release_tag() {
       version="$(sed -n 's/^[[:space:]]*versionName[[:space:]]*"\([^"]*\)".*/\1/p' "$gradle")"
       number="$(sed -n 's/^[[:space:]]*versionCode[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$gradle")"
       ;;
+    macos)
+      plist="$APP_DIR/build/Bracemark.xcarchive/Products/Applications/Bracemark.app/Contents/Info.plist"
+      version="$(plutil -extract CFBundleShortVersionString raw "$plist")"
+      number="$(plutil -extract CFBundleVersion raw "$plist")"
+      ;;
     chrome|firefox)
       version="$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1])).version' \
         "$APP_DIR/package.json")"
@@ -134,7 +146,7 @@ release_tag() {
       ;;
   esac
   [[ "$version" =~ ^[0-9]+(\.[0-9]+)*$ ]] || die "can't read the $STORE build's version ('$version')"
-  if [ "$STORE" = ios ] || [ "$STORE" = android ]; then
+  if [ "$STORE" = ios ] || [ "$STORE" = android ] || [ "$STORE" = macos ]; then
     [[ "$number" =~ ^[0-9]+$ ]] || die "can't read the $STORE build's build number ('$number')"
     printf '%s/%s-%s' "$STORE" "$version" "$number"
   else
