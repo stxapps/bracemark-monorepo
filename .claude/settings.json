@@ -22,9 +22,9 @@
   "enabledPlugins": {
     "nx@nx-claude-plugins": true,
     "frontend-design@claude-plugins-official": true,
-    "swift-lsp@claude-plugins-official": false,
-    "paddle@claude-community": false,
-    "asc@rorkai": false
+    "swift-lsp@claude-plugins-official": true,
+    "asc@rorkai": true,
+    "paddle@claude-community": false
   },
   "skillOverrides": {
     "anthropic-skills:docs": "off",
