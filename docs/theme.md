@@ -760,14 +760,30 @@ under them but the content they scroll.
 ### the radius scale — one shape system, two kits
 
 **The round shape is not a token, and raising `--radius` will not produce it.**
-`--radius: 0.625rem` is mirrored byte-for-byte in `packages/web-ui/src/styles.css`
-and `apps/bracemark-expo/global.css`, and both derive the same
-`--radius-sm/md/lg/xl` from it (6/8/10/14px). Neither sheet touches
+Both sheets resolve `rounded-sm/md/lg/xl` to 6/8/10/14px. Neither sheet touches
 `--radius-2xl`, `--radius-3xl` or `--radius-4xl`, so those keep Tailwind's own
-defaults — 16px, 24px, 32px — on both sides. The kit's round look is written into
+defaults (16px, 24px, 32px) on both sides. The kit's round look is written into
 the COMPONENTS as `rounded-4xl` / `rounded-2xl` / `rounded-xl`, which do not
-derive from `--radius` at all. Move `--radius` and you move the registry
+derive from `--radius` at all. Move web's `--radius` and you move the registry
 leftovers and nothing a user notices; the classes are the system.
+
+⚠ **Bare `rounded` is 4px on both sides, and the two sheets get there by
+different spellings, which is why they drifted.** In
+`packages/web-ui/src/styles.css`, shadcn's `--radius: 0.625rem` sits in `:root`,
+OUTSIDE `@theme`. There it only feeds the `calc()`s behind `rounded-sm…xl`. Bare
+`rounded` reads the THEME key `--radius`, which web never sets, so it falls back
+to Tailwind's own `0.25rem`. `apps/bracemark-expo/global.css` used to carry the
+same line INSIDE its `@theme`, where it IS that theme key, so expo's bare
+`rounded` was 10dp against web's 4px. The steps matched, so the two sheets looked
+"mirrored". It touched the library row's preview slot, the skeleton boxes and
+the search-bar rows, and it flattened the share sheet's saved-corner cut into
+something close to a round corner, which is where it surfaced. Nothing caught
+it: the two apps are never on one screen. Expo's `@theme` now states the scale
+as literals, with `--radius: 0.25rem` meaning only bare `rounded`. Don't copy
+web's `:root` line into expo's `@theme`, and don't "restore" a `calc()` chain
+off `--radius` there. Checked by compiling both sheets for `rounded` and running
+expo's through the Uniwind probe in _extending_ below, which prints
+`--radius => 4`.
 
 | role                                                    | class           | px  | components                                                                                                |
 | ------------------------------------------------------- | --------------- | --- | --------------------------------------------------------------------------------------------------------- |

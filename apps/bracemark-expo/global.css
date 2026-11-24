@@ -46,11 +46,19 @@
      only tells Tailwind/Uniwind which family that utility should emit. Keep
      all three names in sync. */
   --font-sans: 'Inter';
-  --radius: 0.625rem;
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* The radius scale, as literals, because here `--radius` has TWO jobs and web
+     gives it only one. web-ui keeps shadcn's `--radius: 0.625rem` in `:root`,
+     OUTSIDE `@theme`, where it only feeds `rounded-sm/md/lg/xl`. Bare `rounded`
+     reads the THEME key `--radius`, which web never sets, so it falls back to
+     Tailwind's own 0.25rem. Inside this `@theme` the same line WAS the theme key,
+     so bare `rounded` came out 10dp here against web's 4px, and nothing reported it
+     (docs/theme.md, _the radius scale_). So `--radius` is web's 4px, and the steps
+     are the values web derives from its 0.625rem: 6/8/10/14. */
+  --radius: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
 }
 
 /* The `font-mono` family, one per platform, because RN's `fontFamily` is ONE

@@ -60,8 +60,10 @@ const CUT = 12; // 0.75rem — the extension specimen's cut, verbatim
 // The overlay that takes the corner off: a square rotated 45° and centred on the
 // slot's top-right corner. Its half-diagonal is the cut, so its lower-left edge
 // runs exactly from (SLOT_W − CUT, 0) to (SLOT_W, CUT) — the chamfer — and its
-// body covers everything beyond, the rounded corner's arc included (the arc sits
-// 3.3px from the corner, the chamfer 8.5px, so nothing of it survives). It
+// body covers everything beyond, the rounded corner's arc included (at the
+// slot's 4px radius the arc sits 1.2px from the corner, the chamfer 8.5px, so
+// nothing of it survives — and 8px of straight edge stays between the two,
+// which is what lets the cut read as a cut). It
 // erases the plate's border along the diagonal too, which is not a defect: web's
 // `clip-path` erases its ring there for the same reason, so the two match.
 // Painted in `--popover` because that is what the specimen always sits on — the
@@ -103,7 +105,12 @@ export function ShareSpecimen({
 
           `mt-0.5` for the reason the row's slot carries it: `items-start` aligns
           this box to the title's text box, whose glyphs start ~1.5px below that
-          edge, so a flush tile reads as sitting high. */}
+          edge, so a flush tile reads as sitting high.
+
+          `rounded` is 4px, as on web (global.css, the `@theme` radius block), and
+          the 12px cut depends on it: when expo's bare `rounded` was 10dp, a 12dp
+          chamfer took almost nothing the rounding hadn't already, and the save
+          read as a slightly flattened round corner, not a fold. */}
       <View
         aria-hidden
         className="mt-0.5 shrink-0 items-center justify-center rounded border border-foreground/10"
