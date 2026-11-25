@@ -241,6 +241,33 @@ below). Admit another case by adding `firefox`
 to its `browsers` and running it on both engines; the rule is the one above —
 something Gecko does differently has to be on the path.
 
+**⚠ A Firefox that never starts.** Sometimes headless Firefox launches, prints
+`Juggler listening to the pipe`, and then never finishes starting. Its stderr
+carries `RenderCompositorSWGL failed mapping default framebuffer, no dt`, and its
+profile keeps `.startup-incomplete`. The software compositor had no surface for
+the first frame, so the browser window never paints. Firefox runs its delayed
+startup (`browser-init.js`) only after that first `MozAfterPaint`. Juggler answers
+Playwright's `Browser.enable` only after `browser-idle-startup-tasks-finished`.
+So `launchPersistentContext` hangs. It shows as a case timing out at 90s with one
+`launchPersistentContext` in its trace and no other call, or as a
+`browserType.launchPersistentContext: Timeout 180000ms exceeded`.
+
+This is Gecko's bug, not ours. It is the hang tracked in Mozilla bug 1693011
+(headless with software rendering). In the run that exposed it, it hit two
+launches in one run (2026-11-25, Firefox 153, macOS 26). Both came while the
+machine was under memory pressure, with swap in use. Twenty quiet launches did
+not reproduce it, and neither did thirty-two under full CPU load. A healthy launch
+takes about 1.5s, and about 5s on a loaded machine.
+
+So `launchApp` (`web/fixtures/launch.ts`) bounds every Firefox launch at 30s.
+After a timeout it relaunches once on a fresh profile, and it writes a `Firefox
+did not finish starting` line to the log. Playwright kills the stalled process
+when the launch times out. Like the driver-loss rerun (_artifacts and retries_, below), this
+does not retry a verdict, because the first attempt never reached the app. A
+second stall in a row still fails the case. Do not drop the bound to make the
+relaunch "cleaner". Without it, the 90s test budget runs out first, and the case
+fails with no relaunch at all.
+
 #### the browser extension functional target
 
 `e2e-extension` builds the development Chrome MV3 bundle (`e2e-extension:staging`

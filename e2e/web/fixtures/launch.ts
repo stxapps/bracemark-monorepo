@@ -1,8 +1,8 @@
 import { rm } from 'node:fs/promises';
 
-import { type BrowserContext, type Page } from '@playwright/test';
+import { type BrowserContext, errors, type Page } from '@playwright/test';
 
-import { BROWSER_LAUNCH, BROWSER_TYPE } from '../../runner/browser';
+import { BROWSER_LAUNCH, BROWSER_TYPE, IS_FIREFOX } from '../../runner/browser';
 import {
   createAccount,
   createAccountWithRecovery,
@@ -104,7 +104,7 @@ export async function launchApp(
   // System Chrome, or Playwright's Firefox on a Firefox run (runner/browser.ts).
   // A Firefox profile keeps IndexedDB, and the non-extractable key in it, the
   // same way, so nothing else here changes.
-  const context = await BROWSER_TYPE.launchPersistentContext(userDataDir, {
+  const context = await launchContext(userDataDir, {
     ...BROWSER_LAUNCH,
     baseURL: options.baseURL ?? WEB_URL,
     bypassCSP: false,
@@ -143,4 +143,41 @@ export async function launchApp(
       await rm(userDataDir, { recursive: true, force: true });
     },
   };
+}
+
+// Headless Firefox sometimes never finishes starting (docs/e2e.md, _firefox_, ⚠ a
+// Firefox that never starts). Its first composite fails — stderr says
+// `RenderCompositorSWGL failed mapping default framebuffer, no dt` — so the
+// window never paints. Firefox runs its delayed startup only after that first
+// paint, and Juggler answers Playwright's `Browser.enable` only after the
+// startup's idle tasks, so the launch waits out its whole timeout: the 90s test
+// budget, or Playwright's 180s. Nothing of the app has run yet. A healthy launch
+// takes ~1.5s, ~5s on a loaded machine, so 30s means "stalled". Playwright kills
+// the stalled process on timeout, and the relaunch gets a fresh profile. This
+// is not a retry of a verdict, because the first attempt never reached the app.
+// That is the same line runner/driver-loss.ts draws. A second stall in a row
+// still fails the case.
+const FIREFOX_LAUNCH_TIMEOUT = 30_000;
+
+type PersistentLaunchOptions = NonNullable<
+  Parameters<typeof BROWSER_TYPE.launchPersistentContext>[1]
+>;
+
+async function launchContext(
+  userDataDir: string,
+  options: PersistentLaunchOptions,
+): Promise<BrowserContext> {
+  if (!IS_FIREFOX) return BROWSER_TYPE.launchPersistentContext(userDataDir, options);
+  const bounded = { ...options, timeout: FIREFOX_LAUNCH_TIMEOUT };
+  try {
+    return await BROWSER_TYPE.launchPersistentContext(userDataDir, bounded);
+  } catch (error) {
+    if (!(error instanceof errors.TimeoutError)) throw error;
+    // Said out loud, so a run that needed a relaunch says so in its log.
+    console.warn(
+      `Firefox did not finish starting in ${FIREFOX_LAUNCH_TIMEOUT / 1000}s (${userDataDir}); relaunching once on a fresh profile`,
+    );
+    await rm(userDataDir, { recursive: true, force: true });
+    return BROWSER_TYPE.launchPersistentContext(userDataDir, bounded);
+  }
 }
