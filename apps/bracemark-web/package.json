@@ -54,7 +54,6 @@
     "@serwist/next": "^9.5.11",
     "@stxapps/react": "*",
     "@stxapps/shared": "*",
-    "@stxapps/web-crypto": "*",
     "@stxapps/web-react": "*",
     "@stxapps/web-ui": "*",
     "@tanstack/react-query": "^5.101.0",

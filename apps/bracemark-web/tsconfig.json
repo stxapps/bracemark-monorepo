@@ -52,16 +52,13 @@
       "path": "../../packages/react"
     },
     {
-      "path": "../../packages/web-react"
+      "path": "../../packages/shared"
     },
     {
       "path": "../../packages/web-ui"
     },
     {
-      "path": "../../packages/web-crypto"
-    },
-    {
-      "path": "../../packages/shared"
+      "path": "../../packages/web-react"
     }
   ]
 }
