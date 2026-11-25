@@ -1,9 +1,26 @@
 {
   "name": "@stxapps/bracemark-extension",
-  "description": "manifest.json description",
-  "private": true,
   "version": "1.3.1",
+  "private": true,
+  "description": "manifest.json description",
   "type": "module",
+  "scripts": {
+    "postinstall": "wxt prepare",
+    "typecheck": "tsc --noEmit",
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build:development": "wxt build --mode development",
+    "build:staging": "wxt build --mode staging",
+    "build:staging:firefox": "wxt build -b firefox --mode staging",
+    "build:staging:safari": "wxt build -b safari --mode staging",
+    "build": "wxt build",
+    "build:firefox": "wxt build -b firefox",
+    "build:safari": "wxt build -b safari",
+    "zip": "bash ../../tools/scripts/store-release.sh build chrome -- wxt zip",
+    "zip:firefox": "bash ../../tools/scripts/store-release.sh build firefox -- wxt zip -b firefox",
+    "tag:chrome": "bash ../../tools/scripts/store-release.sh tag chrome",
+    "tag:firefox": "bash ../../tools/scripts/store-release.sh tag firefox"
+  },
   "nx": {
     "tags": [
       "type:app",
@@ -87,23 +104,6 @@
         "cache": false
       }
     }
-  },
-  "scripts": {
-    "dev": "wxt",
-    "dev:firefox": "wxt -b firefox",
-    "build:development": "wxt build --mode development",
-    "build:staging": "wxt build --mode staging",
-    "build:staging:firefox": "wxt build -b firefox --mode staging",
-    "build:staging:safari": "wxt build -b safari --mode staging",
-    "build": "wxt build",
-    "build:firefox": "wxt build -b firefox",
-    "build:safari": "wxt build -b safari",
-    "zip": "bash ../../tools/scripts/store-release.sh build chrome -- wxt zip",
-    "zip:firefox": "bash ../../tools/scripts/store-release.sh build firefox -- wxt zip -b firefox",
-    "tag:chrome": "bash ../../tools/scripts/store-release.sh tag chrome",
-    "tag:firefox": "bash ../../tools/scripts/store-release.sh tag firefox",
-    "typecheck": "tsc --noEmit",
-    "postinstall": "wxt prepare"
   },
   "dependencies": {
     "@stxapps/react": "*",

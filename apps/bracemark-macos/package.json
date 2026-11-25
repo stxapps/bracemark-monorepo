@@ -1,8 +1,14 @@
 {
   "name": "@stxapps/bracemark-macos",
-  "description": "The macOS app that carries the browser extension's Safari build",
-  "private": true,
   "version": "0.0.0",
+  "private": true,
+  "description": "The macOS app that carries the browser extension's Safari build",
+  "scripts": {
+    "app:staging": "bash ../../tools/scripts/macos-app.sh staging",
+    "bundle": "bash ../../tools/scripts/store-release.sh build macos -- bash ../../tools/scripts/macos-app.sh bundle",
+    "upload": "bash ../../tools/scripts/macos-upload.sh",
+    "tag": "bash ../../tools/scripts/store-release.sh tag macos"
+  },
   "nx": {
     "tags": [
       "type:app",
@@ -19,11 +25,5 @@
         "cache": false
       }
     }
-  },
-  "scripts": {
-    "app:staging": "bash ../../tools/scripts/macos-app.sh staging",
-    "bundle": "bash ../../tools/scripts/store-release.sh build macos -- bash ../../tools/scripts/macos-app.sh bundle",
-    "upload": "bash ../../tools/scripts/macos-upload.sh",
-    "tag": "bash ../../tools/scripts/store-release.sh tag macos"
   }
 }

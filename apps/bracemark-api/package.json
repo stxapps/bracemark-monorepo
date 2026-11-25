@@ -2,6 +2,11 @@
   "name": "@stxapps/bracemark-api",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.spec.json",
+    "dev": "bash ../../tools/scripts/run-api-dev.sh"
+  },
   "nx": {
     "tags": [
       "type:app",
@@ -67,11 +72,6 @@
         }
       }
     }
-  },
-  "type": "module",
-  "scripts": {
-    "dev": "bash ../../tools/scripts/run-api-dev.sh",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.spec.json"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.8.0",

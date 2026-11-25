@@ -2,12 +2,6 @@
   "name": "@stxapps/expo-react",
   "version": "0.0.0",
   "private": true,
-  "nx": {
-    "tags": [
-      "type:react",
-      "platform:expo"
-    ]
-  },
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -33,6 +27,12 @@
       "default": "./src/lib/auth-api-client.ts"
     },
     "./package.json": "./package.json"
+  },
+  "nx": {
+    "tags": [
+      "type:react",
+      "platform:expo"
+    ]
   },
   "dependencies": {
     "@stxapps/expo-crypto": "*",

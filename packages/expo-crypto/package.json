@@ -2,12 +2,6 @@
   "name": "@stxapps/expo-crypto",
   "version": "0.0.0",
   "private": true,
-  "nx": {
-    "tags": [
-      "type:crypto",
-      "platform:expo"
-    ]
-  },
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -28,6 +22,12 @@
       "default": "./src/lib/shared-keychain.ts"
     },
     "./package.json": "./package.json"
+  },
+  "nx": {
+    "tags": [
+      "type:crypto",
+      "platform:expo"
+    ]
   },
   "dependencies": {
     "@craftzdog/react-native-buffer": "^6.1.2",

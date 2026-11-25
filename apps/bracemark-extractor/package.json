@@ -2,6 +2,11 @@
   "name": "@stxapps/bracemark-extractor",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --env development",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.spec.json"
+  },
   "nx": {
     "tags": [
       "type:app",
@@ -39,11 +44,6 @@
         }
       }
     }
-  },
-  "type": "module",
-  "scripts": {
-    "dev": "wrangler dev --env development",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.spec.json"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.8.0",

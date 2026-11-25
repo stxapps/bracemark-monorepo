@@ -2,6 +2,9 @@
   "name": "@stxapps/bracemark-site",
   "version": "0.0.0",
   "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "nx": {
     "tags": [
       "type:app",
@@ -36,9 +39,6 @@
         }
       }
     }
-  },
-  "scripts": {
-    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@zip.js/zip.js": "^2.8.26",
