@@ -172,7 +172,7 @@ actually localizes it.
 
 _"An update to X inside a test was not wrapped in act(...)"_ is a `console.error`,
 not a failure. The spec stays green, and because it is often a race, a rerun can
-come out clean. Four shapes have produced it here:
+come out clean. Five shapes have produced it here:
 
 - **A synchronous `act()` around an event that starts async work.** Web's
   `contexts/auth-provider.spec.tsx`, _asks again on return to the foreground_,
@@ -213,6 +213,22 @@ come out clean. Four shapes have produced it here:
   the gap comes before it. End such a test with an `await act(…)` that outlasts the load. There,
   a second `loadPasswordScorer()` call does it (`estimatorLanded`), and the
   assertions stay where they are.
+- **A React Native `FlatList` in the tree** (_"An update to VirtualizedList…"_).
+  `VirtualizedList` answers every mount and update by arming a cell-window tick
+  on a real `setTimeout(…, updateCellsBatchingPeriod ?? 50)`. Under jest no
+  layout is ever measured, so the tick can't move the window: its updater
+  returns `null`. React still warns about the `setState` call when the 50ms
+  run out before the tree unmounts, and they run out under load, in the
+  `setImmediate` that RNTL's auto-cleanup waits before it unmounts. Expo's
+  `bulk-tags-dialog.spec.tsx` (the tag picker's `PickerScroller`) warned
+  this way inside `npm run test`. A 1ms period reproduces it in all three
+  picker specs (`bulk-tags-dialog`, `move-to-dialog`, `picker-scroller`),
+  mount-only tests included. So the fix is global rather
+  than per spec: expo's `src/testing/setup.ts` defaults
+  `updateCellsBatchingPeriod` to node's `setTimeout` maximum, so the tick
+  never fires and unmount clears it. A spec that fires `layout` events to drive
+  real windowing has to pass the prop on that list to get the tick back.
+  FlashList (`links/main.tsx`) is not a `VirtualizedList` and doesn't do this.
 
 **The Nx cache makes a race look permanent.** A warning captured once is
 replayed on every `npm run test` until that project's inputs change. So "it

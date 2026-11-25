@@ -73,3 +73,26 @@ jest.mock('uniwind', () => ({
 if (typeof global.structuredClone === 'undefined') {
   global.structuredClone = (object) => JSON.parse(JSON.stringify(object));
 }
+
+// VirtualizedList (FlatList's base; the pickers' PickerScroller is one) answers
+// every mount and update by scheduling a cell-window tick on a real
+// `setTimeout(…, updateCellsBatchingPeriod ?? 50)`, and the tick's `setState`
+// lands outside act(). Under jest no layout is ever measured, so the tick can
+// never move the window — its updater returns `null` — but React warns about
+// the `setState` call itself ("An update to VirtualizedList inside a test was
+// not wrapped in act(...)") whenever the 50ms run out before the tree unmounts:
+// under load, in the `setImmediate` RNTL's auto-cleanup waits before
+// unmounting. Pushing the period past any test's length keeps the tick from ever
+// firing; unmount clears the pending timer. A spec that fires `layout` events
+// to drive real windowing would need the tick back — pass
+// `updateCellsBatchingPeriod` on that list. (docs/testing.md, _an update that
+// lands after act() returns_.)
+{
+  const { VirtualizedList } = require('react-native') as {
+    VirtualizedList: { defaultProps?: Record<string, unknown> };
+  };
+  VirtualizedList.defaultProps = {
+    ...VirtualizedList.defaultProps,
+    updateCellsBatchingPeriod: 2 ** 31 - 1, // node's setTimeout max (~24.8 days)
+  };
+}
