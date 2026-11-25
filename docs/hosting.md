@@ -1321,7 +1321,7 @@ The name is short on purpose — it is read in a git client's ref column, where 
 long one is cut off — so it says neither "deploy" nor "production". A tag under
 `web/`, `site/`, `api/` or `extractor/` **is** a production deploy, by this
 convention and nothing else: keep every other tag out of those four namespaces.
-(`ios/`, `android/`, `chrome/` and `firefox/` are the store releases:
+(`ios/`, `android/`, `macos/`, `chrome/`, `edge/` and `firefox/` are the store releases:
 [below](#which-build-is-in-a-store--store-tags).) The time is UTC, to the second — a Worker deploys in under a minute, and two
 deploys of one app must not want the same name.
 
@@ -1426,10 +1426,11 @@ commit records when the number moved, and a tag records what went out, in
 | App Store        | `ios/<version>-<buildNumber>`     | `ios:bundle`     | `npm run ios:tag`     |
 | Google Play      | `android/<version>-<versionCode>` | `android:bundle` | `npm run android:tag` |
 | Chrome Web Store | `chrome/<version>`                | `zip`            | `npm run tag:chrome`  |
+| Edge Add-ons     | `edge/<version>`                  | `zip:edge`       | `npm run tag:edge`    |
 | Firefox Add-ons  | `firefox/<version>`               | `zip:firefox`    | `npm run tag:firefox` |
 | Mac App Store    | `macos/<version>-<buildNumber>`   | `bundle`         | `npm run tag`         |
 
-The first two run from `apps/bracemark-expo`, the next two from
+The first two run from `apps/bracemark-expo`, the next three from
 `apps/bracemark-extension`, and the last from `apps/bracemark-macos`, the Mac app
 that carries the browser extension's Safari build. Its numbers are
 `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `Config/Base.xcconfig`; the
@@ -1480,14 +1481,14 @@ commit no longer in the branch's history, meaning it was amended or rebased.
 A refusal at tag time comes after the build is live, so `ios:upload` makes the
 same check first, with `store-release.sh check ios`. It also refuses an archive
 that does not match the record, which is one built without `ios:bundle`. The other
-three uploads are by hand, so nothing stands between the build and the console, and
+four uploads are by hand, so nothing stands between the build and the console, and
 the warning at the end of the build is the last word: read it before uploading.
 
 **A store build also warns on release notes** that `npm run check:release-notes`
 would reject, as a warning rather than a stop: a trial build needs no notes, and a
 notes commit made after the build changes nothing that ships.
 
-⚠ **`zip` and `zip:firefox` are not cached by Nx, and must stay that way.** The
+⚠ **`zip`, `zip:edge` and `zip:firefox` are not cached by Nx, and must stay that way.** The
 record depends on git state, which Nx does not hash. With caching on, a cache hit
 would restore the zip and an old record together: build on a dirty tree, commit
 those same files, and the next `nx zip` replays the refusal for a tree that is now
@@ -1496,7 +1497,9 @@ replayed from a cache.
 
 The push follows the rules of the deploy tags above, in the same code:
 `tag_deploy` and `push_deploy_tags` in `tools/scripts/deploy-commit.sh`, with the
-four store namespaces added to `DEPLOY_TAG_PATTERNS`. A tag whose commit `origin`
+six store namespaces added to `DEPLOY_TAG_PATTERNS`. A namespace missing from that
+list is never pushed, and the script blames origin for it. `macos/` was missing
+until `edge/` was added. A tag whose commit `origin`
 does not have yet stays local, and goes out with the next production deploy or
 store tag. A pushed tag is just as public and permanent, and just as much the
 operator's record rather than a claim about the bytes in a store.

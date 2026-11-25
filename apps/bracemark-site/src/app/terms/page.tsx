@@ -55,9 +55,9 @@ export default function Page() {
       <div className={cn('legal-prose')}>
         <p>
           These Terms of Service (“Terms”) govern your access to and use of the Bracemark website at
-          bracemark.com and app.bracemark.com, the Bracemark applications for iOS, Android, Chrome,
-          and Firefox, and any related services (together, the “Service”), all provided by {company}{' '}
-          (“{COMPANY.shortName}”, “we”, “us”).
+          bracemark.com and app.bracemark.com, the Bracemark applications and browser extension on
+          every platform where we publish them, and any related services (together, the “Service”),
+          all provided by {company} (“{COMPANY.shortName}”, “we”, “us”).
         </p>
         <p>
           By creating an account, or by otherwise accessing or using the Service, you agree to be
@@ -90,7 +90,7 @@ export default function Page() {
           Your licence to any application you download from an app store is also governed by that
           store’s own terms (the “App Store Terms”). Where these Terms conflict with the applicable
           App Store Terms, the App Store Terms prevail for that application. Download the
-          applications only from the stores through which we publish them.
+          applications only from us or from the stores through which we publish them.
         </p>
         <p>
           We may suspend or terminate your licence, or any part of the Service, if you breach these
@@ -251,8 +251,8 @@ export default function Page() {
           Prices are stated in US dollars and may be presented to you in your local currency, with
           any applicable taxes calculated at checkout. Paid plans purchased on the web are sold
           through Paddle, which acts as the merchant of record for that sale; purchases made inside
-          the iOS or Android applications are sold through Apple or Google under their terms. We
-          never receive or store your payment card details.
+          an application from the App Store or Google Play are sold through Apple or Google under
+          their terms. We never receive or store your payment card details.
         </p>
         <p>If you purchase a subscription or start a trial, the following apply:</p>
         <ol>

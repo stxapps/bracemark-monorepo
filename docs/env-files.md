@@ -880,6 +880,14 @@ browser frontends — bracemark-web and bracemark-site — need an allowed origi
   the store keys above all — _bracemark-api local secrets_, above. The sandbox
   Paddle pair sat in `.dev.vars`, and the store keys were headed there too,
   until it turned out the App Store key is the production one.
+- **in no env file at all, fifth case:** the **Edge Add-ons API key**. It is
+  Partner Center's key for uploading a browser extension package to the live
+  listing and submitting it for review, so it can publish without anyone opening
+  the console. It is in the login keychain, `-a bracemark -s bracemark-edge-api-key`.
+  The API also needs a client id and a product id. Both are identifiers, like the
+  Cloudflare account id. Partner Center also gives the key an expiry date, after
+  which a new key is needed. Store the new key under the same item name, with
+  `security add-generic-password -U … -w`.
 
 **The workspace root has its own pair, and it belongs to no app.** Root `.env` is
 committed and holds non-secret Nx task-running defaults; root `.env.local` is

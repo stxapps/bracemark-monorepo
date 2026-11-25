@@ -138,8 +138,8 @@ export default function Page() {
         <p>
           This policy explains what {COMPANY.legalName} (“{COMPANY.shortName}”, “we”, “us”) collects
           when you use Bracemark, why, and what happens to it. It covers bracemark.com,
-          app.bracemark.com, status.bracemark.com, the Bracemark applications for iOS, Android,
-          Chrome, and Firefox, and the services behind them.
+          app.bracemark.com, status.bracemark.com, the Bracemark applications and browser extension
+          on every platform where we publish them, and the services behind them.
         </p>
         <p>
           {COMPANY.legalName} is the <strong>controller</strong> of the personal data described here
@@ -222,7 +222,47 @@ export default function Page() {
               collect, how we use it or who receives it moved because of it.
 
             Per _Changes to this policy_, deploy bracemark-site BEFORE the api,
-            the extractor and the web app that do any of this. */}
+            the extractor and the web app that do any of this.
+
+            25 NOVEMBER 2026 WENT UP ABOVE THEM, and may come out on or after 25
+            December 2026. It is a change, though a small one: the browser
+            extension got a fifth store, Microsoft Edge Add-ons, and with it a
+            fifth dashboard of counts we can see. Every sentence that named the
+            platforms or the stores had to move for it, so they now name kinds
+            instead of members, here and in /terms, and a new platform or store
+            stops being an edit at all: a desktop app, the Mac app carrying the
+            Safari build of the browser extension, a store we have not listed
+            yet. The scope line is "the Bracemark applications and browser
+            extension on every platform where we publish them" ("publish"
+            includes a download from our own site, not only a store). _What the
+            stores tell us_ names "the stores that distribute them, such as" its
+            examples. _If you subscribe_ and the Apple and Google row under _Who
+            else processes it_ said "the apps" and "the mobile apps", which a
+            desktop app sold through Paddle would have falsified, so both now
+            mean an app from Apple's or Google's store.
+            WHAT THIS DOES NOT BUY: a new app that BEHAVES differently is still
+            a change. The paragraphs that say what an app does (how the mobile
+            apps fetch pages, what the browser extension may read) are facts
+            about those apps, and a desktop app's own updater, crash reporter or
+            fetch path is a new request or recipient that this page has to name
+            before it ships. The second bullet says that half too, so nobody
+            reads "will not change this page" as wider than it is.
+            */}
+        <h2>What changed on 25 November 2026</h2>
+        <ul>
+          <li>
+            We are publishing the browser extension on Microsoft Edge Add-ons. This policy covers it
+            there, and that store shows us the same kind of counts as the others do.
+          </li>
+          <li>
+            This policy now describes what it covers by kind instead of by name: the Bracemark
+            applications and browser extension on every platform where we publish them, and the
+            stores that distribute them. A new platform or store will not change this page on its
+            own; a change to what we collect, how we use it, or who receives it still will. Our{' '}
+            <Link href="/terms">Terms of Service</Link> now describe their scope the same way.
+          </li>
+        </ul>
+
         <h2>What changed on 20 November 2026</h2>
         <ul>
           <li>
@@ -422,9 +462,9 @@ export default function Page() {
         <h3>If you subscribe</h3>
         <p>
           Payments are processed by <strong>Paddle</strong> for web purchases and by{' '}
-          <strong>Apple</strong> or <strong>Google</strong> for purchases made inside the apps. They
-          collect and hold your payment details under their own privacy policies; we never receive
-          or store your card number.
+          <strong>Apple</strong> or <strong>Google</strong> for purchases made inside an app from
+          their stores. They collect and hold your payment details under their own privacy policies;
+          we never receive or store your card number.
         </p>
         <p>
           What we store is a <strong>subscription record</strong>: the provider, that provider’s
@@ -699,12 +739,18 @@ export default function Page() {
           runs on your device.
         </p>
 
-        {/* THE STORES, ALL FOUR, AND WHAT WE ACTUALLY READ FROM THEM. This was
+        {/* THE STORES, AS A GROUP, AND WHAT WE ACTUALLY READ FROM THEM. This was
             "What Apple and Google tell us" and covered the mobile apps only,
             while we also read the Chrome Web Store's and Firefox Add-ons'
             dashboards for the browser extension, and every store's count of
             how often our listing is seen — figures we use to decide where to
-            put our effort. Sales are deliberately NOT in this list: a store's
+            put our effort. It then named all four stores, and a fifth (Edge
+            Add-ons) made the list wrong; the 25 November 2026 entry above says
+            why it now names a kind instead: the stores that distribute what
+            we publish. "Such as" keeps the two examples a reader will
+            recognise without closing the list, so a desktop app's store, or
+            Safari's (Apple's App Store, already one of the examples), needs no
+            edit. Sales are deliberately NOT in this list: a store's
             payment reports are order records, not counts, and the
             subscription section above is where a payment is accounted for.
             Reviews are not either: they are public, under the reviewer's own
@@ -713,13 +759,13 @@ export default function Page() {
             a sample and the bound is "counts and anonymous reports". */}
         <h3>What the stores tell us</h3>
         <p>
-          As the publisher of the mobile apps and the browser extension, we can see the figures the
-          App Store, Google Play, the Chrome Web Store, and Firefox Add-ons compile for us, such as
-          how often our store pages are seen, installs and uninstalls, which versions are in use,
-          and the crash and performance reports the operating systems collect. They arrive as counts
-          and anonymous reports — they carry no account, and we cannot connect one to a person. None
-          of our apps, the browser extension included, ships an analytics or crash-reporting library
-          of ours.
+          As the publisher of our apps and the browser extension, we can see the figures that the
+          stores distributing them compile for us, such as Apple’s and Google’s app stores and the
+          browsers’ add-on stores. The figures include how often our store pages are seen, installs
+          and uninstalls, which versions are in use, and the crash and performance reports the
+          operating systems collect. They arrive as counts and anonymous reports — they carry no
+          account, and we cannot connect one to a person. None of our apps, the browser extension
+          included, ships an analytics or crash-reporting library of ours.
         </p>
 
         <h3>How link previews and read-mode copies are fetched</h3>
@@ -967,8 +1013,8 @@ export default function Page() {
             including tax.
           </li>
           <li>
-            <strong>Apple</strong> and <strong>Google</strong> — distribute the mobile apps and
-            process any subscription bought inside them.
+            <strong>Apple</strong> and <strong>Google</strong> — distribute our apps through their
+            stores and process any subscription bought inside those apps.
           </li>
           <li>
             <strong>Namecheap (Private Email)</strong> — hosts the mailbox that receives your

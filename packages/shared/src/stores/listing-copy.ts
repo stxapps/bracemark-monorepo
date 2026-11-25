@@ -54,7 +54,7 @@
 // lets it change WITHOUT a review, which is exactly why it is separate from the
 // description.
 
-import { BRAND } from '../brand/brand';
+import { BRAND, SOURCE } from '../brand/brand';
 import { PLAN_LABELS } from '../iap/plans';
 
 // --- what the stores allow ---------------------------------------------------
@@ -85,6 +85,19 @@ export const STORE_LIMITS = {
   /** The dashboard's Store listing tab. Title and summary come from the manifest. */
   chromeWebStore: { description: 16000 },
   firefoxAddons: { summary: 250 },
+  /**
+   * Partner Center's Store listings page. Name and short description come from the
+   * manifest, as on the Web Store. Description is a paste, and it has a FLOOR as
+   * well as a ceiling. Search terms: at most seven, each at most thirty
+   * characters, and twenty-one words across all of them. Checked 2026-11-25.
+   */
+  edgeAddons: {
+    descriptionMin: 250,
+    description: 10000,
+    searchTerms: 7,
+    searchTerm: 30,
+    searchTermWords: 21,
+  },
   /**
    * ⚠ THE ONE LIMIT NO CONSOLE ENFORCES. A screenshot caption is drawn INTO the
    * picture, so nothing rejects a long one — it just sets smaller, wraps to three
@@ -293,8 +306,9 @@ export const BROWSER_EXTENSION_LISTING = {
     'Save the tab you’re reading in two clicks. Bracemark encrypts every link in your browser before it syncs — only you can read it.',
 } as const;
 
-// The browser extension's long description — PASTED, into the Chrome Web Store
-// dashboard's Store listing tab. Not FULL_DESCRIPTION, and that is not the "two
+// The browser extension's long description. It is PASTED into the Chrome Web Store
+// dashboard's Store listing tab, and as it is into Edge Partner Center's Store
+// listings → Description (EDGE_ADDONS, below). Not FULL_DESCRIPTION, and that is not the "two
 // long descriptions" the note above it refuses: that note is about tuning one
 // product's text per store, and this is a different product. FULL_DESCRIPTION
 // sells the mobile app, and most of it is untrue on this listing — sharing in
@@ -309,7 +323,9 @@ export const BROWSER_EXTENSION_LISTING = {
 //
 // The permission line is a claim about `wxt.config.ts`: `activeTab`, and no host
 // permission but the api's. Adding a `<all_urls>`-style host permission makes it
-// false AND puts Chrome's warning, quoted here, on the install dialog.
+// false AND puts Chrome's warning, quoted here, on the install dialog. Edge is
+// built on Chromium and uses the same warning text, so the line is true there too.
+// Re-check that on Edge's install dialog if the line ever changes.
 export const BROWSER_EXTENSION_FULL_DESCRIPTION = `Bracemark is a bookmark manager that cannot read your bookmarks. This browser extension saves the tab you’re reading into it.
 
 Click the Bracemark button, choose a list, add tags or a note if you like, and click Save. The link is encrypted in your browser before it syncs: the address, the title, the tags, the note, the list you filed it in. Your key is unlocked by your password, on your device, and never leaves it. Of your library, our servers hold a path, a size, a timestamp, and bytes we have no key to open; the account around it — your username, your public key, your sessions, and your plan — is what we can read.
@@ -468,3 +484,81 @@ export const PWA_INSTALL_DESCRIPTION = PLAY.shortDescription;
  * or the number of clicks; "you’re reading" was the one that was neither.
  */
 export const FIREFOX_ADDONS_SUMMARY = `${BRAND.tagline}. Save a tab in two clicks, encrypted in your browser with a key your password unlocks before it syncs. Of your library we hold a path, a size, a timestamp, and bytes we have no key to open.`;
+
+// --- the browser extension on Microsoft Edge Add-ons -------------------------
+//
+// Edge takes the Chrome package unchanged (docs/browser-extension.md, _releasing
+// to the stores_). Partner Center reads the listing's name and short description
+// from its manifest, so those are BROWSER_EXTENSION_LISTING, as on the Web Store.
+// Its Description field is BROWSER_EXTENSION_FULL_DESCRIPTION, pasted as it is,
+// because this is the same product on the same engine. It is NOT re-exported here
+// as `EDGE_ADDONS.description`. One string means one place to keep true, and the
+// spec counts the strings that carry the holdings sentence. A copy would be
+// counted as a fourth.
+//
+// What is left is what only Edge asks for. The privacy answers are a separate
+// export because the Web Store asks the same questions.
+export const EDGE_ADDONS = {
+  /**
+   * Store listings → Search terms. No user ever sees these. They are phrases a
+   * person types, each one a query, so the word budget goes on whole searches
+   * rather than on lone words. `zero-knowledge` is here for the reason
+   * APP_STORE.keywords keeps it, and docs/brand-assets.md exempts both: a search
+   * term matches a query and makes no claim. In prose it stays barred. No
+   * competitor marks, for the reason given at APP_STORE.keywords.
+   */
+  searchTerms: [
+    'bookmark manager',
+    'encrypted bookmarks',
+    'read later',
+    'save tabs',
+    'reading list',
+    'end-to-end encrypted',
+    'zero-knowledge',
+  ],
+
+  /**
+   * The Submit page's Notes for certification. Optional, and read only by the
+   * reviewer. It says how to get an account, because the browser extension does
+   * nothing without one. It also says which features need a paid plan, so a
+   * reviewer on the free plan doesn't report them as broken. No version number:
+   * the same notes go with every submission.
+   */
+  certificationNotes: `No test account is needed. Creating one takes about a minute at https://app.bracemark.com: choose a username and a password. No email address is asked for. Then click the Bracemark button in the toolbar, sign in, and save any tab. The saved link turns up in the web app. Keeping a read-mode copy or a screenshot of a page needs ${PLAN_LABELS.plus}. Everything else works on the ${PLAN_LABELS.free} plan. This is the same package the Chrome Web Store serves at this version. The source code is public: ${SOURCE.url}`,
+} as const;
+
+// The browser extension's privacy answers. They are PASTED into two places that
+// ask the same questions: the Chrome Web Store's Privacy practices tab and Edge
+// Partner Center's Privacy page.
+//
+// `permissions` names every permission in `wxt.config.ts`'s Chrome manifest,
+// keyed by name, plus the host grant. That file is in an app, and this package
+// cannot import an app (docs/architecture.md), so no test can check the two
+// lists against each other. Read both lists when a permission is added or
+// removed. A justification for a permission the manifest no longer asks for is
+// a false claim made to the reviewer. A permission missing here is a field the
+// console won't let you leave empty.
+//
+// Two answers are checkboxes rather than text, so they are recorded here instead:
+//   - Remote code: NO. The Argon2id WASM that hash-wasm compiles is bundled in
+//     the package. 'wasm-unsafe-eval' lets the browser compile it; nothing is
+//     fetched to run.
+//   - Data usage: authentication information, web history and website content.
+//     These are the three Firefox's `data_collection_permissions` declares, for
+//     the reasons wxt.config.ts gives beside it. Nothing else is checked, and
+//     the certifications at the bottom (no selling, no unrelated use, no
+//     creditworthiness) are all true.
+export const BROWSER_EXTENSION_PRIVACY = {
+  singlePurpose: `Saves the page you’re on into your Bracemark bookmarks: its address, title and image, filed into the lists and tags you choose. With ${PLAN_LABELS.plus}, it also keeps a read-mode copy or a screenshot of the page. All of it is encrypted in your browser before it syncs.`,
+  permissions: {
+    activeTab:
+      'Reads the address and title of the tab you’re on, and takes a screenshot of it when you ask for one. It works only after you click the Bracemark button on that tab.',
+    scripting: `Runs a script in the tab you clicked the button on, to read the page’s title and image. With ${PLAN_LABELS.plus}, it also makes a read-mode copy of the page. It reaches only the tab activeTab has opened to it, and no script stays in any page.`,
+    storage:
+      'Holds the sync status the popup shows: when it last synced, and what is still waiting to sync. The popup can then read it without waking the background worker.',
+    alarms:
+      'Wakes the background worker on a timer to sync your saved links, to fetch their titles and images, and to finish a sync the browser stopped partway. A Manifest V3 background worker cannot keep running on its own.',
+    hostPermissions:
+      'Lets the browser extension reach Bracemark’s own server, api.bracemark.com, to sign in and to sync your encrypted links. It is the only site the browser extension is granted. Any other page needs your click on it.',
+  },
+} as const;

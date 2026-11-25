@@ -17,8 +17,10 @@
     "build:firefox": "wxt build -b firefox",
     "build:safari": "wxt build -b safari",
     "zip": "bash ../../tools/scripts/store-release.sh build chrome -- wxt zip",
+    "zip:edge": "bash ../../tools/scripts/store-release.sh build edge -- wxt zip",
     "zip:firefox": "bash ../../tools/scripts/store-release.sh build firefox -- wxt zip -b firefox",
     "tag:chrome": "bash ../../tools/scripts/store-release.sh tag chrome",
+    "tag:edge": "bash ../../tools/scripts/store-release.sh tag edge",
     "tag:firefox": "bash ../../tools/scripts/store-release.sh tag firefox"
   },
   "nx": {
@@ -98,6 +100,9 @@
         ]
       },
       "zip": {
+        "cache": false
+      },
+      "zip:edge": {
         "cache": false
       },
       "zip:firefox": {

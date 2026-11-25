@@ -544,9 +544,29 @@ from. Uploads are by hand. After releasing, `npm run tag:chrome` and
 in a store_). Plain `wxt zip` records nothing, and neither target may be cached by
 Nx, for the reason that section gives.
 
-Microsoft Edge Add-ons would take the Chrome package as it is. There is no Edge
-listing yet, and no `edge/` tag to record which build it carries. Safari is
-different: it takes the extension only inside an app, the next section.
+**Microsoft Edge Add-ons takes the Chrome package as it is.** `npm run zip:edge`
+runs the same `wxt zip` and writes the same `-chrome.zip`, under its own record.
+After Edge releases it, `npm run tag:edge` tags it `edge/<version>`. The record
+and the tag are separate from Chrome's because each store reviews on its own
+schedule, and Chrome can ship a build while Edge still has the one before it. When one
+build goes to both stores, run `zip:edge` after `zip`. Neither rebuild changes a
+byte, and each store's record then names the commit that store got.
+
+The listing is pasted from `packages/shared/src/stores/listing-copy.ts`. The
+Description is `BROWSER_EXTENSION_FULL_DESCRIPTION`, the same text as the Web
+Store's, and `EDGE_ADDONS` holds the search terms and the reviewer notes.
+`BROWSER_EXTENSION_PRIVACY` answers the privacy questions both dashboards ask.
+Its permission list is a copy of this manifest's, and no test can compare the
+two, because `shared` cannot import an app. Change both together. The name and
+short description come from the manifest, as on the Web Store.
+
+**Partner Center's API cannot make a first submission.** It has no endpoint to
+create a product or to edit a listing's text and pictures. It can only upload a
+package to a product that already exists and submit it. So the first release, and every
+change to the listing itself, is done by hand in Partner Center. After that, a
+package-only update can go through the API.
+
+Safari is different: it takes the extension only inside an app, the next section.
 
 ### Safari — the Mac app, measured 2026-11-24
 

@@ -196,6 +196,25 @@ describe('tag', () => {
     assert.equal(f.tagged('chrome/1.2.0', f.origin), built);
   });
 
+  it('keeps edge apart from chrome, though both ship the same package', () => {
+    // One `wxt zip` serves both stores, but each reviews on its own schedule.
+    // A Chrome rebuild must not move the commit an Edge release gets tagged at.
+    const f = fixture();
+    const forEdge = f.head();
+    assert.equal(f.build('edge').status, 0);
+    const forChrome = f.commit('a-fix-for-chrome-only');
+    git(f.repo, 'push', '--quiet', 'origin', 'main');
+    assert.equal(f.build('chrome').status, 0);
+
+    assert.equal(f.tag('edge').status, 0);
+    assert.equal(f.tag('chrome').status, 0);
+
+    assert.equal(f.tagged('edge/1.2.0'), forEdge);
+    assert.equal(f.tagged('chrome/1.2.0'), forChrome);
+    // Pushed, which needs edge/* in deploy-commit.sh's DEPLOY_TAG_PATTERNS.
+    assert.equal(f.tagged('edge/1.2.0', f.origin), forEdge);
+  });
+
   it('holds a tag back when origin does not have its commit, and pushes it later', () => {
     const f = fixture();
     const unpushed = f.commit('not-public-yet');

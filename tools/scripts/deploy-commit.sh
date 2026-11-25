@@ -46,11 +46,13 @@
 # and the `die` / `warn` / `note` helpers.
 
 # Every tag these scripts make: the two static apps and the two Workers, then the
-# four stores. A tag matching one of the first four is taken to be a production
-# deploy, and one matching the last four a store release.
+# six stores. A tag matching one of the first four is taken to be a production
+# deploy, and one matching the last six a store release. A store namespace
+# missing from this list is never pushed. Its tags stay in this clone, and
+# `push_deploy_tags` blames origin for not having the commit.
 readonly DEPLOY_TAG_PATTERNS=(
   'web/*' 'site/*' 'api/*' 'extractor/*'
-  'ios/*' 'android/*' 'chrome/*' 'firefox/*'
+  'ios/*' 'android/*' 'macos/*' 'chrome/*' 'edge/*' 'firefox/*'
 )
 
 # Sets DEPLOY_COMMIT (the full sha), DEPLOY_STAMP (twelve characters of it, plus

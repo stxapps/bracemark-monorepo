@@ -6,6 +6,8 @@ import {
   APP_STORE_SUBSCRIPTION,
   BROWSER_EXTENSION_FULL_DESCRIPTION,
   BROWSER_EXTENSION_LISTING,
+  BROWSER_EXTENSION_PRIVACY,
+  EDGE_ADDONS,
   FIREFOX_ADDONS_SUMMARY,
   FULL_DESCRIPTION,
   PLAY,
@@ -91,7 +93,17 @@ describe('store listing copy — character budgets', () => {
       BROWSER_EXTENSION_FULL_DESCRIPTION,
       STORE_LIMITS.chromeWebStore.description,
     ],
+    [
+      'Edge Add-ons description',
+      BROWSER_EXTENSION_FULL_DESCRIPTION,
+      STORE_LIMITS.edgeAddons.description,
+    ],
     ['Firefox Add-ons summary', FIREFOX_ADDONS_SUMMARY, STORE_LIMITS.firefoxAddons.summary],
+    ...EDGE_ADDONS.searchTerms.map((term): [string, string, number] => [
+      `Edge Add-ons search term \`${term}\``,
+      term,
+      STORE_LIMITS.edgeAddons.searchTerm,
+    ]),
     // Every caption, found by walking the object rather than listed — a fifth
     // screenshot must not be able to arrive without its line being measured.
     ...Object.entries(SCREENSHOT_CAPTIONS).map(([slug, caption]): [string, string, number] => [
@@ -117,6 +129,48 @@ describe('store listing copy — character budgets', () => {
     // copy would reach for the tagline here, and it is 51 characters.
     expect(BRAND.tagline.length).toBeGreaterThan(STORE_LIMITS.appStore.subtitle);
     expect(APP_STORE.subtitle).toBe(BRAND.subtitle);
+  });
+});
+
+describe('Edge Add-ons', () => {
+  it('meets the Description floor as well as its ceiling', () => {
+    // Partner Center refuses a Description under 250 characters, which no
+    // other console here does, so the ceiling case above can't catch it.
+    expect(BROWSER_EXTENSION_FULL_DESCRIPTION.length).toBeGreaterThanOrEqual(
+      STORE_LIMITS.edgeAddons.descriptionMin,
+    );
+  });
+
+  const terms: readonly string[] = EDGE_ADDONS.searchTerms;
+
+  it('fits the search-term slots and the word budget across them', () => {
+    expect(terms.length).toBeLessThanOrEqual(STORE_LIMITS.edgeAddons.searchTerms);
+    const words = terms.flatMap((term) => term.split(/\s+/).filter(Boolean));
+    expect(words.length).toBeLessThanOrEqual(STORE_LIMITS.edgeAddons.searchTermWords);
+  });
+
+  it('has no empty or duplicated terms', () => {
+    expect(terms.map((term) => term.trim())).not.toContain('');
+    expect(new Set(terms.map((term) => term.toLowerCase())).size).toBe(terms.length);
+  });
+
+  it('names no competitor', () => {
+    const words = terms
+      .join(' ')
+      .toLowerCase()
+      .split(/[^a-z0-9]+/);
+    for (const mark of ['pocket', 'raindrop', 'pinboard', 'instapaper', 'evernote', 'notion']) {
+      expect(words).not.toContain(mark);
+    }
+  });
+
+  it('has words for every permission', () => {
+    // The list itself cannot be checked against wxt.config.ts from here (see
+    // BROWSER_EXTENSION_PRIVACY). This only stops an empty field reaching a
+    // console that won't take one.
+    for (const [name, text] of Object.entries(BROWSER_EXTENSION_PRIVACY.permissions)) {
+      expect([name, text.trim().length > 0]).toEqual([name, true]);
+    }
   });
 });
 

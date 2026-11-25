@@ -8,13 +8,19 @@
 #   tools/scripts/store-release.sh tag <store> [--yes] [--no-push]
 #   tools/scripts/store-release.sh name <store>
 #
-# <store> is ios, android (bracemark-expo), chrome or firefox (the browser
+# <store> is ios, android (bracemark-expo), chrome, edge or firefox (the browser
 # extension), or macos (bracemark-macos, which carries the browser extension's
 # Safari build). Reached through the app-level scripts rather than by hand:
 #
 #   apps/bracemark-expo        ios:bundle  android:bundle    ios:tag  android:tag
-#   apps/bracemark-extension   zip         zip:firefox       tag:chrome  tag:firefox
+#   apps/bracemark-extension   zip  zip:edge  zip:firefox    tag:chrome  tag:edge  tag:firefox
 #   apps/bracemark-macos       bundle                        tag
+#
+# edge is the Chrome build under its own record. Microsoft Edge Add-ons takes the
+# Chrome package unchanged, so `zip:edge` runs the same `wxt zip` and writes the
+# same -chrome.zip. It still gets a separate record and a separate edge/ tag,
+# because the two stores review on their own schedules. Chrome can release a
+# build while Edge still has the one before it.
 #
 # WHY THERE ARE TWO STEPS
 #
@@ -33,7 +39,7 @@
 #   problem=<why this build cannot be tagged, or nothing>
 #
 # WHAT A TAG SAYS. <store>/<version>, plus the build number where the store has
-# one (ios/1.2.0-1, android/1.2.0-4, macos/1.0.0-1, chrome/1.2.0, firefox/1.2.0): the numbers a
+# one (ios/1.2.0-1, android/1.2.0-4, macos/1.0.0-1, chrome/1.2.0, edge/1.2.0, firefox/1.2.0): the numbers a
 # bug report, the console and Settings → About all print, read back from the
 # native project or archive the build used rather than from app.config.ts. The
 # tag means RELEASED, because `tag` is run after releasing, so a build a store
@@ -43,7 +49,7 @@
 # is a warning at build time, because a trial build is a normal thing to want, and
 # a refusal at tag time, because a tag has to name a commit that holds what shipped.
 # That refusal comes after the build is live, so `check` makes the same one before
-# an upload. `ios:upload` and macos's `upload` run it; the other three uploads are by hand, so the
+# an upload. `ios:upload` and macos's `upload` run it; the other four uploads are by hand, so the
 # warning at the end of their build is the last word.
 #
 # `build` also warns on release notes `npm run check:release-notes` would reject.
@@ -63,10 +69,10 @@ readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: store-release.sh build <ios|android|macos|chrome|firefox> -- <build command...>
-       store-release.sh check <ios|android|macos|chrome|firefox>
-       store-release.sh tag   <ios|android|macos|chrome|firefox> [options]
-       store-release.sh name  <ios|android|macos|chrome|firefox>
+Usage: store-release.sh build <ios|android|macos|chrome|edge|firefox> -- <build command...>
+       store-release.sh check <ios|android|macos|chrome|edge|firefox>
+       store-release.sh tag   <ios|android|macos|chrome|edge|firefox> [options]
+       store-release.sh name  <ios|android|macos|chrome|edge|firefox>
 
   build   Run the build, and record the commit it came from.
   check   Fail unless the last build can be uploaded and later tagged.
@@ -107,12 +113,12 @@ case "$STORE" in
     readonly RECORD="$APP_DIR/build/$STORE.store-build"
     readonly TAG_COMMAND="tag"
     ;;
-  chrome|firefox)
+  chrome|edge|firefox)
     readonly APP_DIR="$REPO_ROOT/apps/bracemark-extension"
     readonly RECORD="$APP_DIR/.output/$STORE.store-build"
     readonly TAG_COMMAND="tag:$STORE"
     ;;
-  *) die "unknown store '$STORE' (expected ios, android, macos, chrome or firefox)" ;;
+  *) die "unknown store '$STORE' (expected ios, android, macos, chrome, edge or firefox)" ;;
 esac
 
 head_commit() { git -C "$REPO_ROOT" rev-parse --verify 'HEAD^{commit}'; }
@@ -139,7 +145,7 @@ release_tag() {
       version="$(plutil -extract CFBundleShortVersionString raw "$plist")"
       number="$(plutil -extract CFBundleVersion raw "$plist")"
       ;;
-    chrome|firefox)
+    chrome|edge|firefox)
       version="$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1])).version' \
         "$APP_DIR/package.json")"
       number=""
