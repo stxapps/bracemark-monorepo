@@ -915,6 +915,16 @@
     "artifacts": ["manual-checklist"]
   },
   {
+    "id": "EXT-RELEASE-003",
+    "title": "Edge runs the automated cases, its toolbar invocation grants the active tab, and the package Edge Add-ons delivers signs in and saves",
+    "surface": "extension",
+    "tier": "release",
+    "traits": ["online", "extension"],
+    "fixture": "small",
+    "path": "extension/RELEASE.md",
+    "artifacts": ["manual-checklist"]
+  },
+  {
     "id": "IAP-ENTITLEMENT-001",
     "title": "A manual Plus grant lifts the browser extension's full-library wall on the popup's next open",
     "surface": "extension",

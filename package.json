@@ -52,6 +52,7 @@
     "e2e:pwa": "nx e2e-pwa @stxapps/e2e",
     "e2e:extension": "nx e2e-extension @stxapps/e2e",
     "e2e:extension:firefox": "nx e2e-extension:firefox @stxapps/e2e",
+    "e2e:extension:edge": "nx e2e-extension:edge @stxapps/e2e",
     "e2e:ios:iphone": "nx e2e-mobile @stxapps/e2e --platform ios --width narrow",
     "e2e:ios:ipad": "nx e2e-mobile @stxapps/e2e --platform ios --width wide",
     "e2e:android:phone": "nx e2e-mobile @stxapps/e2e --platform android --width narrow",

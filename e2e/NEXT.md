@@ -248,6 +248,8 @@ to release qualification.
       page.
 - [ ] `EXT-RELEASE-002` Build and lint Firefox, then manually smoke sign-in, save,
       reopen, and sync in the supported Firefox release.
+- [ ] `EXT-RELEASE-003` Run `e2e:extension:edge`, then manually invoke Edge's
+      real toolbar action, and install the package Edge Add-ons delivered.
 
 ## Phase 3 — core deterministic journeys
 

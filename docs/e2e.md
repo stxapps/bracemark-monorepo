@@ -130,7 +130,8 @@ for exactly this reason.
 ### the browser this repo drives
 
 **`@playwright/test`, launching system Chrome for the web app and bundled
-Chromium for the browser extension.** The runner is worth its
+Chromium for the browser extension** (or system Edge for it: _the Edge run_,
+below). The runner is worth its
 dependency for auto-retrying `expect(locator)` assertions, the trace viewer, and
 worker fixtures; hand-rolling retry logic is the reinvention this repo's
 dependency culture exists to avoid.
@@ -302,7 +303,8 @@ copies in a separate web profile's reader — the only case where a kept copy is
 taken rather than imported. The run manifest
 records all three copies' differences and `activeTabToolbarGrantProven: false`.
 `EXT-RELEASE-001` in `e2e/extension/RELEASE.md` owns the real Chrome-toolbar
-boundary; the Firefox production-build smoke is beside it.
+boundary; the Firefox production-build smoke and the Edge check
+(`EXT-RELEASE-003`) are beside it.
 
 #### the Firefox browser-extension target
 
@@ -345,6 +347,43 @@ stops the installed MV3 service-worker version through CDP, observes its stopped
 state, then uses the popup's public Sync request to wake it back to running and
 observes the pulled link through the live popup. There is no app source import,
 storage-state shortcut, or test-only message.
+
+#### the Edge run
+
+`e2e-extension:edge` (`npm run e2e:extension:edge`) runs the same Chromium
+cases as `e2e-extension`, in the system Microsoft Edge (`EDGE_PATH` in
+`web/fixtures/env.ts`, overridden by `E2E_EDGE_PATH`) instead of Playwright's
+bundled Chromium. The runner sets `E2E_EXTENSION_BROWSER=edge`, and
+`launchExtensionProfile` passes Edge as the `executablePath`. Nothing else
+changes: the same build, the same staged copies, and the same system-Chrome web
+client for the sync cases. The run manifest records `browser.name: "edge"` and
+Edge's version, and the run id carries `-edge`. The first run, on Edge 158 on
+2026-11-26, passed all thirteen cases in 1.9 minutes, `EXT-BOUNDARY-001`'s
+`chrome://extensions/` included.
+
+It is a release check, not a per-change one. Run it before an Edge Add-ons
+submission, and when Edge's major version moves; it is step 1 of
+`EXT-RELEASE-003` in `e2e/extension/RELEASE.md`, whose other steps are the Edge
+toolbar and the package the store delivers. The registry does not name Edge: Edge
+Add-ons takes the Chrome package unchanged, so every Chromium case is an Edge case,
+and `browsers` stays a choice between harnesses (Chromium or Firefox), not between
+Chromium brands.
+
+**Why the system Edge works when the system Chrome does not.** Google removed
+`--load-extension` from branded Chrome builds in Chrome 137. Edge is a branded
+build too, but it still honours the switch, measured on Edge 158 on 2026-11-26.
+Headed and headless both registered the MV3 worker, though the fixture stays
+headed for both browsers. Microsoft has announced nothing either way, so Edge could
+drop the switch in any release, and the failure would be quiet: Edge launches, and
+no service worker appears. On Edge that symptom means the switch is gone, not that
+the run is broken. The fallback is the manual load in `EXT-RELEASE-003`.
+
+**What it cannot see.** The toolbar's `activeTab` grant (the harness's `tabs`
+copy stands in for it, as on Chromium); Windows, where most Edge users are,
+since this Mac runs only Edge for macOS; and enhanced security mode, which turns
+off the JIT on sites a user rarely visits and runs WebAssembly in an interpreter.
+That mode is off in a fresh profile and has not been measured against Argon2id
+sign-in.
 
 #### the PWA target
 
@@ -2779,8 +2818,10 @@ device class, which is its `--width`: `e2e:ios:iphone` / `e2e:ios:ipad` and
 with no class, since the contract runs on a phone only. Each is the target plus
 `--platform` and `--width`, not a target of its own, the way `e2e:web:headed` is.
 `e2e:web:firefox` and `e2e:web:firefox:staging` are the Firefox subset, local
-and deployed (_firefox_, above), and `e2e:extension:firefox` the browser
-extension's Firefox cases (_the Firefox browser-extension target_, above). The staging scripts put the mode last:
+and deployed (_firefox_, above), `e2e:extension:firefox` the browser
+extension's Firefox cases (_the Firefox browser-extension target_, above), and
+`e2e:extension:edge` the browser extension's Chromium cases in system Edge
+(_the Edge run_, above). The staging scripts put the mode last:
 `e2e:extension:staging`, `e2e:ios:iphone:staging`, `e2e:contract:android:staging`,
 `e2e:build:ios:staging` — and there is no `ipad` or `tablet` staging script. There
 is deliberately no bare `npm run e2e`: no honest fan-out

@@ -6,6 +6,7 @@ import { type BrowserContext, chromium, expect, type Page } from '@playwright/te
 
 import { E2E_ROOT } from '../../paths';
 import { type Credentials } from '../../web/fixtures/account';
+import { EDGE_PATH } from '../../web/fixtures/env';
 
 const REPO_ROOT = join(E2E_ROOT, '..');
 const EXTENSION_PROJECT = '@stxapps/bracemark-extension';
@@ -25,6 +26,27 @@ const BUILDS = {
 export type ExtensionBuildMode = keyof typeof BUILDS;
 
 export const EXTENSION_POPUP_WIDTH = 360;
+
+// Which Chromium the unpacked extension loads into. `chromium` is Playwright's
+// bundled build, the default; `edge` is the system Microsoft Edge at EDGE_PATH,
+// chosen by `e2e-extension:edge` (E2E_EXTENSION_BROWSER=edge). Both run the same
+// cases: Edge Add-ons takes the Chrome package unchanged, so the registry's
+// `browsers` does not name Edge — this picks the binary, not the case list.
+export type ExtensionBrowser = 'chromium' | 'edge';
+
+export function resolveExtensionBrowser(env: NodeJS.ProcessEnv = process.env): ExtensionBrowser {
+  const browser = env.E2E_EXTENSION_BROWSER ?? 'chromium';
+  if (browser !== 'chromium' && browser !== 'edge') {
+    throw new Error(`E2E_EXTENSION_BROWSER must be chromium or edge, got ${browser}`);
+  }
+  return browser;
+}
+
+export const EXTENSION_BROWSER = resolveExtensionBrowser();
+
+export function extensionBrowserExecutable(): string {
+  return EXTENSION_BROWSER === 'edge' ? EDGE_PATH : chromium.executablePath();
+}
 
 export interface StageExtensionOptions {
   // The build to copy; the development build unless named.
@@ -85,7 +107,7 @@ export interface LaunchExtensionOptions {
   deviceScaleFactor?: number;
 }
 
-/** Launch an unpacked extension in Playwright's bundled Chromium. */
+/** Launch an unpacked extension in Playwright's bundled Chromium, or in system Edge. */
 export async function launchExtensionProfile(
   userDataDir: string,
   extension: string,
@@ -99,6 +121,7 @@ export async function launchExtensionProfile(
     // default headless mode. Headed Chromium is therefore part of the driver,
     // not a debugging preference; the shot leg already needs it for paint too.
     headless: options.headless ?? false,
+    ...(EXTENSION_BROWSER === 'edge' ? { executablePath: EDGE_PATH } : {}),
     deviceScaleFactor: options.deviceScaleFactor ?? 2,
     args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`],
   });

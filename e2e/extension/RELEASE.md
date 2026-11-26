@@ -49,3 +49,31 @@ iterator is not iterable, and a spread of one made every Firefox save arrive wit
 no title or image while Chrome and every spec passed
 (`docs/link-extraction-keep.md`, _⚠ a page moved in place_). Step 4 alone does not
 show it: a save with no preview still saves.
+
+## Microsoft Edge toolbar and store install
+
+`@EXT-RELEASE-003` `@release` `@online` `@extension`
+
+1. Run `npm run e2e:extension:edge` against the Edge release under test. It runs
+   every automated Chromium case in the system Edge, so this list covers only what
+   that run cannot.
+2. Run `npx nx build @stxapps/bracemark-extension`. In Edge, open
+   `edge://extensions`, turn on Developer mode, and load
+   `apps/bracemark-extension/.output/chrome-mv3` unpacked.
+3. Edge puts a new extension inside its Extensions menu, not on the toolbar.
+   Open that menu and choose **Show in toolbar** for Bracemark.
+4. Sign in, then close the popup. Open an unsaved HTTP page and click the
+   Bracemark toolbar button. Confirm the editor names that page by its live title
+   and URL.
+5. Pick a list and tag, add a note, save, close the popup, and click the toolbar
+   button again. Confirm the saved state appears. Sync, and confirm a separate
+   signed-in web profile reads the link.
+6. After Edge Add-ons publishes the package, remove the unpacked copy, install
+   Bracemark from its Edge Add-ons listing, and confirm its version at
+   `edge://extensions` is the one `npm run zip:edge` recorded. Sign in and save one
+   page.
+
+Steps 3–5 are EXT-RELEASE-001 in Edge's own toolbar: only a real click creates
+the shipped manifest's `activeTab` grant. Step 6 is the only check that runs the
+package Edge delivers rather than one built here. Edge takes the Chrome package
+unchanged, but its review is separate and on its own schedule.

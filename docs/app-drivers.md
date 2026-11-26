@@ -40,6 +40,16 @@ Playwright's bundled Chromium loads the same directory first try. So driving
 chromium`, and it is the only exception to the paragraph above; the operational
 loop is in `.claude/skills/verify/SKILL.md`.
 
+**The system Microsoft Edge does load it.** The same two flags, with
+`executablePath` at `/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft
+Edge` (or `channel: 'msedge'`), registered the worker and drew the popup on Edge
+158, headed and headless (measured 2026-11-26). Google removed the switch from
+branded Chrome in Chrome 137, and Edge has not followed so far. So driving the
+browser extension in Edge needs no download, no grants and none of the Safari
+machinery below; `npm run e2e:extension:edge` is the scripted form
+([e2e.md](./e2e.md), _the Edge run_). Launch it with its own `userDataDir`: the
+user's own Edge can stay open, and its profile is never touched.
+
 ```js
 import { chromium } from 'playwright-core';
 const browser = await chromium.launch({

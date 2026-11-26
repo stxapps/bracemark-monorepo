@@ -552,6 +552,13 @@ schedule, and Chrome can ship a build while Edge still has the one before it. Wh
 build goes to both stores, run `zip:edge` after `zip`. Neither rebuild changes a
 byte, and each store's record then names the commit that store got.
 
+Before an Edge submission, run `EXT-RELEASE-003` in `e2e/extension/RELEASE.md`.
+Its first step is `npm run e2e:extension:edge`, every automated Chromium case in
+the system Edge, which still loads an unpacked extension from the command line
+when Chrome no longer does ([e2e.md](./e2e.md), _the Edge run_). The rest is
+Edge's toolbar, and the package Edge Add-ons delivers. No case is Edge-only: the
+package and the engine are Chrome's.
+
 The listing is pasted from `packages/shared/src/stores/listing-copy.ts`. The
 Description is `BROWSER_EXTENSION_FULL_DESCRIPTION`, the same text as the Web
 Store's, and `EDGE_ADDONS` holds the search terms and the reviewer notes.

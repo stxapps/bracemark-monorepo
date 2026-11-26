@@ -2,9 +2,12 @@ import { existsSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { chromium } from '@playwright/test';
-
-import { buildExtension, stageExtensionCopy } from '../extension/fixtures/extension';
+import {
+  buildExtension,
+  EXTENSION_BROWSER,
+  extensionBrowserExecutable,
+  stageExtensionCopy,
+} from '../extension/fixtures/extension';
 import { E2E_ROOT, runArtifactDir } from '../paths';
 import { proveStagingPlanAccess } from '../seed/d1';
 import { API_URL, WEB_URL } from '../web/fixtures/env';
@@ -38,10 +41,12 @@ async function main(): Promise<void> {
     { origin: API_URL, label: 'bracemark-api', required: true },
   ]);
 
-  const chromiumPath = chromium.executablePath();
+  const chromiumPath = extensionBrowserExecutable();
   if (!existsSync(chromiumPath)) {
     throw new Error(
-      'Playwright Chromium is not installed. Run `npx playwright install chromium` and retry.',
+      EXTENSION_BROWSER === 'edge'
+        ? `Microsoft Edge is not at ${chromiumPath}. Install it, or set E2E_EDGE_PATH.`
+        : 'Playwright Chromium is not installed. Run `npx playwright install chromium` and retry.',
     );
   }
 
@@ -53,7 +58,9 @@ async function main(): Promise<void> {
   const stagingPlanFrom =
     IS_STAGING && stagingGrants.length > 0 ? await proveStagingPlanAccess() : undefined;
 
-  const runId = createRunId(IS_STAGING ? 'staging-extension' : 'extension');
+  const runId = createRunId(
+    `${IS_STAGING ? 'staging-' : ''}extension${EXTENSION_BROWSER === 'edge' ? '-edge' : ''}`,
+  );
   const runDir = runArtifactDir(runId);
   await mkdir(runDir, { recursive: true });
 
@@ -145,9 +152,10 @@ async function main(): Promise<void> {
       : [],
     build: { mode: buildMode, source: build },
     browser: {
+      name: EXTENSION_BROWSER,
       executable: chromiumPath,
       version: chromiumVersion.stdout.trim(),
-      bundled: true,
+      bundled: EXTENSION_BROWSER === 'chromium',
     },
     stagedManifestDifferences: {
       default: { permissions: ['tabs'] },

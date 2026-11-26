@@ -14,6 +14,7 @@
     "e2e-pwa": "tsx runner/pwa.ts",
     "e2e-extension": "tsx runner/extension.ts",
     "e2e-extension:firefox": "tsx runner/extension-firefox.ts",
+    "e2e-extension:edge": "E2E_EXTENSION_BROWSER=edge tsx runner/extension.ts",
     "e2e-mobile": "tsx runner/mobile.ts",
     "e2e-contract": "tsx runner/contract.ts",
     "e2e-visual": "tsx runner/visual.ts",
@@ -92,6 +93,9 @@
         "cache": false
       },
       "e2e-extension:firefox": {
+        "cache": false
+      },
+      "e2e-extension:edge": {
         "cache": false
       },
       "e2e-mobile:staging": {

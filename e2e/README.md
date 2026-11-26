@@ -69,7 +69,10 @@ admitted to Firefox in Playwright's own Firefox build; install it once with
 `docs/e2e.md`, _firefox_. `npm run e2e:extension:firefox` runs the browser
 extension's Firefox cases in that same Firefox, through Marionette, against pages
 the case serves itself — no `npm run dev` needed (`docs/e2e.md`, _the Firefox
-browser-extension target_).
+browser-extension target_). `npm run e2e:extension:edge` runs the browser
+extension's Chromium cases in the system Microsoft Edge instead of the bundled
+Chromium; it needs `npm run dev` like `e2e:extension` (`docs/e2e.md`, _the Edge
+run_).
 
 `--suite smoke` selects only smoke cases; `full` includes smoke and full (never
 release qualification). Narrow any

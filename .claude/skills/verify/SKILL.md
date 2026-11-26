@@ -166,6 +166,11 @@ chromium` (~550 MB into `~/Library/Caches/ms-playwright/`) if it is absent.
   That is the one sanctioned reason to run that command here; see
   `docs/e2e.md`, _the browser this repo drives_, for why it is otherwise avoided.
 
+  **Or use the system Microsoft Edge, which needs no download.** It still honours
+  both args (Edge 158): add `executablePath: '/Applications/Microsoft
+Edge.app/Contents/MacOS/Microsoft Edge'` to the options above, with
+  `playwright-core`. Use a fresh `dir`, never the user's Edge profile.
+
 - **Signed-out screens need no setup.** A fresh `userDataDir` opens on `SignIn`.
 - **The popup window is NOT an attachable page.** `chrome.action.openPopup()`
   from the service worker opens it, but it never appears in `ctx.pages()` and no

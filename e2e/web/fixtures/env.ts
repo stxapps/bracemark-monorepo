@@ -44,3 +44,11 @@ export const SITE_URL = E2E_ORIGINS.site;
 // See docs/e2e.md, "the browser this repo drives".
 export const CHROME_PATH =
   process.env.E2E_CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+
+// The system Microsoft Edge, for `e2e-extension:edge` only. Unlike Google Chrome,
+// Edge still honours `--load-extension` (measured on Edge 158), so the browser
+// extension's Chromium harness runs in it unchanged. Edge auto-updates like
+// Chrome, and may one day drop the switch as Chrome did: the symptom is no
+// service worker, `extensionId` timing out. See docs/e2e.md, _the Edge run_.
+export const EDGE_PATH =
+  process.env.E2E_EDGE_PATH ?? '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge';
