@@ -84,7 +84,7 @@ export const DOC_GROUPS: DocGroup[] = [
         slug: 'layout-sort-and-theme',
         title: 'Layout, sort, and theme',
         description:
-          'Show links as a list or cards, sort them by date, choose a light, dark, or timed theme, and keep a choice to one device.',
+          'Show links as a list, cards, or a table, pick what each one shows, sort them by date, choose a light, dark, or timed theme, and keep a choice to one device.',
       },
     ],
   },

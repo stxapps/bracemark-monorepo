@@ -274,6 +274,14 @@ const COMPARISON: { label: string; cell: (plan: Plan) => Cell }[] = [
   // screenshot is a capped JPEG of the fold_). Read mode is kept from the browser
   // extension and the mobile apps alike, so the label needs no platform.
   { label: 'Read-mode copies of pages', cell: (p) => entitlementsOf(p).keptCopies },
+  // Named with its platform, like the server-previews row below and for the same
+  // reason: the table ships in the web app only (docs/link-layouts.md, _the
+  // table_), and the scope is what makes the row true, not a caveat to trim
+  // (docs/brand-assets.md, _scope is not a cost_). Not on the Plus card: that list
+  // is the five reasons people buy, and a sixth with a qualifier dilutes it. It
+  // needs a wide window too; the app says so where it matters, and the ordinary
+  // web-app case — a computer — holds the row as written.
+  { label: 'Table layout in the web app', cell: (p) => entitlementsOf(p).tableLayout },
   {
     label: 'Server link previews in the web app',
     cell: (p) => (entitlementsOf(p).serverExtraction ? 'Opt-in' : false),
