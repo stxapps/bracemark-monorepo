@@ -44,6 +44,7 @@ import {
   hostFromText,
   openableUrl,
   TABLE_COLUMNS,
+  TABLE_ROW_CHROME,
   type TableColumnId,
 } from '@stxapps/shared';
 import { type LinkView, useSettingMutations, useSettings } from '@stxapps/web-react';
@@ -56,6 +57,7 @@ import {
 } from '@stxapps/web-ui/components/ui/popover';
 import { useElementWidth } from '@stxapps/web-ui/hooks/use-element-size';
 
+import { useLinksPage } from '../_contexts/page-provider';
 import { useLinksViewState } from '../_contexts/view-state-provider';
 import { RelativeTime } from './relative-time';
 import {
@@ -73,6 +75,7 @@ import {
   useListNameMap,
   useReportDisplayedLinkPaths,
   useRestoreReturnRow,
+  useRootScale,
   useScrollTopOnQuery,
   useTagMap,
 } from './shared';
@@ -81,24 +84,9 @@ import { TableColumnsChooser } from '@/components/table-columns-chooser';
 
 const ROW_REM = 2.75;
 const SCROLL_TOP_THRESHOLD = 8;
-// What a row spends outside its columns: pl-4 + pr-2, the ⋯ menu's 32 + gap-3,
-// and gap-3 before every chosen column.
-const ROW_CHROME = 16 + 8 + 44;
-const COLUMN_GAP = 12;
-const SELECT_CHROME = 44;
-
-// The root font size in force, as a scale of the 16px the column widths are
-// written at (see the header). The row height is 2.75rem of it; the columns'
-// widths and the title's minimum scale with it too — px widths held "blog.exampl…"
-// under a 24px default font, and kept columns the text no longer fit (break-ui).
-function useRootScale(): number {
-  const [scale, setScale] = useState(1);
-  useEffect(() => {
-    const root = parseFloat(getComputedStyle(document.documentElement).fontSize);
-    if (Number.isFinite(root) && root > 0) setScale(root / 16);
-  }, []);
-  return scale;
-}
+// The bulk-edit checkbox cell: w-8 and the gap-3 after it. The row's other chrome
+// and the column gaps are the shared fit's (TABLE_ROW_CHROME, TABLE_COLUMN_GAP).
+const SELECT_CHROME = 32 + 12;
 
 function Cell({
   id,
@@ -167,18 +155,23 @@ export function TableLayout({
     useLinksViewState();
   const tagsById = useTagMap();
   const listNames = useListNameMap();
-  const { layoutOptions, sortOrder } = useSettings();
+  const { layoutOptions } = useSettings();
+  // The sort IN FORCE — the query's, which a hand-typed `?order=` overrides and
+  // which coerces a value this build doesn't know — not the setting's raw string:
+  // the arrow and aria-sort must describe the order the rows are actually in.
+  const { sortOrder } = useLinksPage().query;
   const { setSort, setLayoutOptions } = useSettingMutations();
   const { columns } = layoutOptions.table;
 
   // Before the pane is measured (0) every chosen column is shown; the first
-  // measurement drops what doesn't fit.
+  // measurement drops what doesn't fit. The fit and the row's chrome are written
+  // in 16px-root widths and the row's classes are rem, so the pane is converted
+  // to them first — the chrome scales with the root font size like the columns.
   const available =
     paneWidth > 0
-      ? paneWidth - ROW_CHROME - (bulkEditing ? SELECT_CHROME : 0) - COLUMN_GAP * columns.length
+      ? paneWidth / scale - TABLE_ROW_CHROME - (bulkEditing ? SELECT_CHROME : 0)
       : Infinity;
-  // The fit is written in 16px-root widths, so the room is measured in them too.
-  const { shown, hidden } = fitTableColumns(columns, available / scale);
+  const { shown, hidden } = fitTableColumns(columns, available);
 
   useEffect(() => {
     setScrolled(false);
@@ -330,12 +323,13 @@ export function TableLayout({
                   >
                     <PopoverTitle id="table-columns-title">Columns</PopoverTitle>
                     <p className="text-sm text-muted-foreground">
-                      The ones that don’t fit this window are hidden, starting with the least
-                      important.
+                      This window is too narrow for every column, so the least important are
+                      hidden. They are marked “Doesn’t fit”.
                     </p>
                     <TableColumnsChooser
                       idPrefix="table-header"
                       columns={columns}
+                      hidden={hidden}
                       onChange={(next) => void setLayoutOptions({ table: { columns: next } })}
                     />
                   </PopoverContent>

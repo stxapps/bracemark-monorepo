@@ -11,7 +11,9 @@
 //     extension's popup and a phone: a table that can't show its own default
 //     columns is a list with a header. Before the pane is measured (0) the table is
 //     assumed to fit, so a wide window doesn't flash the list first; a narrow one
-//     swaps on the first measurement.
+//     swaps on the first measurement. The minimum is written at a 16px root, like
+//     the columns it is summed from, so `rootScale` (the root font size ÷ 16)
+//     raises it with them: at a 24px default font the defaults need 1.5× the room.
 
 import { TABLE_MIN_PANE_WIDTH } from '@stxapps/shared';
 
@@ -21,10 +23,11 @@ export function resolveLayout(
   linksLayout: string,
   tableEntitled: boolean,
   paneWidth: number,
+  rootScale = 1,
 ): RenderedLayout {
   if (linksLayout === 'card') return 'card';
   if (linksLayout === 'table') {
-    const fits = paneWidth === 0 || paneWidth >= TABLE_MIN_PANE_WIDTH;
+    const fits = paneWidth === 0 || paneWidth >= TABLE_MIN_PANE_WIDTH * rootScale;
     return tableEntitled && fits ? 'table' : 'list';
   }
   return 'list';

@@ -284,3 +284,18 @@ export function remeasureAll(
 // of a pixel of gutter.
 export const measureRowHeight = (el: Element): number =>
   Math.ceil(el.getBoundingClientRect().height);
+
+// The root font size in force, as a scale of the 16px the table's widths are
+// written at (TABLE_COLUMNS, TABLE_MIN_PANE_WIDTH). The table's row height is
+// 2.75rem of it; its column widths, the title's minimum and the narrowest pane
+// that shows it at all scale with it too — px widths held "blog.exampl…" under a
+// 24px default font, and kept columns the text no longer fit (break-ui). Read once
+// after mount: 1 on the server and the first paint.
+export function useRootScale(): number {
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const root = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    if (Number.isFinite(root) && root > 0) setScale(root / 16);
+  }, []);
+  return scale;
+}

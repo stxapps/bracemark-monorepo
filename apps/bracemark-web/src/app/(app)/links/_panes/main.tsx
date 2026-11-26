@@ -15,7 +15,7 @@
 // Deep links that merely INCLUDE a locked list (?list-any=…, tags, search) don't
 // swap — their queries exclude the locked links instead (use-links).
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useEntitlements, useLocks, useSettings } from '@stxapps/web-react';
 import { useElementWidth } from '@stxapps/web-ui/hooks/use-element-size';
@@ -27,11 +27,12 @@ import { LinkEditDialog } from '../_components/link-edit-dialog';
 import { LinkMoveSurface } from '../_components/link-move-surface';
 import { ListLockPane } from '../_components/list-lock-pane';
 import { useLinksPage } from '../_contexts/page-provider';
+import { useLinksViewState } from '../_contexts/view-state-provider';
 import { useLinks } from '../_hooks/use-links';
 import { CardLayout } from '../_layouts/card-layout';
 import { ListLayout } from '../_layouts/list-layout';
 import { resolveLayout } from '../_layouts/resolve-layout';
-import type { LinkLayoutProps } from '../_layouts/shared';
+import { type LinkLayoutProps, useRootScale } from '../_layouts/shared';
 import { TableLayout } from '../_layouts/table-layout';
 
 type Layout = (props: LinkLayoutProps) => React.ReactNode;
@@ -76,6 +77,7 @@ function UnlockedMain() {
   const { links, pinnedCount, hasMore, showMore, isLoading, hasPending, applyPending } = useLinks();
   const [pane, setPane] = useState<HTMLDivElement | null>(null);
   const paneWidth = useElementWidth(pane);
+  const rootScale = useRootScale();
 
   // An unknown layout (synced from a client that has one we don't) renders as the
   // dense default — the same thing a user with no choice made sees. Deliberately does
@@ -83,8 +85,19 @@ function UnlockedMain() {
   // chose, so it still applies there. Settings → Appearance shows no selected radio while
   // this is in effect, which is the user's cue that the choice lives elsewhere. The
   // table's own fallbacks are resolveLayout's.
-  const Layout =
-    LAYOUTS[resolveLayout(linksLayout, entitlements.tableLayout, paneWidth)] ?? ListLayout;
+  const rendered = resolveLayout(linksLayout, entitlements.tableLayout, paneWidth, rootScale);
+  const Layout = LAYOUTS[rendered] ?? ListLayout;
+
+  // Tell View options when the list is standing in for a table only because the
+  // pane is too narrow (not for a missing entitlement: Settings shows the plan
+  // badge for that). Cleared on unmount — a locked list swaps this pane out.
+  const { setTableTooNarrow } = useLinksViewState();
+  const tableTooNarrow =
+    linksLayout === 'table' && entitlements.tableLayout && rendered !== 'table';
+  useEffect(() => {
+    setTableTooNarrow(tableTooNarrow);
+  }, [tableTooNarrow, setTableTooNarrow]);
+  useEffect(() => () => setTableTooNarrow(false), [setTableTooNarrow]);
 
   return (
     <main className="flex min-h-0 flex-1 flex-col">

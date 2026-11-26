@@ -10,6 +10,7 @@ export {
   useListNameMap,
   useReportDisplayedLinkPaths,
   useRestoreReturnRow,
+  useRootScale,
   useScrollTopOnQuery,
   useTagMap,
 } from './hooks';

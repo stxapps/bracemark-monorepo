@@ -39,9 +39,13 @@ one that flexes; the other columns are the user's choice and order
 note, kept copy — default site, tags, modified), each with a fixed width and a
 priority.
 
-- **Wide only.** Below `TABLE_MIN_PANE_WIDTH` (840 — the title's 280 minimum and
-  the three default columns, with the row's chrome) the list renders instead: a
-  table that can't show its own defaults is a list with a header. That rule also
+- **Wide only.** Below `TABLE_MIN_PANE_WIDTH` the list renders instead: a table
+  that can't show its own defaults is a list with a header. The number is DERIVED
+  (912 at a 16px root: the row's chrome 68, the title's 280 minimum, the three
+  default columns each with its 12 gap, and 16 for a classic scrollbar) and scaled
+  by the root font size like the columns. A hand-written 840 summed the columns
+  alone, so from 840 to ~911 the table opened with Tags already behind "+1"; the
+  shared spec now pins the defaults fitting at the minimum. That rule also
   covers the browser extension's popup and a phone. Expo never offers the table
   (`NATIVE_LINKS_LAYOUTS`) and renders a stored `table` as the list; iPad and
   Android tablets are later work.
@@ -63,13 +67,21 @@ priority.
   no longer fit.
 - **A date header sorts** — the same column again flips the order, the other
   date column switches the field — and writes the sort on whichever pack source
-  is active, the same value Settings → Appearance and View options write. Sorting
+  is active, the same value Settings → Appearance and View options write. The
+  arrow and `aria-sort` read the order IN FORCE — the query's, which a hand-typed
+  `?sort=`/`?order=` overrides and which coerces a newer client's value — never
+  the setting's raw string, or they describe an order the rows are not in. (Under
+  such a URL a header click still writes the setting, and the URL keeps winning.)
+  Sorting
   by title or host needs new indexes and read-layer work, and is later.
 - **The column chooser** (`components/table-columns-chooser.tsx`) is one component
   in three places: under the Table radio, in View options, and behind the
   header's "+N". Show/hide per column, reorder by drag (the Lists and Tags
   editors' dnd-kit setup) or by Move up / Move down for the keyboard and screen
-  readers. A column a newer client wrote is kept, after the known ones.
+  readers. A column a newer client wrote is kept, after the known ones. Behind
+  "+N" the chooser marks the chosen columns the window can't fit "Doesn't fit"
+  (still checked — the choice stands and comes back on a wider window), or the
+  "+N" opens a list where every row looks shown and nothing says which N.
 - **Semantics** on the virtualized divs: `role="table"`, `row`, `columnheader`
   and `cell`, `aria-rowcount` and per-row `aria-rowindex` (the header is row 1),
   `aria-sort` on the active date header.
@@ -86,7 +98,11 @@ priority.
   the view's title to "My …" at 320px. It is anchored to the bar's action group,
   so it opens in one place either way, and from the menu it opens in the menu's
   `onCloseAutoFocus`, once the menu has fully closed (opened sooner, the closing
-  menu's focus read as a focus-outside and shut it). On expo a sheet from the
+  menu's focus read as a focus-outside and shut it). When the table is chosen
+  and the account has it but the pane is too narrow, it says so in a status line
+  (`tableTooNarrow`, reported by the main pane into the view-state provider) —
+  otherwise picking Table on a narrow window looks like it did nothing. A missing
+  entitlement gets no such line: the Plus badge and the upgrade cover that. On expo a sheet from the
   header's ⋯ menu (`features/links/view-options.tsx`) — a phone header has no
   room for a fourth target either. Both share their controls with
   Appearance (`layout-options-controls.tsx` in each app).

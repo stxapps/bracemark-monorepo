@@ -438,7 +438,7 @@
   },
   {
     "id": "LAYOUT-TABLE-001",
-    "title": "A free account is offered the upgrade for the table; a Plus account picks it, changes its columns, sorts by a header, and gets the list back on a narrow window",
+    "title": "A free account is offered the upgrade for the table; a Plus account picks it, sees its defaults at the narrowest table, changes its columns, sorts by a header (the arrow following ?order=), finds which column \"+N\" hid, and gets the list back on a narrow window with View options saying why",
     "surface": "web",
     "tier": "full",
     "traits": ["online", "destructive"],

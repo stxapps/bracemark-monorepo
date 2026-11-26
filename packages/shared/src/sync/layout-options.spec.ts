@@ -17,7 +17,10 @@ import {
   localLayoutPack,
   mergeLayoutOptions,
   syncLayoutPack,
+  TABLE_COLUMN_GAP,
   TABLE_COLUMNS,
+  TABLE_MIN_PANE_WIDTH,
+  TABLE_ROW_CHROME,
   TABLE_TITLE_MIN_WIDTH,
 } from './layout-options';
 
@@ -204,7 +207,8 @@ describe('the table', () => {
   // what stays keeps the user's order.
   it('drops the lowest-priority columns until the rest fit beside the title', () => {
     const chosen = ['url', 'host', 'keptCopy', 'updatedAt'] as const;
-    const all = chosen.reduce((sum, id) => sum + TABLE_COLUMNS[id].width, 0);
+    // Each column costs its width and the gap before it.
+    const all = chosen.reduce((sum, id) => sum + TABLE_COLUMN_GAP + TABLE_COLUMNS[id].width, 0);
     expect(fitTableColumns(chosen, TABLE_TITLE_MIN_WIDTH + all)).toEqual({
       shown: [...chosen],
       hidden: [],
@@ -213,6 +217,34 @@ describe('the table', () => {
     expect(fit.hidden).toEqual(['keptCopy']);
     expect(fit.shown).toEqual(['url', 'host', 'updatedAt']);
     expect(fitTableColumns(chosen, 0).shown).toEqual([]);
+  });
+
+  // A dropped column gives its gap back: with three of four columns fitting
+  // exactly, the fourth's gap must not be charged to the three that stay.
+  it('charges a gap only for the columns it keeps', () => {
+    const chosen = ['host', 'tags', 'updatedAt', 'keptCopy'] as const;
+    const three = (['host', 'tags', 'updatedAt'] as const).reduce(
+      (sum, id) => sum + TABLE_COLUMN_GAP + TABLE_COLUMNS[id].width,
+      0,
+    );
+    expect(fitTableColumns(chosen, TABLE_TITLE_MIN_WIDTH + three)).toEqual({
+      shown: ['host', 'tags', 'updatedAt'],
+      hidden: ['keptCopy'],
+    });
+  });
+
+  // The rule the minimum pane exists for: a table that can't show its own
+  // defaults is a list with a header. At the narrowest pane that renders one, the
+  // three default columns all fit beside the title, even after a classic
+  // scrollbar's 15px. (A hand-written 840 summed the columns alone, so the table
+  // opened with Tags behind "+1" up to ~911.)
+  it('fits every default column at the narrowest pane that shows a table', () => {
+    const scrollbar = 15;
+    const fit = fitTableColumns(
+      DEFAULT_TABLE_COLUMNS,
+      TABLE_MIN_PANE_WIDTH - scrollbar - TABLE_ROW_CHROME,
+    );
+    expect(fit).toEqual({ shown: [...DEFAULT_TABLE_COLUMNS], hidden: [] });
   });
 
   it('writes a new column order but keeps a column this build does not know', () => {

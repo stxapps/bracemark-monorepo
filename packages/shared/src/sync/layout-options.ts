@@ -128,12 +128,32 @@ export const TABLE_COLUMNS: Record<TableColumnId, TableColumnDef> = {
 // the default sort orders by.
 export const DEFAULT_TABLE_COLUMNS: readonly TableColumnId[] = ['host', 'tags', 'updatedAt'];
 
-// The narrowest the title column may get before a column drops, and the narrowest
-// PANE that shows a table at all — below it the list layout renders instead. Sized
-// for the title and three default columns (180 + 220 + 112) with the row's own
-// chrome: a table that can't show its own defaults is a list with a header.
+// The narrowest the title column may get before a column drops.
 export const TABLE_TITLE_MIN_WIDTH = 280;
-export const TABLE_MIN_PANE_WIDTH = 840;
+
+// The gap before every column after the title (the row's `gap-3`), and what a row
+// spends outside its columns: pl-4 + pr-2, and the ⋯ menu's 32-wide cell with the
+// gap-3 before it. Like every width here, written at a 16px root — the row's
+// classes are rem, so a caller fitting at another root size divides its px by the
+// scale first (table-layout.tsx).
+export const TABLE_COLUMN_GAP = 12;
+export const TABLE_ROW_CHROME = 16 + 8 + 32 + 12;
+
+// Headroom for a classic (non-overlay) scrollbar: the pane is measured OUTSIDE the
+// table's scroller, whose `scrollbar-gutter: stable` takes ~15px of it.
+const TABLE_SCROLLBAR_ALLOWANCE = 16;
+
+// The narrowest PANE that shows a table at all — below it the list layout renders
+// instead. DERIVED from the title's minimum and the default columns, each with its
+// gap, plus the row's chrome and a scrollbar, because a table that can't show its
+// own defaults is a list with a header. (It was a hand-written 840 that summed the
+// columns but not their gaps, the chrome or the scrollbar, so from 840 to ~911 the
+// table opened with Tags already behind "+1".) At a 16px root; the caller scales it.
+export const TABLE_MIN_PANE_WIDTH =
+  TABLE_ROW_CHROME +
+  TABLE_TITLE_MIN_WIDTH +
+  DEFAULT_TABLE_COLUMNS.reduce((sum, id) => sum + TABLE_COLUMN_GAP + TABLE_COLUMNS[id].width, 0) +
+  TABLE_SCROLLBAR_ALLOWANCE;
 
 export interface TableOptions {
   // The chosen columns, in order — known ids only (unknown ones a newer client
@@ -151,23 +171,27 @@ export function coerceTableOptions(stored: { columns?: unknown[] } | undefined):
   return { columns: [...seen] };
 }
 
-// Which chosen columns fit `available` px beside the title's minimum: drop the
+// Which chosen columns fit `available` px — the row's width less its chrome
+// (TABLE_ROW_CHROME), at a 16px root — beside the title's minimum: drop the
 // lowest-priority columns until the rest fit, keeping the chosen ORDER for those
-// that stay. What drops is shown as "+N hidden", never scrolled to sideways.
+// that stay. Each column costs its width plus the gap before it, so a column that
+// drops gives its gap back too. What drops is shown as "+N hidden", never
+// scrolled to sideways.
 export function fitTableColumns(
   columns: readonly TableColumnId[],
   available: number,
 ): { shown: TableColumnId[]; hidden: TableColumnId[] } {
   const budget = available - TABLE_TITLE_MIN_WIDTH;
+  const cost = (id: TableColumnId) => TABLE_COLUMN_GAP + TABLE_COLUMNS[id].width;
   const kept = new Set(columns);
-  let used = columns.reduce((sum, id) => sum + TABLE_COLUMNS[id].width, 0);
+  let used = columns.reduce((sum, id) => sum + cost(id), 0);
   const byPriority = [...columns].sort(
     (a, b) => TABLE_COLUMNS[a].priority - TABLE_COLUMNS[b].priority,
   );
   for (const id of byPriority) {
     if (used <= budget) break;
     kept.delete(id);
-    used -= TABLE_COLUMNS[id].width;
+    used -= cost(id);
   }
   return {
     shown: columns.filter((id) => kept.has(id)),

@@ -192,12 +192,19 @@ interface LinksViewStateValue {
   // bulk-edit mode — the two sides of the toolbar's Select-all checkbox.
   selectAll: (links: LinkView[]) => void;
   clearSelected: () => void;
+  // The table is the chosen layout and the account has it, but the pane is too
+  // narrow for it, so the list is rendering (resolve-layout.ts). Main reports
+  // it; View options says so, or picking Table there would look like it did
+  // nothing (view-options-popover.tsx).
+  tableTooNarrow: boolean;
+  setTableTooNarrow: (tooNarrow: boolean) => void;
 }
 
 const LinksViewStateContext = createContext<LinksViewStateValue | null>(null);
 
 export function LinksViewStateProvider({ children }: { children: React.ReactNode }) {
   const [scrolled, setScrolled] = useState(false);
+  const [tableTooNarrow, setTableTooNarrow] = useState(false);
   const [openMenus, setOpenMenus] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [preSearch, setPreSearch] = useState<SimpleSelection | null>(null);
@@ -350,6 +357,8 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
       selectRange,
       selectAll,
       clearSelected,
+      tableTooNarrow,
+      setTableTooNarrow,
     }),
     [
       scrolled,
@@ -380,6 +389,7 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
       selectRange,
       selectAll,
       clearSelected,
+      tableTooNarrow,
     ],
   );
 

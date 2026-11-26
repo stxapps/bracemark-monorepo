@@ -39,6 +39,8 @@ import {
   PopoverTrigger,
 } from '@stxapps/web-ui/components/ui/popover';
 
+import { useLinksViewState } from '../_contexts/view-state-provider';
+
 import { ChoiceRow, LayoutOptionsControls } from '@/components/layout-options-controls';
 import { TableColumnsChooser } from '@/components/table-columns-chooser';
 import { usePaywall } from '@/contexts/paywall-provider';
@@ -75,6 +77,7 @@ export function ViewOptionsPopover({
   const { setLinksLayout, setLayoutOptions, setSort } = useSettingMutations();
   const { entitlements } = useEntitlements();
   const paywall = usePaywall();
+  const { tableTooNarrow } = useLinksViewState();
   const [error, setError] = useState<string | null>(null);
   // A layout this build doesn't know (a newer client's) shows no options — the
   // page is rendering its fallback, and the Layout select reads as unset.
@@ -110,6 +113,14 @@ export function ViewOptionsPopover({
                 : run(setLinksLayout(layout))
             }
           />
+          {/* The page is showing the list in the table's place (resolve-layout.ts):
+              say why, or picking Table here looks like it did nothing. A live
+              region, so a screen reader hears it right after the pick. */}
+          <p role="status" className="text-sm text-muted-foreground empty:hidden">
+            {tableTooNarrow
+              ? 'This window is too narrow for the table, so the list shows instead. Make the window wider to see the table.'
+              : ''}
+          </p>
           {linksLayout === 'table' && (
             <TableColumnsChooser
               idPrefix="view"

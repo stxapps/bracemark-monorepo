@@ -3,7 +3,7 @@
 // The Appearance settings section: how the app looks. In order —
 //
 //   - THEME — light / dark / system / custom time;
-//   - LINK LAYOUT — list / card, and under the radios the display options of the
+//   - LINK LAYOUT — list / card / table, and under the radios the display options of the
 //     SELECTED layout only (components/layout-options-controls.tsx, shared with the
 //     links page's View options popover);
 //   - LINK SORT — the order links come in.

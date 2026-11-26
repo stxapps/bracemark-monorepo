@@ -21,6 +21,13 @@ describe('resolveLayout', () => {
     expect(resolveLayout('table', true, TABLE_MIN_PANE_WIDTH - 1)).toBe('list');
   });
 
+  // The minimum is in 16px-root widths, like the columns: under a 24px default
+  // font the columns are 1.5× wider, so the pane must be too.
+  it('raises the narrowest pane with the root font size', () => {
+    expect(resolveLayout('table', true, TABLE_MIN_PANE_WIDTH, 1.5)).toBe('list');
+    expect(resolveLayout('table', true, TABLE_MIN_PANE_WIDTH * 1.5, 1.5)).toBe('table');
+  });
+
   // Unmeasured: assume it fits, so a wide window doesn't flash the list first.
   it('assumes a table fits before the pane is measured', () => {
     expect(resolveLayout('table', true, 0)).toBe('table');

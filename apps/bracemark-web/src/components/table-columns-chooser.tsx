@@ -16,6 +16,11 @@
 //
 // `onChange` takes the whole new order. The writer keeps any column entry a newer
 // client wrote (mergeLayoutOptions).
+//
+// `hidden` is the table's own fit (fitTableColumns): chosen columns the window is
+// too narrow for right now. They stay checked — the choice is kept, and comes back
+// on a wider window — and are marked "Doesn't fit", or the header's "+N" opens a
+// list where every row looks shown and nothing says which N.
 
 import {
   closestCenter,
@@ -48,6 +53,7 @@ function ChosenRow({
   idPrefix,
   isFirst,
   isLast,
+  doesNotFit,
   onHide,
   onMove,
 }: {
@@ -55,6 +61,7 @@ function ChosenRow({
   idPrefix: string;
   isFirst: boolean;
   isLast: boolean;
+  doesNotFit: boolean;
   onHide: () => void;
   onMove: (delta: -1 | 1) => void;
 }) {
@@ -71,8 +78,17 @@ function ChosenRow({
     >
       <DragGrip {...attributes} {...listeners} aria-label={`Drag ${label} to reorder`} />
       <Checkbox id={checkboxId} checked onCheckedChange={onHide} />
+      {/* Inside the label, so the checkbox's accessible name carries it too. */}
       <Label htmlFor={checkboxId} className="min-w-0 flex-1 font-normal">
         {label}
+        {/* The space keeps the accessible name two words ("Tags Doesn’t fit");
+            the Label's flex gap does the visual spacing. */}
+        {doesNotFit && (
+          <>
+            {' '}
+            <span className="text-xs text-muted-foreground">Doesn’t fit</span>
+          </>
+        )}
       </Label>
       <Button
         variant="ghost"
@@ -100,10 +116,13 @@ export function TableColumnsChooser({
   columns,
   onChange,
   idPrefix,
+  hidden = [],
 }: {
   columns: readonly TableColumnId[];
   onChange: (columns: TableColumnId[]) => void;
   idPrefix: string;
+  // Chosen columns the table couldn't fit just now — see the header.
+  hidden?: readonly TableColumnId[];
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -123,7 +142,7 @@ export function TableColumnsChooser({
     <div className="flex flex-col">
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={[...columns]} strategy={verticalListSortingStrategy}>
-          <ul aria-label="Shown columns">
+          <ul aria-label="Chosen columns">
             {columns.map((id, index) => (
               <ChosenRow
                 key={id}
@@ -131,6 +150,7 @@ export function TableColumnsChooser({
                 idPrefix={idPrefix}
                 isFirst={index === 0}
                 isLast={index === columns.length - 1}
+                doesNotFit={hidden.includes(id)}
                 onHide={() => onChange(columns.filter((c) => c !== id))}
                 onMove={(delta) => onChange(arrayMove([...columns], index, index + delta))}
               />
@@ -139,7 +159,7 @@ export function TableColumnsChooser({
         </SortableContext>
       </DndContext>
       {unchosen.length > 0 && (
-        <ul aria-label="Hidden columns">
+        <ul aria-label="Other columns">
           {unchosen.map((id) => {
             const checkboxId = `${idPrefix}-column-${id}`;
             return (
