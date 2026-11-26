@@ -9,6 +9,7 @@ import {
   Folders,
   Info,
   Link,
+  Palette,
   SlidersHorizontal,
   Tags,
   User,
@@ -22,6 +23,7 @@ export type SettingsSectionId =
   | 'read-mode'
   | 'lists'
   | 'tags'
+  | 'appearance'
   | 'misc'
   | 'about';
 
@@ -39,6 +41,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   { id: 'read-mode', label: 'Read mode', icon: <BookOpen className="size-4" /> },
   { id: 'lists', label: 'Lists', icon: <Folders className="size-4" /> },
   { id: 'tags', label: 'Tags', icon: <Tags className="size-4" /> },
+  { id: 'appearance', label: 'Appearance', icon: <Palette className="size-4" /> },
   { id: 'misc', label: 'Misc.', icon: <SlidersHorizontal className="size-4" /> },
   { id: 'about', label: 'About', icon: <Info className="size-4" /> },
 ];

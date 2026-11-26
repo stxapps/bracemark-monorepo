@@ -348,6 +348,7 @@ encrypted file. Random ids — never content-derived — so filenames leak nothi
 /users/{uid}/pins/{id}.enc        ← encrypted { id, rank, … }; {id} = a pinned link's id
 /users/{uid}/extractions/{id}.enc ← encrypted per-link extraction bookkeeping; {id} = the link's id
 /users/{uid}/settings/general.enc ← encrypted general user settings
+/users/{uid}/settings/layout.enc  ← encrypted links layout, its sort, every layout's options
 ```
 
 A link's metadata references the other files by id; the reference graph lives
@@ -537,7 +538,10 @@ extraction.title ?? host(url)`). Written by client extractors (the browser
   a queue object: a link with no `done` `titleImage` facet (no `extractions/` file,
   or one not yet extracted) is pending. See
   [link-extraction.md](./link-extraction.md) for the entity and the privacy stance.
-- **Settings use a fixed `settings/` namespace** (`settings/general.enc` today).
+- **Settings use a fixed `settings/` namespace** (`settings/general.enc` and
+  `settings/layout.enc` today — the second split off so the most casually written
+  setting can't upload a stale copy of the first; [link-layouts.md](./link-layouts.md),
+  _the settings model_).
   Unlike every other file — a random id (see _storage layout_) — these are
   **well-known paths** baked into client code, the one non-random-id family.
   Splitting by concern under `settings/` rather than one monolithic `settings.enc`

@@ -1,21 +1,21 @@
 'use client';
 
-// Reactive read of the user's app settings — the links layout and the theme. Two
-// sources feed each (see docs/local-first-sync.md "data model — settings" and the
-// Misc settings section):
+// Reactive read of the user's app settings — the links layout PACK (the layout, its
+// sort and every layout's display options) and the theme. Two sources feed each (see
+// docs/link-layouts.md, _the settings model_, and the Appearance settings section):
 //
-//   - the SYNCED value in `settings/general.enc` (`readSettingsGeneral`), shared
-//     across the user's devices; and
+//   - the SYNCED value — `settings/layout.enc` for the pack (`readSettingsLayout`,
+//     falling back to the older copies in `settings/general.enc`), and
+//     `settings/general.enc` for the theme (`readSettingsGeneral`) — shared across
+//     the user's devices; and
 //   - the DEVICE-LOCAL value in the `localSettings` store (`getLocalSettings`),
 //     which never syncs and is wiped on sign-out.
 //
-// `linksLayoutSource` (device-local) decides which one the app actually renders, so
-// a device can opt out of the synced layout and keep its own. `linksLayout` is that
-// resolved value — the single field topbar/main consumed before, now sourced here
-// instead of localStorage. ("local" is the internal name for the off-sync source;
-// the Misc UI labels its tab "Device".) Both reads are `useLiveQuery`, so a change
-// on either source (a local edit, or a sync landing a new `settings/general.enc`)
-// re-renders every consumer.
+// `linksLayoutSource` (device-local) decides which one the app renders for the
+// whole pack, so a device can opt out of the synced layout, options and sort
+// together and keep its own; `themeSource` does the same for the theme. ("local" is
+// the internal name for the off-sync source; the UI labels its tab "Device".) All
+// reads are `useLiveQuery`, so a change on any source re-renders every consumer.
 
 import { useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -25,17 +25,14 @@ import {
   DEFAULT_THEME,
   type KeepOnSave,
   keepOnSaveOf,
-  type LinksLayout,
+  type LayoutOptions,
+  localLayoutPack,
+  syncLayoutPack,
   type ThemeState,
 } from '@stxapps/shared';
 
 import { getLocalSettings } from '../data/local-settings-store';
-import { readSettingsGeneral } from '../data/queries';
-
-// The fallback layout before any choice is made (and while a liveQuery is still
-// resolving on first render) — the dense default, matching the old localStorage
-// seed.
-const DEFAULT_LINKS_LAYOUT: LinksLayout = 'list';
+import { readSettingsGeneral, readSettingsLayout } from '../data/queries';
 
 export type LinksLayoutSource = 'sync' | 'local';
 export type ThemeSource = 'sync' | 'local';
@@ -74,13 +71,24 @@ export interface Settings {
   // store at that moment instead (the browser extension's Editor), because this is a
   // render's copy and answers the defaults until the blob's read lands.
   keepOnSave: KeepOnSave;
-  // The SYNCED links sort — global-only (no device split), so the synced value IS
-  // the applied one. Typed `string` for the same forward-compat reason as
-  // `linksLayout`: a newer client's value round-trips and reaches the Settings UI
-  // intact (showing no selection when unknown). use-links coerces these to a known
-  // `LinkSortOn`/`LinkSortOrder` before ordering the read (coerceLinkSort*).
+  // The links sort the app should use right now — part of the pack, so it follows
+  // `linksLayoutSource` like the layout. Typed `string` for the same forward-compat
+  // reason as `linksLayout`: a newer client's value round-trips and reaches the
+  // Settings UI intact (showing no selection when unknown). use-links coerces these
+  // to a known `LinkSortOn`/`LinkSortOrder` before ordering the read.
   sortOn: string;
   sortOrder: string;
+  // Each source's own sort (the Sync and Device tabs' values).
+  syncSortOn: string;
+  syncSortOrder: string;
+  localSortOn: string;
+  localSortOrder: string;
+  // Every layout's display options the app should render right now, coerced (an
+  // absent file gives the defaults, which reproduce the look from before the options
+  // existed), plus each source's own.
+  layoutOptions: LayoutOptions;
+  syncLayoutOptions: LayoutOptions;
+  localLayoutOptions: LayoutOptions;
   // The theme the app should apply right now — `localTheme` when the active source is
   // `local`, else the synced `syncTheme`. The ThemeProvider consumes this (the way
   // main.tsx consumes `linksLayout`) to resolve/apply light-vs-dark and to keep the
@@ -101,12 +109,16 @@ export function useSettings(): Settings {
   // `undefined` on the very first render (and a stale value for one render after a
   // dep change) — defaulted below so consumers always get a concrete layout.
   const general = useLiveQuery(() => readSettingsGeneral(), []);
+  const layout = useLiveQuery(() => readSettingsLayout(), []);
   const local = useLiveQuery(() => getLocalSettings(), []);
 
-  const syncLinksLayout = general?.linksLayout ?? DEFAULT_LINKS_LAYOUT;
+  // The pack, per source (syncLayoutPack / localLayoutPack carry the fallback
+  // rules). Memoized on the raw liveQuery values: both allocate fresh option
+  // objects, and consumers dep on `layoutOptions`.
+  const syncPack = useMemo(() => syncLayoutPack(layout, general), [layout, general]);
+  const localPack = useMemo(() => localLayoutPack(local, syncPack), [local, syncPack]);
   const linksLayoutSource = local?.linksLayoutSource ?? 'sync';
-  const localLinksLayout = local?.linksLayout ?? DEFAULT_LINKS_LAYOUT;
-  const linksLayout = linksLayoutSource === 'local' ? localLinksLayout : syncLinksLayout;
+  const pack = linksLayoutSource === 'local' ? localPack : syncPack;
   // Off by default: absent (older client / never toggled) reads as opted-out.
   const serverExtraction = general?.serverExtraction ?? false;
   const serverReadMode = general?.serverReadMode ?? false;
@@ -124,13 +136,6 @@ export function useSettings(): Settings {
       }),
     [keepReadModeOnSave, keepReadModeOnShare, keepReadModeImages, keepScreenshotOnSave],
   );
-
-  // Global-only: the synced value is the applied one (no source resolution like
-  // layout/theme). Passed through raw (`string`) so an unknown future value reaches
-  // the Settings UI and round-trips; the defaults ('updatedAt'/'desc') match
-  // `emptyQuery`, and use-links coerces before ordering the read.
-  const sortOn = general?.sortOn ?? 'updatedAt';
-  const sortOrder = general?.sortOrder ?? 'desc';
 
   // Coerce both sources through `coerceThemeState`: the synced value is permissively
   // typed (entities.ts) so an odd persisted value never drops the settings blob, and
@@ -152,15 +157,22 @@ export function useSettings(): Settings {
   const theme = themeSource === 'local' ? localTheme : syncTheme;
 
   return {
-    linksLayout,
+    linksLayout: pack.linksLayout,
     linksLayoutSource,
-    syncLinksLayout,
-    localLinksLayout,
+    syncLinksLayout: syncPack.linksLayout,
+    localLinksLayout: localPack.linksLayout,
     serverExtraction,
     serverReadMode,
     keepOnSave,
-    sortOn,
-    sortOrder,
+    sortOn: pack.sortOn,
+    sortOrder: pack.sortOrder,
+    syncSortOn: syncPack.sortOn,
+    syncSortOrder: syncPack.sortOrder,
+    localSortOn: localPack.sortOn,
+    localSortOrder: localPack.sortOrder,
+    layoutOptions: pack.options,
+    syncLayoutOptions: syncPack.options,
+    localLayoutOptions: localPack.options,
     theme,
     themeSource,
     syncTheme,

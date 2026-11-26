@@ -95,8 +95,10 @@ order = asc | desc                      (ordering dir    — READ-ONLY override)
   back. The gate checks the query, not `selection`, because selection resolves to
   `none` for a compound query and "Trash + some text" would come back empty. Archive
   is deliberately not suppressed, since archived links are kept, just not in the inbox.
-- **`sort`/`order` are not filters.** Ordering is a **global synced setting**
-  (`settings/general.enc` — Settings → Misc), and the URL params are only an
+- **`sort`/`order` are not filters.** Ordering is a **setting** — part of the
+  links layout pack, so synced (`settings/layout.enc`) or device-only by the same
+  Sync/Device switch as the layout (Settings → Appearance;
+  [link-layouts.md](./link-layouts.md)) — and the URL params are only an
   **optional, hand-typed, read-only override** of it: present and known → they win;
   absent or unknown → the setting's value (the default the provider passes into
   `parseLinkQuery`). They're deliberately **out of the filter-key set**, so `?sort=…`

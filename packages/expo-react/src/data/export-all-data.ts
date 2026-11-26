@@ -73,8 +73,9 @@ import {
   serializeBackupManifest,
   sessionVerdictOf,
   SETTINGS_GENERAL_PATH,
-  type SettingsGeneral,
+  SETTINGS_LAYOUT_PATH,
   settingsGeneralSchema,
+  settingsLayoutSchema,
   TAGS_PREFIX,
   tagSchema,
   toNetscapeHtml,
@@ -315,7 +316,7 @@ async function assembleBracemarkZip(
   lists: { path: string; entity: List }[],
   tags: { path: string; entity: Tag }[],
   pins: { path: string; entity: Pin }[],
-  settings: SettingsGeneral | undefined,
+  settings: { path: string; entity: object }[],
   filePaths: string[],
   failedPaths: readonly string[],
   unreadable: number,
@@ -332,7 +333,7 @@ async function assembleBracemarkZip(
     }
   }
   for (const { path, entity } of pins) lines.push(jsonlLine(path, entity));
-  if (settings !== undefined) lines.push(jsonlLine(SETTINGS_GENERAL_PATH, settings));
+  for (const { path, entity } of settings) lines.push(jsonlLine(path, entity));
 
   // Gather the includable blobs: a row that claims materialization AND whose
   // disk file is really there AND reads. A file the disk won't give back costs
@@ -517,11 +518,21 @@ export async function exportAllData(options: {
   const pins = readRawNamespace(PINS_PREFIX, pinSchema, tally, (path) =>
     includedLinkIds.has(idFromPath(path, PINS_PREFIX)),
   );
-  // Read raw rather than through readSettingsGeneral, which can't tell an absent
-  // record from one that doesn't decode — and only the second is left out.
-  const settingsRecord = await getItem(SETTINGS_GENERAL_PATH);
-  const settings = parseBlob(settingsRecord?.data ?? undefined, settingsGeneralSchema);
-  if (settingsRecord !== undefined && settings === undefined) tally.unreadable += 1;
+  // Each well-known settings file, read raw rather than through readSettingsGeneral /
+  // readSettingsLayout, which can't tell an absent record from one that doesn't
+  // decode — and only the second is left out. `layout.enc` beside `general.enc`:
+  // an archive without it would restore the layout and sort (from general.enc's
+  // copies) but silently drop every display option.
+  const settings: { path: string; entity: object }[] = [];
+  for (const [path, schema] of [
+    [SETTINGS_GENERAL_PATH, settingsGeneralSchema],
+    [SETTINGS_LAYOUT_PATH, settingsLayoutSchema],
+  ] as const) {
+    const settingsRecord = await getItem(path);
+    const entity = parseBlob(settingsRecord?.data ?? undefined, schema);
+    if (entity !== undefined) settings.push({ path, entity });
+    else if (settingsRecord !== undefined) tally.unreadable += 1;
+  }
 
   const filePaths = referencedFilePaths(links);
   onProgress({ step: 'files', done: 0, total: filePaths.length });

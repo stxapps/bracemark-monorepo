@@ -29,8 +29,8 @@
 // its own h2. Rather than pick a bigger size for a word that never changes, it
 // stopped being a heading: it names the surface, which is chrome, so it's a
 // `span` and the SECTION title is the page's `h1` (see SettingsHeader). The
-// outline that leaves is the honest one — `/settings/misc` is a page called
-// "Misc." whose blocks are Link layout, Link sort, Theme, App lock.
+// outline that leaves is the honest one — `/settings/appearance` is a page called
+// "Appearance" whose blocks are Theme, Link layout, Link sort.
 //
 // Below `md` the left slot becomes the section menu, because the sidebar that
 // normally holds it is hidden at that width. Same sections, same order, same

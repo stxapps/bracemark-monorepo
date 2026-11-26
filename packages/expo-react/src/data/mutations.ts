@@ -39,6 +39,7 @@ import {
   extractionSchema,
   type Facet,
   FILES_PREFIX,
+  type LayoutOptionsPatch,
   type Link,
   linkSchema,
   type LinksLayout,
@@ -46,14 +47,19 @@ import {
   type LinkSortOrder,
   type List,
   listSchema,
+  mergeLayoutOptions,
   pathFromId,
   type Pin,
   PINS_PREFIX,
   pinSchema,
   replacedExtractionFileIds,
   SETTINGS_GENERAL_PATH,
+  SETTINGS_LAYOUT_PATH,
   type SettingsGeneral,
   settingsGeneralSchema,
+  type SettingsLayout,
+  settingsLayoutSchema,
+  storedOptionsOf,
   type Tag,
   tagSchema,
   type ThemeState,
@@ -421,6 +427,51 @@ export async function writeSettingsGeneral(
     }
     return next;
   });
+}
+
+// Patch the synced layout-settings blob (`settings/layout.enc` — the links layout,
+// its sort and every layout's options) and write it: the Sync side of the pack.
+// The same read-merge-inside-the-write-transaction shape as writeSettingsGeneral,
+// with the options merged one level deeper (mergeLayoutOptions) so an option, a
+// field id or a layout a newer client wrote survives this client's write.
+//
+// THE TRANSITION MIRROR. The layout and the sort moved here from `general.enc`, and
+// clients from before the move still read them there only — so while they are in
+// use, a write of any of the three ALSO writes it to `general.enc`. That second
+// write carries the old overwrite risk for those fields, no worse than before the
+// move; removing it is a tracked follow-up (docs/link-layouts.md, _the move_).
+export async function writeSettingsLayout(
+  username: string,
+  patch: {
+    linksLayout?: LinksLayout;
+    sortOn?: LinkSortOn;
+    sortOrder?: LinkSortOrder;
+    options?: LayoutOptionsPatch;
+  },
+): Promise<void> {
+  const { options, ...pack } = patch;
+  const now = Date.now();
+  writeEntityWith(username, SETTINGS_LAYOUT_PATH, (existing) => {
+    const current: SettingsLayout = parseBlob(
+      existing?.data ?? undefined,
+      settingsLayoutSchema,
+    ) ?? {
+      createdAt: 0,
+      updatedAt: 0,
+    };
+    const next: SettingsLayout = {
+      ...current,
+      ...pack,
+      ...(options ? mergeLayoutOptions(storedOptionsOf(current), options) : {}),
+      createdAt: current.createdAt === 0 ? now : current.createdAt,
+      updatedAt: now,
+    };
+    if (!settingsLayoutSchema.safeParse(next).success) {
+      throw new Error('writeSettingsLayout: invalid settings');
+    }
+    return next;
+  });
+  if (Object.keys(pack).length > 0) await writeSettingsGeneral(username, pack);
 }
 
 // Apply a patch to a pin and write it — the put side of pin/reorder. Same body

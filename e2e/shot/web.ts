@@ -187,7 +187,7 @@ const DOCS_FIGURES: Record<string, string> = {
  * The one thing `shot:account` established that a HUMAN can undo between the seeding
  * and the capture, checked rather than re-applied.
  *
- * `linksLayout` SYNCS: one click in Settings → Misc, in the app or on any other
+ * `linksLayout` SYNCS: one click in Settings → Appearance, in the app or on any other
  * device signed into this fixture, is persisted and restored on the next sign-in
  * — and card layout photographs a wall of full-bleed covers where the site's band
  * expects a list. Before the split this was re-asserted in the same run as the
@@ -196,14 +196,14 @@ const DOCS_FIGURES: Record<string, string> = {
  * gated by a scene's own `settle`.
  */
 async function assertListLayout(page: Page): Promise<void> {
-  await page.goto('/settings/misc');
+  await page.goto('/settings/appearance');
   const list = page.getByRole('radio', { name: 'List' });
   await expect(list).toBeVisible();
   if ((await list.getAttribute('data-state')) === 'checked') return;
   throw new Error(
     'this account is on the CARD layout, so the scenes would photograph the wrong screen. ' +
       'Re-run `npm run shot:account` (it sets the layout through the real radio), or set ' +
-      'Settings → Misc → Layout → List by hand.',
+      'Settings → Appearance → Link layout → List by hand.',
   );
 }
 

@@ -74,9 +74,14 @@ jest.mock('@stxapps/expo-react', () => {
       biometricLabel: '',
       unlockListWithBiometric: jest.fn(),
     }),
-    useSettings: () => ({ linksLayout: mockLayout }),
+    // The real defaults, so the items render the layouts as they always looked.
+    useSettings: () => ({
+      linksLayout: mockLayout,
+      layoutOptions: jest.requireActual('@stxapps/shared').DEFAULT_LAYOUT_OPTIONS,
+    }),
     useSync: () => ({ bgSyncStatus: 'idle', requestSync: jest.fn() }),
     useTags: () => tags,
+    useLists: () => tags,
   };
 });
 jest.mock('./page-provider', () => ({

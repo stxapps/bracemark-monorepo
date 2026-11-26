@@ -23,6 +23,7 @@ const SETTINGS_SECTIONS = [
   'read-mode',
   'lists',
   'tags',
+  'appearance',
   'misc',
   'about',
 ];
@@ -33,7 +34,7 @@ function fixturePath(name: string): string {
 }
 
 async function chooseLayout(page: Page, name: 'List' | 'Card') {
-  await page.goto('/settings/misc');
+  await page.goto('/settings/appearance');
   const radio = page.getByRole('radio', { name: new RegExp(`^${name}\\b`) });
   await radio.click();
   await expect(radio).toBeChecked();

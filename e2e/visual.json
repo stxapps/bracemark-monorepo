@@ -158,6 +158,15 @@
       "gate": false
     },
     {
+      "id": "settings-appearance",
+      "title": "Settings: Appearance",
+      "case": "VISUAL-APP-001",
+      "platforms": ["web", "ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": [],
+      "gate": false
+    },
+    {
       "id": "settings-misc",
       "title": "Settings: Misc.",
       "case": "VISUAL-APP-001",
@@ -332,6 +341,16 @@
     {
       "id": "large-font-settings-tags",
       "title": "Settings: Tags at a large font size",
+      "case": "VISUAL-FONT-001",
+      "platforms": ["ios", "android"],
+      "appearances": ["light"],
+      "fontScale": "large",
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "large-font-settings-appearance",
+      "title": "Settings: Appearance at a large font size",
       "case": "VISUAL-FONT-001",
       "platforms": ["ios", "android"],
       "appearances": ["light"],

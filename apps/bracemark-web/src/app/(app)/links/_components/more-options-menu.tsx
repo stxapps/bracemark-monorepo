@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef } from 'react';
 // The overflow menu behind the topbar's "More options" button: account- and
 // session-level actions that don't warrant their own toolbar slot. Sign out goes
 // through the hoisted sign-out flow (@stxapps/web-ui's sign-out-provider), which
@@ -25,7 +26,6 @@
 // its dot is full-ink neutral, never destructive, because the cycle completed
 // and the local library is intact (@stxapps/shared sync/status.ts,
 // `blocked-capacity`).
-
 import {
   CircleAlert,
   CloudOff,
@@ -36,6 +36,7 @@ import {
   MoreHorizontal,
   RefreshCw,
   Settings,
+  SlidersHorizontal,
   SquarePen,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -58,11 +59,16 @@ import { DEFAULT_SECTION_ID } from '../../settings/sections';
 // `onBulkEdit`: the topbar hands its Bulk edit toggle in here when the bar is too
 // narrow to hold it as a button (topbar.tsx, COMPACT_BAR_REM) — present, the menu
 // leads with it; absent, the item doesn't exist.
+// `onViewOptions`: opens the View options popover, for the widths where its own
+// icon is hidden — below `md` (view-options-popover.tsx). The item is `md:hidden`,
+// so it exists exactly where the icon doesn't.
 interface MoreOptionsMenuProps {
   onBulkEdit?: () => void;
+  onViewOptions?: () => void;
 }
 
-export function MoreOptionsMenu({ onBulkEdit }: MoreOptionsMenuProps = {}) {
+export function MoreOptionsMenu({ onBulkEdit, onViewOptions }: MoreOptionsMenuProps = {}) {
+  const openingViewOptions = useRef(false);
   const { storeStatus, bgSyncStatus, syncNow } = useSync();
   const { appLock, lockApp } = useLocks();
   const { requestSignOut, signingOut } = useSignOutFlow();
@@ -128,15 +134,40 @@ export function MoreOptionsMenu({ onBulkEdit }: MoreOptionsMenuProps = {}) {
           fixed width wide enough for those is dead space the rest of the
           time. `w-auto` drops the kit's trigger-width default and `min-w-36`
           lowers its `min-w-48` floor, which alone left ~70px dead. */}
-      <DropdownMenuContent align="end" className="w-auto min-w-36">
+      <DropdownMenuContent
+        align="end"
+        className="w-auto min-w-36"
+        // View options opens HERE, once the menu has finished closing — and focus
+        // does not go back to ⋯. Opened from the item's own select, the popover
+        // arrived while the menu was still animating out with focus inside it, read
+        // that as a focus-outside, and closed on the spot (break-ui, 320px).
+        onCloseAutoFocus={(e) => {
+          if (!openingViewOptions.current) return;
+          openingViewOptions.current = false;
+          e.preventDefault();
+          onViewOptions?.();
+        }}
+      >
         {onBulkEdit && (
-          <>
-            <DropdownMenuItem onSelect={onBulkEdit}>
-              <SquarePen className="size-4" />
-              Bulk edit
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-          </>
+          <DropdownMenuItem onSelect={onBulkEdit}>
+            <SquarePen className="size-4" />
+            Bulk edit
+          </DropdownMenuItem>
+        )}
+        {onViewOptions && (
+          // Opens from the menu's onCloseAutoFocus (above), not here.
+          <DropdownMenuItem
+            className="md:hidden"
+            onSelect={() => {
+              openingViewOptions.current = true;
+            }}
+          >
+            <SlidersHorizontal className="size-4" />
+            View options
+          </DropdownMenuItem>
+        )}
+        {(onBulkEdit || onViewOptions) && (
+          <DropdownMenuSeparator className={onBulkEdit ? '' : 'md:hidden'} />
         )}
         <DropdownMenuItem
           disabled={paused}

@@ -30,8 +30,14 @@ appId: com.bracemark.app
 - runFlow:
     file: ../../flows/subflows/open-settings.yaml
     env:
-      SECTION: misc
-- tapOn: 'Sync'
+      SECTION: appearance
+# By id: Appearance has two Sync tabs, and the theme's comes first.
+- scrollUntilVisible:
+    element:
+      id: 'layout-source-sync'
+    direction: DOWN
+- tapOn:
+    id: 'layout-source-sync'
 - waitForAnimationToEnd:
     timeout: 5000
 - tapOn:

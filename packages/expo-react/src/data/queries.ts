@@ -82,7 +82,10 @@ import {
   setCachedExtraction,
   setCachedLink,
   SETTINGS_GENERAL_PATH,
+  SETTINGS_LAYOUT_PATH,
   settingsGeneralSchema,
+  type SettingsLayout,
+  settingsLayoutSchema,
   TAGS_PREFIX,
   tagSchema,
   tagWithPathId,
@@ -323,6 +326,13 @@ export async function readPins(): Promise<PinItem[]> {
 export async function readSettingsGeneral(): Promise<SettingsGeneral | undefined> {
   const row = getDb().select().from(items).where(eq(items.path, SETTINGS_GENERAL_PATH)).get();
   return parseBlob(row?.data ?? undefined, settingsGeneralSchema);
+}
+
+// The synced layout-settings blob (`settings/layout.enc`), or undefined — web
+// queries.ts readSettingsLayout's twin.
+export async function readSettingsLayout(): Promise<SettingsLayout | undefined> {
+  const row = getDb().select().from(items).where(eq(items.path, SETTINGS_LAYOUT_PATH)).get();
+  return parseBlob(row?.data ?? undefined, settingsLayoutSchema);
 }
 
 // How many links currently belong to `listId`, counted straight off the

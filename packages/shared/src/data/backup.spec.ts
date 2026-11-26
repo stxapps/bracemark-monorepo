@@ -193,6 +193,18 @@ describe('classifyBundleLine', () => {
     );
   });
 
+  // The second well-known settings file. Missed here, a restore would count it
+  // invalid and drop every layout option — with the layout and sort still coming
+  // back from `general.enc`'s copies, so nothing would look wrong but the options.
+  it('classifies settings/layout.enc, under its own schema', () => {
+    const data = { linksLayout: 'card', card: { titleLines: 3 }, createdAt: 1, updatedAt: 1 };
+    expect(classifyBundleLine(jsonlLine('settings/layout.enc', data))?.kind).toBe('settings');
+    expect(
+      classifyBundleLine(jsonlLine('settings/layout.enc', { linksLayout: 'card' })),
+    ).toBeUndefined();
+    expect(classifyBundleLine(jsonlLine('settings/other.enc', data))).toBeUndefined();
+  });
+
   it('rejects malformed lines', () => {
     expect(classifyBundleLine('not json')).toBeUndefined();
     expect(classifyBundleLine(JSON.stringify({ path: 'links/a.enc' }))).toBeUndefined();

@@ -4,7 +4,7 @@
 // checkbox (the options menu's stand-in) and the pinned/note badges. The
 // options menu itself is link-row-menu.tsx.
 
-import { Pin, StickyNote } from 'lucide-react';
+import { BookOpen, Pin, StickyNote } from 'lucide-react';
 
 import { hasPositiveNoteClause } from '@stxapps/shared';
 import { type LinkView } from '@stxapps/web-react';
@@ -117,5 +117,17 @@ export function NoteBadge({ note }: { note: string }) {
         aria-label={matched ? 'Note matches search' : 'Has note'}
       />
     </span>
+  );
+}
+
+// The kept-copy icon (the `keptCopy` field, off by default): this link has a
+// read-mode copy or a screenshot kept with it, so Read in its menu opens something
+// offline. Muted ink and 14px like the pin and note badges beside it, and as
+// non-interactive (it rides inside the row's anchor). Read off `readModeId` /
+// `screenshotId`, which are already on LinkView — no query of its own.
+export function KeptCopyBadge({ link }: { link: LinkView }) {
+  if (!(link.readModeId || link.screenshotId)) return null;
+  return (
+    <BookOpen className="size-3.5 shrink-0 text-muted-foreground" aria-label="Has a kept copy" />
   );
 }

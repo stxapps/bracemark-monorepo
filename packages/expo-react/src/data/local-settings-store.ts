@@ -8,7 +8,13 @@
 
 import { eq } from 'drizzle-orm';
 
-import { DEFAULT_THEME } from '@stxapps/shared';
+import {
+  DEFAULT_THEME,
+  type LayoutOptionsPatch,
+  layoutOptionsSchema,
+  mergeLayoutOptions,
+  type StoredLayoutOptions,
+} from '@stxapps/shared';
 
 import { getDb, localSettings, type LocalSettingsValue } from './db';
 
@@ -33,24 +39,51 @@ export async function getLocalSettings(): Promise<LocalSettingsValue | undefined
 // defaults here mirror the read side's (`sync` sources, `list` layout,
 // DEFAULT_THEME), so a first write of one field doesn't silently pin the others
 // to a surprising value.
-export async function setLocalSettings(patch: Partial<LocalSettingsValue>): Promise<void> {
+export async function setLocalSettings(
+  patch:
+    | Partial<LocalSettingsValue>
+    | ((existing: LocalSettingsValue | undefined) => Partial<LocalSettingsValue>),
+): Promise<void> {
   getDb().transaction((tx) => {
     const existing = tx
       .select()
       .from(localSettings)
       .where(eq(localSettings.id, LOCAL_SETTINGS_ID))
       .get()?.value;
+    const fields = typeof patch === 'function' ? patch(existing) : patch;
     const value: LocalSettingsValue = {
       linksLayoutSource: existing?.linksLayoutSource ?? 'sync',
       linksLayout: existing?.linksLayout ?? 'list',
       themeSource: existing?.themeSource ?? 'sync',
       theme: existing?.theme ?? DEFAULT_THEME,
       previewsPromptDismissed: existing?.previewsPromptDismissed ?? false,
-      ...patch,
+      ...(existing?.sortOn !== undefined ? { sortOn: existing.sortOn } : {}),
+      ...(existing?.sortOrder !== undefined ? { sortOrder: existing.sortOrder } : {}),
+      ...(existing?.layoutOptions !== undefined ? { layoutOptions: existing.layoutOptions } : {}),
+      ...fields,
     };
     tx.insert(localSettings)
       .values({ id: LOCAL_SETTINGS_ID, value })
       .onConflictDoUpdate({ target: localSettings.id, set: { value } })
       .run();
+  });
+}
+
+// Patch this device's layout options (the Device source of the pack), inside the
+// same read-merge-write as setLocalSettings. A row with no options yet starts from
+// `seed` — the SYNCED options this device was showing until now — so the first
+// device edit changes one option instead of resetting the rest to defaults. The
+// stored value is untrusted (another build may have written it), so a corrupt one
+// also starts from the seed. Unknown ids are kept (mergeLayoutOptions).
+export function patchLocalLayoutOptions(
+  patch: LayoutOptionsPatch,
+  seed: StoredLayoutOptions,
+): Promise<void> {
+  return setLocalSettings((existing) => {
+    const stored =
+      existing?.layoutOptions === undefined
+        ? undefined
+        : layoutOptionsSchema.safeParse(existing.layoutOptions).data;
+    return { layoutOptions: mergeLayoutOptions(stored ?? seed, patch) };
   });
 }

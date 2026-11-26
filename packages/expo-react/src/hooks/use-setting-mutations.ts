@@ -2,31 +2,48 @@
 // hooks/use-setting-mutations.ts, verbatim in contract (see there for the
 // source-routing rationale): the device-local setters go to the sqlite
 // `local_settings` row (local-settings-store), the synced setters write
-// `settings/general.enc` via writeSettingsGeneral, then kick a sync.
+// `settings/layout.enc` (the layout pack, via writeSettingsLayout) or
+// `settings/general.enc` (via writeSettingsGeneral), then kick a sync; the
+// unprefixed pack setters go to whichever source is active.
 
 import { useCallback, useMemo } from 'react';
 
-import type {
-  DeviceExtractionMode,
-  LinksLayout,
-  LinkSortOn,
-  LinkSortOrder,
-  ThemeState,
+import {
+  type DeviceExtractionMode,
+  type LayoutOptionsPatch,
+  type LinksLayout,
+  type LinkSortOn,
+  type LinkSortOrder,
+  storedOptionsOf,
+  type ThemeState,
 } from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
-import { setLocalSettings } from '../data/local-settings-store';
-import { writeSettingsGeneral } from '../data/mutations';
+import {
+  getLocalSettings,
+  patchLocalLayoutOptions,
+  setLocalSettings,
+} from '../data/local-settings-store';
+import { writeSettingsGeneral, writeSettingsLayout } from '../data/mutations';
+import { readSettingsLayout } from '../data/queries';
 import type { LinksLayoutSource, ThemeSource } from './use-settings';
 
 export interface SettingMutations {
   // Switch which source the app renders (Sync vs Device) — device-local.
   setLinksLayoutSource: (source: LinksLayoutSource) => Promise<void>;
-  // Set the SYNCED links layout (the Sync tab); writes settings/general.enc + syncs.
+  // Set the SYNCED links layout (the Sync tab); writes settings/layout.enc + syncs.
   setSyncLinksLayout: (layout: LinksLayout) => Promise<void>;
   // Set THIS device's links layout (the Device tab) — device-local, never synced.
   setLocalLinksLayout: (layout: LinksLayout) => Promise<void>;
+  // The rest of the pack, per source and on the active one — web's twin.
+  setLinksLayout: (layout: LinksLayout) => Promise<void>;
+  setSyncSort: (patch: SortPatch) => Promise<void>;
+  setLocalSort: (patch: SortPatch) => Promise<void>;
+  setSort: (patch: SortPatch) => Promise<void>;
+  setSyncLayoutOptions: (patch: LayoutOptionsPatch) => Promise<void>;
+  setLocalLayoutOptions: (patch: LayoutOptionsPatch) => Promise<void>;
+  setLayoutOptions: (patch: LayoutOptionsPatch) => Promise<void>;
   // Toggle the SYNCED server-extraction opt-in; writes settings/general.enc +
   // syncs, so every device honors the same choice. Expo ROUND-TRIPS this setting
   // for the web clients and never reads it — it never calls bracemark-extractor
@@ -47,10 +64,6 @@ export interface SettingMutations {
     readModeImages?: boolean;
     screenshot?: boolean;
   }) => Promise<void>;
-  // Set the SYNCED links sort field / direction; writes settings/general.enc + syncs.
-  // Global-only (no device variant), so no "Sync"/"Local" split like layout/theme.
-  setSortOn: (sortOn: LinkSortOn) => Promise<void>;
-  setSortOrder: (sortOrder: LinkSortOrder) => Promise<void>;
   // Switch which theme source the app renders (Sync vs Device) — device-local.
   setThemeSource: (source: ThemeSource) => Promise<void>;
   // Set the SYNCED theme (the theme "Sync" tab); writes settings/general.enc + syncs.
@@ -60,6 +73,16 @@ export interface SettingMutations {
   // Put away the first-run link-previews offer on THIS device — device-local, so
   // the offer isn't spent for a second phone that never saw it.
   dismissPreviewsPrompt: () => Promise<void>;
+}
+
+export interface SortPatch {
+  sortOn?: LinkSortOn;
+  sortOrder?: LinkSortOrder;
+}
+
+// Read at CALL time — web's use-setting-mutations says why.
+async function packSourceIsLocal(): Promise<boolean> {
+  return (await getLocalSettings())?.linksLayoutSource === 'local';
 }
 
 export function useSettingMutations(): SettingMutations {
@@ -74,7 +97,7 @@ export function useSettingMutations(): SettingMutations {
   const setSyncLinksLayout = useCallback(
     async (layout: LinksLayout) => {
       if (!username) throw new Error('useSettingMutations: no active account');
-      await writeSettingsGeneral(username, { linksLayout: layout });
+      await writeSettingsLayout(username, { linksLayout: layout });
       requestSync();
     },
     [username, requestSync],
@@ -83,6 +106,50 @@ export function useSettingMutations(): SettingMutations {
   const setLocalLinksLayout = useCallback(
     (layout: LinksLayout) => setLocalSettings({ linksLayout: layout }),
     [],
+  );
+
+  const setLinksLayout = useCallback(
+    async (layout: LinksLayout) =>
+      (await packSourceIsLocal()) ? setLocalLinksLayout(layout) : setSyncLinksLayout(layout),
+    [setLocalLinksLayout, setSyncLinksLayout],
+  );
+
+  const setSyncSort = useCallback(
+    async (patch: SortPatch) => {
+      if (!username) throw new Error('useSettingMutations: no active account');
+      await writeSettingsLayout(username, patch);
+      requestSync();
+    },
+    [username, requestSync],
+  );
+
+  const setLocalSort = useCallback((patch: SortPatch) => setLocalSettings(patch), []);
+
+  const setSort = useCallback(
+    async (patch: SortPatch) =>
+      (await packSourceIsLocal()) ? setLocalSort(patch) : setSyncSort(patch),
+    [setLocalSort, setSyncSort],
+  );
+
+  const setSyncLayoutOptions = useCallback(
+    async (patch: LayoutOptionsPatch) => {
+      if (!username) throw new Error('useSettingMutations: no active account');
+      await writeSettingsLayout(username, { options: patch });
+      requestSync();
+    },
+    [username, requestSync],
+  );
+
+  const setLocalLayoutOptions = useCallback(
+    async (patch: LayoutOptionsPatch) =>
+      patchLocalLayoutOptions(patch, storedOptionsOf(await readSettingsLayout())),
+    [],
+  );
+
+  const setLayoutOptions = useCallback(
+    async (patch: LayoutOptionsPatch) =>
+      (await packSourceIsLocal()) ? setLocalLayoutOptions(patch) : setSyncLayoutOptions(patch),
+    [setLocalLayoutOptions, setSyncLayoutOptions],
   );
 
   const setServerExtraction = useCallback(
@@ -124,24 +191,6 @@ export function useSettingMutations(): SettingMutations {
     [username, requestSync],
   );
 
-  const setSortOn = useCallback(
-    async (sortOn: LinkSortOn) => {
-      if (!username) throw new Error('useSettingMutations: no active account');
-      await writeSettingsGeneral(username, { sortOn });
-      requestSync();
-    },
-    [username, requestSync],
-  );
-
-  const setSortOrder = useCallback(
-    async (sortOrder: LinkSortOrder) => {
-      if (!username) throw new Error('useSettingMutations: no active account');
-      await writeSettingsGeneral(username, { sortOrder });
-      requestSync();
-    },
-    [username, requestSync],
-  );
-
   const setThemeSource = useCallback(
     (source: ThemeSource) => setLocalSettings({ themeSource: source }),
     [],
@@ -168,11 +217,16 @@ export function useSettingMutations(): SettingMutations {
       setLinksLayoutSource,
       setSyncLinksLayout,
       setLocalLinksLayout,
+      setLinksLayout,
+      setSyncSort,
+      setLocalSort,
+      setSort,
+      setSyncLayoutOptions,
+      setLocalLayoutOptions,
+      setLayoutOptions,
       setServerExtraction,
       setDeviceExtractionMode,
       setKeepOnSave,
-      setSortOn,
-      setSortOrder,
       setThemeSource,
       setSyncTheme,
       setLocalTheme,
@@ -182,11 +236,16 @@ export function useSettingMutations(): SettingMutations {
       setLinksLayoutSource,
       setSyncLinksLayout,
       setLocalLinksLayout,
+      setLinksLayout,
+      setSyncSort,
+      setLocalSort,
+      setSort,
+      setSyncLayoutOptions,
+      setLocalLayoutOptions,
+      setLayoutOptions,
       setServerExtraction,
       setDeviceExtractionMode,
       setKeepOnSave,
-      setSortOn,
-      setSortOrder,
       setThemeSource,
       setSyncTheme,
       setLocalTheme,

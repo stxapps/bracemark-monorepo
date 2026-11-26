@@ -173,12 +173,34 @@ providers and the real `SyncProvider` were all already correct (the api and
 extract clients are module singletons).
 
 **Estimated vs. measured row heights.** Both web layouts MEASURE. A title is
-`line-clamp-2`, so an item's height turns on whether that title wraps — a fact
+clamped (two lines by default, the `titleLines` option —
+[link-layouts.md](./link-layouts.md)), so an item's height turns on how many of
+them it uses — a fact
 about the browser's line breaker at the current pane width, font and root font
 size, not something derivable from the link. So each row carries
 `ref={virtualizer.measureElement}` and `data-index`, and no `height` in its
 style; the estimates in each file are only for rows not yet mounted, and each
 sits between its own two outcomes so the error cancels rather than accumulating.
+The display options move the estimates, never the rule: each file builds its
+guess from its parts (`estimateRow`, `estimateCard`) — a title capped at N lines
+guessed at (1 + N) / 2 of them, a tag strip at the lines the shared chip-fit
+arithmetic (`fitChips`, `@stxapps/shared`) expects at the current width, the
+banner at the `imageHeight` option's ratio — and each layout drops its whole
+measurement cache when an option's VALUE changes, since a clamp or a field
+coming or going reshapes rows that are already measured.
+
+⚠ **Dropping the cache is `remeasureAll`, never a bare `virtualizer.measure()`**
+(`_layouts/shared/hooks.ts`). In virtual-core 3.17, `measure()` empties the size
+cache but keeps the positions it last computed, and `resizeItem` compares a new
+size against those — so a mounted row that didn't change size afterwards was
+never stored, the ResizeObserver never fired for it, and it sat at its ESTIMATE
+for good: rows overlapping by a title line, even after a reload, since the reset
+also runs on mount. `remeasureAll` reads the measurements (rebuilding them from
+the estimates) and then measures every mounted row again. Found by break-ui; the
+card layout's reset on mount had the same hole before the options existed. Both
+layouts also read a row's height rounded UP (`measureRowHeight`): a banner's
+aspect makes a fractional card height, and rounding down placed each next row up
+to a pixel into the one above.
 
 - **The list layout** measures the row itself. Heights cache by `getItemKey`,
   which is the link **path** rather than the default index, so a search or re-sort
@@ -194,8 +216,18 @@ sits between its own two outcomes so the error cancels rather than accumulating.
   slack its neighbour used.) Its key is the row's
   first link path; a change in `columns` re-composes every row, so it drops the
   whole measurement cache (`virtualizer.measure()`) rather than trying to remap
-  it. The banner is a fixed ASPECT of the card's width (12:7), which is what keeps
-  a late image load from reflowing a measured row.
+  it. The banner is a fixed ASPECT of the card's width (12:7 by default, the
+  `imageHeight` option's ratio otherwise), which is what keeps a late image load
+  from reflowing a measured row.
+
+**The table layout is the one that budgets**, and it can because nothing in a row
+can change its height: every cell is one line, truncated — the title with an
+ellipsis, the tags behind "+N" at one line. So `table-layout.tsx` tells the
+virtualizer the height (`estimateSize` alone, no `measureElement`), which makes
+the scrollbar and a jump to any row exact. The height is `2.75rem`, read off the
+root font size once, so it follows a raised browser font size as the cells' own
+rem type does — a px constant there would clip every cell. Its header row sits in
+the same scroller, above the rows, as the virtualizer's `scrollMargin`.
 
 The card layout used to budget instead — a `ROW_HEIGHT` constant the markup had to
 stay in step with, scaled by the root font size. It was dropped for the usual
@@ -218,6 +250,16 @@ intrinsic-height. FlashList's grid layout manager normalizes a row's cells to th
 tallest as a `minHeight`, which `link-card.tsx`'s WRAPPER fills with `grow` — the
 card inside it does not grow, which is how expo lands on web's `items-start`: the
 cell keeps the row's height, the bordered card keeps its own.
+
+What FlashList can't absorb is a height that changes AFTER it measured the item.
+The one part of an item that could is the tag strip, which picks its chips from a
+width learned in `onLayout`; at one line that only changes which chips show, but
+with the `tagLines` option above one it would change the height. So the expo
+strip renders from a width it knows at its first render — its own once it has
+one, the list's shared one, or the card's own — and draws each of its lines as a
+separate single-line row, so its height is exactly what the shared fit says.
+`features/links/link-tag-chips.tsx` and [link-layouts.md](./link-layouts.md),
+_heights_, carry the mechanism and the measurement.
 
 ### the staged snapshot rule
 

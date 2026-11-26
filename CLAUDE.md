@@ -74,6 +74,7 @@ that reading comes _before_ the edit; nothing downstream will tell you.
 | local store + encrypted file sync (the data path); what the server still holds | `local-first-sync.md` ⚠         |
 | **a schema — Dexie, expo-sqlite, an R2 payload, D1, the DO**                   | `local-first-sync.md` ⚠         |
 | the read edge — indexes, liveQuery, virtual scrolling, paging                  | `client-queries.md` ⚠           |
+| link layouts — card/list/table, display options, `settings/layout.enc`         | `link-layouts.md` ⚠             |
 | links-page search (the URL⇄`LinkQuery` grammar, the UI); expo route params     | `search.md` ⚠                   |
 | accounts — key derivation, username/password rules                             | `account.md` ⚠                  |
 | **the create-account form** — its steps                                        | `account.md` ⚠                  |

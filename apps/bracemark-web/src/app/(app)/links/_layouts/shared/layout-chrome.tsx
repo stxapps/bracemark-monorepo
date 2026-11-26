@@ -5,7 +5,14 @@
 
 import { Archive, Folder, Hash, Inbox, Layers, RefreshCw, SearchX, Trash2 } from 'lucide-react';
 
-import { ARCHIVE_ID, DEFAULT_LIST_ID, TRASH_ID } from '@stxapps/shared';
+import {
+  ARCHIVE_ID,
+  type CardImageHeight,
+  type CardSize,
+  DEFAULT_LIST_ID,
+  TRASH_ID,
+} from '@stxapps/shared';
+import { useSettings } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
@@ -128,9 +135,13 @@ export function EmptyState({
 // silhouette of the list rather than a sentence the eye has to parse and
 // discard. Mirrors each layout's real geometry closely enough to read as the
 // same surface (the list row's 64×40 thumbnail and two text lines; the card's
-// 12:7 banner over its text block, capped and centred like the real one) without
+// banner over its text block, capped and centred like the real one) without
 // importing their measurements — a skeleton that drifts by a few pixels costs
-// nothing, and this file has no business reaching into a layout's numbers.
+// nothing, and this file has no business reaching into a layout's numbers. What it
+// DOES follow is the layout's options that change the shape outright: the card
+// size (the grid's column width and the card's cap), the banner's height or its
+// absence, and the list thumbnail — a skeleton of 12:7 cards in front of a grid of
+// short ones is a jump, not a silhouette.
 //
 // `aria-hidden` on the bones, with one polite status line behind it: a screen
 // reader should hear "Loading links", not eleven empty boxes.
@@ -138,7 +149,22 @@ function Bone({ className }: { className?: string }) {
   return <div className={cn('animate-pulse rounded bg-muted', className)} />;
 }
 
+// The card size as the grid's minimum column (rem, so it follows the root font size
+// like the real grid's px nearly does) and the card's cap — card-layout.tsx's
+// CARD_SIZE_WIDTHS / CARD_MAX_W, spelled as classes Tailwind can see.
+const SKELETON_CARD: Record<CardSize, { min: string; maxW: string }> = {
+  small: { min: '10rem', maxW: 'max-w-60' },
+  medium: { min: '18.75rem', maxW: 'max-w-105' },
+  large: { min: '25rem', maxW: 'max-w-150' },
+};
+const SKELETON_ASPECT: Record<CardImageHeight, string> = {
+  short: 'aspect-3/1',
+  medium: 'aspect-2/1',
+  tall: 'aspect-12/7',
+};
+
 function LinksSkeleton({ variant }: { variant: 'list' | 'card' }) {
+  const { card, list } = useSettings().layoutOptions;
   // Enough CARDS to fill the widest pane, not exactly one pane's worth — the
   // grid is `auto-fill` (below), so its column count is a fact about the
   // container that no value here can know, while the root is `h-full
@@ -181,14 +207,21 @@ function LinksSkeleton({ variant }: { variant: 'list' | 'card' }) {
         <div
           aria-hidden
           className="grid gap-4 p-4"
-          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(18.75rem, 1fr))' }}
+          style={{
+            gridTemplateColumns: `repeat(auto-fill, minmax(${SKELETON_CARD[card.size].min}, 1fr))`,
+          }}
         >
           {Array.from({ length: count }, (_, i) => (
             <div
               key={i}
-              className="mx-auto w-full max-w-105 overflow-hidden rounded-lg border border-border"
+              className={cn(
+                'mx-auto w-full overflow-hidden rounded-lg border border-border',
+                SKELETON_CARD[card.size].maxW,
+              )}
             >
-              <Bone className="aspect-12/7 rounded-none" />
+              {card.fields.image && (
+                <Bone className={cn('rounded-none', SKELETON_ASPECT[card.imageHeight])} />
+              )}
               <div className="flex flex-col gap-2 p-3">
                 <Bone className="h-3 w-16" />
                 <Bone className="h-3.5 w-full" />
@@ -204,7 +237,7 @@ function LinksSkeleton({ variant }: { variant: 'list' | 'card' }) {
               key={i}
               className="flex h-17.5 items-center gap-3 border-b border-border pr-2 pl-4"
             >
-              <Bone className="h-10 w-16 shrink-0" />
+              {list.fields.image && <Bone className="h-10 w-16 shrink-0" />}
               <div className="flex min-w-0 flex-1 flex-col gap-2">
                 <Bone className="h-3.5 w-1/2" />
                 <Bone className="h-3 w-28" />

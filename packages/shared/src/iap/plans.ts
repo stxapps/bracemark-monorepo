@@ -180,6 +180,13 @@ export type Entitlements = {
   // quota ceilings follow). Page copy is metered separately (`maxPageCopies`)
   // and not built.
   keptCopies: boolean;
+  // The table layout (Plus+) — a value gate on a CLIENT-RENDERED view: the links
+  // as rows of chosen columns, on a wide web pane (docs/link-layouts.md). It costs
+  // nothing to serve; a bypass shows the user their own links in a different
+  // arrangement. Card and list, and every display option on them, stay free. A
+  // downgrade keeps the stored `table` layout and its columns and renders the list
+  // instead, so upgrading again brings them back — the same no-hostage rule.
+  tableLayout: boolean;
   // Smart lists & smart tags (Pro) — the "it organizes itself" half of the Pro
   // story. A saved RULE that auto-POPULATES from metadata the user already set
   // (domain, existing tags, dates): a smart list is a query promoted to the
@@ -226,6 +233,7 @@ const ENTITLEMENTS: Record<Plan, Entitlements> = {
     locks: false,
     searchEditor: false,
     keptCopies: false,
+    tableLayout: false,
     smartLists: false,
     savedSearches: false,
     aiTier: 'none',
@@ -255,6 +263,7 @@ const ENTITLEMENTS: Record<Plan, Entitlements> = {
     locks: true,
     searchEditor: true,
     keptCopies: true,
+    tableLayout: true,
     smartLists: false,
     savedSearches: false,
     aiTier: 'none',
@@ -270,6 +279,7 @@ const ENTITLEMENTS: Record<Plan, Entitlements> = {
     locks: true,
     searchEditor: true,
     keptCopies: true,
+    tableLayout: true,
     // Pro = automated / dynamic organization + intelligence (it arranges itself).
     smartLists: true,
     savedSearches: true,

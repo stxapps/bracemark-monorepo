@@ -325,22 +325,30 @@ export type Extraction = z.infer<typeof extractionSchema>;
 
 // How the links library lays out its rows: `list` (dense default) and `card` (a
 // grid of previews). A cross-platform contract — not a web-only union — because
-// the user's choice can be SYNCED (see `settingsGeneralSchema` below), so every
-// client must read/write the same string values.
+// the user's choice can be SYNCED (see `settingsLayoutSchema` below, and its older
+// copy in `settingsGeneralSchema`), so every client must read/write the same
+// string values.
 //
 // This is the WRITER's enumeration: what a UI offers and what a client may store.
 // It is deliberately NOT what the read edge validates against — a persisted
-// `linksLayout` is parsed as a free `z.string()` (see `settingsGeneralSchema`), so
+// `linksLayout` is parsed as a free `z.string()` (see `settingsLayoutSchema`), so
 // a value this client doesn't model round-trips instead of being dropped or
-// clobbered. That asymmetry is what lets this list GROW without a migration: a
-// future `table` layout is added
-// here, and clients that predate it keep syncing happily, rendering their default
-// and leaving the unknown value untouched.
-export const LINKS_LAYOUTS = ['list', 'card'] as const;
+// clobbered. That asymmetry is what lets this list GROW without a migration: the
+// `table` layout was added here, and clients that predate it keep syncing happily,
+// rendering their default (the list) and leaving the unknown value untouched.
+//
+// `table` is web-only (docs/link-layouts.md, _the table_): bracemark-expo offers
+// `NATIVE_LINKS_LAYOUTS` instead, and renders a stored `table` as the list, the
+// same fallback an older client gives it.
+export const LINKS_LAYOUTS = ['list', 'card', 'table'] as const;
 export type LinksLayout = (typeof LINKS_LAYOUTS)[number];
 
-// How the links library is ORDERED — a synced account preference (see
-// `settingsGeneralSchema`'s `sortOn`/`sortOrder` below), split into two orthogonal
+// The layouts bracemark-expo offers — every one but the web-only table.
+export const NATIVE_LINKS_LAYOUTS = ['list', 'card'] as const satisfies readonly LinksLayout[];
+
+// How the links library is ORDERED — part of the layout "pack" (see
+// `settingsLayoutSchema`'s `sortOn`/`sortOrder` below, synced or device-local by the
+// same Sync/Device switch as the layout), split into two orthogonal
 // axes so each round-trips and defaults independently under the file's looseObject
 // rule: `sortOn` is the field (date modified vs. date added), `sortOrder` the
 // direction. Both are the WRITER's enumerations — what a UI offers and a client may
@@ -462,7 +470,7 @@ export type SyncedThemeState = z.infer<typeof themeStateSchema>;
 // blob from arbitrary JSON at the IMPORT edge (`classifyBundleLine` in
 // import-all-data.ts gates on this schema), which would otherwise accept `{}`.
 //
-// `linksLayout` is OPTIONAL: it's the SYNCED links layout (the Settings → Misc
+// `linksLayout` is OPTIONAL: it's the older copy of the SYNCED links layout (Settings → Appearance,
 // "Sync" tab). Absent until the user picks one, and an older client that never
 // wrote it still parses. It's a free `z.string()`, NOT `z.enum(LINKS_LAYOUTS)`:
 // the enum is the WRITER's list (see LINKS_LAYOUTS), and validating reads against it
@@ -539,6 +547,8 @@ export type SyncedThemeState = z.infer<typeof themeStateSchema>;
 // Don't alias them at the read edge (`serverPreviews: general.serverExtraction`): one
 // stored field under two names is the drift this file's comments exist to prevent.
 export const settingsGeneralSchema = z.looseObject({
+  // MOVED to `settings/layout.enc` with the sort (see `sortOn` below) — this copy is
+  // the read fallback and a transition-time mirror, never the primary.
   linksLayout: z.string().optional().catch(undefined),
   serverExtraction: z.boolean().optional().catch(undefined),
   serverReadMode: z.boolean().optional().catch(undefined),
@@ -553,8 +563,12 @@ export const settingsGeneralSchema = z.looseObject({
   keepScreenshotOnSave: z.boolean().optional().catch(undefined),
   // The SYNCED links sort — the two orthogonal axes (see LINK_SORT_ONS /
   // LINK_SORT_ORDERS above): `sortOn` the field (date modified vs. added),
-  // `sortOrder` the direction. Global-only (no device split, unlike `linksLayout`):
-  // the synced value IS the applied one. OPTIONAL and a free `z.string()` for the
+  // `sortOrder` the direction. MOVED, like `linksLayout` above: they now live in
+  // `settings/layout.enc` (`settingsLayoutSchema`), where the Sync/Device switch
+  // covers them too. These copies are read only as the fallback when that file
+  // lacks them, and are still WRITTEN, for a transition, so a client from before
+  // the move keeps seeing the user's choice (docs/link-layouts.md, _the move_).
+  // Never rename or drop them: an old device writes them back. OPTIONAL and a free `z.string()` for the
   // same reason as `linksLayout` — a strict enum would fail this whole parse on an
   // older client if a newer one stored an unknown value, taking every other setting
   // down with it. The read edge coerces each with `coerceLinkSort*` and falls back to
@@ -573,3 +587,83 @@ export const settingsGeneralSchema = z.looseObject({
   updatedAt: z.number().int(),
 });
 export type SettingsGeneral = z.infer<typeof settingsGeneralSchema>;
+
+// `settings/layout.enc` — the links layout, its sort, and every layout's display
+// options: the "pack" one Sync/Device switch governs (`linksLayoutSource`, the
+// device-local store), kept in its OWN file rather than in `general.enc` because
+// settings sync last-writer-wins per file and the shipped engine is local-wins
+// with whole-file uploads (docs/local-first-sync.md, _conflict policy_). A layout
+// tweak on a device that hasn't synced would otherwise upload its stale
+// `general.enc` whole and silently revert whatever changed elsewhere — the
+// extraction opt-ins and `deviceExtractionMode: 'off'` included. The View options
+// popover makes layout the most frequent, most casual settings writer, so it gets
+// a file of its own. docs/link-layouts.md, _the settings model_.
+//
+// The same read-leniently rule as `settingsGeneralSchema`, one level deeper: every
+// option is optional and `.catch(undefined)`, and every nested object is a
+// `looseObject`, so no value of any shape fails the parse and an option or field id
+// a newer client wrote round-trips through an older one. Values are free (`string`,
+// `number`) here and narrowed at the read edge (sync/layout-options.ts,
+// `coerceLayoutOptions`); writers take the strict unions.
+
+// Which pieces of information a link shows, per layout — the field registry's
+// stored half (LINK_FIELDS in sync/layout-options.ts). Toggles are booleans;
+// `address` and `date` are one value each (sync/layout-options.ts says why).
+export const linkFieldsSchema = z.looseObject({
+  image: z.boolean().optional().catch(undefined),
+  address: z.string().optional().catch(undefined),
+  listName: z.boolean().optional().catch(undefined),
+  tags: z.boolean().optional().catch(undefined),
+  date: z.string().optional().catch(undefined),
+  note: z.boolean().optional().catch(undefined),
+  keptCopy: z.boolean().optional().catch(undefined),
+});
+
+export const cardOptionsSchema = z.looseObject({
+  titleLines: z.number().optional().catch(undefined),
+  tagLines: z.number().optional().catch(undefined),
+  size: z.string().optional().catch(undefined),
+  imageHeight: z.string().optional().catch(undefined),
+  fields: linkFieldsSchema.optional().catch(undefined),
+});
+
+export const listOptionsSchema = z.looseObject({
+  titleLines: z.number().optional().catch(undefined),
+  tagLines: z.number().optional().catch(undefined),
+  fields: linkFieldsSchema.optional().catch(undefined),
+});
+
+// The table's columns, in display order. Entries stay `unknown` here — a column
+// this build doesn't know, or one shaped by a newer client, must survive a write
+// in its place — and are narrowed when rendered.
+export const tableOptionsSchema = z.looseObject({
+  columns: z.array(z.unknown()).optional().catch(undefined),
+});
+
+// The per-layout options on their own — the shape `layout.enc` carries beside
+// its pack fields, and the shape the device-local store keeps for the Device
+// source (web-react db.ts / expo-react db.ts `layoutOptions`).
+export const layoutOptionsSchema = z.looseObject({
+  card: cardOptionsSchema.optional().catch(undefined),
+  list: listOptionsSchema.optional().catch(undefined),
+  table: tableOptionsSchema.optional().catch(undefined),
+});
+export type StoredLayoutOptions = z.infer<typeof layoutOptionsSchema>;
+
+export const settingsLayoutSchema = z.looseObject({
+  // Moved here from `general.enc` (docs/link-layouts.md, _the move_): read from
+  // this file first, falling back to `general.enc`'s copy when absent, and for a
+  // transition also written to `general.enc` so older clients still see them.
+  // Free strings for the same forward-compat reason as there.
+  linksLayout: z.string().optional().catch(undefined),
+  sortOn: z.string().optional().catch(undefined),
+  sortOrder: z.string().optional().catch(undefined),
+  card: cardOptionsSchema.optional().catch(undefined),
+  list: listOptionsSchema.optional().catch(undefined),
+  table: tableOptionsSchema.optional().catch(undefined),
+  // The LWW clock — strict, exactly as in `settingsGeneralSchema`, so the FRAME
+  // still fails on a non-settings object (classifyBundleLine relies on it).
+  createdAt: z.number().int(),
+  updatedAt: z.number().int(),
+});
+export type SettingsLayout = z.infer<typeof settingsLayoutSchema>;

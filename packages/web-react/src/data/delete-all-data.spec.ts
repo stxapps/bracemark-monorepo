@@ -35,6 +35,7 @@ import {
   DeleteAllUncertainError,
   LINKS_PREFIX,
   pathFromId,
+  SETTINGS_LAYOUT_PATH,
   untilAborted,
 } from '@stxapps/shared';
 
@@ -317,6 +318,9 @@ describe('deleteAllData', () => {
 
   it('wipes the synced local state once the server confirms', async () => {
     await seedSignedInAccountWithData();
+    // The second settings file: a synced layout setting is the user's data too, and
+    // must go with the rest (the Device copy of it survives — see below).
+    await db.items.put({ path: SETTINGS_LAYOUT_PATH, updatedAt: 1, itemType: 'setting' });
 
     await deleteAllData({ username: USER, api: apiThat(async () => ({ deletedCount: 1 })) });
 

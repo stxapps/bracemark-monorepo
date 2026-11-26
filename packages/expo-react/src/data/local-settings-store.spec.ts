@@ -20,7 +20,11 @@ import { sql } from 'drizzle-orm';
 import { DEFAULT_THEME } from '@stxapps/shared';
 
 import { getDb, localSettings } from './db';
-import { getLocalSettings, setLocalSettings } from './local-settings-store';
+import {
+  getLocalSettings,
+  patchLocalLayoutOptions,
+  setLocalSettings,
+} from './local-settings-store';
 
 jest.mock('expo-sqlite', () => require('../testing/node-sqlite'));
 
@@ -78,5 +82,28 @@ describe('setLocalSettings', () => {
     await setLocalSettings({ previewsPromptDismissed: true });
 
     expect(getDb().select().from(localSettings).all()).toHaveLength(1);
+  });
+});
+
+// The rest of the layout pack on the Device source — web's sibling has the reasons. On
+// this side the whole bag is one JSON column, so a field the upsert doesn't carry forward
+// isn't left alone, it's gone.
+describe('the pack fields', () => {
+  it('keeps the device sort and options across an unrelated write', async () => {
+    await setLocalSettings({ sortOn: 'createdAt', layoutOptions: { card: { titleLines: 3 } } });
+    await setLocalSettings({ themeSource: 'local' });
+
+    expect(await getLocalSettings()).toMatchObject({
+      sortOn: 'createdAt',
+      layoutOptions: { card: { titleLines: 3 } },
+    });
+  });
+
+  it('seeds the first options write from the synced options', async () => {
+    await patchLocalLayoutOptions({ card: { size: 'small' } }, { card: { titleLines: 3 } });
+
+    expect((await getLocalSettings())?.layoutOptions).toEqual({
+      card: { titleLines: 3, size: 'small' },
+    });
   });
 });

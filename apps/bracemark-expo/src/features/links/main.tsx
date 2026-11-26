@@ -46,15 +46,16 @@ import {
   useSync,
 } from '@stxapps/expo-react';
 import { LOCK_COPY } from '@stxapps/react';
-import { type LinkSortOn } from '@stxapps/shared';
+import { CARD_SIZE_WIDTHS, type LayoutOptions, type LinkSortOn } from '@stxapps/shared';
 
 import { LockPane } from '../../components/lock-pane';
 import { SCROLLS_TO_TOP } from '../../lib/status-bar-scroll';
 import { BulkEditBar } from './bulk-edit-bar';
 import { CARD_H_CHROME, LinkCard } from './link-card';
-import { bucketRowWidth, hasKnownTags, LinkRow } from './link-row';
+import { bucketRowWidth, hasKnownTags, LinkRow, RELATIVE_TIME_MIN_ROW_WIDTH } from './link-row';
+import { TagStripWidth } from './link-tag-chips';
 import { useLinksPage } from './page-provider';
-import { EmptyState, type LinkItemProps, RefreshPill, useTagMap } from './shared';
+import { EmptyState, type LinkItemProps, RefreshPill, useListNameMap, useTagMap } from './shared';
 import { useSidebarRail } from './sidebar-rail';
 import { useLinks } from './use-links';
 import { useLinksViewActions, useLinksViewState } from './view-state-provider';
@@ -92,7 +93,11 @@ const VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 0, minimumViewTime: 25
 // four on a tablet — one fewer, often, while the rail is docked beside it,
 // which takes 240–400 of the width (sidebar-rail-width.ts, the user's step). That is where web lands
 // at those same widths, a 390px browser window included.
-const MIN_CARD_WIDTH = 300;
+//
+// That 300 is now the MEDIUM card size; the card size option picks the minimum
+// (CARD_SIZE_WIDTHS in @stxapps/shared — small is 160, so a phone gets two
+// columns, the size's whole point there; large is 400). The same table web's
+// card layout reads, so a size gives the same columns at the same width on both.
 // The pane's content padding in card layout: pairs with each card's own p-2
 // (link-card.tsx) so edges and inter-card gaps both come to 16 — web's p-4
 // container + gap-4 grid.
@@ -118,8 +123,8 @@ type LayoutConfig = {
   // without laying the text out, so a one-line and a two-line item of the same
   // tag-ness do still share a pool. Called very often (FlashList's own note),
   // hence a Map lookup and no allocation.
-  itemType?: (link: LinkView, tagsById: Map<string, string>) => string;
-  columns: (paneWidth: number) => number;
+  itemType?: (link: LinkView, tagsById: Map<string, string>, options: LayoutOptions) => string;
+  columns: (paneWidth: number, options: LayoutOptions) => number;
   // What this layout's item is told of its cell's width — only as much as it
   // draws from (link-row.tsx, bucketRowWidth). It is a prop of every mounted item,
   // so whatever moves here re-renders all of them.
@@ -130,7 +135,9 @@ type LayoutConfig = {
 const LIST_LAYOUT: LayoutConfig = {
   name: 'list',
   Item: LinkRow,
-  itemType: (link, tagsById) => (hasKnownTags(link, tagsById) ? 'tagged' : 'bare'),
+  // A strip that's switched off is a bare item, whatever its tags.
+  itemType: (link, tagsById, options) =>
+    options.list.fields.tags && hasKnownTags(link, tagsById) ? 'tagged' : 'bare',
   columns: () => 1,
   itemWidth: bucketRowWidth,
   contentPadding: 0,
@@ -138,14 +145,16 @@ const LIST_LAYOUT: LayoutConfig = {
 const CARD_LAYOUT: LayoutConfig = {
   name: 'card',
   Item: LinkCard,
-  itemType: (link, tagsById) => (hasKnownTags(link, tagsById) ? 'tagged' : 'bare'),
+  itemType: (link, tagsById, options) =>
+    options.card.fields.tags && hasKnownTags(link, tagsById) ? 'tagged' : 'bare',
   // Web's fit math, in this platform's cell model. Web adds its 16pt gutter
   // BETWEEN cells (`gap-4`, hence its `+ CARD_GAP` term); here the gutter rides
   // inside every cell as the card's own p-2 (CARD_H_CHROME), so it belongs in
   // the divisor instead. Both spellings reduce to n cards of 300 with 16 between
   // and 16 outside, so the two platforms drop to one column at the same outer
   // width — 648 — rather than merely near each other.
-  columns: (paneWidth) => Math.max(1, Math.floor(paneWidth / (MIN_CARD_WIDTH + CARD_H_CHROME))),
+  columns: (paneWidth, options) =>
+    Math.max(1, Math.floor(paneWidth / (CARD_SIZE_WIDTHS[options.card.size].min + CARD_H_CHROME))),
   // All of it: the banner's height is the card's width times its aspect.
   itemWidth: (cellWidth) => cellWidth,
   contentPadding: CARD_GRID_PADDING,
@@ -172,7 +181,20 @@ type ItemExtra = {
   tagsById: Map<string, string>;
   sortOn: LinkSortOn;
   itemWidth: number;
+  options: LayoutOptions;
+  listNames: Map<string, string>;
+  viewedListId: string | null;
 };
+
+// What a list row leaves its tag strip, from the pane's width: the row's pl-4 +
+// pr-2, the thumbnail's 64 + gap-3, the date column (~60 + gap-3) where it shows,
+// and the ⋯ menu's 32 + gap-3 — or, while selecting, the checkbox slot that holds
+// the same 32 + gap-3 in its place (link-row.tsx). An estimate, for the strips'
+// first render only (the stripWidth box below).
+function rowStripWidthEstimate(paneWidth: number, options: LayoutOptions['list']): number {
+  const date = options.fields.date !== 'none' && paneWidth >= RELATIVE_TIME_MIN_ROW_WIDTH;
+  return Math.max(0, paneWidth - 24 - 44 - (options.fields.image ? 76 : 0) - (date ? 72 : 0));
+}
 
 export function Main() {
   const { selection } = useLinksPage();
@@ -247,8 +269,17 @@ export function Main() {
 function UnlockedMain() {
   // The resolved sort is intrinsic to the query (page-provider), so read it off
   // the same context the reads run through and hand it to the date column.
-  const { query } = useLinksPage();
-  const { linksLayout } = useSettings();
+  const { query, selection } = useLinksPage();
+  const { linksLayout, layoutOptions } = useSettings();
+  // The options by VALUE: useSettings rebuilds the object whenever a settings file
+  // re-emits, and the items take it as a memo'd prop — so an identity that moved
+  // with every sync write would re-render every mounted item. Held until the value
+  // actually changes.
+  const optionsKey = JSON.stringify(layoutOptions);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by value, above
+  const options = useMemo(() => layoutOptions, [optionsKey]);
+  const listNames = useListNameMap();
+  const viewedListId = selection.kind === 'list' ? selection.id : null;
   const { links, viewId, pinnedCount, hasMore, showMore, isLoading, hasPending, applyPending } =
     useLinks();
   const { bulkEditing, selectedLinks } = useLinksViewState();
@@ -304,7 +335,7 @@ function UnlockedMain() {
   // needed here). Three subtractions keep it honest — the docked rail, the
   // screen's horizontal safe-area insets, and the grid's own content padding,
   // which is inside the list and so is space no column can use. Feed the raw
-  // window width instead and MIN_CARD_WIDTH stops being the guarantee it exists
+  // window width instead and the card size's minimum stops being the guarantee it exists
   // to be.
   //
   // The rail and the LEFT inset are one or the other, never both. The insets
@@ -320,7 +351,7 @@ function UnlockedMain() {
   const insets = useSafeAreaInsets();
   const { docked, width: railWidth } = useSidebarRail();
   const paneWidth = width - (docked ? railWidth : insets.left) - insets.right - contentPadding * 2;
-  const numColumns = columns(paneWidth);
+  const numColumns = columns(paneWidth, options);
   // One cell's width, as far as this layout's item reads it — the card's banner,
   // the row's date breakpoint (LayoutConfig.itemWidth). Derived here because
   // this is where the column math already lives.
@@ -363,6 +394,9 @@ function UnlockedMain() {
       tagsById,
       sortOn: query.sortOn,
       itemWidth,
+      options,
+      listNames,
+      viewedListId,
     }),
     [
       links,
@@ -373,7 +407,30 @@ function UnlockedMain() {
       tagsById,
       query.sortOn,
       itemWidth,
+      options,
+      listNames,
+      viewedListId,
     ],
+  );
+  // The tag strip's width, shared across the list — link-tag-chips.tsx,
+  // TagStripWidth, has why. A fresh store whenever what a strip's width depends on
+  // moves (the pane, the layout, the column count, the bulk-edit checkbox), so no
+  // strip mounts reading a width from before the change.
+  //
+  // The ROW's box starts at an estimate rather than at 0: a row only hears of a
+  // bucketed width (link-row.tsx says why), so without one the first screenful of
+  // strips renders before any of them has measured, at one line, and a strip that
+  // needs more grows after FlashList measured it — measured on the iPhone 17 Pro
+  // simulator with `plus-worst`, 2 of the first 4. This is the pane less the row's
+  // chrome; the first strip to lay out replaces it with the truth, so it only has
+  // to be close enough to land on the right line count. (The card hands its strip
+  // its own exact width instead — link-card.tsx.)
+  const stripWidth = useMemo(
+    () => ({
+      current: name === 'list' ? rowStripWidthEstimate(paneWidth, options.list) : 0,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the deps ARE the point: a new box per width
+    [paneWidth, name, numColumns, bulkEditing, options],
   );
   // `Item` changes only on a layout switch, which remounts the list anyway
   // (the FlashList `key`).
@@ -397,6 +454,9 @@ function UnlockedMain() {
           // Unwrapped, so the memo'd item sees the same function every render
           // (LinkItemProps' header).
           onToggle={x.toggleSelected}
+          options={x.options}
+          listNames={x.listNames}
+          viewedListId={x.viewedListId}
         />
       );
     },
@@ -486,94 +546,96 @@ function UnlockedMain() {
       {links.length === 0 ? (
         <EmptyState isLoading={isLoading} variant={name} columns={numColumns} />
       ) : (
-        <View className="relative min-h-0 flex-1">
-          <RefreshPill show={hasPending} onPress={applyAndScrollTop} />
-          <FlashList
-            // Remount on a layout switch — the same fresh scroll/recycler state
-            // web's whole-component swap gives, and switches are rare user
-            // actions. A rotation only changes numColumns and re-lays out in
-            // place, keeping the scroll position.
-            key={name}
-            ref={listRef}
-            // The list's viewport, for e2e bounds checks (docs/e2e.md, _the testID
-            // contract_): a row's box means nothing without the box it scrolls in.
-            testID="links-list"
-            data={links}
-            extraData={itemExtra}
-            numColumns={numColumns}
-            maintainVisibleContentPosition={MAINTAIN_VISIBLE_CONTENT_POSITION}
-            // The keyboard pair, and this list is where it matters most: the
-            // search box (links/search-bar.tsx) is `autoFocus`, so the common
-            // state is a keyboard up over the very results it just filtered.
-            // `on-drag` is the dismissal — scrolling the results is the gesture
-            // already in the user's hand, and nothing else here offers one
-            // (the box's own return key does blur, but it is off at the top of
-            // the screen by then). `"handled"` is the other half: FlashList
-            // forwards these to its ScrollView, whose default `"never"` would
-            // eat the first tap on a result and open nothing.
-            scrollsToTop={SCROLLS_TO_TOP}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            contentContainerStyle={contentPadding ? { padding: contentPadding } : undefined}
-            // Namespaced by view, because the key is what FlashList anchors on:
-            // the same link in the view being left and the one arriving would
-            // otherwise be "the first visible row, keep it put", and a drawer
-            // pick would jump to wherever that row sits in the new order. The
-            // reset above cannot prevent it, it runs before the rows do. At the
-            // top of the old list that jump then comes back through the
-            // threshold's smooth scroll, which on Android any later correction
-            // cancels — it parked Show All 7 times in 8 at 850–3800px, its pins
-            // above the viewport, with a page loaded nobody scrolled to
-            // (docs/client-queries.md, _pagination_). Anchoring WITHIN a view is
-            // untouched: the id only moves with the rows of a new one.
-            keyExtractor={(link) => `${viewId}:${link.path}`}
-            getItemType={itemType ? (link) => itemType(link, tagsById) : undefined}
-            renderItem={renderItem}
-            onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > SCROLL_TOP_THRESHOLD)}
-            onViewableItemsChanged={onViewableItemsChanged}
-            viewabilityConfig={VIEWABILITY_CONFIG}
-            // Infinite scroll: grow the page as the end nears. `showMore` grows the
-            // read's `limit`; re-arming is implicit — FlashList only re-fires after
-            // the content grows.
-            onEndReached={() => {
-              if (hasMore) showMore();
-            }}
-            onEndReachedThreshold={0.5}
-            // Suspended in bulk-edit mode (see the header), but NEVER unmounted:
-            // the control's PRESENCE must hold for the list's lifetime (a fresh
-            // element each render is fine). React Native's ScrollView renders a
-            // different tree with and without one — on iOS its children go
-            // [control, content] ↔ [content], so React remounts the content
-            // container; on Android the native ScrollView moves in or out of
-            // AndroidSwipeRefreshLayout and remounts whole. Either way every
-            // FlashList cell remounts while FlashList's RecyclerView, which sits
-            // ABOVE the ScrollView, keeps its layouts and scroll offset — and
-            // the cells came back blank (seen on an iPhone) until a later
-            // relayout.
-            //
-            // `enabled` blocks the gesture on Android. iOS has no equivalent, so
-            // the handler and the controlled `refreshing` guard it there: a pull
-            // still starts the native spinner, and RefreshControl snaps it back
-            // at once because `refreshing` never went true — a brief flash,
-            // accepted.
-            refreshControl={
-              <RefreshControl
-                enabled={!bulkEditing}
-                refreshing={!bulkEditing && refreshing}
-                onRefresh={() => {
-                  if (bulkEditing) return;
-                  applyPending();
-                  // Paused (an expired session, docs/sessions.md): no cycle runs,
-                  // so there is nothing for the spinner to wait on — arming it
-                  // would leave it spinning until a sign-in.
-                  if (bgSyncStatus === 'paused') return;
-                  setRefreshing(true);
-                  requestSync();
-                }}
-              />
-            }
-          />
-        </View>
+        <TagStripWidth.Provider value={stripWidth}>
+          <View className="relative min-h-0 flex-1">
+            <RefreshPill show={hasPending} onPress={applyAndScrollTop} />
+            <FlashList
+              // Remount on a layout switch — the same fresh scroll/recycler state
+              // web's whole-component swap gives, and switches are rare user
+              // actions. A rotation only changes numColumns and re-lays out in
+              // place, keeping the scroll position.
+              key={name}
+              ref={listRef}
+              // The list's viewport, for e2e bounds checks (docs/e2e.md, _the testID
+              // contract_): a row's box means nothing without the box it scrolls in.
+              testID="links-list"
+              data={links}
+              extraData={itemExtra}
+              numColumns={numColumns}
+              maintainVisibleContentPosition={MAINTAIN_VISIBLE_CONTENT_POSITION}
+              // The keyboard pair, and this list is where it matters most: the
+              // search box (links/search-bar.tsx) is `autoFocus`, so the common
+              // state is a keyboard up over the very results it just filtered.
+              // `on-drag` is the dismissal — scrolling the results is the gesture
+              // already in the user's hand, and nothing else here offers one
+              // (the box's own return key does blur, but it is off at the top of
+              // the screen by then). `"handled"` is the other half: FlashList
+              // forwards these to its ScrollView, whose default `"never"` would
+              // eat the first tap on a result and open nothing.
+              scrollsToTop={SCROLLS_TO_TOP}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              contentContainerStyle={contentPadding ? { padding: contentPadding } : undefined}
+              // Namespaced by view, because the key is what FlashList anchors on:
+              // the same link in the view being left and the one arriving would
+              // otherwise be "the first visible row, keep it put", and a drawer
+              // pick would jump to wherever that row sits in the new order. The
+              // reset above cannot prevent it, it runs before the rows do. At the
+              // top of the old list that jump then comes back through the
+              // threshold's smooth scroll, which on Android any later correction
+              // cancels — it parked Show All 7 times in 8 at 850–3800px, its pins
+              // above the viewport, with a page loaded nobody scrolled to
+              // (docs/client-queries.md, _pagination_). Anchoring WITHIN a view is
+              // untouched: the id only moves with the rows of a new one.
+              keyExtractor={(link) => `${viewId}:${link.path}`}
+              getItemType={itemType ? (link) => itemType(link, tagsById, options) : undefined}
+              renderItem={renderItem}
+              onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > SCROLL_TOP_THRESHOLD)}
+              onViewableItemsChanged={onViewableItemsChanged}
+              viewabilityConfig={VIEWABILITY_CONFIG}
+              // Infinite scroll: grow the page as the end nears. `showMore` grows the
+              // read's `limit`; re-arming is implicit — FlashList only re-fires after
+              // the content grows.
+              onEndReached={() => {
+                if (hasMore) showMore();
+              }}
+              onEndReachedThreshold={0.5}
+              // Suspended in bulk-edit mode (see the header), but NEVER unmounted:
+              // the control's PRESENCE must hold for the list's lifetime (a fresh
+              // element each render is fine). React Native's ScrollView renders a
+              // different tree with and without one — on iOS its children go
+              // [control, content] ↔ [content], so React remounts the content
+              // container; on Android the native ScrollView moves in or out of
+              // AndroidSwipeRefreshLayout and remounts whole. Either way every
+              // FlashList cell remounts while FlashList's RecyclerView, which sits
+              // ABOVE the ScrollView, keeps its layouts and scroll offset — and
+              // the cells came back blank (seen on an iPhone) until a later
+              // relayout.
+              //
+              // `enabled` blocks the gesture on Android. iOS has no equivalent, so
+              // the handler and the controlled `refreshing` guard it there: a pull
+              // still starts the native spinner, and RefreshControl snaps it back
+              // at once because `refreshing` never went true — a brief flash,
+              // accepted.
+              refreshControl={
+                <RefreshControl
+                  enabled={!bulkEditing}
+                  refreshing={!bulkEditing && refreshing}
+                  onRefresh={() => {
+                    if (bulkEditing) return;
+                    applyPending();
+                    // Paused (an expired session, docs/sessions.md): no cycle runs,
+                    // so there is nothing for the spinner to wait on — arming it
+                    // would leave it spinning until a sign-in.
+                    if (bgSyncStatus === 'paused') return;
+                    setRefreshing(true);
+                    requestSync();
+                  }}
+                />
+              }
+            />
+          </View>
+        </TagStripWidth.Provider>
       )}
       <BulkEditBar links={links} />
     </>

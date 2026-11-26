@@ -15,6 +15,7 @@ import {
   useSidebarRail,
 } from '../../../features/links/sidebar-rail';
 import { usePausedWhileCovered } from '../../../features/links/use-paused-while-covered';
+import { ViewOptionsHost } from '../../../features/links/view-options';
 
 // The links section's frame — the expo analogue of bracemark-web's two-pane links
 // page (`(app)/links/page.tsx`): on a phone-width window web's sidebar becomes a
@@ -66,9 +67,11 @@ export default function LinksLayout() {
             <LinkAddHost>
               <LinkEditHost>
                 <AdvancedSearchHost>
-                  <SheetCovered>
-                    <LinksDrawer />
-                  </SheetCovered>
+                  <ViewOptionsHost>
+                    <SheetCovered>
+                      <LinksDrawer />
+                    </SheetCovered>
+                  </ViewOptionsHost>
                 </AdvancedSearchHost>
               </LinkEditHost>
             </LinkAddHost>

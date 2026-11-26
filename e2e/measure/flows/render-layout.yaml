@@ -1,5 +1,5 @@
 # The render leg's layout pick (`npm run measure:render:ios` /
-# `measure:render:android`, e2e/measure/render-mobile.ts): Settings → Misc, the
+# `measure:render:android`, e2e/measure/render-mobile.ts): Settings → Appearance, the
 # named link layout, and back to a laid-out links list. Starts and ends on the
 # links screen. The pick itself is mobile/flows/parts/visual-layout.yaml's.
 #
@@ -10,7 +10,12 @@ appId: com.bracemark.app
 - runFlow:
     file: ../../mobile/flows/subflows/open-settings.yaml
     env:
-      SECTION: misc
+      SECTION: appearance
+# The layout radios sit under the theme's, below the fold on a phone.
+- scrollUntilVisible:
+    element:
+      text: '(.*, )?${LAYOUT}(, .*)?'
+    direction: DOWN
 # On iOS the row's name folds its hint in after a comma, hence the optional
 # tail; on an iPad it also leads with empty slots (`​, ​, List, A dense…`), hence
 # the optional head. The commas keep `List` from matching the `Lists` section.

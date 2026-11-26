@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { createContext, useContext, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { type LinkView } from '@stxapps/expo-react';
+import { fitChips } from '@stxapps/shared';
 
 import {
   DropdownMenu,
@@ -11,6 +12,7 @@ import {
 } from '../../components/ui/dropdown-menu';
 import { Text } from '../../components/ui/text';
 import { useCappedFontScale } from '../../lib/font-scale';
+import { EXPO_TAG_LINES_SUPPORTED } from '../../lib/tag-lines';
 import { useLinksPage } from './page-provider';
 import { useEngagedOpen } from './shared';
 
@@ -55,62 +57,50 @@ const TAG_CHIP_CLASS = 'max-w-32 rounded-full bg-foreground/6 px-2 py-1 active:b
 // deliberately stays zero; see docs/accessibility.md.
 const TAG_CHIP_HIT_SLOP = { top: 10, bottom: 10 } as const;
 
-// The strip measures ITS OWN container width, then ESTIMATES which chips fit,
-// where web measures every chip with a hidden clone + ResizeObserver
-// (`_layouts/shared/link-tag-chips.tsx`). Owning the container measurement here
-// removes the error-prone chrome subtraction that used to be split between the
-// card and row renderers. Measuring each native chip is a different trade: RN
-// has no synchronous pre-paint measure, so all those `onLayout`s would land a
-// frame late in recycled cells and need a per-label cache to avoid repeated
-// visible reshuffles.
+// The strip ESTIMATES which chips fit, where web measures every chip with a hidden
+// clone + ResizeObserver (`_layouts/shared/link-tag-chips.tsx`). RN has no
+// synchronous pre-paint measure, so measuring each native chip would land a frame
+// late in recycled cells. The arithmetic is shared (@stxapps/shared `fitChips`,
+// which web's row estimates use too): it packs the chips into at most `maxLines`
+// lines (the `tagLines` option) and this draws each line as its OWN single-line
+// row. A chip the estimate got wrong then truncates (they're `shrink` with one
+// line of text) instead of wrapping onto a line nothing planned for — so the
+// strip's height is exactly the fit's, and never changes after it's drawn unless
+// its width does.
 //
-// Before the one container layout arrives, `fitChipCount` conservatively keeps
-// one named tag plus `+N`. The strip is therefore never blank or loading and its
-// fixed one-line height never changes; layout only expands it when there is
-// proven room. The numbers below still estimate label widths, rounded AGAINST
-// fitting: overestimate a chip and the strip shows one fewer than it could;
-// underestimate and the chips are already `shrink` with `numberOfLines={1}`, so
-// the overflow lands as truncation, never as a clipped or occluded row.
-const CHIP_PADDING = 16; // px-2, both sides — dp, so it does NOT font-scale
-const CHIP_GAP = 4; // the strip's gap-1
-const CHIP_MAX_WIDTH = 128; // max-w-32, the cap a long label can reach
-const CHAR_WIDTH = 6.6; // average advance at text-xs/12pt, rounded up from ~6.2
-const MORE_CHIP_WIDTH = 38; // the "+N" chip at a realistic widest N ("+12")
-
-// A ceiling on top of the width fit, for the wide end (a tablet list row has
-// room for a dozen). Tags are metadata; past about five the strip starts
-// competing with the title it annotates, which is the thing the item is
-// actually for. Web has no such cap because its rows are budgeted in LINES,
-// which bounds the count on its own.
-const MAX_CHIPS = 5;
-
-// How many chips fit `width`, mirroring web's two passes: take chips while they
-// fit, then — only if any are left over — give back trailing chips until the
-// "+N" chip fits after the ones kept.
+// THE WIDTH AT FIRST RENDER is the whole game (docs/link-layouts.md, _heights_).
+// A one-line strip is one line tall whatever the width, so learning it late —
+// in `onLayout`, after FlashList measured the cell — only changes which chips
+// show. A strip of 2–3 lines is as tall as its width allows, so a width learned
+// late would grow the cell after FlashList measured it, and the list jumps. So a
+// strip renders from the first width it can get, in order:
+//   - its own `onLayout` width, once it has one (and a RECYCLED cell keeps it:
+//     FlashList reuses the component, and every strip in a list is the same width);
+//   - the list's shared width (TagStripWidth, below) — the first strip to lay out
+//     stores it, so every strip mounted after it lays out right the first time.
+//     For the LIST layout main.tsx starts the box at an estimate (the pane less
+//     the row's chrome), because a row only hears of a bucketed width
+//     (link-row.tsx says why) and its first screenful would otherwise render
+//     before any strip had measured;
+//   - `seedWidth` from the item — the card knows its own width exactly
+//     (main.tsx hands it over for the banner), so its strip starts right even on
+//     the first screenful.
+// With none of them (0), the fit keeps one named chip plus "+N" on ONE line.
 //
-// Floors at one kept chip, where web can fall to zero. Web's card row has a
-// second line to move a long chip onto; this strip is one line, so falling to
-// zero would paint a bare "+3" beside a link that has three perfectly nameable
-// tags. One shrunk-and-ellipsized chip carries more than that, and `shrink`
-// makes it fit whatever is left over.
-function fitChipCount(names: string[], width: number, fontScale: number): number {
-  const widthOf = (name: string) =>
-    Math.min(CHIP_PADDING + name.length * CHAR_WIDTH * fontScale, CHIP_MAX_WIDTH);
+// Measured with a temporary probe on the iPhone 17 Pro and iPad (A16)
+// simulators, `plus-worst`, tag lines 3: no strip changed its line count after
+// its first render — fast scrolling both ways in both layouts, and a cold launch.
+// Before the list's estimate, 2 of the first 4 rows did at a cold launch.
+//
+// MAX_CHIPS — five per line — rides in the shared metrics (`maxPerLine`): at the
+// wide end (a tablet row) a line has room for a dozen, and past about five tags
+// compete with the title they annotate.
 
-  let used = 0;
-  let kept = 0;
-  while (kept < names.length && kept < MAX_CHIPS) {
-    const cost = (kept === 0 ? 0 : CHIP_GAP) + widthOf(names[kept]);
-    if (used + cost > width) break;
-    used += cost;
-    kept += 1;
-  }
-  while (kept > 1 && kept < names.length && used + CHIP_GAP + MORE_CHIP_WIDTH > width) {
-    kept -= 1;
-    used -= widthOf(names[kept]) + (kept === 0 ? 0 : CHIP_GAP);
-  }
-  return Math.max(kept, 1);
-}
+// The list's tag-strip width, shared by every strip in it — a plain mutable box,
+// not state: a strip READS it at render and WRITES it from its own `onLayout`, and
+// nothing re-renders because it moved (each strip that cares has its own
+// `onLayout`). main.tsx makes a fresh one whenever the width could have changed.
+export const TagStripWidth = createContext<{ current: number }>({ current: 0 });
 
 // The item's tag-chip strip — web's LinkTagChips (`_layouts/shared/
 // link-tag-chips.tsx`), with the estimated fit above standing in for its
@@ -142,6 +132,8 @@ export function LinkTagChips({
   link,
   tagsById,
   selectMode,
+  maxLines = 1,
+  seedWidth = 0,
   className = '',
 }: {
   link: LinkView;
@@ -150,11 +142,16 @@ export function LinkTagChips({
   // than read off useLinksViewState: that value changes whenever any menu opens,
   // and a subscription here would re-render the strip in every mounted item.
   selectMode: boolean;
+  // The `tagLines` option. Ignored (one line) while EXPO_TAG_LINES_SUPPORTED is off.
+  maxLines?: number;
+  // The strip's width as the item knows it, for its first render (above).
+  seedWidth?: number;
   className?: string;
 }) {
   const { setSimpleQuery } = useLinksPage();
   const [, onOverflowOpenChange] = useEngagedOpen();
-  const [availableWidth, setAvailableWidth] = useState(0);
+  const shared = useContext(TagStripWidth);
+  const [ownWidth, setOwnWidth] = useState(0);
   // The chip's own text obeys the app-wide ceiling (components/ui/text.tsx), so
   // the fit has to reason at the capped scale, not the raw one. The helper's
   // floor at 1 is conservative here rather than exact — a user on SMALLER
@@ -166,71 +163,89 @@ export function LinkTagChips({
     .filter((c): c is { id: string; name: string } => c.name !== undefined);
   if (chips.length === 0) return null;
 
-  const visibleCount = fitChipCount(
+  const width = ownWidth || shared.current || seedWidth;
+  const fit = fitChips(
     chips.map((c) => c.name),
-    availableWidth,
+    width,
+    EXPO_TAG_LINES_SUPPORTED ? maxLines : 1,
     fontScale,
   );
-  const overflow = chips.slice(visibleCount);
+  const lines: (typeof chips)[] = [];
+  let next = 0;
+  for (const count of fit.lines) {
+    lines.push(chips.slice(next, next + count));
+    next += count;
+  }
+  const overflow = chips.slice(next);
 
   const onTagPress = (id: string) => setSimpleQuery({ kind: 'tag', id });
+
+  const chip = (c: { id: string; name: string }) =>
+    selectMode ? (
+      <View key={c.id} className={`shrink ${TAG_CHIP_CLASS}`}>
+        <Text numberOfLines={1} className="text-xs leading-4 text-foreground/80">
+          {c.name}
+        </Text>
+      </View>
+    ) : (
+      <Pressable
+        role="button"
+        key={c.id}
+        onPress={() => onTagPress(c.id)}
+        hitSlop={TAG_CHIP_HIT_SLOP}
+        className={`shrink ${TAG_CHIP_CLASS}`}
+      >
+        <Text numberOfLines={1} className="text-xs leading-4 text-foreground/80">
+          {c.name}
+        </Text>
+      </Pressable>
+    );
+
+  const more =
+    overflow.length > 0 &&
+    (selectMode ? (
+      <View className={`shrink-0 ${TAG_CHIP_CLASS}`}>
+        <Text className="text-xs leading-4 text-foreground/80">+{overflow.length}</Text>
+      </View>
+    ) : (
+      <DropdownMenu onOpenChange={onOverflowOpenChange}>
+        <DropdownMenuTrigger asChild>
+          <Pressable
+            role="button"
+            aria-label={`Show ${overflow.length} more ${overflow.length === 1 ? 'tag' : 'tags'}`}
+            hitSlop={TAG_CHIP_HIT_SLOP}
+            className={`shrink-0 ${TAG_CHIP_CLASS}`}
+          >
+            <Text className="text-xs leading-4 text-foreground/80">+{overflow.length}</Text>
+          </Pressable>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="max-w-64">
+          {overflow.map((c) => (
+            <DropdownMenuItem key={c.id} onPress={() => onTagPress(c.id)}>
+              <Text numberOfLines={1}>{c.name}</Text>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    ));
 
   return (
     <View className={className}>
       <View
-        className="flex-row items-center gap-1 overflow-hidden"
+        // gap-1 between lines, the same 4 as between chips (TAG_CHIP_METRICS.gap).
+        className="gap-1"
         onLayout={(event) => {
-          const width = event.nativeEvent.layout.width;
-          setAvailableWidth((current) => (current === width ? current : width));
+          const measured = event.nativeEvent.layout.width;
+          shared.current = measured;
+          setOwnWidth((current) => (current === measured ? current : measured));
         }}
       >
-        {chips.slice(0, visibleCount).map((chip) =>
-          selectMode ? (
-            <View key={chip.id} className={`shrink ${TAG_CHIP_CLASS}`}>
-              <Text numberOfLines={1} className="text-xs leading-4 text-foreground/80">
-                {chip.name}
-              </Text>
-            </View>
-          ) : (
-            <Pressable
-              role="button"
-              key={chip.id}
-              onPress={() => onTagPress(chip.id)}
-              hitSlop={TAG_CHIP_HIT_SLOP}
-              className={`shrink ${TAG_CHIP_CLASS}`}
-            >
-              <Text numberOfLines={1} className="text-xs leading-4 text-foreground/80">
-                {chip.name}
-              </Text>
-            </Pressable>
-          ),
-        )}
-        {overflow.length > 0 &&
-          (selectMode ? (
-            <View className={`shrink-0 ${TAG_CHIP_CLASS}`}>
-              <Text className="text-xs leading-4 text-foreground/80">+{overflow.length}</Text>
-            </View>
-          ) : (
-            <DropdownMenu onOpenChange={onOverflowOpenChange}>
-              <DropdownMenuTrigger asChild>
-                <Pressable
-                  role="button"
-                  aria-label={`Show ${overflow.length} more ${overflow.length === 1 ? 'tag' : 'tags'}`}
-                  hitSlop={TAG_CHIP_HIT_SLOP}
-                  className={`shrink-0 ${TAG_CHIP_CLASS}`}
-                >
-                  <Text className="text-xs leading-4 text-foreground/80">+{overflow.length}</Text>
-                </Pressable>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="max-w-64">
-                {overflow.map((chip) => (
-                  <DropdownMenuItem key={chip.id} onPress={() => onTagPress(chip.id)}>
-                    <Text numberOfLines={1}>{chip.name}</Text>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ))}
+        {lines.map((line, index) => (
+          <View key={index} className="flex-row items-center gap-1 overflow-hidden">
+            {line.map(chip)}
+            {index === lines.length - 1 && more}
+          </View>
+        ))}
       </View>
     </View>
   );

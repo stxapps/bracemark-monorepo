@@ -437,6 +437,16 @@
     "environments": ["local", "staging"]
   },
   {
+    "id": "LAYOUT-TABLE-001",
+    "title": "A free account is offered the upgrade for the table; a Plus account picks it, changes its columns, sorts by a header, and gets the list back on a narrow window",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "small",
+    "path": "web/link-layouts.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
     "id": "LOCK-APP-001",
     "title": "The app lock gates a reload without an app-content flash, rejects a wrong password and unlocks with the real one",
     "surface": "web",

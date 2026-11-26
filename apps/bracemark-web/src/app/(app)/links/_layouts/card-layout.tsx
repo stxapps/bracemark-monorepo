@@ -25,13 +25,20 @@
 //
 // Two things keep a row settling in ONE pass rather than oscillating: the banner
 // is a fixed ASPECT of the card's width (below), so a late image load can't
-// reflow a measured row, and the chip strip is capped at one line.
+// reflow a measured row, and the chip strip is capped at the `tagLines` option and
+// MEASURED before paint (LinkTagChips' layout effect), so its height is final by
+// the time the row is.
+//
+// Every number below is at the DEFAULT options; the card size, the image height,
+// title lines, tag lines and the fields move them (docs/link-layouts.md), and
+// estimateCard says how.
 //
 // The card anatomy, top to bottom:
 //
-//   the banner  — LinkPreviewImage at 12:7 (`aspect-[12/7]`, i.e. its height is
-//                 58.33% of the card's width — it scales with the column count
-//                 instead of being pinned to one number).
+//   the banner  — LinkPreviewImage at the `imageHeight` option's ratio of the
+//                 card's width (12:7, `tall`, by default — it scales with the
+//                 column count instead of being pinned to one number), or none at
+//                 all with the image off.
 //   the meta line — favicon + host + the pinned/note badges + the ⋯ menu at the
 //                 trailing edge. The host reads at `text-base`, the title's size —
 //                 the relationship list-layout has at its own denser text-sm. The badges trail the host in all four layouts
@@ -41,11 +48,16 @@
 //                 the preview any more, and the trigger's 44px hit target expands
 //                 into the card's own p-3 instead of into the grid gutter, where
 //                 it used to sit 6px from the next card's edge.
-//   the title   — `text-base`, `line-clamp-2`. A card is the layout with the most
-//                 room per link, so the title reads at body size here; the list
-//                 row's text-sm answers to a different constraint (density).
-//   the chips   — ONE line (LinkTagChips' default), which is also all
-//                 bracemark-expo's strip can do, so both apps show the same chips.
+//   the title   — `text-base`, clamped at the `titleLines` option (2). A card is
+//                 the layout with the most room per link, so the title reads at
+//                 body size here; the list row's text-sm answers to a different
+//                 constraint (density).
+//   the list    — only with the `listName` option on (off by default): its own
+//                 text-sm line under the title.
+//   the date    — only with the `date` option on (it's `none` by default): one
+//                 text-xs line under the title.
+//   the chips   — up to the `tagLines` option's lines (1), the same count
+//                 bracemark-expo's strip draws, so both apps show the same chips.
 //
 // No line is budgeted for the link's note: an inline note would cost its line on
 // the many cards that have none, so both layouts badge it (NoteBadge) and leave
@@ -53,24 +65,48 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { Folder } from 'lucide-react';
 
-import { displayUrl, hostFromText, openableUrl } from '@stxapps/shared';
+import {
+  CARD_IMAGE_ASPECTS,
+  CARD_SIZE_WIDTHS,
+  type CardImageHeight,
+  type CardOptions,
+  type CardSize,
+  chipStripHeight,
+  displayUrl,
+  fitChips,
+  hostFromText,
+  openableUrl,
+  TAG_CHIP_METRICS,
+} from '@stxapps/shared';
+import { type LinkView, useSettings } from '@stxapps/web-react';
 import { useElementWidth } from '@stxapps/web-ui/hooks/use-element-size';
 
+import { useLinksPage } from '../_contexts/page-provider';
 import { useLinksViewState } from '../_contexts/view-state-provider';
+import { RelativeTime } from './relative-time';
 import {
+  addressText,
   EmptyState,
   Favicon,
   hasKnownTags,
+  KeptCopyBadge,
   type LinkLayoutProps,
   LinkPreviewImage,
   LinkRowMenu,
   LinkRowSelect,
   LinkTagChips,
+  listNameFor,
+  measureRowHeight,
   NoteBadge,
   PinnedBadge,
   RefreshPill,
+  remeasureAll,
+  rowDate,
   ShowMore,
+  TITLE_CLAMP,
+  useListNameMap,
   useReportDisplayedLinkPaths,
   useRestoreReturnRow,
   useScrollTopOnQuery,
@@ -79,26 +115,36 @@ import {
 
 // Column count tracks the scroll container's content width (below) rather than a
 // fixed 3, so cards keep a comfortable width from the extension popup up to a
-// wide monitor. `MIN_CARD_WIDTH` is the smallest a card may get before we drop a
-// column; `CARD_GAP` is the grid `gap-4` (16px), needed by the fit math.
-const MIN_CARD_WIDTH = 300;
+// wide monitor. The card SIZE option's `min` (CARD_SIZE_WIDTHS, @stxapps/shared)
+// is the smallest a card may get before we drop a column; `CARD_GAP` is the grid
+// `gap-4` (16px), needed by the fit math.
 const CARD_GAP = 16;
 const DEFAULT_COLUMNS = 3;
 
 // The other end of that range, and the reason each card is `mx-auto` inside its
 // grid cell: dropping a column can only happen once a cell has grown to twice the
-// minimum, so a cell runs up to ~615px wide at one column (a pane between 300 and
-// 615 — the browser extension's popup, or a narrow window with the sidebar open).
-// A 615px card is a 359px banner and a title stranded on one very long line; the
-// cap keeps a card a card, and the cell's leftover width becomes margin either
-// side of it. Mirrored by `max-w-105` on the card below (26.25rem — the class is
-// the one that renders, this number only feeds the estimates, so under a raised
-// root font size the estimate errs small, which is what an estimate should do).
-const MAX_CARD_WIDTH = 420;
+// minimum, so a cell runs up to ~615px wide at one medium column (a pane between
+// 300 and 615 — the browser extension's popup, or a narrow window with the sidebar
+// open). A 615px card is a 359px banner and a title stranded on one very long
+// line; the size's `max` keeps a card a card, and the cell's leftover width
+// becomes margin either side of it. Rendered by the class below (the class is the
+// one that renders, the number only feeds the estimates, so under a raised root
+// font size the estimate errs small, which is what an estimate should do). FIXED
+// maps, because Tailwind can't see a class name built at runtime.
+const CARD_MAX_W: Record<CardSize, string> = {
+  small: 'max-w-60', // 15rem = 240
+  medium: 'max-w-105', // 26.25rem = 420
+  large: 'max-w-150', // 37.5rem = 600
+};
 
-// The banner's height as a fraction of the card's width: 12:7. Only the estimates
-// need it as a number — `aspect-[12/7]` on the slot is what actually lays it out.
-const PREVIEW_ASPECT = 7 / 12;
+// The banner's height as a fraction of the card's width, per the `imageHeight`
+// option. Only the estimates need it as a number (CARD_IMAGE_ASPECTS) — the class
+// on the slot is what actually lays it out.
+const CARD_ASPECT: Record<CardImageHeight, string> = {
+  short: 'aspect-3/1',
+  medium: 'aspect-2/1',
+  tall: 'aspect-12/7',
+};
 
 // What a row's TEXT adds to its banner, for rows not yet measured. Both sit
 // BETWEEN the two outcomes of the only thing they can't know — whether the title
@@ -109,13 +155,50 @@ const PREVIEW_ASPECT = 7 / 12;
 //                 that stands in for it) + gap-2 8 + title 24 or 48
 //   + p-3 24 + the row's pb-4 16                      → 104 … 128
 //   + one chip line 24 + the strip's pb-3 12          → 140 … 164
-const ESTIMATE_BARE = 116;
-const ESTIMATE_TAGGED = 152;
+//
+// so 116 untagged and 152 tagged at the defaults, the two constants this file
+// used to carry. The options add whole parts: a title capped at N lines is
+// guessed at (1 + N) / 2 of its 24px lines, the date line is gap-2 8 + 16, and a
+// tag strip is as many lines as the shared chip-fit arithmetic expects at this
+// card's width (@stxapps/shared fitChips, the one bracemark-expo draws from). The
+// meta line stays whatever the address does: the ⋯ trigger alone keeps it 32.
+const META_LINE = 32 + 8;
+const TITLE_LINE = 24;
+const DATE_LINE = 8 + 16;
+// The list name's own line: gap-2 8 + a text-sm 20.
+const LIST_NAME_LINE = 8 + 20;
+const CARD_PADDING = 24 + 16;
+const STRIP_PADDING = 12;
+// The strip's own inset (px-3) and the card's 1px border, both sides.
+const STRIP_CHROME = 24 + 2;
+// No per-line ceiling here: web measures, and its strip is bounded by lines alone.
+const WEB_CHIP_METRICS = { ...TAG_CHIP_METRICS, maxPerLine: Infinity };
+
+function estimateCard(
+  link: LinkView,
+  options: CardOptions,
+  tagsById: Map<string, string>,
+  cardWidth: number,
+  showsListName: boolean,
+): number {
+  const { fields } = options;
+  let height = META_LINE + TITLE_LINE * ((1 + options.titleLines) / 2) + CARD_PADDING;
+  if (fields.image) height += Math.round(cardWidth * CARD_IMAGE_ASPECTS[options.imageHeight]);
+  if (showsListName) height += LIST_NAME_LINE;
+  if (fields.date !== 'none') height += DATE_LINE;
+  if (fields.tags && hasKnownTags(link, tagsById)) {
+    const names = link.tagIds.flatMap((id) => tagsById.get(id) ?? []);
+    const fit = fitChips(names, cardWidth - STRIP_CHROME, options.tagLines, 1, WEB_CHIP_METRICS);
+    height += chipStripHeight(fit) + STRIP_PADDING;
+  }
+  return height;
+}
 
 const SCROLL_TOP_THRESHOLD = 8;
 
 export function CardLayout({
   links,
+  sortOn,
   pinnedCount,
   hasMore,
   showMore,
@@ -132,6 +215,12 @@ export function CardLayout({
   const { setScrolled, bulkEditing, selectedLinks, toggleSelected, selectRange } =
     useLinksViewState();
   const tagsById = useTagMap();
+  const listNames = useListNameMap();
+  const { selection } = useLinksPage();
+  // This layout's display options (docs/link-layouts.md).
+  const options = useSettings().layoutOptions.card;
+  const { fields } = options;
+  const { min: MIN_CARD_WIDTH, max: MAX_CARD_WIDTH } = CARD_SIZE_WIDTHS[options.size];
   // Fit as many `MIN_CARD_WIDTH` cards (plus gaps) as the content box holds; fall
   // back to `DEFAULT_COLUMNS` until the first measurement lands so there's no
   // 1-column flash on the initial paint (matches the prior fixed layout).
@@ -179,20 +268,35 @@ export function CardLayout({
     // taller estimate here either.
     estimateSize: (index) => {
       const rowLinks = links.slice(index * columns, index * columns + columns);
-      const tagged = rowLinks.some((link) => hasKnownTags(link, tagsById));
-      return Math.round(cardWidth * PREVIEW_ASPECT) + (tagged ? ESTIMATE_TAGGED : ESTIMATE_BARE);
+      return Math.max(
+        0,
+        ...rowLinks.map((link) =>
+          estimateCard(
+            link,
+            options,
+            tagsById,
+            cardWidth,
+            listNameFor(link, fields.listName, listNames, selection) !== undefined,
+          ),
+        ),
+      );
     },
     overscan: 4,
+    measureElement: measureRowHeight,
   });
 
   // Changing `columns` re-composes every row, so the cached measurements now
   // describe rows that no longer exist (three cards' worth of height on a row that
-  // holds two). `measure()` drops the cache wholesale; the visible rows re-measure
-  // on their next layout. Also covers the once-per-mount DEFAULT_COLUMNS → real
+  // holds two). remeasureAll drops the cache wholesale and measures the mounted rows
+  // again (a row whose size didn't change is never re-measured otherwise). Also covers the once-per-mount DEFAULT_COLUMNS → real
   // correction, and the banner-height change that comes with a new `cardWidth`.
+  // And an option change, which reshapes rows that are already measured — keyed on
+  // the options' VALUE, since the object is rebuilt whenever a settings file
+  // re-emits.
+  const optionsKey = JSON.stringify(options);
   useEffect(() => {
-    virtualizer.measure();
-  }, [virtualizer, columns, cardWidth]);
+    remeasureAll(virtualizer, scrollEl);
+  }, [virtualizer, columns, cardWidth, optionsKey, scrollEl]);
 
   // Virtual items are ROWS of `columns` cards, so the displayed LINK range is the first row's
   // first card through the last row's last card (the hook clamps the tail to `links.length`).
@@ -286,6 +390,11 @@ export function CardLayout({
                   // Needed twice below — as the card's text and as its tooltip.
                   const title = link.title || displayUrl(link.url);
                   const selected = bulkEditing && selectedLinks.has(link.path);
+                  const address = addressText(link, fields.address);
+                  const listName = listNameFor(link, fields.listName, listNames, selection);
+                  const showNote = fields.note && !!link.note;
+                  const showKept = fields.keptCopy && !!(link.readModeId || link.screenshotId);
+                  const date = rowDate(link, fields.date, sortOn);
                   return (
                     <div
                       key={link.path}
@@ -296,7 +405,7 @@ export function CardLayout({
                       // extends the browser's text selection from the last click, so
                       // range-selecting cards would drag highlight across their
                       // titles.
-                      className={`relative mx-auto flex w-full max-w-105 flex-col overflow-hidden rounded-lg border border-border ${
+                      className={`relative mx-auto flex w-full ${CARD_MAX_W[options.size]} flex-col overflow-hidden rounded-lg border border-border ${
                         selected
                           ? 'bg-muted ring-1 ring-muted-foreground'
                           : 'hover:bg-muted/50 has-[a:active]:bg-muted'
@@ -345,11 +454,13 @@ export function CardLayout({
                           checkboxClassName="size-6"
                         />
                       )}
-                      <LinkPreviewImage
-                        link={link}
-                        className="aspect-12/7 w-full shrink-0"
-                        fallback="panel"
-                      />
+                      {fields.image && (
+                        <LinkPreviewImage
+                          link={link}
+                          className={`${CARD_ASPECT[options.imageHeight]} w-full shrink-0`}
+                          fallback="panel"
+                        />
+                      )}
                       <div className="flex min-w-0 flex-col gap-2 p-3">
                         <div className="flex items-center gap-2">
                           {/* text-base, the size the TITLE reads at — the same pairing
@@ -363,10 +474,15 @@ export function CardLayout({
                               height either way: this line is the ⋯ trigger's 32px box,
                               and a 16px string's line box is 24, so the estimates above
                               don't move for it. */}
-                          <Favicon host={hostFromText(link.url)} className="size-4 shrink-0" />
-                          <span className="truncate text-base text-muted-foreground">
-                            {hostFromText(link.url)}
-                          </span>
+                          {address && (
+                            <>
+                              <Favicon host={hostFromText(link.url)} className="size-4 shrink-0" />
+                              {/* `dir="ltr"`: an address reads left to right in every script. */}
+                              <span dir="ltr" className="truncate text-base text-muted-foreground">
+                                {address}
+                              </span>
+                            </>
+                          )}
                           {/* Both islands below are `relative z-10`, which is what
                               lifts them clear of the title anchor's full-card
                               overlay (see it below): the badges so the note's
@@ -375,10 +491,11 @@ export function CardLayout({
                               Everything else on this line stays UNDER the overlay,
                               so a click on the host opens the link like the rest of
                               the card does. */}
-                          {(pinned || link.note) && (
+                          {(pinned || showNote || showKept) && (
                             <span className="relative z-10 flex shrink-0 items-center gap-2">
                               {pinned && <PinnedBadge />}
-                              {link.note && <NoteBadge note={link.note} />}
+                              {showNote && <NoteBadge note={link.note ?? ''} />}
+                              {showKept && <KeptCopyBadge link={link} />}
                             </span>
                           )}
                           {/* While selecting, the slot holds a SPACER, not the
@@ -469,11 +586,24 @@ export function CardLayout({
                               list-layout.tsx's title. */}
                           <span
                             dir="auto"
-                            className="line-clamp-2 text-base font-medium wrap-anywhere"
+                            className={`${TITLE_CLAMP[options.titleLines]} text-base font-medium wrap-anywhere`}
                           >
                             {title}
                           </span>
                         </a>
+                        {/* The list name gets a line of its own on a card — on the
+                            address line it took half a small card's width and left the
+                            address "r…" (break-ui). Text, like list-layout's (see
+                            there), and under the overlay, so a click opens the link. */}
+                        {listName && (
+                          <span className="flex min-w-0 items-center gap-1 text-sm text-muted-foreground">
+                            <Folder className="size-3.5 shrink-0" aria-label="List" />
+                            <span dir="auto" className="truncate">
+                              {listName}
+                            </span>
+                          </span>
+                        )}
+                        {date && <RelativeTime epochMs={date.epochMs} verb={date.verb} />}
                       </div>
                       {/* The chips are buttons, so they sit outside the anchor as
                           the card's bottom block — and above its overlay, or they
@@ -482,11 +612,14 @@ export function CardLayout({
                           transparent, so this rectangle stops being a hole in the
                           card's selection target and a click here reaches the
                           overlay like the rest of the card. */}
-                      <LinkTagChips
-                        link={link}
-                        tagsById={tagsById}
-                        className="relative z-10 px-3 pb-3"
-                      />
+                      {fields.tags && (
+                        <LinkTagChips
+                          link={link}
+                          tagsById={tagsById}
+                          maxLines={options.tagLines}
+                          className="relative z-10 px-3 pb-3"
+                        />
+                      )}
                     </div>
                   );
                 })}

@@ -7,6 +7,7 @@
 import { type SettingsSectionId } from '../sections';
 import { AboutSection } from './_about/about-section';
 import { AccountSection } from './_account/account-section';
+import { AppearanceSection } from './_appearance/appearance-section';
 import { DataSection } from './_data/data-section';
 import { LinkPreviewsSection } from './_link-previews/link-previews-section';
 import { ListsSection } from './_lists/lists-section';
@@ -23,6 +24,7 @@ const SECTIONS: Record<SettingsSectionId, () => React.ReactNode> = {
   'read-mode': () => <ReadModeSection />,
   lists: () => <ListsSection />,
   tags: () => <TagsSection />,
+  appearance: () => <AppearanceSection />,
   misc: () => <MiscSection />,
   about: () => <AboutSection />,
 };

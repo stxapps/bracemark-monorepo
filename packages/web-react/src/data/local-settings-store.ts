@@ -8,7 +8,13 @@
 // side-effect-light — no network, no React (the hooks layer adds reactivity via
 // useLiveQuery and the defaults).
 
-import { DEFAULT_THEME } from '@stxapps/shared';
+import {
+  DEFAULT_THEME,
+  type LayoutOptionsPatch,
+  layoutOptionsSchema,
+  mergeLayoutOptions,
+  type StoredLayoutOptions,
+} from '@stxapps/shared';
 
 import { db, type LocalSettingsRecord } from './db';
 
@@ -28,10 +34,13 @@ export function getLocalSettings(): Promise<LocalSettingsRecord | undefined> {
 // `DEFAULT_THEME`), so a first write of one field doesn't silently pin the others to
 // a surprising value.
 export async function setLocalSettings(
-  patch: Partial<Omit<LocalSettingsRecord, 'id'>>,
+  patch:
+    | Partial<Omit<LocalSettingsRecord, 'id'>>
+    | ((existing: LocalSettingsRecord | undefined) => Partial<Omit<LocalSettingsRecord, 'id'>>),
 ): Promise<void> {
   await db.transaction('rw', db.localSettings, async () => {
     const existing = await db.localSettings.get(LOCAL_SETTINGS_ID);
+    const fields = typeof patch === 'function' ? patch(existing) : patch;
     await db.localSettings.put({
       id: LOCAL_SETTINGS_ID,
       linksLayoutSource: existing?.linksLayoutSource ?? 'sync',
@@ -39,7 +48,29 @@ export async function setLocalSettings(
       themeSource: existing?.themeSource ?? 'sync',
       theme: existing?.theme ?? DEFAULT_THEME,
       previewsPromptDismissed: existing?.previewsPromptDismissed ?? false,
-      ...patch,
+      ...(existing?.sortOn !== undefined ? { sortOn: existing.sortOn } : {}),
+      ...(existing?.sortOrder !== undefined ? { sortOrder: existing.sortOrder } : {}),
+      ...(existing?.layoutOptions !== undefined ? { layoutOptions: existing.layoutOptions } : {}),
+      ...fields,
     });
+  });
+}
+
+// Patch this device's layout options (the Device source of the pack), inside the
+// same read-merge-write as setLocalSettings. A row with no options yet starts from
+// `seed` — the SYNCED options this device was showing until now — so the first
+// device edit changes one option instead of resetting the rest to defaults. The
+// stored value is untrusted (another build may have written it), so a corrupt one
+// also starts from the seed. Unknown ids are kept (mergeLayoutOptions).
+export function patchLocalLayoutOptions(
+  patch: LayoutOptionsPatch,
+  seed: StoredLayoutOptions,
+): Promise<void> {
+  return setLocalSettings((existing) => {
+    const stored =
+      existing?.layoutOptions === undefined
+        ? undefined
+        : layoutOptionsSchema.safeParse(existing.layoutOptions).data;
+    return { layoutOptions: mergeLayoutOptions(stored ?? seed, patch) };
   });
 }

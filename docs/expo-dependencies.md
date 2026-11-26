@@ -253,7 +253,7 @@ this one.
 
 #### @react-native-community/datetimepicker
 
-The two **theme crossover-time** fields in Settings → Misc (`custom` mode —
+The two **theme crossover-time** fields in Settings → Appearance (`custom` mode —
 [theme.md](./theme.md)). Added per the normal convention (`npx expo install`
 inside `apps/bracemark-expo`, then `*` in the app and the real pin — `8.4.4`,
 what `expo/bundledNativeModules.json` names for SDK 54 — in the root

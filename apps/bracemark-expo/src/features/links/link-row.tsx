@@ -21,7 +21,16 @@ import { Favicon, LinkPreviewImage } from './link-media';
 import { LinkRowMenu } from './link-row-menu';
 import { LinkTagChips } from './link-tag-chips';
 import { RelativeTime } from './relative-time';
-import { type LinkItemProps, NoteBadge, PinnedBadge } from './shared';
+import {
+  addressText,
+  itemDate,
+  KeptCopyBadge,
+  type LinkItemProps,
+  listNameFor,
+  ListNameText,
+  NoteBadge,
+  PinnedBadge,
+} from './shared';
 import { useLinksViewActions } from './view-state-provider';
 
 // Web reveals its sorted-field date at the pane's `@xl` container query: 36rem,
@@ -31,7 +40,7 @@ import { useLinksViewActions } from './view-state-provider';
 // So the date never shows on a phone held upright, and does on a phone on its
 // side, a tablet and an unfolded foldable — wherever the ROW reaches 576, which
 // with the docked rail (features/links/sidebar-rail.tsx) is narrower than the window.
-const RELATIVE_TIME_MIN_ROW_WIDTH = 576;
+export const RELATIVE_TIME_MIN_ROW_WIDTH = 576;
 
 // What a row is told of its width (main.tsx, LayoutConfig.itemWidth): which side
 // of the date breakpoint it is on, and nothing finer, because that is all it
@@ -68,9 +77,23 @@ export const LinkRow = memo(function LinkRow({
   selectMode,
   selected,
   onToggle,
+  options: { list: options },
+  listNames,
+  viewedListId,
 }: LinkItemProps) {
   const { enterBulkEdit } = useLinksViewActions();
-  const showRelativeTime = itemWidth >= RELATIVE_TIME_MIN_ROW_WIDTH;
+  // This layout's display options (docs/link-layouts.md) — web's list layout reads
+  // the same ones, the same way (its fields.ts).
+  const { fields } = options;
+  const date =
+    itemWidth >= RELATIVE_TIME_MIN_ROW_WIDTH ? itemDate(link, fields.date, sortOn) : undefined;
+  const address = addressText(link, fields.address);
+  const listName = listNameFor(link, fields.listName, listNames, viewedListId);
+  const showNote = fields.note && link.note !== undefined && link.note !== '';
+  const showKept = fields.keptCopy && !!(link.readModeId || link.screenshotId);
+  // The line goes only when everything on it does — a pinned row with address
+  // `none` still needs a line for its pin.
+  const showAddressLine = !!address || !!listName || pinned || showNote || showKept;
 
   // The role follows the press, because the press has two meanings. In bulk-edit
   // the whole row IS the checkbox — Pressable is `accessible`, so it collapses the
@@ -151,15 +174,18 @@ export const LinkRow = memo(function LinkRow({
         {/* mt-0.5 pays back the title's half-leading, so the image starts on
             the title's ink rather than on its line box (web's list layout —
             see there for the arithmetic). */}
-        <LinkPreviewImage
-          link={link}
-          className="mt-0.5 h-10 w-16 shrink-0 overflow-hidden rounded"
-          iconClassName="size-4 rounded"
-        />
+        {fields.image && (
+          <LinkPreviewImage
+            link={link}
+            className="mt-0.5 h-10 w-16 shrink-0 overflow-hidden rounded"
+            iconClassName="size-4 rounded"
+          />
+        )}
         <View className="min-w-0 flex-1">
           {/* The title line holds the title ALONE (web's list layout, verbatim):
               a phone is the narrowest pane there is, so every pixel goes to the
-              one string that identifies the link. TWO lines for the same reason —
+              one string that identifies the link. Two lines by default (the
+              `titleLines` option, docs/link-layouts.md) for the same reason —
               at this width one line fits only a few words and cuts most titles
               mid-phrase. It costs nothing on the rows that don't need it: the row
               is intrinsic-height, so a short title still renders one line and the
@@ -171,7 +197,7 @@ export const LinkRow = memo(function LinkRow({
               truncates the PAINT, not the accessible text, so a screen reader
               still reads the whole title, and the row menu's editor is the
               sighted path. */}
-          <Text numberOfLines={2} className="text-sm font-medium">
+          <Text numberOfLines={options.titleLines} className="text-sm font-medium">
             {link.title || displayUrl(link.url)}
           </Text>
           {/* text-sm to match the title, mt-0.5 so the lines don't touch, size-3.5
@@ -199,24 +225,34 @@ export const LinkRow = memo(function LinkRow({
               here instead of shoving the badges off the row. The `min-w-0` that
               rode along with the `flex-1` was always a no-op for the same
               reason. */}
-          <View className="mt-0.5 flex-row items-center gap-1.5">
-            <Favicon host={hostFromText(link.url)} className="size-3.5 shrink-0 rounded-sm" />
-            <Text numberOfLines={1} className="shrink text-sm text-muted-foreground">
-              {hostFromText(link.url)}
-            </Text>
-            {pinned && <PinnedBadge />}
-            {link.note !== undefined && link.note !== '' && <NoteBadge />}
-          </View>
-          <LinkTagChips link={link} tagsById={tagsById} selectMode={selectMode} className="mt-3" />
+          {showAddressLine && (
+            <View className="mt-0.5 flex-row items-center gap-1.5">
+              {address && (
+                <>
+                  <Favicon host={hostFromText(link.url)} className="size-3.5 shrink-0 rounded-sm" />
+                  <Text numberOfLines={1} className="shrink text-sm text-muted-foreground">
+                    {address}
+                  </Text>
+                </>
+              )}
+              {listName && <ListNameText name={listName} className="text-sm" />}
+              {pinned && <PinnedBadge />}
+              {showNote && <NoteBadge />}
+              {showKept && <KeptCopyBadge />}
+            </View>
+          )}
+          {fields.tags && (
+            <LinkTagChips
+              link={link}
+              tagsById={tagsById}
+              selectMode={selectMode}
+              maxLines={options.tagLines}
+              className="mt-3"
+            />
+          )}
         </View>
       </View>
-      {showRelativeTime && (
-        <RelativeTime
-          epochMs={link[sortOn]}
-          verb={sortOn === 'createdAt' ? 'Added' : 'Updated'}
-          className="shrink-0"
-        />
-      )}
+      {date && <RelativeTime epochMs={date.epochMs} verb={date.verb} className="shrink-0" />}
       {/* Hidden while selecting — the checkbox column stands in (web's list
           layout, verbatim). */}
       {!selectMode && (

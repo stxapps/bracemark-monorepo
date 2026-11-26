@@ -2,8 +2,8 @@
  * @jest-environment jsdom
  */
 // Specs for the settings read — the hook that folds TWO sources (the synced
-// `settings/general.enc` and the device-local `localSettings` row) into the one value the
-// app renders. Three rules here are silent when broken:
+// `settings/general.enc` + `settings/layout.enc` and the device-local `localSettings`
+// row) into the one value the app renders. Three rules here are silent when broken:
 //
 //   - THE SOURCE RESOLUTION. `linksLayoutSource` / `themeSource` are device-local and
 //     decide which source is applied. Read the wrong one and a device that opted out of
@@ -25,16 +25,18 @@
 
 import { act, renderHook } from '@testing-library/react';
 
-import { DEFAULT_THEME, type ThemeState } from '@stxapps/shared';
+import { DEFAULT_LAYOUT_OPTIONS, DEFAULT_THEME, type ThemeState } from '@stxapps/shared';
 
 import type { LocalSettingsRecord } from '../data/db';
 import { useSettings } from './use-settings';
 
 let mockGeneral: Record<string, unknown> | undefined;
+let mockLayout: Record<string, unknown> | undefined;
 let mockLocal: Partial<LocalSettingsRecord> | undefined;
 
 jest.mock('../data/queries', () => ({
   readSettingsGeneral: () => Promise.resolve(mockGeneral),
+  readSettingsLayout: () => Promise.resolve(mockLayout),
 }));
 jest.mock('../data/local-settings-store', () => ({
   getLocalSettings: () => Promise.resolve(mockLocal),
@@ -62,6 +64,7 @@ const theme = (mode: ThemeState['mode']): ThemeState => ({ ...DEFAULT_THEME, mod
 
 beforeEach(() => {
   mockGeneral = undefined;
+  mockLayout = undefined;
   mockLocal = undefined;
 });
 
@@ -194,6 +197,65 @@ describe('source resolution', () => {
     expect(result.current.linksLayoutSource).toBe('sync');
     expect(result.current.themeSource).toBe('sync');
     expect(result.current.linksLayout).toBe('card');
+  });
+});
+
+// The layout PACK — the layout, its sort and every layout's options — resolved from
+// `settings/layout.enc` with `general.enc`'s older copies as the fallback, and switched
+// as ONE by `linksLayoutSource`. Broken, each of these is a silent reset: the day the
+// move ships, every user's layout and sort, or a Device user's sort.
+describe('the layout pack', () => {
+  it('reads layout.enc first, and general.enc where it is silent', async () => {
+    mockGeneral = { linksLayout: 'list', sortOn: 'createdAt', sortOrder: 'asc' };
+    mockLayout = { linksLayout: 'card', card: { titleLines: 3 } };
+
+    const result = await settings();
+
+    expect(result.current.linksLayout).toBe('card');
+    expect(result.current.sortOn).toBe('createdAt');
+    expect(result.current.sortOrder).toBe('asc');
+    expect(result.current.layoutOptions.card.titleLines).toBe(3);
+  });
+
+  it('keeps the old layout and sort before layout.enc exists', async () => {
+    mockGeneral = { linksLayout: 'card', sortOn: 'createdAt' };
+
+    const result = await settings();
+
+    expect(result.current.linksLayout).toBe('card');
+    expect(result.current.sortOn).toBe('createdAt');
+    expect(result.current.layoutOptions).toEqual(DEFAULT_LAYOUT_OPTIONS);
+  });
+
+  it('switches the sort and the options with the layout source', async () => {
+    mockLayout = { sortOn: 'createdAt', card: { titleLines: 3 } };
+    mockLocal = {
+      linksLayoutSource: 'local',
+      sortOn: 'updatedAt',
+      sortOrder: 'asc',
+      layoutOptions: { card: { titleLines: 1 } },
+    };
+
+    const result = await settings();
+
+    expect(result.current.sortOn).toBe('updatedAt');
+    expect(result.current.sortOrder).toBe('asc');
+    expect(result.current.layoutOptions.card.titleLines).toBe(1);
+    expect(result.current.syncSortOn).toBe('createdAt');
+    expect(result.current.syncLayoutOptions.card.titleLines).toBe(3);
+  });
+
+  // A user who was on Device before the pack existed has a device layout and nothing
+  // else. Their sort and options must stay what they were — the synced ones.
+  it('a Device row from before the pack shows the synced sort and options', async () => {
+    mockLayout = { sortOn: 'createdAt', card: { titleLines: 3 } };
+    mockLocal = { linksLayoutSource: 'local', linksLayout: 'card' };
+
+    const result = await settings();
+
+    expect(result.current.linksLayout).toBe('card');
+    expect(result.current.sortOn).toBe('createdAt');
+    expect(result.current.layoutOptions.card.titleLines).toBe(3);
   });
 });
 

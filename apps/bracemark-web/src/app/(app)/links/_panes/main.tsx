@@ -1,7 +1,7 @@
 'use client';
 
 // The main pane: reads the paginated link query once and hands it to whichever
-// layout the user picked in Settings → Misc (useSettings.linksLayout). Each layout
+// layout the user picked in Settings → Appearance (useSettings.linksLayout). Each layout
 // owns its own scroll/virtualization, so this is a thin switch — it's the single
 // place the data hook meets the layouts. It also mounts the bulk-edit toolbar
 // (shown while the topbar's toggle holds `bulkEditing`) and the page-level
@@ -15,7 +15,10 @@
 // Deep links that merely INCLUDE a locked list (?list-any=…, tags, search) don't
 // swap — their queries exclude the locked links instead (use-links).
 
-import { useLocks, useSettings } from '@stxapps/web-react';
+import { useState } from 'react';
+
+import { useEntitlements, useLocks, useSettings } from '@stxapps/web-react';
+import { useElementWidth } from '@stxapps/web-ui/hooks/use-element-size';
 
 import { BulkEditToolbar } from '../_components/bulk-edit-toolbar';
 import { BulkTagsDialog } from '../_components/bulk-tags-dialog';
@@ -27,7 +30,9 @@ import { useLinksPage } from '../_contexts/page-provider';
 import { useLinks } from '../_hooks/use-links';
 import { CardLayout } from '../_layouts/card-layout';
 import { ListLayout } from '../_layouts/list-layout';
+import { resolveLayout } from '../_layouts/resolve-layout';
 import type { LinkLayoutProps } from '../_layouts/shared';
+import { TableLayout } from '../_layouts/table-layout';
 
 type Layout = (props: LinkLayoutProps) => React.ReactNode;
 
@@ -39,6 +44,7 @@ type Layout = (props: LinkLayoutProps) => React.ReactNode;
 const LAYOUTS: Record<string, Layout | undefined> = {
   list: ListLayout,
   card: CardLayout,
+  table: TableLayout,
 };
 
 export function Main() {
@@ -63,22 +69,27 @@ export function Main() {
 
 function UnlockedMain() {
   const { linksLayout } = useSettings();
+  const { entitlements } = useEntitlements();
   // The resolved sort is intrinsic to the query (page-provider), so read it off
   // the same context the reads run through and hand it to the layout's date column.
   const { query } = useLinksPage();
   const { links, pinnedCount, hasMore, showMore, isLoading, hasPending, applyPending } = useLinks();
+  const [pane, setPane] = useState<HTMLDivElement | null>(null);
+  const paneWidth = useElementWidth(pane);
 
   // An unknown layout (synced from a client that has one we don't) renders as the
   // dense default — the same thing a user with no choice made sees. Deliberately does
   // NOT write the fallback back: the stored value stays whatever the other device
-  // chose, so it still applies there. Settings → Misc shows no selected radio while
-  // this is in effect, which is the user's cue that the choice lives elsewhere.
-  const Layout = LAYOUTS[linksLayout] ?? ListLayout;
+  // chose, so it still applies there. Settings → Appearance shows no selected radio while
+  // this is in effect, which is the user's cue that the choice lives elsewhere. The
+  // table's own fallbacks are resolveLayout's.
+  const Layout =
+    LAYOUTS[resolveLayout(linksLayout, entitlements.tableLayout, paneWidth)] ?? ListLayout;
 
   return (
     <main className="flex min-h-0 flex-1 flex-col">
       <BulkEditToolbar links={links} />
-      <div className="min-h-0 flex-1">
+      <div ref={setPane} className="min-h-0 flex-1">
         <Layout
           links={links}
           sortOn={query.sortOn}

@@ -116,8 +116,8 @@ test.describe('scale', () => {
           // The DEVICE layout, because it lives outside the held store: with
           // the synced settings blob waiting behind the hold too, the synced
           // choice would read as the default (list) until the read answered.
-          // The theme group below has a Device tab of its own.
-          await page.goto('/settings/misc');
+          // The theme group above has a Device tab of its own.
+          await page.goto('/settings/appearance');
           const layout = page
             .locator('section')
             .filter({ has: page.getByRole('heading', { name: 'Link layout' }) });

@@ -222,7 +222,7 @@ async function keepReadModeCopy(page: Page): Promise<void> {
   }
 }
 
-// Settings → Misc → Layout → List, taken through the real radio for the same
+// Settings → Appearance → Link layout → List, taken through the real radio for the same
 // reason `enableServerExtraction` takes the real Switch: a value written straight
 // into the archive's settings blob would land silently, and a picture of the wrong
 // layout is not something the run could then notice.
@@ -238,7 +238,7 @@ async function keepReadModeCopy(page: Page): Promise<void> {
 // (use-settings.ts), and this account has never set that, so the sync tab is what
 // the page is actually reading. Nothing here touches the source toggle.
 async function useListLayout(page: Page): Promise<void> {
-  await page.goto('/settings/misc');
+  await page.goto('/settings/appearance');
   const list = page.getByRole('radio', { name: 'List' });
   await expect(list).toBeVisible();
   if ((await list.getAttribute('data-state')) !== 'checked') await list.click();

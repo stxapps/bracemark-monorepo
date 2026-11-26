@@ -57,6 +57,7 @@ import {
   serializeBackupManifest,
   SESSION_ERROR,
   SETTINGS_GENERAL_PATH,
+  SETTINGS_LAYOUT_PATH,
   syncPathSchema,
   TAGS_PREFIX,
   TRASH_ID,
@@ -387,6 +388,17 @@ function library(): Seeded[] {
       data: { id: 'l_secret', rank: RANKS[5], createdAt: T, updatedAt: T },
     },
     { path: SETTINGS_GENERAL_PATH, data: { linksLayout: 'list', createdAt: T, updatedAt: T } },
+    // The second settings file, with an option this build doesn't know: a backup
+    // must carry it verbatim, or a restore drops every layout option.
+    {
+      path: SETTINGS_LAYOUT_PATH,
+      data: {
+        linksLayout: 'card',
+        card: { titleLines: 3, fields: { image: false, rating: true } },
+        createdAt: T,
+        updatedAt: T,
+      },
+    },
   ];
 }
 

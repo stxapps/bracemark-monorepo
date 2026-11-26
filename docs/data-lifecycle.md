@@ -40,7 +40,12 @@ expo's outcome extends the shared one with the cache file its share sheet
 presents. Four formats, one deliberate asymmetry:
 
 - **bracemark** — the complete backup: a zip of `manifest.json` + `items.jsonl`
-  (raw `{path, data}` entities) + `files/{id}` (raw decrypted blob bytes). The
+  (raw `{path, data}` entities — both settings files included: `general.enc`,
+  and `layout.enc` with the links layout, its sort and every display option) +
+  `files/{id}` (raw decrypted blob bytes). A backup from before `layout.enc`
+  existed carries only `general.enc`, whose older copies of the layout and sort
+  are the read fallback, so it restores them unchanged
+  ([link-layouts.md](./link-layouts.md), _the move_). The
   **only format that round-trips**, and the only one that includes Trash — a
   backup that silently drops data isn't one. The blobs it carries are the
   referenced ones: each link's `customImageId` and every id its extraction names
@@ -148,7 +153,8 @@ It reports five counters, and each gets its own receipt line:
   shape this version refuses) is left out and counted. The read layer drops
   such a record from every view without counting it. Covered: links, the
   extractions of included links, lists, tags, and, for the backup, pins and
-  general settings. A link whose extraction is bad still ships, without its
+  both settings files (`settings/general.enc` and `settings/layout.enc`, each read
+  on its own, so a bad one never takes the other down). A link whose extraction is bad still ships, without its
   extraction. A record that the lock policy excludes by its path (a locked
   list, a locked link's pin) is filtered out before decoding, so it is not
   counted either.
@@ -525,7 +531,7 @@ The policy, decided once:
   by — hidden column or not — so one such link took down the list layout of
   every view containing it, on every device it synced to.
   `classifyBundleLine` now refuses any line carrying one — a link, list, tag,
-  pin, extraction or the settings file, and for an extraction each facet's
+  pin, extraction or either settings file, and for an extraction each facet's
   `extractedAt` as well — and counts it invalid, through `isCalendarTime`
   (`sync/calendar-time.ts`). **Refused, never re-dated**
   — a restore promises the admitted values verbatim, and a link that came back
@@ -1670,7 +1676,7 @@ What survives, and why: the **session** (staying signed in is the point — this
 is the "start over" action, not the "leave" action), the **cached subscription
 status** (entitlement is untouched), and **`localSettings`** (theme/layout
 device overrides are this device's preferences, not "your data"; the synced
-`settings/general.enc` they override _is_ wiped). This is `clearData` minus the
+`settings/general.enc` and `settings/layout.enc` they override _are_ wiped). This is `clearData` minus the
 identity/device stores — the two teardowns are cross-referenced in
 `clear-data.ts` and must stay aligned when stores are added.
 

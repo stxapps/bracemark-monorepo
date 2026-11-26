@@ -5,33 +5,54 @@
 // scrolls cheaply. `ShowMore` lives outside the virtual measurement, below the
 // rows, growing the page on click.
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { Folder } from 'lucide-react';
 
-import { displayUrl, hostFromText, openableUrl } from '@stxapps/shared';
+import {
+  chipStripHeight,
+  displayUrl,
+  fitChips,
+  hostFromText,
+  type ListOptions,
+  openableUrl,
+  TAG_CHIP_METRICS,
+} from '@stxapps/shared';
+import { type LinkView, useSettings } from '@stxapps/web-react';
+import { useElementWidth } from '@stxapps/web-ui/hooks/use-element-size';
 
+import { useLinksPage } from '../_contexts/page-provider';
 import { useLinksViewState } from '../_contexts/view-state-provider';
 import { RelativeTime } from './relative-time';
 import {
+  addressText,
   EmptyState,
   Favicon,
   hasKnownTags,
+  KeptCopyBadge,
   type LinkLayoutProps,
   LinkPreviewImage,
   LinkRowMenu,
   LinkRowSelect,
   LinkTagChips,
+  listNameFor,
+  measureRowHeight,
   NoteBadge,
   PinnedBadge,
   RefreshPill,
+  remeasureAll,
+  rowDate,
   ShowMore,
+  TITLE_CLAMP,
+  useListNameMap,
   useReportDisplayedLinkPaths,
   useRestoreReturnRow,
   useScrollTopOnQuery,
   useTagMap,
 } from './shared';
 
-// Row heights are MEASURED, not budgeted. The title is `line-clamp-2`, so a row's
+// Row heights are MEASURED, not budgeted. The title is clamped (two lines by
+// default; the `titleLines` option — docs/link-layouts.md), so a row's
 // height turns on whether that title wraps — and whether it wraps is a fact about
 // the browser's line breaker at the current pane width, font and root font size,
 // not something derivable from the link. So each row reports its own height:
@@ -40,12 +61,17 @@ import {
 //
 // `py-3.5` makes the 14px gutter explicit — every row is 14 + content + 14 (+1px
 // border) whatever the content does — which is the whole point of measuring. The
-// four shapes that produces:
+// shapes that produces at the default options:
 //
 //    71 = 14 + [ title 20 + 2 + host 20 ]                        + 14 + 1
 //    91 = 14 + [ title 40 + 2 + host 20 ]                        + 14 + 1
 //   107 = 14 + [ title 20 + 2 + host 20 + 12 + one chip line 24 ] + 14 + 1
 //   127 = 14 + [ title 40 + 2 + host 20 + 12 + one chip line 24 ] + 14 + 1
+//
+// and the options move them in whole lines: each title line is 20, each extra tag
+// line 24 + the strip's 4 gap, and an address line with nothing on it (address
+// `none`, no list name, no badge) drops its 2 + 20. The thumbnail never sets the
+// height: it is 2 + 40 = 42, the shortest text column there is (estimateRow).
 //
 // A FIXED budget cannot have that gutter once the title may take two lines: it
 // would reserve the second line on every row and leave 20px of slack on the rows
@@ -54,9 +80,10 @@ import {
 // between rows then alternates 29/49). Measuring leaves no slack to place.
 //
 // Two things keep the measurement settling in ONE pass rather than oscillating:
-// the chip line is capped at one (LinkTagChips' default `maxLines` — measured,
-// overflow behind "+N"), and the 64x40 preview is a fixed slot, so neither the tag
-// strip nor a late image load can reflow a row after it has been measured.
+// the chip strip is capped at the `tagLines` option and MEASURED before paint
+// (LinkTagChips' layout effect, overflow behind "+N"), so its height is final by the
+// time the row is measured; and the 64x40 preview is a fixed slot, so a late image
+// load can't reflow a row either.
 //
 // The numbers below are only ESTIMATES, for rows not yet mounted. Each sits
 // BETWEEN its own two outcomes rather than at the floor, so the error cancels
@@ -84,8 +111,57 @@ import {
 // no manual invalidation is needed — a row that changes shape while mounted is
 // re-measured by the observer, and one that changes while offscreen is measured
 // afresh when it mounts.
-const ESTIMATE_BARE = 80;
-const ESTIMATE_TAGGED = 116;
+//
+// estimateRow below builds the estimate from those same parts. Each guess sits
+// halfway between its outcomes: a title capped at N lines is guessed at
+// (1 + N) / 2 of them, and the tag strip at the lines the shared chip-fit
+// arithmetic expects at this pane's width (@stxapps/shared fitChips — the one
+// bracemark-expo renders from). At the default options it lands where the two
+// constants this file used to carry did: 81 for an untagged row (was 80), 117 for
+// a tagged one (was 116).
+const GUTTER = 14 + 14 + 1;
+const TITLE_LINE = 20;
+const ADDRESS_LINE = 2 + 20;
+const THUMBNAIL = 2 + 40;
+const STRIP_GAP = 12;
+// What the row spends beside the text column — pl-4 + pr-2, the ⋯ menu's 32 + its
+// gap-3, the thumbnail's 64 + gap-3, the date column (~60 + gap-3) — for the chip
+// estimate's width. An estimate: overstate the chrome and the guess errs a line
+// tall, which a measured row corrects on mount.
+const ROW_CHROME = 16 + 8 + 44;
+const THUMBNAIL_CHROME = 76;
+const DATE_CHROME = 72;
+// The `@xl` container width the date column appears at (36rem at a 16px root).
+const DATE_MIN_PANE = 576;
+
+// No per-line ceiling here: web measures, and its strip is bounded by lines alone.
+const WEB_CHIP_METRICS = { ...TAG_CHIP_METRICS, maxPerLine: Infinity };
+
+function estimateRow(
+  link: LinkView,
+  pinned: boolean,
+  options: ListOptions,
+  tagsById: Map<string, string>,
+  stripWidth: number,
+): number {
+  const { fields } = options;
+  let text = TITLE_LINE * ((1 + options.titleLines) / 2);
+  const badges =
+    pinned ||
+    (fields.note && !!link.note) ||
+    (fields.keptCopy && !!(link.readModeId || link.screenshotId));
+  if (fields.address !== 'none' || fields.listName || badges) text += ADDRESS_LINE;
+  if (fields.tags && hasKnownTags(link, tagsById)) {
+    const names = link.tagIds.flatMap((id) => tagsById.get(id) ?? []);
+    // Before the pane is measured the width is 0: guess halfway to the cap.
+    const height =
+      stripWidth > 0
+        ? chipStripHeight(fitChips(names, stripWidth, options.tagLines, 1, WEB_CHIP_METRICS))
+        : 24 + ((options.tagLines - 1) / 2) * (24 + TAG_CHIP_METRICS.gap);
+    text += STRIP_GAP + height;
+  }
+  return GUTTER + Math.max(text, fields.image ? THUMBNAIL : 0);
+}
 
 // Past this many pixels we treat the pane as "scrolled away from the top", so a
 // background sync is staged behind the refresh pill (see view-state-provider).
@@ -101,15 +177,30 @@ export function ListLayout({
   hasPending,
   applyPending,
 }: LinkLayoutProps) {
-  // The date column shows the field the rows are SORTED by, so the relative values
-  // read top-to-bottom in order — showing createdAt while sorted by updatedAt would
-  // look out of order. The verb names which instant it is (the visible text is bare
-  // to keep the column narrow, so "Added"/"Updated" rides the title + aria-label).
-  const dateVerb = sortOn === 'createdAt' ? 'Added' : 'Updated';
-  const scrollRef = useRef<HTMLDivElement>(null);
+  // The scroll container as STATE as well as a ref: useElementWidth needs to see it
+  // mount (the div is absent while EmptyState shows), and the tag estimate needs the
+  // pane width. The virtualizer and the scroll helpers read the ref.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
+  const paneWidth = useElementWidth(scrollEl);
   const { setScrolled, bulkEditing, selectedLinks, toggleSelected, selectRange } =
     useLinksViewState();
   const tagsById = useTagMap();
+  const listNames = useListNameMap();
+  const { selection } = useLinksPage();
+  // This layout's display options (docs/link-layouts.md). The date column shows the
+  // `date` option's field — by default the one the rows are SORTED by, so its
+  // relative values read top-to-bottom in order (rowDate).
+  const options = useSettings().layoutOptions.list;
+  const { fields } = options;
+  const showDateColumn = fields.date !== 'none' && paneWidth >= DATE_MIN_PANE;
+  const stripWidth =
+    paneWidth > 0
+      ? paneWidth -
+        ROW_CHROME -
+        (fields.image ? THUMBNAIL_CHROME : 0) -
+        (showDateColumn ? DATE_CHROME : 0)
+      : 0;
 
   // This layout owns the scroll position; reset the shared flag on mount (fresh
   // at top) and unmount (so a layout switch doesn't leave it stuck true).
@@ -134,9 +225,20 @@ export function ListLayout({
     // By path, not the default index — see the note above the estimates.
     getItemKey: (index) => links[index]?.path ?? index,
     estimateSize: (index) =>
-      hasKnownTags(links[index], tagsById) ? ESTIMATE_TAGGED : ESTIMATE_BARE,
+      estimateRow(links[index], index < pinnedCount, options, tagsById, stripWidth),
     overscan: 8,
+    measureElement: measureRowHeight,
   });
+
+  // An option change reshapes rows that are already MEASURED — a title clamp, a tag
+  // cap, a field coming or going — and the size cache keeps their old heights until
+  // each remounts. Drop it, so every row is re-estimated and the mounted ones
+  // re-measured at once. Keyed on the options' VALUE: the object is rebuilt whenever
+  // a settings file re-emits.
+  const optionsKey = JSON.stringify(options);
+  useEffect(() => {
+    remeasureAll(virtualizer, scrollRef.current);
+  }, [virtualizer, optionsKey]);
 
   // Report only the displayed rows (index maps 1:1 to `links`) so extraction tracks the window.
   const rows = virtualizer.getVirtualItems();
@@ -180,7 +282,10 @@ export function ListLayout({
     <div className="relative h-full">
       <RefreshPill show={hasPending} onClick={applyAndScrollTop} />
       <div
-        ref={scrollRef}
+        ref={(el) => {
+          scrollRef.current = el;
+          setScrollEl(el);
+        }}
         // `@container` so the date column below can gate on the PANE width (not the
         // viewport) — the pane widens/narrows with the collapsible sidebar without a
         // window resize, so a viewport `lg:` breakpoint would be wrong here.
@@ -195,7 +300,7 @@ export function ListLayout({
         // card-layout.tsx pins its own scroller for the same reason (there the 15px
         // moves the column count), and the two must carry this TOGETHER: they are
         // sibling scrollers for one pane with only ever one mounted, so a gutter on
-        // just one of them makes the Settings → Misc layout switch shift the pane.
+        // just one of them makes the Settings → Appearance layout switch shift the pane.
         // Not in conflict with the frame's `data-no-scrollbar-gutter` (page.tsx) —
         // that opt-out is `html`'s dead gutter, outside a pane that has its own
         // scrollbar; this is that pane. docs/safe-area.md carries the full note.
@@ -208,6 +313,15 @@ export function ListLayout({
             const pinned = row.index < pinnedCount;
             // Needed twice below — as the row's text and as its `title` tooltip.
             const title = link.title || displayUrl(link.url);
+            const address = addressText(link, fields.address);
+            const listName = listNameFor(link, fields.listName, listNames, selection);
+            const showNote = fields.note && !!link.note;
+            const showKept = fields.keptCopy && !!(link.readModeId || link.screenshotId);
+            // The address line holds the address, the list name and the badges, so it
+            // goes only when ALL of them do — a pinned row with address `none` still
+            // needs a line for its pin.
+            const showAddressLine = !!address || !!listName || pinned || showNote || showKept;
+            const date = rowDate(link, fields.date, sortOn);
             // Undefined for a url nothing can open (url/url.ts) — both anchors
             // then render without an href, so the row shows the link but no
             // longer offers a click that does nothing.
@@ -313,16 +427,19 @@ export function ListLayout({
                     column AFTER its anchor. The image anchor duplicates the text
                     one, so keyboard/AT skip it. */}
                 <div className="flex min-w-0 flex-1 items-start gap-3">
-                  <a
-                    href={href}
-                    target="_blank"
-                    rel="noreferrer"
-                    tabIndex={-1}
-                    aria-hidden
-                    className="shrink-0"
-                    onClick={onAnchorClick}
-                  >
-                    {/* mt-0.5 pays back the title's half-leading. `items-start`
+                  {/* The `image` field: off, the thumbnail column goes and the text
+                      starts at the row's edge. */}
+                  {fields.image && (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                      tabIndex={-1}
+                      aria-hidden
+                      className="shrink-0"
+                      onClick={onAnchorClick}
+                    >
+                      {/* mt-0.5 pays back the title's half-leading. `items-start`
                         aligns the image's box to the TEXT BOX's top, but a 14px
                         Inter glyph in a 20px line box starts ~1.5px below that
                         edge, so a flush image reads as sitting high. 2 is the
@@ -334,12 +451,13 @@ export function ListLayout({
                         shapes. Chasing Inter's cap height instead would want ~5
                         and make the image the tallest thing in the shortest row.
                         In rem, so it scales with the text. */}
-                    <LinkPreviewImage
-                      link={link}
-                      className="mt-0.5 h-10 w-16 rounded"
-                      iconClassName="size-4 rounded"
-                    />
-                  </a>
+                      <LinkPreviewImage
+                        link={link}
+                        className="mt-0.5 h-10 w-16 rounded"
+                        iconClassName="size-4 rounded"
+                      />
+                    </a>
+                  )}
                   <span className="min-w-0 flex-1">
                     <a
                       href={href}
@@ -382,7 +500,7 @@ export function ListLayout({
                           else can. */}
                       <span
                         dir="auto"
-                        className="line-clamp-2 text-sm font-medium wrap-anywhere"
+                        className={`${TITLE_CLAMP[options.titleLines]} text-sm font-medium wrap-anywhere`}
                         title={title}
                       >
                         {title}
@@ -392,12 +510,33 @@ export function ListLayout({
                           touching. size-3.5 leaves the favicon a touch under the
                           14px cap height so it reads as a mark, not a third word;
                           the line box is 20 either way. */}
-                      <span className="mt-0.5 flex items-center gap-1.5">
-                        <Favicon host={hostFromText(link.url)} className="size-3.5 shrink-0" />
-                        <span className="truncate text-sm text-muted-foreground">
-                          {hostFromText(link.url)}
-                        </span>
-                        {/* The badges ride THIS line, not the title's, in all
+                      {showAddressLine && (
+                        <span className="mt-0.5 flex items-center gap-1.5">
+                          {address && (
+                            <>
+                              <Favicon
+                                host={hostFromText(link.url)}
+                                className="size-3.5 shrink-0"
+                              />
+                              {/* `dir="ltr"`: an address reads left to right in every script. */}
+                              <span dir="ltr" className="truncate text-sm text-muted-foreground">
+                                {address}
+                              </span>
+                            </>
+                          )}
+                          {/* The list name (the `listName` field): TEXT, not a button —
+                            it rides this line inside the row's anchor, where a button
+                            may not nest; the sidebar is the way to the list. Capped at
+                            half the line so a long name can't push the address out. */}
+                          {listName && (
+                            <span className="flex max-w-1/2 min-w-0 shrink-0 items-center gap-1 text-sm text-muted-foreground">
+                              <Folder className="size-3.5 shrink-0" aria-label="List" />
+                              <span dir="auto" className="truncate">
+                                {listName}
+                              </span>
+                            </span>
+                          )}
+                          {/* The badges ride THIS line, not the title's, in all
                             four layouts (both here and in bracemark-expo, list
                             and card alike — the card had no title-adjacent slot
                             anyway, so this is where the two converge). A host
@@ -417,11 +556,20 @@ export function ListLayout({
                             Still inside the anchor, so their aria-labels stay
                             part of the link's accessible name (now read after
                             the host rather than after the title). */}
-                        {pinned && <PinnedBadge />}
-                        {link.note && <NoteBadge note={link.note} />}
-                      </span>
+                          {pinned && <PinnedBadge />}
+                          {showNote && <NoteBadge note={link.note ?? ''} />}
+                          {showKept && <KeptCopyBadge link={link} />}
+                        </span>
+                      )}
                     </a>
-                    <LinkTagChips link={link} tagsById={tagsById} className="mt-3" />
+                    {fields.tags && (
+                      <LinkTagChips
+                        link={link}
+                        tagsById={tagsById}
+                        maxLines={options.tagLines}
+                        className="mt-3"
+                      />
+                    )}
                   </span>
                 </div>
                 {/* Sorted-field date column — only when the PANE is wide enough (@xl
@@ -430,11 +578,13 @@ export function ListLayout({
                     rows are ordered by (see dateVerb above). dateTime carries the exact
                     instant; title/aria-label prefix the verb so the field is legible
                     to hover and AT (the bare visible text can't say which it is). */}
-                <RelativeTime
-                  epochMs={link[sortOn]}
-                  verb={dateVerb}
-                  className="hidden shrink-0 @xl:block"
-                />
+                {date && (
+                  <RelativeTime
+                    epochMs={date.epochMs}
+                    verb={date.verb}
+                    className="hidden shrink-0 @xl:block"
+                  />
+                )}
                 {!bulkEditing && (
                   <LinkRowMenu
                     link={link}

@@ -32,12 +32,12 @@ const FRAME = { createdAt: 1, updatedAt: 2 };
 
 describe('settingsGeneralSchema', () => {
   describe('no setting field can fail the parse', () => {
-    // The case this whole design exists for: `table` is a real planned layout
-    // that this build doesn't implement. It must survive the
+    // The case this whole design exists for: a layout a newer client offers and
+    // this build doesn't implement (as `table` once was). It must survive the
     // round trip untouched, so the device that chose it keeps its choice.
     it('round-trips a layout this build does not know', () => {
-      const parsed = settingsGeneralSchema.parse({ ...FRAME, linksLayout: 'table' });
-      expect(parsed.linksLayout).toBe('table');
+      const parsed = settingsGeneralSchema.parse({ ...FRAME, linksLayout: 'timeline' });
+      expect(parsed.linksLayout).toBe('timeline');
     });
 
     it('round-trips an unknown sibling setting a newer client wrote', () => {

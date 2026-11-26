@@ -3,9 +3,9 @@
 // The bar to the right of the sidebar. Left: the active selection's name (what
 // the main pane is showing). Right: the primary actions — add, then search,
 // bulk edit, overflow (more-options-menu.tsx) — with the search box between the
-// title and them. The list/card layout switch used to live here too; it moved to
-// Settings → Misc (a choose-once setting with a sync/device split), so the
-// topbar stays minimal.
+// title and them. The layout's HOME is Settings → Appearance (a setting with a
+// sync/device split); the View options popover here edits the same values in
+// place, on whichever source is active (view-options-popover.tsx).
 //
 // It carries the frame's whole narrow-width adaptation, in three moves, because
 // this is the one bar that survives at every width:
@@ -49,6 +49,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 import { LinkAddSurface } from '../_components/link-add-surface';
 import { MoreOptionsMenu } from '../_components/more-options-menu';
 import { SearchBar } from '../_components/search-bar';
+import { ViewOptionsPopover, ViewOptionsTrigger } from '../_components/view-options-popover';
 import { useLinksPage } from '../_contexts/page-provider';
 import { useLinksViewState } from '../_contexts/view-state-provider';
 import {
@@ -131,6 +132,9 @@ const COMPACT_BAR_REM = 16;
 export function Topbar() {
   const label = useSelectionLabel();
   const [header, setHeader] = useState<HTMLElement | null>(null);
+  // View options is controlled here: its icon (md+) and the ⋯ menu item (below md)
+  // open the one popover.
+  const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
   const headerWidth = useElementWidth(header);
   // 0 until measured (SSR, first paint): full bar until then. The root size is
   // read here rather than cached — it is the user's setting and can change.
@@ -236,41 +240,47 @@ export function Topbar() {
             that, which is what left Add stranded mid-group when it sat second. */}
         <div className="ml-auto flex shrink-0 items-center gap-3">
           <LinkAddSurface />
-          <div className="flex items-center gap-1">
-            <Button
-              variant={searchVisible ? 'secondary' : 'ghost'}
-              size="icon"
-              // The name states what pressing it DOES, which also keeps every
-              // state collision-free: closed, it is the only "Search links" on
-              // screen (the inline box is `display:none` below `md`, so it isn't
-              // in the a11y tree); open, the box owns that name and this becomes
-              // "Close search" — which is honest, since dismissing a committed
-              // search also restores the view it was run from. And the title
-              // button can only read "Search" while a search IS committed, i.e.
-              // while this one is named "Close search".
-              aria-label={searchVisible ? 'Close search' : 'Search links'}
-              aria-expanded={searchVisible}
-              onClick={toggleSearch}
-              className="md:hidden"
-            >
-              <Search className="size-4" />
-            </Button>
-            {/* Compact (COMPACT_BAR_REM), the toggle is a menu item instead,
+          <ViewOptionsPopover open={viewOptionsOpen} onOpenChange={setViewOptionsOpen}>
+            <div className="flex items-center gap-1">
+              <Button
+                variant={searchVisible ? 'secondary' : 'ghost'}
+                size="icon"
+                // The name states what pressing it DOES, which also keeps every
+                // state collision-free: closed, it is the only "Search links" on
+                // screen (the inline box is `display:none` below `md`, so it isn't
+                // in the a11y tree); open, the box owns that name and this becomes
+                // "Close search" — which is honest, since dismissing a committed
+                // search also restores the view it was run from. And the title
+                // button can only read "Search" while a search IS committed, i.e.
+                // while this one is named "Close search".
+                aria-label={searchVisible ? 'Close search' : 'Search links'}
+                aria-expanded={searchVisible}
+                onClick={toggleSearch}
+                className="md:hidden"
+              >
+                <Search className="size-4" />
+              </Button>
+              {/* Compact (COMPACT_BAR_REM), the toggle is a menu item instead,
                 and only for ENTERING: once in the mode, the bulk-edit toolbar's
                 own ✕ is the exit. */}
-            {!compact && (
-              <Button
-                variant={bulkEditing ? 'secondary' : 'ghost'}
-                size="icon"
-                aria-label="Bulk edit"
-                aria-pressed={bulkEditing}
-                onClick={() => (bulkEditing ? exitBulkEdit() : enterBulkEdit())}
-              >
-                <SquarePen className="size-4" />
-              </Button>
-            )}
-            <MoreOptionsMenu onBulkEdit={compact && !bulkEditing ? enterBulkEdit : undefined} />
-          </div>
+              {!compact && (
+                <Button
+                  variant={bulkEditing ? 'secondary' : 'ghost'}
+                  size="icon"
+                  aria-label="Bulk edit"
+                  aria-pressed={bulkEditing}
+                  onClick={() => (bulkEditing ? exitBulkEdit() : enterBulkEdit())}
+                >
+                  <SquarePen className="size-4" />
+                </Button>
+              )}
+              <ViewOptionsTrigger />
+              <MoreOptionsMenu
+                onBulkEdit={compact && !bulkEditing ? enterBulkEdit : undefined}
+                onViewOptions={() => setViewOptionsOpen(true)}
+              />
+            </div>
+          </ViewOptionsPopover>
         </div>
       </header>
 

@@ -19,7 +19,7 @@
 
 import Dexie, { type EntityTable, type Table } from 'dexie';
 
-import type { OpKind, ThemeState, UnreadableRecheck } from '@stxapps/shared';
+import type { OpKind, StoredLayoutOptions, ThemeState, UnreadableRecheck } from '@stxapps/shared';
 
 import { isUpdateRequired, markUpdateRequired, onUpdateRequired } from './update-required';
 
@@ -280,6 +280,15 @@ export interface LocalSettingsRecord {
   // its one offer (docs/link-extraction.md — _the links-page offer_). Absent on rows
   // written before the field existed; every read defaults it to `false`.
   previewsPromptDismissed: boolean;
+  // The rest of the layout PACK for the Device source — `linksLayoutSource` covers the
+  // layout, its sort and every layout's options together (docs/link-layouts.md). All
+  // three absent on rows written before the pack: the read side then falls back to
+  // the SYNCED values (localLayoutPack, @stxapps/shared), which is what this device
+  // was showing, so nothing changes on upgrade. Free strings / an untrusted object
+  // for the same forward-compat reason as `linksLayout`; the read edge narrows them.
+  sortOn?: string;
+  sortOrder?: string;
+  layoutOptions?: StoredLayoutOptions;
 }
 
 // One device-local lock — the app lock or a per-list lock. Like `localSettings`,

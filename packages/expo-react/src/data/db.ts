@@ -69,7 +69,12 @@ import {
 } from 'drizzle-orm/sqlite-core';
 import { openDatabaseSync } from 'expo-sqlite';
 
-import type { LinksLayout, ThemeState, UnreadableRecheck } from '@stxapps/shared';
+import type {
+  LinksLayout,
+  StoredLayoutOptions,
+  ThemeState,
+  UnreadableRecheck,
+} from '@stxapps/shared';
 
 // Raw decrypted bytes. drizzle's built-in `blob({ mode: 'buffer' })` types as
 // Node's Buffer, which doesn't exist on Hermes — expo-sqlite reads/binds BLOBs
@@ -214,6 +219,12 @@ export interface LocalSettingsValue {
   // shown it should still get its one offer (docs/link-extraction.md — off by
   // default must cost one tap, not a settings expedition).
   previewsPromptDismissed: boolean;
+  // The rest of the layout pack for the Device source — web-react db.ts has why.
+  // Optional: a row written before the pack has none, and the read side falls back
+  // to the synced values. Inside the JSON `value`, so no migration (see below).
+  sortOn?: string;
+  sortOrder?: string;
+  layoutOptions?: StoredLayoutOptions;
 }
 
 // Device-local settings that DELIBERATELY never sync — the single-row settings

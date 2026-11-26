@@ -24,7 +24,8 @@ import type { AvailablePaidPlan } from '@stxapps/shared';
 // A `Record` for misc-settings-copy.ts's reason — a new gate fails to typecheck
 // until it has words.
 
-export type PaywallFeature = 'searchEditor' | 'locks' | 'nestedLists' | 'keptCopies';
+export type PaywallFeature =
+  'searchEditor' | 'locks' | 'nestedLists' | 'keptCopies' | 'tableLayout';
 
 export const PAYWALL_COPY: Record<
   PaywallFeature,
@@ -77,5 +78,15 @@ export const PAYWALL_COPY: Record<
     title: 'Keep a copy',
     description:
       'Keeping a copy of a page is a Plus feature — its text in read mode, to read even if the page changes or disappears. Copies you have already kept stay readable on every plan.',
+  },
+  // Fired from Settings → Appearance (and the View options popover) on web, the
+  // only app with a table. The second sentence is the plan table's promise: card
+  // and list, and every option on them, are free, and a table chosen while on Plus
+  // comes back on upgrade.
+  tableLayout: {
+    plan: 'plus',
+    title: 'Table layout',
+    description:
+      'Showing your links as a table, with the columns you choose, is a Plus feature. The list and card layouts, and all their options, stay free.',
   },
 };

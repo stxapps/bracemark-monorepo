@@ -100,6 +100,12 @@ export function isPathId(id: string): boolean {
 // concern; a new concern adds its own `SETTINGS_<NAME>_PATH` const beside this.)
 export const SETTINGS_GENERAL_PATH = `${SETTINGS_PREFIX}general${ENC_SUFFIX}`;
 
+// The links layout, its sort and every layout's display options
+// (`settingsLayoutSchema`) — split from `general` so the most casually written
+// setting can't upload a stale copy of the extraction opt-ins over a newer one
+// (entities.ts says why; docs/link-layouts.md, _the settings model_).
+export const SETTINGS_LAYOUT_PATH = `${SETTINGS_PREFIX}layout${ENC_SUFFIX}`;
+
 // The id-keyed namespaces — every prefix whose path is `{prefix}{randomId}.enc`.
 // `settings/` is excluded on purpose: its segment is a fixed lowercase concern
 // name, not a random id, so it's validated as its own shape.

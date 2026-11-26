@@ -34,6 +34,7 @@ import {
   listSchema,
   pinSchema,
   settingsGeneralSchema,
+  settingsLayoutSchema,
   tagSchema,
 } from '../sync/entities';
 import { extractionFileIds } from '../sync/extraction';
@@ -46,6 +47,7 @@ import {
   LISTS_PREFIX,
   PINS_PREFIX,
   SETTINGS_GENERAL_PATH,
+  SETTINGS_LAYOUT_PATH,
   TAGS_PREFIX,
 } from '../sync/paths';
 import {
@@ -240,8 +242,18 @@ export function classifyBundleLine(line: string): BundleEntry | undefined {
   const { path, data } = parsed as { path?: unknown; data?: unknown };
   if (typeof path !== 'string' || typeof data !== 'object' || data === null) return undefined;
 
-  if (path === SETTINGS_GENERAL_PATH) {
-    if (!settingsGeneralSchema.safeParse(data).success) return undefined;
+  // The well-known settings files, each under its own schema. An archive from
+  // before `layout.enc` existed carries only `general.enc`, whose copies of the
+  // layout and sort are the read fallback (sync/layout-options.ts,
+  // syncLayoutPack), so it restores the user's layout and sort unchanged.
+  const settingsSchema =
+    path === SETTINGS_GENERAL_PATH
+      ? settingsGeneralSchema
+      : path === SETTINGS_LAYOUT_PATH
+        ? settingsLayoutSchema
+        : undefined;
+  if (settingsSchema) {
+    if (!settingsSchema.safeParse(data).success) return undefined;
     // The same two clocks as every entity below, under the same rule.
     if (!hasCalendarTimes(data, 'settings')) return undefined;
     return { path, data, kind: 'settings' };

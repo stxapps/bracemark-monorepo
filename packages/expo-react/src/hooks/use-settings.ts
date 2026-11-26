@@ -4,7 +4,9 @@
 // UNCOERCED for forward compat, the theme memoization). Divergences only here:
 // the device-local source is the sqlite `local_settings` row
 // (local-settings-store) instead of a Dexie table, and reactivity is
-// useLiveRead over `items` (the synced blob) + `local_settings`.
+// useLiveRead over `items` (the synced blobs) + `local_settings`. The layout
+// pack (layout, sort, options) resolves through the same shared helpers as web's
+// (syncLayoutPack / localLayoutPack, @stxapps/shared).
 
 import { useMemo } from 'react';
 
@@ -15,17 +17,15 @@ import {
   type DeviceExtractionMode,
   type KeepOnSave,
   keepOnSaveOf,
-  type LinksLayout,
+  type LayoutOptions,
+  localLayoutPack,
+  syncLayoutPack,
   type ThemeState,
 } from '@stxapps/shared';
 
 import { getLocalSettings } from '../data/local-settings-store';
-import { readSettingsGeneral } from '../data/queries';
+import { readSettingsGeneral, readSettingsLayout } from '../data/queries';
 import { useLiveRead } from './use-live-read';
-
-// The fallback layout before any choice is made (and while a live read is still
-// resolving on first render) — the dense default, matching web.
-const DEFAULT_LINKS_LAYOUT: LinksLayout = 'list';
 
 export type LinksLayoutSource = 'sync' | 'local';
 export type ThemeSource = 'sync' | 'local';
@@ -43,6 +43,13 @@ export interface Settings {
   deviceExtractionMode: DeviceExtractionMode;
   sortOn: string;
   sortOrder: string;
+  syncSortOn: string;
+  syncSortOrder: string;
+  localSortOn: string;
+  localSortOrder: string;
+  layoutOptions: LayoutOptions;
+  syncLayoutOptions: LayoutOptions;
+  localLayoutOptions: LayoutOptions;
   theme: ThemeState;
   themeSource: ThemeSource;
   syncTheme: ThemeState;
@@ -60,12 +67,15 @@ export function useSettings(): Settings {
   // `undefined` on the very first render — defaulted below so consumers always
   // get a concrete value.
   const general = useLiveRead(() => readSettingsGeneral(), [], ['items']);
+  const layout = useLiveRead(() => readSettingsLayout(), [], ['items']);
   const local = useLiveRead(() => getLocalSettings(), [], ['local_settings']);
 
-  const syncLinksLayout = general?.linksLayout ?? DEFAULT_LINKS_LAYOUT;
+  // The pack, per source — web's use-settings has the fallback rules and why it's
+  // memoized.
+  const syncPack = useMemo(() => syncLayoutPack(layout, general), [layout, general]);
+  const localPack = useMemo(() => localLayoutPack(local, syncPack), [local, syncPack]);
   const linksLayoutSource = local?.linksLayoutSource ?? 'sync';
-  const localLinksLayout = local?.linksLayout ?? DEFAULT_LINKS_LAYOUT;
-  const linksLayout = linksLayoutSource === 'local' ? localLinksLayout : syncLinksLayout;
+  const pack = linksLayoutSource === 'local' ? localPack : syncPack;
   // `serverExtraction` is off by default and round-tripped for the web clients — never
   // acted on here (expo never calls bracemark-extractor). `deviceExtractionMode` is expo's
   // own, and a three-position ladder rather than an opt-in boolean: absent (never
@@ -73,11 +83,6 @@ export function useSettings(): Settings {
   // else. See docs/link-extraction.md — _expo drains in the foreground_.
   const serverExtraction = general?.serverExtraction ?? false;
   const deviceExtractionMode = coerceDeviceExtractionMode(general?.deviceExtractionMode);
-
-  // Global-only: the synced value is the applied one. The defaults
-  // ('updatedAt'/'desc') match `emptyQuery`; use-links coerces before ordering.
-  const sortOn = general?.sortOn ?? 'updatedAt';
-  const sortOrder = general?.sortOrder ?? 'desc';
 
   // Memoized for identity stability (consumers dep on `theme`) — web's
   // rationale, verbatim: coerceThemeState allocates a fresh object every call.
@@ -105,14 +110,21 @@ export function useSettings(): Settings {
   );
 
   return {
-    linksLayout,
+    linksLayout: pack.linksLayout,
     linksLayoutSource,
-    syncLinksLayout,
-    localLinksLayout,
+    syncLinksLayout: syncPack.linksLayout,
+    localLinksLayout: localPack.linksLayout,
     serverExtraction,
     deviceExtractionMode,
-    sortOn,
-    sortOrder,
+    sortOn: pack.sortOn,
+    sortOrder: pack.sortOrder,
+    syncSortOn: syncPack.sortOn,
+    syncSortOrder: syncPack.sortOrder,
+    localSortOn: localPack.sortOn,
+    localSortOrder: localPack.sortOrder,
+    layoutOptions: pack.options,
+    syncLayoutOptions: syncPack.options,
+    localLayoutOptions: localPack.options,
     theme,
     themeSource,
     syncTheme,

@@ -24,7 +24,7 @@
 import { memo } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { displayUrl, hostFromText } from '@stxapps/shared';
+import { CARD_IMAGE_ASPECTS, CARD_SIZE_WIDTHS, displayUrl, hostFromText } from '@stxapps/shared';
 
 import { Checkbox } from '../../components/ui/checkbox';
 import { Text } from '../../components/ui/text';
@@ -32,7 +32,17 @@ import { openLink } from '../../lib/open-url';
 import { Favicon, LinkPreviewImage } from './link-media';
 import { LinkRowMenu } from './link-row-menu';
 import { LinkTagChips } from './link-tag-chips';
-import { type LinkItemProps, NoteBadge, PinnedBadge } from './shared';
+import { RelativeTime } from './relative-time';
+import {
+  addressText,
+  itemDate,
+  KeptCopyBadge,
+  type LinkItemProps,
+  listNameFor,
+  ListNameText,
+  NoteBadge,
+  PinnedBadge,
+} from './shared';
 import { useLinksViewActions } from './view-state-provider';
 
 // The banner is 12:7 — its height is 58.33% of the card's width — so it scales
@@ -41,20 +51,25 @@ import { useLinksViewActions } from './view-state-provider';
 // hands down rather than as an aspect class: a plain dp height needs nothing
 // from the class layer to be exactly right on the first frame — which is what
 // keeps the cell from measuring twice as the image resolves.
-const PREVIEW_ASPECT = 7 / 12;
+// The ratio itself is the `imageHeight` option's (CARD_IMAGE_ASPECTS in
+// @stxapps/shared — 12:7 is `tall`, the default), and with the image off there is
+// no banner at all.
 // The cell's horizontal chrome — the wrapper's p-2, both sides — so the CARD is
 // the item width less this. main.tsx's column math imports it rather than
 // spelling 16 again: that gutter is exactly what separates a cell's width from
 // the card a reader sees, and MIN_CARD_WIDTH is a promise about the latter.
 export const CARD_H_CHROME = 16;
-// The other end of the range, and now the same cap web sets (card-layout.tsx
-// MAX_CARD_WIDTH, rendered there as `max-w-105`): a column can only be dropped
+// The other end of the range, and the same cap web sets (the card size's `max`,
+// CARD_SIZE_WIDTHS in @stxapps/shared — 420 for medium): a column can only be dropped
 // once a cell has grown to TWICE the minimum, so a one-column pane runs a cell
 // up to ~615 wide. That card is a 359 banner and a title stranded on one very
 // long line; the cap keeps a card a card, and the cell's leftover width becomes
 // margin either side of it (`self-center`). No phone reaches it — a 430pt device
 // gives a 398 card — it's for the widths a tablet or a foldable opens up.
-const MAX_CARD_WIDTH = 420;
+// The strip's inset (px-3) and the card's 1pt border, both sides — what the tag
+// strip's width is short of the card's, for its first-render seed
+// (link-tag-chips.tsx, _the width at first render_).
+const STRIP_CHROME = 24 + 2;
 
 export const LinkCard = memo(function LinkCard({
   link,
@@ -66,11 +81,23 @@ export const LinkCard = memo(function LinkCard({
   selectMode,
   selected,
   onToggle,
+  sortOn,
+  options: { card: options },
+  listNames,
+  viewedListId,
 }: LinkItemProps) {
   const { enterBulkEdit } = useLinksViewActions();
-  const host = hostFromText(link.url);
-  const cardWidth = Math.min(itemWidth - CARD_H_CHROME, MAX_CARD_WIDTH);
-  const previewHeight = Math.round(cardWidth * PREVIEW_ASPECT);
+  // This layout's display options (docs/link-layouts.md) — web's card reads the
+  // same ones, the same way.
+  const { fields } = options;
+  const maxCardWidth = CARD_SIZE_WIDTHS[options.size].max;
+  const cardWidth = Math.min(itemWidth - CARD_H_CHROME, maxCardWidth);
+  const previewHeight = Math.round(cardWidth * CARD_IMAGE_ASPECTS[options.imageHeight]);
+  const address = addressText(link, fields.address);
+  const listName = listNameFor(link, fields.listName, listNames, viewedListId);
+  const showNote = fields.note && link.note !== undefined && link.note !== '';
+  const showKept = fields.keptCopy && !!(link.readModeId || link.screenshotId);
+  const date = itemDate(link, fields.date, sortOn);
 
   return (
     // p-2 is half the 16pt grid gutter: with the pane's matching content padding
@@ -115,16 +142,21 @@ export const LinkCard = memo(function LinkCard({
         // the page background, where this border runs along the card's own edge
         // and so composites with the banner photo for the top half of its
         // travel.
-        className={`w-full max-w-105 self-center overflow-hidden rounded-lg border ${
+        // The cap is the card size's `max`, as a style: a class can't be built
+        // from a number at runtime.
+        style={{ maxWidth: maxCardWidth }}
+        className={`w-full self-center overflow-hidden rounded-lg border ${
           selected ? 'border-muted-foreground bg-muted' : 'border-border active:bg-muted/50'
         }`}
       >
         {/* The banner: the preview image once its bytes are resident (fetched
             on demand by mounting — link-media.tsx), else the full-bleed hue
             panel. The height is the slot's, so both fallbacks fill it. */}
-        <View style={{ height: previewHeight }}>
-          <LinkPreviewImage link={link} className="h-full w-full" fallback="panel" />
-        </View>
+        {fields.image && (
+          <View style={{ height: previewHeight }}>
+            <LinkPreviewImage link={link} className="h-full w-full" fallback="panel" />
+          </View>
+        )}
         {/* The selection checkbox floats over the banner's top-leading corner,
             web's card verbatim (`_layouts/shared/link-row-widgets.tsx` carries
             why a card can't use the meta line's slot for it). Absolute against
@@ -189,12 +221,17 @@ export const LinkCard = memo(function LinkCard({
                 nothing: the ⋯ / checkbox slot is size-8 and a 16pt line box is
                 24. The size-4 favicon lands at the list row's proportion too —
                 the mark matches the font size there (14/14) as here (16/16). */}
-            <Favicon host={host} className="size-4 shrink-0 rounded-sm" />
-            <Text numberOfLines={1} className="shrink text-base text-muted-foreground">
-              {host}
-            </Text>
+            {address && (
+              <>
+                <Favicon host={hostFromText(link.url)} className="size-4 shrink-0 rounded-sm" />
+                <Text numberOfLines={1} className="shrink text-base text-muted-foreground">
+                  {address}
+                </Text>
+              </>
+            )}
             {pinned && <PinnedBadge />}
-            {link.note !== undefined && link.note !== '' && <NoteBadge />}
+            {showNote && <NoteBadge />}
+            {showKept && <KeptCopyBadge />}
             {selectMode ? (
               // A SPACER holding the ⋯ menu's footprint (size-8) while the
               // checkbox is up in the banner's corner — web's card, verbatim.
@@ -226,16 +263,22 @@ export const LinkCard = memo(function LinkCard({
               most room per link, so its title reads at body size (web's card,
               verbatim). Two lines, and they cost nothing on the cards that use
               one — the card is intrinsic-height now. */}
-          <Text numberOfLines={2} className="text-base font-medium">
+          <Text numberOfLines={options.titleLines} className="text-base font-medium">
             {link.title || displayUrl(link.url)}
           </Text>
+          {listName && <ListNameText name={listName} className="text-sm" ownLine />}
+          {date && <RelativeTime epochMs={date.epochMs} verb={date.verb} />}
         </View>
-        <LinkTagChips
-          link={link}
-          tagsById={tagsById}
-          selectMode={selectMode}
-          className="px-3 pb-3"
-        />
+        {fields.tags && (
+          <LinkTagChips
+            link={link}
+            tagsById={tagsById}
+            selectMode={selectMode}
+            maxLines={options.tagLines}
+            seedWidth={cardWidth - STRIP_CHROME}
+            className="px-3 pb-3"
+          />
+        )}
       </Pressable>
     </View>
   );

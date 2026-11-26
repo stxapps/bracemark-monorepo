@@ -15,7 +15,12 @@
 import { DEFAULT_THEME } from '@stxapps/shared';
 
 import { db } from './db';
-import { getLocalSettings, LOCAL_SETTINGS_ID, setLocalSettings } from './local-settings-store';
+import {
+  getLocalSettings,
+  LOCAL_SETTINGS_ID,
+  patchLocalLayoutOptions,
+  setLocalSettings,
+} from './local-settings-store';
 
 beforeEach(async () => {
   await db.localSettings.clear();
@@ -72,5 +77,45 @@ describe('setLocalSettings', () => {
     await setLocalSettings({ themeSource: 'local' });
 
     expect(await db.localSettings.count()).toBe(1);
+  });
+});
+
+// The rest of the layout pack on the Device source. A row from before the pack has no
+// sort and no options; the pack fields are optional and must SURVIVE every other write
+// (the put rebuilds the record field by field, so a field it doesn't carry forward is a
+// field the next theme flip deletes).
+describe('the pack fields', () => {
+  it('keeps the device sort and options across an unrelated write', async () => {
+    await setLocalSettings({ sortOn: 'createdAt', layoutOptions: { card: { titleLines: 3 } } });
+    await setLocalSettings({ themeSource: 'local' });
+
+    expect(await getLocalSettings()).toMatchObject({
+      sortOn: 'createdAt',
+      layoutOptions: { card: { titleLines: 3 } },
+    });
+  });
+
+  // The first device edit of an option starts from the SYNCED options this device was
+  // showing, so it changes one option rather than resetting the rest to defaults.
+  it('seeds the first options write from the synced options', async () => {
+    await patchLocalLayoutOptions(
+      { card: { size: 'small' } },
+      { card: { titleLines: 3, fields: { tags: false } }, list: { titleLines: 1 } },
+    );
+
+    expect((await getLocalSettings())?.layoutOptions).toEqual({
+      card: { titleLines: 3, size: 'small', fields: { tags: false } },
+      list: { titleLines: 1 },
+    });
+  });
+
+  it('patches its own options once it has them, ignoring the seed', async () => {
+    await setLocalSettings({ layoutOptions: { card: { titleLines: 1, future: 'x' } } });
+
+    await patchLocalLayoutOptions({ card: { tagLines: 2 } }, { card: { titleLines: 3 } });
+
+    expect((await getLocalSettings())?.layoutOptions).toEqual({
+      card: { titleLines: 1, future: 'x', tagLines: 2 },
+    });
   });
 });

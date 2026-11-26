@@ -22,6 +22,7 @@ import {
   Info,
   Link,
   type LucideIcon,
+  Palette,
   SlidersHorizontal,
   Tags,
   User,
@@ -35,6 +36,7 @@ export type SettingsSectionId =
   | 'read-mode'
   | 'lists'
   | 'tags'
+  | 'appearance'
   | 'misc'
   | 'about';
 
@@ -52,6 +54,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   { id: 'read-mode', label: 'Read mode', icon: BookOpen },
   { id: 'lists', label: 'Lists', icon: Folders },
   { id: 'tags', label: 'Tags', icon: Tags },
+  { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'misc', label: 'Misc.', icon: SlidersHorizontal },
   { id: 'about', label: 'About', icon: Info },
 ];

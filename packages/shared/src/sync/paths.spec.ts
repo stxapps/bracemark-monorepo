@@ -7,6 +7,8 @@ import {
   LINKS_PREFIX,
   PINS_PREFIX,
   rekey,
+  SETTINGS_GENERAL_PATH,
+  SETTINGS_LAYOUT_PATH,
   SETTINGS_PREFIX,
 } from './paths';
 
@@ -31,6 +33,12 @@ describe('syncPathSchema covers the whole path contract', () => {
       expect(syncPathSchema.safeParse(`${prefix}aZ09_-${ENC_SUFFIX}`).success).toBe(true);
     }
     expect(syncPathSchema.safeParse(`${SETTINGS_PREFIX}general${ENC_SUFFIX}`).success).toBe(true);
+  });
+
+  // Every well-known settings file by its own const — a concern name the server
+  // pattern refused would be an op that never drains, on every device, silently.
+  it.each([SETTINGS_GENERAL_PATH, SETTINGS_LAYOUT_PATH])('accepts %s', (path) => {
+    expect(syncPathSchema.safeParse(path).success).toBe(true);
   });
 
   it('rejects traversal, unknown namespaces, and wrong suffixes', () => {

@@ -346,7 +346,7 @@ async function measureLayout(
   runDir: string,
   options: Options,
 ): Promise<RenderRun[]> {
-  await page.goto('/settings/misc');
+  await page.goto('/settings/appearance');
   const radio = page.getByRole('radio', { name: new RegExp(`^${LAYOUTS[layout]}\\b`) });
   await radio.click();
   await expect(radio).toBeChecked();

@@ -1,7 +1,7 @@
 'use client';
 
 // Full-height left rail for the settings page: the brand lockup, then the section
-// menu (Account, Subscription, Lists, Tags, Misc., About). Each entry is a link to
+// menu (Account, Subscription, …, Appearance, Misc., About). Each entry is a link to
 // `/settings/[section]`; the active one is derived from the pathname (the URL is
 // the source of truth), and the matching section page renders the content.
 //

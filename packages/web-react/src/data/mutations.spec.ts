@@ -27,7 +27,10 @@ import {
   newFacet,
   pathFromId,
   PINS_PREFIX,
+  SETTINGS_GENERAL_PATH,
+  SETTINGS_LAYOUT_PATH,
   UnreadablePathError,
+  utf8,
 } from '@stxapps/shared';
 
 import { db } from './db';
@@ -43,6 +46,7 @@ import {
   writeExtraction,
   writeFile,
   writeLink,
+  writeSettingsLayout,
 } from './mutations';
 import { type LinkItem, readExtraction, readLinkById, readPins } from './queries';
 import { forgetUnreadablePaths, recordUnreadablePaths, seedNewAccount } from './sync-store';
@@ -752,5 +756,53 @@ describe('the write edge and the unreadable record', () => {
 
     await expect(assertExtractionWritable(USER, LINK_ID)).rejects.toThrow(UnreadablePathError);
     await expect(assertExtractionWritable(USER, 'l_b')).resolves.toBeUndefined();
+  });
+});
+
+// The layout pack's writer. Two silent failures: a merge rebuilt from the coerced view
+// deletes the options, fields and layouts a newer client wrote; and a layout or sort
+// written only to `layout.enc` while clients from before the move are still in use never
+// reaches them (they read `general.enc` only) — docs/link-layouts.md, _the move_.
+describe('writeSettingsLayout', () => {
+  const blob = async (path: string) => {
+    const record = await db.items.get(path);
+    return record?.data ? JSON.parse(new TextDecoder().decode(record.data)) : undefined;
+  };
+
+  it('merges options one level deep, keeping what it does not name', async () => {
+    await writeSettingsLayout(USER, { options: { card: { titleLines: 3 } } });
+    await db.items.update(SETTINGS_LAYOUT_PATH, {
+      data: utf8(
+        JSON.stringify({
+          ...(await blob(SETTINGS_LAYOUT_PATH)),
+          card: { titleLines: 3, density: 'tight', fields: { rating: true } },
+          timeline: { zoom: 2 },
+        }),
+      ),
+    });
+
+    await writeSettingsLayout(USER, { options: { card: { fields: { image: false } } } });
+
+    expect(await blob(SETTINGS_LAYOUT_PATH)).toMatchObject({
+      card: { titleLines: 3, density: 'tight', fields: { rating: true, image: false } },
+      timeline: { zoom: 2 },
+    });
+    expect(await pendingFor(SETTINGS_LAYOUT_PATH)).toBeDefined();
+  });
+
+  it('copies the layout and the sort into general.enc too, and only those', async () => {
+    await writeSettingsLayout(USER, { linksLayout: 'card', sortOn: 'createdAt' });
+
+    expect(await blob(SETTINGS_GENERAL_PATH)).toMatchObject({
+      linksLayout: 'card',
+      sortOn: 'createdAt',
+    });
+    expect(await pendingFor(SETTINGS_GENERAL_PATH)).toBeDefined();
+  });
+
+  it('leaves general.enc alone for an options-only write', async () => {
+    await writeSettingsLayout(USER, { options: { list: { tagLines: 2 } } });
+
+    expect(await db.items.get(SETTINGS_GENERAL_PATH)).toBeUndefined();
   });
 });

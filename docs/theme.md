@@ -189,8 +189,8 @@ toolbar popup ignores.
 
 - **bracemark-web** — `layout.tsx` inlines `themeInitScript()` in `<head>` as a
   server-rendered `<script>`; `inner-layout.tsx` mounts `<ThemeProvider>` (no
-  props) inside the data-layer providers. The theme **picker** is Settings → Misc
-  (`misc-section.tsx`): a Sync/Device tab, four mode radios, and two time inputs
+  props) inside the data-layer providers. The theme **picker** is Settings → Appearance
+  (`appearance-section.tsx`): a Sync/Device tab, four mode radios, and two time inputs
   revealed in `custom` mode — the same tab shape as the link-layout section right
   above it.
 
@@ -230,7 +230,7 @@ toolbar popup ignores.
 
 - **bracemark-expo** — the model is identical (four modes, the sync/device split,
   the same `useSettings`/`useSettingMutations` seam in `@stxapps/expo-react`),
-  and the picker is Settings → Misc (`features/settings/misc-section.tsx`), the
+  and the picker is Settings → Appearance (`features/settings/appearance-section.tsx`), the
   same tab shape as web. Two things differ, both because RN lacks a browser
   affordance rather than by design.
 

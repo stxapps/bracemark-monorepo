@@ -163,7 +163,7 @@ marketing site and the `min-h-dvh` screens are documents.
     count and from there into a wholesale `virtualizer.measure()`. A 15px flip when
     the list stops overflowing doesn't slide the pane, it re-composes it. The two
     are sibling scrollers for one pane with only ever one mounted, so they must
-    carry the utility **together** or the Settings → Misc layout switch shifts the
+    carry the utility **together** or the Settings → Appearance layout switch shifts the
     pane. `EmptyState` replaces the scroller outright, so the 0→N boundary is a
     full swap that no gutter setting steadies — but its SKELETON
     (`shared/layout-chrome.tsx`) carries the utility anyway, on an

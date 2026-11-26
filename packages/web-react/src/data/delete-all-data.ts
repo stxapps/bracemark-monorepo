@@ -9,7 +9,8 @@
 // the sign-out teardown): same wipe of the synced stores, opposite treatment of
 // the identity stores. Device-local settings (localSettings — theme/layout
 // device overrides) also survive: they're this device's preferences, not "your
-// data", and the synced settings/general.enc they override IS wiped server-side.
+// data", and the synced settings files they override (general.enc, layout.enc)
+// ARE wiped server-side.
 //
 // Other devices need nothing from us: the wiped op log answers their next pull
 // with null bounds, routing them into the download-authoritative fallback

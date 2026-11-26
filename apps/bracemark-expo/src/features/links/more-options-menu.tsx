@@ -37,6 +37,7 @@ import {
   MoreHorizontal,
   RefreshCw,
   Settings,
+  SlidersHorizontal,
   SquareCheckBig,
 } from 'lucide-react-native';
 
@@ -57,12 +58,14 @@ import { Text } from '../../components/ui/text';
 import { useSignOutFlow } from '../../contexts/sign-out-provider';
 import { SUPPORT_URL } from '../../lib/site';
 import { cn } from '../../lib/utils';
+import { useViewOptions } from './view-options';
 import { useLinksViewActions } from './view-state-provider';
 
 export function MoreOptionsMenu() {
   const { storeStatus, bgSyncStatus, syncNow } = useSync();
   const { appLock, lockApp } = useLocks();
   const { enterBulkEdit } = useLinksViewActions();
+  const { openViewOptions } = useViewOptions();
   const { requestSignOut, signingOut } = useSignOutFlow();
   const router = useRouter();
   const phase = getSyncPhase(storeStatus, bgSyncStatus);
@@ -193,6 +196,11 @@ export function MoreOptionsMenu() {
         <DropdownMenuItem testID="links-select-links" onPress={enterBulkEdit}>
           <Icon as={SquareCheckBig} className="size-4" />
           <Text>Select links</Text>
+        </DropdownMenuItem>
+        {/* The layout, its options and the sort, in place (view-options.tsx). */}
+        <DropdownMenuItem testID="links-view-options" onPress={openViewOptions}>
+          <Icon as={SlidersHorizontal} className="size-4" />
+          <Text>View options</Text>
         </DropdownMenuItem>
         <DropdownMenuItem testID="links-open-settings" onPress={() => router.push('/settings')}>
           <Icon as={Settings} className="size-4" />

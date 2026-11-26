@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import {
   Archive,
+  BookOpen,
   Folder,
   Hash,
   Inbox,
@@ -20,11 +21,18 @@ import {
   Trash2,
 } from 'lucide-react-native';
 
-import { type LinkView, useTags } from '@stxapps/expo-react';
+import { type LinkView, useLists, useSettings, useTags } from '@stxapps/expo-react';
 import {
+  type AddressMode,
   ARCHIVE_ID,
+  CARD_IMAGE_ASPECTS,
+  CARD_SIZE_WIDTHS,
+  type DateMode,
   DEFAULT_LIST_ID,
+  displayUrl,
   hasPositiveNoteClause,
+  hostFromText,
+  type LayoutOptions,
   type LinkSortOn,
   TRASH_ID,
   treeNameMap,
@@ -77,7 +85,86 @@ export type LinkItemProps = {
   // passed through unwrapped so it is the same function for every item on every
   // render (see the memo note above); the item supplies its own link.
   onToggle: (link: LinkView) => void;
+  // Every layout's display options (docs/link-layouts.md); the item reads its
+  // own layout's. Stable across renders while the options' VALUE holds
+  // (main.tsx), so a sync that re-reads the settings file re-renders no item.
+  options: LayoutOptions;
+  // The `listName` field's id → name map, and the list being viewed (whose name
+  // every row would otherwise repeat) — web's fields.ts, listNameFor.
+  listNames: Map<string, string>;
+  viewedListId: string | null;
 };
+
+// The link's list name, or undefined when it says nothing — web's listNameFor
+// (`_layouts/shared/fields.ts`), verbatim in rule: off, a list this device
+// doesn't know, or the list being viewed.
+export function listNameFor(
+  link: LinkView,
+  show: boolean,
+  listNames: Map<string, string>,
+  viewedListId: string | null,
+): string | undefined {
+  if (!show || link.listId === viewedListId) return undefined;
+  return listNames.get(link.listId);
+}
+
+// The date an item shows, or undefined for `none` — web's rowDate (fields.ts).
+export function itemDate(
+  link: LinkView,
+  mode: DateMode,
+  sortOn: LinkSortOn,
+): { epochMs: number; verb: string } | undefined {
+  const field = mode === 'sorted' ? sortOn : mode === 'none' ? undefined : mode;
+  if (!field) return undefined;
+  return { epochMs: link[field], verb: field === 'createdAt' ? 'Added' : 'Updated' };
+}
+
+// The address line's text — web's addressText (fields.ts).
+export function addressText(link: LinkView, mode: AddressMode): string | undefined {
+  if (mode === 'host') return hostFromText(link.url);
+  if (mode === 'url') return displayUrl(link.url);
+  return undefined;
+}
+
+// The kept-copy icon (the `keptCopy` field, off by default) — web's KeptCopyBadge:
+// this link has a read-mode copy or a screenshot kept with it. Labelled with
+// `accessibilityLabel` for the reason above.
+export function KeptCopyBadge() {
+  return (
+    <Icon
+      as={BookOpen}
+      className="size-3.5 shrink-0 text-muted-foreground"
+      accessibilityLabel="Has a kept copy"
+    />
+  );
+}
+
+// The list-name text — text, not a button (web's list layout has why; here a nested
+// Pressable would work, but one behaviour on both apps). On a row it shares the
+// address line and is capped at half of it; on a card it has a line of its own
+// (`ownLine`), because half a small card's line left the address "r…" (break-ui).
+export function ListNameText({
+  name,
+  className,
+  ownLine = false,
+}: {
+  name: string;
+  className?: string;
+  ownLine?: boolean;
+}) {
+  return (
+    <View className={cn('flex-row items-center gap-1', ownLine ? 'min-w-0' : 'max-w-1/2 shrink-0')}>
+      <Icon
+        as={Folder}
+        className="size-3.5 shrink-0 text-muted-foreground"
+        accessibilityLabel="List"
+      />
+      <Text numberOfLines={1} className={cn('shrink text-muted-foreground', className)}>
+        {name}
+      </Text>
+    </View>
+  );
+}
 
 // Both badges are labelled with `accessibilityLabel`, NOT web's `aria-label`: an
 // `Icon` is react-native-svg's `Svg`, which hands its props to the native view
@@ -300,6 +387,11 @@ function Bone({ className }: { className?: string }) {
 }
 
 function LinksSkeleton({ variant, columns }: { variant: 'list' | 'card'; columns: number }) {
+  // The options that change the shape outright — the card's cap and banner, the
+  // list thumbnail (web's LinksSkeleton has why).
+  const { card, list } = useSettings().layoutOptions;
+  const cardMax = CARD_SIZE_WIDTHS[card.size].max;
+  const bannerAspect = 1 / CARD_IMAGE_ASPECTS[card.imageHeight];
   // Three rows of whatever the grid is about to be, rather than a flat 6: at one
   // column six cards is two screens of bones nobody sees, and on a tablet six is
   // barely one row.
@@ -321,8 +413,15 @@ function LinksSkeleton({ variant, columns }: { variant: 'list' | 'card'; columns
               // with nothing to measure. `max-w-105 self-center` then mirrors
               // the real card's cap (link-card.tsx MAX_CARD_WIDTH).
               <View key={i} style={{ width: `${100 / columns}%` }} className="p-2">
-                <View className="w-full max-w-105 self-center overflow-hidden rounded-lg border border-border">
-                  <Bone className="aspect-12/7 rounded-none" />
+                <View
+                  style={{ maxWidth: cardMax }}
+                  className="w-full self-center overflow-hidden rounded-lg border border-border"
+                >
+                  {card.fields.image && (
+                    <View style={{ aspectRatio: bannerAspect }}>
+                      <Bone className="h-full rounded-none" />
+                    </View>
+                  )}
                   <View className="gap-2 p-3">
                     <Bone className="h-3 w-16" />
                     <Bone className="h-3.5 w-full" />
@@ -339,7 +438,7 @@ function LinksSkeleton({ variant, columns }: { variant: 'list' | 'card'; columns
                 key={i}
                 className="h-17.5 flex-row items-center gap-3 border-b border-border pr-2 pl-4"
               >
-                <Bone className="h-10 w-16 shrink-0" />
+                {list.fields.image && <Bone className="h-10 w-16 shrink-0" />}
                 <View className="min-w-0 flex-1 gap-2">
                   <Bone className="h-3.5 w-1/2" />
                   <Bone className="h-3 w-28" />
@@ -415,5 +514,12 @@ export function useEngagedOpen(): [boolean, (open: boolean) => void] {
 // immediately, never wait behind the refresh pill).
 export function useTagMap(): Map<string, string> {
   const tree = useTags();
+  return useMemo(() => treeNameMap(tree), [tree]);
+}
+
+// The same for lists — the `listName` field's map, hoisted once for the same
+// reasons (web's useListNameMap).
+export function useListNameMap(): Map<string, string> {
+  const tree = useLists();
   return useMemo(() => treeNameMap(tree), [tree]);
 }

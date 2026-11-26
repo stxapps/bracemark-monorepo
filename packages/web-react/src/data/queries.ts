@@ -52,7 +52,10 @@ import {
   setCachedExtraction,
   setCachedLink,
   SETTINGS_GENERAL_PATH,
+  SETTINGS_LAYOUT_PATH,
   settingsGeneralSchema,
+  type SettingsLayout,
+  settingsLayoutSchema,
   TAGS_PREFIX,
   tagSchema,
   tagWithPathId,
@@ -326,6 +329,15 @@ export function readPins(): Promise<PinItem[]> {
 export async function readSettingsGeneral(): Promise<SettingsGeneral | undefined> {
   const record = await db.items.get(SETTINGS_GENERAL_PATH);
   return parseBlob(record?.data, settingsGeneralSchema);
+}
+
+// The synced layout-settings blob (`settings/layout.enc` — the links layout, its sort
+// and every layout's options), or undefined if none is here yet. Same shape of read
+// as readSettingsGeneral; callers resolve it together with that file's older copies
+// of the pack fields (syncLayoutPack, @stxapps/shared).
+export async function readSettingsLayout(): Promise<SettingsLayout | undefined> {
+  const record = await db.items.get(SETTINGS_LAYOUT_PATH);
+  return parseBlob(record?.data, settingsLayoutSchema);
 }
 
 // One link looked up by its exact stored URL, or undefined. Served by the

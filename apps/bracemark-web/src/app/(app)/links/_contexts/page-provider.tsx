@@ -11,7 +11,7 @@
 // local store. That's what keeps plaintext names out of the URL, and so out of
 // browser history and anything that captures the address bar. (The list/card/table
 // layout used to live here as a localStorage preference; it moved to a real
-// setting — see `useSettings` / Settings → Misc.)
+// setting — see `useSettings` / Settings → Appearance.)
 //
 // The provider supplies its OWN Suspense boundary (see LinksPageProvider below):
 // useSearchParams() opts the subtree out of static prerendering, which Next

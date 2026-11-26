@@ -53,6 +53,7 @@ const SETTINGS_SECTIONS = [
   'read-mode',
   'lists',
   'tags',
+  'appearance',
   'misc',
   'about',
 ];

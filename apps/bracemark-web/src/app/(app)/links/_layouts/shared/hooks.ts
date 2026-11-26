@@ -7,10 +7,11 @@
 // popover).
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Virtualizer } from '@tanstack/react-virtual';
 import { useSearchParams } from 'next/navigation';
 
 import { linkIdOf, treeNameMap } from '@stxapps/shared';
-import { type LinkView, useLinkPreviews, useTags } from '@stxapps/web-react';
+import { type LinkView, useLinkPreviews, useLists, useTags } from '@stxapps/web-react';
 
 import { useLinksPage } from '../../_contexts/page-provider';
 import { useLinksViewState } from '../../_contexts/view-state-provider';
@@ -214,6 +215,14 @@ export function useTagMap(): Map<string, string> {
   return useMemo(() => treeNameMap(tree), [tree]);
 }
 
+// The same for lists — the `listName` field's id → name map (fields.ts,
+// listNameFor). Hoisted once per layout for the same reason, and live for the same
+// reason: a renamed list repaints every row that names it.
+export function useListNameMap(): Map<string, string> {
+  const tree = useLists();
+  return useMemo(() => treeNameMap(tree), [tree]);
+}
+
 // Controlled open state for a row-anchored overlay (the row menu, the tag
 // overflow popover), reporting open/close into the hoisted engagement count
 // (setMenuOpen) so a background sync won't repaint the row — moving or
@@ -240,3 +249,38 @@ export function useEngagedOpen(): [boolean, (open: boolean) => void] {
   };
   return [open, handleOpenChange];
 }
+
+// Drop a virtualizer's measured heights AND measure the mounted rows again.
+// `measure()` alone only empties the cache: a row the ResizeObserver already
+// measured is measured again only when its size CHANGES, so a mounted row whose
+// height an option change didn't touch kept its estimate for good, and its
+// neighbours were placed by that estimate — found by break-ui as rows overlapping
+// by a title line, even right after a reload, because the reset also runs on mount,
+// after the rows' first measurement. Re-measuring every mounted row (the
+// `data-index` elements under `root`) puts the cache back on what is on screen.
+//
+// The `getTotalSize()` between the two is load-bearing (virtual-core 3.17):
+// `measure()` empties the size cache but leaves the flat positions array it last
+// computed, and `resizeItem` compares a new size against THAT — so a row measured
+// straight after `measure()` matched its old measured size, counted as unchanged,
+// and was never stored; the cache stayed empty and every row fell to its estimate.
+// Reading the total first (the public reader of the measurements) rebuilds them
+// from the estimates, so each real
+// size registers as a change. (The card layout's reset on mount had the same hole
+// before the options existed; it was a few px then, at one fixed card shape.)
+export function remeasureAll(
+  virtualizer: Virtualizer<HTMLDivElement, Element>,
+  root: Element | null,
+): void {
+  virtualizer.measure();
+  virtualizer.getTotalSize();
+  root?.querySelectorAll('[data-index]').forEach((el) => virtualizer.measureElement(el));
+}
+
+// A measured row's height, rounded UP. The default reading rounds to the nearest
+// pixel, and a card whose banner is an aspect ratio of its width is a fractional
+// height, so rounding down placed the next row up to a pixel into it — and across a
+// few rows break-ui measured 1–2px of overlap. Up, a row only ever gains a fraction
+// of a pixel of gutter.
+export const measureRowHeight = (el: Element): number =>
+  Math.ceil(el.getBoundingClientRect().height);

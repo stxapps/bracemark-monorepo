@@ -1,7 +1,7 @@
 // The read/apply half of the theme — the expo port of web-ui's
 // `contexts/theme-provider.tsx` (the canonical doc: docs/theme.md). The SOURCE
 // OF TRUTH is the settings data layer, not this provider: the user picks a mode
-// (and, per device, the sync/device source) in Settings → Misc, written via
+// (and, per device, the sync/device source) in Settings → Appearance, written via
 // `useSettingMutations`. This consumes the already-resolved `ThemeState` from
 // `useSettings` (exactly as the links page consumes `linksLayout`), turns it
 // into the rendered light/dark, and re-resolves on each mode's trigger. It
