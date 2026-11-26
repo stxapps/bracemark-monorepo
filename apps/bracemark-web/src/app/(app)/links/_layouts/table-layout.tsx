@@ -18,12 +18,13 @@
 // 2.75rem is also the 44px touch target (docs/accessibility.md).
 //
 // NO SIDEWAYS SCROLL. When the chosen columns don't fit beside the title's minimum,
-// the lowest-priority ones drop (fitTableColumns, @stxapps/shared) and the header
-// grows a "+N hidden" button that opens the column chooser. A table that scrolls
+// the lowest-priority ones drop (fitTableColumns, @stxapps/shared) and the header's
+// column-chooser button shows "+N" (a columns icon otherwise). A table that scrolls
 // sideways hides the title's own column under a horizontal bar the user has to
 // find, and on a trackpad a vertical flick that drifts moves the page sideways.
 //
-// SEMANTICS on the virtualized divs: `role="table"` on the scroller, `row`,
+// SEMANTICS on the virtualized divs: `role="table"` on a box just inside the
+// scroller (Show more sits after it, outside the table), `row`,
 // `columnheader` and `cell` below, `aria-rowcount` and per-row `aria-rowindex`
 // (the header is row 1), so a screen reader announces "row 12 of 200" though only
 // a window of rows is mounted. A sortable header is a button inside its
@@ -35,7 +36,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowDown, ArrowUp } from 'lucide-react';
+import { ArrowDown, ArrowUp, Columns3 } from 'lucide-react';
 
 import { TABLE_COLUMN_COPY } from '@stxapps/react';
 import {
@@ -247,73 +248,101 @@ export function TableLayout({
           scrollRef.current = el;
           setScrollEl(el);
         }}
-        role="table"
-        aria-label="Links"
-        // +1 for the header row. While more pages remain the true total is unknown.
-        aria-rowcount={hasMore ? -1 : links.length + 1}
         // `scrollbar-gutter-stable` for list-layout.tsx's reason: this box's width
         // is read by code (the column fit), and a scrollbar coming and going would
         // move it by 15px.
         className="h-full scrollbar-gutter-stable overflow-y-auto"
         onScroll={(e) => setScrolled(e.currentTarget.scrollTop > SCROLL_TOP_THRESHOLD)}
       >
-        <div role="rowgroup" className="sticky top-0 z-20 bg-background">
-          <div
-            role="row"
-            aria-rowindex={1}
-            style={{ height: rowHeight }}
-            className="flex items-center gap-3 border-b border-border pr-2 pl-4 text-xs font-medium text-muted-foreground"
-          >
-            {bulkEditing && <span aria-hidden className="w-8 shrink-0" />}
-            <div role="columnheader" className="min-w-0 flex-1">
-              Title
-            </div>
-            {shown.map((id) => {
-              const def = TABLE_COLUMNS[id];
-              const field = def.sortOn;
-              const active = field !== undefined && field === sortOn;
-              return (
-                <div
-                  key={id}
-                  role="columnheader"
-                  aria-sort={
-                    active ? (sortOrder === 'desc' ? 'descending' : 'ascending') : undefined
-                  }
-                  style={{ width: def.width * scale }}
-                  className="flex shrink-0 items-center"
-                >
-                  {field ? (
-                    <button
-                      type="button"
-                      className="-mx-1 flex items-center gap-1 rounded px-1 py-1 hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
-                      onClick={() => sortBy(field)}
-                    >
-                      {TABLE_COLUMN_COPY[id]}
-                      {active &&
-                        (sortOrder === 'desc' ? (
-                          <ArrowDown className="size-3.5" aria-hidden />
-                        ) : (
-                          <ArrowUp className="size-3.5" aria-hidden />
-                        ))}
-                    </button>
-                  ) : (
-                    TABLE_COLUMN_COPY[id]
-                  )}
+        {/* The table is this box INSIDE the scroller, not the scroller itself: a
+            table may own only row groups and rows, and Show more (below, still in
+            the scroller so it comes at the end) is neither. Its sticky header still
+            sticks — its scroll container is the scroller, and this box spans the
+            whole content height. */}
+        <div
+          role="table"
+          aria-label="Links"
+          // +1 for the header row. While more pages remain the true total is unknown.
+          aria-rowcount={hasMore ? -1 : links.length + 1}
+        >
+          <div role="rowgroup" className="sticky top-0 z-20 bg-background">
+            <div
+              role="row"
+              aria-rowindex={1}
+              style={{ height: rowHeight }}
+              className="flex items-center gap-3 border-b border-border pr-2 pl-4 text-xs font-medium text-muted-foreground"
+            >
+              {/* A real header over the bulk-edit checkboxes, not a spacer: each row
+                gains a cell here, and a header row one cell short shifts every
+                header a column to the right for a screen reader (the checkbox
+                read as "Title", the title as "Site"). */}
+              {bulkEditing && (
+                <div role="columnheader" className="w-8 shrink-0">
+                  <span className="sr-only">Select</span>
                 </div>
-              );
-            })}
-            <div role="columnheader" className="flex w-8 shrink-0 justify-center">
-              {hidden.length > 0 ? (
-                // The columns that didn't fit, and the way to choose others.
+              )}
+              <div role="columnheader" className="min-w-0 flex-1">
+                Title
+              </div>
+              {shown.map((id) => {
+                const def = TABLE_COLUMNS[id];
+                const field = def.sortOn;
+                const active = field !== undefined && field === sortOn;
+                return (
+                  <div
+                    key={id}
+                    role="columnheader"
+                    aria-sort={
+                      active ? (sortOrder === 'desc' ? 'descending' : 'ascending') : undefined
+                    }
+                    style={{ width: def.width * scale }}
+                    className="flex shrink-0 items-center"
+                  >
+                    {field ? (
+                      <button
+                        type="button"
+                        className="-mx-1 flex items-center gap-1 rounded px-1 py-1 hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                        onClick={() => sortBy(field)}
+                      >
+                        {TABLE_COLUMN_COPY[id]}
+                        {active &&
+                          (sortOrder === 'desc' ? (
+                            <ArrowDown className="size-3.5" aria-hidden />
+                          ) : (
+                            <ArrowUp className="size-3.5" aria-hidden />
+                          ))}
+                      </button>
+                    ) : (
+                      TABLE_COLUMN_COPY[id]
+                    )}
+                  </div>
+                );
+              })}
+              {/* The row-actions column's header, and the way to choose columns: "+N"
+                while the window hides some of them, a columns icon otherwise. It is
+                ALWAYS there. A trigger that existed only while columns were hidden
+                took its open popover with it the moment a change inside made the
+                rest fit, and focus fell to the page; one that stays avoids that,
+                and on close Radix has a trigger to return focus to. */}
+              <div role="columnheader" className="flex w-8 shrink-0 justify-center">
+                <span className="sr-only">Actions</span>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
                       variant="ghost"
                       size="sm"
                       className="h-7 px-1.5 text-xs"
-                      aria-label={`${hidden.length} ${hidden.length === 1 ? 'column' : 'columns'} hidden — choose columns`}
+                      aria-label={
+                        hidden.length > 0
+                          ? `${hidden.length} ${hidden.length === 1 ? 'column' : 'columns'} hidden — choose columns`
+                          : 'Choose columns'
+                      }
                     >
-                      +{hidden.length}
+                      {hidden.length > 0 ? (
+                        `+${hidden.length}`
+                      ) : (
+                        <Columns3 className="size-4" aria-hidden />
+                      )}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent
@@ -322,10 +351,12 @@ export function TableLayout({
                     aria-labelledby="table-columns-title"
                   >
                     <PopoverTitle id="table-columns-title">Columns</PopoverTitle>
-                    <p className="text-sm text-muted-foreground">
-                      This window is too narrow for every column, so the least important are
-                      hidden. They are marked “Doesn’t fit”.
-                    </p>
+                    {hidden.length > 0 && (
+                      <p className="text-sm text-muted-foreground">
+                        This window is too narrow for every column, so the least important are
+                        hidden. They are marked “Doesn’t fit”.
+                      </p>
+                    )}
                     <TableColumnsChooser
                       idPrefix="table-header"
                       columns={columns}
@@ -334,83 +365,81 @@ export function TableLayout({
                     />
                   </PopoverContent>
                 </Popover>
-              ) : (
-                <span className="sr-only">Actions</span>
-              )}
+              </div>
             </div>
           </div>
-        </div>
-        <div role="rowgroup" className="relative" style={{ height: virtualizer.getTotalSize() }}>
-          {rows.map((row) => {
-            const link = links[row.index];
-            const pinned = row.index < pinnedCount;
-            const title = link.title || displayUrl(link.url);
-            const href = openableUrl(link.url);
-            const selected = bulkEditing && selectedLinks.has(link.path);
-            // Bulk edit: the row owns the click — list-layout.tsx has the rule.
-            const onRowClick = bulkEditing
-              ? (e: React.MouseEvent) => {
-                  if (e.shiftKey) selectRange(link, links);
-                  else toggleSelected(link);
-                }
-              : undefined;
-            return (
-              <div
-                key={link.path}
-                role="row"
-                aria-rowindex={row.index + 2}
-                aria-selected={bulkEditing ? selected : undefined}
-                className={`absolute inset-x-0 top-0 flex items-center gap-3 border-b border-border pr-2 pl-4 ${
-                  selected ? 'bg-muted' : 'hover:bg-muted/50 has-[a:active]:bg-muted'
-                } ${bulkEditing ? 'cursor-pointer select-none active:bg-muted' : ''}`}
-                style={{
-                  height: rowHeight,
-                  transform: `translateY(${row.start - virtualizer.options.scrollMargin}px)`,
-                }}
-                onClick={onRowClick}
-              >
-                {bulkEditing && (
-                  <div role="cell">
-                    <LinkRowSelect link={link} links={links} />
-                  </div>
-                )}
-                <div role="cell" className="flex min-w-0 flex-1 items-center gap-2">
-                  {pinned && <PinnedBadge />}
-                  <a
-                    href={href}
-                    target="_blank"
-                    rel="noreferrer"
-                    dir="auto"
-                    title={title}
-                    className="truncate text-sm font-medium"
-                    onClick={bulkEditing ? (e) => e.preventDefault() : undefined}
-                  >
-                    {title}
-                  </a>
-                </div>
-                {shown.map((id) => (
-                  <div
-                    key={id}
-                    role="cell"
-                    style={{ width: TABLE_COLUMNS[id].width * scale }}
-                    className="flex min-w-0 shrink-0 items-center gap-1.5 overflow-hidden"
-                  >
-                    <Cell id={id} link={link} listNames={listNames} tagsById={tagsById} />
-                  </div>
-                ))}
-                <div role="cell" className="flex w-8 shrink-0 justify-center">
-                  {!bulkEditing && (
-                    <LinkRowMenu
-                      link={link}
-                      pinned={pinned}
-                      pinnedAbove={row.index > 0 && pinned ? links[row.index - 1] : undefined}
-                      pinnedBelow={row.index < pinnedCount - 1 ? links[row.index + 1] : undefined}
-                    />
+          <div role="rowgroup" className="relative" style={{ height: virtualizer.getTotalSize() }}>
+            {rows.map((row) => {
+              const link = links[row.index];
+              const pinned = row.index < pinnedCount;
+              const title = link.title || displayUrl(link.url);
+              const href = openableUrl(link.url);
+              const selected = bulkEditing && selectedLinks.has(link.path);
+              // Bulk edit: the row owns the click — list-layout.tsx has the rule.
+              const onRowClick = bulkEditing
+                ? (e: React.MouseEvent) => {
+                    if (e.shiftKey) selectRange(link, links);
+                    else toggleSelected(link);
+                  }
+                : undefined;
+              return (
+                <div
+                  key={link.path}
+                  role="row"
+                  aria-rowindex={row.index + 2}
+                  aria-selected={bulkEditing ? selected : undefined}
+                  className={`absolute inset-x-0 top-0 flex items-center gap-3 border-b border-border pr-2 pl-4 ${
+                    selected ? 'bg-muted' : 'hover:bg-muted/50 has-[a:active]:bg-muted'
+                  } ${bulkEditing ? 'cursor-pointer select-none active:bg-muted' : ''}`}
+                  style={{
+                    height: rowHeight,
+                    transform: `translateY(${row.start - virtualizer.options.scrollMargin}px)`,
+                  }}
+                  onClick={onRowClick}
+                >
+                  {bulkEditing && (
+                    <div role="cell">
+                      <LinkRowSelect link={link} links={links} />
+                    </div>
                   )}
+                  <div role="cell" className="flex min-w-0 flex-1 items-center gap-2">
+                    {pinned && <PinnedBadge />}
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                      dir="auto"
+                      title={title}
+                      className="truncate text-sm font-medium"
+                      onClick={bulkEditing ? (e) => e.preventDefault() : undefined}
+                    >
+                      {title}
+                    </a>
+                  </div>
+                  {shown.map((id) => (
+                    <div
+                      key={id}
+                      role="cell"
+                      style={{ width: TABLE_COLUMNS[id].width * scale }}
+                      className="flex min-w-0 shrink-0 items-center gap-1.5 overflow-hidden"
+                    >
+                      <Cell id={id} link={link} listNames={listNames} tagsById={tagsById} />
+                    </div>
+                  ))}
+                  <div role="cell" className="flex w-8 shrink-0 justify-center">
+                    {!bulkEditing && (
+                      <LinkRowMenu
+                        link={link}
+                        pinned={pinned}
+                        pinnedAbove={row.index > 0 && pinned ? links[row.index - 1] : undefined}
+                        pinnedBelow={row.index < pinnedCount - 1 ? links[row.index + 1] : undefined}
+                      />
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
         <ShowMore hasMore={hasMore} showMore={showMore} />
       </div>

@@ -22,6 +22,7 @@
 // on a wider window — and are marked "Doesn't fit", or the header's "+N" opens a
 // list where every row looks shown and nothing says which N.
 
+import { useEffect, useRef } from 'react';
 import {
   closestCenter,
   DndContext,
@@ -130,6 +131,22 @@ export function TableColumnsChooser({
   );
   const unchosen = TABLE_COLUMN_IDS.filter((id) => !columns.includes(id));
 
+  // Checking or unchecking a column MOVES it between the two lists, which mounts
+  // a new checkbox and drops the old one — and focus with it, to the page (or,
+  // in a popover, out of it). So the toggled column's checkbox is focused again
+  // once the new order renders. A move up/down keeps its element (keyed by id),
+  // so only the toggles need this.
+  const refocus = useRef<string | null>(null);
+  useEffect(() => {
+    if (!refocus.current) return;
+    document.getElementById(refocus.current)?.focus();
+    refocus.current = null;
+  }, [columns]);
+  const toggle = (id: TableColumnId, next: TableColumnId[]) => {
+    refocus.current = `${idPrefix}-column-${id}`;
+    onChange(next);
+  };
+
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
     const from = columns.indexOf(active.id as TableColumnId);
@@ -151,7 +168,12 @@ export function TableColumnsChooser({
                 isFirst={index === 0}
                 isLast={index === columns.length - 1}
                 doesNotFit={hidden.includes(id)}
-                onHide={() => onChange(columns.filter((c) => c !== id))}
+                onHide={() =>
+                  toggle(
+                    id,
+                    columns.filter((c) => c !== id),
+                  )
+                }
                 onMove={(delta) => onChange(arrayMove([...columns], index, index + delta))}
               />
             ))}
@@ -169,7 +191,7 @@ export function TableColumnsChooser({
                 <Checkbox
                   id={checkboxId}
                   checked={false}
-                  onCheckedChange={() => onChange([...columns, id])}
+                  onCheckedChange={() => toggle(id, [...columns, id])}
                 />
                 <Label htmlFor={checkboxId} className="min-w-0 flex-1 font-normal">
                   {TABLE_COLUMN_COPY[id]}

@@ -38,14 +38,16 @@ test.describe('link layouts', () => {
       await expect(page.getByRole('heading', { name: 'Table columns' })).toBeVisible();
 
       // --- the narrowest table still shows its own defaults --------------------
-      // The pane is the scroller's box (role=table fills it). Shrink the window by
+      // The pane is the scroller's box — the table's parent (role=table sits just
+      // inside it, so Show more can follow it in the scroll). Shrink the window by
       // exactly the pane's surplus over the minimum: a table must render, and with
       // every default column — none behind "+N". (A hand-written 840 summed the
       // columns but not their gaps or the row's chrome, so the table opened with
       // Tags hidden up to ~911.)
       await page.goto('/links');
       await expect(page.getByRole('table', { name: 'Links' })).toBeVisible();
-      const wide = await page.getByRole('table', { name: 'Links' }).boundingBox();
+      const scroller = page.getByRole('table', { name: 'Links' }).locator('..');
+      const wide = await scroller.boundingBox();
       if (!wide) throw new Error('the table has no box');
       await page.setViewportSize({
         width: 1440 - Math.floor(wide.width - TABLE_MIN_PANE_WIDTH),
@@ -53,7 +55,7 @@ test.describe('link layouts', () => {
       });
       const narrowest = page.getByRole('table', { name: 'Links' });
       await expect
-        .poll(async () => Math.round((await narrowest.boundingBox())?.width ?? 0))
+        .poll(async () => Math.round((await scroller.boundingBox())?.width ?? 0))
         .toBe(TABLE_MIN_PANE_WIDTH);
       await expect(narrowest.getByRole('columnheader')).toHaveText([
         'Title',
@@ -102,6 +104,21 @@ test.describe('link layouts', () => {
       await expect(added).toHaveAttribute('aria-sort', 'ascending');
       await expect(modified).not.toHaveAttribute('aria-sort');
 
+      // --- bulk edit: a header over the checkbox column --------------------------
+      // Every row gains a checkbox cell first; the header row must gain its header
+      // too, or a screen reader reads each cell under the header one to its left.
+      await page.getByRole('button', { name: 'Bulk edit' }).click();
+      await expect(grid.getByRole('columnheader')).toHaveText([
+        'Select',
+        'Title',
+        'Site',
+        /Modified/,
+        'Added',
+        'Actions',
+      ]);
+      await expect(row.getByRole('cell')).toHaveCount(6);
+      await page.getByRole('button', { name: 'Exit bulk edit' }).click();
+
       // --- "+N": which chosen columns didn't fit ---------------------------------
       // Add URL (the lowest priority of the four) and narrow the pane to the
       // table's minimum, where Site, Modified and Added fit and URL does not. The
@@ -122,7 +139,17 @@ test.describe('link layouts', () => {
       await expect(
         columnsPopover.getByRole('checkbox', { name: 'Site', exact: true }),
       ).toBeChecked();
+      // Hiding URL from here makes the rest fit, so "+1" goes — but the popover
+      // and focus must stay where the user is, and closing it must land focus on
+      // the button, now "Choose columns".
+      await columnsPopover.getByRole('checkbox', { name: 'URL Doesn’t fit' }).click();
+      await expect(grid.getByRole('button', { name: 'Choose columns' })).toBeVisible();
+      await expect(columnsPopover).toBeVisible();
+      await expect(
+        columnsPopover.getByRole('checkbox', { name: 'URL', exact: true }),
+      ).toBeFocused();
       await page.keyboard.press('Escape');
+      await expect(grid.getByRole('button', { name: 'Choose columns' })).toBeFocused();
 
       // --- narrow: the list, the choice kept, and View options says why ----------
       await page.setViewportSize({ width: 600, height: 900 });

@@ -50,8 +50,11 @@ priority.
   (`NATIVE_LINKS_LAYOUTS`) and renders a stored `table` as the list; iPad and
   Android tablets are later work.
 - **Never sideways.** When the chosen columns don't fit beside the title's
-  minimum, the lowest-priority ones drop (`fitTableColumns`) and the header shows
-  a "+N" button that opens the column chooser. A sideways scroll hides the title
+  minimum, the lowest-priority ones drop (`fitTableColumns`) and the header's
+  column-chooser button shows "+N" (a columns icon, "Choose columns", otherwise).
+  The button is always there: one that existed only while columns were hidden
+  vanished with its open popover the moment a change inside it made the rest
+  fit, and focus fell to the page. A sideways scroll hides the title
   under a bar the user has to find, and a trackpad flick that drifts moves the
   page sideways.
 - **The fallbacks** are one pure function, `_layouts/resolve-layout.ts`: no
@@ -84,7 +87,13 @@ priority.
   "+N" opens a list where every row looks shown and nothing says which N.
 - **Semantics** on the virtualized divs: `role="table"`, `row`, `columnheader`
   and `cell`, `aria-rowcount` and per-row `aria-rowindex` (the header is row 1),
-  `aria-sort` on the active date header.
+  `aria-sort` on the active date header. The table is a box just INSIDE the
+  scroller, so Show more can follow it in the scroll without being a stray child
+  of the table (which may own only row groups and rows). In bulk edit the header
+  row gains a "Select" header over the checkbox cells — one cell short, it shifted
+  every header a column right for a screen reader. Checking or unchecking a
+  column in the chooser moves it between its two lists, so the chooser puts
+  focus back on that column's checkbox.
 
 ### the two places to edit
 
