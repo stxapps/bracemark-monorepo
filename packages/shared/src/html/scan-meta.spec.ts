@@ -112,6 +112,14 @@ describe('scanHtmlMeta', () => {
     ['a double-quoted attribute value', `<img alt="${FORGED.replaceAll('"', "'")}">`],
     ['a single-quoted attribute value', `<div title='${FORGED}'></div>`],
     ['an unclosed comment', `<!-- ${FORGED}`],
+    ['a comment holding `->`', `<!-- a visitor wrote -> ${FORGED} -->`],
+    ['a comment opening with `<!---`', `<!---x ${FORGED} -->`],
+    // The tokenizer's whitespace before a quoted value — a space the commonest, honest
+    // form (`alt= "…"`): the value opens there, and a visitor's text inside it is text.
+    ...[' ', '\t', '\f', '\n'].map((space): [string, string] => [
+      `a value after \`=\` and ${JSON.stringify(space)}`,
+      `<img alt=${space}"x> ${FORGED.replaceAll('"', "'")}">`,
+    ]),
     ['an unclosed CDATA section', `<svg><![CDATA[ x > ${FORGED}`],
     ['a value after a no-break space', `<img alt=\u00a0"x><textarea>"> ${FORGED}</textarea>`],
     [
@@ -150,8 +158,11 @@ describe('scanHtmlMeta', () => {
   });
 
   it('closes the head at `</head>` only, not at any four-letter end tag', () => {
-    const html = `<head></span></body><meta property="og:title" content="A"></head>`;
+    const html = `<head></span></body></xead></header><meta property="og:title" content="A"></head>`;
     expect(scanHtmlMeta(html, { maxChars: BIG, through: 'head' })).toEqual({ ogTitle: 'A' });
+    // With no `</head>` at all, none of them closes it either.
+    const open = `<head></xead></header><meta property="og:title" content="A">`;
+    expect(scanHtmlMetaReport(open, { maxChars: BIG, through: 'head' }).headEnd).toBeUndefined();
   });
 
   it('does not take a custom element for a meta', () => {

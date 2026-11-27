@@ -42,6 +42,8 @@ jest.mock('../contexts/favicon-provider', () => ({
 }));
 
 const mockRows = new Map<string, FaviconRecord>();
+// Whether the store's one-time re-check of cached icons has run (favicon-store.ts).
+const mockChecked = { value: true };
 const mockOnDisk = new Set<string>();
 // A host listed here has its read held open until `release()` — the beat, made as long
 // as the assertion needs.
@@ -65,7 +67,7 @@ jest.mock('../data/favicon-store', () => ({
   // Unknown is stale and nothing else is: the TTL is the store's, covered there.
   isFaviconStale: (record: FaviconRecord | undefined) => record === undefined,
   faviconFileFor: (host: string) => ({ uri: mockUriFor(host), exists: mockOnDisk.has(host) }),
-  cachedFaviconsChecked: () => true,
+  cachedFaviconsChecked: () => mockChecked.value,
 }));
 
 function withIcon(host: string): void {
@@ -126,6 +128,7 @@ beforeEach(() => {
   mockRows.clear();
   mockOnDisk.clear();
   mockHeld.clear();
+  mockChecked.value = true;
   mockRequestFavicon.mockClear();
 });
 
@@ -181,6 +184,22 @@ describe('the verdict', () => {
     expect(result.current).toBe(mockUriFor('orphan.example'));
 
     await waitFor(() => expect(result.current).toBeUndefined());
+  });
+
+  // Until the store's one-time re-check of cached icons has run, a file on disk may be
+  // one it is about to drop (an oversized icon cached before the size check), so the
+  // disk answers nothing; the verdict, which waits for the re-check, still does.
+  it('lets the disk answer only once the cached icons are re-checked', async () => {
+    withIcon('icon.example');
+    mockChecked.value = false;
+    hold('icon.example');
+    const { result, urisFor } = renderRow('icon.example');
+    expect(result.current).toBeUndefined();
+
+    mockChecked.value = true;
+    await release('icon.example');
+    expect(result.current).toBe(mockUriFor('icon.example'));
+    expect(urisFor('icon.example')[0]).toBeUndefined();
   });
 
   // Liveness, which the keyed read must not have cost: an icon that lands under a row

@@ -302,32 +302,119 @@ describe('the one-time re-check of cached icons', () => {
     expect(await readFavicon('huge.example')).toBeUndefined();
     expect(faviconFileFor('huge.example').exists).toBe(false);
     expect(isFaviconStale(await readFavicon('huge.example'))).toBe(true);
+    // The row goes too, not only the file (which alone would also read as unresolved).
+    expect(getDb().all(sql`SELECT host FROM favicons WHERE host = 'huge.example'`)).toEqual([]);
     expect((await readFavicon('fine.example'))?.status).toBe('ok');
     expect((await readFavicon('other.example'))?.status).toBe('ok');
     expect((await readFavicon('none.example'))?.status).toBe('none');
   });
 
-  // Wired in: on a fresh install of the module, the FIRST read already waits for the
-  // re-check, and the run is remembered on disk so the next launch skips it.
-  it('runs before the first read, once', async () => {
+  const fsModule = () =>
+    require('expo-file-system') as typeof import('../testing/memory-file-system');
+  const marker = () =>
+    new (fsModule().File)(fsModule().Paths.document, 'bracemark-favicons.checked-1');
+
+  // The row hook shows whatever file is on disk while a verdict is in flight, so the
+  // re-check walks the FILES: an orphan with no row — what a wipe killed between the
+  // table delete and the file delete leaves — is checked like any other.
+  it('drops an oversized icon file that no row points at', async () => {
+    await putFavicon(USER, 'orphan.example', png(20000));
+    await putFavicon(USER, 'kept.example', png(16));
+    getDb().run(sql`DELETE FROM favicons`);
+
+    await recheckCachedFavicons();
+
+    expect(faviconFileFor('orphan.example').exists).toBe(false);
+    expect(faviconFileFor('kept.example').exists).toBe(true);
+    expect(marker().exists).toBe(true);
+  });
+
+  it('drops an icon file it cannot read, and still completes', async () => {
+    await putFavicon(USER, 'unreadable.example', png(16));
+    const read = jest.spyOn(fsModule().File.prototype, 'bytesSync').mockImplementationOnce(() => {
+      throw new Error('EIO');
+    });
+    try {
+      await recheckCachedFavicons();
+    } finally {
+      read.mockRestore();
+    }
+
+    expect(faviconFileFor('unreadable.example').exists).toBe(false);
+    expect(await readFavicon('unreadable.example')).toBeUndefined();
+    expect(marker().exists).toBe(true);
+  });
+
+  // A drop that fails leaves an oversized icon behind, so the run isn't marked done and
+  // the next launch tries again.
+  it('withholds the marker when a drop fails, and drops it on the next run', async () => {
+    await putFavicon(USER, 'huge.example', png(20000));
+    const remove = jest.spyOn(fsModule().File.prototype, 'delete').mockImplementationOnce(() => {
+      throw new Error('EBUSY');
+    });
+    try {
+      await recheckCachedFavicons();
+    } finally {
+      remove.mockRestore();
+    }
+    expect(marker().exists).toBe(false);
+    expect(faviconFileFor('huge.example').exists).toBe(true);
+
+    await recheckCachedFavicons();
+    expect(faviconFileFor('huge.example').exists).toBe(false);
+    expect(marker().exists).toBe(true);
+  });
+
+  // Wired in, on a fresh copy of the module (the run is once per process): the FIRST
+  // read already waits for the re-check, and the run is remembered on disk.
+  const freshStore = async (
+    run: (store: typeof import('./favicon-store')) => Promise<void>,
+  ): Promise<void> => {
     await jest.isolateModulesAsync(async () => {
       const store = require('./favicon-store') as typeof import('./favicon-store');
       const sync = require('./sync-store') as typeof import('./sync-store');
-      const fs = require('expo-file-system') as typeof import('expo-file-system');
       const { getDb: freshDb } = require('./db') as typeof import('./db');
       freshDb().run(sql`DELETE FROM favicons`);
       freshDb().run(sql`DELETE FROM sync_meta`);
       await sync.seedNewAccount(USER);
       await store.putFavicon(USER, 'huge.example', png(20000));
-      const marker = () =>
-        fs.Paths.document && new fs.File(fs.Paths.document, 'bracemark-favicons.checked-1');
       expect(marker().exists).toBe(false);
+      await run(store);
+    });
+  };
 
+  it('runs before the first batch read, once', async () => {
+    await freshStore(async (store) => {
+      expect(store.cachedFaviconsChecked()).toBe(false);
       expect(await store.readFavicons(['huge.example'])).toEqual(
         new Map([['huge.example', undefined]]),
       );
       expect(store.cachedFaviconsChecked()).toBe(true);
       expect(marker().exists).toBe(true);
+    });
+  });
+
+  it('runs before the first single read', async () => {
+    await freshStore(async (store) => {
+      expect(await store.readFavicon('huge.example')).toBeUndefined();
+      expect(store.faviconFileFor('huge.example').exists).toBe(false);
+    });
+  });
+
+  // Icons are decoration: a run that fails still lets the app show them this session,
+  // and leaves no marker, so the next launch runs it again.
+  it('opens the gate without a marker when the run itself fails', async () => {
+    await freshStore(async (store) => {
+      const list = jest.spyOn(fsModule().Directory.prototype, 'list').mockImplementation(() => {
+        throw new Error('EIO');
+      });
+      try {
+        await store.whenCachedFaviconsChecked();
+      } finally {
+        list.mockRestore();
+      }
+      expect(store.cachedFaviconsChecked()).toBe(true);
+      expect(marker().exists).toBe(false);
     });
   });
 });

@@ -964,10 +964,11 @@ that closed inside the first read is settled: the walk ends at any span the read
 (M1 Hermes, `through: 'document'`). When the body is needed, its read **starts where the
 head's stopped** (`scanHtmlBodyMeta`), so no character is walked twice. Until
 2026-11-27 it was a second whole-page scan, and a hostile head the size of the cap that
-declared nothing cost two. The worst hostile shape found (a flood of `<meta>` tags)
-now takes ~0.28 s for `parseHtmlHead` on M1 Hermes (was ~0.5 s), and the whole
-`collectHtmlMeta` ~0.73 s with the cap's decode (was ~0.94 s), perhaps three or four
-times that on a low-end Android phone (measured 2026-11-27). Each read follows its own
+declared nothing cost two. The worst hostile shape found (a flood of `<meta>` tags,
+each with a run of bare attribute names) now takes ~0.33 s for `parseHtmlHead` on M1
+Hermes (was ~0.65 s), and the whole `collectHtmlMeta` ~0.78 s with the cap's decode (was
+~1.1 s), perhaps three or four times that on a low-end Android phone (measured
+2026-11-27). Each read follows its own
 page fetch (`CONCURRENCY` in `device-link-previews.ts`), so they never run back to back
 as one long stall.
 
@@ -1011,11 +1012,14 @@ raw-text element, comment or attribute (the scanner ends the template there); an
 the tokenizer reads as part of a name (`<img ="…`) or of an unquoted value (`alt=a="…`),
 whose quote the scanner skips as a value; a CDATA section in HTML content, skipped to
 its `]]>` where the DOM's bogus comment ends at the first `>`; a script's double-escaped
-state (`<script><!--<script>…`); and, on a page with no `</head>`, an SVG `<title>`
-before any other. Each needs markup the page itself wrote before the visitor's, or a
-second injection point. The other direction fails safe: inside inline `<svg>`/`<math>`
-the scanner skips a `<style>` or `<title>` as HTML raw text, where the DOM would read a
-`<meta>` in it.
+state (`<script><!--<script>…`); on a page with no `</head>`, an SVG or MathML
+`<title>` before any other; and inline `<svg>`/`<math>`, where every raw-text name
+(`<style>`, `<title>`, `<script>`…) is an ordinary element to the DOM but raw text to the
+scanner. That last one cuts both ways: the scanner misses a `<meta>` the DOM reads inside
+such an element, and when the element's content opens a comment or a quoted value that
+closes after its end tag (`<svg><style><!--</style><meta …>-->`), it collects a `<meta>`
+the DOM keeps inside that comment. Each needs markup the page itself wrote before the
+visitor's, or a second injection point.
 
 ⚠ **The scanner must stay linear on a hostile page**, and on Hermes linear is not
 enough: count the calls. Every construct it reads — a comment, a raw-text body, a
@@ -1032,8 +1036,8 @@ spent 0.5 s on one `<meta>` holding `= ` 512 K times. Since 2026-11-26 that is 1
 
 So the walk (`scanTags`) makes a call or two per tag and crosses everything between in
 one native call: the next `<` by `indexOf`, a run of text `<`s by one regex, a tag name
-by char codes, and a name is turned into a string only if its first letter and length
-could make it one the walk acts on. A closer is searched once and jumped past, and a
+by char codes, and a name is compared in place, never sliced: its first letter and
+length pick the names it could be, and only those are compared. A closer is searched once and jumped past, and a
 missing one ends the read. The `>` that ends a tag is the first one **outside a quoted
 value**, as the HTML tokenizer has it: a tag with no quote before its first `>` ends
 there (the next `"` and `'` are kept until the walk passes them, so no stretch is
@@ -1048,10 +1052,11 @@ so a name with no `=` is consumed rather than backtracked through, and reads at 
 The specs pin each hostile shape twice, **the small one first**: at 64 KB against
 50 ms, then at the full cap against a 250 ms budget (a few ms linear on V8, 0.4–14 s
 under the old regexes). A synchronous call can't be interrupted by jest's timeout, so
-the order is the point: a quadratic revert fails the 64 KB check in about a second and
-the full-cap run never starts. With the full cap first, one revert held the expo suite
-for 188 s before it failed. The shared suite (`scan-meta.spec.ts`) has its own 64 KB
-cases, so a revert in the walk fails where the walk lives. Neither runs Hermes, so
+the order is the point: a quadratic revert fails a 64 KB check and the full-cap run
+never starts. With the full cap first, one revert held the expo suite for 188 s before
+it failed; now it fails in ~15 s there (the expo suite still runs its earlier cases at
+the cap first), and in ~1 s in the shared suite (`scan-meta.spec.ts`), which has its own
+64 KB cases, so a revert in the walk fails fast where the walk lives. Neither runs Hermes, so
 neither can see a revert to a call per `=`; the Hermes figures above are the record.
 
 The regex spelling is one more tripwire. A body matched lazily is `.*?` under

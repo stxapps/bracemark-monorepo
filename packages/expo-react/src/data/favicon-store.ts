@@ -40,8 +40,8 @@
 // the write's own transaction, ahead of the file, as data/mutations.ts's
 // writeFile has it.
 //
-// ICONS CACHED BEFORE THE SIZE CHECK are re-checked ONCE PER INSTALL, before any icon
-// is handed out (`whenCachedFaviconsChecked`). Both fillers gate on the decode ceiling
+// ICONS CACHED BEFORE THE SIZE CHECK are re-checked ONCE PER INSTALL, every icon file
+// on disk, before any icon is handed out (`whenCachedFaviconsChecked`). Both fillers gate on the decode ceiling
 // since 2026-11-26 (`@stxapps/shared` extract/favicon.ts), but an `ok` row never
 // expires, and an oversized icon stored before then would keep its full-size decode
 // on iOS for good. Web re-checks on every read, because there the bytes are in the
@@ -173,18 +173,19 @@ export async function putFaviconNone(username: string, host: string): Promise<vo
 // leaves it: what it says — no icon here predates the size check — stays true when
 // there are no icons. Bump the suffix to run the re-check again for a new rule.
 const CHECKED_MARKER = 'bracemark-favicons.checked-1';
-// Icons read between yields to the JS thread. Each is a file read (an icon is ~1–2 KB,
-// at most MAX_FAVICON_BYTES) and a header read.
+// Icon files read between yields to the JS thread. Each is a file read (an icon is
+// ~1–2 KB, at most MAX_FAVICON_BYTES) and a header read.
 const RECHECK_BATCH = 25;
 
 let recheck: Promise<void> | undefined;
 let rechecked = false;
 
-// Resolves once no icon on this device is past the decode ceiling: at once after the
-// first run on this install (the marker), else when the run ends. readFavicon and
-// readFavicons wait on it, so the first answer after an update already excludes such an
-// icon. A run that fails resolves too — icons are decoration, and the next launch runs
-// it again, since the marker is written only at the end.
+// Resolves once no icon file on this device is past the decode ceiling: at once after
+// the first complete run on this install (the marker), else when the run ends.
+// readFavicon and readFavicons wait on it, so the first answer after an update already
+// excludes such an icon. A run that fails resolves too, and opens the hook's on-disk
+// branch for the session — icons are decoration, and the next launch runs it again,
+// since the marker is written only after a complete run.
 export function whenCachedFaviconsChecked(): Promise<void> {
   if (recheck === undefined) {
     if (new File(Paths.document, CHECKED_MARKER).exists) {
@@ -212,36 +213,59 @@ export function cachedFaviconsChecked(): boolean {
   return rechecked;
 }
 
-// Drop every `ok` icon whose raster header is past the decode ceiling, row and file
-// together, then write the marker. A dropped host reads as never fetched, so it is asked
-// for again and its answer goes through the filler's gate. Each host's read, verdict and
-// delete run with no `await` between them, so a filler can't land fresh bytes in the
-// middle and have them deleted; the yields come between hosts.
+// Drop every icon FILE whose raster header is past the decode ceiling, with its `ok` row,
+// then write the marker. It walks the directory, not the rows, because the row hook shows
+// whatever file is on disk while a verdict is in flight: an orphan file with no row — left
+// by a wipe killed between the table delete and clearFaviconFiles — is shown as readily as
+// one with a row. A dropped host reads as never fetched, so it is asked for again and its
+// answer goes through the filler's gate. A file that can't be read is dropped too: it is
+// not an icon anything here can vouch for. Each file's read, verdict and delete run with
+// no `await` between them, so a filler can't land fresh bytes in the middle and have them
+// deleted; the yields come between files. Only a drop that itself fails withholds the
+// marker, so the next launch tries again.
 export async function recheckCachedFavicons(): Promise<void> {
-  const hosts = getDb()
-    .select({ host: favicons.host })
-    .from(favicons)
-    .where(eq(favicons.status, 'ok'))
-    .all()
-    .map((row) => row.host);
-  for (const [i, batch] of chunk(hosts, RECHECK_BATCH).entries()) {
+  const dir = faviconFilesDir();
+  const icons = dir.exists
+    ? dir.list().filter((entry): entry is File => entry instanceof File)
+    : [];
+  let complete = true;
+  for (const [i, batch] of chunk(icons, RECHECK_BATCH).entries()) {
     if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
-    for (const host of batch) {
+    for (const file of batch) {
       try {
-        dropIfOversized(host);
+        dropIfOversized(file);
       } catch {
-        // One unreadable file is not a reason to leave the rest unchecked.
+        complete = false;
       }
     }
   }
-  new File(Paths.document, CHECKED_MARKER).write('');
+  if (complete) new File(Paths.document, CHECKED_MARKER).write('');
 }
 
-function dropIfOversized(host: string): void {
+// The host a file in the icon directory belongs to (faviconFileFor's encoding), or
+// undefined for a name that encoding can't produce.
+function hostOfFile(file: File): string | undefined {
+  try {
+    return decodeURIComponent(file.name);
+  } catch {
+    return undefined;
+  }
+}
+
+function dropIfOversized(file: File): void {
   getDb().transaction((tx) => {
-    const file = faviconFileFor(host);
-    if (!file.exists || !isOversizedRasterIcon(file.bytesSync())) return;
+    // A filler or a wipe may have replaced or removed it since the listing.
+    if (!file.exists) return;
+    let oversized: boolean;
+    try {
+      oversized = isOversizedRasterIcon(file.bytesSync());
+    } catch {
+      oversized = true;
+    }
+    if (!oversized) return;
+    const host = hostOfFile(file);
     file.delete();
+    if (host === undefined) return;
     tx.delete(favicons)
       .where(and(eq(favicons.host, host), eq(favicons.status, 'ok')))
       .run();
@@ -250,8 +274,10 @@ function dropIfOversized(host: string): void {
 
 // Remove every cached icon file — the file-system half of the `favicons` table
 // wipe (clear-data, delete-all-data), mirroring clearDataFiles: tables first,
-// so a crash in between leaves orphan files no row points at, invisible to the
-// app and removed by the next wipe or overwrite.
+// so a crash in between leaves orphan files no row points at, removed by the next
+// wipe or overwrite. Not invisible: the row hook shows a file on disk while its host's
+// verdict is in flight (hooks/use-favicon-uri.ts) — which is why the one-time re-check
+// above walks the files, not the rows.
 export function clearFaviconFiles(): void {
   const dir = faviconFilesDir();
   if (dir.exists) dir.delete();

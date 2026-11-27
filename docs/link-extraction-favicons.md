@@ -171,16 +171,22 @@ default" falls out for free — a fresh install fetches no favicons anywhere, pe
   ⚠ **Icons cached before the size check are re-checked**, because an `ok` row never
   expires and the gate only sees new writes: an oversized icon stored before 2026-11-26
   would otherwise keep its full-size decode for good. The check is `isOversizedRasterIcon`
-  (raster only, magic bytes and a header, no text decode). **Web** runs it in
+  (raster only, magic bytes and a header — a GIF walked to its trailer — no text
+  decode). **Web** runs it in
   `readFavicon` on every read, since the bytes are in the row: an `ok` row that fails
   reads as never resolved, is never handed to an `<img>`, and is fetched again through
   the gate. **Expo** keeps the bytes in files, and reading every file on every mount is
   what split storage avoids, so its store re-checks **once per install**
   (`whenCachedFaviconsChecked`): `readFavicon` and `readFavicons` wait for it, the row
-  hook shows no on-disk icon until it has run, and it drops each failing icon (row and
-  file) and then writes `bracemark-favicons.checked-1` beside the icon directory. A run
-  that fails leaves no marker and runs again on the next launch. To re-check for a new
-  rule, bump the marker's suffix.
+  hook shows no on-disk icon until it has run, and it drops each failing icon (file, and
+  its `ok` row) and then writes `bracemark-favicons.checked-1` beside the icon directory.
+  It walks the **files**, not the rows: the row hook shows whatever file is on disk while
+  a verdict is in flight, and an orphan with no row — what a wipe leaves when it is killed
+  between the table delete and the file delete — would be shown as readily as any other.
+  A file it can't read is dropped too, since nothing can vouch for it. A run where a drop
+  itself fails, or that fails outright, writes no marker and runs again on the next
+  launch; one that fails outright still lets icons show for that session. To re-check
+  for a new rule, bump the marker's suffix.
 
   Web's render path also has to declare what it decodes: an `<img>` content-sniffs
   raster bytes from a typeless object-URL blob but will NOT sniff SVG, so

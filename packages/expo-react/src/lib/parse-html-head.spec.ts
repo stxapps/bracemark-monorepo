@@ -132,6 +132,16 @@ describe('parseHtmlHead', () => {
     });
   });
 
+  // The icons are the head's even when the head declared none: a body `<link rel=icon>`
+  // is where a visitor's markup sits, not where a site declares its favicon.
+  it('never takes a body icon for the favicon, even when the head has none', () => {
+    const collected = parseHtmlHead(`
+      <head><title>T</title></head>
+      <body><meta property="og:title" content="Body"><link rel="icon" href="https://evil.example/i.png"></body>
+    `);
+    expect(collected).toEqual({ docTitle: 'T', ogTitle: 'Body' });
+  });
+
   // YouTube's watch pages: og:title ~850 KB in, inside a head the size of its inline
   // data — past the old 256 KB cap, under MAX_HEAD_CHARS.
   it('reaches og tags ~850 KB into a long head', () => {

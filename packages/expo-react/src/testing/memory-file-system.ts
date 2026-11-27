@@ -91,6 +91,12 @@ export class Directory extends FileSystemNode {
 }
 
 export class File extends FileSystemNode {
+  // The last path segment, as the native `name` (data/favicon-store.ts maps an icon file
+  // back to its host by it).
+  get name(): string {
+    return this.uri.slice(this.uri.lastIndexOf('/') + 1);
+  }
+
   get parentDirectory(): Directory {
     return new Directory(parentOf(this.uri));
   }

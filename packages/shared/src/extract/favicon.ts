@@ -74,8 +74,9 @@ export function isRenderableIconBytes(bytes: Uint8Array): boolean {
 
 // The size half alone: a RASTER icon whose header can't be read or claims more than
 // FAVICON_MAX_DECODE_PIXELS. False for anything that isn't a raster image, SVG included.
-// Reads magic bytes and a header only, and decodes no text, so a store can run it over
-// every icon it hands out. That is how icons cached before the size check existed
+// Reads magic bytes and a header (for a GIF, every block to its trailer — at most
+// MAX_FAVICON_BYTES), and decodes no text, so a store can run it over every icon it
+// hands out. That is how icons cached before the size check existed
 // (2026-11-26) are re-checked: web's `readFavicon` on every read, expo's favicon store
 // once per install (docs/link-extraction-favicons.md, _what counts as
 // an icon_).

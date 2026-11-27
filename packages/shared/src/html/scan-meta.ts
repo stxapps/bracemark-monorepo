@@ -133,6 +133,13 @@ function tagEnd(text: string, from: number): number {
 // a raw-text element, comment or attribute in the template's content: a `<meta>` after
 // it is then read as the page's (docs/link-extraction.md, _what the scanner still
 // reads differently_).
+//
+// Inside `<svg>`/`<math>` none of these is raw text to the DOM, only to this scanner: a
+// `<meta>` inside such an element is missed, and a comment or quote opened in its
+// content and closed past its end tag (`<svg><style><!--</style><meta …>-->`) hides a
+// `<meta>` from the DOM that is collected here. Both need the page's own foreign markup
+// around a visitor's text (docs/link-extraction.md, _what the scanner still reads
+// differently_).
 const RAW_TEXT = new Set([
   'script',
   'style',
@@ -381,8 +388,8 @@ export interface ScanHtmlMetaOptions {
   // m.youtube.com, for one, closes its head after 5 KB and declares og:title
   // ~575 KB later, in the body. The `<title>` is read from the head either way, so an
   // SVG's `<title>` in the body is not taken for the page's — when the page closes its
-  // head. With no `</head>` (an optional tag) the whole input is the head, and an SVG
-  // `<title>` before any other is taken.
+  // head. With no `</head>` (an optional tag) the whole input is the head, and an SVG or
+  // MathML `<title>` before any other is taken.
   through: 'head' | 'document';
 }
 

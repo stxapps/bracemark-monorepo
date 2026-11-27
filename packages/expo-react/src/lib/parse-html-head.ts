@@ -38,8 +38,8 @@ import {
 // `TextDecoder` is JavaScript, ~0.4 s per MiB on an M1 (measured 2026-11-26), where the
 // scan of an honest markup-dense MiB is ~55 ms. Hence the two-step read. A page that
 // needs the whole cap (YouTube's, or a hostile one) pays ~0.4 s to decode it and up to
-// ~0.28 s to scan the worst shape found — one walk, head and body together (measured
-// 2026-11-27; ~0.73 s end to end); perhaps three or four times that on a low-end
+// ~0.33 s to scan the worst shape found — one walk, head and body together (measured
+// 2026-11-27; ~0.78 s end to end); perhaps three or four times that on a low-end
 // Android phone. Each such read follows its own page fetch (CONCURRENCY in
 // device-link-previews.ts), so they never run back to back.
 export const MAX_HEAD_CHARS = 1024 * 1024;

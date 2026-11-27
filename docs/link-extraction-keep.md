@@ -1154,8 +1154,8 @@ covers the pages we never copied; it is the reason page copy can wait.
   GIF by every frame, a favicon against its own ceiling — and an article's decodes run
   one at a time** (_the decode's memory_). Drop the first and a 76 KB PNG costs a 1.6 GB
   decode; drop the second and three large photos triple the peak. A favicon cached
-  before the ceiling existed is sized by the store's one-time re-check before any icon
-  is shown ([link-extraction-favicons.md](./link-extraction-favicons.md), _what counts as an
+  before the ceiling existed is sized by the store's one-time re-check of every icon
+  file before any icon is shown ([link-extraction-favicons.md](./link-extraction-favicons.md), _what counts as an
   icon_).
   And nothing that decodes a fetched image may use expo-image's `loadAsync`: it leaves a
   plaintext copy in a disk cache that sign-out never clears.
