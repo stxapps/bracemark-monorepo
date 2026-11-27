@@ -15,7 +15,7 @@ BRACEMARK_EXTENSION_ID = $(BRACEMARK_APP_ID).safari-extension
 // which live in apps/bracemark-expo/app.config.ts. docs/architecture.md,
 // _project versions_.
 MARKETING_VERSION = 1.0.0
-CURRENT_PROJECT_VERSION = 1
+CURRENT_PROJECT_VERSION = 2
 
 // macOS 15, the oldest macOS that gets the current Safari (Safari 27 ships for
 // Sequoia and Tahoe, as of 2026-11), so every Mac that can install this has a
