@@ -80,8 +80,13 @@ export const STORE_LIMITS = {
   /** A subscription's listing. Play has no group; `benefits` is a count, the rest characters. */
   playSubscription: { name: 55, description: 80, benefit: 40, benefits: 4 },
   play: { title: 30, shortDescription: 80, fullDescription: 4000 },
-  /** One manifest serves both browsers, so each budget is the smaller of the two. */
-  browserExtension: { name: 45, description: 132 },
+  /**
+   * One manifest serves every browser, so each budget is the smallest of them. The
+   * description's is Safari's: App Store Connect refuses an upload whose Safari web
+   * extension says more than 112 characters (error 90849, met on the first Mac upload,
+   * 2026-11-27). Chrome's 132 was the floor before it.
+   */
+  browserExtension: { name: 45, description: 112 },
   /** The dashboard's Store listing tab. Title and summary come from the manifest. */
   chromeWebStore: { description: 16000 },
   firefoxAddons: { summary: 250 },
@@ -313,7 +318,7 @@ Privacy Policy: https://bracemark.com/privacy`;
 export const BROWSER_EXTENSION_LISTING = {
   name: APP_STORE.name,
   description:
-    'Save the tab you’re reading in two clicks. Bracemark encrypts every link in your browser before it syncs — only you can read it.',
+    'Save the tab you’re reading in two clicks. Bracemark encrypts every link in your browser before it syncs.',
 } as const;
 
 // The browser extension's long description. It is PASTED into the Chrome Web Store
