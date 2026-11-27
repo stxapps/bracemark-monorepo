@@ -619,13 +619,18 @@ there, full screen and in Split View, before a submission. App Store Connect →
 _Pricing and Availability_ also offers the iPad build to Apple silicon Macs and
 Apple Vision Pro by default, and neither has been run.
 
-**What still says phone-only, on purpose, until the release ships.** The
-marketing site says phone-only in three places: the FAQ's `platforms` and
-`need-extension` answers, and the home page capture card (`app/page.tsx`,
-"Phone"). The site deploys on its own schedule, so changing them in this commit
-would claim tablet support before any store carries it ([brand-assets.md](./brand-assets.md),
-_the source — what we may claim_). Change them when the first tablet-capable build
-is live.
+**What still says phone-only — now due.** The marketing site was left saying
+phone-only until a tablet-capable build was live, because the site deploys on its
+own schedule and changing it with this commit would have claimed tablet support
+before any store carried it ([brand-assets.md](./brand-assets.md), _the source —
+what we may claim_). Both stores carry one now: the App Store since 1.4.1, live
+2026-11-26 (`ios/1.4.1-1`, a universal build with iPad screenshots), and Play
+before it. The places to change: the FAQ's `platforms` answer and the comment
+above it (`src/content/faq.tsx`: "the iPhone app opens in a phone-sized window",
+"On an Android tablet or a Chromebook, use the web app"), `/docs/get-the-apps`
+(its first paragraph and its OS paragraph), the `need-extension` answer, and the
+home page capture card (`app/page.tsx`, "Phone"). Chromebook stays a web-app
+answer until it has been run.
 
 **The OS floors: iOS 26 and Android 13 (API 33).** Both are in the
 `expo-build-properties` entry. The iOS share extension copies the app target's

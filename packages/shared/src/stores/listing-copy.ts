@@ -129,13 +129,15 @@ export const APP_STORE = {
    * with NO spaces (a space is an indexed character), singular forms only, and
    * never a word already in `name` or `subtitle`: Apple indexes those separately,
    * so "private", "bookmarks", "link", "encrypted" and "device" here would be
-   * wasted budget. "read" returned when it left the subtitle.
+   * wasted budget. "read" returned when it left the subtitle. "saver" sits beside
+   * "save" because Apple doesn't match one to the other, and "link saver" is a
+   * search of its own.
    *
    * No competitor names. "pocket", "raindrop" and "pinboard" are the obvious
    * additions and all three are trademarks — Apple rejects the build for it
    * (guideline 2.3.7) rather than just dropping the term.
    */
-  keywords: 'zero,knowledge,e2ee,secure,vault,later,save,url,tab,offline,sync,manager,read',
+  keywords: 'zero,knowledge,e2ee,secure,vault,later,save,saver,url,tab,offline,sync,manager,read',
 
   /**
    * The one field Apple lets us change without a review, which makes it the only
