@@ -133,11 +133,19 @@ export const APP_STORE = {
    * "save" because Apple doesn't match one to the other, and "link saver" is a
    * search of its own.
    *
+   * "tag" and "list" name what ships, in the app's own words. "folder" is the word
+   * someone coming from browser bookmarks types for a list. It is barred as a
+   * synonym in prose (docs/brand-assets.md, _terminology_), but this field is not
+   * prose, for the reason that page gives for keeping `zero,knowledge` here: a
+   * search term matches a query and makes no claim. 99 of 100 bytes; adding a
+   * term now means dropping one.
+   *
    * No competitor names. "pocket", "raindrop" and "pinboard" are the obvious
    * additions and all three are trademarks — Apple rejects the build for it
    * (guideline 2.3.7) rather than just dropping the term.
    */
-  keywords: 'zero,knowledge,e2ee,secure,vault,later,save,saver,url,tab,offline,sync,manager,read',
+  keywords:
+    'zero,knowledge,e2ee,secure,vault,later,save,saver,url,tab,offline,sync,manager,read,tag,list,folder',
 
   /**
    * The one field Apple lets us change without a review, which makes it the only
