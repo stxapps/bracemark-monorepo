@@ -539,15 +539,15 @@ newer than the declared minimum (`KEY_FIREFOX_*UNSUPPORTED_BY_MIN_VERSION`).
 
 `npm run zip` and `npm run zip:firefox` from `apps/bracemark-extension` build the
 Chrome Web Store and Firefox Add-ons packages, and record the commit each came
-from. Uploads are by hand. After releasing, `npm run tag:chrome` and
-`npm run tag:firefox` tag that commit, however far `HEAD` has moved
+from. Uploads are by hand. Once each upload is submitted for review,
+`npm run tag:chrome` and `npm run tag:firefox` tag that commit, however far `HEAD` has moved
 ([hosting.md](./hosting.md#which-build-is-in-a-store--store-tags), _which build is
 in a store_). Plain `wxt zip` records nothing, and neither target may be cached by
 Nx, for the reason that section gives.
 
 **Microsoft Edge Add-ons takes the Chrome package as it is.** `npm run zip:edge`
 runs the same `wxt zip` and writes the same `-chrome.zip`, under its own record.
-After Edge releases it, `npm run tag:edge` tags it `edge/<version>`. The record
+Once it is submitted in Partner Center, `npm run tag:edge` tags it `edge/<version>`. The record
 and the tag are separate from Chrome's because each store reviews on its own
 schedule, and Chrome can ship a build while Edge still has the one before it. When one
 build goes to both stores, run `zip:edge` after `zip`. Neither rebuild changes a
@@ -597,7 +597,7 @@ Extension" target copies that folder into the appex. From
 - `npm run bundle` — the App Store build: production api (the script refuses
   anything else), Release archive in `build/`, build number checked against App
   Store Connect, commit recorded (`store-release.sh`).
-- `npm run upload`, then after release `npm run tag` (`macos/<version>-<build>`,
+- `npm run upload`, then once it is submitted for review `npm run tag` (`macos/<version>-<build>`,
   [hosting.md](./hosting.md#which-build-is-in-a-store--store-tags)).
 
 **What works unchanged:** the popup and options page draw as in Chrome; sign-in,
@@ -676,6 +676,12 @@ reloads and rebuilds; `activeTab` reads; save, and sync both ways.
   installs on macOS 15 and up, the oldest macOS the current Safari ships for, so
   in practice that is the floor; nothing below 26 has run.
 
+**App Store Connect checks the manifest itself.** A Safari web extension's
+`description` must be 112 characters or fewer, and the upload is refused with
+error 90849 otherwise. Neither Chrome nor Firefox has that limit, so it is now
+the shared budget (`STORE_LIMITS.browserExtension` in `listing-copy.ts`). A
+refused upload still uses up its build number.
+
 **Traps in the Xcode project**, none of which fails a build:
 
 - ⚠ **Re-sign after the copy.** The copy phase changes the appex's files after
@@ -705,12 +711,14 @@ permissions ([app-drivers.md](./app-drivers.md)).
   iOS app's record (universal purchase); App Store Connect needs the macOS
   platform added to that record, and the first upload creates the macOS signing
   profiles (`macos-upload.sh`). Export compliance is answered there as for iOS.
-- **Not run:** a production build, App Review, the library-full screen (a free
-  library at its cap), Safari on iPhone and iPad (a target inside
-  `bracemark-expo`, not this app).
+- **Not run:** App Review, the library-full screen (a free library at its cap),
+  Safari on iPhone and iPad (a target inside `bracemark-expo`, not this app).
 
 **Run by hand on 2026-11-27**, staging, Safari 27.2: sign-in in the popup; a free
 account's save, with no _Keep a copy_ row and no options section; sign-out; a Plus
 account's save with the read-mode copy kept on save and the screenshot on a tap,
 both opened in bracemark-web's reader; the Plus options switches; the saved link
-and its cover in bracemark-web.
+and its cover in bracemark-web. The same day, the App Store archive of 1.0.0 (2)
+ran against production through `EXT-RELEASE-004`'s step 4 and the Plus copies:
+_Allow Bracemark to connect_, Safari's own dialog, Always Allow, sign-in, saves
+with their covers, and both copies in production's reader.

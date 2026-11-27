@@ -1418,10 +1418,10 @@ move it is a rebuild that matches the served bytes:
 
 The commit that bumps a version is not the commit that ships: a bump is followed
 by testing and fixes, and the build comes from wherever that ends. So the bump
-commit records when the number moved, and a tag records what went out, in
-`tools/scripts/store-release.sh`:
+commit records when the number moved, and a tag records what was sent to the
+store, in `tools/scripts/store-release.sh`:
 
-| store            | tag                               | build            | after releasing       |
+| store            | tag                               | build            | after submitting      |
 | ---------------- | --------------------------------- | ---------------- | --------------------- |
 | App Store        | `ios/<version>-<buildNumber>`     | `ios:bundle`     | `npm run ios:tag`     |
 | Google Play      | `android/<version>-<versionCode>` | `android:bundle` | `npm run android:tag` |
@@ -1438,7 +1438,7 @@ Safari build inside it keeps the browser extension's own version.
 
 ```bash
 git log firefox/1.1.0..firefox/1.2.0 -- apps packages   # what a release contained
-git diff ios/1.2.0-1 HEAD -- apps packages              # what is not out yet
+git diff ios/1.2.0-1 HEAD -- apps packages              # what is not submitted yet
 ```
 
 The name is the store's own number rather than a time, because that is what a
@@ -1447,14 +1447,20 @@ reused number, so the name cannot collide. Each store has its own namespace
 because each gets its own artifact on its own schedule: an iOS build 2 can carry
 a fix Android never needed. Two tags on one commit is normal.
 
-**A tag here means released**, because the command is run after releasing. A
-build a store rejects never gets one. Whether a build is live _now_ is still a
-question for the console.
+**A tag here means uploaded and submitted.** Whoever uploads a build runs its tag
+command as soon as the submission for review goes through, not after the store
+releases it, so a tag never waits on a review and cannot be forgotten in the
+days one takes. Tagging stays its own command for every store, never the last
+step of an upload script. A build the store then rejects keeps its tag: the
+build that replaces it has a new number, which every store requires, and its
+own tag. So the tags of one version can include a build nobody got, and which
+build a store is serving is a question for its console. With automatic release
+the two meanings differ only there.
 
 **The commit is recorded at build time, not read at tag time.** A deploy can tag
 `HEAD` because it builds and ships in one run. A store release cannot, since the
-upload is a separate step and review takes days, so `HEAD` at tag time is usually
-some later commit, and a tag on it would be wrong with nothing to say so. Each
+upload and the submission are separate steps, most of them by hand, so `HEAD` at
+tag time can be a later commit, and a tag on it would be wrong with nothing to say so. Each
 build command therefore wraps its build and writes a gitignored
 `<store>.store-build` beside the artifact, holding the tag, the commit and the
 time. The tag command reads that, however much later it runs. The version and
@@ -1463,7 +1469,7 @@ not from `app.config.ts`, so the tag names what the artifact carries.
 
 **Run the tag command before the next build of a different version.** The record
 holds the last successful build, and is the only place its commit is written
-down. A build that replaces an untagged release warns, and prints the `git tag`
+down. A build that replaces an untagged build warns, and prints the `git tag`
 line that records it by hand. A failed build leaves the record alone.
 
 **It holds the last build, not the last upload**, so a rebuild under the same
@@ -1473,14 +1479,14 @@ unless `--yes` is passed.
 
 **What refuses, and when.** A dirty tree, or a tree that changed during the build,
 is a warning at build time, because a trial build is a normal thing to want, and
-a refusal at tag time, because no commit then holds what shipped. The fix is to
-commit, rebuild, and release that build. Unlike a production deploy there is no
+a refusal at tag time, because no commit then holds what was sent. The fix is to
+commit, rebuild, and submit that build. Unlike a production deploy there is no
 `--allow-dirty`. The tag command also refuses a tag that already exists and a
 commit no longer in the branch's history, meaning it was amended or rebased.
 
-A refusal at tag time comes after the build is live, so `ios:upload` makes the
-same check first, with `store-release.sh check ios`. It also refuses an archive
-that does not match the record, which is one built without `ios:bundle`. The other
+A refusal at tag time would come after the build is submitted, so `ios:upload`
+and the Mac app's `upload` make the same check first, with `store-release.sh check`. It also refuses an archive
+that does not match the record, which is one built without its bundle script. The other
 four uploads are by hand, so nothing stands between the build and the console, and
 the warning at the end of the build is the last word: read it before uploading.
 
@@ -1504,7 +1510,7 @@ does not have yet stays local, and goes out with the next production deploy or
 store tag. A pushed tag is just as public and permanent, and just as much the
 operator's record rather than a claim about the bytes in a store.
 
-**Releases from before this script have no record**, and the command says so. Tag
+**Builds from before this script have no record**, and the command says so. Tag
 one by hand only when its commit is known for certain; a guessed tag is worse
 than none.
 

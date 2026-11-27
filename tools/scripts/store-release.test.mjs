@@ -198,7 +198,7 @@ describe('tag', () => {
 
   it('keeps edge apart from chrome, though both ship the same package', () => {
     // One `wxt zip` serves both stores, but each reviews on its own schedule.
-    // A Chrome rebuild must not move the commit an Edge release gets tagged at.
+    // A Chrome rebuild must not move the commit an Edge submission gets tagged at.
     const f = fixture();
     const forEdge = f.head();
     assert.equal(f.build('edge').status, 0);
@@ -321,7 +321,7 @@ describe('build', () => {
     assert.equal(f.tagged('chrome/1.2.0'), good);
   });
 
-  it('says so when a different release is about to lose its only record', () => {
+  it('says so when a different build is about to lose its only record', () => {
     const f = fixture();
     const old = f.head();
     f.build('chrome');
@@ -346,7 +346,7 @@ describe('build', () => {
     assert.doesNotMatch(f.build('chrome').stderr, /never tagged/);
   });
 
-  it('warns when the number has already been released', () => {
+  it('warns when the number has already been submitted', () => {
     const f = fixture();
     f.build('chrome');
     f.tag('chrome');
@@ -432,7 +432,7 @@ describe('android-bundle.sh', () => {
     assert.equal(f.tagged('android/1.2.0-5'), f.head());
   });
 
-  it('stops before Gradle when versionCode is not above the highest released one', () => {
+  it('stops before Gradle when versionCode is not above the highest tagged one', () => {
     const f = fixture({ versionCode: 9 });
     git(f.repo, 'tag', 'android/1.1.0-9');
     git(f.repo, 'tag', 'android/1.0.0-2');
@@ -505,11 +505,11 @@ describe('ios-upload.sh', { skip: process.platform !== 'darwin' && 'plutil is ma
     refused(f, /no ios build is recorded/);
   });
 
-  it('refuses a number that has already been released', () => {
+  it('refuses a number that has already been submitted', () => {
     const f = fixture();
     built(f);
     assert.equal(f.tag('ios').status, 0);
-    refused(f, /has been released/);
+    refused(f, /has been submitted/);
   });
 });
 

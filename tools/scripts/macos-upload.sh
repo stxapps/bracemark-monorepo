@@ -2,7 +2,7 @@
 #
 # Signs apps/bracemark-macos/build/Bracemark.xcarchive for the App Store and
 # uploads it, as tools/scripts/ios-upload.sh does for the iOS app. Run
-# `npm run bundle` first; after the release, `npm run tag`.
+# `npm run bundle` first; once it is submitted for review, `npm run tag`.
 #
 # The archive is signed with the developer's Apple Development certificate and no
 # profile (Config/Base.xcconfig). Export re-signs it with automatic signing, and
@@ -36,4 +36,4 @@ asc xcode export \
 
 step "done"
 echo "Bracemark for macOS $VERSION ($BUILD) is on App Store Connect — submit it for review there"
-echo "once it is released: npm run tag"
+echo "once it is submitted for review: npm run tag"

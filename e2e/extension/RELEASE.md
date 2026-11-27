@@ -104,8 +104,12 @@ unchanged, but its review is separate and on its own schedule.
    mode_ and _Screenshot_, and confirm the reader shows the article and the
    picture of the page. Confirm the link appears in the list with its cover.
 7. Sign out of the browser extension and of bracemark-web.
-8. After App Store Connect has processed the build from `npm run upload`, install
-   it with TestFlight, sign in, and repeat step 4 against production.
+8. Run step 4 against production on the build `npm run upload` sent. Install it
+   with TestFlight, or open `build/Bracemark.xcarchive/Products/Applications/Bracemark.app`
+   in `apps/bracemark-macos` (the same build before App Store re-signing), then
+   quit and reopen Safari, which otherwise keeps the build it already loaded.
+   Confirm the popup opens on _Allow Bracemark to connect_ for `api.bracemark.com`
+   and that _Create an account_ opens `app.bracemark.com`.
 
 There is no automated Safari run. Playwright's WebKit is not Safari and cannot
 load a Safari web extension, and `safaridriver` runs separate automation windows

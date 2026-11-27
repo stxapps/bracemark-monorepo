@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 #
 # Which commit a store build came from, and the tag that records it once the
-# build is released. docs/hosting.md, _which build is in a store_.
+# build is uploaded and submitted. docs/hosting.md, _which build is in a store_.
+# "Release" in the name is the whole process of sending a build to a store, from
+# build to submission; it is not the store's release, which no step here waits for.
 #
 #   tools/scripts/store-release.sh build <store> -- <build command...>
 #   tools/scripts/store-release.sh check <store>
@@ -25,10 +27,10 @@
 # WHY THERE ARE TWO STEPS
 #
 # A deploy can tag HEAD because it builds and ships in one run
-# (tools/scripts/deploy-commit.sh). A store release cannot: the upload is a
-# separate step, most of them by hand, and review takes days, so by the time a
-# build is released HEAD has moved on and a tag on it would name the wrong commit.
-# Nothing would say so. So `build` wraps the build and writes down what it was
+# (tools/scripts/deploy-commit.sh). A store release cannot: the upload and the
+# submission are separate steps, most of them by hand, so by the time a build has
+# been submitted HEAD may have moved on, and a tag on it would name the wrong
+# commit. Nothing would say so. So `build` wraps the build and writes down what it was
 # built from, and `tag` reads that, whenever it is run:
 #
 #   <app>/<output dir>/<store>.store-build      (gitignored)
@@ -41,15 +43,22 @@
 # WHAT A TAG SAYS. <store>/<version>, plus the build number where the store has
 # one (ios/1.2.0-1, android/1.2.0-4, macos/1.0.0-1, chrome/1.2.0, edge/1.2.0, firefox/1.2.0): the numbers a
 # bug report, the console and Settings → About all print, read back from the
-# native project or archive the build used rather than from app.config.ts. The
-# tag means RELEASED, because `tag` is run after releasing, so a build a store
-# rejected never gets one.
+# native project or archive the build used rather than from app.config.ts.
+#
+# THE TAG MEANS SUBMITTED. `tag` is run right after the build has been uploaded
+# and submitted for review successfully, by whoever did that, not after the store
+# releases it, so it is never left waiting on a review. A build the store then
+# rejects keeps its tag: the build that replaces it carries a new number, which
+# every store insists on, and gets its own. So the tags of one version can include
+# a build nobody got, and which build a store is serving is a question for its
+# console. `tag` is its own command for every store, never the end of an upload
+# script, so a tag is always a separate, deliberate step.
 #
 # WHEN A BUILD CANNOT BE TAGGED. A dirty tree or a tree that moved during the build
 # is a warning at build time, because a trial build is a normal thing to want, and
-# a refusal at tag time, because a tag has to name a commit that holds what shipped.
-# That refusal comes after the build is live, so `check` makes the same one before
-# an upload. `ios:upload` and macos's `upload` run it; the other four uploads are by hand, so the
+# a refusal at tag time, because a tag has to name a commit that holds what was sent.
+# That refusal would come after the build is submitted, so `check` makes the same
+# one before an upload. `ios:upload` and macos's `upload` run it; the other four uploads are by hand, so the
 # warning at the end of their build is the last word.
 #
 # `build` also warns on release notes `npm run check:release-notes` would reject.
@@ -59,7 +68,8 @@
 # The record is overwritten only by a build that succeeds, so a failed rebuild
 # leaves the record of the last good one. It holds the LAST build, not the last
 # upload, which is why `tag` shows the commit and asks: a rebuild under the same
-# number after uploading would otherwise tag the wrong one.
+# number after uploading would otherwise tag the wrong one. Tagging as soon as the
+# submission goes through keeps that window short.
 #
 # Requires: git, node; plutil (macOS) for ios and macos.
 
@@ -160,7 +170,7 @@ release_tag() {
   fi
 }
 
-# Before the record goes: a different release sitting in it, never tagged, is the
+# Before the record goes: a different build sitting in it, never tagged, is the
 # one way the commit is lost, because this is the last place it is written down.
 warn_untagged_previous() {
   local tag="$1" previous commit
@@ -171,7 +181,7 @@ warn_untagged_previous() {
   [ -z "$(record_value problem)" ] || return 0
   tag_exists "$previous" && return 0
   warn "$previous was built but never tagged, and this build replaces its record.
-       If it was released, record it by hand:
+       If it was submitted, record it by hand:
        git tag $previous $commit && git push origin $previous"
 }
 
@@ -191,7 +201,7 @@ run_check() {
   current="$(release_tag)"
   [ "$recorded" = "$current" ] || die "the $STORE build is $current, but the record says $recorded.
        It was not made by its npm script. Build it again."
-  tag_exists "$recorded" && die "$recorded already exists, so this number has been released. Bump it."
+  tag_exists "$recorded" && die "$recorded already exists, so this number has been submitted. Bump it."
   [ -z "$problem" ] || die "refusing to send $recorded: $problem, so it could never be tagged.
        Commit, build again, and upload that build."
   return 0
@@ -219,7 +229,7 @@ run_build() {
   warn_release_notes
   warn_untagged_previous "$tag"
   if tag_exists "$tag"; then
-    warn "$tag already exists, so this number has been released. Bump it before uploading."
+    warn "$tag already exists, so this number has been submitted. Bump it before uploading."
   fi
 
   built="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -229,10 +239,10 @@ run_build() {
   mv "$RECORD.tmp" "$RECORD"
 
   if [ -n "$problem" ]; then
-    warn "$tag can't be tagged: $problem. Commit, then build again before releasing it."
+    warn "$tag can't be tagged: $problem. Commit, then build again before uploading it."
   else
     note "recorded: $tag → ${commit:0:12}"
-    note "once it is released: npm run $TAG_COMMAND"
+    note "once it is uploaded and submitted: npm run $TAG_COMMAND"
   fi
 }
 
@@ -250,7 +260,7 @@ run_tag() {
   done
 
   [ -f "$RECORD" ] || die "no $STORE build is recorded. Only a build made after this script
-       existed has a record. Rebuild, or tag a past release by hand:
+       existed has a record. Rebuild, or tag a past submission by hand:
        git tag <$STORE/version> <commit> && git push origin <$STORE/version>"
   tag="$(record_value tag)"
   commit="$(record_value commit)"
@@ -260,7 +270,7 @@ run_tag() {
 
   tag_exists "$tag" && die "$tag already exists. Each store build gets one tag — did you mean to bump?"
   [ -z "$problem" ] || die "refusing to tag $tag: $problem. No commit holds exactly what that build
-       was made from. Commit, build again, and release that build instead."
+       was made from. Commit, build again, and submit that build instead."
   git -C "$REPO_ROOT" merge-base --is-ancestor "$commit" HEAD 2>/dev/null \
     || die "$commit is not in this branch's history (amended or rebased?).
        Tag the commit that replaced it by hand: git tag $tag <commit>"
@@ -273,7 +283,7 @@ run_tag() {
 
   if [ "$assume_yes" = false ]; then
     [ -t 0 ] || die "run this in a terminal, or pass --yes if you mean it"
-    printf '    Is this the build you released? A pushed tag is public and permanent. [y/N] '
+    printf '    Is this the build you uploaded and submitted? A pushed tag is public and permanent. [y/N] '
     read -r answer
     [ "$answer" = "y" ] || [ "$answer" = "Y" ] || die "aborted"
   fi

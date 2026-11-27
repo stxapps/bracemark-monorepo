@@ -167,6 +167,13 @@ at the end, because its key and library live in the real profile.
   answers a tick in Settings → Extensions with "Safari detected an app or service
   that interfered with clicking" and asks for Touch ID. Ask for it once: a
   rebuild under the same bundle id keeps it on.
+- ⚠ **Two builds with one bundle id: Safari keeps the one it loaded.** Opening
+  the App Store archive's `Bracemark.app` after a staging build moved
+  `pluginkit` to the archive's copy, but the toolbar went on running staging
+  until Safari was quit and reopened. Check which build is live before testing
+  anything: _Create an account_ opens the web app that build points at. Quitting
+  Safari drops its windows and the App Store Connect session in them, so save
+  the tabs' URLs first.
 - **A rebuild reloads the extension**: its tabs close, its UUID changes, and its
   website access may go back to Ask.
 - **Click the toolbar button with a real mouse click.** A System Events `click`,

@@ -5,7 +5,7 @@
 # ios:upload` from apps/bracemark-expo. docs/expo-build.md, _the npm scripts_.
 #
 #   1. tools/scripts/store-release.sh check ios — a dirty build could never be
-#      tagged, and finding that out after the release is too late.
+#      tagged, and finding that out after submitting is too late.
 #   2. tools/scripts/check-native-bundle.mjs on the archive again — the file
 #      about to leave this Mac, however long ago it was built.
 #   3. `asc xcode export --wait`: generates App Store Connect export options
@@ -52,4 +52,4 @@ asc xcode export \
 
 step "done"
 echo "Bracemark $VERSION ($BUILD) is on App Store Connect — submit it for review there"
-echo "once it is released: npm run ios:tag"
+echo "once it is submitted for review: npm run ios:tag"

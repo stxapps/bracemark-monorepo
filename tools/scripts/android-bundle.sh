@@ -11,7 +11,8 @@
 #      only through a prebuild, and a stale one builds and uploads without a word.
 #   2. versionCode against the highest android/* tag — a read, before the
 #      multi-minute build rather than after Play rejects the upload. A tag means
-#      released, so this cannot see a code that was uploaded and never released.
+#      uploaded and submitted, so this misses only a code that was uploaded and
+#      never tagged.
 #   3. bundleRelease. `--rerun` stays even on a fresh android/: Gradle does not
 #      count the env as an input, so this is what guarantees the JS bundle was
 #      made under this shell's env (docs/expo-build.md, _the npm scripts_).
@@ -45,7 +46,7 @@ npx expo prebuild --clean --platform android
 TAG="$(bash "$SCRIPTS/store-release.sh" name android)"
 CODE="${TAG##*-}"
 
-step "versionCode: $CODE against the released tags"
+step "versionCode: $CODE against the tagged builds"
 HIGHEST=0
 HIGHEST_TAG=""
 while IFS= read -r released; do
@@ -56,8 +57,8 @@ while IFS= read -r released; do
   fi
 done < <(git tag -l 'android/*')
 [ "$CODE" -gt "$HIGHEST" ] ||
-  die "versionCode $CODE is not above $HIGHEST_TAG, which is released — set android.versionCode in apps/bracemark-expo/app.config.ts to $((HIGHEST + 1)) (or higher) and rerun"
-echo "ok — the highest released versionCode is $HIGHEST"
+  die "versionCode $CODE is not above $HIGHEST_TAG, which is already tagged — set android.versionCode in apps/bracemark-expo/app.config.ts to $((HIGHEST + 1)) (or higher) and rerun"
+echo "ok — the highest tagged versionCode is $HIGHEST"
 
 rm -f "$AAB"
 mkdir -p "$OUT"
