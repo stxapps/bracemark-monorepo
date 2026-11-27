@@ -10,6 +10,7 @@ import {
   EDGE_ADDONS,
   FIREFOX_ADDONS_SUMMARY,
   FULL_DESCRIPTION,
+  MAC_APP_STORE,
   PLAY,
   PLAY_SUBSCRIPTION,
   SCREENSHOT_CAPTIONS,
@@ -43,6 +44,13 @@ describe('store listing copy — character budgets', () => {
     ['App Store name', APP_STORE.name, STORE_LIMITS.appStore.name],
     ['App Store subtitle', APP_STORE.subtitle, STORE_LIMITS.appStore.subtitle],
     ['App Store keywords', APP_STORE.keywords, STORE_LIMITS.appStore.keywords],
+    ['Mac App Store keywords', MAC_APP_STORE.keywords, STORE_LIMITS.appStore.keywords],
+    [
+      'Mac App Store promotional text',
+      MAC_APP_STORE.promotionalText,
+      STORE_LIMITS.appStore.promotionalText,
+    ],
+    ['Mac App Store description', MAC_APP_STORE.description, STORE_LIMITS.appStore.description],
     [
       'App Store promotional text',
       APP_STORE.promotionalText,
@@ -190,11 +198,16 @@ describe('Play subscription benefits', () => {
   });
 });
 
-describe('App Store keyword field', () => {
-  const keywords = APP_STORE.keywords.split(',');
+// Both platforms of the one record: each has its own keyword field, and both share
+// the record's name and subtitle.
+describe.each([
+  ['iOS', APP_STORE.keywords],
+  ['macOS', MAC_APP_STORE.keywords],
+])('App Store keyword field (%s)', (_platform, field) => {
+  const keywords = field.split(',');
 
   it('has no spaces — every one is an indexed character', () => {
-    expect(APP_STORE.keywords).not.toMatch(/\s/);
+    expect(field).not.toMatch(/\s/);
   });
 
   it('has no empty or duplicated terms', () => {
@@ -293,7 +306,7 @@ describe('rules that bind every exported string', () => {
 
     // And the enumeration is load-bearing enough that it has to still be there:
     // the strings that carry it are the product's whole argument.
-    expect(EVERY_EXPORTED_STRING.filter(([, v]) => sentenceWithTheClaim(v)).length).toBe(3);
+    expect(EVERY_EXPORTED_STRING.filter(([, v]) => sentenceWithTheClaim(v)).length).toBe(4);
   });
 
   it('lists every readable field beside the bytes, not two of the three', () => {
@@ -320,9 +333,10 @@ describe('the strings Apple reads', () => {
   // and the promotional text is the likeliest place to trip it, because it is the
   // field for launch notes and "now on Android too" is exactly the note someone
   // would write there. FULL_DESCRIPTION is included: Apple reads it too.
-  const appleFields = everyString(APP_STORE, 'APP_STORE').concat([
-    ['FULL_DESCRIPTION', FULL_DESCRIPTION],
-  ]);
+  const appleFields = everyString(APP_STORE, 'APP_STORE').concat(
+    everyString(MAC_APP_STORE, 'MAC_APP_STORE'),
+    [['FULL_DESCRIPTION', FULL_DESCRIPTION]],
+  );
 
   it.each(appleFields)('%s names no other mobile platform (guideline 2.3.10)', (_path, value) => {
     // "on iPhone, iPad and Android" is the natural line for someone to add to a
@@ -336,6 +350,7 @@ describe('the long descriptions', () => {
   it.each([
     ['FULL_DESCRIPTION', FULL_DESCRIPTION],
     ['BROWSER_EXTENSION_FULL_DESCRIPTION', BROWSER_EXTENSION_FULL_DESCRIPTION],
+    ['MAC_APP_STORE.description', MAC_APP_STORE.description],
   ])('%s quotes no price, cap or trial length (they change without a review)', (_name, value) => {
     // Numbers belong in APP_STORE.promotionalText, which Apple lets us edit
     // outside the review cycle. Anything here goes stale on the storefront for as

@@ -362,6 +362,65 @@ We hold no key, so there is no password reset. A recovery code is your second wa
 
 Bracemark is paid for by subscriptions. There is no advertising, no data to sell, and no investor waiting for us to change that.`;
 
+// --- the Mac App Store -------------------------------------------------------
+//
+// The macOS platform of the App Store record APP_STORE describes: apps/bracemark-macos,
+// which carries the browser extension's Safari build. Name and subtitle are the
+// record's, shared with iOS, so only the per-platform fields are here. Pasted into
+// App Store Connect → the macOS version → its en-US localization.
+//
+// Not BROWSER_EXTENSION_FULL_DESCRIPTION, for two reasons that are claims about the
+// Mac app. It quotes CHROME's install warning, which Safari never shows; Safari
+// instead asks once to let the browser extension reach the api host
+// (docs/browser-extension.md, _asking for the api host_). And it sells a Plus
+// feature and the subscriptions, while the Mac app sells nothing and may not point
+// at a purchase anywhere else (docs/browser-extension.md, _no purchase calls to
+// action in Safari_) — the listing keeps the same silence as the app. What the copy
+// promises is what a FREE account gets in Safari, because that is what a reviewer
+// and a stranger installing it will see. The closing links are FULL_DESCRIPTION's,
+// for the same 3.1.2 reason: the record sells subscriptions, even though this
+// platform does not, and they point at terms rather than at a purchase.
+export const MAC_APP_STORE = {
+  /**
+   * The search terms a Mac shopper types for this: "safari" and "extension" lead,
+   * and the rest is APP_STORE.keywords' list less what no longer fits. Same rules —
+   * no spaces, no word from the shared name or subtitle, no competitor. "extension"
+   * is a search term here, not prose, which is why the bare-word rule lets it pass.
+   */
+  keywords:
+    'safari,extension,toolbar,zero,knowledge,e2ee,secure,vault,later,save,saver,url,tab,sync,tag,list',
+
+  promotionalText:
+    'Click the Bracemark button in Safari to save the tab you’re reading. It is encrypted on your Mac before it syncs, with a key your password unlocks.',
+
+  description: `Bracemark is a bookmark manager that cannot read your bookmarks. This Mac app adds the Bracemark browser extension to Safari, and the browser extension saves the tab you’re reading into it.
+
+Open the app once and turn Bracemark on in Safari’s settings. Then click the Bracemark button in Safari’s toolbar, choose a list, add tags or a note if you like, and click Save. The link is encrypted in Safari before it syncs: the address, the title, the tags, the note, the list you filed it in. Your key is unlocked by your password, on your Mac, and never leaves it. Of your library, our servers hold a path, a size, a timestamp, and bytes we have no key to open; the account around it — your username, your public key, your sessions, and your plan — is what we can read.
+
+WHAT THE BROWSER EXTENSION DOES
+• Saves the tab you’re on in two clicks
+• Files it into your lists and tags, the same ones you use everywhere else in Bracemark
+• Picks up the page’s title and image from the tab itself
+• Shows when it last synced, and what is still waiting to
+
+WHAT IT ASKS FOR
+• Access to a tab only when you click the button on it, never to every website you visit
+• Permission to connect to Bracemark’s server, which Safari asks you for once
+• No ads, no trackers, no analytics code
+
+WHERE YOUR LINKS GO
+Everything you save turns up in the Bracemark web app, on any device you sign in on — where you search, pin, import, and export it. Export is in open formats.
+
+YOU’LL NEED AN ACCOUNT
+Sign in with your Bracemark username and password. No account yet? The browser extension opens the web app to create one, and no email address is needed.
+
+WHAT IT COSTS TO BUILD IT THIS WAY
+We hold no key, so there is no password reset. A recovery code is your second way in, and saving it is on you.
+
+Terms of Service: https://bracemark.com/terms
+Privacy Policy: https://bracemark.com/privacy`,
+} as const;
+
 // --- the store screenshots ---------------------------------------------------
 //
 // One line per published screenshot, drawn INTO the picture by the compositor.
