@@ -635,6 +635,12 @@ reloads and rebuilds; `activeTab` reads; save, and sync both ways.
   Always Allow / Allow for One Day) and resolved with the answer. So the popup's
   Continue opens that tab. "Allow for One Day" lapses, and the screen returns.
   Chrome and Firefox never render it (`IS_SAFARI`, `utils/target.ts`).
+- ⚠ **The toolbar icon must not be grayscale.** Safari tints an all-grey icon
+  as a template, so the white tile of `public/icon/*` turned blue on every page
+  the browser extension is active on. The Safari build alone ships
+  `public-safari/icon/*` instead, the same icons with a 1px `--color-signal` ring
+  on the tile (`wxt.config.ts`, `build:publicAssets`;
+  [brand-visuals.md](./brand-visuals.md), _the mark_).
 - **The options page opens as a tab**, whatever `open_in_tab` says, so the
   Safari build alone draws the header the other hosts make redundant
   (`options/Shell.tsx`, `SafariHeader`).

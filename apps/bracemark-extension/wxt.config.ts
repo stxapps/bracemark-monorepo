@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import tailwindcss from '@tailwindcss/vite';
@@ -124,6 +125,27 @@ export default defineConfig({
     'entrypoints:found': (_wxt, infos) => {
       for (let i = infos.length - 1; i >= 0; i--) {
         if (/\.(spec|test)\.[cm]?[jt]sx?$/.test(infos[i].inputPath)) infos.splice(i, 1);
+      }
+    },
+    // SAFARI GETS ITS OWN TOOLBAR ICONS. Safari tints an all-grey toolbar icon as a
+    // template, which turned the white tile blue on every page the browser extension
+    // is active on; the icons under `public-safari/icon/` carry a teal ring that
+    // stops it, and Chrome, Edge and Firefox keep the plain ones. Each file under
+    // `public-safari/` replaces the `public/` file at the same path, so the manifest
+    // is unchanged. Why the ring, and how it was painted: docs/brand-visuals.md,
+    // _the mark_.
+    'build:publicAssets': (wxt, files) => {
+      if (wxt.config.browser !== 'safari') return;
+      const dir = fileURLToPath(new URL('./public-safari/', import.meta.url));
+      for (const entry of readdirSync(dir, { recursive: true, withFileTypes: true })) {
+        if (!entry.isFile() || entry.name.startsWith('.')) continue;
+        const src = join(entry.parentPath, entry.name);
+        const rel = relative(dir, src);
+        const file = files.find((f) => f.relativeDest === rel);
+        // A Safari file with no `public/` twin would ship nowhere — say so, loudly.
+        if (!file || !('absoluteSrc' in file))
+          throw new Error(`public-safari/${rel} replaces nothing in public/`);
+        file.absoluteSrc = src;
       }
     },
     // SAFARI GETS AN EVENT PAGE, NOT A SERVICE WORKER. WXT gives every MV3 build

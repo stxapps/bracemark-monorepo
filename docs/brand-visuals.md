@@ -26,14 +26,14 @@ one-path/`currentColor` invariant and the 428×512 grid it is constructed on. Th
 comment is the source of truth for _what the shape is doing_ and is not repeated
 here; this page owns the inventory and the rules that span files.
 
-**Two source components, one icon file, and 29 raster assets:**
+**Two source components, one icon file, and 33 raster assets:**
 
-| where                                                                                                                                                                                          | what                                                                                                                                                      |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/web-ui/src/components/icons/bracemark-icon.tsx`                                                                                                                                      | the source of truth                                                                                                                                       |
-| `apps/bracemark-expo/src/components/icons/bracemark-icon.tsx`                                                                                                                                  | the RN port — **byte-identical path and viewBox**, colour from `useCSSVariable` because `react-native-svg` takes fill as a prop and has no `currentColor` |
-| `apps/bracemark-macos/App/AppIcon.icon` (`Assets/mark.svg`)                                                                                                                                    | the Mac app icon — **the same path**, in an Icon Composer file; Xcode renders the older-macOS sizes from it                                               |
-| `apps/bracemark-web/public/` (9), `apps/bracemark-web/src/app/` (4), `apps/bracemark-site/src/app/` (4), `apps/bracemark-expo/assets/images/` (8), `apps/bracemark-extension/public/icon/` (4) | 29 PNG/ICO files rendered from that path                                                                                                                  |
+| where                                                                                                                                                                                                                      | what                                                                                                                                                      |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/web-ui/src/components/icons/bracemark-icon.tsx`                                                                                                                                                                  | the source of truth                                                                                                                                       |
+| `apps/bracemark-expo/src/components/icons/bracemark-icon.tsx`                                                                                                                                                              | the RN port — **byte-identical path and viewBox**, colour from `useCSSVariable` because `react-native-svg` takes fill as a prop and has no `currentColor` |
+| `apps/bracemark-macos/App/AppIcon.icon` (`Assets/mark.svg`)                                                                                                                                                                | the Mac app icon — **the same path**, in an Icon Composer file; Xcode renders the older-macOS sizes from it                                               |
+| `apps/bracemark-web/public/` (9), `apps/bracemark-web/src/app/` (4), `apps/bracemark-site/src/app/` (4), `apps/bracemark-expo/assets/images/` (8), `apps/bracemark-extension/public/icon/` (4) + `public-safari/icon/` (4) | 33 PNG/ICO files rendered from that path                                                                                                                  |
 
 ⚠ **The two components must not drift, and nothing enforces it** — no test
 compares the two `d` strings. A retouch of the mark is a **two-file** change plus
@@ -137,6 +137,44 @@ transparency on one file because it looks better in one browser puts a white chi
 behind the mark in bracemark-web's tab and none behind the same mark on the
 toolbar button beside it. The app and PWA tiles are a different class and keep
 their full-bleed square: nothing paints _them_ onto an unknown colour.
+
+⚠ **Safari gets its own four toolbar icons, with a teal ring that must stay
+coloured.** `apps/bracemark-extension/public-safari/icon/16|32|48|128` are the
+files in `public/icon/` plus one thing: the tile's outermost ring — 1px at 16, 32
+and 48, 3px at 128 — is `--color-signal`, `#1c5a60` (`oklch(0.43 0.062 205)`,
+the marketing site's accent). The Safari build swaps them in at the same paths
+(`wxt.config.ts`, `build:publicAssets`), so the manifest does not change and the
+Chrome, Edge and Firefox builds ship `public/icon/` untouched.
+
+Safari draws a toolbar icon in which every pixel is grey as a **template**: it
+multiplies the icon by a tint of its own choosing, so on a page where the browser
+extension is active the white tile came out `(172,250,255)` cyan and the mark
+`(0,29,157)` navy — the whole chip went blue. One coloured ring is enough to make
+Safari paint the icon as shipped: white tile, `#0a0a0a` mark (measured
+2026-11-27, Safari 27.2, macOS 26.7.2). On a page where it is not active, Safari
+greys any icon, coloured or not; that state was never ours. How much colour it
+takes was measured too: a 1px ring of the pale `oklch(0.9 0.028 205)`
+(`#cae4e7`) was already enough, so the accent at full strength sits well clear of
+the threshold. Removing the ring, or "matching" it back to grey or black, brings
+the blue chip back in Safari alone, and nothing else shows it: no browser you can
+drive headless tints.
+
+**Why Safari only.** The ring was tried on all four browsers first. In Chrome and
+Edge on a light toolbar, where the white tile used to vanish, it drew the tile's
+dog-eared outline round the mark, which the owner judged not beautiful. Those
+browsers never tint, so they have no reason to pay for it. This is a split inside
+the favicon class above, but not the mix its ⚠ forbids: every file is still a
+tile, and Safari repaints its toolbar icons anyway, ring or not.
+
+**A retouch of the mark moves eight extension files, not four.** The Safari set
+is derived from `public/icon/`, so re-render that first and repaint the ring on
+it; a forgotten `public-safari/` keeps Safari on the old shape with nothing to
+say so. The ring is **painted on**, per the corner rule above, not re-rendered:
+an edge pixel is mixed towards the teal by `1 − eroded alpha ÷ alpha` (alpha
+eroded by a disk of the ring's width, the canvas edge counting as transparent),
+any pixel that is not tile white (min channel < 250) is skipped, and alpha is
+untouched. So each Safari file differs from its `public/icon/` twin on white tile
+pixels only, with alpha and every mark pixel byte-identical, and that is the check.
 
 ### the lockup
 
