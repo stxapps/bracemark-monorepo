@@ -387,6 +387,34 @@ describe('runDeviceTitleImageBatch', () => {
       expect((await facetOf('l_1'))?.status).toBe('done');
     });
 
+    // A byte ceiling doesn't bound a decode: a PNG whose header claims 20000 × 20000 is
+    // refused before any decoder is handed it (previewFileFromBytes, imageHeaderSize).
+    it('never hands a decoder an image whose header says it is too large', async () => {
+      const huge = Uint8Array.from(PNG);
+      huge.set([0, 0, 0x4e, 0x20, 0, 0, 0x4e, 0x20], 16);
+      let probed = false;
+      mockOnProbe = () => {
+        probed = true;
+      };
+      routes({
+        'https://example.com/a': () =>
+          html('<title>T</title><meta property="og:image" content="https://cdn.example/i.png">'),
+        'https://cdn.example/i.png': () =>
+          new Response(huge as unknown as ResponseBody, {
+            status: 200,
+            headers: { 'content-type': 'image/png' },
+          }),
+      });
+
+      await runDeviceTitleImageBatch(USER, [linkItem('l_1', 'https://example.com/a')], TIER, {
+        optedIn: true,
+      });
+
+      expect(probed).toBe(false);
+      expect((await readExtraction('l_1'))?.imageId).toBeUndefined();
+      expect((await readExtraction('l_1'))?.title).toBe('T');
+    });
+
     // TITLES FIRST is what makes a retryable image failure acceptable: the list already
     // shows the real title while the preview waits for the next drain.
     it.each([429, 500, 503])(
@@ -521,6 +549,28 @@ describe('runDeviceTitleImageBatch', () => {
       });
 
       expect((await readFavicon('example.com'))?.status).toBe('ok');
+    });
+
+    // expo-image decodes an icon at full size on iOS, so the fill gate sizes it from its
+    // header first (shared extract/favicon.ts, FAVICON_MAX_DECODE_PIXELS).
+    it('does not cache a declared icon whose header says it decodes too large', async () => {
+      const huge = Uint8Array.from(PNG);
+      huge.set([0, 0, 0x4e, 0x20, 0, 0, 0x4e, 0x20], 16);
+      routes({
+        'https://example.com/a': PAGE_WITH_OWN_ICON,
+        'https://example.com/icon.png': () =>
+          new Response(huge as unknown as ResponseBody, {
+            status: 200,
+            headers: { 'content-type': 'image/png' },
+          }),
+      });
+
+      await runDeviceTitleImageBatch(USER, [linkItem('l_1', 'https://example.com/a')], TIER, {
+        optedIn: false,
+      });
+
+      expect(requestedUrls()).toContain('https://example.com/icon.png');
+      expect((await readFavicon('example.com'))?.status).not.toBe('ok');
     });
 
     // THE GATE. Without the un-gestured opt-in we are here on a SAVE, which paid for this

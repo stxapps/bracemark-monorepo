@@ -58,10 +58,13 @@ import { FaviconProvider, useFavicon } from './favicon-provider';
 // can only be reached through a throw is asserting nothing about the verdict at all.
 global.TextDecoder = TextDecoder as typeof globalThis.TextDecoder;
 
-// A real PNG signature, and what a host with no /favicon.ico actually serves: an HTML
+// A real PNG signature and IHDR (16 × 16), and what a host with no /favicon.ico actually serves: an HTML
 // error page, which the proxy passes through under the upstream's declared `image/*` (the
 // source header, WHAT THE PROXY DOESN'T DECIDE).
-const iconBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
+const iconBytes = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 16,
+  0, 0, 0, 16,
+]);
 const htmlBytes = Uint8Array.from('<!doctype html><title>404 Not Found</title>', (c) =>
   c.charCodeAt(0),
 );
@@ -277,6 +280,18 @@ describe('the favicon queue', () => {
   // origin's storage quota, permanently.
   it('records `none` when the bytes are not an icon', async () => {
     mockFetchImage.mockImplementation(() => Promise.resolve(htmlBytes));
+    await mount(['example.com']);
+
+    expect(mockPutFaviconNone).toHaveBeenCalledWith('alice', 'example.com');
+    expect(mockPutFavicon).not.toHaveBeenCalled();
+  });
+
+  // The size half of the verdict, at this filler: a real PNG header claiming 20000 × 20000
+  // is an image, and not an icon any decoder should be handed (FAVICON_MAX_DECODE_PIXELS).
+  it('records `none` when the icon claims more pixels than an icon may decode to', async () => {
+    const oversized = Uint8Array.from(iconBytes);
+    oversized.set([0, 0, 0x4e, 0x20, 0, 0, 0x4e, 0x20], 16);
+    mockFetchImage.mockImplementation(() => Promise.resolve(oversized));
     await mount(['example.com']);
 
     expect(mockPutFaviconNone).toHaveBeenCalledWith('alice', 'example.com');

@@ -210,8 +210,9 @@ async function encodeOne(
     const sourceType = sniffImageMime(body.head);
     if (sourceType === undefined) return undefined;
     // Sized from the header before any decoder opens it (header). A frame header past the
-    // head is read off the file — the source in JS once, at most 8 MB, and only for an image
-    // with that much metadata in front of it.
+    // head is read off the file — the source in JS once, at most 8 MB: for an image with
+    // that much metadata in front of it, and for EVERY GIF larger than the head, since a GIF
+    // is sized by walking each frame to its trailer (shared image/header-size.ts).
     const header =
       imageHeaderSize(body.head) ??
       (body.size > body.head.byteLength ? imageHeaderSize(await file.bytes()) : undefined);

@@ -31,8 +31,18 @@ type ResponseBody = ConstructorParameters<typeof Response>[0];
 const HOST = 'github.com';
 
 // Real bytes with real magic numbers, so `isRenderableIconBytes` decides for real.
-const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
-const ICO = new Uint8Array([0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x10, 0x10, 0, 0, 0, 0]);
+// A PNG's signature and IHDR, 16 × 16: the verdict reads the size from it.
+const PNG = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 16,
+  0, 0, 0, 16,
+]);
+// ImageMagick's 16 × 16 icon: its directory, then the bitmap header the size is read from.
+const ICO = Uint8Array.from(
+  Buffer.from(
+    'AAABAAEAEBACAAEAAQCwAAAAFgAAACgAAAAQAAAAIAAAAAEAAQAAAAAAQAAAAAAAAAAAAAAAAgAAAAIAAAAAAP8A',
+    'base64',
+  ),
+);
 const HTML = new TextEncoder().encode('<!DOCTYPE html><html><body>404 not found</body></html>');
 
 let fetchMock: jest.Mock;
@@ -83,6 +93,16 @@ describe('fetchFaviconBytes', () => {
   // path cannot decode, and the `ok` row then says the host is resolved forever.
   it('rejects a 200 whose body is not a decodable image', async () => {
     answers(HTML, { headers: { 'content-type': 'image/x-icon' } });
+
+    expect(await fetchFaviconBytes(HOST)).toBeUndefined();
+  });
+
+  // The size half of the verdict: a real PNG header claiming 20000 × 20000 is an image,
+  // and expo-image would decode it at full size on iOS (FAVICON_MAX_DECODE_PIXELS).
+  it('rejects an icon that claims more pixels than an icon may decode to', async () => {
+    const oversized = Uint8Array.from(PNG);
+    oversized.set([0, 0, 0x4e, 0x20, 0, 0, 0x4e, 0x20], 16);
+    answers(oversized);
 
     expect(await fetchFaviconBytes(HOST)).toBeUndefined();
   });

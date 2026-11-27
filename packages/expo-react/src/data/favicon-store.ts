@@ -39,11 +39,20 @@
 // clearData had already been and would not come again. The check sits inside
 // the write's own transaction, ahead of the file, as data/mutations.ts's
 // writeFile has it.
+//
+// ICONS CACHED BEFORE THE SIZE CHECK are re-checked ONCE PER INSTALL, before any icon
+// is handed out (`whenCachedFaviconsChecked`). Both fillers gate on the decode ceiling
+// since 2026-11-26 (`@stxapps/shared` extract/favicon.ts), but an `ok` row never
+// expires, and an oversized icon stored before then would keep its full-size decode
+// on iOS for good. Web re-checks on every read, because there the bytes are in the
+// row; here they are a file, and reading every icon file on every mount is the cost
+// split storage exists to avoid. docs/link-extraction-favicons.md, _what counts as
+// an icon_.
 
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { Directory, File, Paths } from 'expo-file-system';
 
-import { chunk } from '@stxapps/shared';
+import { chunk, isOversizedRasterIcon } from '@stxapps/shared';
 
 import { favicons, getDb } from './db';
 import { assertAccountOwnsStoreTx } from './sync-store';
@@ -78,6 +87,7 @@ export function faviconFileFor(host: string): File {
 // last — but an OS-level loss can) reads as unresolved, so the provider
 // re-fetches instead of the UI trusting a verdict with no bytes behind it.
 export async function readFavicon(host: string): Promise<FaviconRecord | undefined> {
+  await whenCachedFaviconsChecked();
   const row = getDb().select().from(favicons).where(eq(favicons.host, host)).get();
   if (row?.status === 'ok' && !faviconFileFor(host).exists) return undefined;
   return row;
@@ -92,6 +102,7 @@ const FAVICON_BATCH = 500;
 export async function readFavicons(
   hosts: readonly string[],
 ): Promise<Map<string, FaviconRecord | undefined>> {
+  await whenCachedFaviconsChecked();
   const rows = new Map<string, FaviconRecord>();
   for (const batch of chunk([...hosts], FAVICON_BATCH)) {
     for (const row of getDb().select().from(favicons).where(inArray(favicons.host, batch)).all()) {
@@ -152,6 +163,88 @@ export async function putFaviconNone(username: string, host: string): Promise<vo
     if (file.exists) file.delete();
     const row = { host, status: 'none' as const, fetchedAt: Date.now() };
     tx.insert(favicons).values(row).onConflictDoUpdate({ target: favicons.host, set: row }).run();
+  });
+}
+
+// --- the one-time re-check (the header's last note) ----------------------------
+
+// Written when the re-check has run, beside the icons' directory rather than in it, so
+// that directory holds icon files only. It names nothing about the account, so a wipe
+// leaves it: what it says — no icon here predates the size check — stays true when
+// there are no icons. Bump the suffix to run the re-check again for a new rule.
+const CHECKED_MARKER = 'bracemark-favicons.checked-1';
+// Icons read between yields to the JS thread. Each is a file read (an icon is ~1–2 KB,
+// at most MAX_FAVICON_BYTES) and a header read.
+const RECHECK_BATCH = 25;
+
+let recheck: Promise<void> | undefined;
+let rechecked = false;
+
+// Resolves once no icon on this device is past the decode ceiling: at once after the
+// first run on this install (the marker), else when the run ends. readFavicon and
+// readFavicons wait on it, so the first answer after an update already excludes such an
+// icon. A run that fails resolves too — icons are decoration, and the next launch runs
+// it again, since the marker is written only at the end.
+export function whenCachedFaviconsChecked(): Promise<void> {
+  if (recheck === undefined) {
+    if (new File(Paths.document, CHECKED_MARKER).exists) {
+      rechecked = true;
+      recheck = Promise.resolve();
+    } else {
+      recheck = recheckCachedFavicons().then(
+        () => {
+          rechecked = true;
+        },
+        () => {
+          rechecked = true;
+        },
+      );
+    }
+  }
+  return recheck;
+}
+
+// The same, synchronously, for a render that can't wait (hooks/use-favicon-uri.ts, which
+// shows the file on disk while a verdict is in flight): false until it has run, and asking
+// starts it.
+export function cachedFaviconsChecked(): boolean {
+  if (!rechecked) void whenCachedFaviconsChecked();
+  return rechecked;
+}
+
+// Drop every `ok` icon whose raster header is past the decode ceiling, row and file
+// together, then write the marker. A dropped host reads as never fetched, so it is asked
+// for again and its answer goes through the filler's gate. Each host's read, verdict and
+// delete run with no `await` between them, so a filler can't land fresh bytes in the
+// middle and have them deleted; the yields come between hosts.
+export async function recheckCachedFavicons(): Promise<void> {
+  const hosts = getDb()
+    .select({ host: favicons.host })
+    .from(favicons)
+    .where(eq(favicons.status, 'ok'))
+    .all()
+    .map((row) => row.host);
+  for (const [i, batch] of chunk(hosts, RECHECK_BATCH).entries()) {
+    if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
+    for (const host of batch) {
+      try {
+        dropIfOversized(host);
+      } catch {
+        // One unreadable file is not a reason to leave the rest unchecked.
+      }
+    }
+  }
+  new File(Paths.document, CHECKED_MARKER).write('');
+}
+
+function dropIfOversized(host: string): void {
+  getDb().transaction((tx) => {
+    const file = faviconFileFor(host);
+    if (!file.exists || !isOversizedRasterIcon(file.bytesSync())) return;
+    file.delete();
+    tx.delete(favicons)
+      .where(and(eq(favicons.host, host), eq(favicons.status, 'ok')))
+      .run();
   });
 }
 

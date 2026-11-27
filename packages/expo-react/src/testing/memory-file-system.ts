@@ -151,6 +151,13 @@ export class File extends FileSystemNode {
     return Uint8Array.from(readFileBytes(this.uri));
   }
 
+  // The sync read (data/favicon-store.ts's one-time re-check reads each icon inside a
+  // transaction). Throws for a missing file, as the native one does.
+  bytesSync(): Uint8Array {
+    if (!this.exists) throw new Error(`No such file: ${this.uri}`);
+    return Uint8Array.from(readFileBytes(this.uri));
+  }
+
   async text(): Promise<string> {
     return decoder.decode(readFileBytes(this.uri));
   }

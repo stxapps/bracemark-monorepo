@@ -1,6 +1,12 @@
 import { selectFaviconUrl, selectTitleImage } from '@stxapps/shared';
 
-import { decodeHtmlBytes, MAX_HEAD_CHARS, parseHtmlHead } from './parse-html-head';
+import {
+  collectHtmlMeta,
+  decodeHtmlBytes,
+  FIRST_READ_BYTES,
+  MAX_HEAD_CHARS,
+  parseHtmlHead,
+} from './parse-html-head';
 
 // The scanner's contract is "collect what the extractor's HTMLRewriter would collect",
 // so these fixtures are the malformed-input hazards a regex scan can actually get
@@ -175,15 +181,28 @@ describe('parseHtmlHead', () => {
     expect(collected.icons?.map((i) => i.href)).toEqual(['/i.png']);
   });
 
-  // The scanner's choice, not HTML's: an unclosed comment or script is left in place
-  // rather than swallowing the rest of the page, so the metadata after it survives.
-  it('keeps the metadata after an unclosed comment or script', () => {
+  // HTML's rule: an unclosed comment or script swallows the rest of the page, and
+  // what follows it is its text, not tags (scan-meta.ts, scanTags). The rule before it
+  // read on past them, which read a cut script's strings as tags.
+  it.each([
+    ['comment', '<!-- never closed'],
+    ['script', '<script> never closed'],
+    ['textarea', '<textarea> never closed'],
+  ])('reads nothing after an unclosed %s, as the DOM does', (_name, opener) => {
     const collected = parseHtmlHead(`
-      <!-- never closed
-      <script> never closed
+      <meta property="og:image" content="/before.jpg">
+      ${opener}
       <meta property="og:title" content="After">
     `);
-    expect(collected.ogTitle).toBe('After');
+    expect(collected).toEqual({ ogImage: '/before.jpg' });
+  });
+
+  it('never reads tags out of a script the cap cut off', () => {
+    const script = `<script>var data = '<meta property="og:image" content="https://evil.example/x.png">';`;
+    const collected = parseHtmlHead(
+      `<html><head><title>T</title>${script}${'x'.repeat(MAX_HEAD_CHARS)}</script></head></html>`,
+    );
+    expect(collected).toEqual({ docTitle: 'T' });
   });
 
   it('collects every icon rel in document order for the selector to rank', () => {
@@ -205,8 +224,14 @@ describe('parseHtmlHead', () => {
 // these take a few ms linear, and the regexes they replaced took 1–13 s each on V8,
 // so 250 ms neither flakes on a loaded machine nor passes a revert. Each also asserts
 // the real tag in front of the junk is still collected, which is the positive control.
+//
+// EACH CASE RUNS AT 64 KB FIRST, against 50 ms. A synchronous call can't be interrupted
+// by jest's timeout, so a quadratic revert at the full cap holds the suite for minutes
+// (one did, for 188 s) before it fails; at 64 KB linear is well under a millisecond and
+// quadratic fails in about a second, and the full-cap run never starts.
 describe('parseHtmlHead on hostile input', () => {
   const BUDGET_MS = 250;
+  const FAIL_FAST_MS = 50;
   const REAL = '<meta property="og:title" content="Real">';
 
   const timed = (html: string): { ogTitle?: string; ms: number } => {
@@ -214,42 +239,49 @@ describe('parseHtmlHead on hostile input', () => {
     const { ogTitle } = parseHtmlHead(html);
     return { ogTitle, ms: performance.now() - start };
   };
+  // `page(chars)` is the hostile page at about that many characters.
+  const expectLinear = (page: (chars: number) => string): void => {
+    const small = timed(page(64 * 1024));
+    expect(small.ms).toBeLessThan(FAIL_FAST_MS);
+    const full = timed(page(MAX_HEAD_CHARS - 1024));
+    expect(full.ogTitle).toBe('Real');
+    expect(full.ms).toBeLessThan(BUDGET_MS);
+  };
+  const repeated =
+    (unit: string, before = '') =>
+    (chars: number) =>
+      before + REAL + unit.repeat(Math.floor(chars / unit.length));
 
   it.each([
     ['comment', '<!--x'],
     ['script', '<script>x'],
     ['style', '<style>x'],
     ['title', '<title>x'],
+    ['CDATA', '<![CDATA[x'],
     ['title with no `>`', '<title '],
     ['meta with no `>`', '<meta '],
     ['link with no `>`', '<link '],
   ])('stays linear on thousands of unclosed %s openers', (_name, opener) => {
-    const { ogTitle, ms } = timed(
-      REAL + opener.repeat(Math.floor((MAX_HEAD_CHARS - 1024) / opener.length)),
-    );
-    expect(ogTitle).toBe('Real');
-    expect(ms).toBeLessThan(BUDGET_MS);
+    expectLinear(repeated(opener));
   });
 
   // The walk keeps each kind's next opener until it passes it; one that re-searched every
   // kind at every span would be quadratic here.
   it('stays linear on thousands of closed spans of every kind, interleaved', () => {
-    const unit = '<!----><script></script><style></style>';
-    const { ogTitle, ms } = timed(
-      REAL + unit.repeat(Math.floor((MAX_HEAD_CHARS - 1024) / unit.length)),
-    );
-    expect(ogTitle).toBe('Real');
-    expect(ms).toBeLessThan(BUDGET_MS);
+    expectLinear(repeated('<!----><!---><!--><script></script><style></style><![CDATA[]]>'));
   });
 
-  // An empty head sends the scan through the whole page: the second read must be as
-  // linear as the first.
-  it('stays linear reading a hostile body after an empty head', () => {
-    const { ogTitle, ms } = timed(
-      '<head></head>' + REAL + '<meta '.repeat(Math.floor((MAX_HEAD_CHARS - 1024) / 6)),
-    );
-    expect(ogTitle).toBe('Real');
-    expect(ms).toBeLessThan(BUDGET_MS);
+  // An empty head sends the scan through the whole page: the body read must be as
+  // linear as the head's.
+  it.each([
+    ['meta with no `>`', '<meta '],
+    ['comment', '<!--x'],
+    ['script', '<script>x'],
+    ['`="` with no closing quote', '<meta a="'],
+    ['`=` with no value', '<meta a= '],
+    ['empty tags', '<b>'],
+  ])('stays linear reading a hostile body of %s after an empty head', (_name, unit) => {
+    expectLinear(repeated(unit, '<head></head>'));
   });
 
   // The quote-aware tag end (scan-meta.ts, tagEnd): each quote's closer is searched once
@@ -258,19 +290,71 @@ describe('parseHtmlHead on hostile input', () => {
     ['quoted values holding `>`', '<meta a="x>y" b=\'>\'>'],
     ['`="` with no closing `>`', '<meta a="'],
   ])('stays linear on thousands of tags with %s', (_name, unit) => {
-    const { ogTitle, ms } = timed(
-      REAL + unit.repeat(Math.floor((MAX_HEAD_CHARS - 1024) / unit.length)),
-    );
-    expect(ogTitle).toBe('Real');
-    expect(ms).toBeLessThan(BUDGET_MS);
+    expectLinear(repeated(unit));
   });
 
   it('stays linear on one enormous attribute name with no `=`', () => {
-    const { ogTitle, ms } = timed(
-      `<meta ${'a'.repeat(30_000)} property="og:title" content="Real">`,
-    );
-    expect(ogTitle).toBe('Real');
-    expect(ms).toBeLessThan(BUDGET_MS);
+    expectLinear((chars) => `<meta ${'a'.repeat(chars)} property="og:title" content="Real">`);
+  });
+});
+
+// The two-step read (parse-html-head.ts, collectHtmlMeta): FIRST_READ_BYTES first, and
+// the cap only when that read's answer isn't settled. Each case is a page where
+// stopping at the first read would give a different answer from the whole cap.
+describe('collectHtmlMeta', () => {
+  const bytes = (text: string) => new TextEncoder().encode(text);
+  const pad = (n: number) => `<!-- ${'x'.repeat(n)} -->`;
+
+  it('answers from the first read when its head closed there, declaring a field', () => {
+    const page = `<head><meta property="og:title" content="A"></head><body>${'x'.repeat(2 * FIRST_READ_BYTES)}</body>`;
+    expect(collectHtmlMeta(bytes(page))).toEqual({ ogTitle: 'A' });
+  });
+
+  it('reads on when the head runs past the first read', () => {
+    const page = `<head><meta property="og:title" content="A">${pad(FIRST_READ_BYTES)}<link rel="icon" href="/late.png"></head>`;
+    expect(collectHtmlMeta(bytes(page))).toEqual({
+      ogTitle: 'A',
+      icons: [{ href: '/late.png', rel: 'icon', sizes: undefined, type: undefined }],
+    });
+  });
+
+  // A script cut by the first read is not markup there either: the walk stops at it,
+  // the head hasn't closed, and the whole cap is read.
+  it('never answers from a first read that cut a script holding tags', () => {
+    const page = `<head><meta property="og:title" content="A"><script>${'x'.repeat(FIRST_READ_BYTES)}'<meta property="og:image" content="https://evil.example/x.png"></head>'</script><link rel="icon" href="/i.png"></head>`;
+    expect(collectHtmlMeta(bytes(page))).toEqual({
+      ogTitle: 'A',
+      icons: [{ href: '/i.png', rel: 'icon', sizes: undefined, type: undefined }],
+    });
+  });
+
+  // A quoted value cut by the first read is a value there too: the `</head>` inside it is
+  // text, the walk stops at the quote, and the whole cap is read.
+  it('never answers from a first read that cut a quoted value', () => {
+    const page = `<head><meta property="og:title" content="A"><meta name="x" content='></head>${'y'.repeat(FIRST_READ_BYTES)}'><link rel="icon" href="/i.png"></head>`;
+    expect(collectHtmlMeta(bytes(page))).toEqual({
+      ogTitle: 'A',
+      icons: [{ href: '/i.png', rel: 'icon', sizes: undefined, type: undefined }],
+    });
+  });
+
+  // A head that closed early with no og tag says nothing about the body: YouTube's
+  // channel pages, past the first read.
+  it('reads on when the first read closed a head that declared nothing', () => {
+    const page = `<head><title>T</title></head><body>${'x'.repeat(2 * FIRST_READ_BYTES)}<meta property="og:title" content="Body"></body>`;
+    expect(collectHtmlMeta(bytes(page))).toEqual({ docTitle: 'T', ogTitle: 'Body' });
+  });
+
+  it('reads no more than the cap', () => {
+    const page = `<head></head><body>${'x'.repeat(MAX_HEAD_CHARS)}<meta property="og:title" content="Late"></body>`;
+    expect(collectHtmlMeta(bytes(page))).toEqual({});
+  });
+
+  // The cap is on BYTES decoded (each costs JS decode time on Hermes), not characters:
+  // 600 K two-byte characters are 1.2 MB, past it.
+  it('decodes no more than the cap, in bytes', () => {
+    const page = `<head></head><body>${'é'.repeat(600_000)}<meta property="og:title" content="Late"></body>`;
+    expect(collectHtmlMeta(bytes(page))).toEqual({});
   });
 });
 

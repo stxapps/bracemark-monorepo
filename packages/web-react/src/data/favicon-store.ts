@@ -6,6 +6,8 @@
 // lives in favicon-provider.tsx, and the read half the UI observes is
 // use-favicon-url.ts.
 
+import { isOversizedRasterIcon } from '@stxapps/shared';
+
 import { db, type FaviconRecord } from './db';
 import { assertAccountStillOwnsStore } from './sync-store';
 
@@ -19,8 +21,20 @@ export const FAVICON_RETRY_MS = 7 * 24 * 60 * 60 * 1000;
 
 // One host's cached row, or undefined if this host was never resolved. An exact
 // primary-key get — no scan.
+//
+// An `ok` row whose raster icon is past the decode ceiling reads as never resolved
+// (`@stxapps/shared` `isOversizedRasterIcon`): the provider's gate refuses such bytes
+// since 2026-11-26, but `ok` rows never expire, so one cached before then would render
+// for good. Read as unresolved, the row isn't handed to an `<img>`, and the next mount
+// re-asks: the fetch goes through the gate and the answer replaces the row. Checked on
+// every read because the bytes are already in hand, and a header read costs nothing
+// next to the get.
 export async function readFavicon(host: string): Promise<FaviconRecord | undefined> {
-  return db.favicons.get(host);
+  const row = await db.favicons.get(host);
+  if (row?.status === 'ok' && row.bytes !== undefined && isOversizedRasterIcon(row.bytes)) {
+    return undefined;
+  }
+  return row;
 }
 
 // Is there nothing usable for this host right now? True when the host is unknown,

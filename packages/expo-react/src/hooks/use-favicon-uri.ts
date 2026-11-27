@@ -25,12 +25,16 @@
 //    the host rather than dropping to its fallback and back. It cannot show a
 //    half-written icon: putFavicon writes the file and the row in one
 //    synchronous transaction, so no render falls between them. The settled
-//    verdict outranks the disk the moment it lands.
+//    verdict outranks the disk the moment it lands. Not before the store's
+//    one-time re-check of icons cached before the size check has run
+//    (favicon-store.ts, `cachedFaviconsChecked`) — until then a file on disk may be
+//    one that check is about to drop.
 
 import { useEffect } from 'react';
 
 import { useFavicon } from '../contexts/favicon-provider';
 import {
+  cachedFaviconsChecked,
   faviconFileFor,
   type FaviconRecord,
   isFaviconStale,
@@ -80,6 +84,7 @@ export function useFaviconUri(host: string | undefined): string | undefined {
   // Settled: the verdict answers, and a host without an icon builds no File.
   if (record !== undefined) return record?.status === 'ok' ? faviconFileFor(host).uri : undefined;
   // In flight: the disk answers — see the header.
+  if (!cachedFaviconsChecked()) return undefined;
   const file = faviconFileFor(host);
   return file.exists ? file.uri : undefined;
 }

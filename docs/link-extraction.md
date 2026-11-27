@@ -928,22 +928,21 @@ WHICH tag becomes a link's title/image is `selectTitleImage` in `@stxapps/shared
 is an improvement and not a change. What each client does BEFORE that differs,
 because each parses a page with what its runtime has:
 
-| client                | parser                                 | character references     |
-| --------------------- | -------------------------------------- | ------------------------ |
-| `bracemark-extension` | the live DOM, via `executeScript`      | decoded by the DOM, free |
-| `bracemark-extractor` | `HTMLRewriter` (`lib/html.ts`)         | **decoded by us**        |
-| `bracemark-expo`      | a regex scanner (`parse-html-head.ts`) | **decoded by us**        |
+| client                | parser                                  | character references     |
+| --------------------- | --------------------------------------- | ------------------------ |
+| `bracemark-extension` | the live DOM, via `executeScript`       | decoded by the DOM, free |
+| `bracemark-extractor` | `HTMLRewriter` (`lib/html.ts`)          | **decoded by us**        |
+| `bracemark-expo`      | a markup scanner (`parse-html-head.ts`) | **decoded by us**        |
 
 The scanner itself is `@stxapps/shared` `html/scan-meta.ts` (`scanHtmlMeta`);
 `parse-html-head.ts` is its expo caller. It reads the head, stopping at the first
-`</head>` outside a script or comment, and only when that head declared no og,
-Twitter or `image_src` tag does it read on through the body, as the live DOM and
-`HTMLRewriter` do, which both find a `<meta>` anywhere. Both reads stop at
-`MAX_HEAD_CHARS`, **1 MiB of characters** (1,048,576). That is close to what the
-extractor reads, not equal to it: `MAX_HTML_BYTES` is 1,000,000 **bytes**, so the
-device reads ~48 K further on an ASCII page, and further still on a page whose text
-is mostly multi-byte (a character there is 2–4 bytes). Every measured YouTube offset
-below sits under both caps.
+`</head>` outside a comment, a raw-text body or a tag, and only when that head
+declared no og, Twitter or `image_src` tag does it read on through the body, as the
+live DOM and `HTMLRewriter` do, which both find a `<meta>` anywhere. Both reads stop at
+`MAX_HEAD_CHARS`, **1 MiB** (1,048,576), counted in bytes decoded and so at most as
+many characters scanned. That is close to what the extractor reads, not equal to it:
+`MAX_HTML_BYTES` is 1,000,000 bytes, so the device reads ~48 KB further. Every
+measured YouTube offset below sits under both caps.
 
 **Why 1 MiB.** Measured 2026-11-22 over 87 pages fetched with the app's User-Agent
 (the kept-copies set plus ~25 large sites). Every page but YouTube's had its title
@@ -952,14 +951,25 @@ og:title at 828–856 KB, inside a head the size of its inline data, and a chann
 at 876 KB, in the body after a head that closes at 825 KB. Nothing fell between. At
 the old 256 KB the app took no title or image from any YouTube link. With the change,
 those five pages went from nothing to title and image, and no other page's result
-moved. The cap is not what an ordinary page costs: the head read stops at `</head>`,
-so a 1.9 MB Wikipedia article whose head closes at 16 KB costs 16 KB. A page with no
-og tags in its head (Hacker News, The Guardian's front page, an Amazon product page)
-pays for the body read too: under 2.5 ms on V8 for a 1.4 MB page. On Hermes that is
-perhaps ten times more, and on a low-end Android phone a few times more again, so
-30–45 ms for a page this size: two or three frames. Each scan follows its own page
-fetch (`CONCURRENCY` in `device-link-previews.ts`), so they never run back to back as
-one long stall.
+moved.
+
+**What it costs, on Hermes.** Most of it is the **decode**, not the scan: Expo's
+`TextDecoder` is JavaScript, ~0.4 s per MiB on an M1 (measured 2026-11-26). So the
+read comes in two steps (`collectHtmlMeta`): the first 64 KiB (`FIRST_READ_BYTES`,
+~25 ms to decode), which is the answer when the head closed inside it and declared a
+field — every page measured above but YouTube's — and otherwise the whole cap. A head
+that closed inside the first read is settled: the walk ends at any span the read cut
+(below), so no `</head>` it reaches can move in a longer read. The scan itself stops at
+`</head>` and reads nothing past it; an honest markup-dense MiB read whole takes ~55 ms
+(M1 Hermes, `through: 'document'`). When the body is needed, its read **starts where the
+head's stopped** (`scanHtmlBodyMeta`), so no character is walked twice. Until
+2026-11-27 it was a second whole-page scan, and a hostile head the size of the cap that
+declared nothing cost two. The worst hostile shape found (a flood of `<meta>` tags)
+now takes ~0.28 s for `parseHtmlHead` on M1 Hermes (was ~0.5 s), and the whole
+`collectHtmlMeta` ~0.73 s with the cap's decode (was ~0.94 s), perhaps three or four
+times that on a low-end Android phone (measured 2026-11-27). Each read follows its own
+page fetch (`CONCURRENCY` in `device-link-previews.ts`), so they never run back to back
+as one long stall.
 
 Its second caller is the live-DOM collector, after an in-page move: a page whose head went
 stale re-fetches its own address and scans the answer through the whole document,
@@ -968,45 +978,86 @@ since a page enforcing Trusted Types (YouTube) can't parse a string into a DOM
 lives in `shared`, imports by relative path only, and is reached by subpath, because
 it is bundled into scripts that run inside a stranger's page.
 
-⚠ **The scanner must stay linear on a hostile page**, and nothing a real page
-does will show it isn't. Every construct it reads — a comment, a `<script>` or
-`<style>` body, a `<title>`, a `<meta …>` or `<link …>` — is an opener then a
-closer. The obvious regex for one (`/<meta\b[^>]*>/g`, `/<!--.*?-->/gs`) goes
-quadratic when openers never close: it scans to the end, fails, and starts over
-from the next opener. That is true on V8 too. The drain fetches pages nobody
-gestured for (the whole-library job, back-fill), on the JS thread, so a page
-built this way was a stall of tens of seconds. Measured on the Hermes CLI,
-before → after the rewrite: `<!--x` × 48,000 went from 32 s to 9 ms, `<meta ` ×
-40,000 from 38 s to 6 ms, and one 30,000-letter attribute name with no `=` from
-8.5 s to 1 ms. A real page with 200 scripts and comments reads the same, 5–6 ms,
-either way.
+⚠ **Text the DOM reads as text is text to the scanner** for every construct below,
+and the ones it still reads differently are listed after them. The body read exists for
+pages whose head declares nothing, and
+on those a `<meta property="og:image">` written by a visitor — in a comment box's
+`<textarea>`, a `<noscript>`, an `alt`, a CDATA section, a string inside an inline
+script — would choose the stored preview and the fetch it triggers. So the scanner
+reads the page as the HTML tokenizer does, tag by tag: comments, bogus comments
+(`<!DOCTYPE …>`, `<?…>`, `</ …>`) and CDATA are skipped, and a comment ends where the
+tokenizer ends one (`-->`, `--!>`, and the empty `<!-->` and `<!--->`); every raw-text or
+out-of-document element (`script`, `style`, `title`, `textarea`, `xmp`, `iframe`,
+`noembed`, `noframes`, `noscript`, `template`) is skipped to its own end tag (any case,
+and only where the name ends there, at the tokenizer's whitespace, `/` or `>`:
+`</titles>` closes nothing, nor does `</script` before a no-break space); `plaintext`
+ends the read; and a tag's attribute values are skipped whole. Tag names match in ASCII
+case only, as the tokenizer lowercases them: `<linK>` (U+212A KELVIN SIGN) is not a
+`<link>`. **A span that never closes runs to the end of the input, as in a browser** —
+a comment, a CDATA section, a raw-text body, a tag, a quoted attribute value — so the
+read ends there, and the walk never guesses. That is also the honest reading of a
+capped input: a script or a value cut by the cap goes on past it. (Until 2026-11-26 the
+scanner read on past an unclosed span to keep a broken page's later tags, and so read a
+cut script's strings as tags. A quoted value kept that rule until 2026-11-27: its tag
+ended at the next `>`, and a visitor's text inside a page's long `data-props="…"` cut by
+the cap became tags, a spoofed preview and its fetch.) Repeated attributes take the
+first, and a bare name the empty value, as `getAttribute` does. The specs
+(`scan-meta.spec.ts`) put a forged tag in each of those places.
 
-So the scanner (`scan-meta.ts`) walks the page once, in document order, skipping
-whichever comment, script or style opens first, as HTML does (a `<!--` inside a
-script is script). It finds each kind's next opener by regex and keeps it until the
-walk passes it, so no stretch is searched twice for the same opener. It then searches
-forward for the opener's `>` and its closer, and drops that kind at the first one
-missing: a closer absent after one opener is absent after every later one. So each
-character is scanned about once. The `>` that ends a tag is the first one **outside a
-quoted value**, as the HTML tokenizer has it (`tagEnd`): a quote opens a value only
-right after `=`, and its closer is searched once and jumped past. The first `>` alone
-cut `content="Home > Shop"` at "Home ", losing a title the live DOM and
-`HTMLRewriter` read whole. A quote that never closes would swallow the rest of the
-page in a browser; here it ends its tag at the next `>`, the old rule, so it costs
-that tag only. It can happen at most once per quote character, since any later quote
-of the same kind would have closed it. The spec sizes every hostile shape to the full 1 MiB
-cap, and adds two the walk could get wrong: thousands of closed spans of all three
-kinds interleaved (14 ms per MiB on V8, doubling with the size), and a hostile body
-after an empty head.
-`parseAttrs` makes the value optional, so a name with no `=` is consumed rather
-than backtracked through. Its spec pins each hostile shape to a 250 ms budget.
-They take a few ms linear and 0.4–14 s under the old regexes on V8, so a revert
-fails there even though jest never runs Hermes.
+**What the scanner still reads differently**, each found against parse5
+(2026-11-26) and left because none lets a single injected string choose a preview the DOM
+would not: a `<template>` whose content holds `</template` inside a nested template,
+raw-text element, comment or attribute (the scanner ends the template there); an `=`
+the tokenizer reads as part of a name (`<img ="…`) or of an unquoted value (`alt=a="…`),
+whose quote the scanner skips as a value; a CDATA section in HTML content, skipped to
+its `]]>` where the DOM's bogus comment ends at the first `>`; a script's double-escaped
+state (`<script><!--<script>…`); and, on a page with no `</head>`, an SVG `<title>`
+before any other. Each needs markup the page itself wrote before the visitor's, or a
+second injection point. The other direction fails safe: inside inline `<svg>`/`<math>`
+the scanner skips a `<style>` or `<title>` as HTML raw text, where the DOM would read a
+`<meta>` in it.
 
-The regex spelling is the second tripwire. A body matched lazily is `.*?` under
+⚠ **The scanner must stay linear on a hostile page**, and on Hermes linear is not
+enough: count the calls. Every construct it reads — a comment, a raw-text body, a
+`<meta …>` — is an opener then a closer. The obvious regex for one
+(`/<meta\b[^>]*>/g`, `/<!--.*?-->/gs`) goes quadratic when openers never close: it
+scans to the end, fails, and starts over from the next opener. That is true on V8
+too. The drain fetches pages nobody gestured for (the whole-library job, back-fill),
+on the JS thread, so a page built this way was a stall of tens of seconds. Measured
+on the Hermes CLI (RN 0.81, M1, re-measured 2026-11-26), the regexes before the first
+rewrite: `<!--x` × 48,000 took 32 s, `<meta ` × 40,000 27 s, one 30,000-letter
+attribute name with no `=` 10 s. And a regex `exec` costs about a microsecond on
+Hermes however little it matches, so a linear scan that makes one call per `=` still
+spent 0.5 s on one `<meta>` holding `= ` 512 K times. Since 2026-11-26 that is 16 ms.
+
+So the walk (`scanTags`) makes a call or two per tag and crosses everything between in
+one native call: the next `<` by `indexOf`, a run of text `<`s by one regex, a tag name
+by char codes, and a name is turned into a string only if its first letter and length
+could make it one the walk acts on. A closer is searched once and jumped past, and a
+missing one ends the read. The `>` that ends a tag is the first one **outside a quoted
+value**, as the HTML tokenizer has it: a tag with no quote before its first `>` ends
+there (the next `"` and `'` are kept until the walk passes them, so no stretch is
+searched twice for a quote), and one with a quote goes to `tagEnd`, whose one regex
+finds either a `>` or an `=` opening a quoted value, and jumps past its closer. The
+first `>` alone cut `content="Home > Shop"` at "Home ", losing a title the live DOM and
+`HTMLRewriter` read whole. A quote that never closes swallows the rest of the page, as
+in a browser. `parseAttrs` makes the value optional,
+so a name with no `=` is consumed rather than backtracked through, and reads at most
+64 attributes of a tag.
+
+The specs pin each hostile shape twice, **the small one first**: at 64 KB against
+50 ms, then at the full cap against a 250 ms budget (a few ms linear on V8, 0.4–14 s
+under the old regexes). A synchronous call can't be interrupted by jest's timeout, so
+the order is the point: a quadratic revert fails the 64 KB check in about a second and
+the full-cap run never starts. With the full cap first, one revert held the expo suite
+for 188 s before it failed. The shared suite (`scan-meta.spec.ts`) has its own 64 KB
+cases, so a revert in the walk fails where the walk lives. Neither runs Hermes, so
+neither can see a revert to a call per `=`; the Hermes figures above are the record.
+
+The regex spelling is one more tripwire. A body matched lazily is `.*?` under
 the `s` flag, **never `[\s\S]*?`**: on Hermes the class spelling costs time in
 proportion to the rest of the input on every match. The strip pass read 178 ms
-against 2 ms on a 244 KB head before the rewrite took the regex out of it. V8 runs
+against 2 ms on a 244 KB head before the first rewrite took the regex out of it. V8 runs
 both spellings alike; the `REGEX_SYNTAX` lint rule in `eslint.config.mjs` catches
 it. The same trap hit the Netscape import parser
 ([data-lifecycle.md](./data-lifecycle.md), _readings — expo_).

@@ -1,7 +1,15 @@
 /**
  * @jest-environment jsdom
  */
-import { collectLivePageMeta, headMayBeStale } from './page-meta';
+import { ReadableStream } from 'node:stream/web';
+import { TextDecoder, TextEncoder } from 'node:util';
+
+import {
+  collectLivePageMeta,
+  headMayBeStale,
+  PAGE_REFETCH_MAX_CHARS,
+  PAGE_REFETCH_TIMEOUT_MS,
+} from './page-meta';
 
 // The live-page collector's guard against a head left stale by an in-page move
 // (page-meta.ts, _a stale head_). The specimen is YouTube's, measured 2026-11-22 on
@@ -62,6 +70,9 @@ function showPage(address: string, head: string, title: string): void {
   document.head.innerHTML = head;
   document.title = title;
 }
+
+// jsdom has neither; the re-read's capped reader decodes with the runtime's own.
+global.TextDecoder = TextDecoder as typeof globalThis.TextDecoder;
 
 afterEach(() => {
   delete (window.performance as { getEntriesByType?: unknown }).getEntriesByType;
@@ -151,5 +162,66 @@ describe('collectLivePageMeta', () => {
       href: NEXT,
       collected: { docTitle: 'The next video - YouTube' },
     });
+  });
+
+  // The re-read's two bounds (page-meta.ts, refetchHead): it reads no further than
+  // PAGE_REFETCH_MAX_CHARS of a streamed body and cancels the rest, and it gives up after
+  // PAGE_REFETCH_TIMEOUT_MS. A server can't make the page hold either.
+  it('stops reading a streamed answer at the cap and cancels the rest', async () => {
+    loadedAt(FIRST);
+    showPage(NEXT, FIRST_HEAD, 'The next video - YouTube');
+    const chunk = new TextEncoder().encode('x'.repeat(256 * 1024));
+    let pulls = 0;
+    let cancelled = false;
+    const body = new ReadableStream({
+      pull(controller) {
+        pulls++;
+        controller.enqueue(
+          pulls === 1 ? new TextEncoder().encode(NEXT_HTML.replace('</html>', '')) : chunk,
+        );
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const res = { ...answer({}), body } as unknown as Response;
+
+    const result = await collectLivePageMeta(
+      document,
+      jest.fn(async () => res),
+    );
+    expect(result.collected.ogTitle).toBe('The next video');
+    expect(cancelled).toBe(true);
+    // The cap's worth of chunks and the one that crosses it; a source that never ends.
+    expect(pulls).toBeLessThanOrEqual(Math.ceil(PAGE_REFETCH_MAX_CHARS / chunk.length) + 2);
+  });
+
+  it('gives up on an answer that never comes, and drops the stale tags', async () => {
+    jest.useFakeTimers();
+    try {
+      loadedAt(FIRST);
+      showPage(NEXT, FIRST_HEAD, 'The next video - YouTube');
+      const fetchPage = jest.fn(
+        (_url: RequestInfo | URL, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () =>
+              reject(new DOMException('aborted', 'AbortError')),
+            );
+          }),
+      );
+      const settled = collectLivePageMeta(document, fetchPage);
+      await jest.advanceTimersByTimeAsync(PAGE_REFETCH_TIMEOUT_MS - 1);
+      let done = false;
+      void settled.then(() => (done = true));
+      await Promise.resolve();
+      expect(done).toBe(false);
+      await jest.advanceTimersByTimeAsync(1);
+      await expect(settled).resolves.toEqual({
+        href: NEXT,
+        collected: { docTitle: 'The next video - YouTube' },
+      });
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

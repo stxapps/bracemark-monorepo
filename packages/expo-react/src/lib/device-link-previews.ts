@@ -30,7 +30,7 @@ import {
 } from '../data/mutations';
 import { type LinkItem, readExtraction } from '../data/queries';
 import { probeImageSize, resizeImage } from './image';
-import { decodeHtmlBytes, parseHtmlHead } from './parse-html-head';
+import { collectHtmlMeta, type parseHtmlHead } from './parse-html-head';
 import { USER_AGENT } from './user-agent';
 
 // The ON-DEVICE extraction worker: fill a page of links' `titleImage` facet by fetching
@@ -231,7 +231,7 @@ async function extractOne(
   // with real titles before any image is fetched (web's two-pass ordering; the image pass
   // below sets the terminal state). A page that genuinely has no title settles `done`
   // anyway: there's nothing to come back for, and `host(url)` is the render fallback.
-  const collected = parseHtmlHead(decodeHtmlBytes(page.bytes, page.contentType));
+  const collected = collectHtmlMeta(page.bytes, page.contentType);
   const { title, imageUrl } = selectTitleImage(collected, page.finalUrl);
   if (title) await writeAll(username, targets, { fields: { title } });
 

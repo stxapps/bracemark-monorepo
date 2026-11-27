@@ -26,6 +26,7 @@
 // So the ceiling that means "not an icon" belongs here, at the write edge both
 // platforms share, applied to bytes already in hand.
 
+import { imageHeaderSize } from '../image/header-size';
 import { isSvgBytes, sniffImageMime } from '../image/sniff';
 
 // A favicon is ~1–2 KB; anything past this is not an icon (a misconfigured
@@ -54,7 +55,32 @@ export function sniffIconMime(bytes: Uint8Array): string | undefined {
   return sniffImageMime(bytes) ?? (isSvgBytes(bytes) ? 'image/svg+xml' : undefined);
 }
 
-// The same verdict as a boolean, for the fetching paths that only gate on it.
+// The most pixels a raster icon may decode to: 2048 × 2048, 16 MiB at four bytes a
+// pixel. An icon is drawn at 16–64 pt and the largest any site declares is a 1024 px
+// touch icon, so this refuses nothing real — but the byte cap doesn't bound a decode: a
+// 76 KB PNG can claim 20000 × 20000, and expo-image decodes an icon at full size on iOS
+// (1.6 GB, per row that shows it). Read from the header (image/header-size.ts), before
+// any decoder sees the bytes.
+export const FAVICON_MAX_DECODE_PIXELS = 2048 * 2048;
+
+// The verdict every FILLER gates on before it stores an icon, on both platforms: an
+// icon `sniffIconMime` takes, and — for a raster one — a header that says what it will
+// decode to, within FAVICON_MAX_DECODE_PIXELS. SVG has no pixel size of its own (its
+// renderer draws it at the size it's shown). The size check is not in `sniffIconMime`,
+// which web runs at RENDER time to type the Blob.
 export function isRenderableIconBytes(bytes: Uint8Array): boolean {
-  return sniffIconMime(bytes) !== undefined;
+  return sniffIconMime(bytes) !== undefined && !isOversizedRasterIcon(bytes);
+}
+
+// The size half alone: a RASTER icon whose header can't be read or claims more than
+// FAVICON_MAX_DECODE_PIXELS. False for anything that isn't a raster image, SVG included.
+// Reads magic bytes and a header only, and decodes no text, so a store can run it over
+// every icon it hands out. That is how icons cached before the size check existed
+// (2026-11-26) are re-checked: web's `readFavicon` on every read, expo's favicon store
+// once per install (docs/link-extraction-favicons.md, _what counts as
+// an icon_).
+export function isOversizedRasterIcon(bytes: Uint8Array): boolean {
+  if (sniffImageMime(bytes) === undefined) return false;
+  const size = imageHeaderSize(bytes);
+  return size === undefined || size.width * size.height > FAVICON_MAX_DECODE_PIXELS;
 }

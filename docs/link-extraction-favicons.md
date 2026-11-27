@@ -137,7 +137,7 @@ default" falls out for free — a fresh install fetches no favicons anywhere, pe
   sniff**, not on anyone's content-type, and that sniff deliberately takes raster
   formats **plus SVG**, because `<link rel="icon" type="image/svg+xml">` is common
   enough that refusing it left those hosts on the monogram permanently, and
-  because an icon is only ever RENDERED — never measured, capped or re-encoded.
+  because an icon is only ever RENDERED — never resized or re-encoded.
   The stored-preview sniff keeps refusing SVG for exactly that reason:
   `probeImageSize`/`resizeImage` are raster-only, so an SVG accepted there would
   sail past the 1024px cap and land whole in the user's quota. Sniffing text needs
@@ -159,6 +159,29 @@ default" falls out for free — a fresh install fetches no favicons anywhere, pe
   the **10 MB og:image** ceiling shared with the preview path — not a statement
   about icons. Either would otherwise land as an `ok` row that never expires
   (`FAVICON_RETRY_MS` ages only `none`), charged to the origin's storage quota.
+  ⚠ **A raster icon is also SIZED from its header before it is stored**
+  (`FAVICON_MAX_DECODE_PIXELS`, 2048 × 2048; `@stxapps/shared` `image/header-size.ts`).
+  The byte cap doesn't bound a decode: a 76 KB PNG can claim 20000 × 20000, and
+  expo-image decodes an icon at full size on iOS — 1.6 GB, for every row that shows
+  it. An icon is drawn at 16–64 pt and the largest any site declares is a 1024 px touch
+  icon, so the ceiling refuses nothing real. The check is in `isRenderableIconBytes`
+  (the fillers' gate), **not** in `sniffIconMime`, which web runs at render time to type
+  the Blob. SVG has no pixel size of its own.
+
+  ⚠ **Icons cached before the size check are re-checked**, because an `ok` row never
+  expires and the gate only sees new writes: an oversized icon stored before 2026-11-26
+  would otherwise keep its full-size decode for good. The check is `isOversizedRasterIcon`
+  (raster only, magic bytes and a header, no text decode). **Web** runs it in
+  `readFavicon` on every read, since the bytes are in the row: an `ok` row that fails
+  reads as never resolved, is never handed to an `<img>`, and is fetched again through
+  the gate. **Expo** keeps the bytes in files, and reading every file on every mount is
+  what split storage avoids, so its store re-checks **once per install**
+  (`whenCachedFaviconsChecked`): `readFavicon` and `readFavicons` wait for it, the row
+  hook shows no on-disk icon until it has run, and it drops each failing icon (row and
+  file) and then writes `bracemark-favicons.checked-1` beside the icon directory. A run
+  that fails leaves no marker and runs again on the next launch. To re-check for a new
+  rule, bump the marker's suffix.
+
   Web's render path also has to declare what it decodes: an `<img>` content-sniffs
   raster bytes from a typeless object-URL blob but will NOT sniff SVG, so
   `use-favicon-url.ts` stamps `sniffIconMime`'s result onto the `Blob` — derived

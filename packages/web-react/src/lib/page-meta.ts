@@ -123,8 +123,9 @@ export function collectPageMeta(page: Document): { href: string; collected: Coll
 // current, and there is no image — a missing preview is fixable by a second tap, a
 // wrong one says "Preview updated" over the wrong picture.
 //
-// The GET is the one a reload of the page would make, on a tap the user made on that
-// page; it never runs otherwise.
+// The GET asks for the address a reload would, on a tap the user made on that page,
+// and never runs otherwise. It is a `fetch`, not a navigation (`Sec-Fetch-Mode: cors`,
+// only an `Accept` header), so a server that answers on those may answer differently.
 
 // The re-fetch's own deadline — inside the capture screen's wait for the answer
 // (META_TIMEOUT_MS, 10 s, in the app's features/capture/use-page-capture.ts).
@@ -230,7 +231,11 @@ async function refetchHead(
 }
 
 // What both callers inject: the live page's candidates, with a stale head's tags
-// replaced by its address's own, or dropped when those couldn't be had. Never throws.
+// replaced by its address's own, or dropped when those couldn't be had. Nothing a server
+// sends can make it throw. A PAGE can: the capture WebView's injected script runs in the
+// page's own world, where the page may have replaced `querySelectorAll`, `Array.from` or
+// `fetch` — so every caller catches (webview-capture.ts, the browser extension's
+// `executeScript` result), and the app's own deadline bounds a re-read the page holds.
 export async function collectLivePageMeta(
   page: Document,
   fetchPage: typeof fetch = (input, init) => fetch(input, init),

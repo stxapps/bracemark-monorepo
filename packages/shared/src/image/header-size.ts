@@ -24,9 +24,12 @@
 // ceiling is about — is the same either way; anything that lays the image out still
 // measures it with a decoder, after this has let it through.
 
-// 32 Mi pixels — 128 MiB decoded at four bytes a pixel. Past every camera photo
-// that fits under the 8 MB source ceilings (a 24 MP phone photo is ~5–7 MB), and
-// far past anything an article or a preview needs, since both are cut to 1024 px.
+// 32 Mi pixels — an output bitmap of 128 MiB at four bytes a pixel. That is what it
+// bounds, not a decode's whole peak: a progressive or CMYK JPEG also needs the
+// decoder's coefficient buffers (several bytes a pixel more), and a decoder may hold
+// the encoded bytes beside it. Past a 24 MP phone photo (~5–7 MB), and far past
+// anything an article or a preview needs, since both are cut to 1024 px; a 48 MP photo
+// small enough for the 8 MB source ceilings is refused, which fails safe.
 export const IMAGE_MAX_DECODE_PIXELS = 32 * 1024 * 1024;
 
 export interface ImageHeaderSize {
@@ -57,10 +60,53 @@ function pngSize(b: Uint8Array, at = 0): ImageHeaderSize | undefined {
   return sized(u32be(b, at + 16), u32be(b, at + 20));
 }
 
+// The largest canvas any decoder will draw on: the logical screen, grown to hold every
+// frame's rectangle. The screen alone is not a bound — a GIF may say 1 × 1 and carry a
+// 20000 × 20000 frame, and Skia (Android) grows its canvas to the first frame while
+// Glide sizes a buffer by each frame. So every image descriptor is read: the walk skips
+// colour tables and data sub-blocks by their lengths (a few hundred steps per KB of
+// picture, no copying), and is undefined when the bytes end before the trailer — a
+// caller holding only the head of the download reads the rest and asks again.
 function gifSize(b: Uint8Array): ImageHeaderSize | undefined {
-  // The logical screen: the canvas every frame is drawn on.
-  if (b.length < 10) return undefined;
-  return sized(u16le(b, 6), u16le(b, 8));
+  if (b.length < 13) return undefined;
+  let width = u16le(b, 6);
+  let height = u16le(b, 8);
+  const tableSize = (flags: number) => (flags & 0x80 ? 3 * (2 << (flags & 0x07)) : 0);
+  // Past a run of data sub-blocks starting at `at` (each a length byte, then that many
+  // bytes; a zero length ends the run); -1 when the bytes end first.
+  const pastSubBlocks = (at: number): number => {
+    let i = at;
+    while (i < b.length) {
+      const length = b[i];
+      if (length === 0) return i + 1;
+      i += 1 + length;
+    }
+    return -1;
+  };
+
+  let i = 13 + tableSize(b[10]);
+  for (;;) {
+    if (i >= b.length) return undefined;
+    const block = b[i];
+    if (block === 0x3b) return sized(width, height); // the trailer
+    if (block === 0x21) {
+      // An extension: its label, then its sub-blocks.
+      const next = pastSubBlocks(i + 2);
+      if (next === -1) return undefined;
+      i = next;
+    } else if (block === 0x2c) {
+      // An image descriptor: left, top, width, height, flags; then its colour table, the
+      // LZW code size and the picture's sub-blocks.
+      if (i + 10 > b.length) return undefined;
+      width = Math.max(width, u16le(b, i + 1) + u16le(b, i + 5));
+      height = Math.max(height, u16le(b, i + 3) + u16le(b, i + 7));
+      const next = pastSubBlocks(i + 10 + tableSize(b[i + 9]) + 1);
+      if (next === -1) return undefined;
+      i = next;
+    } else {
+      return undefined; // not a GIF block: malformed
+    }
+  }
 }
 
 // A BMP's DIB header, at `at` — in a BMP file after its 14-byte file header, in an

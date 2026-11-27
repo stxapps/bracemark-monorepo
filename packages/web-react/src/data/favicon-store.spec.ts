@@ -99,6 +99,44 @@ describe('putFavicon / putFaviconNone', () => {
   it('is undefined for a host nothing has resolved', async () => {
     expect(await readFavicon('never-seen.example')).toBeUndefined();
   });
+
+  // An icon cached before the size check: the row says `ok` forever, so the read is
+  // where it is caught. Read as unresolved, it is never rendered and is fetched again.
+  it('reads a cached icon past the decode ceiling as unresolved', async () => {
+    const png = (side: number) =>
+      new Uint8Array([
+        0x89,
+        0x50,
+        0x4e,
+        0x47,
+        0x0d,
+        0x0a,
+        0x1a,
+        0x0a,
+        0,
+        0,
+        0,
+        13,
+        0x49,
+        0x48,
+        0x44,
+        0x52,
+        0,
+        0,
+        side >> 8,
+        side & 0xff,
+        0,
+        0,
+        side >> 8,
+        side & 0xff,
+      ]);
+    await db.favicons.put({ host: HOST, status: 'ok', bytes: png(20000), fetchedAt: 0 });
+    expect(await readFavicon(HOST)).toBeUndefined();
+    expect(isFaviconStale(await readFavicon(HOST))).toBe(true);
+    // Control: the same header at 2048 is an icon.
+    await db.favicons.put({ host: HOST, status: 'ok', bytes: png(2048), fetchedAt: 0 });
+    expect((await readFavicon(HOST))?.status).toBe('ok');
+  });
 });
 
 // THE FENCE. The provider writes after a network round trip, so a sign-out can have wiped

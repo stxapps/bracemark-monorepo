@@ -65,6 +65,7 @@ jest.mock('../data/favicon-store', () => ({
   // Unknown is stale and nothing else is: the TTL is the store's, covered there.
   isFaviconStale: (record: FaviconRecord | undefined) => record === undefined,
   faviconFileFor: (host: string) => ({ uri: mockUriFor(host), exists: mockOnDisk.has(host) }),
+  cachedFaviconsChecked: () => true,
 }));
 
 function withIcon(host: string): void {

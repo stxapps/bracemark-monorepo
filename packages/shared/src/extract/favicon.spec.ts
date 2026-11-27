@@ -5,10 +5,23 @@
 // through an `<img>` object URL, which content-sniffs raster but not SVG).
 
 import { sniffImageMime } from '../image/sniff';
-import { isRenderableIconBytes, MAX_FAVICON_BYTES, sniffIconMime } from './favicon';
+import {
+  FAVICON_MAX_DECODE_PIXELS,
+  isOversizedRasterIcon,
+  isRenderableIconBytes,
+  MAX_FAVICON_BYTES,
+  sniffIconMime,
+} from './favicon';
 
 const utf8 = (text: string): Uint8Array => new TextEncoder().encode(text);
-const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+// A PNG's signature and IHDR, 16 × 16: the filler's verdict reads the size from it.
+const PNG = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 16,
+  0, 0, 0, 16,
+]);
+// The same header claiming 20000 × 20000 — what a 76 KB PNG can say.
+const HUGE_PNG = Uint8Array.from(PNG);
+HUGE_PNG.set([0, 0, 0x4e, 0x20, 0, 0, 0x4e, 0x20], 16);
 
 describe('sniffIconMime', () => {
   it('reports the raster mime', () => {
@@ -64,10 +77,40 @@ describe('isRenderableIconBytes', () => {
     expect(isRenderableIconBytes(oversized)).toBe(false);
   });
 
+  // The byte cap doesn't bound a decode; the header does (FAVICON_MAX_DECODE_PIXELS).
+  it('refuses a raster icon that decodes past the ceiling, or whose size it cannot read', () => {
+    expect(sniffIconMime(HUGE_PNG)).toBe('image/png'); // the render-time sniff still takes it
+    expect(isRenderableIconBytes(HUGE_PNG)).toBe(false);
+    const atCeiling = Uint8Array.from(PNG);
+    atCeiling.set([0, 0, 0x08, 0x00, 0, 0, 0x08, 0x00], 16); // 2048 × 2048
+    expect(isRenderableIconBytes(atCeiling)).toBe(true);
+    const pastCeiling = Uint8Array.from(PNG);
+    pastCeiling.set([0, 0, 0x08, 0x00, 0, 0, 0x08, 0x01], 16); // 2048 × 2049
+    expect(isRenderableIconBytes(pastCeiling)).toBe(false);
+    expect(FAVICON_MAX_DECODE_PIXELS).toBe(2048 * 2048);
+    // A signature with no IHDR after it can't be sized.
+    expect(isRenderableIconBytes(PNG.subarray(0, 12))).toBe(false);
+  });
+
   it('still refuses a page and an empty body', () => {
     expect(isRenderableIconBytes(utf8('<!DOCTYPE html><html><body>Not found</body></html>'))).toBe(
       false,
     );
     expect(isRenderableIconBytes(new Uint8Array(0))).toBe(false);
+  });
+});
+
+// The size half alone, which a store runs over icons it already holds: raster only, so
+// an SVG or bytes no sniff knows are never "oversized", and a raster header that can't be
+// read is.
+describe('isOversizedRasterIcon', () => {
+  it('is true only for a raster icon past the ceiling or with an unreadable header', () => {
+    expect(isOversizedRasterIcon(HUGE_PNG)).toBe(true);
+    expect(isOversizedRasterIcon(PNG.subarray(0, 12))).toBe(true);
+    expect(isOversizedRasterIcon(PNG)).toBe(false);
+    expect(
+      isOversizedRasterIcon(new TextEncoder().encode('<svg width="99999" height="99999"></svg>')),
+    ).toBe(false);
+    expect(isOversizedRasterIcon(new Uint8Array([1, 2, 3]))).toBe(false);
   });
 });

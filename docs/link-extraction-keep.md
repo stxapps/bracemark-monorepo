@@ -323,7 +323,14 @@ native path that keeps a fetched image — the article's figures (expo-react
 `lib/reader-images.ts`) and a page's preview (`previewFileFromBytes`,
 `lib/device-link-previews.ts`) — reads its size off the HEADER first (`@stxapps/shared`
 `image/header-size.ts`, the formats `sniffImageMime` takes) and hands a decoder nothing
-past `IMAGE_MAX_DECODE_PIXELS` (32 Mi pixels, 128 MiB decoded) or that it can't size. An
+past `IMAGE_MAX_DECODE_PIXELS` (32 Mi pixels, whose output bitmap is 128 MiB; a
+progressive or CMYK JPEG also needs the decoder's working buffers on top) or that it
+can't size. A GIF is sized by its largest frame, not its logical screen: a GIF may say
+1 × 1 and carry a 20000 × 20000 frame, and Skia grows its canvas to the first frame while
+Glide sizes a buffer by each one, so every image descriptor is read. A **favicon** is
+held to its own, tighter ceiling at every filler's gate (`isRenderableIconBytes`,
+`FAVICON_MAX_DECODE_PIXELS`, 2048 × 2048), since expo-image decodes an icon at full size
+on iOS ([link-extraction-favicons.md](./link-extraction-favicons.md)). An
 image the page posted must say it is within the 1024 px cap before it is probed at all.
 And an article's decodes run **one at a time** — fetches still overlap, three at a time —
 so three large photos never decode at once; a decode still queued at the deadline is
@@ -946,8 +953,13 @@ So both take the page's candidates through `collectLivePageMeta` (web-react
   the stale tags are **dropped**: `document.title` and no image. A missing preview is
   fixed by a second tap; a wrong one is announced as right.
 
-The GET is the one a reload of the page would make, on a tap the user made on that
-page, and never otherwise. YouTube also rewrites its address on load (it appends
+The GET is for the same address a reload would ask for, on a tap the user made on that
+page, and never otherwise. It is not byte for byte a reload's request: it is a `fetch`
+(`Sec-Fetch-Mode: cors`, `Sec-Fetch-Dest: empty`, only an `Accept` header), so a server
+that answers on those may answer differently. It reads at most 3 M characters
+(`PAGE_REFETCH_MAX_CHARS`) and cancels the rest of the stream. Nothing a server sends
+can make it throw; the page itself can, in the capture WebView, where the injected
+script shares the page's world, so its callers catch. YouTube also rewrites its address on load (it appends
 `&pp=…`), so on YouTube the re-read runs on every tap, even on the page first loaded —
 the same answer, a second later. `page-meta.spec.ts` holds the rules; the real page
 was checked by injecting the bundled collector into m.youtube.com and www.youtube.com
@@ -1138,9 +1150,13 @@ covers the pages we never copied; it is the reason page copy can wait.
   storing it** (_images in read mode_). Break the first and the orphan sweep deletes
   the images a month later; the second stores a remote URL in a copy; the third
   leaves figures naming images the pack doesn't hold.
-- **On expo, no fetched image reaches a native decoder before its header is sized, and
-  an article's decodes run one at a time** (_the decode's memory_). Drop the first and
-  a 76 KB PNG costs a 1.6 GB decode; drop the second and three large photos triple the peak.
+- **On expo, no fetched image reaches a native decoder before its header is sized — a
+  GIF by every frame, a favicon against its own ceiling — and an article's decodes run
+  one at a time** (_the decode's memory_). Drop the first and a 76 KB PNG costs a 1.6 GB
+  decode; drop the second and three large photos triple the peak. A favicon cached
+  before the ceiling existed is sized by the store's one-time re-check before any icon
+  is shown ([link-extraction-favicons.md](./link-extraction-favicons.md), _what counts as an
+  icon_).
   And nothing that decodes a fetched image may use expo-image's `loadAsync`: it leaves a
   plaintext copy in a disk cache that sign-out never clears.
 - **No `null` in what Safari's preprocessing hands over — strings only** — a

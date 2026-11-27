@@ -33,6 +33,7 @@ import {
   putFaviconNone,
   readFavicon,
   readFavicons,
+  recheckCachedFavicons,
 } from './favicon-store';
 import { AccountFencedError, seedNewAccount } from './sync-store';
 
@@ -254,5 +255,79 @@ describe('clearFaviconFiles', () => {
 
   it('is safe on a device that never cached an icon', () => {
     expect(() => clearFaviconFiles()).not.toThrow();
+  });
+});
+
+// ICONS CACHED BEFORE THE SIZE CHECK. Both fillers refuse a raster icon past the decode
+// ceiling since 2026-11-26, but an `ok` row never expires, so one stored before then
+// would keep its full-size decode for good. The store re-checks every cached icon once.
+describe('the one-time re-check of cached icons', () => {
+  // A PNG signature and IHDR, `side` × `side`.
+  const png = (side: number) =>
+    new Uint8Array([
+      0x89,
+      0x50,
+      0x4e,
+      0x47,
+      0x0d,
+      0x0a,
+      0x1a,
+      0x0a,
+      0,
+      0,
+      0,
+      13,
+      0x49,
+      0x48,
+      0x44,
+      0x52,
+      0,
+      0,
+      side >> 8,
+      side & 0xff,
+      0,
+      0,
+      side >> 8,
+      side & 0xff,
+    ]);
+
+  it('drops an icon past the decode ceiling, row and file, and keeps the rest', async () => {
+    await putFavicon(USER, 'huge.example', png(20000));
+    await putFavicon(USER, 'fine.example', png(2048));
+    await putFavicon(USER, 'other.example', ICON);
+    await putFaviconNone(USER, 'none.example');
+
+    await recheckCachedFavicons();
+
+    expect(await readFavicon('huge.example')).toBeUndefined();
+    expect(faviconFileFor('huge.example').exists).toBe(false);
+    expect(isFaviconStale(await readFavicon('huge.example'))).toBe(true);
+    expect((await readFavicon('fine.example'))?.status).toBe('ok');
+    expect((await readFavicon('other.example'))?.status).toBe('ok');
+    expect((await readFavicon('none.example'))?.status).toBe('none');
+  });
+
+  // Wired in: on a fresh install of the module, the FIRST read already waits for the
+  // re-check, and the run is remembered on disk so the next launch skips it.
+  it('runs before the first read, once', async () => {
+    await jest.isolateModulesAsync(async () => {
+      const store = require('./favicon-store') as typeof import('./favicon-store');
+      const sync = require('./sync-store') as typeof import('./sync-store');
+      const fs = require('expo-file-system') as typeof import('expo-file-system');
+      const { getDb: freshDb } = require('./db') as typeof import('./db');
+      freshDb().run(sql`DELETE FROM favicons`);
+      freshDb().run(sql`DELETE FROM sync_meta`);
+      await sync.seedNewAccount(USER);
+      await store.putFavicon(USER, 'huge.example', png(20000));
+      const marker = () =>
+        fs.Paths.document && new fs.File(fs.Paths.document, 'bracemark-favicons.checked-1');
+      expect(marker().exists).toBe(false);
+
+      expect(await store.readFavicons(['huge.example'])).toEqual(
+        new Map([['huge.example', undefined]]),
+      );
+      expect(store.cachedFaviconsChecked()).toBe(true);
+      expect(marker().exists).toBe(true);
+    });
   });
 });
