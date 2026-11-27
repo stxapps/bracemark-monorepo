@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 
-import { useAuth } from '@stxapps/web-react';
+import { useAuth, useEntitlements } from '@stxapps/web-react';
 import { BracemarkIcon } from '@stxapps/web-ui/components/icons/bracemark-icon';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { SignOutProvider } from '@stxapps/web-ui/contexts/sign-out-provider';
@@ -12,21 +12,31 @@ import { CopiesSection } from './CopiesSection';
 import { OptionsShell } from './Shell';
 import { ThemeSection } from './ThemeSection';
 
+import { IS_SAFARI } from '@/utils/target';
+
 // The Settings page — durable configuration only: the signed-in account (username +
 // sign-out), what a save keeps (CopiesSection — the synced kept-copies setting, here
 // because this is the client it governs), and a theme picker (see ThemeSection). Operational state lives in the toolbar popup: sync status (and its
 // detail view) is the popup's SyncPill / SyncDetail, and extraction progress is in
 // bracemark-web's Settings → Link previews (the app that runs the extraction loop). This page
 // holds nothing that changes on its own.
+//
+// The intro names only the sections on the page: the Safari build shows a free
+// account no _Keep a copy_ (CopiesSection, and docs/browser-extension.md, _no purchase
+// calls to action in Safari_), so there it leaves "what a save keeps" out.
 function App() {
   const { status } = useAuth();
+  const { entitlements } = useEntitlements();
+  const showsCopies = !IS_SAFARI || entitlements.keptCopies;
 
   return (
     <OptionsShell>
       <h1 className={cn('text-xl font-semibold')}>Settings</h1>
       <p className={cn('mt-1 text-sm text-muted-foreground')}>
-        Your account, what a save keeps, and how the extension looks. Lists, tags, and everything
-        else live in the Bracemark app.
+        {showsCopies
+          ? 'Your account, what a save keeps, and how the extension looks.'
+          : 'Your account, and how the extension looks.'}{' '}
+        Lists, tags, and everything else live in the Bracemark app.
       </p>
 
       {status === 'loading' ? (

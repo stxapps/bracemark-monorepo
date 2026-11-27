@@ -40,6 +40,14 @@ jest.mock('@stxapps/web-react', () => ({
   readSettingsGeneral: () => mockReadSettingsGeneral(),
   linkIdOf: (link: { url: string }) => `id-of:${link.url}`,
 }));
+let mockIsSafari = false;
+jest.mock('@/utils/target', () => ({
+  get IS_SAFARI() {
+    return mockIsSafari;
+  },
+  API_HOST: 'localhost:8787',
+  API_ORIGINS: ['http://localhost:8787/*'],
+}));
 jest.mock('@/utils/messages', () => ({
   get sendMessage() {
     return mockSendMessage;
@@ -347,6 +355,19 @@ describe('a library at its cap', () => {
     expect(fake.tabs.create).toHaveBeenCalledWith({
       url: 'http://localhost:3000/settings/subscription',
     });
+  });
+
+  it('in Safari, offers no upgrade — only the Trash', () => {
+    mockIsSafari = true;
+    try {
+      renderEditor();
+
+      expect(screen.queryByRole('button', { name: /^Upgrade to/ })).toBeNull();
+      expect(screen.queryByText(/upgrade/i)).toBeNull();
+      expect(screen.getByText(/Empty some of the Trash/)).toBeTruthy();
+    } finally {
+      mockIsSafari = false;
+    }
   });
 
   it('keeps the form for a paid library with no cap to be at', () => {

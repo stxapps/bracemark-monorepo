@@ -8,6 +8,7 @@ import {
   PAGE_META_SCRIPT,
   READ_MODE_SCRIPT,
 } from './capture';
+import { PAGE_META_GLOBAL } from './page-meta-global';
 
 // The active-page capture tier. The interesting half of this file is code that never
 // runs in the extension's own bundle: `scripting.executeScript`'s `func` is
@@ -44,9 +45,12 @@ let responses: Map<string, { ok: boolean; bytes: Uint8Array; type: string }>;
 
 /**
  * The real injection contract: run `func` with `args` — or the named bundled file — in
- * this document, and return the browser's `[{ result }]` envelope.
+ * this document, and return the browser's `[{ result }]` envelope. The file does what
+ * entrypoints/page-meta.ts does: leaves the collector's Promise on PAGE_META_GLOBAL and
+ * returns it. `safari` answers a file's Promise the way Safari does — no result, an
+ * error — which is what the second, func injection exists for.
  */
-function injectFor(after?: () => void) {
+function injectFor(after?: () => void, { safari = false } = {}) {
   return jest.fn(
     async ({
       func,
@@ -60,11 +64,17 @@ function injectFor(after?: () => void) {
       let result: unknown;
       if (files) {
         if (files[0] !== PAGE_META_SCRIPT) throw new Error(`no fake for ${files.join()}`);
-        result = await collectLivePageMeta(document);
+        const meta = collectLivePageMeta(document);
+        (globalThis as Record<string, unknown>)[PAGE_META_GLOBAL] = meta;
+        after?.();
+        if (safari) {
+          return [{ result: null, error: 'JavaScript execution returned a result of an unsupported type' }];
+        }
+        result = await meta;
       } else {
         result = await func?.(...((args ?? []) as never[]));
+        after?.();
       }
-      after?.();
       return [{ result }];
     },
   );
@@ -208,7 +218,26 @@ describe('captureTitleImage — which image wins', () => {
     setPage('<meta property="og:image" content="data:image/png;base64,iVBORw0KGgo=">', 'A page');
 
     await expect(captureTitleImage(1)).resolves.toEqual({ title: 'A page' });
-    expect(fake.scripting.executeScript).toHaveBeenCalledTimes(1);
+    // The collector file and the func that reads its answer back — no image fetch.
+    expect(fake.scripting.executeScript).toHaveBeenCalledTimes(2);
+  });
+
+  it('works in Safari, which hands back no result for the collector file', async () => {
+    // Safari will not return an injected file's Promise ("a result of an unsupported
+    // type"). Read from the file's envelope, every Safari save went `done` with no
+    // title and no image — permanently, `extension:fg` being the top tier.
+    fake.scripting.executeScript = injectFor(undefined, { safari: true });
+    setPage('<meta property="og:image" content="http://localhost/og.png">', 'A page');
+    serveImage('http://localhost/og.png', PNG);
+
+    await expect(captureTitleImage(1)).resolves.toEqual({ title: 'A page', image: PNG });
+  });
+
+  it('reads the collector’s answer once, so a later capture cannot pick it up', async () => {
+    setPage('', 'A page');
+    await captureTitleImage(1);
+
+    expect(PAGE_META_GLOBAL in globalThis).toBe(false);
   });
 });
 

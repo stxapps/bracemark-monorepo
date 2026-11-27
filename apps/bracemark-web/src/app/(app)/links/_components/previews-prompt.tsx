@@ -29,7 +29,10 @@
 //     rather than calling `usePaywall()`: the paywall dialog is the ACTION-INTERRUPT
 //     pattern (a free user clicked a gated affordance), and nothing was clicked here
 //     — this is the inline "See plans" surface the paywall provider's header points
-//     such cases at, the same door LockedBanner (search-bar.tsx) uses.
+//     such cases at, the same door LockedBanner (search-bar.tsx) uses. Which store
+//     the extension button opens is `extensionStoreUrl`'s call — the App Store for
+//     Safari on a Mac — and on a phone or tablet, where no browser extension
+//     installs, there is no button and the copy says "on a computer".
 //
 // The count comes from `readRawPendingTitleImageCount` (four index counts, no decode,
 // no trash-correction join), not `useLinkPreviewCounts`: the exact tally is gated on
@@ -118,18 +121,21 @@ export function PreviewsPrompt() {
         ) : (
           <>
             <p className="text-sm text-muted-foreground">
-              The Bracemark browser extension tries to preview links in your browser as you save
-              them — free, without our server fetching the page. The mobile app can also fill in the
-              links already here for free when its Link previews setting covers All links. Doing
-              that with server previews in the web app is part of {PLAN_LABELS.plus}.
+              {storeUrl ? 'The' : 'On a computer, the'} Bracemark browser extension tries to preview
+              links in your browser as you save them — free, without our server fetching the page.
+              The mobile app can also fill in the links already here for free when its Link previews
+              setting covers All links. Doing that with server previews in the web app is part of{' '}
+              {PLAN_LABELS.plus}.
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              <Button asChild size="sm" variant="outline">
-                <a href={storeUrl} target="_blank" rel="noreferrer">
-                  Get the browser extension
-                </a>
-              </Button>
-              <Button asChild size="sm" variant="ghost">
+              {storeUrl ? (
+                <Button asChild size="sm" variant="outline">
+                  <a href={storeUrl} target="_blank" rel="noreferrer">
+                    Get the browser extension
+                  </a>
+                </Button>
+              ) : null}
+              <Button asChild size="sm" variant={storeUrl ? 'ghost' : 'outline'}>
                 <Link href="/settings/subscription">See plans</Link>
               </Button>
             </div>

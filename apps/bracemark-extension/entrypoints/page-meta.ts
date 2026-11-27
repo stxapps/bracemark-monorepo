@@ -1,5 +1,7 @@
 import { collectLivePageMeta } from '@stxapps/web-react/lib/page-meta';
 
+import { PAGE_META_GLOBAL } from '@/utils/page-meta-global';
+
 // The title + preview-image candidates of the active tab, as a file the background
 // injects (`captureTitleImage` in utils/capture.ts: `scripting.executeScript({ files:
 // ['/page-meta.js'] })`). An UNLISTED script, like entrypoints/read-mode.ts: WXT bundles
@@ -10,7 +12,13 @@ import { collectLivePageMeta } from '@stxapps/web-react/lib/page-meta';
 // screen injects the same one into its WebView (web-react lib/page-meta.ts). It decides
 // nothing: `selectTitleImage` runs in the background over what it returns.
 //
-// It returns a PROMISE when the tab's head went stale after an in-page move and is
-// re-read from the tab's own address (web-react lib/page-meta.ts, _a stale head_);
-// `executeScript` waits for it to settle and hands back its value.
-export default defineUnlistedScript(() => collectLivePageMeta(document));
+// It returns a PROMISE (the collector is async: a tab whose head went stale after an
+// in-page move is re-read from its own address — web-react lib/page-meta.ts, _a stale
+// head_), and Safari will not hand a file's Promise back. So the Promise is also left
+// on a global, which the background reads with a second, func injection
+// (utils/page-meta-global.ts). The return value stays for any caller that can use it.
+export default defineUnlistedScript(() => {
+  const meta = collectLivePageMeta(document);
+  (globalThis as Record<string, unknown>)[PAGE_META_GLOBAL] = meta;
+  return meta;
+});

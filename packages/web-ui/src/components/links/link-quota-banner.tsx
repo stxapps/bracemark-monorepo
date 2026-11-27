@@ -17,9 +17,15 @@
 // be advice that doesn't work.
 //
 // The CTA is a slot: bracemark-web passes a next/link to /settings/subscription,
-// while the extension (no such route of its own) opens the web app's page in a
-// tab. Everything else — the copy, the count, the shape — lives here so the two
-// surfaces can't drift.
+// while the browser extension (no such route of its own) opens the web app's page
+// in a tab. Everything else — the copy, the count, the shape — lives here so the
+// two surfaces can't drift.
+//
+// No slot, no upgrade: the browser extension's Safari build passes none, because
+// that build ships inside a Mac App Store app that sells nothing, and a sentence
+// saying "Upgrade" is a call to buy elsewhere all the same
+// (docs/browser-extension.md, _no purchase calls to action in Safari_). The copy
+// then offers only the Trash.
 
 import { Lock } from 'lucide-react';
 
@@ -33,8 +39,8 @@ export function LinkQuotaBanner({
   count: number;
   max: number;
   // The upgrade CTA — a link/button owned by the host app (its router, its
-  // tab-opening).
-  action: React.ReactNode;
+  // tab-opening). Omitted where no upgrade may be offered (see the header).
+  action?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -45,8 +51,11 @@ export function LinkQuotaBanner({
           <span className="font-medium text-foreground">
             {count} of {max}
           </span>{' '}
-          links on the {PLAN_LABELS.free} plan. Upgrade to save more — or empty some of the Trash to
-          free up room. Everything you’ve saved stays here, and stays syncing.
+          links on the {PLAN_LABELS.free} plan.{' '}
+          {action
+            ? 'Upgrade to save more — or empty some of the Trash to free up room.'
+            : 'Empty some of the Trash to free up room.'}{' '}
+          Everything you’ve saved stays here, and stays syncing.
         </span>
       </div>
       {action}

@@ -77,3 +77,46 @@ Steps 3–5 are EXT-RELEASE-001 in Edge's own toolbar: only a real click creates
 the shipped manifest's `activeTab` grant. Step 6 is the only check that runs the
 package Edge delivers rather than one built here. Edge takes the Chrome package
 unchanged, but its review is separate and on its own schedule.
+
+## Safari, through the Mac app
+
+`@EXT-RELEASE-004` `@release` `@online` `@extension`
+
+1. Run `npx nx test @stxapps/bracemark-extension`. The Safari differences found
+   so far are faked there, so a regression in one fails before any of this.
+2. In `apps/bracemark-macos`, run `npm run app:staging`. If Bracemark is off in
+   Safari Settings → Extensions, turn it on.
+3. Click the Bracemark toolbar button. If the popup opens on _Allow Bracemark to
+   connect_, press Continue and choose **Always Allow** in Safari's dialog.
+4. Sign in with a **free** account. Open an article page that account has not
+   saved, click the toolbar button, and save. Confirm that:
+   - within a few seconds the saved screen's tile changes from a letter to the
+     page's cover picture;
+   - the saved screen has no _Keep a copy_ row, and no screen says "Upgrade";
+   - the options page (the gear) has no _Keep a copy_ section, and its intro does
+     not mention what a save keeps.
+5. Sign out on the options page. Sign in with a **Plus** account and save another
+   unsaved article. Confirm _Read mode_ gets its tick by itself, then press
+   _Screenshot_ and confirm it gets one too. The options page shows the three
+   _Keep a copy_ switches.
+6. Sign in to bracemark-web in Safari with the same Plus account. If Safari
+   offers to save the password, choose **Not Now**. From the popup, open _Read
+   mode_ and _Screenshot_, and confirm the reader shows the article and the
+   picture of the page. Confirm the link appears in the list with its cover.
+7. Sign out of the browser extension and of bracemark-web.
+8. After App Store Connect has processed the build from `npm run upload`, install
+   it with TestFlight, sign in, and repeat step 4 against production.
+
+There is no automated Safari run. Playwright's WebKit is not Safari and cannot
+load a Safari web extension, and `safaridriver` runs separate automation windows
+that have not been tried. Driving real Safari by script works, but it needs
+three macOS permissions and the owner's own profile
+(`docs/app-drivers.md`, _driving the browser extension in Safari_).
+
+The cover in step 4 is the check for a bug only Safari had. Safari would not hand
+back the title and image collector's answer, so every save arrived with no title
+and no image, and every spec and every Chromium and Firefox run still passed
+(`docs/browser-extension.md`, _Safari — the Mac app_). The rest of step 4 checks
+that the Mac app offers nothing to buy, which App Review requires of it (the same
+section, _no purchase calls to action in Safari_). Step 8 is the only check on
+the build the Mac App Store will ship.

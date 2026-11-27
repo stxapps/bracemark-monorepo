@@ -16,6 +16,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { sendMessage } from '@/utils/messages';
 import { openWebApp } from '@/utils/open-web-app';
+import { IS_SAFARI } from '@/utils/target';
 
 // The saved screen's "keep a copy" row: the page's text in read mode, and a
 // screenshot of what is on screen. Both are captured from THIS tab, which is why
@@ -39,6 +40,12 @@ import { openWebApp } from '@/utils/open-web-app';
 // app's Subscription section: the popup has no paywall of its own, the same hand-off
 // the link-cap banner makes (Editor). Reading a kept copy is never gated — "Read" on
 // a kept copy works on every plan.
+//
+// Except in the Safari build, which ships inside a Mac App Store app that sells
+// nothing, so a Plus-marked button that leads to a web checkout is not allowed there
+// (docs/browser-extension.md, _no purchase calls to action in Safari_). A free
+// account sees only the copies it already has — still readable, as everywhere — and
+// no row at all when it has none.
 //
 // _Include images_ sits directly under _Read mode_, in its column — the order web's
 // keep section and expo's capture screen have: the box qualifies the read-mode copy
@@ -221,6 +228,11 @@ export function KeptCopies({
   };
   const read = () => void openWebApp(`/read?link=${encodeURIComponent(linkId)}`);
 
+  const offered = entitled || !IS_SAFARI;
+  const showReadMode = offered || readMode === 'kept';
+  const showScreenshot = offered || screenshot === 'kept';
+  if (!showReadMode && !showScreenshot) return null;
+
   return (
     <section aria-labelledby="kept-copies" className={cn('flex flex-col gap-2')}>
       <h2 id="kept-copies" className={cn('text-xs font-medium text-muted-foreground')}>
@@ -229,30 +241,34 @@ export function KeptCopies({
       {/* Placed by the grid, in DOM order for a screen reader: _Read mode_, then the
           box that qualifies it, then _Screenshot_ beside them. */}
       <div className={cn('grid grid-cols-2 gap-x-2 gap-y-3')}>
-        <CopyButton
-          icon={<BookOpen />}
-          label="Read mode"
-          state={readMode}
-          entitled={entitled}
-          onKeep={() => keep('readMode')}
-          onRead={read}
-          className={cn('col-start-1 row-start-1')}
-        />
+        {showReadMode ? (
+          <CopyButton
+            icon={<BookOpen />}
+            label="Read mode"
+            state={readMode}
+            entitled={entitled}
+            onKeep={() => keep('readMode')}
+            onRead={read}
+            className={cn('col-start-1 row-start-1')}
+          />
+        ) : null}
         {entitled ? (
           <IncludeImages
             disabled={readMode === 'keeping' || readMode === 'kept'}
             className={cn('col-start-1 row-start-2')}
           />
         ) : null}
-        <CopyButton
-          icon={<ImageIcon />}
-          label="Screenshot"
-          state={screenshot}
-          entitled={entitled}
-          onKeep={() => keep('screenshot')}
-          onRead={read}
-          className={cn('col-start-2 row-start-1')}
-        />
+        {showScreenshot ? (
+          <CopyButton
+            icon={<ImageIcon />}
+            label="Screenshot"
+            state={screenshot}
+            entitled={entitled}
+            onKeep={() => keep('screenshot')}
+            onRead={read}
+            className={cn(showReadMode ? 'col-start-2' : 'col-start-1', 'row-start-1')}
+          />
+        ) : null}
       </div>
       {readMode === 'noArticle' ? (
         <p className={cn('text-xs leading-5 text-muted-foreground')}>

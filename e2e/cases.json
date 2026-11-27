@@ -935,6 +935,16 @@
     "artifacts": ["manual-checklist"]
   },
   {
+    "id": "EXT-RELEASE-004",
+    "title": "Safari, through the Mac app: a save gets its preview, a free account is offered nothing to buy, and Plus copies are kept and read",
+    "surface": "extension",
+    "tier": "release",
+    "traits": ["online", "extension"],
+    "fixture": "small",
+    "path": "extension/RELEASE.md",
+    "artifacts": ["manual-checklist"]
+  },
+  {
     "id": "IAP-ENTITLEMENT-001",
     "title": "A manual Plus grant lifts the browser extension's full-library wall on the popup's next open",
     "surface": "extension",

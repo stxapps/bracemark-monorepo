@@ -186,6 +186,13 @@ at the end, because its key and library live in the real profile.
   second call. To find the UUID, open Safari Settings → Extensions → the
   extension → **Settings**, which opens the options page in a tab, and read that
   tab's URL.
+- **Run the extension's own API against a page from an extension tab.** After a
+  real click on the toolbar button, the page's tab holds the `activeTab` grant, so
+  `browser.scripting.executeScript({ target: { tabId }, … })` called through
+  `do JavaScript` in the options tab runs in that page and shows the raw answer,
+  including Safari's `error` field. That is how the empty collector result was
+  found (_Safari — the Mac app_ in browser-extension.md): the popup showed only a
+  letter tile.
 - **A blank extension page that never finishes loading means the background is
   stuck**, not the page: every page of the extension hung that way while the
   service worker was frozen. `do JavaScript` into such a tab hangs too.

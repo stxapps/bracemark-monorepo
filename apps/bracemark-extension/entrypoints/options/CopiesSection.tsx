@@ -10,6 +10,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { OptionsSection } from './Shell';
 
+import { IS_SAFARI } from '@/utils/target';
 import { WEB_APP_URL } from '@/utils/web-app-url';
 
 // The browser extension's part of the synced kept-copies setting (`keepReadModeOnSave`
@@ -37,6 +38,11 @@ import { WEB_APP_URL } from '@/utils/web-app-url';
 // off and disabled: a disabled switch says nothing about why (docs/accessibility.md).
 // The stored value is left alone, so an account that downgrades and comes back keeps
 // its choice.
+//
+// The Safari build shows a free account no section at all: no switches to set, and
+// no Upgrade, because that build ships inside a Mac App Store app that sells nothing
+// (docs/browser-extension.md, _no purchase calls to action in Safari_). A subscriber
+// sees the switches there as everywhere.
 //
 // A plain `tabs.create` to the web app, not utils/open-web-app.ts: this page is
 // embedded in about:addons, so there is no container to copy (the footer's "Open
@@ -81,6 +87,7 @@ export function CopiesSection({ className }: { className?: string }) {
   const [error, setError] = useState<string | null>(null);
 
   if (!entitlements.keptCopies) {
+    if (IS_SAFARI) return null;
     const upsell = PAYWALL_COPY.keptCopies;
     return (
       <OptionsSection className={className} title={upsell.title} description={upsell.description}>

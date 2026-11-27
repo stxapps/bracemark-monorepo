@@ -389,7 +389,8 @@ fails a test:
 The popup sends the user to bracemark-web for what it doesn't do itself: "Open
 Bracemark" on the complete page, a kept copy's reader (`/read?link=`) and the
 Subscription section from _Keep a copy_, "Upgrade to Plus" when the library is
-full, and "Create an account" on sign-in. Because the session doesn't carry across (above),
+full (neither in the Safari build, below: _no purchase calls to action in
+Safari_), and "Create an account" on sign-in. Because the session doesn't carry across (above),
 what the new tab shows depends on bracemark-web's session **in that tab's cookie
 store**. In Firefox that store is per container, and a tab an extension creates
 opens in the **default** container unless it asks for another. So someone signed
@@ -641,6 +642,32 @@ reloads and rebuilds; `activeTab` reads; save, and sync both ways.
   `public-safari/icon/*` instead, the same icons with a 1px `--color-signal` ring
   on the tile (`wxt.config.ts`, `build:publicAssets`;
   [brand-visuals.md](./brand-visuals.md), _the mark_).
+- ⚠ **An injected file's Promise comes back empty.** `executeScript({ files })`
+  whose script ends in a Promise answers, in Safari only, `result: null` with
+  "JavaScript execution returned a result of an unsupported type". The title and
+  image collector (`entrypoints/page-meta.ts`) is async, so every Safari save went
+  `done` with no title and no image, and `extension:fg` is the top tier, so nothing
+  would ever have replaced it. The collector now leaves its Promise on a global
+  (`utils/page-meta-global.ts`) and `captureTitleImage` reads it back with a
+  `func` injection, whose Promise every browser waits for. The read-mode collector
+  is synchronous and was never affected. Found 2026-11-27 by driving it; the
+  capture spec now fakes Safari's answer.
+- **Tabs have no `favIconUrl`.** Safari leaves it off `tabs.Tab` entirely, so the
+  popup's editor shows the letter tile where Chrome shows the site's icon. The
+  saved screen still swaps in the page's cover once the capture lands.
+- ⚠ **No purchase calls to action in Safari.** The Mac app sells nothing: it
+  shares the iOS app's record, but it has no in-app purchase. App Review
+  guideline 3.1.1 refuses a button or link to a purchase outside in-app purchase
+  (the US storefront aside). What lets the app honour a plan bought elsewhere
+  without selling it is 3.1.3(f), a free app that is a companion to a paid web
+  service, and that holds only while the app has no purchasing inside it and no
+  call to buy outside it. So with `IS_SAFARI`, a free account sees nothing to buy. The library-full screen keeps the count and the Trash, with
+  no button and no "Upgrade" sentence (`LinkQuotaBanner` with no `action`). The
+  saved screen's _Keep a copy_ shows only copies already kept, which stay
+  readable, and no row when there are none. The options page drops _Keep a copy_.
+  A subscriber sees everything, wherever they paid. Nothing checks this but the
+  specs: a new Plus button in the popup or the options page has to make the same
+  test, or App Review finds it.
 - **The options page opens as a tab**, whatever `open_in_tab` says, so the
   Safari build alone draws the header the other hosts make redundant
   (`options/Shell.tsx`, `SafariHeader`).
@@ -666,15 +693,24 @@ reloads and rebuilds; `activeTab` reads; save, and sync both ways.
 - **The icon is an Icon Composer file.** macOS 26 put a hand-rendered rounded
   square inside a grey square ([brand-visuals.md](./brand-visuals.md), _the mark_).
 
+**Before a Safari submission**, run `EXT-RELEASE-004` in
+`e2e/extension/RELEASE.md`, the hand-run release check for this build. No
+automated run reaches Safari: Playwright's WebKit cannot load a Safari web
+extension, and driving the real app by script needs the owner's profile and
+permissions ([app-drivers.md](./app-drivers.md)).
+
 **Still open before a submission:**
 
-- **"Upgrade to Plus".** The popup and the options page send a free user to
-  bracemark-web to pay. An app sold through the App Store may be asked to use
-  in-app purchase there or drop the button ([iap.md](./iap.md)).
 - **The App Store record.** `com.bracemark.app` makes this the macOS app of the
   iOS app's record (universal purchase); App Store Connect needs the macOS
   platform added to that record, and the first upload creates the macOS signing
   profiles (`macos-upload.sh`). Export compliance is answered there as for iOS.
-- **Not run:** the read-mode and screenshot captures (Plus), a production build,
-  App Review, Safari on iPhone and iPad (a target inside `bracemark-expo`, not
-  this app).
+- **Not run:** a production build, App Review, the library-full screen (a free
+  library at its cap), Safari on iPhone and iPad (a target inside
+  `bracemark-expo`, not this app).
+
+**Run by hand on 2026-11-27**, staging, Safari 27.2: sign-in in the popup; a free
+account's save, with no _Keep a copy_ row and no options section; sign-out; a Plus
+account's save with the read-mode copy kept on save and the screenshot on a tap,
+both opened in bracemark-web's reader; the Plus options switches; the saved link
+and its cover in bracemark-web.

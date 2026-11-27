@@ -31,6 +31,7 @@ import { PopupBody, PopupTitle } from './Shell';
 
 import { sendMessage } from '@/utils/messages';
 import { openWebApp } from '@/utils/open-web-app';
+import { IS_SAFARI } from '@/utils/target';
 
 // Signed-in, not-yet-saved: a popup-sized link editor for the active tab. The
 // page itself is the PageSpecimen at the top — the same object the complete
@@ -52,7 +53,10 @@ import { openWebApp } from '@/utils/open-web-app';
 // form that can't submit, and this gate IS the cap (the server stopped counting
 // links; see the hook), so the banner is the wall itself. Upgrading isn't a
 // flow the extension owns, so the CTA opens the web app's subscription settings in
-// a tab, the same hand-off SignIn makes for account creation.
+// a tab, the same hand-off SignIn makes for account creation — except in the Safari
+// build, which has no CTA and no "Upgrade" sentence: it ships inside a Mac App Store
+// app that sells nothing (docs/browser-extension.md, _no purchase calls to action
+// in Safari_).
 //
 // `trashed` — this tab's URL is already saved, but in Trash (App's SaveFlow, which
 // routes every other already-saved match to Complete). The form is unchanged; only
@@ -163,15 +167,17 @@ export function Editor({
           count={count}
           max={max}
           action={
-            <Button
-              size="sm"
-              className={cn('self-end')}
-              onClick={() => {
-                void openWebApp('/settings/subscription');
-              }}
-            >
-              Upgrade to {PLAN_LABELS.plus}
-            </Button>
+            IS_SAFARI ? undefined : (
+              <Button
+                size="sm"
+                className={cn('self-end')}
+                onClick={() => {
+                  void openWebApp('/settings/subscription');
+                }}
+              >
+                Upgrade to {PLAN_LABELS.plus}
+              </Button>
+            )
           }
         />
       </PopupBody>

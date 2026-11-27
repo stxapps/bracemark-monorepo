@@ -32,6 +32,8 @@ import {
   sniffImageMime,
 } from '@stxapps/shared';
 
+import { PAGE_META_GLOBAL } from './page-meta-global';
+
 // Ceiling on a preview image we'll carry back from the page. The in-page fetch has already
 // buffered the blob by the time we can measure it (same limitation the expo worker
 // documents), so this doesn't abort a transfer — it bounds what gets base64-inflated into
@@ -75,9 +77,21 @@ export async function captureTitleImage(
   // The collector is a bundled FILE (entrypoints/page-meta.ts → web-react
   // `lib/page-meta.ts`), not an inline func, so expo's capture screen runs the very same
   // one inside its WebView: one live-DOM collector, not two kept in step by hand.
+  //
+  // Two injections, not one: the file runs the collector and leaves its Promise on a
+  // global, and a func reads it back. Safari refuses a file's Promise result outright
+  // (utils/page-meta-global.ts), while every browser waits for a func's. The global is
+  // deleted as it is read, so a later capture can never pick up this one's answer.
+  await browser.scripting.executeScript({ target: { tabId }, files: [PAGE_META_SCRIPT] });
   const [collection] = await browser.scripting.executeScript({
     target: { tabId },
-    files: [PAGE_META_SCRIPT],
+    args: [PAGE_META_GLOBAL],
+    func: (key: string) => {
+      const scope = globalThis as Record<string, unknown>;
+      const meta = scope[key];
+      delete scope[key];
+      return meta;
+    },
   });
 
   const page = collection?.result as { href: string; collected: CollectedMeta } | undefined;

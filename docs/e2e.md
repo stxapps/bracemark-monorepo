@@ -303,8 +303,9 @@ copies in a separate web profile's reader — the only case where a kept copy is
 taken rather than imported. The run manifest
 records all three copies' differences and `activeTabToolbarGrantProven: false`.
 `EXT-RELEASE-001` in `e2e/extension/RELEASE.md` owns the real Chrome-toolbar
-boundary; the Firefox production-build smoke and the Edge check
-(`EXT-RELEASE-003`) are beside it.
+boundary; the Firefox production-build smoke, the Edge check
+(`EXT-RELEASE-003`) and the Safari check (`EXT-RELEASE-004`, through the Mac app,
+which no automated run reaches) are beside it.
 
 #### the Firefox browser-extension target
 

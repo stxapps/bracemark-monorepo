@@ -15,7 +15,8 @@ import { WEB_APP_URL } from '@/utils/web-app-url';
 //     only what the phone takes), and each writes only its own field;
 //   - on free there are no switches, only the upgrade into the web app's
 //     Subscription section, and nothing is rewritten, so a returning subscriber
-//     keeps their choice.
+//     keeps their choice;
+//   - in the Safari build, free shows no section at all — nothing to buy there.
 
 let mockKeptCopies = true;
 let mockKeepOnSave = { readMode: true, readModeImages: true, screenshot: false };
@@ -27,6 +28,15 @@ jest.mock('@stxapps/web-react', () => ({
   useSettingMutations: () => ({ setKeepOnSave: mockSetKeepOnSave }),
 }));
 
+let mockIsSafari = false;
+jest.mock('@/utils/target', () => ({
+  get IS_SAFARI() {
+    return mockIsSafari;
+  },
+  API_HOST: 'localhost:8787',
+  API_ORIGINS: ['http://localhost:8787/*'],
+}));
+
 const readMode = () => screen.getByRole('switch', { name: 'Keep a read-mode copy when you save' });
 const screenshot = () => screen.getByRole('switch', { name: 'Keep a screenshot when you save' });
 const images = () => screen.getByRole('switch', { name: 'Include images in read-mode copies' });
@@ -34,6 +44,7 @@ const images = () => screen.getByRole('switch', { name: 'Include images in read-
 let fake: FakeBrowser;
 
 beforeEach(() => {
+  mockIsSafari = false;
   fake = installFakeBrowser();
   mockKeptCopies = true;
   mockKeepOnSave = { readMode: true, readModeImages: true, screenshot: false };
@@ -77,6 +88,24 @@ test('free: no switches, only the upgrade into the web app, and nothing written'
   fireEvent.click(screen.getByRole('button', { name: /upgrade to plus/i }));
   expect(fake.tabs.create).toHaveBeenCalledWith({ url: `${WEB_APP_URL}/settings/subscription` });
   expect(mockSetKeepOnSave).not.toHaveBeenCalled();
+});
+
+test('Safari, free: no section, no upgrade, and nothing written', () => {
+  mockIsSafari = true;
+  mockKeptCopies = false;
+
+  const { container } = render(<CopiesSection />);
+
+  expect(container.innerHTML).toBe('');
+  expect(mockSetKeepOnSave).not.toHaveBeenCalled();
+});
+
+test('Safari, Plus: the switches, as everywhere', () => {
+  mockIsSafari = true;
+
+  render(<CopiesSection />);
+
+  expect(screen.queryAllByRole('switch')).toHaveLength(3);
 });
 
 test('a failed write is announced, and the switches stay live', async () => {

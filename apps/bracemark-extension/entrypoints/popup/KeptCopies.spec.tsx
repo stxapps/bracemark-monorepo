@@ -15,6 +15,8 @@ import { KeptCopies } from './KeptCopies';
 //     ask is always allowed;
 //   - a free account's taps go to the web app's Subscription section and capture
 //     nothing; reading a kept copy works on every plan;
+//   - the Safari build offers a free account nothing to buy — no Plus buttons — but
+//     still shows, and opens, the copies it already has;
 //   - _Include images_ is live only while a tap on _Read mode_ would take a copy —
 //     off during "Keeping…", whose capture has already read the setting, and off
 //     under a kept copy, which the popup can't re-take.
@@ -32,6 +34,14 @@ jest.mock('@stxapps/web-react', () => ({
 }));
 jest.mock('@/utils/messages', () => ({
   sendMessage: (m: unknown) => mockSendMessage(m),
+}));
+let mockIsSafari = false;
+jest.mock('@/utils/target', () => ({
+  get IS_SAFARI() {
+    return mockIsSafari;
+  },
+  API_HOST: 'localhost:8787',
+  API_ORIGINS: ['http://localhost:8787/*'],
 }));
 jest.mock('@/utils/open-web-app', () => ({
   openWebApp: (path: string) => mockOpenWebApp(path),
@@ -52,6 +62,7 @@ const mount = (ex: ExtractionItem | undefined, requested?: typeof READ_MODE_ASKE
   render(<KeptCopies linkId="l1" extraction={ex} requested={requested} />);
 
 beforeEach(() => {
+  mockIsSafari = false;
   mockKeptCopies = true;
   mockReadModeImages = false;
   mockSetKeepOnSave.mockClear();
@@ -143,6 +154,38 @@ test('free: a tap opens Subscription in the web app and captures nothing', () =>
   fireEvent.click(screen.getByRole('button', { name: /read mode — a plus feature/i }));
   expect(mockOpenWebApp).toHaveBeenCalledWith('/settings/subscription');
   expect(mockSendMessage).not.toHaveBeenCalled();
+});
+
+test('Safari, free: no row when there is nothing kept', () => {
+  mockIsSafari = true;
+  mockKeptCopies = false;
+  mount(extraction());
+
+  expect(screen.queryByRole('heading', { name: 'Keep a copy' })).toBeNull();
+  expect(screen.queryAllByRole('button')).toHaveLength(0);
+});
+
+test('Safari, free: a kept copy still shows and opens, and nothing is offered beside it', () => {
+  mockIsSafari = true;
+  mockKeptCopies = false;
+  mount(
+    extraction({
+      screenshotId: 's1',
+      facets: { screenshot: { status: 'done', extractedAt: 1, attempts: 0 } },
+    }),
+  );
+
+  expect(screen.getAllByRole('button')).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: /screenshot kept/i }));
+  expect(mockOpenWebApp).toHaveBeenCalledWith('/read?link=l1');
+});
+
+test('Safari, Plus: both buttons, as everywhere', () => {
+  mockIsSafari = true;
+  mount(extraction());
+
+  expect(screen.getByRole('button', { name: 'Read mode' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Screenshot' })).toBeTruthy();
 });
 
 test('a save that asked for the screenshot too opens on “Keeping…” for both', () => {
