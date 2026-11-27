@@ -85,6 +85,13 @@ export const BLOG_POSTS: BlogPost[] = [
       'A foldable hands Bracemark a phone screen and a near-square one. We tested what folding keeps, what it changes, and the bug we found.',
     publishedAt: '2026-11-19T00:00:00Z',
   },
+  {
+    slug: 'link-preview-privacy',
+    title: 'Who sees a link when Bracemark fetches its preview',
+    description:
+      'Server previews in our web app are paid and opt-in, and they send link addresses to our service. We compare who gets an address on each path.',
+    publishedAt: '2026-12-01T00:00:00Z',
+  },
 ];
 
 export function findBlogPost(slug: string): BlogPost | undefined {

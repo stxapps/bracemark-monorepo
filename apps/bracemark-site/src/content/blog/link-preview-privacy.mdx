@@ -1,0 +1,57 @@
+A link preview is the title and image that help you recognise a saved link. To fill them in, something has to read the page, and for a link you saved earlier that usually means visiting it again. Whatever does the visiting gets the address.
+
+In Bracemark’s web app, filling in previews takes a <PlanName plan="plus" /> setting called Server previews. It’s off unless you turn it on, and it sends link addresses to a service of ours. Saving with the browser extension, or fetching previews in the iPhone and Android apps, is free and doesn’t use that service.
+
+## Who sees what
+
+| Where the preview comes from    | What reads the page             | Does our link-extraction service get the address? |
+| ------------------------------- | ------------------------------- | ------------------------------------------------- |
+| Browser extension, as you save  | Your browser, from the open tab | No                                                |
+| iPhone and Android apps         | The app, on your device         | No                                                |
+| Web app with Server previews on | Our link-extraction service     | Yes                                               |
+
+These rows are about fetching. A preview from any of them syncs with your library as encrypted data.
+
+## The browser extension
+
+When you save with the browser extension, you’re already on the page. It reads the open tab, and it can do that only at the moment you click to save. The preview image the page names may need one more request, made by your browser from that tab. Our service isn’t part of this.
+
+## The iPhone and Android apps
+
+The apps can visit a page themselves. The site gets a request from your device, including your IP address. Our service doesn’t get the address, but the site can tell that your connection asked for the page.
+
+How much the app fetches is up to you, in its Link previews settings:
+
+- **Links you save on this device** is the default. The app fetches each page you save there to fill in its title and image.
+- **All links, including synced and imported** also visits pages this device may never have opened, as those links come into view. Generate all works through the rest. Each of those sites gets a request from your device.
+- **Off** fetches no titles or images.
+
+## The web app
+
+A web app generally can’t read another website’s page, because the browser blocks it. It can show a preview that synced from another device. If there isn’t one, it can leave the preview empty or ask a server to fetch it.
+
+With Server previews on, newly saved links and older ones still waiting for a preview are sent to [our link-extraction service](/extractor) as they come into view. That includes imported links and links from your other devices. Generate all sends every link that’s still waiting. The service also fetches site icons.
+
+The service gets each link’s address and your IP address. The request carries no account sign-in, and the service has no key to your library. It stores no URL or page content and writes no URL to its logs. Its rate limiter briefly holds your IP address so that one source can’t flood it. The service runs on Cloudflare.
+
+Paying for this setting doesn’t make the web app more private. With it off, the web app doesn’t visit a saved site for a preview or an icon, and our service gets no address. With it on, our service gets the address and sends a request to the site. What the setting adds is previews you can fill in from the web app.
+
+Compared with fetching on your own device, it does change who the site hears from. The request comes from our service, not from your browser, and identifies itself as `bracemark-extractor`. The site doesn’t get that request from your device, but a service of ours has to see the address.
+
+## What you can check
+
+Your browser’s network inspector shows your side of this. With Server previews on, you can watch a link’s address leave in readable text for our link-extraction service. This is separate from sync, which sends each link encrypted.
+
+The inspector can’t show what happens after an address arrives, or everything your key is used for. When we say the service doesn’t store or log URLs, you’re relying on how we built and run it. You can [read its code](https://github.com/stxapps/bracemark-monorepo/tree/main/apps/bracemark-extractor), but we publish no reproducible builds or signed releases. Nothing lets you tie the running service, or the web app your browser loads, to a particular version of that code. These checks aren’t a guarantee.
+
+If you don’t want our service to receive an address, not sending it is more certain than relying on what we do with it.
+
+## Keeping addresses away from our service
+
+- In the web app, leave Server previews off in Settings → Link previews. Server read mode is a separate setting that sends a link’s address when you ask for a read-mode copy, so leave that off too. With both off, the web app sends no link addresses to our link-extraction service.
+- Save with the browser extension, or in the iPhone or Android app. A preview fetched there can sync to the web app as encrypted data, without our service fetching it.
+- If you don’t want the iPhone or Android app to visit saved sites for titles and images, choose Off. A link saved there may then have no preview.
+
+With Server previews off, previews you already have stay in your library. Links without one remain usable, and you can set your own title in Edit link. The web app also fetches no new site icons, and icons don’t sync from other devices, so you may see a plain placeholder where an icon would be.
+
+For the steps and the reasons a preview can fail, see [link previews](/docs/link-previews). For what we collect, see the [privacy policy](/privacy).
